@@ -115,6 +115,14 @@ impl CalendarOccurrenceService for FakeReads {
         unreachable!("calendar GraphQL reads never resolve the primary time zone")
     }
 
+    async fn meeting_copies(
+        &self,
+        _requester_id: &str,
+        _event_id: uuid::Uuid,
+    ) -> Result<Vec<calendar_events::domain::models::MeetingCopy>, Report> {
+        unreachable!("no GraphQL read lists a meeting's copies")
+    }
+
     async fn event_ics(
         &self,
         _requester_id: &str,

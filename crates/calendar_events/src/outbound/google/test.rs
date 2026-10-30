@@ -1,5 +1,7 @@
 use super::*;
 
+mod all_day;
+mod import;
 mod points;
 
 #[test]
@@ -1055,6 +1057,48 @@ fn rsvp_patch_updates_only_the_connected_attendee() {
     assert_eq!(attendees[0]["comment"], "unrelated state that must survive");
 }
 
+/// Google refuses new attendees in `attendeesOmitted` mode
+/// (`omittedAttendeesSpecified`), so an invite writes the whole list and
+/// must carry every existing attendee exactly as Google returned it.
+#[test]
+fn invite_body_keeps_every_attendee_as_google_returned_it_and_appends_the_guests() {
+    let current: Vec<GoogleAttendee> = serde_json::from_value(serde_json::json!([
+        {
+            "email": "olivia@example.com",
+            "organizer": true,
+            "responseStatus": "accepted"
+        },
+        {
+            "email": "jacob@example.com",
+            "self": true,
+            "responseStatus": "tentative",
+            "comment": "running late",
+            "additionalGuests": 1
+        }
+    ]))
+    .unwrap();
+
+    let body = invite_attendees_body(
+        &current,
+        &[CalendarAttendeeInput {
+            email: "ada@example.com".to_string(),
+            is_optional: true,
+            response_status: None,
+        }],
+    );
+
+    assert!(body.get("attendeesOmitted").is_none());
+    let attendees = body["attendees"].as_array().unwrap();
+    assert_eq!(attendees.len(), 3);
+    assert_eq!(attendees[0]["responseStatus"], "accepted");
+    assert_eq!(attendees[1]["responseStatus"], "tentative");
+    assert_eq!(attendees[1]["comment"], "running late");
+    assert_eq!(attendees[1]["additionalGuests"], 1);
+    assert_eq!(attendees[2]["email"], "ada@example.com");
+    assert_eq!(attendees[2]["optional"], true);
+    assert!(attendees[2].get("responseStatus").is_none());
+}
+
 fn google_attendee(email: &str, is_self: bool) -> GoogleAttendee {
     serde_json::from_value(serde_json::json!({
         "email": email,
@@ -1070,8 +1114,7 @@ fn rsvp_patches_the_actor_row_not_the_google_self_flag() {
         google_attendee("jacob@example.com", true),
         google_attendee("jackson@example.com", false),
     ];
-    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
-        .expect("owned addresses remain after normalize");
+    let actor = ActorInboxes::sole("jackson@example.com");
     let found = find_actor_attendee(&attendees, &actor);
     assert_eq!(
         found.and_then(|attendee| attendee.email.as_deref()),
@@ -1082,8 +1125,7 @@ fn rsvp_patches_the_actor_row_not_the_google_self_flag() {
 #[test]
 fn rsvp_does_not_patch_another_attendee_when_the_requester_is_absent() {
     let attendees = vec![google_attendee("jacob@example.com", true)];
-    let actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()])
-        .expect("owned addresses remain after normalize");
+    let actor = ActorInboxes::sole("jackson@example.com");
     assert!(find_actor_attendee(&attendees, &actor).is_none());
 }
 
@@ -1219,6 +1261,7 @@ fn mutation_bodies_serialize_reminders_in_google_shape() {
         reminders: Some(reminders.clone()),
         conference: None,
         out_of_office: None,
+        guest_policy: None,
     };
     assert_eq!(draft_body(&draft)["reminders"], expected);
 
@@ -1356,6 +1399,7 @@ fn drafts_carry_conference_requests_and_their_parameter() {
         reminders: None,
         conference: Some(ConferenceChange::GoogleMeet),
         out_of_office: None,
+        guest_policy: None,
     };
 
     let body = draft_body(&draft);
@@ -1389,6 +1433,7 @@ fn timed_draft(out_of_office: Option<OutOfOfficeProperties>) -> CalendarEventDra
         reminders: None,
         conference: None,
         out_of_office,
+        guest_policy: None,
     }
 }
 
@@ -1657,4 +1702,49 @@ async fn keyed_create_recovers_lost_response_and_duplicate_conflict_without_seco
         );
         task.abort();
     }
+}
+
+#[test]
+fn a_guest_policy_writes_all_three_switches() {
+    let policy = GuestPolicy {
+        can_modify: false,
+        can_invite_others: false,
+        can_see_other_guests: true,
+    };
+    let expected = serde_json::json!({
+        "guestsCanModify": false,
+        "guestsCanInviteOthers": false,
+        "guestsCanSeeOtherGuests": true,
+    });
+    let switches = |body: serde_json::Value| {
+        [
+            "guestsCanModify",
+            "guestsCanInviteOthers",
+            "guestsCanSeeOtherGuests",
+        ]
+        .into_iter()
+        .filter_map(|key| body.get(key).map(|value| (key.to_string(), value.clone())))
+        .collect::<serde_json::Map<_, _>>()
+    };
+
+    let draft = CalendarEventDraft {
+        guest_policy: Some(policy),
+        ..timed_draft(None)
+    };
+    assert_eq!(
+        serde_json::Value::Object(switches(draft_body(&draft))),
+        expected
+    );
+    let patch = CalendarEventPatch {
+        guest_policy: Some(policy),
+        ..CalendarEventPatch::default()
+    };
+    assert_eq!(
+        serde_json::Value::Object(switches(patch_body(&patch))),
+        expected
+    );
+    assert!(
+        switches(patch_body(&CalendarEventPatch::default())).is_empty(),
+        "an untouched policy leaves Google's switches alone"
+    );
 }

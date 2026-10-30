@@ -10,7 +10,7 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX, onMount } from 'solid-js';
+import { createSignal, type JSX, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useViewShell, ViewShell, ViewSidebarToggle } from './ViewShell';
@@ -33,11 +33,9 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
-  Button: (
-    props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
-  ) => (
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
-      aria-label={props.label}
+      aria-label={props['aria-label']}
       aria-expanded={props['aria-expanded']}
       onClick={props.onClick}
       onMouseDown={props.onMouseDown}
@@ -415,6 +413,33 @@ it('opens secondary splits without navigation and leaves the preference alone', 
   reopened.unmount();
   render(() => <InSplit app="email" first />);
   expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+});
+
+it('keeps a secondary split navigation choice when the split changes view', () => {
+  const [app, setApp] = createSignal('home');
+  render(() => (
+    <SplitPanelContext.Provider
+      value={
+        {
+          handle: { isFirst: () => false },
+          isPanelActive: () => false,
+          splitHotkeyScope: 'split',
+          navigationCollapsed: createSignal(true),
+        } as unknown as SplitPanelContextType
+      }
+    >
+      <Show when={app()} keyed>
+        {(current) => <Workspace app={current} />}
+      </Show>
+    </SplitPanelContext.Provider>
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  setApp('agents');
+  expect(screen.getByRole('region', { name: 'agents' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+  setApp('home');
+  expect(screen.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
 });
 
 it('reopens automatic narrow collapse as a dismissible overlay', () => {

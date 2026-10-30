@@ -11,7 +11,11 @@ impl<B> PgAgentSessionRepo<B> {
     ) -> Result<Vec<StoredQueuedAction>> {
         let row = sqlx::query!(
             r#"
-            SELECT entries AS "entries: Json<Vec<StoredQueuedAction>>"
+            SELECT COALESCE((
+                SELECT jsonb_agg(entry ORDER BY position)
+                FROM jsonb_array_elements(entries) WITH ORDINALITY AS queued(entry, position)
+                WHERE entry->'action'->>'privateContext' IS NULL
+            ), '[]'::jsonb) AS "entries!: Json<Vec<StoredQueuedAction>>"
             FROM agent_session_queue
             WHERE agent_session_id = $1
             "#,

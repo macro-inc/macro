@@ -1,5 +1,5 @@
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
-import LoadingSpinner from '@phosphor/spinner.svg';
 import { createSignal, Show } from 'solid-js';
 import { createToolRenderer, useToolError } from './ToolRenderer';
 
@@ -67,7 +67,14 @@ export const generateImageHandler = createToolRenderer({
             class="flex items-center gap-2 py-4 text-sm text-ink-muted"
             role="status"
           >
-            <Show when={!error()} fallback="Image generation failed">
+            <Show
+              when={!error()}
+              fallback={
+                error()?.kind === 'stopped'
+                  ? 'Image generation stopped'
+                  : 'Image generation failed'
+              }
+            >
               <LoadingSpinner class="size-4 animate-spin" />
               <span>Generating image</span>
             </Show>

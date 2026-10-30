@@ -182,7 +182,7 @@ async fn test_delete_draft_message_keeps_nonempty_thread(
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     let deletion = repo
-        .delete_draft_message(draft_id, thread_id, &[link_id], None)
+        .delete_draft_message(draft_id, thread_id, &[link_id], None, 0)
         .await?
         .expect("the draft should be deleted");
     assert!(
@@ -218,7 +218,7 @@ async fn test_delete_draft_message_removes_empty_thread(
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     let deletion = repo
-        .delete_draft_message(draft_id, thread_id, &[link_id], None)
+        .delete_draft_message(draft_id, thread_id, &[link_id], None, 0)
         .await?
         .expect("the draft should be deleted");
     assert!(
@@ -249,7 +249,7 @@ async fn test_delete_draft_message_rejects_sent_message(
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     assert!(
-        repo.delete_draft_message(sent_id, thread_id, &[link_id], None)
+        repo.delete_draft_message(sent_id, thread_id, &[link_id], None, 0)
             .await?
             .is_none(),
         "deleting a non-draft should match nothing and leave it intact"
@@ -286,7 +286,7 @@ async fn test_delete_draft_message_rejects_foreign_link_scope(
     let foreign_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
 
     assert!(
-        repo.delete_draft_message(draft_id, thread_id, &[foreign_link], None)
+        repo.delete_draft_message(draft_id, thread_id, &[foreign_link], None, 0)
             .await?
             .is_none(),
         "a delete outside the caller's inboxes must match nothing"
@@ -542,6 +542,7 @@ async fn test_insert_draft_message_into_existing_thread(
     let to_contact_id = Uuid::parse_str("c0000002-0000-0000-0000-000000000002")?;
 
     let input = ResolvedDraftInput {
+        draft_generation: 0,
         db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
@@ -633,6 +634,7 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
     let from_contact_id = Uuid::parse_str("c0000001-0000-0000-0000-000000000001")?;
 
     let input = ResolvedDraftInput {
+        draft_generation: 0,
         db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
@@ -709,6 +711,7 @@ async fn test_autosave_ignores_send_time_but_immediate_send_preserves_undo_sched
         chrono::DateTime::parse_from_rfc3339("2025-06-01T12:00:00Z")?.with_timezone(&Utc);
 
     let input = ResolvedDraftInput {
+        draft_generation: 0,
         db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
@@ -797,6 +800,7 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
     tokio::time::sleep(Duration::from_millis(10)).await;
 
     let input = ResolvedDraftInput {
+        draft_generation: 0,
         db_id: message_db_id,
         provider_id: None,
         replying_to_id: Some(Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?),
@@ -875,6 +879,7 @@ async fn test_insert_draft_message_updates_thread_metadata(
 
     // Insert a macro draft (no provider_id, is_draft=true) into the thread
     let input = ResolvedDraftInput {
+        draft_generation: 0,
         db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
@@ -930,6 +935,7 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
     let from_contact_id = Uuid::parse_str("c0000001-0000-0000-0000-000000000001")?;
 
     let input = ResolvedDraftInput {
+        draft_generation: 0,
         db_id: message_db_id,
         provider_id: None,
         replying_to_id: None,
@@ -1029,7 +1035,7 @@ async fn test_client_handle_bindings_resolve_scoped_and_cascade(
     );
 
     // Deleting the draft cascades its binding away.
-    repo.delete_draft_message(draft_id, thread_id, &[link], None)
+    repo.delete_draft_message(draft_id, thread_id, &[link], None, 0)
         .await?
         .expect("the draft should be deleted");
     assert_eq!(
@@ -1228,6 +1234,7 @@ async fn test_client_handle_replay_cannot_replace_a_scheduled_or_sent_winner(
         &actor,
         ScheduleChange::Set(Utc::now() + chrono::Duration::hours(1)),
         None,
+        0,
     )
     .await?;
 
@@ -1338,6 +1345,7 @@ async fn test_rebinding_a_handle_wins_the_cross_inbox_recency_tie(
 
 fn resolved_input(db_id: Uuid, thread_db_id: Uuid) -> ResolvedDraftInput {
     ResolvedDraftInput {
+        draft_generation: 0,
         db_id,
         provider_id: None,
         replying_to_id: None,

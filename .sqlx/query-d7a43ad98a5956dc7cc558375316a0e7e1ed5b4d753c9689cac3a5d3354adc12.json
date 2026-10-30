@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT root_folder_id FROM import_run WHERE user_id = $1 AND source = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "root_folder_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "d7a43ad98a5956dc7cc558375316a0e7e1ed5b4d753c9689cac3a5d3354adc12"
+}

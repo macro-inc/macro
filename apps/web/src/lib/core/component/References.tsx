@@ -97,19 +97,25 @@ interface ReferenceRowProps {
   source: JSX.Element;
   senderAvatar?: JSX.Element;
   senderName?: string;
-  timestamp: DateValue;
+  timestamp?: DateValue;
+  timestampLabel?: string;
+  ariaLabel?: string;
   body?: JSX.Element;
   onClick?: (e: KeyboardEvent | MouseEvent) => void;
 }
 
-function ReferenceRow(props: ReferenceRowProps) {
+export function ReferenceRow(props: ReferenceRowProps) {
   const navHandlers = useSplitNavigationHandler<HTMLDivElement>((e) => {
     props.onClick?.(e);
   });
+  const timestamp = () =>
+    props.timestampLabel ??
+    (props.timestamp ? formatRelativeTimestamp(props.timestamp) : undefined);
 
   return (
     <div
       role="button"
+      aria-label={props.ariaLabel}
       tabIndex={0}
       class="group/ref-row flex min-w-0 flex-col overflow-hidden rounded-lg py-1 hover:bg-hover/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       onMouseDown={navHandlers.onMouseDown}
@@ -134,12 +140,18 @@ function ReferenceRow(props: ReferenceRowProps) {
             {props.source}
           </div>
         </div>
-        <span aria-hidden class="shrink-0 text-ink-extra-muted">
-          ·
-        </span>
-        <span class="shrink-0 text-ink-extra-muted tabular-nums">
-          {formatRelativeTimestamp(props.timestamp)}
-        </span>
+        <Show when={timestamp()}>
+          {(label) => (
+            <>
+              <span aria-hidden class="shrink-0 text-ink-extra-muted">
+                ·
+              </span>
+              <span class="shrink-0 text-ink-extra-muted tabular-nums">
+                {label()}
+              </span>
+            </>
+          )}
+        </Show>
       </div>
 
       <Show when={props.body}>

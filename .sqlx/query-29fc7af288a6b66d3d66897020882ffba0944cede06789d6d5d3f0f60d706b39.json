@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_chat c SET\n            name = COALESCE(i.name, c.name),\n            last_activity_at = GREATEST(c.last_activity_at, i.last_activity_at),\n            archived = COALESCE(i.archived, c.archived),\n            pinned = COALESCE(i.pinned, c.pinned),\n            updated_at = now()\n        FROM UNNEST($2::text[], $3::text[], $4::timestamptz[], $5::bool[], $6::bool[])\n            AS i(chat_jid, name, last_activity_at, archived, pinned)\n        WHERE c.account_id = $1 AND c.chat_jid = i.chat_jid\n          AND (c.name IS DISTINCT FROM COALESCE(i.name, c.name)\n            OR c.last_activity_at IS DISTINCT FROM GREATEST(c.last_activity_at, i.last_activity_at)\n            OR c.archived IS DISTINCT FROM COALESCE(i.archived, c.archived)\n            OR c.pinned IS DISTINCT FROM COALESCE(i.pinned, c.pinned))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TimestamptzArray",
+        "BoolArray",
+        "BoolArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "29fc7af288a6b66d3d66897020882ffba0944cede06789d6d5d3f0f60d706b39"
+}

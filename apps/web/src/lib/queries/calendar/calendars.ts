@@ -71,6 +71,7 @@ function cachedVisibleCalendarsQueryOptions(host: CacheHost, enabled: boolean) {
     networkMode: 'offlineFirst' as const,
     enabled,
     placeholderData: keepPreviousData,
+    reconcile: 'id' as const,
   };
 }
 
@@ -82,6 +83,9 @@ function visibleCalendarsQueryOptions(enabled: boolean) {
     refetchInterval: outlookCalendarRefetchInterval,
     enabled,
     placeholderData: keepPreviousData,
+    // Polls return new objects for unchanged calendars. Without reconciling,
+    // an open calendar picker rebuilds its rows and loses keyboard focus.
+    reconcile: 'id' as const,
   };
 }
 

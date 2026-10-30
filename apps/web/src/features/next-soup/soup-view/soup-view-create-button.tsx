@@ -1,3 +1,4 @@
+import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   CREATABLE_BLOCKS,
@@ -6,9 +7,9 @@ import {
   useCreateAction,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
+import { type TranslationKey, t } from '@app/lib/i18n';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import type { BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -17,11 +18,9 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
-import { Button, cn, Dropdown } from '@ui';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
+import { Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
 import { useMaybeSoupView } from './soup-view-context';
@@ -43,17 +42,23 @@ type CreateOption = {
 
 const IMPORT_FILE_OPTION: CreateOption = {
   id: 'import-file',
-  label: 'Import file',
+  get label() {
+    return t('create.importFile');
+  },
 };
 const IMPORT_FOLDER_OPTION: CreateOption = {
   id: 'import-folder',
-  label: 'Import folder',
+  get label() {
+    return t('create.importFolder');
+  },
 };
 // Companies aren't blocks, so the Customers view gets a bespoke option
 // that opens the create-company modal instead of a create action.
 const CREATE_COMPANY_OPTION: CreateOption = {
   id: 'create-company',
-  label: 'Company',
+  get label() {
+    return t('create.companyLabel');
+  },
 };
 
 /**
@@ -61,18 +66,18 @@ const CREATE_COMPANY_OPTION: CreateOption = {
  * (and thus aren't in CREATABLE_BLOCKS) but still need a create entry in
  * specific list views.
  */
-const VIEW_ONLY_BLOCK_LABELS: Partial<Record<CreatableName, string>> = {
-  routine: 'Routine',
+const VIEW_ONLY_BLOCK_LABELS: Partial<Record<CreatableName, TranslationKey>> = {
+  routine: 'create.routineLabel',
 };
 
-const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
-  agents: 'Agent',
-  channels: 'Channel',
-  companies: 'Company',
-  documents: 'New',
-  folders: 'Folder',
-  mail: 'Email',
-  tasks: 'Task',
+const VIEW_CREATE_LABELS: Partial<Record<ListView, TranslationKey>> = {
+  agents: 'create.agentLabel',
+  channels: 'create.channelLabel',
+  companies: 'create.companyLabel',
+  documents: 'create.new',
+  folders: 'create.folderLabel',
+  mail: 'create.emailLabel',
+  tasks: 'create.taskLabel',
 };
 
 function getViewCreateOptions(
@@ -90,7 +95,7 @@ function getViewCreateOptions(
       return [{ id: block.blockName, label: block.label }];
     }
     const viewOnlyLabel = VIEW_ONLY_BLOCK_LABELS[name];
-    if (viewOnlyLabel) return [{ id: name, label: viewOnlyLabel }];
+    if (viewOnlyLabel) return [{ id: name, label: t(viewOnlyLabel) }];
     return [];
   });
   if (view === 'documents') {
@@ -154,8 +159,8 @@ export const SoupViewCreateButton = () => {
   });
   const createLabel = createMemo(() => {
     const view = createView();
-    if (!view) return 'Create';
-    return VIEW_CREATE_LABELS[view] ?? 'Create';
+    const label = view ? VIEW_CREATE_LABELS[view] : undefined;
+    return t(label ?? 'create.create');
   });
 
   const handleSelect = (option: CreateOption) => {
@@ -184,38 +189,22 @@ export const SoupViewCreateButton = () => {
     runCreateAction(option.id);
   };
 
-  const SingleOptionButton = (props: { hideLabel?: boolean }) => (
-    <Button
-      variant="accent"
-      class={cn(
-        'border-0 px-3 py-2 pl-1 font-semibold',
-        props.hideLabel && 'pr-1'
-      )}
-      size="sm"
+  const SingleOptionButton = () => (
+    <ViewCreateButton
+      presentation="toolbar"
+      aria-label={createLabel()}
       onClick={() => handleSelect(options()[0])}
-    >
-      <PlusCircleIcon class="size-3.5 text-accent" />
-      <Show when={!props.hideLabel}>
-        <span>{createLabel()}</span>
-      </Show>
-    </Button>
+    />
   );
 
-  const MultiOptionButton = (props: { hideLabel?: boolean }) => (
-    <Dropdown placement="bottom-start">
+  const MultiOptionButton = () => (
+    <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        variant="accent"
-        class={cn(
-          'border-0 px-3 py-2 pl-1 font-semibold',
-          props.hideLabel && 'pr-1'
-        )}
-      >
-        <PlusCircleIcon class="size-3.5" />
-        <Show when={!props.hideLabel}>
-          <span>{createLabel()}</span>
-        </Show>
-        <ChevronDownIcon class="size-2.5" />
-      </Dropdown.Trigger>
+        as={ViewCreateButton}
+        presentation="toolbar"
+        menu
+        aria-label={createLabel()}
+      />
       <Dropdown.Content>
         <Dropdown.Group>
           <For each={options()}>
@@ -239,16 +228,9 @@ export const SoupViewCreateButton = () => {
         <NewCallButton />
       </Show>
       <Show when={options().length > 0}>
-        <CollapsibleHeaderItem id="create-button" priority={2}>
-          {(isCollapsed) => (
-            <Show
-              when={options().length > 1}
-              fallback={<SingleOptionButton hideLabel={isCollapsed()} />}
-            >
-              <MultiOptionButton hideLabel={isCollapsed()} />
-            </Show>
-          )}
-        </CollapsibleHeaderItem>
+        <Show when={options().length > 1} fallback={<SingleOptionButton />}>
+          <MultiOptionButton />
+        </Show>
       </Show>
     </>
   );

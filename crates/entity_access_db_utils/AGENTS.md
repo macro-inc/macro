@@ -31,7 +31,7 @@ top of it.
 - Used by: `crates/entity_access_management`, `crates/entity_registry/entity_registry_db_utils`,
   and most domain crates that grant access as part of a write
   (`channels`, `projects`, `teams`, `crm`, `call`, `chat`, `documents`,
-  `macro_db_client`, `services/scheduled_action`).
+  `macro_db_client`, `crates/scheduled_action`).
 
 ## Recipes
 
@@ -51,6 +51,8 @@ top of it.
 - Folder direct-grant changes hold `team_share::acquire_guard` before entity/row
   locks, matching project topology propagation. Legacy non-UUID children inherit
   through their parent dynamically and do not get UUID grant rows.
+
+- `external_chat` entities use the generic direct-sharing facts and grant helpers; provider membership never creates a grant.
 
 ## Related
 

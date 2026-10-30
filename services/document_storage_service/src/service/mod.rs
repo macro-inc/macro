@@ -7,3 +7,5 @@ pub mod document_event_publisher;
 pub mod entity_mutation;
 pub mod s3;
 pub mod soup_favorites_reader;
+
+pub mod saved_views;

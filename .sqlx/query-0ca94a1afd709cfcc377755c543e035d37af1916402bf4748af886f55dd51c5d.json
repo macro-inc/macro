@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET lease_expires_at = NOW() + ($3::double precision * interval '1 second'),\n                updated_at = NOW()\n            WHERE user_id = $1 AND source = $4 AND status IN ('running', 'importing')\n              AND lease_owner = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Float8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0ca94a1afd709cfcc377755c543e035d37af1916402bf4748af886f55dd51c5d"
+}

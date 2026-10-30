@@ -5,7 +5,12 @@ export function EmailViewSkeleton() {
   return (
     <ViewSkeleton.Root asidePreferenceKey="email">
       <ViewSkeleton.Sidebar title="Email" createLabel="New email" />
-      <ViewSkeleton.Main title="Inbox" searchPlaceholder="Search email" />
+      <ViewSkeleton.Main
+        title="Inbox"
+        tabs={['Signal', 'Noise']}
+        controls={[2, 1, '+ New', 1]}
+        searchPlaceholder="Search email"
+      />
     </ViewSkeleton.Root>
   );
 }

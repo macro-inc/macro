@@ -26,8 +26,8 @@ through `call::domain::imports`.
 
 ## Boundaries
 
-- Depends on: `call` import port, `pipedream_mcp` `ApiProxy` / `ConnectionStore` / `AppConnections`.
-- Used by: `services/document_cognition_service` (composition root, worker, webhook route).
+- Depends on: `call` import port, `pipedream_mcp` `ConnectedAppProxy` / `ConnectionStore` / `AppConnections`.
+- Used by: `services/agent_harness_service` (composition root, worker, webhook route).
 
 ## Checks
 
@@ -35,7 +35,7 @@ through `call::domain::imports`.
 
 ## Gotchas
 
-- Granola only accepts public HTTPS webhook URLs, built from DCS `MCP_PUBLIC_URL`;
+- Granola only accepts public HTTPS webhook URLs, built from the harness `MCP_CLIENT_PUBLIC_URL`;
   reconcile is a no-op otherwise. Local stacks need a tunnel on
   `/cognition/integrations/granola/webhooks`.
 - Granola discards a delivery permanently on 401 or other 4xx; return 503 while

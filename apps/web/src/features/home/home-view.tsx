@@ -50,7 +50,10 @@ function HomeFallback() {
 
 function HomeListPane(props: {
   hasPreview: boolean;
-  onPreviewEntityChange: (entity: PreviewSelection | undefined) => void;
+  onPreviewEntityChange: (
+    entity: PreviewSelection | undefined,
+    options?: { activate?: boolean }
+  ) => void;
   onNewChat: () => void;
 }) {
   const shell = useViewShell();
@@ -89,8 +92,11 @@ function HomeViewRoot() {
     useHomeView();
 
   const newChat = closePreview;
-  const onPreviewEntityChange = (entity: PreviewSelection | undefined) => {
-    if (entity) openPreview(entity);
+  const onPreviewEntityChange = (
+    entity: PreviewSelection | undefined,
+    options?: { activate?: boolean }
+  ) => {
+    if (entity) openPreview(entity, options);
     else closePreview();
   };
 
@@ -219,9 +225,18 @@ function HomeCalendarRouteContent() {
       <PreviewFrame
         splitPanelContext={panel}
         headerLeading={<HomeReturnBreadcrumb onReturn={closePreview} />}
+        hideHeader={!isTouchDevice()}
         locationKey={() => `${search.eventId}:${search.occurrenceKey}`}
       >
-        <CalendarView route={homeCalendarRoute} refocus={calendarRefocus} />
+        <CalendarView
+          route={homeCalendarRoute}
+          refocus={calendarRefocus}
+          headerLeading={
+            <Show when={!isTouchDevice()}>
+              <HomeReturnBreadcrumb onReturn={closePreview} />
+            </Show>
+          }
+        />
       </PreviewFrame>
     </div>
   );

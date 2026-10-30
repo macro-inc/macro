@@ -13,7 +13,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmCommentTarget } from '../context/workspace-context';
 import type { CrmContact } from '../core/contact';
@@ -197,8 +197,19 @@ vi.mock('./record-associations', () => ({
   RecordReferencesSection: () => null,
 }));
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   taskContext.records.length = 0;
   taskContext.contactCompanyId = undefined;
   taskContext.recordError = () => false;

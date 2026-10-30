@@ -2,10 +2,12 @@ use crate::domain::models::{
     CatalogEntry, CatalogPage, ConnectToken, McpServer, PipedreamAccount, PipedreamConnection,
     client_info,
 };
-use crate::domain::ports::{ApiProxy, ProxyMethod, ProxyResponse};
-use crate::domain::ports::{ConnectorDirectory, McpConnection, PipedreamConnect};
+use crate::domain::ports::{
+    ConnectedAppProxy, ConnectorDirectory, McpConnection, PipedreamConnect, ProxyResponse,
+};
 use anyhow::Context;
 use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use reqwest::header::{HeaderMap, HeaderValue};
 use rmcp::service::ServiceExt;
 use rmcp::transport::StreamableHttpClientTransport;
@@ -17,50 +19,6 @@ use url::Url;
 
 mod capabilities;
 
-impl ApiProxy for PipedreamClient {
-    #[tracing::instrument(skip_all, err)]
-    async fn proxy(
-        &self,
-        connection: &PipedreamConnection,
-        method: ProxyMethod,
-        url: &str,
-        body: Option<serde_json::Value>,
-    ) -> anyhow::Result<ProxyResponse> {
-        let target = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(url);
-        let method = match method {
-            ProxyMethod::Get => reqwest::Method::GET,
-            ProxyMethod::Post => reqwest::Method::POST,
-            ProxyMethod::Delete => reqwest::Method::DELETE,
-        };
-        let mut request = self
-            .authed(
-                self.http
-                    .request(method, self.connect_api(&format!("/proxy/{target}"))),
-            )
-            .await?
-            .query(&[
-                ("external_user_id", connection.user_id.as_ref()),
-                ("account_id", connection.account_id.as_str()),
-            ]);
-        if let Some(body) = body {
-            request = request.json(&body);
-        }
-        let response = request
-            .send()
-            .await
-            .context("Pipedream proxy request failed")?;
-        let status = response.status().as_u16();
-        // Preserve status for provider-specific retries and missing resources.
-        let bytes = response.bytes().await?;
-        let body = if bytes.is_empty() {
-            serde_json::Value::Null
-        } else {
-            serde_json::from_slice(&bytes).context("invalid proxy JSON response")?
-        };
-        Ok(ProxyResponse { status, body })
-    }
-}
-
 /// Default base URL of the Pipedream REST API.
 pub const DEFAULT_API_URL: &str = "https://api.pipedream.com";
 
@@ -70,6 +28,10 @@ pub const DEFAULT_MCP_URL: &str = "https://remote.mcp.pipedream.net";
 /// Safety margin subtracted from an access token's lifetime, so we never
 /// present a token about to expire mid-request.
 const TOKEN_EXPIRY_MARGIN: Duration = Duration::from_secs(60);
+
+/// The most accounts one listing asks for; a user holds one per app unless a
+/// connect flow went unreported.
+const ACCOUNTS_PAGE_LIMIT: &str = "100";
 
 /// Configuration for [`PipedreamClient`].
 #[derive(Clone, Debug)]
@@ -256,13 +218,32 @@ impl PipedreamConnect for PipedreamClient {
         let account: AccountResponse =
             serde_json::from_value(account).context("parsing Pipedream account")?;
 
-        Ok(Some(PipedreamAccount {
-            id: account.id,
-            external_user_id: account.external_id,
-            app_slug: account.app.name_slug,
-            app_name: account.app.name,
-            healthy: account.healthy.unwrap_or(true),
-        }))
+        Ok(Some(account.into()))
+    }
+
+    #[tracing::instrument(skip(self, external_user_id), err)]
+    async fn list_accounts(
+        &self,
+        external_user_id: &str,
+        app_slug: &str,
+    ) -> anyhow::Result<Vec<PipedreamAccount>> {
+        let response = self
+            .authed(self.http.get(self.connect_api("/accounts")).query(&[
+                ("external_user_id", external_user_id),
+                ("app", app_slug),
+                ("limit", ACCOUNTS_PAGE_LIMIT),
+            ]))
+            .await?
+            .send()
+            .await
+            .context("listing Pipedream accounts")?;
+        let response = error_for_status(response).await?;
+
+        let accounts: AccountsResponse = response
+            .json()
+            .await
+            .context("decoding Pipedream accounts response")?;
+        Ok(accounts.data.into_iter().map(Into::into).collect())
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -474,6 +455,55 @@ impl McpConnection for PipedreamClient {
     }
 }
 
+/// The prefix Pipedream's Connect proxy strips to find upstream headers.
+const PROXY_HEADER_PREFIX: &str = "x-pd-proxy-";
+
+impl ConnectedAppProxy for PipedreamClient {
+    #[tracing::instrument(skip_all, err, fields(app = %connection.app_slug, user_id = %connection.user_id, method = ?method))]
+    async fn proxy(
+        &self,
+        connection: &PipedreamConnection,
+        method: http::Method,
+        url: &str,
+        headers: &http::HeaderMap,
+        body: Option<&serde_json::Value>,
+    ) -> anyhow::Result<ProxyResponse> {
+        if headers.contains_key(http::header::AUTHORIZATION) {
+            anyhow::bail!("the Connect proxy injects Authorization; callers may not set it");
+        }
+        let endpoint = self.connect_api(&format!("/proxy/{}", URL_SAFE_NO_PAD.encode(url)));
+        let mut request = self
+            .authed(self.http.request(method, endpoint))
+            .await?
+            .query(&[
+                ("external_user_id", connection.user_id.as_ref()),
+                ("account_id", connection.account_id.as_str()),
+            ]);
+        for (name, value) in headers {
+            request = request.header(format!("{PROXY_HEADER_PREFIX}{name}"), value);
+        }
+        if let Some(body) = body {
+            request = request.json(body);
+        }
+
+        let response = request
+            .send()
+            .await
+            .context("calling the Pipedream Connect proxy")?;
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = response
+            .text()
+            .await
+            .context("reading the Pipedream Connect proxy response")?;
+        Ok(ProxyResponse {
+            status,
+            headers,
+            body,
+        })
+    }
+}
+
 /// The charset a Pipedream app slug may use. A segment outside it could never
 /// name an app, and must not be placed in a request path.
 fn is_app_slug(slug: &str) -> bool {
@@ -529,7 +559,26 @@ struct AccountResponse {
     id: String,
     external_id: Option<String>,
     healthy: Option<bool>,
+    created_at: Option<chrono::DateTime<chrono::Utc>>,
     app: AccountApp,
+}
+
+impl From<AccountResponse> for PipedreamAccount {
+    fn from(account: AccountResponse) -> Self {
+        Self {
+            id: account.id,
+            external_user_id: account.external_id,
+            app_slug: account.app.name_slug,
+            app_name: account.app.name,
+            healthy: account.healthy.unwrap_or(true),
+            created_at: account.created_at,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct AccountsResponse {
+    data: Vec<AccountResponse>,
 }
 
 #[derive(Deserialize)]

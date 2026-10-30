@@ -5,6 +5,8 @@ import { match } from 'ts-pattern';
 import type {
   BooleanProperty,
   DateProperty,
+  DateRangeProperty,
+  DateRangeValue,
   EntityProperty,
   LinkProperty,
   MultiValueProperty,
@@ -41,6 +43,12 @@ export const isDateProperty = (
   property: Property
 ): property is DateProperty => {
   return property.valueType === 'DATE';
+};
+
+export const isDateRangeProperty = (
+  property: Property
+): property is DateRangeProperty => {
+  return property.valueType === 'DATE_RANGE';
 };
 
 const _isSelectStringProperty = (
@@ -83,7 +91,8 @@ const _isSingleValueProperty = (
     property.valueType === 'STRING' ||
     property.valueType === 'NUMBER' ||
     property.valueType === 'BOOLEAN' ||
-    property.valueType === 'DATE'
+    property.valueType === 'DATE' ||
+    property.valueType === 'DATE_RANGE'
   );
 };
 
@@ -229,6 +238,7 @@ type RawPropertyValue =
   | number
   | boolean
   | Date
+  | DateRangeValue
   | string[]
   | EntityReference
   | EntityReference[]
@@ -247,6 +257,19 @@ function isSingleEntityReference(value: unknown): value is EntityReference {
   );
 }
 
+function isDateRangeValue(value: unknown): value is DateRangeValue {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'start' in value &&
+    'end' in value &&
+    'allDay' in value &&
+    typeof value.allDay === 'boolean' &&
+    value.start instanceof Date &&
+    value.end instanceof Date
+  );
+}
+
 /**
  * Creates a null-valued PropertyApiValues for the given valueType
  */
@@ -258,6 +281,10 @@ function createNullApiValue(
     .with('NUMBER', () => ({ valueType: 'NUMBER' as const, value: null }))
     .with('BOOLEAN', () => ({ valueType: 'BOOLEAN' as const, value: null }))
     .with('DATE', () => ({ valueType: 'DATE' as const, value: null }))
+    .with('DATE_RANGE', () => ({
+      valueType: 'DATE_RANGE' as const,
+      value: null,
+    }))
     .with('SELECT_STRING', () => ({
       valueType: 'SELECT_STRING' as const,
       values: null,
@@ -309,6 +336,11 @@ export function toPropertyApiValue(
       }
       return null;
     })
+    .with('DATE_RANGE', () =>
+      isDateRangeValue(value)
+        ? { valueType: 'DATE_RANGE' as const, value }
+        : null
+    )
     .with('SELECT_STRING', () => {
       if (typeof value === 'string') {
         return { valueType: 'SELECT_STRING' as const, values: [value] };

@@ -7,6 +7,7 @@ import type {
   InputCallbacks,
   InputData,
   InputPersistenceKey,
+  InputSnapshot,
 } from '@channel/Input/types';
 
 type ComposerOptions = {
@@ -15,6 +16,8 @@ type ComposerOptions = {
   attachmentTracker?: InputAttachmentTracker;
   persistenceKey?: InputPersistenceKey;
   clearEditor: () => void;
+  /** Puts the editor draft back when send fails after the optimistic clear. */
+  restoreEditor?: (snapshot: InputSnapshot) => void;
   attachFiles: (files: File[]) => Promise<void>;
   trackTyping?: () => boolean;
   onSendError?: (error: unknown) => void;
@@ -41,6 +44,10 @@ export function createMessageComposer(options: ComposerOptions) {
     clearComposer: () => {
       mentionsTracker.setMentions([]);
       options.clearEditor();
+    },
+    restoreEditor: (snapshot) => {
+      mentionsTracker.setMentions(snapshot.mentions);
+      options.restoreEditor?.(snapshot);
     },
     callbacks: {
       onChange: options.callbacks.onChange,

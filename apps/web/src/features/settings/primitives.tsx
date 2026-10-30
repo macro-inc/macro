@@ -1,5 +1,5 @@
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import { Button, type ButtonProps, cn } from '@ui';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import { Button, type ButtonProps, ComposerSurface, cn } from '@ui';
 import { children, createContext, type JSX, Show, useContext } from 'solid-js';
 import { settingsTarget } from './core/settings-target';
 
@@ -9,7 +9,7 @@ export const SettingsSheetContext = createContext(false);
 /*
  * Shared building blocks for the settings panels. Every settings tab composes
  * these so the whole menu shares one rhythm: a centered content column,
- * clear section headings, and flat neutral surfaces with subtle row dividers.
+ * clear section headings, and raised composer surfaces with subtle row dividers.
  *
  *   <SettingsPage title="Account" description="…">
  *     <SettingsSection title="Profile">
@@ -51,7 +51,7 @@ export function SettingsPage(props: {
     <div
       data-settings-page
       data-drawer-scroll-body={inSheet ? true : undefined}
-      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel [&_[data-variant=cta]]:bg-ink [&_[data-variant=cta]]:text-panel [&_[data-variant=cta]]:focus-visible:ring-panel/70 [&_:has(>input[type=checkbox])]:[--color-accent:var(--color-ink)] [&_input[type=checkbox]]:accent-ink"
+      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel"
     >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
@@ -120,7 +120,14 @@ export function SettingsPage(props: {
  */
 export function SettingsSection(props: {
   title?: JSX.Element;
+  /**
+   * The settings search target, when the title is translated or not a plain
+   * string. Defaults to the title.
+   */
+  target?: string;
   description?: string;
+  /** Collapsible sections keep their heading visible when the body is closed. */
+  expanded?: boolean;
   /** Right-aligned controls beside the section heading. */
   actions?: JSX.Element;
   class?: string;
@@ -130,9 +137,11 @@ export function SettingsSection(props: {
   return (
     <section
       data-settings-target={
-        typeof props.title === 'string'
-          ? settingsTarget(props.title)
-          : undefined
+        props.target
+          ? settingsTarget(props.target)
+          : typeof props.title === 'string'
+            ? settingsTarget(props.title)
+            : undefined
       }
       tabIndex={-1}
       class={cn('scroll-mt-4 outline-none', props.class)}
@@ -154,9 +163,11 @@ export function SettingsSection(props: {
           </Show>
         </div>
       </Show>
-      <SettingsSurface class="flex flex-col gap-2 p-4">
-        {props.children}
-      </SettingsSurface>
+      <Show when={props.expanded ?? true}>
+        <SettingsSurface class="flex flex-col gap-2 p-4">
+          {props.children}
+        </SettingsSurface>
+      </Show>
     </section>
   );
 }
@@ -174,21 +185,22 @@ export function SettingsSurface(props: {
       when={!nested}
       fallback={<div class={props.class}>{props.children}</div>}
     >
-      <div
+      <ComposerSurface
+        as="div"
         class={cn(
-          'relative min-w-0 rounded-2xl border border-edge-muted bg-ink/4 text-ink',
+          'relative min-w-0 touch:rounded-3xl touch:border touch:border-edge-muted touch:bg-composer touch:text-composer-ink',
           props.class
         )}
       >
         <SettingsSurfaceContext.Provider value={true}>
           {props.children}
         </SettingsSurfaceContext.Provider>
-      </div>
+      </ComposerSurface>
     </Show>
   );
 }
 
-/** Rows share a flat neutral surface; nested cards do not add another box. */
+/** Rows share a raised surface; nested cards do not add another box. */
 export function SettingsCard(props: { class?: string; children: JSX.Element }) {
   const nested = useContext(SettingsSurfaceContext);
   return (
@@ -297,14 +309,17 @@ export function ChoiceRow(props: {
   checked: boolean;
   title: string;
   description: string;
+  suggested?: boolean;
   disabled?: boolean;
   onChange: () => void;
 }) {
   return (
     <label
-      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
         'cursor-not-allowed opacity-50': props.disabled,
+        'p-4': props.suggested,
+        'p-3': !props.suggested,
       }}
     >
       <input
@@ -318,7 +333,14 @@ export function ChoiceRow(props: {
         class="mt-0.5 accent-accent"
       />
       <span class="min-w-0">
-        <span class="block text-sm font-medium text-ink">{props.title}</span>
+        <span class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
+          {props.title}
+          <Show when={props.suggested}>
+            <span class="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink-muted">
+              Suggested
+            </span>
+          </Show>
+        </span>
         <span class="mt-0.5 block text-sm text-ink-muted">
           {props.description}
         </span>
@@ -358,7 +380,8 @@ export function IntegrationRow(props: {
           {props.icon}
         </div>
       </Show>
-      <div class="flex-1 min-w-0 flex flex-col gap-0.5">
+      {/* The basis wraps actions below the text on narrow screens. */}
+      <div class="flex-1 basis-48 min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
           <div
             class={cn(
@@ -382,7 +405,9 @@ export function IntegrationRow(props: {
         </Show>
       </div>
       <Show when={props.children}>
-        <div class="shrink-0 flex items-center gap-2">{props.children}</div>
+        <div class="shrink-0 max-w-full flex flex-wrap items-center gap-2">
+          {props.children}
+        </div>
       </Show>
     </div>
   );
@@ -392,6 +417,7 @@ export function IntegrationRow(props: {
 export function SettingsButton(props: ButtonProps) {
   return (
     <Button
+      variant="ghost"
       {...props}
       class={cn('rounded-full font-normal gap-1.5', props.class)}
     />

@@ -1342,7 +1342,7 @@ async fn create_team_owned_bot_requires_team_admin_or_owner(pool: PgPool) -> any
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn only_creator_or_team_owner_can_delete_team_bots(pool: PgPool) -> anyhow::Result<()> {
+async fn team_admins_can_delete_agents_but_not_other_team_bots(pool: PgPool) -> anyhow::Result<()> {
     let service = service(&pool);
     let team_id = Uuid::new_v4();
     insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
@@ -1376,12 +1376,27 @@ async fn only_creator_or_team_owner_can_delete_team_bots(pool: PgPool) -> anyhow
         .create_agent(user_id(TEAM_MEMBER), member_agent_request)
         .await?;
 
-    let admin_delete = service
-        .delete_bot(user_id(TEAM_ADMIN), member_agent.bot.id)
-        .await;
-    assert!(matches!(admin_delete, Err(BotError::Unauthorized)));
     service
-        .delete_bot(user_id(TEAM_MEMBER), member_agent.bot.id)
+        .delete_bot(user_id(TEAM_ADMIN), member_agent.bot.id)
+        .await?;
+
+    let mut owner_agent_request = create_agent_req("owner-team-agent", AgentChannelScope::All);
+    owner_agent_request.team_id = Some(team_id);
+    let owner_agent = service
+        .create_agent(user_id(TEAM_OWNER), owner_agent_request)
+        .await?;
+    let member_delete = service
+        .delete_bot(user_id(TEAM_MEMBER), owner_agent.bot.id)
+        .await;
+    assert!(matches!(member_delete, Err(BotError::Unauthorized)));
+
+    let mut creator_agent_request = create_agent_req("creator-team-agent", AgentChannelScope::All);
+    creator_agent_request.team_id = Some(team_id);
+    let creator_agent = service
+        .create_agent(user_id(TEAM_MEMBER), creator_agent_request)
+        .await?;
+    service
+        .delete_bot(user_id(TEAM_MEMBER), creator_agent.bot.id)
         .await?;
 
     Ok(())

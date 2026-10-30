@@ -12,9 +12,6 @@ vi.mock('@app/lib/graphql-cache', () => ({
   normalizedCacheResultMetadata: (result: { metadata: unknown }) =>
     result.metadata,
 }));
-vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: () => ({}),
-}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
   getGraphqlSoupCacheHost: () => undefined,

@@ -8,6 +8,7 @@ mod error;
 mod mailbox;
 mod mailbox_settings;
 mod operation;
+mod permit;
 mod provider;
 mod send;
 
@@ -19,5 +20,10 @@ pub use error::{EmailApiError, RateLimitOrigin, RateLimitRefusal};
 pub use mailbox::{CalendarPart, MessageWithCalendarParts, ProviderSubscription, ThreadListPage};
 pub use mailbox_settings::*;
 pub use operation::ApiOperationKind;
+pub use permit::{MailboxLoad, RequestPermit};
 pub use provider::*;
+#[cfg(feature = "ports")]
+pub use send::PreparedSendMessage;
+#[cfg(feature = "ports")]
+pub(crate) use send::validate_message_id;
 pub use send::{SendRequest, SentIds};

@@ -4,6 +4,7 @@ use crate::outbound::{
     email_api::{GmailApi, MicrosoftCredentialsClient},
     inbox_health::{PgInboxHealth, ProviderInboxHealth},
 };
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use email::{
     domain::mailbox::{credentials::MailboxCredentials, health::InboxHealthService},
     outbound::mailbox_pg::PgMailboxSync,
@@ -36,7 +37,11 @@ pub fn inbox_lifecycle(
 pub type MicrosoftTokens = MailboxCredentials<PgMailboxSync, MicrosoftCredentialsClient>;
 pub type InboxHealth = InboxHealthService<
     PgInboxHealth,
-    ProviderInboxHealth<MicrosoftTokens, MacroEventBrokerService<KafkaEventPublisher, TaskTracker>>,
+    ProviderInboxHealth<
+        MicrosoftTokens,
+        MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
+        SqsContactsIngress<SqsContactsQueue>,
+    >,
 >;
 
 pub fn inbox_health(
@@ -46,6 +51,7 @@ pub fn inbox_health(
     redis: crate::util::redis::RedisClient,
     queue: sqs_client::SQS,
     broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
+    contacts: std::sync::Arc<SqsContactsIngress<SqsContactsQueue>>,
 ) -> InboxHealth {
     InboxHealthService::new(
         PgInboxHealth {
@@ -62,6 +68,7 @@ pub fn inbox_health(
             db,
             queue,
             broker,
+            contacts,
         },
     )
 }

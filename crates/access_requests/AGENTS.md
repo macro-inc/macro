@@ -19,6 +19,10 @@ the durable notification/realtime dispatcher.
 - Asking for initial access cannot require an existing View receipt. Request
   state hides owner details and other people's requests from ordinary callers
   without access; recorded reviewers can review without a separate View grant.
+- Request state reports Owner for the recorded user owner of a document, chat,
+  or folder, whatever that owner's grant row says, because those entities' read
+  extractors do the same. The web app compares the two levels and reloads on a
+  mismatch.
 - Notification delivery is composed in document storage. Stable event IDs and
   durable withdrawal prevent delayed delivery from resurrecting old requests.
 
@@ -38,3 +42,5 @@ the durable notification/realtime dispatcher.
   and entity. Identical pending replays are harmless; cancellation stays available
   and preserves the deadline. Approval clears it for a further upgrade, while
   denial replaces it with the 24-hour cooldown.
+
+- `ShareEntityType::ExternalChat` uses the generic direct-access/request workflow; viewing requires no provider account.

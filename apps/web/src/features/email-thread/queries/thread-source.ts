@@ -25,6 +25,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
         db_id: attachment.db_id,
         filename: attachment.filename,
         mime_type: attachment.mime_type,
+        reference_url: attachment.reference_url,
         sfs_id: attachment.sfs_id,
         size_bytes: attachment.size_bytes,
       })),
@@ -62,6 +63,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
       })),
       created_at: message.created_at,
       db_id: message.db_id,
+      draft_generation: message.draft_generation,
       from: message.from
         ? {
             email: message.from.email,
@@ -88,6 +90,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
       provider_id: message.provider_id,
       replying_to_id: message.replying_to_id,
       scheduled_send_time: message.scheduled_send_time,
+      scheduled_send_status: message.scheduled_send_status,
       sent_at: message.sent_at,
       snippet: message.snippet,
       subject: message.subject,
@@ -107,7 +110,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
 export function createEmailThreadSource(
   threadId: Accessor<string>,
   query: ThreadQueryResult<ThreadQueryData>
-): EmailThreadSource {
+): EmailThreadSource & { isLocalDraft: Accessor<boolean> } {
   // Status guards prevent a pending Solid resource from suspending its owner.
   const snapshot = createMemo<{ requested: string; thread?: EmailThread }>(
     (previous) => {
@@ -227,6 +230,22 @@ export function createEmailThreadSource(
   return {
     id: () => thread()?.db_id ?? query.resolvedThreadId ?? threadId(),
     thread,
+    // A first-use working copy may not have reached the mutation queue, so
+    // its temporary thread ID can still return NOT_FOUND from the server.
+    isLocalDraft: () =>
+      query.transport === 'graphql' &&
+      query.resolvedThreadId === threadId() &&
+      !!thread() &&
+      local
+        .drafts()
+        .some(
+          (draft) =>
+            draft.threadId === threadId() &&
+            !draft.serverDraftId &&
+            !draft.serverThreadId &&
+            !draft.content.replying_to_id &&
+            draft.status !== 'synced'
+        ),
     isError: () =>
       query.isError && (query.transport !== 'graphql' || !thread()),
     isLoading: () =>

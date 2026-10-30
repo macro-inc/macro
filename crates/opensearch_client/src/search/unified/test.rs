@@ -810,9 +810,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                       "minimum_should_match": 1,
                       "should": [
                         {
-                          "match_phrase": {
-                            "content": "test"
-                          }
+                          "bool": {"minimum_should_match": 1, "should": [
+                            {"match_phrase": {"content": "test"}},
+                            {"match_phrase": {"imported_author": "test"}}
+                          ]}
                         }
                       ]
                     }

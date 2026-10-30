@@ -19,10 +19,8 @@ import type {
 import { soupKeys } from '@queries/soup/keys';
 import {
   isDisplayableSoupItem,
-  isInstructionsMdDoc,
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
@@ -113,12 +111,10 @@ function getNextGroupPageParam(lastPage: GroupQueryPage): string | null {
 
 export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
   const usesGraphql = () => args.transport() === 'graphql';
-  const instructionsIdQuery = useInstructionsMdIdQuery();
   const queryClient = useQueryClient();
 
   const mapItemToEntity = (item: SoupApiItem) => {
     if (!isDisplayableSoupItem(item)) return;
-    if (isInstructionsMdDoc(item, instructionsIdQuery)) return;
 
     return mapApiSoupItemToEntity(item);
   };

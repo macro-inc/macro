@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -49,6 +50,14 @@ export type {
 type CalendarMutationContext = { rollback: () => void };
 
 /**
+ * Moves when a write starts patching the occurrence viewports. A refresh
+ * from an earlier write drops its refetch once this has moved: the server
+ * may not have the newer write yet, so the refetch could undo its optimistic
+ * patch, and the newer write refreshes the viewports itself once it settles.
+ */
+let occurrenceWriteRevision = 0;
+
+/**
  * Optimistically rewrite every cached occurrence viewport (each visible
  * range is its own cache entry) and return a rollback that restores the
  * exact snapshots.
@@ -56,6 +65,7 @@ type CalendarMutationContext = { rollback: () => void };
 async function patchOccurrenceCaches(
   update: (items: CalendarOccurrenceItem[]) => CalendarOccurrenceItem[]
 ): Promise<CalendarMutationContext> {
+  occurrenceWriteRevision += 1;
   await queryClient.cancelQueries({
     queryKey: calendarKeys.occurrences._def,
   });
@@ -70,6 +80,21 @@ async function patchOccurrenceCaches(
       }
     },
   };
+}
+
+/**
+ * Refreshes what a settled write can change without holding the mutation
+ * open: the write is done once the provider answers, while a delta sync can
+ * queue behind other cache work for many seconds.
+ */
+function refreshAfterWrite(eventId: string) {
+  fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
+  invalidateCalendarEventPreviews(eventId);
+  const revision = occurrenceWriteRevision;
+  fireAndForget(
+    invalidateCalendarOccurrences(() => revision === occurrenceWriteRevision),
+    'calendar-mutations'
+  );
 }
 
 function patchEventItems(
@@ -282,6 +307,7 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
     >(
       {
         onMutate: async (args) => {
+          occurrenceWriteRevision += 1;
           const revision = ++rsvpRevisionCounter;
           await queryClient.cancelQueries({
             queryKey: calendarKeys.occurrences._def,
@@ -328,6 +354,12 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
               }
             },
           };
+        },
+        onSuccess: (_data, args) => {
+          analytics.track('calendar_event_rsvp', {
+            response: args.response,
+            scope: args.scope ?? (args.recurrenceId ? 'this_event' : 'all'),
+          });
         },
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args, context) => {
@@ -388,15 +420,37 @@ function withInvitedGuests(
   };
 }
 
+function hasCalendarMutationCode(
+  error: unknown,
+  code: CalendarMutationErrorCode
+): boolean {
+  return (
+    thrownResultErrorHasCode(error, code) ||
+    (error instanceof CalendarMutationError && error.code === code)
+  );
+}
+
 /** Whether a write failed because the organizer does not let the viewer invite guests. */
 export function isGuestInviteRefused(error: unknown): boolean {
-  return (
-    thrownResultErrorHasCode(
-      error,
-      CalendarMutationErrorCode.guests_cannot_invite
-    ) ||
-    (error instanceof CalendarMutationError &&
-      error.code === CalendarMutationErrorCode.guests_cannot_invite)
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guests_cannot_invite
+  );
+}
+
+/** Whether an invitation failed because the organizer hides the guest list from the viewer. */
+export function isGuestListHiddenRefusal(error: unknown): boolean {
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guest_list_hidden
+  );
+}
+
+/** Whether a write failed because the organizer does not let the viewer change the event. */
+export function isGuestEditRefused(error: unknown): boolean {
+  return hasCalendarMutationCode(
+    error,
+    CalendarMutationErrorCode.guests_cannot_modify
   );
 }
 
@@ -444,7 +498,8 @@ async function inviteCalendarEventGuests(
       span.setAttr('calendar.invite.outcome', 'sent');
       return 'sent';
     } catch (error) {
-      const refused = isGuestInviteRefused(error);
+      const refused =
+        isGuestInviteRefused(error) || isGuestListHiddenRefusal(error);
       span.setAttr('calendar.invite.outcome', refused ? 'refused' : 'failed');
       // Provider messages can quote addresses; record only the category.
       span.error(
@@ -482,11 +537,7 @@ export function useInviteCalendarEventGuestsMutation(
             )
           ),
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: (_data, _error, args) => {
-          fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
-          invalidateCalendarEventPreviews(args.eventId);
-          return invalidateCalendarOccurrences();
-        },
+        onSettled: (_data, _error, args) => refreshAfterWrite(args.eventId),
       },
       callbacks
     ),
@@ -588,11 +639,13 @@ type DeleteCallbacks = MutationCallbacks<
   CalendarMutationContext
 >;
 
-/** Deletes an event (a recurring event's entire series) at the provider. */
-export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
-  return useMutation(() => ({
-    mutationFn: async (args: DeleteCalendarEventArgs) => {
-      const host = answeringGraphqlCalendarHost();
+async function deleteCalendarEvent(args: DeleteCalendarEventArgs) {
+  return Telemetry.span('calendar.delete_event', async (span) => {
+    const host = answeringGraphqlCalendarHost();
+    span.setAttr('calendar.event_id', args.eventId);
+    span.setAttr('calendar.delete.scope', args.scope ?? 'all');
+    span.setAttr('calendar.transport', host ? 'graphql' : 'rest');
+    try {
       if (host) {
         await executeGraphqlDelete(host, args);
         return;
@@ -604,7 +657,18 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
           recurrenceId: args.recurrenceId,
         })
       );
-    },
+    } catch (error) {
+      // Provider messages can quote addresses; record only the category.
+      span.error('Calendar event delete failed');
+      throw error;
+    }
+  });
+}
+
+/** Deletes an event (a recurring event's entire series) at the provider. */
+export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
+  return useMutation(() => ({
+    mutationFn: deleteCalendarEvent,
     ...withCallbacks<
       unknown,
       Error,
@@ -615,11 +679,7 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
         onMutate: (args) =>
           patchOccurrenceCaches((items) => applyDeletion(items, args)),
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: (_data, _error, args) => {
-          fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
-          invalidateCalendarEventPreviews(args.eventId);
-          return invalidateCalendarOccurrences();
-        },
+        onSettled: (_data, _error, args) => refreshAfterWrite(args.eventId),
       },
       callbacks
     ),
@@ -692,6 +752,9 @@ function applyEventPatch(
   const event = patchesCanonical
     ? applyCopyPatch(item.event, patch)
     : { ...item.event };
+  if (patch.guestPolicy && patchesCanonical) {
+    event.guestPolicy = patch.guestPolicy;
+  }
   if (sources.length > 0) {
     event.sources = sources.map((copy) =>
       copy.calendarId === targetCalendarId ? applyCopyPatch(copy, patch) : copy
@@ -712,16 +775,15 @@ function applyEventPatch(
   return { ...item, event, occurrence };
 }
 
-/**
- * Patches event fields. A recurring event patches the whole series by
- * default; a `this_event` scope writes the patch as a single-occurrence
- * exception addressed by `recurrenceId`, so the optimistic update lands on
- * that occurrence alone.
- */
-export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
-  return useMutation(() => ({
-    mutationFn: async (args: UpdateCalendarEventArgs) => {
-      const host = answeringGraphqlCalendarHost();
+async function updateCalendarEvent(
+  args: UpdateCalendarEventArgs
+): Promise<CalendarEventEntity | undefined> {
+  return Telemetry.span('calendar.update_event', async (span) => {
+    const host = answeringGraphqlCalendarHost();
+    span.setAttr('calendar.event_id', args.eventId);
+    span.setAttr('calendar.update.scope', args.scope ?? 'all');
+    span.setAttr('calendar.transport', host ? 'graphql' : 'rest');
+    try {
       if (host) return committedEvent(await executeGraphqlUpdate(host, args));
       return await throwOnErr(() =>
         emailClient.updateCalendarEvent(args.eventId, {
@@ -731,7 +793,23 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
           recurrenceId: args.recurrenceId,
         })
       );
-    },
+    } catch (error) {
+      // Provider messages can quote addresses; record only the category.
+      span.error('Calendar event update failed');
+      throw error;
+    }
+  });
+}
+
+/**
+ * Patches event fields. A recurring event patches the whole series by
+ * default; a `this_event` scope writes the patch as a single-occurrence
+ * exception addressed by `recurrenceId`, so the optimistic update lands on
+ * that occurrence alone.
+ */
+export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
+  return useMutation(() => ({
+    mutationFn: updateCalendarEvent,
     ...withCallbacks<
       CalendarEventEntity | undefined,
       Error,
@@ -752,11 +830,7 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
           );
         },
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: (_data, _error, args) => {
-          fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
-          invalidateCalendarEventPreviews(args.eventId);
-          return invalidateCalendarOccurrences();
-        },
+        onSettled: (_data, _error, args) => refreshAfterWrite(args.eventId),
       },
       callbacks
     ),
@@ -786,6 +860,15 @@ export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
     },
     ...withCallbacks<CalendarEventEntity, Error, CreateCalendarEventRequest>(
       {
+        onSuccess: (event, args) => {
+          analytics.track('calendar_event_created', {
+            eventId: event.id,
+            attendees: args.attendees?.length ?? 0,
+            recurring: (args.recurrenceLines?.length ?? 0) > 0,
+            macroCall: args.macroCall === true,
+            conference: args.conference != null,
+          });
+        },
         onSettled: () => invalidateCalendarOccurrences(),
       },
       callbacks

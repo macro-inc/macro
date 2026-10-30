@@ -3,23 +3,33 @@
   "theme": "maple",
   "name": "Macro",
   "appearance": {
-    "default": "dark",
+    "default": "system",
     "strict": true
   },
   "colors": {
-    "primary": "#ff8f05",
-    "light": "#ff8f05",
-    "dark": "#ff8f05"
+    "primary": "#000000",
+    "light": "#ffffff",
+    "dark": "#000000"
   },
   "background": {
     "color": {
-      "dark": "#090909"
+      "light": "#f5f1e8",
+      "dark": "#000000"
     }
   },
-  "favicon": {
-    "light": "/favicon.svg",
-    "dark": "/favicon.svg"
+  "fonts": {
+    "heading": {
+      "family": "Roboto Slab",
+      "source": "/fonts/roboto-slab-variable.woff2",
+      "format": "woff2"
+    },
+    "body": {
+      "family": "Inter",
+      "source": "/fonts/inter-variable.woff2",
+      "format": "woff2"
+    }
   },
+  "favicon": "/favicon.svg",
   "navigation": {
     "pages": [
       "index",
@@ -29,26 +39,49 @@
       {
         "group": "Features",
         "pages": [
-          "product/inbox",
           "product/search",
           "product/unified-memory",
+          "product/projects",
           "product/tagging"
         ]
       },
       {
         "group": "Blocks",
         "pages": [
-          "product/agents",
+          "product/home",
+          {
+            "group": "Drive",
+            "icon": "folder",
+            "root": "product/drive",
+            "pages": [
+              "product/docs",
+              "product/spreadsheets",
+              "product/canvas",
+              "product/snippets"
+            ]
+          },
           "product/email",
-          "product/docs",
-          "product/canvas",
-          "product/tasks",
-          "product/snippets",
           "product/channels",
-          "product/calls",
-          "product/calendar",
-          "product/folders",
-          "product/crm"
+          "product/tasks",
+          {
+            "group": "Calendar",
+            "icon": "calendar",
+            "root": "product/calendar",
+            "pages": [
+              "product/booking-links"
+            ]
+          },
+          {
+            "group": "Agents",
+            "icon": "wand-magic-sparkles",
+            "root": "product/agents",
+            "pages": [
+              "product/routines",
+              "product/skills"
+            ]
+          },
+          "product/crm",
+          "product/calls"
         ]
       },
       {
@@ -71,7 +104,9 @@
             "icon": "wrench",
             "pages": [
               "AI/mcp/tools/index",
+              "AI/mcp/tools/add-shared-calendar-event",
               "AI/mcp/tools/add-to-pipeline",
+              "AI/mcp/tools/apply-canvas-edits",
               "AI/mcp/tools/bash-code-execution",
               "AI/mcp/tools/bulk-set-entity-property-options",
               "AI/mcp/tools/calculate-spreadsheet",
@@ -113,6 +148,7 @@
               "AI/mcp/tools/dispatch-coding-agent",
               "AI/mcp/tools/duplicate-item",
               "AI/mcp/tools/edit-booking-link",
+              "AI/mcp/tools/edit-canvas",
               "AI/mcp/tools/edit-channel-message",
               "AI/mcp/tools/edit-comment",
               "AI/mcp/tools/edit-document",
@@ -134,6 +170,9 @@
               "AI/mcp/tools/get-team-availability",
               "AI/mcp/tools/get-thread",
               "AI/mcp/tools/import-companies-csv",
+              "AI/mcp/tools/import-from-jira",
+              "AI/mcp/tools/import-from-linear",
+              "AI/mcp/tools/import-from-notion",
               "AI/mcp/tools/import-notion-page",
               "AI/mcp/tools/import-pipeline-csv",
               "AI/mcp/tools/issue-bot-credential",
@@ -174,7 +213,9 @@
               "AI/mcp/tools/read-agent-session",
               "AI/mcp/tools/read-agent-session-sharing",
               "AI/mcp/tools/read-booking-settings",
+              "AI/mcp/tools/read-calendar-event",
               "AI/mcp/tools/read-call-record",
+              "AI/mcp/tools/read-canvas",
               "AI/mcp/tools/read-channel-message-context",
               "AI/mcp/tools/read-channel-messages",
               "AI/mcp/tools/read-channel-thread",
@@ -197,6 +238,7 @@
               "AI/mcp/tools/rename-channel",
               "AI/mcp/tools/rename-document",
               "AI/mcp/tools/rename-item",
+              "AI/mcp/tools/render-canvas",
               "AI/mcp/tools/resolve-comment",
               "AI/mcp/tools/run-routine",
               "AI/mcp/tools/save-database-query",
@@ -274,6 +316,16 @@
       }
     ]
   },
+  "redirects": [
+    {
+      "source": "/product/inbox",
+      "destination": "/product/home"
+    },
+    {
+      "source": "/product/folders",
+      "destination": "/product/drive"
+    }
+  ],
   "navbar": {
     "primary": {
       "type": "button",

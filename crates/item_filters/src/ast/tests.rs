@@ -1683,12 +1683,49 @@ fn initiatives_expand_with_properties_without_enabling_legacy_queries() {
 }
 
 #[test]
-fn database_rows_are_requested_by_naming_a_table_or_a_row_outside_a_not() {
+fn initiative_notification_states_opt_in() {
+    use initiative::{InitiativeLiteral, initiatives_requested};
+    let filter = EntityFilters {
+        initiative_filters: crate::InitiativeFilters {
+            notification_filters: crate::NotificationFilters {
+                states: vec![
+                    crate::NotificationState::Unseen,
+                    crate::NotificationState::Seen,
+                    crate::NotificationState::Unseen,
+                ],
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let ast = EntityFilterAst::new_from_filters(filter).unwrap().unwrap();
+    let tree = ast.initiative_filter.as_deref().unwrap();
+    assert!(initiatives_requested(Some(tree)));
+    assert!(matches!(
+        tree,
+        Expr::Or(a, b)
+            if matches!(**a, Expr::Literal(InitiativeLiteral::NotificationState(crate::NotificationState::Unseen)))
+                && matches!(**b, Expr::Literal(InitiativeLiteral::NotificationState(crate::NotificationState::Seen)))
+    ));
+}
+
+#[test]
+fn database_rows_are_requested_by_include_or_id_outside_a_not() {
     use database_row::{DatabaseRowLiteral, database_rows_requested};
     let table = Uuid::from_u128(0x7ab1e);
     let row = Uuid::from_u128(0x0001);
 
     assert!(!database_rows_requested(None));
+    assert!(database_rows_requested(Some(&Expr::val(
+        DatabaseRowLiteral::Include
+    ))));
+    assert!(!database_rows_requested(Some(&Expr::is_not(Expr::val(
+        DatabaseRowLiteral::Include
+    )))));
+    assert_eq!(
+        serde_json::to_value(DatabaseRowLiteral::Include).unwrap(),
+        json!("inc")
+    );
     assert!(database_rows_requested(Some(&Expr::val(
         DatabaseRowLiteral::TableId(table)
     ))));
@@ -1796,4 +1833,44 @@ fn crm_associations_deduplicate_repeated_records() {
 
     assert_eq!(ast.crm_associations(), vec![company]);
     assert!(EntityFilterAst::default().crm_associations().is_empty());
+}
+
+#[test]
+fn agent_session_source_literals_use_the_column_values() {
+    use crate::ast::agent_session::{AgentSessionLiteral, AgentSessionSource};
+
+    let tree: Expr<AgentSessionLiteral> =
+        serde_json::from_value(json!({ "!": { "l": { "src": "routine" } } })).unwrap();
+    assert_matches!(&tree, Expr::Not(inner) => {
+        assert_matches!(
+            **inner,
+            Expr::Literal(AgentSessionLiteral::Source(AgentSessionSource::Routine))
+        );
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "!": { "l": { "src": "routine" } } })
+    );
+    assert_eq!(<&str>::from(AgentSessionSource::User), "user");
+    assert_eq!("routine".parse(), Ok(AgentSessionSource::Routine));
+}
+
+#[test]
+fn agent_session_visibility_literals_use_the_column_values() {
+    use crate::ast::agent_session::{AgentSessionLiteral, AgentSessionVisibility};
+
+    let tree: Expr<AgentSessionLiteral> =
+        serde_json::from_value(json!({ "!": { "l": { "vis": "unlisted" } } })).unwrap();
+    assert_matches!(&tree, Expr::Not(inner) => {
+        assert_matches!(
+            **inner,
+            Expr::Literal(AgentSessionLiteral::Visibility(AgentSessionVisibility::Unlisted))
+        );
+    });
+    assert_eq!(
+        serde_json::to_value(&tree).unwrap(),
+        json!({ "!": { "l": { "vis": "unlisted" } } })
+    );
+    assert_eq!(<&str>::from(AgentSessionVisibility::Listed), "listed");
+    assert_eq!("unlisted".parse(), Ok(AgentSessionVisibility::Unlisted));
 }

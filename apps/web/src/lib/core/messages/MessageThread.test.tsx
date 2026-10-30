@@ -23,13 +23,28 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+const hotkeyMocks = vi.hoisted(() => ({
+  registrations: [] as Array<{
+    hotkey?: string | string[];
+    condition?: () => boolean;
+    keyDownHandler?: (event?: KeyboardEvent) => boolean;
+  }>,
+}));
 vi.mock('@core/hotkey/hotkeys', () => ({
   useHotkeyDOMScope: () => [() => {}, 'scope'],
+  registerHotkey: (options: (typeof hotkeyMocks.registrations)[number]) => {
+    hotkeyMocks.registrations.push(options);
+    return {
+      dispose: () => {},
+      hotkey: () => undefined,
+      withGroup: () => ({ dispose: () => {}, hotkey: () => undefined }),
+    };
+  },
 }));
 vi.mock('@channel/Channel/create-message-editor', () => ({
   createMessageEditor: (options: unknown) => {
     mocks.editor(options);
-    return { start: mocks.edit };
+    return { start: mocks.edit, state: () => undefined };
   },
 }));
 vi.mock('@channel/Channel/create-delete-message-confirmation', () => ({
@@ -117,6 +132,7 @@ vi.mock('@channel/Mobile/ActionDrawer', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  hotkeyMocks.registrations.length = 0;
 });
 
 const message: MessageListItem = {
@@ -218,6 +234,19 @@ describe('document discussion controls', () => {
     expect(
       view.queryByRole('button', { name: 'Delete discussion' })
     ).toBeNull();
+  });
+
+  it('opens a reply when Enter is pressed on an active comment bubble', () => {
+    const view = render(() => (
+      <MessageThread data={message} canWrite keyboardActive />
+    ));
+    expect(view.queryByRole('textbox', { name: 'Reply composer' })).toBeNull();
+    const enter = hotkeyMocks.registrations.find(
+      (registration) => registration.hotkey === 'enter'
+    );
+    expect(enter?.condition?.()).toBe(true);
+    expect(enter?.keyDownHandler?.()).toBe(true);
+    expect(view.getByRole('textbox', { name: 'Reply composer' })).toBeTruthy();
   });
 });
 

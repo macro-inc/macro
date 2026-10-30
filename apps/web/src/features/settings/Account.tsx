@@ -26,19 +26,19 @@ import {
 import { createStaticFile } from '@core/util/create';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openFilePicker } from '@core/util/upload';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import SignOutIcon from '@icon/system/regular/sign-out.svg?component-solid';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
+import IconUpload from '@icon/system/regular/upload-simple.svg?component-solid';
+import WarningIcon from '@icon/system/regular/warning.svg';
+import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import {
   type BundleUpdateStatus,
   nativeUpdateDescription,
   useTauri,
 } from '@macro/tauri';
-import CheckIcon from '@phosphor/check.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import WarningIcon from '@phosphor/warning.svg';
-import WarningCircleIcon from '@phosphor/warning-circle.svg';
-import SignOutIcon from '@phosphor-icons/core/regular/sign-out.svg?component-solid';
-import IconUpload from '@phosphor-icons/core/regular/upload-simple.svg?component-solid';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import {
   invalidateOwnUserName,
@@ -66,6 +66,7 @@ import {
   buildAccountDeletionFeedbackPayload,
   performAccountDeletion,
 } from './account-deletion-feedback';
+import { getBundleDebugInfo } from './app-build';
 import { CurrentPlanCard } from './components/current-plan-card';
 import { resolvePlanTier } from './core/billing-state';
 import {
@@ -295,15 +296,13 @@ function ProfilePictureRow(props: { userId: string }) {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 disabled={isRemoving()}
                 onClick={() => setShowRemoveConfirmModal(false)}
               >
                 Cancel
               </Button>
               <Button
-                variant="strong"
-                depth={3}
+                variant="secondary"
                 disabled={isRemoving()}
                 onClick={handleRemove}
               >
@@ -503,7 +502,7 @@ export function Account() {
           label="Log out"
           description="Sign out of Macro on this device."
         >
-          <Button variant="outline" depth={3} onClick={() => logout()}>
+          <Button variant="secondary" size="sm" onClick={() => logout()}>
             <SignOutIcon class="size-4" />
             Log out
           </Button>
@@ -520,7 +519,6 @@ export function Account() {
         <Button
           variant="danger"
           size="sm"
-          depth={3}
           onClick={() => {
             resetDeleteFlow();
             setShowDeleteModal(true);
@@ -611,7 +609,6 @@ export function Account() {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 onClick={() => {
                   setShowDeleteModal(false);
                   resetDeleteFlow();
@@ -620,8 +617,7 @@ export function Account() {
                 Cancel
               </Button>
               <Button
-                variant="strong"
-                depth={3}
+                variant="secondary"
                 onClick={() => {
                   setShowDeleteConfirmModal(true);
                   setShowDeleteModal(false);
@@ -658,7 +654,6 @@ export function Account() {
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
                 variant="ghost"
-                depth={3}
                 disabled={isDeleting()}
                 onClick={() => {
                   setShowDeleteConfirmModal(false);
@@ -669,7 +664,6 @@ export function Account() {
               </Button>
               <HoldButton
                 variant="danger"
-                depth={3}
                 duration={DELETE_HOLD_MS}
                 disabled={isDeleting()}
                 onConfirm={deleteAccountHandler}
@@ -771,10 +765,10 @@ function NameInput(props: {
   // Pull the box out by its padding and border (12px + 1px) so the text, not the
   // border, lines up with the other values in the column.
   return (
-    <div class="ph-no-capture group relative -ml-[13px] flex w-[calc(100%+13px)] items-center gap-1.5 rounded-lg h-9 px-3 border text-sm bg-transparent text-ink-muted border-edge-muted hover:text-ink focus-within:text-ink focus-within:border-accent">
+    <div class="ph-no-capture group settings-input relative -ml-[13px] flex w-[calc(100%+13px)] items-center gap-1.5 focus-within:ring-2 focus-within:ring-edge-muted">
       <input
         type="text"
-        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 text-sm placeholder:text-ink-placeholder"
+        class="flex-1 min-w-0 bg-transparent outline-none border-0 p-0 placeholder:text-ink-placeholder"
         value={inputValue()}
         onInput={(e) => setInputValue(e.currentTarget.value)}
         onFocus={() => {
@@ -845,20 +839,9 @@ function bundleUpdateAction(
   }
 }
 
-type BundleDebugInfo = {
-  bundleBuild: number;
-  source: 'embedded' | 'ota';
-  nativeBuild: number;
-};
-
 function BundleVersionRow() {
   if (!isNativeMobilePlatform()) return null;
-  const [bundleDebugInfo] = createResource(() =>
-    invoke<BundleDebugInfo>('get_bundle_debug_info').catch((error) => {
-      console.error('[bundle-update] get_bundle_debug_info failed', error);
-      return null;
-    })
-  );
+  const [bundleDebugInfo] = createResource(getBundleDebugInfo);
 
   return (
     <Show when={bundleDebugInfo()}>
@@ -888,7 +871,7 @@ function BundleUpdateRow() {
         </span>
         <Show when={action()}>
           {(a) => (
-            <Button variant="accent" size="sm" depth={3} onClick={a().action}>
+            <Button variant="primary" size="sm" onClick={a().action}>
               {a().label}
             </Button>
           )}
@@ -909,9 +892,8 @@ function NativeUpdateRow() {
           </span>
           <Show when={tauri?.nativeUpdateStatus().status === 'Ready'}>
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
-              depth={3}
               onClick={() =>
                 fireAndForget(tauri?.restartNativeUpdate(), 'native-updates')
               }

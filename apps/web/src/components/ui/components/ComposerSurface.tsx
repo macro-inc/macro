@@ -36,8 +36,10 @@ export function ComposerSurface(
       component={local.as ?? ComposerPanel}
       {...rest}
       class={cn(
+        // Light mode keeps the composer's wide halo: a fine outline alone
+        // vanishes against near-white content.
         !isTouchDevice() &&
-          'rounded-[28px] border-0 bg-composer text-composer-ink dark-mode:glass-input backdrop-filter-none light-mode:after:hidden light-mode:composer-shadow',
+          'rounded-[28px] border-0 bg-composer text-composer-ink glass-input light-mode:composer-shadow',
         local.class
       )}
     />

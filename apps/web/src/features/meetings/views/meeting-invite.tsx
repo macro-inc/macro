@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
+import UserPlus from '@icon/system/regular/user-plus.svg';
 import { Popover } from '@kobalte/core/popover';
-import UserPlus from '@phosphor/user-plus.svg';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { AvatarGroup, Button, Layer, Tooltip } from '@ui';
 import { type Accessor, createSignal, For, Show, Suspense } from 'solid-js';

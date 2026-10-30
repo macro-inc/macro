@@ -120,8 +120,8 @@ jobs:
         # plugins, tauri.android.conf.json and tauri.macos.conf.json, desktop_update
         # and the desktop_* modules, linux_notification, the macos icons; the Rust
         # ones are all behind cfg(target_os) / cfg(desktop)) — plus the desktop
-        # updater manifest and editor config. `apple`/`ios` paths stay included:
-        # gen/apple is the Xcode project. Plus one thing outside that tree: the
+        # updater manifest, editor config and Markdown docs. `apple`/`ios` paths
+        # stay included: gen/apple is the Xcode project. Plus one thing outside that tree: the
         # version of the client cache wasm package
         # (crates/client/cache-wasm/Cargo.toml). The app compiles the cache crates
         # natively, and the team bumps that version when a cache change must ship, so
@@ -133,7 +133,7 @@ jobs:
         # detection (web_app_check_main/ios_native_check.rs).
         NATIVE_TREE_PATH=apps/web/tauri
         CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
-        export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|^desktop-release\.json$|^\.helix/'
+        export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows|desktop)([_./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
         # native_tree_hash <commit>: prints the hash, fails if the path is missing.
         # (--full-tree: ls-tree otherwise narrows its output to the current directory,

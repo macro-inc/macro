@@ -59,6 +59,11 @@ they need.
 
 - `cargo test -p messages --all-features` (`SQLX_OFFLINE` unset).
 
+A bot post made for a user through a named client (an MCP client on the public
+MCP) uses `MessageAttribution::ActingUserVia`; the client's self-reported name is
+stored in `comms_messages.triggered_via` beside `triggered_by` and shown "via
+<client>". It is a display label only.
+
 New posts use the message sender receipt to retain signed code-mode agent
 attribution. All other operations use the caller receipt so attribution cannot
 grant users another agent invocation's edit, deletion, or reaction authority.

@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Button, Dialog, Panel, Select } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CompanyImportPipelines } from '../context/pipelines';
@@ -103,11 +103,11 @@ export function CrmImport(props: {
           />
           <div class="flex flex-wrap items-center gap-3">
             <Button
-              variant="outline"
+              variant="secondary"
               disabled={pending()}
               onClick={() => fileInput.click()}
             >
-              <UploadIcon />
+              <UploadIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               {fileName() ? 'Change file' : 'Choose file'}
             </Button>
             <span
@@ -224,7 +224,7 @@ export function CrmImport(props: {
             Close
           </Button>
           <Button
-            variant="strong"
+            variant="secondary"
             disabled={pending() || !runnable()}
             onClick={() => fireAndForget(run(), 'crm')}
           >

@@ -8,8 +8,8 @@ vi.mock('@app/components/view-shell/ViewShell', () => ({
     TopBar: (props: ParentProps) => <div>{props.children}</div>,
   },
 }));
-vi.mock('@components/app/split-panel', () => ({
-  SplitPanel: { CloseButton: () => null },
+vi.mock('@app/components/view-shell/ViewSidebar', () => ({
+  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
 }));
 afterEach(cleanup);
 

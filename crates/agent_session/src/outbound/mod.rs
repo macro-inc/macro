@@ -16,3 +16,6 @@ pub mod broker_lifecycle_publisher;
 
 /// Session actions through the owning harness service.
 mod session_actions_client;
+
+/// Durable system notifications.
+pub mod notifications;

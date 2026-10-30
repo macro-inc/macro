@@ -10,11 +10,11 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{
-    AttendeeInput, CalendarToolContext, EventRemindersInput, EventTimeInput, OutOfOfficeInput,
-    ToolCalendarEvent, mutation_tool_error,
+    AttendeeInput, CalendarLabels, CalendarToolContext, CopyChange, EventRemindersInput,
+    EventTimeInput, OutOfOfficeInput, ToolCalendarEvent, confirm_copy, mutation_tool_error,
 };
 use crate::domain::{
-    models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange},
+    models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange, GuestPolicy},
     ports::{
         CalendarMutationService, CalendarOccurrenceService, CalendarRsvpScope, CalendarUpdateScope,
         MeetingLinkProvider,
@@ -84,8 +84,20 @@ pub enum UpdateScopeInput {
 #[schemars(
     title = "UpdateCalendarEvent",
     description = "\
-Update an existing calendar event. Only the supplied fields change; omitted fields keep \
-their current values. The change is written to the calendar provider immediately and attendees are \
+Update an existing calendar event.\n\
+\n\
+A meeting on more than one of the user's inboxes is one ListCalendarEvents entry per inbox. \
+Before changing its details, guests or guest permissions, ask the user which inbox's copy to \
+change, then pass that copy's `inbox`. Never choose between the user's inboxes yourself, \
+whatever they look like: a test, secondary or unfamiliar address is still the user's own \
+inbox. Skip the question only when the user already named the inbox, when only one copy's \
+`viewerCan` allows the change (use it and say why), or when adding guests to a meeting the \
+user organizes from one of the inboxes (add them from that copy and say why). Reminders may \
+go to one copy and an `rsvp` to the copy where the user is a guest, naming the inbox in your \
+reply. Without `inbox` the tool refuses, lists each copy and gives the question to ask. One \
+call changes one copy, so an edit on one copy and an `rsvp` on another take two calls.\n\
+\n\
+Only the supplied fields change; omitted fields keep their current values. The change is written to the calendar provider immediately and attendees are \
 notified of it, so confirm details with the user first. Get the `eventId` from \
 ListCalendarEvents.\n\
 \n\
@@ -102,13 +114,21 @@ not just additions. That holds when `viewerCan.removeGuests` from ListCalendarEv
 true (the user organizes the event, or the organizer lets guests modify it). When it is \
 false, the list may only grow: pass the current attendees plus the additions; the additions \
 are invited without touching anyone else, and dropping any guest fails. Adding guests then \
-needs `viewerCan.inviteGuests`; otherwise the organizer doesn't let guests invite others. \
+needs `viewerCan.inviteGuests`; otherwise the organizer doesn't let guests invite others \
+or hides the guest list, or the event is an Outlook meeting the user doesn't organize. \
 An empty string for `description` or `location` clears it. Fails on events from calendars \
 the user cannot edit.\n\
 \n\
+A guest without modify rights (`viewerCan.editDetails` false while `viewerCan.rsvp` is \
+true) may only change their own `reminders`, add guests where `viewerCan.inviteGuests` \
+allows it, and answer with `rsvp`; changing the title, time, description, location, \
+recurrence or conference fails because the organizer doesn't let guests change the \
+event.\n\
+\n\
 `rsvp` sets the user's own response to an invitation and is independent of the field \
 edits — it can be the only thing this call changes. It applies at the same `scope` as \
-the rest of the call, and only works on events the user is actually an attendee of."
+the rest of the call and answers as the connected inbox the event's copy belongs to, so \
+it only works when that inbox is an attendee."
 )]
 pub struct UpdateCalendarEvent {
     /// Event to update.
@@ -123,6 +143,17 @@ pub struct UpdateCalendarEvent {
     )]
     #[serde(default)]
     pub calendar_id: Option<uuid::Uuid>,
+
+    /// Inbox holding the copy this call changes.
+    #[schemars(
+        description = "The `inbox` of the copy this call changes, from its ListCalendarEvents \
+                       entry. Required when the meeting is on more than one of the user's \
+                       inboxes and the call changes anything but `reminders` or `rsvp`: the \
+                       tool refuses without it and lists each copy. It must be the inbox \
+                       holding the copy `eventId` names."
+    )]
+    #[serde(default)]
+    pub inbox: Option<String>,
 
     /// Update scope.
     #[schemars(
@@ -228,6 +259,17 @@ pub struct UpdateCalendarEvent {
     )]
     #[serde(default)]
     pub out_of_office: Option<OutOfOfficeInput>,
+
+    /// Replacement guest policy.
+    #[schemars(
+        description = "Replace what guests may do: `canModify` (change the event; implies \
+                       `canInviteOthers`), `canInviteOthers` and `canSeeOtherGuests`, all three \
+                       required. Only the organizer of a Google event may set it \
+                       (`viewerCan.setGuestPolicy`), and only with scope \"all\": it belongs to \
+                       the whole series. Outlook events have none. Omit to leave it untouched."
+    )]
+    #[serde(default)]
+    pub guest_policy: Option<GuestPolicy>,
 }
 
 impl ToolAnnotated for UpdateCalendarEvent {
@@ -254,6 +296,7 @@ where
             scope=?self.scope,
             attendee_count=?self.attendees.as_ref().map(Vec::len),
             rsvp=?self.rsvp,
+            inbox_confirmed=self.inbox.is_some(),
             "Update calendar event"
         );
 
@@ -303,7 +346,24 @@ where
             reminders: self.reminders.clone().map(Into::into),
             conference: self.conference.map(Into::into),
             out_of_office: self.out_of_office.clone().map(Into::into),
+            guest_policy: self.guest_policy,
         };
+
+        // Reminders and the user's own answer belong to one copy; anything
+        // else reaches the meeting, so the agent must have chosen the copy
+        // when the meeting is on several of the user's inboxes.
+        if patch.reaches_meeting() || self.inbox.is_some() {
+            confirm_copy(
+                &*service_context.occurrences,
+                &requester_id,
+                self.event_id,
+                self.inbox.as_deref(),
+                CopyChange::Update {
+                    changes_guests: patch.attendees.is_some(),
+                },
+            )
+            .await?;
+        }
 
         // An RSVP is its own provider call, so a call carrying only one runs
         // only that half. Answering after the patch keeps a replaced attendee
@@ -364,6 +424,7 @@ where
             })?,
         };
 
-        Ok(ToolCalendarEvent::from_event(&event))
+        let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
+        Ok(ToolCalendarEvent::from_event(&event, &labels))
     }
 }

@@ -398,7 +398,9 @@ pub struct ThreadReplyRow {
 }
 
 /// Type of channel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
+)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
@@ -406,6 +408,7 @@ pub struct ThreadReplyRow {
     sqlx(type_name = "comms_channel_type", rename_all = "snake_case")
 )]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ChannelType {
     /// Public channel.
     Public,
@@ -415,17 +418,6 @@ pub enum ChannelType {
     DirectMessage,
     /// Team channel.
     Team,
-}
-
-impl std::fmt::Display for ChannelType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChannelType::Public => f.write_str("public"),
-            ChannelType::Private => f.write_str("private"),
-            ChannelType::DirectMessage => f.write_str("direct_message"),
-            ChannelType::Team => f.write_str("team"),
-        }
-    }
 }
 
 /// Request to add a user to all organization channels.
@@ -693,6 +685,8 @@ pub enum ReferencedShareItemType {
     CalendarEvent,
     /// Form entity: posting one lets the channel respond to it.
     Form,
+    /// External chat added to Macro: mentioning one lets the channel read it.
+    ExternalChat,
 }
 
 impl ReferencedShareItemType {
@@ -708,6 +702,7 @@ impl ReferencedShareItemType {
             "call" => Some(Self::Call),
             "calendar_event" => Some(Self::CalendarEvent),
             "form" => Some(Self::Form),
+            "external_chat" => Some(Self::ExternalChat),
             _ => None,
         }
     }
@@ -724,6 +719,7 @@ impl ReferencedShareItemType {
             Self::Call => "call",
             Self::CalendarEvent => "calendar_event",
             Self::Form => "form",
+            Self::ExternalChat => "external_chat",
         }
     }
 

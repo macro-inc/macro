@@ -7,6 +7,7 @@
 
 import type { CalendarGuestInputBody } from './calendarGuestInputBody';
 import type { InviteCalendarEventGuestsRequestCalendarId } from './inviteCalendarEventGuestsRequestCalendarId';
+import type { InviteCalendarEventGuestsRequestInbox } from './inviteCalendarEventGuestsRequestInbox';
 import type { InviteCalendarEventGuestsRequestRecurrenceId } from './inviteCalendarEventGuestsRequestRecurrenceId';
 import type { InviteCalendarEventGuestsRequestScope } from './inviteCalendarEventGuestsRequestScope';
 
@@ -20,6 +21,11 @@ more than one calendar. Omit to write the canonical copy. */
   calendarId?: InviteCalendarEventGuestsRequestCalendarId;
   /** Guests to add; anyone already on the event is skipped. */
   guests: CalendarGuestInputBody[];
+  /** Inbox address holding the copy this request changes. An agent run
+must name it when the meeting is on more than one of the requester's
+inboxes, and it must be the inbox holding the addressed copy; a
+mismatch is refused whoever sends it. */
+  inbox?: InviteCalendarEventGuestsRequestInbox;
   /** Original-start key of the occurrence the guests are added to. */
   recurrenceId?: InviteCalendarEventGuestsRequestRecurrenceId;
   scope?: InviteCalendarEventGuestsRequestScope;

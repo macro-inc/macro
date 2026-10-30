@@ -1,3 +1,4 @@
+import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import {
@@ -9,11 +10,40 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from '../../../lib/core/component/Toast/Toast';
 import { DatabaseTitle } from '../../database/components/database-title';
 import type { DatabaseEntityFailure } from '../../database/core/write-failure';
-import { DatabasePageActions } from './database-page-actions';
+import {
+  type DatabaseEntityActions,
+  DatabasePageActions,
+} from './database-page-actions';
+
+// Keep the real split label, title and menu together; stub only host data.
+vi.mock('@app/components/entity-detail/DocumentTitleHoverCard', () => ({
+  DocumentTitleHoverCard: () => null,
+}));
+vi.mock('@core/block', () => ({
+  isInBlock: () => true,
+  useBlockAliasedName: () => 'database',
+}));
+vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
+vi.mock('@core/signal/load', () => ({ blockMetadataSignal: () => undefined }));
+vi.mock('@core/signal/permissions', () => ({
+  useIsDocumentOwner: () => () => true,
+}));
+vi.mock('@core/util/currentBlockDocumentName', () => ({
+  useBlockDocumentName: () => () => 'Customers',
+}));
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useSplitDisplayName: () => {},
+  useSplitPanelOrThrow: () => ({
+    titleFileMenuActions: () => undefined,
+    titleFileMenuTrigger: () => undefined,
+    setTitleFileMenuRef: () => {},
+  }),
+}));
 
 const mocks = vi.hoisted(() => ({
   download: vi.fn(),
@@ -49,16 +79,28 @@ function setup(
   grant: DatabaseDetail['grant'] = 'owner',
   remove = vi.fn(
     (): ResultAsync<void, DatabaseEntityFailure> => okAsync(undefined)
-  )
+  ),
+  entityActions?: DatabaseEntityActions
 ) {
   let editTitle: (() => void) | undefined;
+  const editReady = vi.fn((edit: (() => void) | undefined) => {
+    editTitle = edit;
+  });
+  const [loaded, setLoaded] = createSignal(false);
   render(() => (
     <>
-      <DatabaseTitle
-        name="Customers"
-        canEdit={grant !== 'view'}
-        onRename={vi.fn()}
-        onEditReady={(edit) => (editTitle = edit)}
+      <BlockItemSplitLabel
+        name={() => 'Customers'}
+        title={
+          <Show when={loaded()}>
+            <DatabaseTitle
+              name="Customers"
+              canEdit={grant !== 'view'}
+              onRename={vi.fn()}
+              onEditReady={editReady}
+            />
+          </Show>
+        }
       />
       <DatabasePageActions
         detail={
@@ -69,13 +111,15 @@ function setup(
           } as unknown as DatabaseDetail
         }
         table={{ table: { id: 'table', name: 'Contacts' } } as TableDetail}
+        entityActions={entityActions}
         onImported={vi.fn()}
         onRename={() => editTitle?.()}
         onDelete={remove}
       />
     </>
   ));
-  return { remove };
+  setLoaded(true);
+  return { remove, editReady };
 }
 async function openMenu() {
   const trigger = screen.getByRole('button', { name: 'Database actions' });
@@ -91,7 +135,8 @@ function selectItem(name: string) {
 
 describe('database page actions', () => {
   it('focuses the inline title from Rename', async () => {
-    setup();
+    const { editReady } = setup();
+    expect(editReady).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('button', { name: 'Import CSV' })).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Download database' })
@@ -214,6 +259,25 @@ describe('database page actions', () => {
       name: 'Table name',
     })) as HTMLInputElement;
     expect(name.value).toBe('Contacts 2');
+  });
+  it('offers link, ID and favorite actions to every grant', async () => {
+    const entityActions = {
+      favorited: true,
+      onToggleFavorite: vi.fn(),
+      onCopyLink: vi.fn(),
+      onCopyId: vi.fn(),
+    };
+    setup('view', undefined, entityActions);
+    for (const [item, handler] of [
+      ['Copy Link', entityActions.onCopyLink],
+      ['Copy ID', entityActions.onCopyId],
+      ['Unfavorite', entityActions.onToggleFavorite],
+    ] as const) {
+      await openMenu();
+      selectItem(item);
+      expect(handler).toHaveBeenCalledOnce();
+      await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    }
   });
   it('confirms deletion and retains a failed dialog for retry', async () => {
     const remove = vi

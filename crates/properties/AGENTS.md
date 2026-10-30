@@ -53,6 +53,8 @@ events to the `macro.properties` Kafka topic.
 - `cargo test -p properties --no-default-features --features outbound` to
   check the outbound-only build other services depend on.
 
+- `ExternalChat` currently has no property-storage mapping.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md` · Docs: `README.md`

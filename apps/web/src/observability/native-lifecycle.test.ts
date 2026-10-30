@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DesktopSnapshot } from './desktop';
 import { frontendInstanceId } from './frontend-instance';
 import {
+  previousDocumentAttributes,
   recordNativeWebviewStart,
   reportRecoveredEvents,
 } from './native-lifecycle';
@@ -157,6 +158,90 @@ describe('native WebView startup diagnostics', () => {
       expected
     );
     expect(telemetry.span.end).toHaveBeenCalledOnce();
+  });
+
+  it('names what the terminated document last opened and its last memory warning', () => {
+    const snapshot: DesktopSnapshot = {
+      identity: {
+        instanceId: 'host',
+        nativeVersion: '2.5',
+        os: 'ios',
+        hostPid: 1,
+        recordingId: null,
+        tracesUrl: null,
+      },
+      samples: [],
+      droppedSamples: 0,
+      recentEvents: {
+        currentFrontendInstanceId: 'previous',
+        events: [
+          {
+            sequence: 1,
+            timestampMs: 100,
+            frontendInstanceId: 'previous',
+            event: {
+              kind: 'navigated',
+              cause: 'navigate',
+              route: 'view-search',
+              from_route: 'view-home',
+              entity_type: null,
+            },
+          },
+          {
+            sequence: 2,
+            timestampMs: 200,
+            frontendInstanceId: 'previous',
+            event: {
+              kind: 'navigated',
+              cause: 'navigate',
+              route: 'legacy-content',
+              from_route: 'view-search',
+              entity_type: 'channel',
+            },
+          },
+          {
+            sequence: 3,
+            timestampMs: 250,
+            frontendInstanceId: 'previous',
+            event: { kind: 'memory_warning' },
+          },
+          {
+            sequence: 4,
+            timestampMs: 300,
+            frontendInstanceId: 'previous',
+            event: { kind: 'web_content_terminated' },
+          },
+          {
+            sequence: 5,
+            timestampMs: 400,
+            frontendInstanceId: 'older',
+            event: {
+              kind: 'navigated',
+              cause: 'history',
+              route: 'agents',
+              from_route: null,
+              entity_type: null,
+            },
+          },
+        ],
+        heartbeat: null,
+        dropped: 0,
+        memoryWarningReporting: true,
+      },
+    };
+    expect(previousDocumentAttributes(snapshot, 'previous')).toEqual({
+      previous_document_last_route: 'legacy-content',
+      previous_document_last_from_route: 'view-search',
+      previous_document_last_entity_type: 'channel',
+      previous_document_last_navigation_cause: 'navigate',
+      previous_document_last_navigation_at_ms: 200,
+      previous_document_last_memory_warning_at_ms: 250,
+    });
+    expect(
+      Object.values(previousDocumentAttributes(snapshot, undefined)).every(
+        (value) => value === undefined
+      )
+    ).toBe(true);
   });
 
   it('reports missing native support as unknown, rather than zero terminations', () => {

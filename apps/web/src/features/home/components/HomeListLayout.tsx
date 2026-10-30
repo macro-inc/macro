@@ -1,8 +1,10 @@
+import { SearchBar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tourTarget } from '@ui/components/Tour';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import { useHomeView } from '../home-view-context';
 import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
 
@@ -25,6 +27,7 @@ export function HomeListLayout(
     footer?: JSX.Element;
   }>
 ) {
+  const { state, setState } = useHomeView();
   return (
     <div
       ref={tourTarget(HOME_TOUR.list)}
@@ -40,7 +43,16 @@ export function HomeListLayout(
             title="Home"
             label="New chat"
             onCreate={props.onNewChat}
-            titleActions={<HomeFilterDropdown />}
+            actions={<HomeFilterDropdown />}
+            searchLabel="Search Home"
+            search={() => (
+              <SearchBar
+                label="Search Home"
+                placeholder="Search Home"
+                value={state.search}
+                onValueChange={(search) => setState('search', search)}
+              />
+            )}
           />
         }
       >

@@ -93,6 +93,7 @@ export * from './shapes/embedded';
 export {
   canLabel,
   type LabelShape,
+  labelTextGeometry,
   measureShapeLabel,
   type ShapeLabel,
   shapeLabelLayout,
@@ -111,8 +112,10 @@ export {
   shapeDefinition,
   shapeDefinitions,
   shapeKinds,
+  shapePayload,
 } from './shapes/registry';
 export {
+  type TextFitMode,
   type TextFont,
   type TextGeometry,
   type TextMeasurer,
@@ -122,4 +125,10 @@ export { snapPoint, snapTranslation, snapValue } from './snapping';
 export { regenerateScaledShapes, stretchShapes } from './stretch';
 export { selectedShapeIds } from './style-selection';
 export * from './text-commands';
+export {
+  fitTextLayout,
+  type TextFitEffect,
+  type TextFitRequest,
+  type TextFitResult,
+} from './text-fit';
 export { textTargetAt } from './text-target';

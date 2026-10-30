@@ -2,11 +2,11 @@ import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import clickOutside from '@core/directive/clickOutside';
 import type { Entity } from '@core/types';
+import Bell from '@icon/system/regular/bell.svg';
 import {
   type NotificationSource,
   useNotificationsForEntity,
 } from '@notifications';
-import Bell from '@phosphor/bell.svg';
 import { Button, cn } from '@ui';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { Notifications } from './Notifications';
@@ -31,6 +31,7 @@ function _NotificationsButton(props: {
   return (
     <div class="relative p-0 flex" tabIndex={-1}>
       <Button
+        variant="ghost"
         class={cn(
           'px-1',
           drawerControl.isOpen() &&
@@ -43,7 +44,7 @@ function _NotificationsButton(props: {
         }}
         size="icon-sm"
       >
-        <Bell />
+        <Bell class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
       <Suspense fallback={null}>
         <Show when={unreadCount() > 0}>

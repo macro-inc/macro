@@ -11,6 +11,21 @@ use super::platform::open_pending_browser;
 use super::quickstart::{Quickstart, QuickstartAction};
 use super::ui;
 use crate::config::Config;
+use crate::daemon::InheritedAgent;
+use crate::update::{self, StagedUpdate};
+
+/// What the caller does once the panel hands over to an updated macrod.
+#[cfg(unix)]
+pub struct Restart {
+    /// The new binary, in place.
+    pub installed: update::Installed,
+    /// The running agent, for the new binary to keep relaying.
+    pub agent: Option<InheritedAgent>,
+}
+
+/// Windows never restarts into an update; the launcher starts it next time.
+#[cfg(not(unix))]
+pub type Restart = std::convert::Infallible;
 
 #[cfg(test)]
 mod test;
@@ -18,8 +33,14 @@ mod test;
 /// Spinner cadence and input latency budget.
 const TICK: Duration = Duration::from_millis(120);
 
-/// Run the control panel - and the daemon inside it - until the user quits.
-pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
+/// Run the control panel - and the daemon inside it - until the user quits,
+/// or until a self-update is installed and the caller should relaunch.
+/// `inherited` is the agent a previous macrod handed over.
+pub async fn run(
+    config_path: &Path,
+    logs: LogBuffer,
+    inherited: Option<InheritedAgent>,
+) -> rootcause::Result<Option<Restart>> {
     let (input_tx, mut input_rx) = tokio::sync::mpsc::unbounded_channel();
     // A dedicated thread owns the blocking crossterm read; the loop below
     // stays async and free to poll the network.
@@ -67,13 +88,13 @@ pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
     };
     if needs_quickstart && !quickstarted {
         ratatui::restore();
-        return Ok(());
+        return Ok(None);
     }
     if !config_path.exists() {
         ratatui::restore();
-        return Ok(());
+        return Ok(None);
     }
-    let mut app = match App::load(config_path, logs) {
+    let mut app = match App::load(config_path, logs, inherited) {
         Ok(app) => app,
         Err(error) => {
             ratatui::restore();
@@ -178,8 +199,10 @@ async fn run_loop(
     app: &mut App,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
     pair_on_start: bool,
-) -> rootcause::Result<()> {
+) -> rootcause::Result<Option<Restart>> {
     let mut tick = tokio::time::interval(TICK);
+    let mut poller = update::start_poller(app.config.update.auto);
+    let mut staged: Option<StagedUpdate> = None;
     // Paired already? Start serving before the first frame.
     if app.paired() {
         app.restart_daemon().await;
@@ -200,7 +223,7 @@ async fn run_loop(
                 match event {
                     Some(TermEvent::Key(key)) => app.on_key(key).await,
                     Some(_) => {}
-                    None => return Ok(()),
+                    None => return Ok(None),
                 }
                 apply_pending_browser(app);
             }
@@ -211,12 +234,57 @@ async fn run_loop(
                 if matches!(app.mode, Mode::Normal) {
                     app.maybe_refresh().await;
                 }
+                if let Some(update) = poller.as_mut().and_then(|poller| poller.staged.try_recv().ok()) {
+                    poller = None;
+                    if cfg!(windows) {
+                        // Installed beside this one; the launcher starts it next time.
+                        app.update_ready = Some(update.tag().to_owned());
+                    } else {
+                        app.ok(format!("macrod {} is ready; restarting once no turn is running", update.tag()));
+                        staged = Some(update);
+                    }
+                }
+                #[cfg(unix)]
+                if let Some(installed) = install_when_idle(app, &mut staged) {
+                    let agent = match app.daemon.take() {
+                        Some(daemon) => daemon.hand_off().await,
+                        None => None,
+                    };
+                    return Ok(Some(Restart { installed, agent }));
+                }
             }
         }
 
         if app.quit {
             app.stop_daemon().await;
-            return Ok(());
+            return Ok(None);
+        }
+    }
+}
+
+/// Swap in a staged update once nothing would be cut short: no agent turn
+/// running and no edit, pairing, or install open in the panel.
+///
+/// The agent process survives the restart, but the service ends a turn
+/// when its runtime connection closes, so a turn in flight would still be
+/// cut off in Macro: the swap waits for one to finish.
+#[cfg(unix)]
+fn install_when_idle(
+    app: &mut App,
+    staged: &mut Option<StagedUpdate>,
+) -> Option<update::Installed> {
+    let idle = matches!(app.mode, Mode::Normal)
+        && app.daemon.as_ref().is_none_or(|daemon| daemon.is_idle());
+    if !idle {
+        return None;
+    }
+    let update = staged.take()?;
+    let tag = update.tag().to_owned();
+    match update.swap() {
+        Ok(installed) => Some(installed),
+        Err(error) => {
+            app.fail(format!("Could not install macrod {tag}: {error}"));
+            None
         }
     }
 }

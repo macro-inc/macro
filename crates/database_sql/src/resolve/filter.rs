@@ -2,8 +2,9 @@
 //! the column's kind.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use models_databases::{DateRange, OptionId};
 
-use crate::catalog::{Column, ColumnKind, EntityKind};
+use crate::catalog::{Column, ColumnKind, EntityKind, SelectOption};
 use crate::parse::{ComparisonOperator, Condition, Literal};
 
 use super::names::Scope;
@@ -134,7 +135,11 @@ fn check_operator(column: &Column, operator: ComparisonOperator) -> Result<(), R
             | ComparisonOperator::GreaterOrEqual
     );
     let supported = match column.kind {
-        ColumnKind::Text | ColumnKind::Link | ColumnKind::Number | ColumnKind::Date => {
+        ColumnKind::Text
+        | ColumnKind::Link
+        | ColumnKind::Number
+        | ColumnKind::Date
+        | ColumnKind::DateRange => {
             return Ok(());
         }
         ColumnKind::Boolean => "checkbox columns support = and !=",
@@ -152,12 +157,29 @@ fn check_operator(column: &Column, operator: ComparisonOperator) -> Result<(), R
 }
 
 const DATE_HINT: &str = "compare it to an ISO date like '2026-09-01' or '2026-09-01T09:00:00Z'";
+const RANGE_COMPARISON_HINT: &str = "compare it to an ISO date like '2026-09-01': = contains it, \
+                                     < ends before it, > starts after it";
+const RANGE_HINT: &str =
+    "write an ISO interval like '2026-09-01/2026-09-05', or one date for a single day";
 
-/// Type a literal a column is compared to. Lists belong to writes.
+/// Type a literal a column is compared to. Lists belong to writes. A date
+/// range compares to a date: whether it contains it, ends before it or
+/// starts after it.
 pub fn typed(column: &Column, lit: Literal) -> Result<Value, ResolveError> {
     if matches!(lit, Literal::List(_)) {
         return Err(ResolveError::ListInComparison {
             column: column.name.clone(),
+        });
+    }
+    if column.kind == ColumnKind::DateRange {
+        return match lit {
+            Literal::Text(text) => parse_date(&text).map(Value::Date),
+            _ => None,
+        }
+        .ok_or_else(|| ResolveError::TypeMismatch {
+            column: column.name.clone(),
+            expected: "date",
+            hint: RANGE_COMPARISON_HINT,
         });
     }
     typed_one(column, lit)
@@ -171,29 +193,34 @@ pub fn typed_cell(column: &Column, lit: Literal) -> Result<Value, ResolveError> 
         Literal::List(elements) => elements,
         single => vec![single],
     };
-    if !column.kind.is_multi() {
-        let count = elements.len();
-        return match <[Literal; 1]>::try_from(elements) {
-            Ok([single]) => typed_one(column, single),
-            Err(_) => Err(ResolveError::ListOnSingleValued {
-                column: column.name.clone(),
-                count,
-            }),
-        };
-    }
-    let mut options = Vec::new();
-    let mut entities = Vec::new();
-    for element in elements {
-        match typed_one(column, element)? {
-            Value::Option(id) => options.push(id),
-            Value::Entity(id) => entities.push(id),
-            other => unreachable!("multi-valued columns are select or entity: {other:?}"),
+    match &column.kind {
+        ColumnKind::Entity {
+            multi: true,
+            target,
+        } => elements
+            .into_iter()
+            .map(|element| typed_entity(column, *target, element))
+            .collect::<Result<_, _>>()
+            .map(Value::Entities),
+        ColumnKind::Select {
+            multi: true,
+            options,
+        } => elements
+            .into_iter()
+            .map(|element| typed_option(column, options, element))
+            .collect::<Result<_, _>>()
+            .map(Value::Options),
+        _ => {
+            let count = elements.len();
+            match <[Literal; 1]>::try_from(elements) {
+                Ok([single]) => typed_one(column, single),
+                Err(_) => Err(ResolveError::ListOnSingleValued {
+                    column: column.name.clone(),
+                    count,
+                }),
+            }
         }
     }
-    Ok(match column.kind {
-        ColumnKind::Entity { .. } => Value::Entities(entities),
-        _ => Value::Options(options),
-    })
 }
 
 fn typed_one(column: &Column, lit: Literal) -> Result<Value, ResolveError> {
@@ -214,35 +241,54 @@ fn typed_one(column: &Column, lit: Literal) -> Result<Value, ResolveError> {
             .map(Value::Date)
             .ok_or_else(|| mismatch("date", DATE_HINT)),
         (ColumnKind::Date, _) => Err(mismatch("date", DATE_HINT)),
-        (ColumnKind::Select { options, .. }, Literal::Text(label)) => options
-            .iter()
-            .find(|option| option.label.eq_ignore_ascii_case(&label))
-            .map(|option| Value::Option(option.id))
-            .ok_or_else(|| ResolveError::UnknownOption {
-                column: column.name.clone(),
-                label,
-                options: options.iter().map(|option| option.label.clone()).collect(),
-            }),
-        (ColumnKind::Select { .. }, _) => {
-            Err(mismatch("select", "compare it to a quoted option label"))
+        (ColumnKind::DateRange, Literal::Text(text)) => parse_range(&text)
+            .map(Value::DateRange)
+            .ok_or_else(|| mismatch("date range", RANGE_HINT)),
+        (ColumnKind::DateRange, _) => Err(mismatch("date range", RANGE_HINT)),
+        (ColumnKind::Select { options, .. }, lit) => {
+            typed_option(column, options, lit).map(Value::Option)
         }
-        (
-            ColumnKind::Entity {
-                target: EntityKind::Row,
-                ..
-            },
-            Literal::Text(id),
-        ) => match id.parse::<models_databases::RowId>() {
-            Ok(_) => Ok(Value::Entity(id)),
+        (ColumnKind::Entity { target, .. }, lit) => {
+            typed_entity(column, *target, lit).map(Value::Entity)
+        }
+    }
+}
+
+fn typed_option(
+    column: &Column,
+    options: &[SelectOption],
+    lit: Literal,
+) -> Result<OptionId, ResolveError> {
+    let Literal::Text(label) = lit else {
+        return Err(ResolveError::TypeMismatch {
+            column: column.name.clone(),
+            expected: "select",
+            hint: "compare it to a quoted option label",
+        });
+    };
+    options
+        .iter()
+        .find(|option| option.label.eq_ignore_ascii_case(&label))
+        .map(|option| option.id)
+        .ok_or_else(|| ResolveError::UnknownOption {
+            column: column.name.clone(),
+            label,
+            options: options.iter().map(|option| option.label.clone()).collect(),
+        })
+}
+
+fn typed_entity(column: &Column, target: EntityKind, lit: Literal) -> Result<String, ResolveError> {
+    match (target, lit) {
+        (EntityKind::Row, Literal::Text(id)) => match id.parse::<models_databases::RowId>() {
+            Ok(_) => Ok(id),
             Err(_) => Err(ResolveError::RowIdNotAnId { written: id }),
         },
-        (ColumnKind::Entity { .. }, Literal::Text(id)) if is_entity_id(&id) => {
-            Ok(Value::Entity(id))
-        }
-        (ColumnKind::Entity { .. }, _) => Err(mismatch(
-            "entity",
-            "give an id like 'macro|sam@example.com', not a name",
-        )),
+        (_, Literal::Text(id)) if is_entity_id(&id) => Ok(id),
+        _ => Err(ResolveError::TypeMismatch {
+            column: column.name.clone(),
+            expected: "entity",
+            hint: "give an id like 'macro|sam@example.com', not a name",
+        }),
     }
 }
 
@@ -254,6 +300,19 @@ fn is_entity_id(text: &str) -> bool {
         || text
             .split_once('|')
             .is_some_and(|(kind, rest)| !kind.is_empty() && !rest.is_empty())
+}
+
+/// `2026-09-01/2026-09-05`, an ISO interval of two dates or date-times
+/// ending no earlier than it starts, or one date for the range of that
+/// instant.
+fn parse_range(text: &str) -> Option<DateRange> {
+    DateRange::parse_interval(text, parse_date).or_else(|| {
+        let date = parse_date(text)?;
+        Some(DateRange {
+            start: date,
+            end: date,
+        })
+    })
 }
 
 /// `2026-09-01` (midnight UTC) or any RFC 3339 date-time.

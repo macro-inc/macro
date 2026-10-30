@@ -13,4 +13,6 @@ xcrun actool "$icon_dir/Macro.icon" \
   --output-partial-info-plist "$output_dir/Info.plist" \
   --output-format human-readable-text
 
-cp "$output_dir/Assets.car" "$output_dir/Macro.icns" "$output_dir/Info.plist" "$icon_dir/"
+# Info.plist holds hand-written keys (usage descriptions, activity types), so
+# it is not regenerated; keep its CFBundleIcon* keys in step with --app-icon.
+cp "$output_dir/Assets.car" "$output_dir/Macro.icns" "$icon_dir/"

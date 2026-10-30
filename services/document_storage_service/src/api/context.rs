@@ -292,6 +292,22 @@ pub(crate) type DssCalendarService = CalendarService<PgCalendarRepository>;
 /// Calendar occurrence router state.
 pub(crate) type DssCalendarState = CalendarRouterState<DssCalendarService, AuthorizationService>;
 
+/// Service for asking to join calendar events shared with a channel.
+pub(crate) type DssCalendarJoinRequestService =
+    calendar_events::domain::join_requests::CalendarJoinRequestServiceImpl<
+        PgCalendarRepository,
+        calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
+            NotificationIngressType,
+        >,
+    >;
+
+/// Calendar join-request router state.
+pub(crate) type DssCalendarJoinRequestState =
+    calendar_events::inbound::join_request_router::CalendarJoinRequestRouterState<
+        DssCalendarJoinRequestService,
+        AuthorizationService,
+    >;
+
 /// Adapter implementing [`TaskPropertiesPort`] for the system properties service.
 pub(crate) struct TaskPropertiesAdapter {
     pub system_properties: Arc<SystemPropertiesService>,
@@ -859,6 +875,7 @@ pub(crate) struct ApiContext {
     pub reminders_state: DssRemindersState,
     pub access_requests_state: AccessRequestsState,
     pub slack_state: DssSlackState,
+    pub external_chat_state: crate::external_chat::State,
     pub initiative_state: DssInitiativeState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
@@ -868,6 +885,8 @@ pub(crate) struct ApiContext {
     pub graphql_work_feed_context: complete_graph::WorkFeedGraphqlContext,
     pub graphql_initiative_entity_loader: graphql_initiative::InitiativeEntityLoader,
     pub graphql_agent_session_entity_loader: graphql_soup::AgentSessionEntityLoader,
+    /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.
+    pub email_focus_reader: Arc<dyn complete_graph::EmailFocusReader>,
     pub graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader,
     pub graphql_soup_item_loader: graphql_soup::SoupItemDataLoader,
     pub databases_state: DssDatabasesState,
@@ -884,6 +903,7 @@ pub(crate) struct ApiContext {
     pub notification_ingress_service: Arc<NotificationIngressType>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
+    pub sync_sessions: sync_router::session::SyncSessionFactory,
     pub system_properties_service: Arc<SystemPropertiesService>,
     pub properties_service: Arc<PropertiesService>,
     pub opensearch_client: Arc<OpensearchClient>,
@@ -897,6 +917,7 @@ pub(crate) struct ApiContext {
     pub channel_list_state: DssChannelListState,
     pub entity_access_service: Arc<EntityAccessService>,
     pub calendar_state: DssCalendarState,
+    pub calendar_join_request_state: DssCalendarJoinRequestState,
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,

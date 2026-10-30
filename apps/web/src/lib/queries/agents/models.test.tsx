@@ -48,11 +48,10 @@ afterEach(() => {
 
 describe('agent model discovery', () => {
   it('constructs every available target in parallel without waiting for another target', async () => {
-    const targets = buildAgentModelTargets(
-      true,
-      [{ id: 'harness-a' }, { id: 'harness-b' }],
-      true
-    );
+    const targets = buildAgentModelTargets(true, [
+      { id: 'harness-a' },
+      { id: 'harness-b' },
+    ]);
     const pending = new Promise<never>(() => {});
     vi.mocked(agentHarnessServiceClient.loadAgentModels).mockReturnValue(
       pending
@@ -62,7 +61,7 @@ describe('agent model discovery', () => {
 
     await vi.waitFor(() => {
       expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(
-        5
+        4
       );
     });
     expect(
@@ -71,7 +70,6 @@ describe('agent model discovery', () => {
         .mock.calls.map(([request]) => request)
     ).toEqual([
       { harness: 'in-memory' },
-      { harness: 'claude-cloud' },
       { harness: 'cursor' },
       { harness: 'macrod', harnessId: 'harness-a' },
       { harness: 'macrod', harnessId: 'harness-b' },
@@ -79,9 +77,8 @@ describe('agent model discovery', () => {
   });
 
   it('omits Cursor when it is not registered', () => {
-    expect(buildAgentModelTargets(false, [{ id: 'harness-a' }], true)).toEqual([
+    expect(buildAgentModelTargets(false, [{ id: 'harness-a' }])).toEqual([
       { harness: 'in-memory' },
-      { harness: 'claude-cloud' },
       { harness: 'macrod', harnessId: 'harness-a' },
     ]);
   });
@@ -128,22 +125,5 @@ describe('agent model discovery', () => {
       ).toBe(true);
     });
     expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(2);
-  });
-
-  it('does not query Claude when its feature flag is off', async () => {
-    vi.mocked(agentHarnessServiceClient.loadAgentModels).mockReturnValue(
-      new Promise<never>(() => {})
-    );
-    renderHook(() =>
-      useAgentModelsQueries(() => buildAgentModelTargets(true, [], false))
-    );
-    await vi.waitFor(() =>
-      expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(2)
-    );
-    expect(
-      vi
-        .mocked(agentHarnessServiceClient.loadAgentModels)
-        .mock.calls.map(([request]) => request)
-    ).toEqual([{ harness: 'in-memory' }, { harness: 'cursor' }]);
   });
 });

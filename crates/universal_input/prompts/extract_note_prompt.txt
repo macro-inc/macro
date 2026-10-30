@@ -1,0 +1,1 @@
+Suggest a short title from the note. The application preserves the complete note text and Markdown directly; do not extract or rewrite a body.

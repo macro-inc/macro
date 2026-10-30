@@ -9,7 +9,10 @@ use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarT
 use macro_event_broker::MacroEventBroker;
 
 use super::{
-    ics::{CalendarEventIcs, render_event_ics},
+    ics::{
+        CalendarEventExportAccess, CalendarEventForward, CalendarEventForwardKind,
+        CalendarEventIcs, IcsParticipant, IcsPurpose, render_event_ics,
+    },
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
@@ -17,11 +20,11 @@ use super::{
         GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
     ports::{
-        CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
-        CalendarEventWriteOutcome, CalendarOccurrenceService, CalendarProviderError,
-        CalendarProviderErrorKind, CalendarReauthNotifier, CalendarRepository,
-        GoogleCalendarProvider, GoogleCalendarSyncRepository, GoogleEventSyncContext,
-        RetiredCalendarEvent,
+        CalendarBackfillRepository, CalendarEventChange, CalendarEventForwardSource,
+        CalendarEventWrite, CalendarEventWriteOutcome, CalendarOccurrenceService,
+        CalendarProviderError, CalendarProviderErrorKind, CalendarReauthNotifier,
+        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
+        GoogleEventSyncContext, RetiredCalendarEvent,
     },
 };
 
@@ -107,12 +110,12 @@ where
             .list_occurrences(requester_id, range, cursor, limit)
             .await?;
         if let Some(viewer) =
-            ActorInboxes::from_owned(self.repository.owned_inbox_emails(requester_id).await?)
+            ActorInboxes::from_owned(self.repository.owned_inboxes(requester_id).await?)
         {
             for listing in &mut rows {
-                viewer.mark_event(&mut listing.event);
+                viewer.mark_event(&mut listing.event, listing.link_id);
                 if let Some(attendees) = &mut listing.exception.attendees {
-                    viewer.mark_attendees(attendees);
+                    viewer.mark_attendees(attendees, listing.link_id);
                 }
             }
         }
@@ -187,15 +190,40 @@ where
         if items.is_empty() {
             return Ok(Vec::new());
         }
-        self.repository
-            .mention_previews(requester_id, items, Utc::now())
-            .await
+        let mut previews = self
+            .repository
+            .mention_previews(requester_id, items.clone(), Utc::now())
+            .await?;
+        super::join_requests::annotate_join_state(
+            &self.repository,
+            requester_id,
+            &items,
+            &mut previews,
+        )
+        .await?;
+        Ok(previews)
     }
 
     /// The IANA time zone of the requester's primary calendar.
     #[tracing::instrument(skip(self, requester_id), err)]
     pub async fn primary_time_zone(&self, requester_id: &str) -> Result<Option<String>, Report> {
         self.repository.primary_time_zone(requester_id).await
+    }
+
+    /// Every copy of `event_id`'s meeting the requester holds through one of
+    /// their own inboxes.
+    #[tracing::instrument(skip(self, requester_id), fields(copies), err)]
+    pub async fn meeting_copies(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Vec<super::models::MeetingCopy>, Report> {
+        let copies = self
+            .repository
+            .meeting_copies(requester_id, event_id)
+            .await?;
+        tracing::Span::current().record("copies", copies.len());
+        Ok(copies)
     }
 
     /// Export an event the requester can see as an iCalendar document.
@@ -207,8 +235,71 @@ where
     ) -> Result<Option<CalendarEventIcs>, Report> {
         let event = self.repository.event_export(requester_id, event_id).await?;
         Ok(event.map(|event| CalendarEventIcs {
-            document: render_event_ics(&event),
+            document: render_event_ics(&event, IcsPurpose::Share),
             title: event.title,
+        }))
+    }
+
+    /// What a forward of the requester's own copy of an event to `invitees`
+    /// sends, and that copy's inbox, which sends it. The copy decides the
+    /// kind ([`ForwardedCopy::outside_organizer`]): an invitation naming
+    /// `invitees` when its organizer is outside Google, else the
+    /// shared-event file. Both carry the copy's join link. `None` unless
+    /// `event_id` is a live copy held through one of the requester's own
+    /// inboxes: a channel share or a delegated inbox's copy has no inbox of
+    /// theirs to send from.
+    ///
+    /// [`ForwardedCopy::outside_organizer`]: super::ics::ForwardedCopy::outside_organizer
+    #[tracing::instrument(
+        skip(self, requester_id, invitees),
+        fields(invitee_count = invitees.len(), kind = tracing::field::Empty),
+        err
+    )]
+    pub async fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        invitees: &[IcsParticipant],
+    ) -> Result<Option<CalendarEventForward>, Report> {
+        let copies = self
+            .repository
+            .meeting_copies(requester_id, event_id)
+            .await?;
+        let Some(copy) = copies.into_iter().find(|copy| copy.event_id == event_id) else {
+            return Ok(None);
+        };
+        let Some(event) = self
+            .repository
+            .event_export(requester_id, event_id)
+            .await?
+            .filter(|event| event.access == CalendarEventExportAccess::OwnCopy)
+        else {
+            return Ok(None);
+        };
+        let Some(forwarded) = self
+            .repository
+            .forwarded_copy(requester_id, event_id)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let kind = match forwarded.outside_organizer(&event) {
+            Some(organizer) => CalendarEventForwardKind::Invitation { organizer },
+            None => CalendarEventForwardKind::EventFile,
+        };
+        tracing::Span::current().record("kind", kind.as_str());
+        let purpose = IcsPurpose::Forward {
+            join_link: forwarded.join_link.as_ref(),
+            invitees: matches!(kind, CalendarEventForwardKind::Invitation { .. })
+                .then_some(invitees),
+        };
+        Ok(Some(CalendarEventForward {
+            ics: CalendarEventIcs {
+                document: render_event_ics(&event, purpose),
+                title: event.title,
+            },
+            inbox: copy.inbox,
+            kind,
         }))
     }
 
@@ -232,6 +323,20 @@ where
             .schedule_google_sync_for_link(email_link_id)
             .await?;
         Ok(true)
+    }
+}
+
+impl<R> CalendarEventForwardSource for CalendarService<R>
+where
+    R: CalendarRepository,
+{
+    fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        invitees: &[IcsParticipant],
+    ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send {
+        CalendarService::event_forward(self, requester_id, event_id, invitees)
     }
 }
 
@@ -286,6 +391,14 @@ where
         requester_id: &str,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send {
         CalendarService::primary_time_zone(self, requester_id)
+    }
+
+    fn meeting_copies(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<super::models::MeetingCopy>, Report>> + Send {
+        CalendarService::meeting_copies(self, requester_id, event_id)
     }
 
     fn event_ics(
@@ -869,6 +982,7 @@ where
                     .await?;
                 self.publish_write_outcome(&outcome);
                 report.team_ooo_changed |= outcome.team_ooo_changed;
+                report.aligned_copies.extend(outcome.aligned_copies);
                 calendar_count += 1;
             }
             // The upserts above committed individually, so they count even

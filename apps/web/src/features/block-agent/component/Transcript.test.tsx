@@ -11,6 +11,7 @@ import { Transcript } from './Transcript';
 
 const session = vi.hoisted(() => ({
   sessionId: () => 'session',
+  metadata: () => ({ notifications: [] }),
   turn: (): TurnState => 'idle',
   messages: () => [] as FoldedMessage[],
   quoteSelection: vi.fn(),
@@ -515,5 +516,19 @@ describe('Transcript with the shared TanStack ThreadList', () => {
     view.setMessages((list) => [...list, message(50)]);
     await settle();
     expect(view.scroller.scrollTop).toBe(view.scroller.scrollHeight - viewport);
+  });
+
+  it('keeps the touch jump button visible while scrolling up and jumps to latest on tap', async () => {
+    session.touch = true;
+    const view = mount(Array.from({ length: 50 }, (_, i) => message(i)));
+    await settle();
+    expect(view.queryByLabelText('Jump to latest')).toBeNull();
+    view.scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: -600 }));
+    view.scroller.scrollTo({ top: 500 });
+    await settle();
+    view.getByLabelText('Jump to latest').click();
+    await settle();
+    expect(view.scroller.scrollTop).toBe(view.scroller.scrollHeight - viewport);
+    expect(view.queryByLabelText('Jump to latest')).toBeNull();
   });
 });

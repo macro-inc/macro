@@ -2,7 +2,10 @@ import { PIPEDREAM_CALLBACK_PATH } from './connect-callback';
 import { openPipedreamConnectUI } from './connect-ui';
 
 /** Standalone browser handoff; no Macro browser login is needed. */
-export function mountPipedreamBrowserConnect(root: HTMLElement) {
+export function mountPipedreamBrowserConnect(
+  root: HTMLElement,
+  returnToApp: (href: string) => void = (href) => window.location.assign(href)
+) {
   const params = new URLSearchParams(window.location.hash.slice(1));
   history.replaceState(null, '', window.location.pathname);
   const token = params.get('token');
@@ -37,6 +40,9 @@ export function mountPipedreamBrowserConnect(root: HTMLElement) {
       link.href = callback.href;
       link.textContent = 'Return to Macro';
       root.appendChild(link);
+      // Hand back to the app without waiting for a click; the link stays as
+      // the fallback when the browser blocks or the user dismisses the prompt.
+      returnToApp(callback.href);
     },
   });
 }

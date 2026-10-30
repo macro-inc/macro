@@ -1,4 +1,3 @@
-import { isClaudeBotId } from '@core/constant/claudeAgent';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
 import { isMacroAgentId } from '@core/constant/macroAgent';
@@ -6,7 +5,6 @@ import { isMacroCoderId } from '@core/constant/macroCoder';
 import { isMacroNewId } from '@core/constant/macroNew';
 import { isMacroSystemId } from '@core/constant/macroSystem';
 import MacroLogo from '@icon/macro-logo.svg';
-import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import type { Component, ComponentProps } from 'solid-js';
@@ -20,7 +18,6 @@ export type FirstPartyBotMark = {
 
 const MACRO_MARK: FirstPartyBotMark = { Icon: MacroLogo, tone: 'accent' };
 const CURSOR_MARK: FirstPartyBotMark = { Icon: CursorIcon, tone: 'ink' };
-const CLAUDE_MARK: FirstPartyBotMark = { Icon: ClaudeIcon, tone: 'ink' };
 const CODEX_MARK: FirstPartyBotMark = { Icon: CodexIcon, tone: 'ink' };
 
 /**
@@ -43,7 +40,6 @@ export function firstPartyBotMark(
     return MACRO_MARK;
   }
   if (isCursorBotId(id)) return CURSOR_MARK;
-  if (isClaudeBotId(id)) return CLAUDE_MARK;
   if (isCodexBotId(id)) return CODEX_MARK;
   return undefined;
 }

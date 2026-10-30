@@ -1,7 +1,6 @@
 import type { EntityData } from '@entity';
 import { keyArray } from '@solid-primitives/keyed';
 import { type Accessor, createMemo } from 'solid-js';
-import { useInstructionsMdIdQuery } from '../../../storage/instructions-md';
 import { createKeyedProjection } from '../../create-keyed-projection';
 import type { GroupedSoupPaging } from '../../graphql/create-grouped-soup-live-query';
 import {
@@ -11,7 +10,6 @@ import {
 import type { SoupApiItemFilter, SoupAstItemsGroupedPage } from '../../items';
 import {
   isDisplayableSoupItem,
-  isInstructionsMdDoc,
   mapApiSoupItemToEntity,
 } from '../../transform-utils';
 import type { GroupMeta } from '../types';
@@ -35,7 +33,6 @@ type CreateGraphqlGroupedSoupQueriesArgs = {
 export function createGraphqlGroupedSoupQueries(
   args: CreateGraphqlGroupedSoupQueriesArgs
 ) {
-  const instructions = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const rows = createKeyedProjection(
     () => Object.entries(args.initialPage()?.items ?? {}),
@@ -43,9 +40,7 @@ export function createGraphqlGroupedSoupQueries(
     ([id, item]) => {
       const filter = args.itemFilter();
       const entity =
-        isDisplayableSoupItem(item) &&
-        (!filter || filter(item)) &&
-        !isInstructionsMdDoc(item, instructions)
+        isDisplayableSoupItem(item) && (!filter || filter(item))
           ? mapApiSoupItemToEntity(item)
           : undefined;
       return { id, entity };

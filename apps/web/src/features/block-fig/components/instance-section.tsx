@@ -13,10 +13,10 @@ import type {
   InstanceProperties,
 } from '@core/fig-engine/design-types';
 import type { ComponentInfo } from '@core/fig-engine/types';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import DiamondsFour from '@phosphor/diamonds-four.svg';
-import Swap from '@phosphor/swap.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import DiamondsFour from '@icon/system/regular/diamonds-four.svg';
+import Swap from '@icon/system/regular/swap.svg';
 import { For, Show } from 'solid-js';
 import type { PropertyInput } from '../core/design-system';
 import { ComponentPicker } from './component-picker';

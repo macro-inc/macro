@@ -6,6 +6,8 @@
  */
 import type {
   AgentConversationsDto,
+  AgentModeChoiceRequest,
+  AgentModeChoiceResponse,
   AgentRepositoriesResponse,
   AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
@@ -17,8 +19,10 @@ import type {
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
+  AppConnectedRequest,
+  ClassifyInputRequest,
+  ClassifyInputResponse,
   CodingPreferencesBody,
-  CompleteRequest,
   ControlRequest,
   ControlResponse,
   CreateAgentSessionRequest,
@@ -27,8 +31,9 @@ import type {
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
   EditQueuedActionRequest,
-  EmptyRequest,
   ExecutionRecord,
+  ExtractInputRequest,
+  ExtractInputResponse,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
@@ -47,8 +52,6 @@ import type {
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
   StartFreshAgentConversationRequest,
-  StartResponse,
-  StatusResponse,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionRequest,
@@ -453,6 +456,81 @@ export const retryAgentConversationTurn = async (
     status: res.status,
     headers: res.headers,
   } as retryAgentConversationTurnResponse;
+};
+
+/**
+ * @summary Choose whether a composer prompt goes to a chat or a coding agent.
+ */
+export type chooseAgentModeResponse200 = {
+  data: AgentModeChoiceResponse;
+  status: 200;
+};
+
+export type chooseAgentModeResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type chooseAgentModeResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type chooseAgentModeResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type chooseAgentModeResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type chooseAgentModeResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type chooseAgentModeResponseSuccess = chooseAgentModeResponse200 & {
+  headers: Headers;
+};
+export type chooseAgentModeResponseError = (
+  | chooseAgentModeResponse400
+  | chooseAgentModeResponse401
+  | chooseAgentModeResponse402
+  | chooseAgentModeResponse403
+  | chooseAgentModeResponse503
+) & {
+  headers: Headers;
+};
+
+export type chooseAgentModeResponse =
+  | chooseAgentModeResponseSuccess
+  | chooseAgentModeResponseError;
+
+export const getChooseAgentModeUrl = () => {
+  return `/agent-mode-choice`;
+};
+
+export const chooseAgentMode = async (
+  agentModeChoiceRequest: AgentModeChoiceRequest,
+  options?: RequestInit
+): Promise<chooseAgentModeResponse> => {
+  const res = await fetch(getChooseAgentModeUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentModeChoiceRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: chooseAgentModeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as chooseAgentModeResponse;
 };
 
 /**
@@ -1267,6 +1345,87 @@ export const deleteAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as deleteAgentSessionResponse;
+};
+
+/**
+ * The harness produces an `app.connected` system event, which the transcript
+shows as no prompt; it starts a turn once the session is idle.
+ * @summary Continue the session now that its owner connected an app it asked for.
+ */
+export type reportAgentSessionAppConnectedResponse202 = {
+  data: void;
+  status: 202;
+};
+
+export type reportAgentSessionAppConnectedResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reportAgentSessionAppConnectedResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reportAgentSessionAppConnectedResponse409 = {
+  data: string;
+  status: 409;
+};
+
+export type reportAgentSessionAppConnectedResponse422 = {
+  data: string;
+  status: 422;
+};
+
+export type reportAgentSessionAppConnectedResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reportAgentSessionAppConnectedResponseSuccess =
+  reportAgentSessionAppConnectedResponse202 & {
+    headers: Headers;
+  };
+export type reportAgentSessionAppConnectedResponseError = (
+  | reportAgentSessionAppConnectedResponse401
+  | reportAgentSessionAppConnectedResponse403
+  | reportAgentSessionAppConnectedResponse409
+  | reportAgentSessionAppConnectedResponse422
+  | reportAgentSessionAppConnectedResponse500
+) & {
+  headers: Headers;
+};
+
+export type reportAgentSessionAppConnectedResponse =
+  | reportAgentSessionAppConnectedResponseSuccess
+  | reportAgentSessionAppConnectedResponseError;
+
+export const getReportAgentSessionAppConnectedUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/app-connections`;
+};
+
+export const reportAgentSessionAppConnected = async (
+  sessionId: string,
+  appConnectedRequest: AppConnectedRequest,
+  options?: RequestInit
+): Promise<reportAgentSessionAppConnectedResponse> => {
+  const res = await fetch(getReportAgentSessionAppConnectedUrl(sessionId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(appConnectedRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportAgentSessionAppConnectedResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reportAgentSessionAppConnectedResponse;
 };
 
 /**
@@ -2965,195 +3124,127 @@ export const answerAgentSessionToolApproval = async (
 };
 
 /**
- * @summary Read connection status for the authenticated user only.
+ * @summary Classify a draft for the authenticated user.
  */
-export type statusResponse200 = {
-  data: StatusResponse;
+export type classifyResponse200 = {
+  data: ClassifyInputResponse;
   status: 200;
 };
 
-export type statusResponse401 = {
-  data: void;
-  status: 401;
-};
-
-export type statusResponseSuccess = statusResponse200 & {
-  headers: Headers;
-};
-export type statusResponseError = statusResponse401 & {
-  headers: Headers;
-};
-
-export type statusResponse = statusResponseSuccess | statusResponseError;
-
-export const getStatusUrl = () => {
-  return `/claude-auth`;
-};
-
-export const status = async (
-  options?: RequestInit
-): Promise<statusResponse> => {
-  const res = await fetch(getStatusUrl(), {
-    ...options,
-    method: 'GET',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: statusResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as statusResponse;
-};
-
-/**
- * @summary Forget only the authenticated user's grant and cancel pending consent.
- */
-export type disconnectResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type disconnectResponse403 = {
-  data: void;
-  status: 403;
-};
-
-export type disconnectResponseSuccess = disconnectResponse204 & {
-  headers: Headers;
-};
-export type disconnectResponseError = disconnectResponse403 & {
-  headers: Headers;
-};
-
-export type disconnectResponse =
-  | disconnectResponseSuccess
-  | disconnectResponseError;
-
-export const getDisconnectUrl = () => {
-  return `/claude-auth`;
-};
-
-export const disconnect = async (
-  emptyRequest: EmptyRequest,
-  options?: RequestInit
-): Promise<disconnectResponse> => {
-  const res = await fetch(getDisconnectUrl(), {
-    ...options,
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(emptyRequest),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: disconnectResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as disconnectResponse;
-};
-
-/**
- * @summary Exchange one code; never return access or refresh tokens.
- */
-export type completeResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type completeResponse400 = {
+export type classifyResponse400 = {
   data: void;
   status: 400;
 };
 
-export type completeResponse409 = {
+export type classifyResponse401 = {
   data: void;
-  status: 409;
+  status: 401;
 };
 
-export type completeResponse502 = {
+export type classifyResponse402 = {
   data: void;
-  status: 502;
+  status: 402;
 };
 
-export type completeResponseSuccess = completeResponse204 & {
+export type classifyResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type classifyResponseSuccess = classifyResponse200 & {
   headers: Headers;
 };
-export type completeResponseError = (
-  | completeResponse400
-  | completeResponse409
-  | completeResponse502
+export type classifyResponseError = (
+  | classifyResponse400
+  | classifyResponse401
+  | classifyResponse402
+  | classifyResponse503
 ) & {
   headers: Headers;
 };
 
-export type completeResponse = completeResponseSuccess | completeResponseError;
+export type classifyResponse = classifyResponseSuccess | classifyResponseError;
 
-export const getCompleteUrl = () => {
-  return `/claude-auth/complete`;
+export const getClassifyUrl = () => {
+  return `/universal_input/classify`;
 };
 
-export const complete = async (
-  completeRequest: CompleteRequest,
+export const classify = async (
+  classifyInputRequest: ClassifyInputRequest,
   options?: RequestInit
-): Promise<completeResponse> => {
-  const res = await fetch(getCompleteUrl(), {
+): Promise<classifyResponse> => {
+  const res = await fetch(getClassifyUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(completeRequest),
+    body: JSON.stringify(classifyInputRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: completeResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as completeResponse;
+  const data: classifyResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as classifyResponse;
 };
 
 /**
- * @summary Create an expiring PKCE challenge for the authenticated user.
+ * @summary Extract editable fields for the authenticated user.
  */
-export type startResponse200 = {
-  data: StartResponse;
+export type extractResponse200 = {
+  data: ExtractInputResponse;
   status: 200;
 };
 
-export type startResponse403 = {
+export type extractResponse400 = {
   data: void;
-  status: 403;
+  status: 400;
 };
 
-export type startResponse429 = {
+export type extractResponse401 = {
   data: void;
-  status: 429;
+  status: 401;
 };
 
-export type startResponseSuccess = startResponse200 & {
+export type extractResponse402 = {
+  data: void;
+  status: 402;
+};
+
+export type extractResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type extractResponseSuccess = extractResponse200 & {
   headers: Headers;
 };
-export type startResponseError = (startResponse403 | startResponse429) & {
+export type extractResponseError = (
+  | extractResponse400
+  | extractResponse401
+  | extractResponse402
+  | extractResponse503
+) & {
   headers: Headers;
 };
 
-export type startResponse = startResponseSuccess | startResponseError;
+export type extractResponse = extractResponseSuccess | extractResponseError;
 
-export const getStartUrl = () => {
-  return `/claude-auth/start`;
+export const getExtractUrl = () => {
+  return `/universal_input/extract`;
 };
 
-export const start = async (
-  emptyRequest: EmptyRequest,
+export const extract = async (
+  extractInputRequest: ExtractInputRequest,
   options?: RequestInit
-): Promise<startResponse> => {
-  const res = await fetch(getStartUrl(), {
+): Promise<extractResponse> => {
+  const res = await fetch(getExtractUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(emptyRequest),
+    body: JSON.stringify(extractInputRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: startResponse['data'] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as startResponse;
+  const data: extractResponse['data'] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as extractResponse;
 };

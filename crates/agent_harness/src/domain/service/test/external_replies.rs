@@ -147,6 +147,7 @@ async fn an_external_mention_resolves_and_a_followup_can_finish_before_its_annou
         .execute_here(
             session.id,
             HarnessCommand::Turn(TurnSignal::TurnEnded {
+                notification_noop: false,
                 turn: TurnId(0),
                 action_id: Some(AgentActionId::from_uuid(source)),
                 stop: StopReason::EndTurn,
@@ -168,6 +169,7 @@ async fn an_external_mention_resolves_and_a_followup_can_finish_before_its_annou
         .execute_here(
             session.id,
             HarnessCommand::Turn(TurnSignal::TurnEnded {
+                notification_noop: false,
                 turn: TurnId(1),
                 action_id: Some(AgentActionId::from_uuid(followup)),
                 stop: StopReason::EndTurn,
@@ -243,6 +245,7 @@ async fn failed_channel_updates_retry_after_restart_without_reprompting() {
         .execute_here(
             session.id,
             HarnessCommand::Turn(TurnSignal::TurnEnded {
+                notification_noop: false,
                 turn: TurnId(0),
                 action_id: Some(AgentActionId::from_uuid(source)),
                 stop: StopReason::Cancelled,

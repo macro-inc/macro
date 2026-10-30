@@ -1,18 +1,24 @@
 import { EmailFormContextProvider } from '@app/features/email-compose/context/email-form-context';
+import { observeDraftRestoration } from '@app/features/email-compose/primitives/draft-restoration';
 import { EmailComposeView } from '@app/features/email-compose/views/email-compose';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import type { JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { EmailThreadTitle } from '../components/email-thread-title';
 import type { EmailThreadHost } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { createThreadNavigation } from '../primitives/thread-navigation';
 import { createThreadReplyArea } from '../primitives/thread-reply-area';
 import { BottomReplyButtons } from './bottom-reply-buttons';
+import { EmailParticipants } from './email-participants';
 import { MessageList } from './message-list';
 import { MobileEmailCompose } from './mobile-email-compose';
 export type EmailThreadViewProps = {
   title: string;
+  /** Host control after the subject's last word, in place of Copy subject. */
+  titleTrailing?: JSX.Element;
   threadId: Accessor<string>;
   host?: EmailThreadHost;
   header?: JSX.Element;
@@ -20,9 +26,26 @@ export type EmailThreadViewProps = {
 };
 export function EmailThreadView(props: EmailThreadViewProps) {
   const context = useEmailThreadState();
+  createScrollTopFade(context.messagesListRef);
   const viewContext = useEmailThreadViewContext();
   const threadContext = viewContext.thread;
   const isTouchDevice = threadContext.isTouch;
+  observeDraftRestoration({
+    storage: viewContext.compose.drafts,
+    accepts: (change) =>
+      change.threadId === props.threadId() && !!change.replyingToId,
+    version: props.threadId,
+    cancelPendingSave() {},
+    setPending() {},
+    restore: (draft) => {
+      context.drafts.restoreDraftForMessage(draft);
+      if (!draft.replying_to_id) return;
+      if (isTouchDevice())
+        context.mobileReplyComposer.openForMessage(draft.replying_to_id);
+      else context.messages.setReplyingToMessageId(draft.replying_to_id);
+    },
+    reportError: viewContext.compose.notices.reportError,
+  });
   const navigation = createThreadNavigation(
     props,
     context,
@@ -96,8 +119,13 @@ export function EmailThreadView(props: EmailThreadViewProps) {
             }}
           >
             {/* Edge-to-edge on mobile/tablet: the message list carries its own
-                  insets in-scroll and under-scrolls the floating chrome. */}
-            <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
+                  insets in-scroll and under-scrolls the floating chrome. On
+                  every device persistent prompts wait rather than cover its
+                  last attachments, reply bar and reply composer. */}
+            <div
+              class="size-full select-none overscroll-none overflow-hidden flex flex-col"
+              data-holds-prompts
+            >
               {props.header}
               {props.actions}
               {viewContext.rendering.renderOrganizationStatus?.({
@@ -108,6 +136,30 @@ export function EmailThreadView(props: EmailThreadViewProps) {
                 class="@container w-full flex-1 flex flex-col items-center overflow-hidden"
                 ref={context.registerMessagesContainer}
               >
+                {/* Desktop keeps the subject, tags and participants still
+                    while the messages scroll up under them. */}
+                <Show when={!isTouchDevice() && props.title}>
+                  {(title) => (
+                    <div class="shrink-0 w-full flex justify-center">
+                      <div class="macro-message-width macro-message-padding w-full pt-2 pb-3.5">
+                        <EmailThreadTitle
+                          onCopy={viewContext.copySubject}
+                          title={title()}
+                          copyReveal="hover"
+                          trailing={props.titleTrailing}
+                          class="text-2xl"
+                        />
+                        <div class="h-2" aria-hidden="true" />
+                        {/* Bounded so a long expanded list scrolls instead of
+                            crowding out the messages; the padding keeps focus
+                            rings unclipped. */}
+                        <div class="-m-1 max-h-34 overflow-y-auto p-1">
+                          <EmailParticipants />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </Show>
                 <MessageList
                   initialLoadComplete={context.initialLoadComplete()}
                   markdownDomRef={(el) => {

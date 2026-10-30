@@ -1,4 +1,4 @@
-//! Session code-mode use cases.
+//! Session and user code-mode use cases.
 mod models;
 mod ports;
 mod service;
@@ -13,3 +13,6 @@ pub use documentation::*;
 pub mod reviews;
 
 mod activity;
+
+mod user;
+pub use user::*;

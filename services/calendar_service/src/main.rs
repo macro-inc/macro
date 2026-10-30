@@ -321,6 +321,14 @@ async fn main() -> anyhow::Result<()> {
         config: Arc::new(config),
         authorization_state,
         calendar_service,
+        calendar_notes: Arc::new(calendar_events::domain::notes::MeetingNotes::new(
+            calendar_events::outbound::pg_notes::PgNoteRepository::new(db.clone()),
+        )),
+        note_access: Arc::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(db.clone()),
+            ),
+        ),
         calendar_mutation_service,
         calendar_team_service,
         scheduling_service,

@@ -148,6 +148,25 @@ impl CalendarMutationService for FakeMutations {
         Ok(series_event())
     }
 
+    async fn copy_shared_event(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        unreachable!("GraphQL has no copy mutation")
+    }
+
+    async fn respond_to_join_request(
+        &self,
+        _requester_id: &str,
+        _request_id: Uuid,
+        _accept: bool,
+    ) -> Result<calendar_events::domain::join_requests::CalendarJoinRequest, CalendarMutationError>
+    {
+        unreachable!("GraphQL has no join requests")
+    }
+
     async fn disconnect_calendar(
         &self,
         _requester_id: &str,
@@ -778,9 +797,30 @@ async fn every_failure_carries_its_rest_code_and_hides_provider_details() {
             false,
         ),
         (CalendarMutationError::NotAttendee, "not_attendee", false),
+        (CalendarMutationError::NotOrganizer, "not_organizer", false),
         (
             CalendarMutationError::GuestsCannotInvite,
             "guests_cannot_invite",
+            false,
+        ),
+        (
+            CalendarMutationError::GuestListHidden,
+            "guest_list_hidden",
+            false,
+        ),
+        (
+            CalendarMutationError::GuestsCannotModify,
+            "guests_cannot_modify",
+            false,
+        ),
+        (
+            CalendarMutationError::AlreadyOnCalendar,
+            "already_on_calendar",
+            false,
+        ),
+        (
+            CalendarMutationError::JoinRequestOpen,
+            "join_request_open",
             false,
         ),
         (

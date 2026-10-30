@@ -210,6 +210,8 @@ export function createUrlNavigation(options: {
         from,
         cause: 'external' as const,
         signal: UNCANCELLABLE,
+        // The host only asks permission; the router cannot observe its commit.
+        onCommit: () => {},
       };
 
       return checksFor(guards.select(pane, PANE_LEVEL), context);

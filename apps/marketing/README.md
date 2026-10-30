@@ -1066,3 +1066,47 @@ restores compact dimensions before the header reappears; keep one app link.
 
 The landing-page CRM illustration has a transparent outer frame with no
 decorative rim in either palette. Keep the inner CRM window surface and shadow.
+
+Prerender product routes must link the styles for their actual lazy module before
+JavaScript runs. Keep the route asset map aligned with App imports; shared Vite
+dynamic entries can have generated manifest keys, so resolve their unique entry
+names and fail on missing/ambiguous entries. Product logos carry intrinsic 20px
+dimensions. The production product checks hold scripts and verify styled heroes
+and correctly sized logos before releasing them.
+
+The homepage uses a silent dark unification MP4 and its clean opening frame as
+Open Graph media. Keep the image free of navigation and CTA buttons, and keep
+the headline above the bottom quarter, where X overlays its title label. The video
+ends in a unified Macro mark; it is not a seamless loop. Use versioned asset URLs
+and retain earlier files for cached previews. Keep video homepage-only, with
+`og:type=website`, the matching `og:image`, and an
+explicit `twitter:card=summary_large_image` plus `twitter:image`. Product and
+article pages retain their own image cards; remove video metadata when navigating
+away. The video is metadata-only, never preloaded or added to the page player.
+Social clients control playback and caching; verify Messages and X previews
+separately after publishing.
+
+### Pricing savings comparison
+
+The Free/Pro/Max comparison uses fixed plan columns, a continuous Pro-column
+highlight, and subdued Free values on desktop and phones.
+
+`/pricing` uses a single aligned table in `SavingsCalculator`, with a compact
+savings header and team-size control above it. Show eight primary tools:
+Superhuman, Slack, Notion, Jira, HubSpot Professional, Granola Business,
+Calendly, and Dropbox. Default to Superhuman, Notion, Jira, Slack, Granola,
+and HubSpot for a complementary email/docs/tasks/chat/meeting-notes/CRM stack.
+Calendly and Dropbox are visible but start off. The tool rows scroll within a compact, keyboard-focusable region with a visible
+scrollbar and sticky column headers. Primary tools appear first, followed by
+alternatives including Attio Pro ($79/user/month billed annually), Linear,
+Salesforce Pro, Otter, Fireflies Business, Airtable, Asana, ClickUp, Zoom, and Acrobat. Avoid preselecting competing tools
+for the same workflow simply to increase the savings estimate.
+Keep tool logos, names, plans, and prices in consistent columns; show the per-user
+monthly unit once in the header. Preserve the same columns on phones with
+smaller type and spacing. Do not show category headings, a separate result card,
+divider lines, a stacked cost breakdown, or introductory subtext. Standalone AI
+subscriptions are excluded. Display yearly savings against Macro Pro at $40 per
+person per month; label additional cost explicitly when Macro costs more.
+Prices link to vendor sources; a short plain-text billing/seat-count note sits directly below the list.
+The `/tour` calculator retains its separate tier controls and shares the original
+nine tools' prices through `core/savings-calculator.ts`.

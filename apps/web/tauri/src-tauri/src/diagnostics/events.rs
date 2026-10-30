@@ -18,6 +18,47 @@ pub enum ReloadReason {
     Logout,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(test, derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum NavigationCause {
+    Initial,
+    External,
+    Navigate,
+    History,
+    Search,
+}
+
+/// A route id or entity type defined in app code, never user text.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(test, derive(specta::Type))]
+#[serde(try_from = "String", into = "String")]
+pub struct CodeName(String);
+
+impl From<CodeName> for String {
+    fn from(name: CodeName) -> Self {
+        name.0
+    }
+}
+
+impl TryFrom<String> for CodeName {
+    type Error = &'static str;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let mut chars = value.chars();
+        let valid = value.len() <= 64
+            && chars
+                .next()
+                .is_some_and(|first| first.is_ascii_alphabetic())
+            && chars.all(|next| next.is_ascii_alphanumeric() || next == '-' || next == '_');
+        if valid {
+            Ok(Self(value))
+        } else {
+            Err("expected a code-defined name")
+        }
+    }
+}
+
 /// Closed schema: never accept arbitrary text, URLs, or message content.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(test, derive(specta::Type))]
@@ -39,6 +80,14 @@ pub enum FrontendEvent {
     ReloadRequested {
         reload_id: Uuid,
         reason: ReloadReason,
+    },
+    /// A pane started navigating; recorded before the destination loads so a
+    /// termination while it loads still names it.
+    Navigated {
+        cause: NavigationCause,
+        route: CodeName,
+        from_route: Option<CodeName>,
+        entity_type: Option<CodeName>,
     },
     /// Clears identifiers before another account can take over the WebView.
     AccountCleared,

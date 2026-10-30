@@ -6,23 +6,29 @@ import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { type ChannelEntity, Entity } from '@entity';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChatCircleIcon from '@phosphor/chat-circle.svg';
-import ChatsCircleIcon from '@phosphor/chats-circle.svg';
-import CheckIcon from '@phosphor/check.svg';
-import HashIcon from '@phosphor/hash.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SortIcon from '@phosphor/sort-ascending.svg';
-import XIcon from '@phosphor/x.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import SortIcon from '@icon/system/regular/sort-ascending.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   createDraggable,
   createDroppable,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
-import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip } from '@ui';
+import {
+  cn,
+  Dropdown,
+  EmptyStatePanel,
+  Hotkey,
+  type TabOption,
+  Tabs,
+  Tooltip,
+} from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
@@ -41,9 +47,11 @@ import type {
   ChannelListSort,
   ChannelsGroup,
   ChannelsSortGroup,
+  ChannelsTab,
 } from '../../types';
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
+import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
 import { ChannelFavoritesSection } from './ChannelFavoriteRows';
 import {
   ChannelLabelMenuItems,
@@ -70,6 +78,7 @@ import {
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
+  COLLAPSED_SECTION_HEIGHT,
   CollapsibleSection,
   CreateRailAction,
   RailListError,
@@ -77,17 +86,18 @@ import {
   RailListLoadingMore,
 } from './ChannelsRailSection';
 import {
+  CHANNEL_LIST_GROUPS,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
-const CHANNEL_TABS = [
+const CHANNEL_TABS: TabOption<ChannelsTab>[] = [
   { value: 'browse', label: 'All' },
   { value: 'recents', label: 'Recent' },
 ];
-const CHANNEL_TABS_WITH_THREADS = [
+const CHANNEL_TABS_WITH_THREADS: TabOption<ChannelsTab>[] = [
   ...CHANNEL_TABS,
   { value: 'threads', label: 'Threads' },
 ];
@@ -114,6 +124,13 @@ type GroupConfig = {
 };
 
 const GROUPS: GroupConfig[] = [
+  {
+    group: 'team_channels',
+    label: 'Team channels',
+    emptyLabel: 'No team channels',
+    createLabel: 'Create channel',
+    onCreate: openNewChannelModal,
+  },
   {
     group: 'channels',
     label: 'Channels',
@@ -152,10 +169,11 @@ function ChannelSortDropdown(props: {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
+        aria-label={`Sort ${props.label.toLowerCase()}`}
+        tooltip={`Sort ${props.label.toLowerCase()}`}
         as={ViewSidebar.Control}
         variant="ghost"
         size="icon-sm"
-        label={`Sort ${props.label.toLowerCase()}`}
       >
         <SortIcon class="size-3.5" />
       </Dropdown.Trigger>
@@ -240,7 +258,7 @@ function ChannelOption(props: {
   rowId?: ChannelRailRow['id'];
   /** Nest under a label heading, with the branch rail. */
   labelId?: string;
-  /** Make a team-channel row draggable between labels (Channels section only). */
+  /** Make a team-channel row draggable between labels (Team channels section only). */
   draggable?: boolean;
 }) {
   const rail = useChannelsRail();
@@ -284,8 +302,9 @@ function ChannelOption(props: {
         dnd?.droppable.ref(element);
       }}
       {...(canLabelChannel(props.channel) ? dnd?.draggable.dragActivators : {})}
-      onPointerDown={() => {
+      onPointerDown={(event) => {
         didDrag = false;
+        rail.prefetchRow(rowId(), event);
       }}
       class={cn(
         'min-w-0',
@@ -377,49 +396,70 @@ function ChannelOption(props: {
 
 function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
-  const selectTab = (value: string) => {
-    if (
-      value === 'browse' ||
-      value === 'recents' ||
-      (value === 'threads' && rail.threadsEnabled())
-    ) {
-      rail.selectTab(value);
-    }
+  const selectTab = (value: ChannelsTab) => {
+    if (value !== 'threads' || rail.threadsEnabled()) rail.selectTab(value);
   };
 
   return (
     <div class="flex shrink-0 flex-col">
-      <ViewSidebar.Header>
+      <ViewSidebar.Header
+        searchLabel="Search conversations"
+        searchOpen={props.search.isOpen()}
+        onSearchOpenChange={(open) =>
+          open ? props.search.open() : props.search.close()
+        }
+        search={() => (
+          <SearchBar
+            ref={props.search.registerInput}
+            label="Search channels and direct messages"
+            placeholder="Search conversations"
+            value={props.search.query()}
+            hotkey="cmd+f"
+            onValueChange={props.search.setQuery}
+            onEscape={() => {
+              if (!props.search.query()) props.search.close();
+            }}
+          />
+        )}
+      >
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Chat</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
-      <ViewSidebar.Primary>
-        <ViewSidebar.Toolbar>
+      <ViewSidebar.Primary class="flex flex-col gap-3">
+        <Show when={!isTouchDevice()}>
+          <ConversationsCreateMenu presentation="sidebar" />
+        </Show>
+        <ViewSidebar.Toolbar class={!isTouchDevice() ? 'px-0' : undefined}>
           <Tabs
             aria-label="Chat sidebar views"
-            list={
+            fullWidth={!isTouchDevice()}
+            options={
               rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
             }
             value={rail.tab()}
             onChange={selectTab}
           />
-          <ViewSidebar.Control
-            label={
-              props.search.isOpen() ? 'Close search' : 'Search conversations'
-            }
-            aria-pressed={props.search.isOpen()}
-            class={cn(props.search.isOpen() && 'bg-active text-ink')}
-            onClick={() =>
-              props.search.isOpen() ? props.search.close() : props.search.open()
-            }
-          >
-            <MagnifyingGlassIcon class="size-3.5" />
-          </ViewSidebar.Control>
+          <Show when={isTouchDevice()}>
+            <ViewSidebar.Control
+              aria-label={
+                props.search.isOpen() ? 'Close search' : 'Search conversations'
+              }
+              aria-pressed={props.search.isOpen()}
+              class={cn(props.search.isOpen() && 'bg-active text-ink')}
+              onClick={() =>
+                props.search.isOpen()
+                  ? props.search.close()
+                  : props.search.open()
+              }
+            >
+              <MagnifyingGlassIcon class="size-3.5" />
+            </ViewSidebar.Control>
+          </Show>
         </ViewSidebar.Toolbar>
       </ViewSidebar.Primary>
-      <Show when={props.search.isOpen()}>
+      <Show when={isTouchDevice() && props.search.isOpen()}>
         <div class="px-(--sidebar-content-inset) pt-(--sidebar-gutter)">
           <SearchBar
             ref={props.search.registerInput}
@@ -442,6 +482,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
 function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  createScrollTopFade(scrollRoot);
   const pagination = useChannelRailVirtualizer(() => 'search');
   const query = () => props.search.query().trim();
   const focusedIndex = () => {
@@ -537,7 +578,7 @@ const channelRowOf = (row: ChannelSectionRow) =>
   row.kind === 'conversation' ? row : undefined;
 
 /**
- * The Channels section body: an optional "new label" draft, then one
+ * The Team channels section body: an optional "new label" draft, then one
  * virtualized list of label headings and channels. Dropping a dragged channel
  * on the list itself, outside any row, takes it out of its label.
  */
@@ -650,7 +691,11 @@ function ChannelHeadingDropTarget(props: { element: HTMLElement }) {
   return null;
 }
 
-function ExpandedGroupSection(props: { config: GroupConfig }) {
+function ExpandedGroupSection(props: {
+  config: GroupConfig;
+  /** The share of the column this section may claim while open. */
+  maxHeight: string;
+}) {
   // A conditional expression as `ref` is dropped by the Solid compiler, so
   // the target is chosen inside the callback.
   const createTarget = tourTarget(CHANNELS_TOUR.create);
@@ -669,14 +714,15 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
   return (
     <CollapsibleSection.Root
       open={section().open}
-      sizing={section().fillAvailable ? 'fill' : 'half'}
+      sizing={section().fillAvailable ? 'fill' : 'share'}
+      maxHeight={props.maxHeight}
     >
       <CollapsibleSection.Header
         focused={section().focused}
         focusWithin={section().containsFocus}
         class={cn(
           rail.channelTagsEnabled() &&
-            props.config.group === 'channels' &&
+            props.config.group === 'team_channels' &&
             rail.activeDropTarget()?.kind === 'unlabelled' &&
             'bg-selected ring-1 ring-inset ring-accent'
         )}
@@ -685,7 +731,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
         <Show
           when={
             rail.channelTagsEnabled() &&
-            props.config.group === 'channels' &&
+            props.config.group === 'team_channels' &&
             headerElement()
           }
           keyed
@@ -730,7 +776,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             label={props.config.label}
           />
           <Show
-            when={props.config.group === 'channels'}
+            when={props.config.group === 'team_channels'}
             fallback={
               <CreateRailAction
                 label={props.config.createLabel}
@@ -838,13 +884,20 @@ function ExpandedBrowse() {
   const hasItems = () =>
     rail.labels().length > 0 ||
     rail.favorites().length > 0 ||
-    rail.sources.channels.items().length > 0 ||
-    rail.sources.direct_messages.items().length > 0;
+    CHANNEL_LIST_GROUPS.some((group) => rail.sources[group].items().length > 0);
   const sourcesSettled = () =>
-    !rail.sources.channels.isLoading() &&
-    !rail.sources.direct_messages.isLoading() &&
-    !rail.sources.channels.error() &&
-    !rail.sources.direct_messages.error();
+    CHANNEL_LIST_GROUPS.every(
+      (group) =>
+        !rail.sources[group].isLoading() && !rail.sources[group].error()
+    );
+  // Open sections share the column evenly; the collapsed headers and the gaps
+  // come off the top first.
+  const sectionMaxHeight = () => {
+    const total = GROUPS.length;
+    const open = GROUPS.filter(({ group }) => rail.isGroupOpen(group)).length;
+    if (open === 0) return '100%';
+    return `calc((100% - ${total - open} * ${COLLAPSED_SECTION_HEIGHT}px - ${total - 1} * var(--sidebar-section-gap)) / ${open})`;
+  };
 
   return (
     <Switch>
@@ -855,11 +908,16 @@ function ExpandedBrowse() {
         <ViewSidebar.Content class="h-full overflow-hidden">
           <ChannelFavoritesSection />
           {/* The groups split the height left after favorites between them.
-              Their half-height caps resolve against this column, not the
-              whole sidebar, so favorites is never squeezed out. */}
+              Their caps resolve against this column, not the whole sidebar,
+              so favorites is never squeezed out. */}
           <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
             <For each={GROUPS}>
-              {(config) => <ExpandedGroupSection config={config} />}
+              {(config) => (
+                <ExpandedGroupSection
+                  config={config}
+                  maxHeight={sectionMaxHeight()}
+                />
+              )}
             </For>
           </div>
         </ViewSidebar.Content>
@@ -897,6 +955,9 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
         onActivate={(event) =>
           rail.activateRow(rowKeyForChannel(props.channel.id), event)
         }
+        onPress={(event) =>
+          rail.prefetchRow(rowKeyForChannel(props.channel.id), event)
+        }
       />
     </ChannelRailItemContextMenu>
   );
@@ -904,6 +965,7 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
 
 function ExpandedRecents() {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  createScrollTopFade(scrollRoot);
   const scope = useChannelRailScopeState(() => 'recents');
   const pagination = useChannelRailVirtualizer(() => 'recents');
   const forceEmptyState = useDebugSetting(
@@ -964,36 +1026,6 @@ function ExpandedRecents() {
   );
 }
 
-/** The Threads section's create action: a channel or a direct message. */
-function ConversationsCreateMenu() {
-  return (
-    <Dropdown placement="bottom-end">
-      <Dropdown.Trigger
-        as={ViewSidebar.Control}
-        variant="ghost"
-        size="icon-sm"
-        label="Create channel or direct message"
-      >
-        <PlusIcon class="size-3.5" />
-      </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-44">
-        <Dropdown.Group>
-          <Dropdown.Item onSelect={openNewChannelModal}>
-            <HashIcon class="size-3.5 shrink-0 text-ink-muted" />
-            <span class="flex-1 truncate text-ink-muted">New channel</span>
-          </Dropdown.Item>
-          <Dropdown.Item onSelect={() => runCreateAction('channel')}>
-            <ChatCircleIcon class="size-3.5 shrink-0 text-ink-muted" />
-            <span class="flex-1 truncate text-ink-muted">
-              New direct message
-            </span>
-          </Dropdown.Item>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
-}
-
 function ExpandedThreads() {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
@@ -1038,7 +1070,9 @@ function ExpandedThreads() {
           </span>
           <div data-section-action="" class="flex items-center gap-0.5">
             <ChannelSortDropdown group="threads" label="Conversations" />
-            <ConversationsCreateMenu />
+            <Show when={isTouchDevice()}>
+              <ConversationsCreateMenu />
+            </Show>
           </div>
         </CollapsibleSection.Header>
         <CollapsibleSection.Content

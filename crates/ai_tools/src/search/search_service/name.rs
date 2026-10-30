@@ -161,6 +161,7 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             filters: search_filters(&non_channel_types, base_filters),
             search_on: models_search::SearchOn::Name,
             include_crm: false,
+            calendar_event_scope: Default::default(),
             collapse: None,
         });
         let channel_request = include_channels.then(|| ChannelNameSearchRequest {

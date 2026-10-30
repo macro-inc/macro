@@ -1,5 +1,6 @@
 import type { BlockName } from '@core/block';
 import { itemToResolvedBlockName } from '@core/constant/allBlocks';
+import { getProfilePictureUrl } from '@core/signal/profilePicture';
 import type { EntityType } from '@core/types';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { getItemPreview, isAccessiblePreviewItem } from '@queries/preview';
@@ -7,6 +8,7 @@ import { stringToItemType } from '@service-storage/client';
 import { raceTimeout, until } from '@solid-primitives/promise';
 
 export type UserNameResolver = (id: string) => Promise<string | undefined>;
+export type UserAvatarResolver = (id: string) => Promise<string | undefined>;
 export type DocumentNameResolver = (
   id: string,
   type: EntityType
@@ -28,6 +30,10 @@ export const DefaultUserNameResolver: UserNameResolver = async (id: string) => {
   if (resolvedName) return resolvedName;
   return macroId ? macroIdToEmail(macroId) : id || undefined;
 };
+
+export const DefaultUserAvatarResolver: UserAvatarResolver = async (
+  id: string
+) => await raceTimeout(getProfilePictureUrl(id), RESOLVER_TIMEOUT);
 
 const getPreview = async (id: string, type: string) => {
   const itemType = stringToItemType(type);

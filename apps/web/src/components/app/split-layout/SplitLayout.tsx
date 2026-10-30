@@ -2,11 +2,12 @@ import { CreateContextProvider } from '@app/features/command/context/create-cont
 import { useSplitRouter } from '@app/lib/split-router';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
+import { DesktopTabsController } from '@components/app/tab-layout/DesktopTabsController';
 import { Resize } from '@core/component/Resize';
+import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
-import { isPlatform } from '@core/util/platform';
 import {
   createEffect,
   createMemo,
@@ -35,12 +36,15 @@ import { createSplitFocusTracker } from './splitFocusTracker';
 export function SplitLayoutProvider(props: ParentProps) {
   const router = useSplitRouter();
   const blockOrchestrator = useGlobalBlockOrchestrator();
+  const userId = useUserId();
+  const authenticated = useIsAuthenticated();
 
   const splitManager = createSplitLayout(blockOrchestrator, {
     router,
     toLocation: (content) => resolveContentLocation(router.routes, content),
     toContent: splitContentFromLocation,
     stacked: isNativeMobilePlatform,
+    sessionKey: () => (authenticated() === false ? undefined : userId()),
   });
   createEffect(() => setGlobalSplitManager(splitManager));
   onCleanup(() => setGlobalSplitManager(undefined));
@@ -48,6 +52,7 @@ export function SplitLayoutProvider(props: ParentProps) {
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
       <CreateContextProvider focusedPaneId={splitManager.activeSplitId}>
+        <DesktopTabsController router={router} manager={splitManager} />
         {props.children}
       </CreateContextProvider>
     </SplitLayoutContext.Provider>
@@ -68,8 +73,7 @@ export function SplitLayout() {
   const panelRefs = new Map<SplitId, HTMLDivElement>();
 
   const splits = createMemo(splitManager.splits);
-  const useBentoLayout = () =>
-    !isTouchDevice() && (isPlatform('desktop') || splits().length > 1);
+  const useBentoLayout = () => !isTouchDevice();
 
   // Drop refs for departed splits by reconciling against the live list:
   // batched mutations can remove several splits in one flush (e.g. closing
