@@ -4,10 +4,10 @@ import {
   ToastType,
 } from '@core/component/Toast/Toast';
 import LinkIcon from '@icon/system/regular/link.svg';
-import Spinner from '@icon/system/regular/spinner.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
 import { type ComponentProps, createSignal, createUniqueId, onCleanup } from 'solid-js';
 import { Button } from './Button';
+import { Spinner } from './Spinner';
 
 type PreviewToast = Omit<ComponentProps<typeof ToastContent>, 'toastId'>;
 
@@ -238,7 +238,7 @@ function AsyncDemo() {
       onDismiss: () => cancel?.(),
       custom: {
         title: 'Downloading archive',
-        icon: (props) => <Spinner {...props} class="size-4 motion-safe:animate-spin" />,
+        icon: (props) => <Spinner {...props} size="sm" decorative />,
         color: 'var(--color-accent)',
         content: () => (
           <div class="flex flex-col gap-2">
@@ -355,6 +355,7 @@ export default defineDoc({
       'Use primary actions with a secondary Dismiss button instead of a close icon.',
       'Set actionLayout to inline for brief notices; keep stacked actions for longer prompts.',
       'Use the existing toast service so queueing, timing, and dismissal stay consistent.',
+      'Use the shared Spinner for loading; keep the progress bar for known progress.',
     ],
     dont: [
       'Use a toast for information that must remain in the page.',

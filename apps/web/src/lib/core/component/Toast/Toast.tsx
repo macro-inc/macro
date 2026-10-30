@@ -3,11 +3,10 @@ import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import CheckIcon from '@icon/system/bold/check-bold.svg';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
-import Spinner from '@icon/system/regular/spinner.svg';
 import WarningIcon from '@icon/system/regular/warning.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
-import { Button, cn } from '@ui';
+import { Button, cn, Spinner } from '@ui';
 import type { Component, JSX } from 'solid-js';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -35,7 +34,10 @@ const TOAST_STYLES: Record<
     icon: WarningIcon,
     iconClass: 'text-warning',
   },
-  [ToastType.LOADING]: { icon: Spinner, iconClass: 'text-accent' },
+  [ToastType.LOADING]: {
+    icon: (props) => <Spinner {...props} size="sm" decorative />,
+    iconClass: 'text-accent',
+  },
 };
 
 /** A single entry in the actions row — icon and label rendered as a button */
@@ -336,10 +338,9 @@ export function ToastContent(props: {
                     >
                       <Dynamic
                         component={Icon()}
-                        class={cn(
-                          props.custom || loading() ? 'size-4' : 'size-5',
-                          loading() && 'motion-safe:animate-spin'
-                        )}
+                        class={
+                          props.custom || loading() ? 'size-4' : 'size-5'
+                        }
                       />
                     </span>
                   )}
