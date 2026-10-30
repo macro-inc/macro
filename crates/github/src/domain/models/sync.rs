@@ -344,8 +344,12 @@ impl ValidatedGithubWebhookEvent {
     }
 
     /// The pull request and GitHub account behind this event's task status
-    /// change: whoever merged it on a merge, the webhook sender otherwise.
+    /// change: whoever merged it on a merge, the webhook sender otherwise. A
+    /// comment on a plain issue also changes status, but has no pull request.
     pub fn task_status_source(&self) -> Option<PropertyChangeSource> {
+        if !self.is_associated_with_pull_request() {
+            return None;
+        }
         let pull_request = self
             .payload
             .get("pull_request")

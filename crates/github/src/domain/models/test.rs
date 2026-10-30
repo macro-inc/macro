@@ -691,7 +691,10 @@ fn task_status_source_reads_the_pull_request_from_a_comment_event() {
         "issue_comment".to_string(),
         serde_json::json!({
             "action": "created",
-            "issue": { "html_url": "https://github.com/my-org/my-repo/pull/42" },
+            "issue": {
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "pull_request": { "url": "https://api.github.com/repos/my-org/my-repo/pulls/42" }
+            },
             "sender": { "login": "commenter", "id": 555 }
         }),
     );
@@ -706,6 +709,24 @@ fn task_status_source_reads_the_pull_request_from_a_comment_event() {
             },
         })
     );
+}
+
+#[test]
+fn task_status_source_is_none_for_a_comment_on_a_plain_issue() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "html_url": "https://github.com/my-org/my-repo/issues/42",
+                "state": "open"
+            },
+            "sender": { "login": "commenter", "id": 555 }
+        }),
+    );
+
+    assert_eq!(event.task_status_for_event(), Some("In Review"));
+    assert_eq!(event.task_status_source(), None);
 }
 
 #[test]
