@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   Message as EntityMessage,
   MessageListItem,
@@ -87,6 +88,28 @@ export function resolveMessageTarget(args: {
     : { kind: 'top_level', messageId: args.messageId };
 }
 
+/** Once `inFlight` settles, merges the thread's current timeline preview into its fetched replies. */
+async function reapplyPreviewAfter(
+  inFlight: Promise<unknown>,
+  parent: MessageParent,
+  threadId: string
+): Promise<void> {
+  try {
+    await inFlight;
+  } catch {
+    /* A failed fetch still gets the preview merged into whatever is cached. */
+  }
+  const preview = findTopLevelMessageInMessageTimeline(parent, threadId)?.thread
+    .preview;
+  if (preview?.length)
+    setThreadRepliesData(parent, threadId, (prev) =>
+      preview.reduce<EntityMessage[] | undefined>(
+        (replies, reply) => insertThreadReply(replies, reply),
+        prev
+      )
+    );
+}
+
 /** Inserts a message into the rendered caches for its target. */
 export function insertMessageIntoTargetCaches(
   parent: MessageParent,
@@ -118,21 +141,10 @@ export function insertMessageIntoTargetCaches(
         exact: true,
       })?.promise;
       if (inFlight)
-        void inFlight
-          .catch(() => {})
-          .finally(() => {
-            const preview = findTopLevelMessageInMessageTimeline(
-              parent,
-              target.threadId
-            )?.thread.preview;
-            if (preview?.length)
-              setThreadRepliesData(parent, target.threadId, (prev) =>
-                preview.reduce<EntityMessage[] | undefined>(
-                  (replies, reply) => insertThreadReply(replies, reply),
-                  prev
-                )
-              );
-          });
+        fireAndForget(
+          reapplyPreviewAfter(inFlight, parent, target.threadId),
+          'message-reconcile'
+        );
     }
     return;
   }

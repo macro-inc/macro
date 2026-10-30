@@ -33,6 +33,31 @@ function crmTarget(file: string, path: string) {
     : undefined;
 }
 
+/** Whether a module in `layer` may not import `path`, which resolves to `target` in CRM. */
+function crossesLayer(layer: string, path: string, target: string | undefined) {
+  const concrete =
+    /^(?:@queries\/|@service-|@core\/context\/|@app\/lib\/analytics)/.test(
+      path
+    );
+  const rootAdapter =
+    target && !target.includes('/') && /adapter|^crm(?:-|$)/.test(target);
+  const otherLayer = target?.split('/')[0];
+  return layer === 'core'
+    ? /^(?:solid-js|@queries\/|@service-|@core\/context\/)/.test(path) ||
+        (otherLayer && otherLayer !== 'core')
+    : ['primitives', 'context'].includes(layer)
+      ? concrete ||
+        rootAdapter ||
+        ['queries', 'views', 'components'].includes(otherLayer ?? '')
+      : layer === 'views'
+        ? concrete || rootAdapter || otherLayer === 'queries'
+        : layer === 'components'
+          ? concrete ||
+            rootAdapter ||
+            ['queries', 'views', 'primitives'].includes(otherLayer ?? '')
+          : false;
+}
+
 describe('CRM ownership boundaries', () => {
   it('keeps app consumers on explicit CRM entry points', () => {
     const leaks = files(source)
@@ -51,40 +76,11 @@ describe('CRM ownership boundaries', () => {
   it('keeps core pure and reactive consumers independent of production wiring', () => {
     const leaks = files(feature).flatMap((file) => {
       const layer = relative(feature, file).split('/')[0];
-      return imports(file).flatMap((path) => {
-        const target = crmTarget(file, path);
-        const concrete =
-          /^(?:@queries\/|@service-|@core\/context\/|@app\/lib\/analytics)/.test(
-            path
-          );
-        // UI rollout gates read flags directly rather than threading boolean props.
-        const uiFlagReader = path === '@app/lib/analytics/posthog';
-        const rootAdapter =
-          target && !target.includes('/') && /adapter|^crm(?:-|$)/.test(target);
-        const otherLayer = target?.split('/')[0];
-        const invalid =
-          layer === 'core'
-            ? /^(?:solid-js|@queries\/|@service-|@core\/context\/)/.test(
-                path
-              ) ||
-              (otherLayer && otherLayer !== 'core')
-            : ['primitives', 'context'].includes(layer)
-              ? concrete ||
-                rootAdapter ||
-                ['queries', 'views', 'components'].includes(otherLayer ?? '')
-              : layer === 'views'
-                ? (concrete && !uiFlagReader) ||
-                  rootAdapter ||
-                  otherLayer === 'queries'
-                : layer === 'components'
-                  ? (concrete && !uiFlagReader) ||
-                    rootAdapter ||
-                    ['queries', 'views', 'primitives'].includes(
-                      otherLayer ?? ''
-                    )
-                  : false;
-        return invalid ? [`${relative(feature, file)} -> ${path}`] : [];
-      });
+      return imports(file).flatMap((path) =>
+        crossesLayer(layer, path, crmTarget(file, path))
+          ? [`${relative(feature, file)} -> ${path}`]
+          : []
+      );
     });
     expect(leaks).toEqual([]);
   });

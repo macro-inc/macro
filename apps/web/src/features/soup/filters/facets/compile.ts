@@ -106,7 +106,7 @@ export const compileFacets = <
 
     for (const clause of clauses) {
       for (const target of Object.keys(clause) as Target[]) {
-        if (facet.restrict && isEntityTarget(target)) facetAllowed.add(target);
+        updateCompileFacets(facet, target, facetAllowed);
 
         const expr = clause[target];
         if (!expr) continue;
@@ -117,12 +117,7 @@ export const compileFacets = <
       }
     }
 
-    if (facet.restrict) {
-      allowed =
-        allowed === undefined
-          ? facetAllowed
-          : new Set([...allowed].filter((target) => facetAllowed.has(target)));
-    }
+    updateAllowed(facet, facetAllowed);
 
     const mode = resolveFacetMode(facet, context);
     for (const [target, exprs] of exprsByTarget) {
@@ -158,6 +153,26 @@ export const compileFacets = <
   }
 
   return result;
+
+  function updateAllowed(
+    facet: Facet<TItem, TContext, TOption>,
+    facetAllowed: Set<EntityTarget>
+  ) {
+    if (facet.restrict) {
+      allowed =
+        allowed === undefined
+          ? facetAllowed
+          : new Set([...allowed].filter((target) => facetAllowed.has(target)));
+    }
+  }
+
+  function updateCompileFacets(
+    facet: Facet<TItem, TContext, TOption>,
+    target: Parameters<typeof isEntityTarget>[0],
+    facetAllowed: Set<EntityTarget>
+  ) {
+    if (facet.restrict && isEntityTarget(target)) facetAllowed.add(target);
+  }
 };
 
 export const compileClause = (optionClause: FacetClause): BackendAstMap => {

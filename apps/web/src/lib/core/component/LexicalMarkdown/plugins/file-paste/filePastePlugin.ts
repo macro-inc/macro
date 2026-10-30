@@ -18,6 +18,18 @@ type FilePastePluginProps = {
   ) => void;
 };
 
+async function pasteRecoveredClipboardImages(
+  props: FilePastePluginProps,
+  fileEntries: FileSystemFileEntry[]
+) {
+  const entries = await recoverMobileClipboardImageEntries();
+  if (entries.length > 0) {
+    props.onPasteFilesAndDirs(entries, []);
+  } else if (fileEntries.length > 0) {
+    props.onPasteFilesAndDirs(fileEntries, []);
+  }
+}
+
 function registerFilePastePlugin(
   editor: LexicalEditor,
   props: FilePastePluginProps
@@ -40,13 +52,7 @@ function registerFilePastePlugin(
         ) {
           event.preventDefault();
           fireAndForget(
-            recoverMobileClipboardImageEntries().then((entries) => {
-              if (entries.length > 0) {
-                props.onPasteFilesAndDirs(entries, []);
-              } else if (fileEntries.length > 0) {
-                props.onPasteFilesAndDirs(fileEntries, []);
-              }
-            }),
+            pasteRecoveredClipboardImages(props, fileEntries),
             'markdown-file-paste'
           );
           return true;

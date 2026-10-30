@@ -1,6 +1,4 @@
 import { ListHeader } from '@app/components/view-shell/ListHeader';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { enableDatabases } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateDatabaseGraphic from '@design/empty-state-folder.svg';
 import { createSignal, type JSX, Show } from 'solid-js';
@@ -16,7 +14,7 @@ export function CrmDatabasesView(props: {
   scope?: CrmRecordScope;
   title?: JSX.Element;
 }) {
-  const flag = useFeatureFlag(enableDatabases);
+  const flag = useCrmContext().databasesRollout();
   return (
     <Show
       when={flag().enabled}

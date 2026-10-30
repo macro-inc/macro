@@ -44,7 +44,7 @@ vi.mock('@queries/client', async () => {
     }),
   };
 });
-vi.mock('@core/agent-session/AgentSession', () => ({
+vi.mock('@app/lib/queries/agent-session/agent-session', () => ({
   AgentSession: {
     acquire: (id: string) => {
       live.acquire(id);

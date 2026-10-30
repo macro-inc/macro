@@ -32,19 +32,19 @@ if (!buildServer) {
   );
 }
 
-concurrently([
-  {
-    command: `dotnet publish -c Release -r ${buildServer} --self-contained true -o ../dist/docx-server-${buildServer.replace(
-      'osx',
-      'mac'
-    )}`,
-    name: 'DocX',
-    cwd: serverDir,
-  },
-]).then(
-  () => console.log('done'),
-  (e) => {
-    console.error(e);
-    process.exit(1);
-  }
-);
+try {
+  await concurrently([
+    {
+      command: `dotnet publish -c Release -r ${buildServer} --self-contained true -o ../dist/docx-server-${buildServer.replace(
+        'osx',
+        'mac'
+      )}`,
+      name: 'DocX',
+      cwd: serverDir,
+    },
+  ]);
+  console.log('done');
+} catch (e) {
+  console.error(e);
+  process.exit(1);
+}

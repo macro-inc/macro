@@ -100,17 +100,22 @@ function UploadedWorkbookImport(props: { workbook: WorkbookFileData }) {
     });
     registerSpreadsheetImport(doc, plan, formulas);
   };
-  write().then(
-    () => setReady(true),
-    (reason: unknown) => {
+
+  const open = async () => {
+    try {
+      await write();
+    } catch (reason: unknown) {
       if (!disposed)
         setError(
           reason instanceof Error
             ? reason.message
             : 'Unable to open this workbook.'
         );
+      return;
     }
-  );
+    setReady(true);
+  };
+  fireAndForget(open(), 'uploaded-workbook');
   return (
     <Show
       when={ready()}

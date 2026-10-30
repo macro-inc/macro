@@ -149,11 +149,6 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
   };
 }
 
-const DEFAULT_BUTTON_CLASS =
-  'text-ink text-sm border border-edge-muted/50 rounded-md hover:bg-hover flex flex-row h-6 px-2 justify-center items-center';
-const DEFAULT_ICON_CLASS = 'flex justify-start items-center w-3.5 h-3.5 mr-2';
-const DEFAULT_TEXT_CLASS = 'flex-1 text-left leading-5 min-w-0 truncate';
-
 interface StatusDisplayProps {
   class?: string;
   iconClass?: string;
@@ -164,15 +159,27 @@ function ButtonNoAccess(props: StatusDisplayProps) {
   return (
     <div
       class={cn(
-        DEFAULT_BUTTON_CLASS,
+        'text-ink text-sm border border-edge-muted/50 rounded-md hover:bg-hover flex flex-row h-6 px-2 justify-center items-center',
         'opacity-50 cursor-not-allowed',
         props.class
       )}
     >
-      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+      <div
+        class={cn(
+          'flex justify-start items-center w-3.5 h-3.5 mr-2',
+          props.iconClass
+        )}
+      >
         <EyeSlash class="text-ink-muted size-3.5" />
       </div>
-      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>No Access</div>
+      <div
+        class={cn(
+          'flex-1 text-left leading-5 min-w-0 truncate',
+          props.textClass
+        )}
+      >
+        No Access
+      </div>
     </div>
   );
 }
@@ -192,15 +199,27 @@ function ButtonDeleted(props: StatusDisplayProps) {
   return (
     <div
       class={cn(
-        DEFAULT_BUTTON_CLASS,
+        'text-ink text-sm border border-edge-muted/50 rounded-md hover:bg-hover flex flex-row h-6 px-2 justify-center items-center',
         'opacity-50 cursor-not-allowed',
         props.class
       )}
     >
-      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+      <div
+        class={cn(
+          'flex justify-start items-center w-3.5 h-3.5 mr-2',
+          props.iconClass
+        )}
+      >
         <TrashSimple class="text-ink-muted size-3.5" />
       </div>
-      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>Deleted</div>
+      <div
+        class={cn(
+          'flex-1 text-left leading-5 min-w-0 truncate',
+          props.textClass
+        )}
+      >
+        Deleted
+      </div>
     </div>
   );
 }
@@ -220,17 +239,29 @@ function ButtonLoading(props: StatusDisplayProps) {
   return (
     <div
       class={cn(
-        DEFAULT_BUTTON_CLASS,
+        'text-ink text-sm border border-edge-muted/50 rounded-md hover:bg-hover flex flex-row h-6 px-2 justify-center items-center',
         'opacity-50 cursor-not-allowed',
         props.class
       )}
     >
-      <div class={cn(DEFAULT_ICON_CLASS, props.iconClass)}>
+      <div
+        class={cn(
+          'flex justify-start items-center w-3.5 h-3.5 mr-2',
+          props.iconClass
+        )}
+      >
         <div class="size-3.5 animate-spin">
           <LoadingSpinner />
         </div>
       </div>
-      <div class={cn(DEFAULT_TEXT_CLASS, props.textClass)}>Loading...</div>
+      <div
+        class={cn(
+          'flex-1 text-left leading-5 min-w-0 truncate',
+          props.textClass
+        )}
+      >
+        Loading...
+      </div>
     </div>
   );
 }
@@ -275,9 +306,15 @@ function ItemPreviewInner(props: ItemPreviewProps) {
 
   const maxLength = () => props.maxLength ?? 80;
   const iconSize = () => props.iconSize ?? 'fill';
-  const buttonClass = () => cn(DEFAULT_BUTTON_CLASS, props.class);
-  const iconClass = () => cn(DEFAULT_ICON_CLASS, props.iconClass);
-  const textClass = () => cn(DEFAULT_TEXT_CLASS, props.textClass);
+  const buttonClass = () =>
+    cn(
+      'text-ink text-sm border border-edge-muted/50 rounded-md hover:bg-hover flex flex-row h-6 px-2 justify-center items-center',
+      props.class
+    );
+  const iconClass = () =>
+    cn('flex justify-start items-center w-3.5 h-3.5 mr-2', props.iconClass);
+  const textClass = () =>
+    cn('flex-1 text-left leading-5 min-w-0 truncate', props.textClass);
 
   return (
     <Switch>

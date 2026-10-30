@@ -1,4 +1,5 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { match } from 'ts-pattern';
 import type { InputObservation } from './context/telemetry';
 import type { Field, Intent } from './core/input';
 
@@ -73,61 +74,62 @@ export function createInputTelemetry(
     drafts.delete(id);
     if (activeId === id) activeId = undefined;
   };
+  const startDraft = (event: InputObservation): DraftTrace | undefined => {
+    if (event.event !== 'changed' || !event.length) return undefined;
+    const span = Telemetry.span('universal_input.draft');
+    span.setAttr('input.draft_id', event.draftId);
+    span.setAttr('input.surface', surface);
+    span.setAttr('input.intent', event.intent ?? 'unknown');
+    const draft: DraftTrace = {
+      span,
+      started: performance.now(),
+      changed: performance.now(),
+      revision: event.revision,
+      readyRevision: -1,
+      readyValid: false,
+      firstType: false,
+      firstFields: false,
+      firstUsable: false,
+      predictions: new Map(),
+      edited: new Set(),
+      corrected: new Set(),
+      calls: 0,
+      discarded: 0,
+      coalesced: 0,
+      overrides: 0,
+      failures: 0,
+    };
+    drafts.set(event.draftId, draft);
+    activeId = event.draftId;
+    return draft;
+  };
   const observe = (event: InputObservation) => {
     if (disposed) return;
-    let draft = drafts.get(event.draftId);
-    if (!draft && event.event === 'changed' && event.length) {
-      const span = Telemetry.span('universal_input.draft');
-      span.setAttr('input.draft_id', event.draftId);
-      span.setAttr('input.surface', surface);
-      span.setAttr('input.intent', event.intent ?? 'unknown');
-      draft = {
-        span,
-        started: performance.now(),
-        changed: performance.now(),
-        revision: event.revision,
-        readyRevision: -1,
-        readyValid: false,
-        firstType: false,
-        firstFields: false,
-        firstUsable: false,
-        predictions: new Map(),
-        edited: new Set(),
-        corrected: new Set(),
-        calls: 0,
-        discarded: 0,
-        coalesced: 0,
-        overrides: 0,
-        failures: 0,
-      };
-      drafts.set(event.draftId, draft);
-      activeId = event.draftId;
-    }
+    const draft = drafts.get(event.draftId) ?? startDraft(event);
     if (!draft) return;
-    switch (event.event) {
-      case 'changed':
+    match(event)
+      .with({ event: 'changed' }, (event) => {
         draft.revision = event.revision;
         draft.changed = performance.now();
         draft.intent = event.intent;
         draft.span.setAttr('input.length', event.length);
         draft.span.setAttr('input.revision', event.revision);
-        break;
-      case 'queue':
-        if (event.observation.action === 'started') {
-          draft.coalesced += event.observation.coalesced;
-          measure(draft, 'universal_input.queue', {
-            'input.phase': event.phase,
-            'input.queue_ms': event.observation.waitMs,
-            'input.coalesced_updates': event.observation.coalesced,
-          });
-        }
-        break;
-      case 'prediction': {
+      })
+      .with({ event: 'queue' }, (event) => {
+        if (event.observation.action !== 'started') return;
+        draft.coalesced += event.observation.coalesced;
+        measure(draft, 'universal_input.queue', {
+          'input.phase': event.phase,
+          'input.queue_ms': event.observation.waitMs,
+          'input.coalesced_updates': event.observation.coalesced,
+        });
+      })
+      .with({ event: 'prediction' }, (event) => {
         const key = `${event.phase}:${event.revision}`;
         if (event.outcome === 'started') {
           draft.calls++;
           draft.predictions.set(key, performance.now());
-          break;
+          return;
         }
         const started = draft.predictions.get(key);
         draft.predictions.delete(key);
@@ -145,9 +147,8 @@ export function createInputTelemetry(
           ...(event.failure && { 'error.type': event.failure }),
         });
         finish(event.draftId, draft);
-        break;
-      }
-      case 'type':
+      })
+      .with({ event: 'type' }, (event) => {
         draft.intent = event.intent;
         draft.span.setAttr('input.intent', event.intent ?? 'unknown');
         if (
@@ -168,54 +169,53 @@ export function createInputTelemetry(
             'input.type_ready_ms': performance.now() - draft.started,
           });
         }
-        break;
-      case 'field':
-        if (!draft.edited.has(event.field)) {
-          draft.edited.add(event.field);
-          if (event.inferred) draft.corrected.add(event.field);
-          measure(draft, 'universal_input.field_edit', {
-            'input.field': event.field,
-            'input.corrected_suggestion': event.inferred,
-          });
-        }
-        break;
-      case 'ready':
+      })
+      .with({ event: 'field' }, (event) => {
+        if (draft.edited.has(event.field)) return;
+        draft.edited.add(event.field);
+        if (event.inferred) draft.corrected.add(event.field);
+        measure(draft, 'universal_input.field_edit', {
+          'input.field': event.field,
+          'input.corrected_suggestion': event.inferred,
+        });
+      })
+      .with({ event: 'ready' }, (event) => {
         if (
-          draft.readyRevision !== event.revision ||
-          draft.readyIntent !== event.intent ||
-          (event.valid && !draft.readyValid)
-        ) {
-          draft.readyRevision = event.revision;
-          draft.readyIntent = event.intent;
-          draft.readyValid = event.valid;
-          measure(draft, 'universal_input.fields_ready', {
-            'input.valid': event.valid,
-            'input.fields_ready_ms': performance.now() - draft.changed,
-            'input.first_form': !draft.firstFields,
-            'input.first_form_ms': performance.now() - draft.started,
-            'input.first_usable': event.valid && !draft.firstUsable,
-            ...(event.valid &&
-              !draft.firstUsable && {
-                'input.first_usable_ms': performance.now() - draft.started,
-              }),
-          });
-          draft.firstFields = true;
-          if (event.valid) draft.firstUsable = true;
-        }
-        break;
-      case 'blocked':
+          draft.readyRevision === event.revision &&
+          draft.readyIntent === event.intent &&
+          (!event.valid || draft.readyValid)
+        )
+          return;
+        draft.readyRevision = event.revision;
+        draft.readyIntent = event.intent;
+        draft.readyValid = event.valid;
+        measure(draft, 'universal_input.fields_ready', {
+          'input.valid': event.valid,
+          'input.fields_ready_ms': performance.now() - draft.changed,
+          'input.first_form': !draft.firstFields,
+          'input.first_form_ms': performance.now() - draft.started,
+          'input.first_usable': event.valid && !draft.firstUsable,
+          ...(event.valid &&
+            !draft.firstUsable && {
+              'input.first_usable_ms': performance.now() - draft.started,
+            }),
+        });
+        draft.firstFields = true;
+        if (event.valid) draft.firstUsable = true;
+      })
+      .with({ event: 'blocked' }, (event) => {
         measure(draft, 'universal_input.submission_blocked', {
           'input.operation': event.operation,
           'input.blocked_reason': event.reason,
         });
-        break;
-      case 'submission':
+      })
+      .with({ event: 'submission' }, (event) => {
         if (event.outcome === 'started') {
           draft.submission = draft.span.span('universal_input.submit');
           draft.submission.setAttr('input.surface', surface);
           draft.submission.setAttr('input.intent', event.intent);
           draft.submission.setAttr('input.operation', event.operation);
-          break;
+          return;
         }
         draft.submission?.setAttr('input.outcome', event.outcome);
         if (event.outcome === 'error') {
@@ -226,14 +226,14 @@ export function createInputTelemetry(
         draft.submission?.end();
         draft.submission = undefined;
         finish(event.draftId, draft);
-        break;
-      case 'finished':
+      })
+      .with({ event: 'finished' }, (event) => {
         draft.finished = event.outcome;
         draft.closedAt = performance.now();
         if (activeId === event.draftId) activeId = undefined;
         finish(event.draftId, draft);
-        break;
-    }
+      })
+      .exhaustive();
   };
   return {
     observe,

@@ -1,6 +1,6 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { PropertyApiValues } from '@property/types';
-import type { TaskComposerContext } from '../task-composer/core/context';
+import type { TaskComposerContext } from '../task-composer/context/composer';
 import type { CrmTaskRecord } from './core/record';
 
 const reference = (

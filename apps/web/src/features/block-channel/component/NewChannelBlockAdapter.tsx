@@ -291,12 +291,14 @@ function NewTop(props: { channelId: string }) {
               'px-1',
               // Call in progress: tint the whole island, matching the call
               // button's `success` variant.
-              !!activeCallQuery.data &&
-                'bg-success ring-success [&_button]:text-surface'
+              !!activeCallQuery.data && 'bg-success ring-success'
             )}
           >
             <div class="flex items-center gap-1.5">
-              <ChannelCallButton channelId={props.channelId} />
+              <ChannelCallButton
+                channelId={props.channelId}
+                tinted={!!activeCallQuery.data}
+              />
             </div>
           </HeaderIsland>
         </SplitHeaderRight>

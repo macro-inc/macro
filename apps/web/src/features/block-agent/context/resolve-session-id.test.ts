@@ -66,7 +66,7 @@ vi.mock('@service-agent-harness/client', () => ({
   },
 }));
 
-vi.mock('@core/agent-session/AgentSession', () => ({
+vi.mock('@app/lib/queries/agent-session/agent-session', () => ({
   AgentSession: {
     acquire: (id: string) => {
       let requestId: string | undefined;

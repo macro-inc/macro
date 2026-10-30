@@ -67,6 +67,19 @@ export type ChannelsViewContext = {
   setAsideWidth: (width: number) => void;
 };
 
+function initialSortBy(
+  sortBy: ChannelsViewStateOptions['sortBy']
+): ChannelsViewState['sortBy'] {
+  return {
+    team_channels:
+      sortBy?.team_channels ?? CHANNELS_DEFAULT_SORT_BY.team_channels,
+    channels: sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
+    direct_messages:
+      sortBy?.direct_messages ?? CHANNELS_DEFAULT_SORT_BY.direct_messages,
+    threads: sortBy?.threads ?? CHANNELS_DEFAULT_SORT_BY.threads,
+  };
+}
+
 function createInitialState(
   initial: ChannelsViewStateOptions
 ): ChannelsViewState {
@@ -80,15 +93,7 @@ function createInitialState(
     },
     collapsedLabels: initial.collapsedLabels ?? [],
     threadsChannelId: initial.threadsChannelId,
-    sortBy: {
-      team_channels:
-        initial.sortBy?.team_channels ?? CHANNELS_DEFAULT_SORT_BY.team_channels,
-      channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
-      direct_messages:
-        initial.sortBy?.direct_messages ??
-        CHANNELS_DEFAULT_SORT_BY.direct_messages,
-      threads: initial.sortBy?.threads ?? CHANNELS_DEFAULT_SORT_BY.threads,
-    },
+    sortBy: initialSortBy(initial.sortBy),
     asideWidth: clampChannelsRailWidth(
       initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
     ),

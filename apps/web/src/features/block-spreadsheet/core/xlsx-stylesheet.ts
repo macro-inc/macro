@@ -295,11 +295,7 @@ export function readXlsxStylesheet(
           formats.set(Number(value.numFmtId), value.formatCode);
         return;
       case 'rgbColor':
-        if (
-          parent === 'indexedColors' &&
-          /^[0-9a-f]{8}$/i.test(value.rgb ?? '')
-        )
-          customPalette.push(value.rgb.slice(2).toUpperCase());
+        addPaletteColor();
         return;
       case 'font':
         if (parent === 'fonts') font = {};
@@ -311,13 +307,7 @@ export function readXlsxStylesheet(
         if (parent === 'borders') border = {};
         return;
       case 'xf':
-        if (parent === 'cellXfs')
-          xf = {
-            numFmtId: Number(value.numFmtId ?? 0),
-            fontId: Number(value.fontId ?? 0),
-            fillId: Number(value.fillId ?? 0),
-            borderId: Number(value.borderId ?? 0),
-          };
+        startCellXf();
         return;
       case 'alignment':
         if (xf && parent === 'xf') xf.alignment = value;
@@ -326,34 +316,65 @@ export function readXlsxStylesheet(
         if (xf) xf.complement = Number(value.i);
         return;
     }
-    if (font && parent === 'font') {
-      if (node.local === 'b') font.bold = flag(value);
-      else if (node.local === 'i') font.italic = flag(value);
-      else if (node.local === 'strike') font.strike = flag(value);
-      else if (node.local === 'u') font.underline = value.val ?? 'single';
-      else if (node.local === 'sz') font.size = Number(value.val);
+    readFontOrFillChild();
+
+    function addPaletteColor() {
+      if (parent === 'indexedColors' && /^[0-9a-f]{8}$/i.test(value.rgb ?? ''))
+        customPalette.push(value.rgb.slice(2).toUpperCase());
+    }
+
+    function startCellXf() {
+      if (parent === 'cellXfs')
+        xf = {
+          numFmtId: Number(value.numFmtId ?? 0),
+          fontId: Number(value.fontId ?? 0),
+          fillId: Number(value.fillId ?? 0),
+          borderId: Number(value.borderId ?? 0),
+        };
+    }
+
+    function readFontOrFillChild() {
+      if (font && parent === 'font') {
+        readFontChild(font);
+      } else if (fill && parent === 'patternFill') {
+        if (node.local === 'fgColor') fill.fg = value;
+        else if (node.local === 'bgColor') fill.bg = value;
+      } else readFillChild();
+    }
+
+    function readFontChild(fontInput: NonNullable<typeof font>) {
+      if (node.local === 'b') fontInput.bold = flag(value);
+      else if (node.local === 'i') fontInput.italic = flag(value);
+      else if (node.local === 'strike') fontInput.strike = flag(value);
+      else if (node.local === 'u') fontInput.underline = value.val ?? 'single';
+      else if (node.local === 'sz') fontInput.size = Number(value.val);
       else if (node.local === 'name' || node.local === 'rFont')
-        font.name = value.val;
-      else if (node.local === 'color') font.color = value;
+        fontInput.name = value.val;
+      else if (node.local === 'color') fontInput.color = value;
       else if (
         (node.local === 'vertAlign' && value.val !== 'baseline') ||
         (['outline', 'shadow'].includes(node.local) && flag(value))
       )
-        font.effects = true;
-    } else if (fill && parent === 'patternFill') {
-      if (node.local === 'fgColor') fill.fg = value;
-      else if (node.local === 'bgColor') fill.bg = value;
-    } else if (fill && node.local === 'patternFill') {
-      fill.pattern = value.patternType ?? 'none';
-    } else if (fill && node.local === 'gradientFill') {
-      fill.gradient = [];
-    } else if (fill?.gradient && node.local === 'color' && parent === 'stop') {
-      fill.gradient.push(value);
-    } else if (border && parent === 'border') {
-      edge = { start: 'left', end: 'right' }[node.local] ?? node.local;
-      border[edge] = { style: value.style };
-    } else if (border && edge && node.local === 'color') {
-      border[edge].color = value;
+        fontInput.effects = true;
+    }
+
+    function readFillChild() {
+      if (fill && node.local === 'patternFill') {
+        fill.pattern = value.patternType ?? 'none';
+      } else if (fill && node.local === 'gradientFill') {
+        fill.gradient = [];
+      } else if (
+        fill?.gradient &&
+        node.local === 'color' &&
+        parent === 'stop'
+      ) {
+        fill.gradient.push(value);
+      } else if (border && parent === 'border') {
+        edge = { start: 'left', end: 'right' }[node.local] ?? node.local;
+        border[edge] = { style: value.style };
+      } else if (border && edge && node.local === 'color') {
+        border[edge].color = value;
+      }
     }
   });
   parser.on('closetag', (node) => {
@@ -436,115 +457,11 @@ export function readXlsxStylesheet(
     const cellFont = fonts[definition.fontId];
     const base = fonts[0];
     const baseColor = color(base?.color);
-    if (cellFont) {
-      if (cellFont.bold) result.bold = true;
-      if (cellFont.italic) result.italic = true;
-      if (cellFont.underline && cellFont.underline !== 'none')
-        result.underline = true;
-      if (cellFont.strike) result.strikethrough = true;
-      if (
-        cellFont.size &&
-        Number.isFinite(cellFont.size) &&
-        cellFont.size !== base?.size
-      ) {
-        result.fontSize = Math.min(36, Math.max(8, Math.round(cellFont.size)));
-        if (result.fontSize !== cellFont.size)
-          warnings.add('Font sizes are rounded and limited to 8–36 pt.');
-      }
-      if (cellFont.name && cellFont.name !== base?.name) {
-        result.fontFamily = /courier|mono|consolas/i.test(cellFont.name)
-          ? 'mono'
-          : /times|georgia|serif|garamond|cambria|book antiqua/i.test(
-                cellFont.name
-              ) && !/sans/i.test(cellFont.name)
-            ? 'serif'
-            : 'sans';
-        if (
-          cellFont.name !==
-          { sans: 'Arial', serif: 'Georgia', mono: 'Courier New' }[
-            result.fontFamily
-          ]
-        )
-          result.fontName = cellFont.name.slice(0, 128);
-      }
-      // A font that names its own color keeps it, even when it resolves to
-      // the default font's color; fonts that inherit it store nothing.
-      const text = color(cellFont.color);
-      if (
-        text &&
-        (text !== baseColor ||
-          JSON.stringify(cellFont.color) !== JSON.stringify(base?.color))
-      )
-        result.textColor = text;
-      if (
-        cellFont.effects ||
-        (cellFont.underline &&
-          !['single', 'none', 'singleAccounting'].includes(cellFont.underline))
-      )
-        warnings.add(
-          'Special font effects are simplified to the supported text formatting.'
-        );
-    }
+    applyFont();
     const cellFill = fills[definition.fillId];
-    if (cellFill?.gradient?.length) {
-      const first = color(cellFill.gradient[0]);
-      if (first) result.fillColor = first;
-      warnings.add('Gradient fills are shown with their first color.');
-    } else if (cellFill?.pattern && cellFill.pattern !== 'none') {
-      // Solid fills use the foreground colour; a missing one means black.
-      const front = color(cellFill.fg) ?? '#000000';
-      if (cellFill.pattern === 'solid') result.fillColor = front;
-      else {
-        const back = color(cellFill.bg) ?? '#FFFFFF';
-        result.fillColor = blend(
-          front,
-          back,
-          patternDensity[cellFill.pattern] ?? 0.5
-        );
-        warnings.add('Patterned fills are shown as a blended solid color.');
-      }
-    }
+    applyFill();
     const alignment = definition.alignment;
-    if (alignment) {
-      const horizontal = alignment.horizontal;
-      if (
-        horizontal === 'left' ||
-        horizontal === 'center' ||
-        horizontal === 'right'
-      )
-        result.horizontalAlign = horizontal;
-      // Center Across Selection is the usual financial-model title layout.
-      else if (
-        horizontal === 'centerContinuous' ||
-        horizontal === 'distributed'
-      )
-        result.horizontalAlign = 'center';
-      else if (horizontal === 'justify' || horizontal === 'fill')
-        result.horizontalAlign = 'left';
-      // Excel ignores the indent of other alignments.
-      const indent = Number(alignment.indent ?? 0);
-      if (
-        (horizontal === 'left' || horizontal === 'right') &&
-        Number.isInteger(indent) &&
-        indent > 0
-      )
-        result.indent = Math.min(SPREADSHEET_MAX_INDENT, indent);
-      const vertical = alignment.vertical;
-      if (vertical === 'top' || vertical === 'bottom')
-        result.verticalAlign = vertical;
-      else if (vertical === 'center') result.verticalAlign = 'middle';
-      else if (vertical === 'justify' || vertical === 'distributed')
-        result.verticalAlign = 'top';
-      if (flag({ val: alignment.wrapText ?? '0' })) result.wrap = true;
-      if (
-        Number(alignment.textRotation ?? 0) ||
-        flag({ val: alignment.shrinkToFit ?? '0' }) ||
-        alignment.readingOrder === '2'
-      )
-        warnings.add(
-          'Text rotation, shrink-to-fit and right-to-left layout are not imported.'
-        );
-    }
+    applyAlignment();
     const cellBorder = borders[definition.borderId];
     for (const [edgeName, key] of [
       ['top', 'borderTop'],
@@ -574,6 +491,140 @@ export function readXlsxStylesheet(
           value !== SPREADSHEET_DEFAULT_STYLE[key as keyof SpreadsheetCellStyle]
       )
     );
+
+    function applyFont() {
+      if (cellFont) {
+        if (cellFont.bold) result.bold = true;
+        if (cellFont.italic) result.italic = true;
+        if (cellFont.underline && cellFont.underline !== 'none')
+          result.underline = true;
+        if (cellFont.strike) result.strikethrough = true;
+        applyFontSize();
+        applyFontFamily();
+        // A font that names its own color keeps it, even when it resolves to
+        // the default font's color; fonts that inherit it store nothing.
+        const text = color(cellFont.color);
+        if (
+          text &&
+          (text !== baseColor ||
+            JSON.stringify(cellFont.color) !== JSON.stringify(base?.color))
+        )
+          result.textColor = text;
+        if (
+          cellFont.effects ||
+          (cellFont.underline &&
+            !['single', 'none', 'singleAccounting'].includes(
+              cellFont.underline
+            ))
+        )
+          warnings.add(
+            'Special font effects are simplified to the supported text formatting.'
+          );
+      }
+    }
+
+    function applyFontSize() {
+      if (
+        cellFont.size &&
+        Number.isFinite(cellFont.size) &&
+        cellFont.size !== base?.size
+      ) {
+        result.fontSize = Math.min(36, Math.max(8, Math.round(cellFont.size)));
+        if (result.fontSize !== cellFont.size)
+          warnings.add('Font sizes are rounded and limited to 8–36 pt.');
+      }
+    }
+
+    function applyFontFamily() {
+      if (cellFont.name && cellFont.name !== base?.name) {
+        result.fontFamily = /courier|mono|consolas/i.test(cellFont.name)
+          ? 'mono'
+          : /times|georgia|serif|garamond|cambria|book antiqua/i.test(
+                cellFont.name
+              ) && !/sans/i.test(cellFont.name)
+            ? 'serif'
+            : 'sans';
+        if (
+          cellFont.name !==
+          { sans: 'Arial', serif: 'Georgia', mono: 'Courier New' }[
+            result.fontFamily
+          ]
+        )
+          result.fontName = cellFont.name.slice(0, 128);
+      }
+    }
+
+    function applyAlignment() {
+      if (alignment) {
+        const horizontal = alignment.horizontal;
+        applyHorizontalAlign(horizontal);
+        applyIndent(horizontal, alignment.indent);
+        const vertical = alignment.vertical;
+        if (vertical === 'top' || vertical === 'bottom')
+          result.verticalAlign = vertical;
+        else if (vertical === 'center') result.verticalAlign = 'middle';
+        else if (vertical === 'justify' || vertical === 'distributed')
+          result.verticalAlign = 'top';
+        if (flag({ val: alignment.wrapText ?? '0' })) result.wrap = true;
+        if (
+          Number(alignment.textRotation ?? 0) ||
+          flag({ val: alignment.shrinkToFit ?? '0' }) ||
+          alignment.readingOrder === '2'
+        )
+          warnings.add(
+            'Text rotation, shrink-to-fit and right-to-left layout are not imported.'
+          );
+      }
+    }
+
+    function applyHorizontalAlign(horizontal: string) {
+      if (
+        horizontal === 'left' ||
+        horizontal === 'center' ||
+        horizontal === 'right'
+      )
+        result.horizontalAlign = horizontal;
+      // Center Across Selection is the usual financial-model title layout.
+      else if (
+        horizontal === 'centerContinuous' ||
+        horizontal === 'distributed'
+      )
+        result.horizontalAlign = 'center';
+      else if (horizontal === 'justify' || horizontal === 'fill')
+        result.horizontalAlign = 'left';
+    }
+
+    function applyIndent(horizontal: string, indentText: string | undefined) {
+      // Excel ignores the indent of other alignments.
+      const indent = Number(indentText ?? 0);
+      if (
+        (horizontal === 'left' || horizontal === 'right') &&
+        Number.isInteger(indent) &&
+        indent > 0
+      )
+        result.indent = Math.min(SPREADSHEET_MAX_INDENT, indent);
+    }
+
+    function applyFill() {
+      if (cellFill?.gradient?.length) {
+        const first = color(cellFill.gradient[0]);
+        if (first) result.fillColor = first;
+        warnings.add('Gradient fills are shown with their first color.');
+      } else if (cellFill?.pattern && cellFill.pattern !== 'none') {
+        // Solid fills use the foreground colour; a missing one means black.
+        const front = color(cellFill.fg) ?? '#000000';
+        if (cellFill.pattern === 'solid') result.fillColor = front;
+        else {
+          const back = color(cellFill.bg) ?? '#FFFFFF';
+          result.fillColor = blend(
+            front,
+            back,
+            patternDensity[cellFill.pattern] ?? 0.5
+          );
+          warnings.add('Patterned fills are shown as a blended solid color.');
+        }
+      }
+    }
   };
   const conditionalStyle = (definition: Dxf): ConditionalStyle => {
     const style: ConditionalStyle = {};

@@ -2,6 +2,7 @@ import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { heicConversionService } from '@core/heic/service';
 import type { FetchError } from '@core/service';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import {
   createStaticUploadFile,
@@ -99,6 +100,18 @@ export const UPDATE_MEDIA_SIZE_COMMAND: LexicalCommand<
 export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<
   MediaType | 'all'
 > = createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
+
+/** Starts an upload, reporting a failure with the media type it was for. */
+function uploadInBackground(upload: Promise<unknown>, mediaType: MediaType) {
+  const report = async () => {
+    try {
+      await upload;
+    } catch (error) {
+      Telemetry.error(error, { surface: 'media-upload', mediaType });
+    }
+  };
+  fireAndForget(report(), 'media-upload');
+}
 
 function validateMediaFile(file: UploadFile, mediaType: MediaType): boolean {
   const ext = fileExtension(file.name);
@@ -401,9 +414,9 @@ function registerMediaPlugin(editor: LexicalEditor) {
 
           $safeInsertMediaNode(node);
           const nodeKey = node.getKey();
-          handleUpload(payload.file, nodeKey, payload.url, mediaType).catch(
-            (error) =>
-              Telemetry.error(error, { surface: 'media-upload', mediaType })
+          uploadInBackground(
+            handleUpload(payload.file, nodeKey, payload.url, mediaType),
+            mediaType
           );
           return true;
         }
@@ -566,12 +579,7 @@ function registerMediaPlugin(editor: LexicalEditor) {
                 ? 'video'
                 : null;
             if (type) {
-              addMediaFromFile(editor, file, type).catch((error) =>
-                Telemetry.error(error, {
-                  surface: 'media-upload',
-                  mediaType: type,
-                })
-              );
+              uploadInBackground(addMediaFromFile(editor, file, type), type);
             }
           }
           input.remove();

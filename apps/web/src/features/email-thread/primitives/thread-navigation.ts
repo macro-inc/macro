@@ -348,10 +348,7 @@ export function createThreadNavigation(
     // Arrow navigation owns focus, including when it only scrolls the current
     // card. Enter should act on that selection rather than the previous button.
     const activeElement = document.activeElement;
-    if (activeElement instanceof HTMLButtonElement) {
-      activeElement.blur();
-      host.focusContainer?.();
-    }
+    updateCreateCallback();
 
     const stops = shownStops({
       length: messages.length,
@@ -419,6 +416,13 @@ export function createThreadNavigation(
       messages,
       list
     );
+
+    function updateCreateCallback() {
+      if (activeElement instanceof HTMLButtonElement) {
+        activeElement.blur();
+        host.focusContainer?.();
+      }
+    }
   });
 
   const navigateToPreviousMessage = () => navigateMessage('prev');

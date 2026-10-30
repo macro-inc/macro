@@ -38,12 +38,11 @@ export function EquationThumb(props: {
   });
   onMount(() => {
     matchInk(props.editor, el);
-    fireAndForget(
-      props.editor.thumbnail(props.latex).then((p) => {
-        if (alive) setPicture(p);
-      }),
-      'pptx-editor'
-    );
+    const showPicture = async () => {
+      const p = await props.editor.thumbnail(props.latex);
+      if (alive) setPicture(p);
+    };
+    fireAndForget(showPicture(), 'pptx-editor');
   });
   return (
     <span ref={el} class="flex min-h-6 items-center justify-center text-ink">

@@ -1,6 +1,7 @@
 import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
 import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SoupEntityContextMenu } from '@app/features/soup/SoupEntityContextMenu';
+import type { MacroId } from '@app/lib/identity/macro-id';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
@@ -10,7 +11,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
-import type { MacroId } from '@core/user/macroId';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, Entity } from '@entity';
 import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@icon/system/fill/phone-incoming-fill.svg';
@@ -134,6 +135,14 @@ export function IncomingCallActions(props: {
 }) {
   const userId = useUserId();
   const isWide = () => props.layout === 'wide';
+  const joinCall = async () => {
+    try {
+      await joinChannelCall(props.channelId);
+    } catch (error) {
+      console.error('Failed to join call', error);
+      toast.failure('Failed to join call');
+    }
+  };
 
   return (
     <Show when={props.callId}>
@@ -175,10 +184,7 @@ export function IncomingCallActions(props: {
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              void joinChannelCall(props.channelId).catch((error) => {
-                console.error('Failed to join call', error);
-                toast.failure('Failed to join call');
-              });
+              fireAndForget(joinCall(), 'channels-rail');
             }}
           >
             <PhoneIncomingIcon class="incoming-call-shake size-3" />

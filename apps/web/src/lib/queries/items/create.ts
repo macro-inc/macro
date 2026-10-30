@@ -18,23 +18,35 @@ import { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { PropertyInput } from '@service-storage/generated/schemas/propertyInput';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
 import { err, ok } from 'neverthrow';
-import { decodeBase64Bytes } from './base64';
-import { isPaymentError } from './handlePaymentError';
-import { contentHash } from './hash';
+import { isPaymentError } from '../../core/util/handlePaymentError';
+import { contentHash } from '../../core/util/hash';
 import {
   getExtensionForLanguage,
   isCodeEditorExtensionSupported,
   isCodeEditorLanguageSupported,
-} from './languageQuery';
-import { resolveUploadContentType } from './uploadContentType';
+} from '../../core/util/languageQuery';
+import { resolveUploadContentType } from '../../core/util/uploadContentType';
+import { decodeBase64Bytes } from '../../utils/base64';
 
 function refreshCreatedSoupEntity(entityId: string, entityType: SoupEntityTag) {
-  refetchSoupEntity(entityId, entityType, {
-    ownTouch: true,
-    refreshGraphql: true,
-  }).catch((error) =>
-    Telemetry.error(error, { surface: 'create-entity', entityType })
+  fireAndForget(
+    refetchCreatedSoupEntity(entityId, entityType),
+    'create-entity'
   );
+}
+
+async function refetchCreatedSoupEntity(
+  entityId: string,
+  entityType: SoupEntityTag
+) {
+  try {
+    await refetchSoupEntity(entityId, entityType, {
+      ownTouch: true,
+      refreshGraphql: true,
+    });
+  } catch (error) {
+    Telemetry.error(error, { surface: 'create-entity', entityType });
+  }
 }
 
 type CreateMarkdownFileArgs = {

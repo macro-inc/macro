@@ -1,4 +1,4 @@
-import { dateBucket } from '@app/features/soup/collection/date-buckets';
+import { dateBucket } from '@app/lib/utils/date-buckets';
 import type { GithubPullRequestEntity } from '@entity';
 import { match } from 'ts-pattern';
 import type { ReviewsSortId } from '../reviews-types';

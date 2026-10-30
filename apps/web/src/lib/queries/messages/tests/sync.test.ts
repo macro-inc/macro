@@ -537,7 +537,11 @@ describe.each([
         },
       ],
     });
-    await fetching.catch(() => undefined);
+    try {
+      await fetching;
+    } catch {
+      /* The invalidation below is the outcome under test. */
+    }
     await vi.waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: timelineKey(),
@@ -574,7 +578,11 @@ describe.each([
       pageParams: [null],
       pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
-    await fetching.catch(() => undefined);
+    try {
+      await fetching;
+    } catch {
+      /* The invalidation below is the outcome under test. */
+    }
     await vi.waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: timelineKey(),
@@ -787,7 +795,11 @@ describe('live timeline activity', () => {
       pageParams: [null],
       pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
     });
-    await fetching.catch(() => undefined);
+    try {
+      await fetching;
+    } catch {
+      /* The invalidation below is the outcome under test. */
+    }
     await vi.waitFor(() =>
       expect(invalidate).toHaveBeenCalledWith({ queryKey: latest, exact: true })
     );

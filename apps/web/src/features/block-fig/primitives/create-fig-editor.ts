@@ -271,15 +271,21 @@ export function createFigEditor(options: FigEditorOptions) {
   let clipboard: string[] = [];
   /** Whether the page may read the system clipboard without asking. */
   let clipboardReadable = false;
-  void navigator.permissions
-    ?.query({ name: 'clipboard-read' as PermissionName })
-    .then((status) => {
+  const watchClipboardPermission = async () => {
+    if (!navigator.permissions) return;
+    try {
+      const status = await navigator.permissions.query({
+        name: 'clipboard-read' as PermissionName,
+      });
       clipboardReadable = status.state === 'granted';
       status.onchange = () => {
         clipboardReadable = status.state === 'granted';
       };
-    })
-    .catch(() => {});
+    } catch {
+      // Unsupported permission queries leave the clipboard unreadable.
+    }
+  };
+  fireAndForget(watchClipboardPermission(), 'fig-editor');
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saving: Promise<void> | undefined;
   let dirtySinceSave = false;
@@ -433,17 +439,32 @@ export function createFigEditor(options: FigEditorOptions) {
     pushTimer = undefined;
     await sharing?.push();
   };
+  /**
+   * Runs `work` after every edit queued before it, so edits apply one at a
+   * time and in order. A failure is reported and resolves to undefined.
+   */
+  const enqueue = <T>(work: () => Promise<T>): Promise<T | undefined> => {
+    const runAfterQueue = async () => {
+      await queue;
+      try {
+        return await work();
+      } catch (e) {
+        options.notifyError(e instanceof Error ? e.message : String(e));
+        return undefined;
+      }
+    };
+    const run = runAfterQueue();
+    queue = run;
+    return run;
+  };
   const pushSoon = () => {
     if (pushTimer) return;
     pushTimer = setTimeout(() => {
       pushTimer = undefined;
-      queue = queue.then(async () => {
-        try {
-          await sharing?.push();
-        } catch (e) {
-          options.notifyError(e instanceof Error ? e.message : String(e));
-        }
-      });
+      const push = async () => {
+        await sharing?.push();
+      };
+      fireAndForget(enqueue(push), 'fig-editor');
     }, GESTURE_PUSH_MS);
   };
   onCleanup(() => clearTimeout(pushTimer));
@@ -452,14 +473,11 @@ export function createFigEditor(options: FigEditorOptions) {
   const unsubscribeIncoming = sharing?.onIncoming(() => {
     if (pullQueued) return;
     pullQueued = true;
-    queue = queue.then(async () => {
+    const pull = async () => {
       pullQueued = false;
-      try {
-        await pullShared();
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-      }
-    });
+      await pullShared();
+    };
+    fireAndForget(enqueue(pull), 'fig-editor');
   });
   onCleanup(() => unsubscribeIncoming?.());
 
@@ -476,63 +494,50 @@ export function createFigEditor(options: FigEditorOptions) {
   ) => {
     if (!enabled() || (Array.isArray(ops) && ops.length === 0))
       return Promise.resolve(undefined);
-    const run = queue.then(async () => {
-      try {
-        // Other people's changes that arrived first apply first.
-        await pullShared();
-        const page = viewer.page();
-        const resolved = typeof ops === 'function' ? await ops(page) : ops;
-        if (resolved.length === 0) return undefined;
-        const before = viewer.selected();
-        const result = await engine.apply(page, resolved, coalesce);
-        // A drag's later steps coalesce into its first: keep that one's.
-        if (result.undoStep !== null && !stepSelections.has(result.undoStep)) {
-          stepSelections.set(result.undoStep, { page, before });
-          // The engine keeps 200 steps; forget the oldest beyond that.
-          for (const id of stepSelections.keys()) {
-            if (stepSelections.size <= MAX_REMEMBERED_STEPS) break;
-            stepSelections.delete(id);
-          }
+    const applyStep = async () => {
+      // Other people's changes that arrived first apply first.
+      await pullShared();
+      const page = viewer.page();
+      const resolved = typeof ops === 'function' ? await ops(page) : ops;
+      if (resolved.length === 0) return undefined;
+      const before = viewer.selected();
+      const result = await engine.apply(page, resolved, coalesce);
+      // A drag's later steps coalesce into its first: keep that one's.
+      if (result.undoStep !== null && !stepSelections.has(result.undoStep)) {
+        stepSelections.set(result.undoStep, { page, before });
+        // The engine keeps 200 steps; forget the oldest beyond that.
+        for (const id of stepSelections.keys()) {
+          if (stepSelections.size <= MAX_REMEMBERED_STEPS) break;
+          stepSelections.delete(id);
         }
-        if (coalesce) pushSoon();
-        else await pushNow();
-        await settle(result, quiet);
-        return result;
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-        return undefined;
       }
-    });
-    queue = run;
-    return run;
+      if (coalesce) pushSoon();
+      else await pushNow();
+      await settle(result, quiet);
+      return result;
+    };
+    return enqueue(applyStep);
   };
 
   const history = (action: 'undo' | 'redo'): Promise<unknown> => {
     if (!enabled()) return Promise.resolve();
-    queue = queue.then(async () => {
-      try {
-        await pullShared();
-        const step = action === 'undo' ? undoStep : redoStep;
-        const remembered = step === null ? undefined : stepSelections.get(step);
-        if (remembered && action === 'undo')
-          remembered.after = viewer.selected();
-        const result =
-          action === 'undo'
-            ? await engine.undo(viewer.page())
-            : await engine.redo(viewer.page());
-        // Undo is local: what it restores is shared as a new change.
-        await pushNow();
-        await settle(result);
-        const wanted =
-          action === 'undo' ? remembered?.before : remembered?.after;
-        if (remembered && wanted)
-          await restoreSelection(remembered.page, wanted);
-        else await viewer.pruneSelection();
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-      }
-    });
-    return queue;
+    const moveInHistory = async () => {
+      await pullShared();
+      const step = action === 'undo' ? undoStep : redoStep;
+      const remembered = step === null ? undefined : stepSelections.get(step);
+      if (remembered && action === 'undo') remembered.after = viewer.selected();
+      const result =
+        action === 'undo'
+          ? await engine.undo(viewer.page())
+          : await engine.redo(viewer.page());
+      // Undo is local: what it restores is shared as a new change.
+      await pushNow();
+      await settle(result);
+      const wanted = action === 'undo' ? remembered?.before : remembered?.after;
+      if (remembered && wanted) await restoreSelection(remembered.page, wanted);
+      else await viewer.pruneSelection();
+    };
+    return enqueue(moveInHistory);
   };
 
   /** Selects the layers a step created. */
@@ -642,20 +647,14 @@ export function createFigEditor(options: FigEditorOptions) {
    */
   const importLibrary = async (pkg: LibraryPackage, spec: LibrarySpec) => {
     if (!enabled()) return undefined;
-    const run = queue.then(async () => {
-      try {
-        await pullShared();
-        const result = await engine.importLibrary(viewer.page(), pkg, spec);
-        await pushNow();
-        await settle(result);
-        return result;
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-        return undefined;
-      }
-    });
-    queue = run;
-    const result = await run;
+    const importStep = async () => {
+      await pullShared();
+      const result = await engine.importLibrary(viewer.page(), pkg, spec);
+      await pushNow();
+      await settle(result);
+      return result;
+    };
+    const result = await enqueue(importStep);
     await selectCreated(result);
     return result;
   };
@@ -759,19 +758,27 @@ export function createFigEditor(options: FigEditorOptions) {
       dataType: 'scene',
       ids,
     };
-    const html = engine
-      .copy(viewer.page(), ids)
-      .then(
-        (copied) =>
-          new Blob([encodeClipboard({ meta, copied })], { type: 'text/html' })
-      );
+    const encode = async () => {
+      const copied = await engine.copy(viewer.page(), ids);
+      return new Blob([encodeClipboard({ meta, copied })], {
+        type: 'text/html',
+      });
+    };
+    const html = encode();
     // The item is handed over now, inside the key press, and filled in
     // when the engine has written the layers.
     try {
       if (typeof ClipboardItem === 'undefined') return;
-      void navigator.clipboard
-        .write([new ClipboardItem({ 'text/html': html })])
-        .catch(() => {});
+      const write = async () => {
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'text/html': html }),
+          ]);
+        } catch {
+          // A refused write leaves pasting here working.
+        }
+      };
+      fireAndForget(write(), 'fig-editor');
     } catch {
       // No clipboard access: pasting here still works.
     }
@@ -792,8 +799,10 @@ export function createFigEditor(options: FigEditorOptions) {
         if (status.state !== 'granted') return undefined;
       }
       for (const item of await navigator.clipboard.read()) {
-        if (item.types.includes('text/html'))
-          return await (await item.getType('text/html')).text();
+        if (item.types.includes('text/html')) {
+          const html = await item.getType('text/html');
+          return await html.text();
+        }
       }
     } catch {
       // No access: the layers copied here are pasted.
@@ -830,17 +839,7 @@ export function createFigEditor(options: FigEditorOptions) {
               selection.map((s) => s.id)
             )
           : [];
-      const sameFile =
-        !payload ||
-        (!!payload.meta && payload.meta.fileKey === (options.fileKey ?? ''));
-      parent = pasteParent(
-        selection.map((s) => ({
-          ...s,
-          type: rows.find((r) => r.id === s.id)?.type ?? 'GROUP',
-        })),
-        page.id,
-        sameFile ? (payload ? (payload.meta?.ids ?? []) : own) : []
-      );
+      parent = selectedPasteParent(selection, rows);
     }
     const c = viewer.camera();
     const v = viewer.viewport();
@@ -850,23 +849,33 @@ export function createFigEditor(options: FigEditorOptions) {
       ...(place && 'at' in place ? { at: place.at } : {}),
       ...(place && 'replace' in place ? { replace: place.replace } : {}),
     };
-    const run = queue.then(async () => {
-      try {
-        const copied =
-          payload?.copied ?? (await engine.copy(viewer.page(), own));
-        // As with other steps: others' changes first, then share this one.
-        await pullShared();
-        const result = await engine.paste(viewer.page(), copied, spec);
-        await pushNow();
-        await settle(result);
-        return result;
-      } catch (e) {
-        options.notifyError(e instanceof Error ? e.message : String(e));
-        return undefined;
-      }
-    });
-    queue = run;
-    await selectCreated(await run);
+    const pasteStep = async () => {
+      const copied = payload?.copied ?? (await engine.copy(viewer.page(), own));
+      // As with other steps: others' changes first, then share this one.
+      await pullShared();
+      const result = await engine.paste(viewer.page(), copied, spec);
+      await pushNow();
+      await settle(result);
+      return result;
+    };
+    await selectCreated(await enqueue(pasteStep));
+
+    function selectedPasteParent(
+      selection: Selected[],
+      rows: Awaited<ReturnType<FigEngine['rows']>>
+    ) {
+      const sameFile =
+        !payload ||
+        (!!payload.meta && payload.meta.fileKey === (options.fileKey ?? ''));
+      return pasteParent(
+        selection.map((s) => ({
+          ...s,
+          type: rows.find((r) => r.id === s.id)?.type ?? 'GROUP',
+        })),
+        page.id,
+        sameFile ? (payload ? (payload.meta?.ids ?? []) : own) : []
+      );
+    }
   };
 
   /** ⌘V (`html` from the paste event) and the menus' Paste. */

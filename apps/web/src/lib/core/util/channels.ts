@@ -61,14 +61,20 @@ export function useSendMessageToPeople() {
     const senderId = userId();
     if (!senderId) return;
     await beforeSend?.(channelId);
-    const messageResponse = await sendMessage
-      .mutateAsync({
-        parent: { type: 'channel', id: channelId },
-        message: { content, attachments, mentions },
-        senderId,
-        optimisticId: newMessageId(),
-      })
-      .catch(() => null);
+
+    const send = async () => {
+      try {
+        return await sendMessage.mutateAsync({
+          parent: { type: 'channel', id: channelId },
+          message: { content, attachments, mentions },
+          senderId,
+          optimisticId: newMessageId(),
+        });
+      } catch {
+        return null;
+      }
+    };
+    const messageResponse = await send();
     if (!messageResponse) return;
 
     fireAndForget(invalidateListChannels(), 'messages');

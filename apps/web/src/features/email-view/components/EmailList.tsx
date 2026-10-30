@@ -128,6 +128,14 @@ export function EmailList(props: EmailListProps) {
   } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
+  async function loadNextPage() {
+    try {
+      await source.loadMore();
+    } catch {
+      // The source reports load failures through source.error().
+    }
+  }
+
   function openEntity(
     entity: EntityData,
     options: {
@@ -139,14 +147,18 @@ export function EmailList(props: EmailListProps) {
       ? persistSoupNavigationTouchHighlight(options.event)
       : undefined;
 
-    fireAndForget(
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle: panel.handle,
-        referredFrom: 'mail',
-        openInNewSplit: options.openInNewSplit,
-      }).finally(() => finishTouchHighlight?.()),
-      'open-entity-in-split'
-    );
+    const open = async () => {
+      try {
+        await openEntityInSplitFromUnifiedList(entity, {
+          splitHandle: panel.handle,
+          referredFrom: 'mail',
+          openInNewSplit: options.openInNewSplit,
+        });
+      } finally {
+        finishTouchHighlight?.();
+      }
+    };
+    fireAndForget(open(), 'open-entity-in-split');
   }
 
   function onActivate({
@@ -154,7 +166,7 @@ export function EmailList(props: EmailListProps) {
     metadata,
   }: ListActivation<EmailDataSourceItem, EmailListActivationMetadata>) {
     if (item.kind === 'load-more') {
-      if (!item.isLoading) void source.loadMore().catch(() => {});
+      if (!item.isLoading) fireAndForget(loadNextPage(), 'email-view');
 
       return;
     }
@@ -346,7 +358,7 @@ export function EmailList(props: EmailListProps) {
 
         if (distanceFromEnd > 3) return;
 
-        void source.loadMore().catch(() => {});
+        fireAndForget(loadNextPage(), 'email-view');
       },
     },
     activation: {
@@ -592,7 +604,7 @@ export function EmailList(props: EmailListProps) {
     const distance =
       handle.scrollSize - handle.scrollOffset - handle.viewportSize;
     if (distance < 300 && !source.isLoadingMore()) {
-      void source.loadMore().catch(() => {});
+      fireAndForget(loadNextPage(), 'email-view');
     }
   }
 

@@ -9,7 +9,7 @@ import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
-import { ChannelTypeEnum } from '@service-storage/client';
+import { ChannelTypeEnum } from '@service-storage/itemType';
 import { confirmDialog } from '@ui';
 import { createMemo, getOwner } from 'solid-js';
 import { CallParticipantAvatars } from './CallParticipantAvatars';

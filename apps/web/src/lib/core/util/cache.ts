@@ -1,4 +1,5 @@
 import type { Result } from 'neverthrow';
+import { fireAndForget } from './fireAndForget';
 import type { ObjectLike, ResultError } from './result';
 
 interface CacheEntry<E extends string, R extends ObjectLike> {
@@ -80,13 +81,7 @@ export function cache<Fn extends (...args: any[]) => Promise<any>>(
       expiresAt,
     };
 
-    result
-      .then((value) => {
-        if (value.isErr()) {
-          cache.delete(key);
-        }
-      })
-      .catch(() => cache.delete(key));
+    fireAndForget(evictUnlessOk(cache, key, result), 'cached-function');
 
     cache.set(key, cacheEntry);
     return result;
@@ -101,6 +96,21 @@ export function cache<Fn extends (...args: any[]) => Promise<any>>(
   });
 
   return wrappedFn as any;
+}
+
+async function evictUnlessOk(
+  cache: Map<string, unknown>,
+  key: string,
+  result: Promise<Result<unknown, unknown>>
+): Promise<void> {
+  try {
+    const value = await result;
+    if (value.isErr()) {
+      cache.delete(key);
+    }
+  } catch {
+    cache.delete(key);
+  }
 }
 
 // Modified from the amazing Tanstack Query library (MIT)

@@ -15,7 +15,8 @@ import {
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
-import { storageServiceClient } from '@service-storage/client';
+import { fetchSoupAstItems, fetchSoupItems } from '@queries/storage/requests';
+
 import type {
   PostSoupRequest,
   SoupApiItem,
@@ -408,13 +409,13 @@ export default function DocumentWherePlayground() {
 
       const page = await throwOnErr(async () => {
         if (mode() === 'simple') {
-          return await storageServiceClient.getSoupItems({
+          return await fetchSoupItems({
             params: { cursor },
             body: simpleRequestBody(),
           });
         }
 
-        return await storageServiceClient.getSoupAstItems({
+        return await fetchSoupAstItems({
           params: { cursor },
           body: requestBody(),
         });

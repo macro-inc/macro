@@ -2,7 +2,7 @@ id: ts-no-service-client-outside-queries
 language: typescript
 # Twin of tsx-no-service-client-outside-queries — ast-grep rules are
 # single-language, and `tsx` only scans .tsx files.
-severity: warning
+severity: error
 message: Don't import a service client outside the queries package — wrap the call in a query/mutation under queries/ and import that instead.
 note: |-
   Rule FE-01 in docs/development/style-guide.md (also apps/web/AGENTS.md, General). UI code
@@ -12,15 +12,10 @@ note: |-
   or the owning feature's queries/ dir (or queries.ts), and import from there.
   Importing generated schema *types* from @service-*/generated is fine — this
   rule only covers the runtime client modules. `import type` from a client is
-  also allowed. ~110 legacy files exist — don't add new ones.
+  also allowed.
 files:
   - apps/web/src/**
 ignores:
-  # FE-33 composition roots pass the client to CRM query adapters.
-  - apps/web/src/features/crm/crm-adapter.ts
-  - apps/web/src/features/crm/preview-adapter.ts
-  - apps/web/src/features/crm/record-adapter.ts
-  - apps/web/src/features/crm/stage-adapter.ts
   - '**/queries/**'
   - '**/queries.ts'
   - '**/service-clients/**'

@@ -17,8 +17,6 @@ const LOAD_MORE_THRESHOLD = 600;
 const LIST_SKELETON_CARDS = [0, 1, 2];
 /** Reply rows sketched under the root while a card loads, as width classes. */
 const CARD_SKELETON_REPLIES = ['w-2/3', 'w-1/2'];
-const CARD_CLASS =
-  'relative flex flex-col gap-2 rounded-xl border border-edge-muted bg-surface p-3';
 
 /** One sketched message row: avatar, name, and a line of text. */
 function MessageSkeleton(props: { textWidth: string; indent?: boolean }) {
@@ -55,7 +53,11 @@ function ThreadListSkeleton() {
     <div role="status" aria-label="Loading threads" class="flex flex-col gap-6">
       <For each={LIST_SKELETON_CARDS}>
         {() => (
-          <div class={CARD_CLASS}>
+          <div
+            class={
+              'relative flex flex-col gap-2 rounded-xl border border-edge-muted bg-surface p-3'
+            }
+          >
             <ThreadSkeleton />
           </div>
         )}
@@ -116,7 +118,10 @@ function ThreadCard(props: {
 
   return (
     <article
-      class={cn(CARD_CLASS, 'group/thread-card')}
+      class={cn(
+        'relative flex flex-col gap-2 rounded-xl border border-edge-muted bg-surface p-3',
+        'group/thread-card'
+      )}
       data-channel-thread={props.thread.id}
     >
       <Show when={props.showChannel && props.channel}>
@@ -297,7 +302,9 @@ function ThreadList(props: {
               <div
                 role="status"
                 aria-label="Loading more threads"
-                class={CARD_CLASS}
+                class={
+                  'relative flex flex-col gap-2 rounded-xl border border-edge-muted bg-surface p-3'
+                }
               >
                 <ThreadSkeleton />
               </div>

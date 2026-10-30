@@ -15,7 +15,7 @@ import {
   type SoupQuery,
   type SoupQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { mapGraphqlProperties } from '@service-storage/graphql-soup';
+import { mapGraphqlProperties } from '@service-storage/graphql-properties';
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
 import type { ProjectRow, ProjectsSource } from '../context/projects-context';

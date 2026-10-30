@@ -30,6 +30,9 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableProjects: { key: 'enable-projects' },
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: vi.fn(),
+}));
 vi.mock('../../projects/queries/project-identity', () => ({
   useProjectIdentityQuery: (id: () => string) => {
     fixture.projectMounts++;

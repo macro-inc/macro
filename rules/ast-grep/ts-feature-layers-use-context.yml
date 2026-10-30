@@ -2,7 +2,7 @@ id: ts-feature-layers-use-context
 language: typescript
 # Twin of tsx-feature-layers-use-context — ast-grep rules are single-language,
 # and `tsx` only scans .tsx files.
-severity: warning
+severity: error
 message: Supply app capabilities through feature-owned contracts; construct production adapters at the feature root.
 note: |-
   Rule FE-33 in docs/development/style-guide.md. Inside a layered feature, `queries/`,
@@ -11,7 +11,7 @@ note: |-
   entity display, openDocument, PostHog). Those arrive through the
   feature's `Context` record so every layer runs against mocks in tests. Keep `context/` free of production imports. Only production entry points
   and adapters at the feature root construct app capabilities. The pure
-  `@core/user/macroId` identity helpers are a documented exception. Adopting features add their layer paths to
+  Pure identity helpers live separately in `src/lib/identity`. Adopting features add their layer paths to
   `files` in each ts-/tsx-feature-* rule. Block-agent uses `ui/` for
   presentation and `component/` for composition.
 files:
@@ -192,8 +192,6 @@ files:
 rule:
   kind: string
   regex: ^['"](@service-storage/graphql-soup|@core/context/user|@core/user|@property/hooks|@property/editor/hooks|@core/component/LexicalMarkdown/component/core/BlockLink|@app/lib/analytics/posthog)
-  not:
-    regex: ^['"]@core/user/macroId['"]
   any:
     - inside:
         kind: import_statement

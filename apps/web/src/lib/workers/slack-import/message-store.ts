@@ -150,11 +150,14 @@ export class MessageStore {
         // when the old connection was already closed and missed versionchange.
         db.createObjectStore(this.ownerStore);
       },
-      () => {
+      async () => {
         // Another importer deleted/replaced this session. Never revive the old owner.
         this.retired = true;
-        // A retired store has no caller left to report a close failure to.
-        this.database.close().catch(() => undefined);
+        try {
+          await this.database.close();
+        } catch {
+          // A retired store has no caller left to report a close failure to.
+        }
       }
     );
   }

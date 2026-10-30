@@ -132,14 +132,7 @@ export function Bar(props: BarProps) {
 
     let currentWidth = 0;
 
-    if (currentStage() === 0 || props.suppressPop) {
-      currentWidth =
-        (leftSize()?.width ?? 0) +
-        (centerSize()?.width ?? 0) +
-        (rightSize()?.width ?? 0);
-    } else {
-      currentWidth = (leftSize()?.width ?? 0) + (rightSize()?.width ?? 0);
-    }
+    updateCurrentWidth();
 
     // Store the current width measurement
     setStageWidths((prev) => {
@@ -191,6 +184,17 @@ export function Bar(props: BarProps) {
         currentOverlap > prevStageWidth - currentWidth + PADDING
       ) {
         setCurrentStage((prev) => Math.max(0, prev - 1));
+      }
+    }
+
+    function updateCurrentWidth() {
+      if (currentStage() === 0 || props.suppressPop) {
+        currentWidth =
+          (leftSize()?.width ?? 0) +
+          (centerSize()?.width ?? 0) +
+          (rightSize()?.width ?? 0);
+      } else {
+        currentWidth = (leftSize()?.width ?? 0) + (rightSize()?.width ?? 0);
       }
     }
   };

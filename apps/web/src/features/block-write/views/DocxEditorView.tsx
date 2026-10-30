@@ -1,4 +1,4 @@
-import type { EditOp, PageRect, Pos } from '@core/docx-engine/types';
+import type { EditOp, PageRect, Pos } from '@app/lib/docx/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
@@ -82,13 +82,15 @@ export type DocxEditorViewProps = {
 
 /** The collaborative DOCX editor: toolbar, pages, collaborators and comments. */
 export function DocxEditorView(props: DocxEditorViewProps) {
-  const download = () => {
-    editor
-      .idle()
-      .then(() => editor.save())
-      .then(props.onDownload)
-      .catch((error: unknown) => props.onError?.(error));
+  const saveForDownload = async () => {
+    try {
+      await editor.idle();
+      props.onDownload(await editor.save());
+    } catch (error) {
+      props.onError?.(error);
+    }
   };
+  const download = () => fireAndForget(saveForDownload(), 'docx-editor');
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
   let input: HTMLTextAreaElement | undefined;
   let selectionTimer: ReturnType<typeof setTimeout> | undefined;
@@ -340,19 +342,8 @@ export function DocxEditorView(props: DocxEditorViewProps) {
       {props.actions?.(download)}
       <DocxToolbar
         canEdit={props.canEdit}
-        canComment={
-          !!props.commentRoots &&
-          props.canComment() &&
-          editor.state()?.story.kind === 'body'
-        }
-        format={{
-          bold: format()?.bold,
-          italic: format()?.italic,
-          underline: format()?.underline,
-          strike: format()?.strike,
-          superscript: format()?.superscript,
-          subscript: format()?.subscript,
-        }}
+        canComment={getDocxEditorViewCanComment()}
+        format={getDocxEditorViewFormat()}
         fontSize={format()?.size ?? null}
         fontFamily={format()?.font ?? null}
         color={format()?.color ?? null}
@@ -510,4 +501,25 @@ export function DocxEditorView(props: DocxEditorViewProps) {
       </div>
     </div>
   );
+
+  function getDocxEditorViewCanComment(): boolean {
+    return (
+      !!props.commentRoots &&
+      props.canComment() &&
+      editor.state()?.story.kind === 'body'
+    );
+  }
+
+  function getDocxEditorViewFormat(): Partial<
+    Record<import('../components/DocxToolbar').DocxInlineFormat, boolean>
+  > {
+    return {
+      bold: format()?.bold,
+      italic: format()?.italic,
+      underline: format()?.underline,
+      strike: format()?.strike,
+      superscript: format()?.superscript,
+      subscript: format()?.subscript,
+    };
+  }
 }

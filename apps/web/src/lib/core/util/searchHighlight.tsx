@@ -112,7 +112,6 @@ export function highlightTermsInText(text: string, terms: string[]): string {
  * pass without disturbing other spans in the subtree.
  */
 const DOM_HIGHLIGHT_MARKER_ATTR = 'data-search-highlight';
-const DOM_HIGHLIGHT_DEFAULT_CLASS = 'md-mark search-match inline';
 
 type DomHighlightOptions = {
   /** CSS classes applied to the injected `<span>` wrapper. */
@@ -157,7 +156,7 @@ export function applyDomHighlights(
   if (!pattern) return;
 
   const markerAttr = options.markerAttr ?? DOM_HIGHLIGHT_MARKER_ATTR;
-  const className = options.className ?? DOM_HIGHLIGHT_DEFAULT_CLASS;
+  const className = options.className ?? 'md-mark search-match inline';
 
   const targets: Text[] = [];
   const walker = root.ownerDocument.createTreeWalker(

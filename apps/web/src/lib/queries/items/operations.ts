@@ -21,15 +21,16 @@ import {
 import { callServiceClient } from '@service-call/client';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
+import { storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import type { ItemType } from '@service-storage/itemType';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import {
   getPermissions,
   hasPermissions,
   Permissions,
-} from '../SharePermissions';
+} from '../../core/component/SharePermissions';
 
 const DEFAULT_CHUNK_SIZE = 10;
 const ENTITY_TYPES = {

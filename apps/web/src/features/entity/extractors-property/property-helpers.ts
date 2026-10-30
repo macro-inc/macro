@@ -5,6 +5,7 @@ import {
 } from '@property/constants';
 import type { Property, PropertyOption, ValueType } from '@property/types';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { match } from 'ts-pattern';
 import { timeRangeFromInstants } from '../../database/core/cell-date-range';
 import {
   COMPANY_STAGE_OPTIONS,
@@ -177,8 +178,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
   ) as ValueType;
 
   // Handle each value type with proper type checking
-  switch (valueType) {
-    case 'STRING': {
+  return match(valueType)
+    .with('STRING', (): Property => {
       if (hasPropertyValueType(propertyValue, 'String')) {
         const stringVal = propertyValue.value;
         if (typeof stringVal === 'string' && stringVal) {
@@ -186,9 +187,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
         }
       }
       return { ...baseProperty, valueType: 'STRING', value: null };
-    }
-
-    case 'NUMBER': {
+    })
+    .with('NUMBER', (): Property => {
       if (hasPropertyValueType(propertyValue, 'Number')) {
         const numVal = propertyValue.value;
         if (
@@ -204,9 +204,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
         }
       }
       return { ...baseProperty, valueType: 'NUMBER', value: null };
-    }
-
-    case 'BOOLEAN': {
+    })
+    .with('BOOLEAN', (): Property => {
       if (hasPropertyValueType(propertyValue, 'Boolean')) {
         const boolVal = propertyValue.value;
         if (typeof boolVal === 'boolean') {
@@ -214,9 +213,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
         }
       }
       return { ...baseProperty, valueType: 'BOOLEAN', value: null };
-    }
-
-    case 'DATE': {
+    })
+    .with('DATE', (): Property => {
       if (hasPropertyValueType(propertyValue, 'Date')) {
         const dateVal = propertyValue.value;
         if (
@@ -231,21 +229,19 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
         }
       }
       return { ...baseProperty, valueType: 'DATE', value: null };
-    }
-
-    case 'DATE_RANGE': {
-      return {
+    })
+    .with(
+      'DATE_RANGE',
+      (): Property => ({
         ...baseProperty,
         valueType: 'DATE_RANGE',
         value:
           (propertyValue?.type === 'DateRange' &&
             timeRangeFromInstants(propertyValue.value)) ||
           null,
-      };
-    }
-
-    case 'SELECT_STRING':
-    case 'SELECT_NUMBER': {
+      })
+    )
+    .with('SELECT_STRING', 'SELECT_NUMBER', (valueType): Property => {
       if (hasPropertyValueType(propertyValue, 'SelectOption')) {
         const selectVal = propertyValue.value;
         if (isStringArray(selectVal)) {
@@ -257,9 +253,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
         }
       }
       return { ...baseProperty, valueType, value: null };
-    }
-
-    case 'ENTITY': {
+    })
+    .with('ENTITY', (): Property => {
       if (hasPropertyValueType(propertyValue, 'EntityReference')) {
         const entityVal = propertyValue.value;
         if (isEntityReferenceArray(entityVal)) {
@@ -267,9 +262,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
         }
       }
       return { ...baseProperty, valueType: 'ENTITY', value: null };
-    }
-
-    case 'LINK': {
+    })
+    .with('LINK', (): Property => {
       if (hasPropertyValueType(propertyValue, 'Link')) {
         const linkVal = propertyValue.value;
         if (isStringArray(linkVal)) {
@@ -281,13 +275,8 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
         }
       }
       return { ...baseProperty, valueType: 'LINK', value: null };
-    }
-
-    default: {
-      const exhaustiveCheck: never = valueType;
-      throw new Error(`Unsupported value type: ${String(exhaustiveCheck)}`);
-    }
-  }
+    })
+    .exhaustive();
 }
 
 /**

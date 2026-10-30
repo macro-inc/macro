@@ -27,7 +27,7 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'current-user',
 }));
 
-vi.mock('@core/signal/profilePicture', () => ({
+vi.mock('@app/lib/queries/auth/profile-pictures', () => ({
   useProfilePictureUrl: () => [() => undefined],
 }));
 

@@ -1,3 +1,4 @@
+import { startDetached } from '@core/util/startDetached';
 import { createClient, gql, stringifyDocument } from '@urql/core';
 import { filter, map, pipe } from 'wonka';
 import { createDraftThread } from '../../../queries/email/graphql/optimistic-thread';
@@ -115,16 +116,19 @@ async function refresh(append = false) {
     if (page.revision !== selected.revision) throw new Error('stale page');
     if (!append) rows.replaceChildren();
     for (const { recordKey, record } of selected.records) {
-      const email = materializeMailView(
-        record as MailItemFieldsFragment,
-        select('view').value as CachedMailView,
-        page.sortTimestamps[page.keys.indexOf(recordKey)]
-      );
-      if (!email || email.__typename !== 'GraphqlSoupEmailThread')
-        throw new Error('missing canonical preview');
-      const li = document.createElement('li');
-      li.textContent = `${email.emailName} — ${email.inboxVisible ? 'Not Done' : 'Done'}`;
-      rows.append(li);
+      const processRecordKeyrecord = () => {
+        const email = materializeMailView(
+          record as MailItemFieldsFragment,
+          select('view').value as CachedMailView,
+          page.sortTimestamps[page.keys.indexOf(recordKey)]
+        );
+        if (!email || email.__typename !== 'GraphqlSoupEmailThread')
+          throw new Error('missing canonical preview');
+        const li = document.createElement('li');
+        li.textContent = `${email.emailName} — ${email.inboxVisible ? 'Not Done' : 'Done'}`;
+        rows.append(li);
+      };
+      processRecordKeyrecord();
     }
     nextCursor = page.nextCursor ?? undefined;
     more.disabled = !nextCursor;
@@ -144,10 +148,10 @@ const showFailure = (error: unknown): void => {
 
 for (const control of document.querySelectorAll('select'))
   control.addEventListener('change', () => {
-    refresh().catch(showFailure);
+    startDetached(refresh(), showFailure);
   });
 more.addEventListener('click', () => {
-  refresh(true).catch(showFailure);
+  startDetached(refresh(true), showFailure);
 });
 
 document

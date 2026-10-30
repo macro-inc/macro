@@ -95,10 +95,15 @@ export async function upload(
     const result = await uploadWithProgress(file, name, options, progress);
     if (result.type === 'folder') {
       // The server keeps unpacking the folder after the zip is sent.
-      fireAndForget(
-        result.projectId.finally(() => progress?.done()),
-        'file-upload'
-      );
+      const { projectId } = result;
+      const finishWhenUnpacked = async () => {
+        try {
+          await projectId;
+        } finally {
+          progress?.done();
+        }
+      };
+      fireAndForget(finishWhenUnpacked(), 'file-upload');
     } else {
       progress?.done();
     }
@@ -109,55 +114,142 @@ export async function upload(
   }
 }
 
+// TODO: remove toast logic from dss upload util
+function handleUploadError(err: ResultError<string>[] | Error | string): never {
+  if (Array.isArray(err) && err[0]?.code === DOCUMENT_NAME_TOO_LONG_CODE) {
+    let maxLength: number | undefined;
+    try {
+      maxLength = (JSON.parse(err[0].message) as { maxLength?: number })
+        .maxLength;
+    } catch {
+      maxLength = undefined;
+    }
+    throw new DocumentNameTooLongError(maxLength);
+  }
+
+  const isPaywallError = Array.isArray(err) && err[0].message.includes('403');
+
+  if (isPaywallError) {
+    usePaywallState().showPaywall(PaywallKey.FILE_LIMIT);
+    throw new Error('Forbidden');
+  }
+
+  const errorMessage = Array.isArray(err)
+    ? err[0].message
+    : err instanceof Error
+      ? err.message
+      : err;
+
+  throw new Error(errorMessage);
+}
+
+function resolveFileTypeOrExtension(
+  file: File,
+  fileType: FileTypeString | undefined
+): string {
+  // Many file types have "" as the mimeType on upload
+  // In that case, we default to the file extension as the fileType
+  return (
+    fileType ||
+    blockAcceptedMimetypeToFileExtension[file.type as MimeType] ||
+    file.name.split('.').pop()?.toLowerCase() ||
+    ''
+  );
+}
+
+function resolveContentType(
+  contentType: string | null | undefined,
+  fileType: string | null | undefined
+): MimeType {
+  const fallbackMime = fileType
+    ? (FileTypeMap[fileType as keyof typeof FileTypeMap]?.mime as
+        | MimeType
+        | undefined)
+    : undefined;
+  return (contentType ||
+    fallbackMime ||
+    'application/octet-stream') as MimeType;
+}
+
+type PutFile = (presignedUrl: string, type: MimeType) => Promise<boolean>;
+
+async function uploadZipAsFolder(
+  sha: string,
+  name: string,
+  parentId: string | undefined,
+  putFile: PutFile
+): Promise<PendingFolderUploadResult> {
+  const res = await storageServiceClient.projects.createUploadZipRequest({
+    sha,
+    name,
+    parentId,
+  });
+  if (res.isErr()) {
+    return handleUploadError(res.error);
+  }
+
+  const { presignedUrl, requestId } = res.value;
+
+  if (
+    !presignedUrl ||
+    !requestId ||
+    !(await putFile(presignedUrl, 'application/zip'))
+  ) {
+    return handleUploadError('Failed to upload zip file');
+  }
+
+  const projectIdPromise = waitBulkUploadStatus(requestId);
+  const announceResult = async () => {
+    if (await projectIdPromise) {
+      toast.success(`Uploaded ${name}`);
+    } else {
+      toast.failure(`Failed to upload ${name}`);
+    }
+  };
+  fireAndForget(announceResult(), 'file-upload');
+
+  return {
+    type: 'folder',
+    name,
+    requestId,
+    projectId: projectIdPromise,
+  };
+}
+
+async function warnIfContentNotReady(
+  documentId: string,
+  versionId: number,
+  fileType: FileTypeString | undefined
+) {
+  let contentState: string | undefined;
+  try {
+    const location = await waitForDocumentContentReady({
+      documentId,
+      versionId,
+    });
+    contentState = location.content.state;
+  } catch (error) {
+    console.warn('failed while waiting for document upload readiness', error);
+  }
+  if (contentState !== 'ready') {
+    console.warn('document upload did not become ready before timeout', {
+      documentId,
+      fileType,
+    });
+  }
+}
+
 async function uploadWithProgress(
   file: File,
   name: string,
   options: UploadFileOptions | undefined,
   progress: UploadProgressHandle | undefined
 ): Promise<UploadSuccess> {
-  const { showPaywall } = usePaywallState();
-
-  // TODO: remove toast logic from dss upload util
-  const handleUploadError = (err: ResultError<string>[] | Error | string) => {
-    if (Array.isArray(err) && err[0]?.code === DOCUMENT_NAME_TOO_LONG_CODE) {
-      let maxLength: number | undefined;
-      try {
-        maxLength = (JSON.parse(err[0].message) as { maxLength?: number })
-          .maxLength;
-      } catch {
-        maxLength = undefined;
-      }
-      throw new DocumentNameTooLongError(maxLength);
-    }
-
-    const isPaywallError = Array.isArray(err) && err[0].message.includes('403');
-
-    if (isPaywallError) {
-      showPaywall(PaywallKey.FILE_LIMIT);
-      throw new Error('Forbidden');
-    }
-
-    const errorMessage = Array.isArray(err)
-      ? err[0].message
-      : err instanceof Error
-        ? err.message
-        : err;
-
-    throw new Error(errorMessage);
-  };
-
-  const { type: mimeType } = file;
-
   // Determine file type and mime type
-  let fileTypeOrExtension =
-    options?.fileType || blockAcceptedMimetypeToFileExtension[mimeType];
-  const fileExtension = file.name.split('.').pop()?.toLowerCase();
-
-  // Many file types have "" as the mimeType on upload
-  // In that case, we default to the file extension as the fileType
-  if (!fileTypeOrExtension) {
-    fileTypeOrExtension = fileExtension ?? '';
-  }
+  const fileTypeOrExtension = resolveFileTypeOrExtension(
+    file,
+    options?.fileType
+  );
   const isZip = fileTypeOrExtension === 'zip';
 
   if (!options?.skipAnalytics) {
@@ -177,7 +269,7 @@ async function uploadWithProgress(
     return handleUploadError(error instanceof Error ? error : String(error));
   }
   const { sha } = source;
-  const putFile = async (presignedUrl: string, type: MimeType) => {
+  const putFile: PutFile = async (presignedUrl, type) => {
     if (source.kind === 'bytes') {
       const sent = await uploadWithPresignedUrl({
         presignedUrl,
@@ -206,44 +298,7 @@ async function uploadWithProgress(
   };
 
   if (isZip && options?.unzipFolder) {
-    const res = await storageServiceClient.projects.createUploadZipRequest({
-      sha,
-      name,
-      parentId: options?.projectId,
-    });
-    if (res.isErr()) {
-      return handleUploadError(res.error);
-    }
-
-    const { presignedUrl, requestId } = res.value;
-
-    if (
-      !presignedUrl ||
-      !requestId ||
-      !(await putFile(presignedUrl, 'application/zip'))
-    ) {
-      return handleUploadError('Failed to upload zip file');
-    }
-
-    const projectIdPromise = waitBulkUploadStatus(requestId);
-
-    fireAndForget(
-      projectIdPromise.then((projectId) => {
-        if (projectId) {
-          toast.success(`Uploaded ${name}`);
-        } else {
-          toast.failure(`Failed to upload ${name}`);
-        }
-      }),
-      'file-upload'
-    );
-
-    return {
-      type: 'folder',
-      name,
-      requestId,
-      projectId: projectIdPromise,
-    };
+    return uploadZipAsFolder(sha, name, options.projectId, putFile);
   }
 
   // Handle docx file upload
@@ -279,16 +334,9 @@ async function uploadWithProgress(
   const { metadata, presignedUrl, contentType, fileType } = newfile.value;
   const { documentId, documentVersionId } = metadata;
 
-  const fallbackMime = fileType
-    ? (FileTypeMap[fileType as keyof typeof FileTypeMap]?.mime as
-        | MimeType
-        | undefined)
-    : undefined;
-  const resolvedContentType = (contentType ||
-    fallbackMime ||
-    'application/octet-stream') as MimeType;
-
-  if (!(await putFile(presignedUrl, resolvedContentType))) {
+  if (
+    !(await putFile(presignedUrl, resolveContentType(contentType, fileType)))
+  ) {
     console.error('failed to upload', documentId, 'removing...');
     await storageServiceClient.deleteDocument({ documentId });
     return handleUploadError('Failed to upload file');
@@ -298,19 +346,7 @@ async function uploadWithProgress(
   // pipeline. The event finalizer marks object-storage documents uploaded and
   // initializes markdown documents in sync-service.
   if (fileType !== 'docx') {
-    const readyLocation = await waitForDocumentContentReady({
-      documentId,
-      versionId: documentVersionId,
-    }).catch((error) => {
-      console.warn('failed while waiting for document upload readiness', error);
-      return undefined;
-    });
-    if (readyLocation?.content.state !== 'ready') {
-      console.warn('document upload did not become ready before timeout', {
-        documentId,
-        fileType,
-      });
-    }
+    await warnIfContentNotReady(documentId, documentVersionId, fileType);
   }
 
   if (docxProcessingPromise) {

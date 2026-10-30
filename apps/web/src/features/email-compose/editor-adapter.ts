@@ -5,12 +5,12 @@ import {
   isInlineVideoFileName,
 } from '@core/component/LexicalMarkdown/utils/fileUploadUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   handleFileFolderDrop,
   isFileUploadEntry,
   type UploadInput,
 } from '@core/util/upload';
-import { Telemetry } from '@macro-inc/observability';
 import { type FocusableElement, tabbable } from 'tabbable';
 import type { ComposeBodyActions } from './context/editor-capabilities';
 import { makeAttachmentPublic } from './make-attachment-public';
@@ -68,23 +68,26 @@ export function createComposeBodyActions(): ComposeBodyActions {
     },
     readDroppedFiles: readDroppedEmailFiles,
     insertFiles(editor, { files, directories, dropEvent, onVideos }) {
-      handleFileFolderDrop(
-        files,
-        directories,
-        withVideoAttachments(
-          createFilesReadyHandler(
-            editor,
-            undefined,
-            undefined,
-            dropEvent
-              ? () => getDragDropPosition(editor, dropEvent, true)
-              : undefined,
-            (ids) => ids.forEach(makeAttachmentPublic),
-            { width: 542, height: 542 }
-          ),
-          onVideos
-        )
-      ).catch((error) => Telemetry.error(error, { surface: 'email-compose' }));
+      fireAndForget(
+        handleFileFolderDrop(
+          files,
+          directories,
+          withVideoAttachments(
+            createFilesReadyHandler(
+              editor,
+              undefined,
+              undefined,
+              dropEvent
+                ? () => getDragDropPosition(editor, dropEvent, true)
+                : undefined,
+              (ids) => ids.forEach(makeAttachmentPublic),
+              { width: 542, height: 542 }
+            ),
+            onVideos
+          )
+        ),
+        'email-compose'
+      );
     },
   };
 }

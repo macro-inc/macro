@@ -3,6 +3,7 @@
  * outgoing slide images, approximating PowerPoint's effects.
  */
 
+import { match as matchBranch } from 'ts-pattern';
 /** Keyframes for the incoming and outgoing slide of a transition. */
 export interface TransitionFrames {
   incoming?: Keyframe[];
@@ -18,52 +19,61 @@ export function transitionFrames(
   direction: string | undefined
 ): TransitionFrames | null {
   const offset = (d: string | undefined) => {
-    switch (d) {
-      case 'r':
+    return matchBranch(d)
+      .with('r', () => {
         return { from: 'translateX(-100%)', to: 'translateX(100%)' };
-      case 'u':
+      })
+      .with('u', () => {
         return { from: 'translateY(100%)', to: 'translateY(-100%)' };
-      case 'd':
+      })
+      .with('d', () => {
         return { from: 'translateY(-100%)', to: 'translateY(100%)' };
-      case 'lu':
+      })
+      .with('lu', () => {
         return { from: 'translate(100%, 100%)', to: 'translate(-100%, -100%)' };
-      case 'ru':
+      })
+      .with('ru', () => {
         return { from: 'translate(-100%, 100%)', to: 'translate(100%, -100%)' };
-      case 'ld':
+      })
+      .with('ld', () => {
         return { from: 'translate(100%, -100%)', to: 'translate(-100%, 100%)' };
-      case 'rd':
+      })
+      .with('rd', () => {
         return { from: 'translate(-100%, -100%)', to: 'translate(100%, 100%)' };
-      default:
+      })
+      .otherwise(() => {
         return { from: 'translateX(100%)', to: 'translateX(-100%)' };
-    }
+      });
   };
   const fadeIn: Keyframe[] = [{ opacity: 0 }, { opacity: 1 }];
-  switch (kind) {
-    case 'none':
-    case 'cut':
+  return matchBranch(kind)
+    .with('none', 'cut', (): TransitionFrames | null => {
       return null;
-    case 'push': {
-      const o = offset(direction);
-      return {
-        incoming: [{ transform: o.from }, { transform: 'none' }],
-        outgoing: [{ transform: 'none' }, { transform: o.to }],
-      };
-    }
-    case 'cover':
+    })
+    .with('push', (): TransitionFrames | null => {
+      {
+        const o = offset(direction);
+        return {
+          incoming: [{ transform: o.from }, { transform: 'none' }],
+          outgoing: [{ transform: 'none' }, { transform: o.to }],
+        };
+      }
+    })
+    .with('cover', (): TransitionFrames | null => {
       return {
         incoming: [
           { transform: offset(direction).from },
           { transform: 'none' },
         ],
       };
-    case 'uncover':
-    case 'pull':
-      // The old slide slides away and reveals the new one underneath.
+    })
+    .with('uncover', 'pull', (): TransitionFrames | null => {
       return {
         incoming: [{ opacity: 1 }, { opacity: 1 }],
         outgoing: [{ transform: 'none' }, { transform: offset(direction).to }],
       };
-    case 'wipe':
+    })
+    .with('wipe', (): TransitionFrames | null => {
       return {
         incoming: [
           {
@@ -79,7 +89,8 @@ export function transitionFrames(
           { clipPath: 'inset(0 0 0 0)' },
         ],
       };
-    case 'split':
+    })
+    .with('split', (): TransitionFrames | null => {
       return {
         incoming: [
           {
@@ -94,7 +105,8 @@ export function transitionFrames(
           { clipPath: 'inset(0 0 0 0)' },
         ],
       };
-    case 'reveal':
+    })
+    .with('reveal', (): TransitionFrames | null => {
       return {
         incoming: fadeIn,
         outgoing: [
@@ -102,8 +114,8 @@ export function transitionFrames(
           { transform: offset(direction).to, opacity: 0 },
         ],
       };
-    case 'shape':
-    case 'circle':
+    })
+    .with('shape', 'circle', (): TransitionFrames | null => {
       return {
         incoming: [
           {
@@ -120,7 +132,8 @@ export function transitionFrames(
           },
         ],
       };
-    case 'zoom':
+    })
+    .with('zoom', (): TransitionFrames | null => {
       return direction === 'out'
         ? {
             incoming: fadeIn,
@@ -135,14 +148,16 @@ export function transitionFrames(
               { transform: 'none', opacity: 1 },
             ],
           };
-    case 'flash':
+    })
+    .with('flash', (): TransitionFrames | null => {
       return {
         incoming: [
           { filter: 'brightness(4)', opacity: 0 },
           { filter: 'brightness(1)', opacity: 1 },
         ],
       };
-    case 'fade':
+    })
+    .with('fade', (): TransitionFrames | null => {
       return direction === 'black'
         ? {
             incoming: [
@@ -157,8 +172,8 @@ export function transitionFrames(
             ],
           }
         : { incoming: fadeIn };
-    default:
-      // dissolve, randomBar, and Morph when its scene cannot be drawn...
+    })
+    .otherwise((): TransitionFrames | null => {
       return { incoming: fadeIn };
-  }
+    });
 }

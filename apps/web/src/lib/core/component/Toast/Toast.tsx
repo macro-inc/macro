@@ -348,37 +348,37 @@ async function promise<T>(
   );
   setActiveToastId(region, toastId);
 
-  return promiseArg
-    .then((result) => {
-      toaster.dismiss(toastId);
+  try {
+    const result = await promiseArg;
 
-      if (options.success) {
-        const successMessage =
-          typeof options.success === 'function'
-            ? options.success(result)
-            : options.success;
+    toaster.dismiss(toastId);
 
-        const toastType =
-          options.toastTypeDeterminer?.(result) ?? ToastType.SUCCESS;
+    if (options.success) {
+      const successMessage =
+        typeof options.success === 'function'
+          ? options.success(result)
+          : options.success;
 
-        createToast(successMessage, toastType, {
-          hideOnMobile: options.hideOnMobile,
-        });
-      }
+      const toastType =
+        options.toastTypeDeterminer?.(result) ?? ToastType.SUCCESS;
 
-      return result;
-    })
-    .catch((error) => {
-      toaster.dismiss(toastId);
-      if (options.error) {
-        const errorMessage =
-          typeof options.error === 'function'
-            ? options.error(error)
-            : options.error;
-        failure(errorMessage, { hideOnMobile: options.hideOnMobile });
-      }
-      throw error;
-    });
+      createToast(successMessage, toastType, {
+        hideOnMobile: options.hideOnMobile,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    toaster.dismiss(toastId);
+    if (options.error) {
+      const errorMessage =
+        typeof options.error === 'function'
+          ? options.error(error)
+          : options.error;
+      failure(errorMessage, { hideOnMobile: options.hideOnMobile });
+    }
+    throw error;
+  }
 }
 
 // ─── createToast (internal) ──────────────────────────────────────────────────

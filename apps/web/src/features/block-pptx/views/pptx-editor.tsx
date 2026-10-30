@@ -120,6 +120,7 @@ import { SpellSquiggles } from '../components/spell-squiggles';
 import { SpellingPane } from '../components/spelling-pane';
 import {
   type MenuTarget,
+  type StageMenuActions,
   StageMenuItems,
 } from '../components/stage-context-menu';
 import { usePptxEditorContext } from '../context/pptx-editor-context';
@@ -179,7 +180,10 @@ import { createMediaUrls } from '../primitives/create-media-urls';
 import { createPictureImages } from '../primitives/create-picture-images';
 import { createPresentationSession } from '../primitives/create-presentation-session';
 import { createRenderQueue } from '../primitives/create-render-queue';
-import { createSlideEditor } from '../primitives/create-slide-editor';
+import {
+  createSlideEditor,
+  type EditingState,
+} from '../primitives/create-slide-editor';
 import { createSmartArt } from '../primitives/create-smart-art';
 import {
   createSpellCheck,
@@ -250,9 +254,23 @@ export function PptxEditor() {
     autosaveDelay: context.autosaveDelay,
   });
   const [loadError, setLoadError] = createSignal<string>();
-  void session.refresh().catch((e: unknown) => {
-    setLoadError(e instanceof Error ? e.message : String(e));
-  });
+
+  const loadPresentation = async () => {
+    try {
+      await session.refresh();
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+    }
+  };
+  fireAndForget(loadPresentation(), 'pptx-editor');
+  /** Saves now; the session already shows the user a failure. */
+  const saveNow = async () => {
+    try {
+      await session.save();
+    } catch {
+      // Reported through the save state and `notifyError`.
+    }
+  };
 
   const queue = createRenderQueue();
   const dpr = () =>
@@ -824,14 +842,7 @@ export function PptxEditor() {
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    if (cellEdit())
-      fireAndForget(
-        commitCell(
-          (document.getElementById('pptx-cell-input') as HTMLTextAreaElement)
-            ?.value ?? ''
-        ),
-        'pptx-editor'
-      );
+    updateOnPointerDown();
     const at = toSlide(e);
     if (painter.active() && paintAt(at)) {
       e.preventDefault();
@@ -862,19 +873,12 @@ export function PptxEditor() {
         return;
       }
     }
-    const t = !e.shiftKey && !toggle && !readonly() ? tableHit(at) : undefined;
+    const t = buildT();
     if (t) {
       const edit = editor.editing();
-      const sameCell =
-        edit?.shape === t.shape.id &&
-        edit.cell &&
-        anchorOf(t.shape, edit.cell).row === anchorOf(t.shape, t.cell).row &&
-        anchorOf(t.shape, edit.cell).col === anchorOf(t.shape, t.cell).col;
+      const sameCell = buildSameCell(edit, t);
       // A column or row border of the selected table resizes it.
-      const border =
-        editor.selectedShape()?.id === t.shape.id
-          ? boundaryAt(t.g, at, 3 * unit())
-          : undefined;
+      const border = buildBorder(t);
       if (border) {
         tableGesture = {
           kind: 'border',
@@ -929,10 +933,7 @@ export function PptxEditor() {
     tableGesture = null;
     setTableRange(null);
     // A click on a selected SmartArt graphic picks the node under it.
-    if (!e.shiftKey && !toggle) {
-      const slide = session.currentSlide();
-      smartArt.pointerDown(slide ? hitTest(slide.shapes, at) : undefined, at);
-    }
+    updateOnPointerDown2();
     editor.pointerDown(at, { shift: e.shiftKey, toggle, detail: e.detail });
     if (editor.editing()) {
       e.preventDefault();
@@ -941,6 +942,48 @@ export function PptxEditor() {
       if (!e.shiftKey) pickEquationAt(at, e.detail >= 2);
     } else {
       focusStage();
+    }
+
+    function buildBorder(tInput: NonNullable<typeof t>) {
+      return editor.selectedShape()?.id === tInput.shape.id
+        ? boundaryAt(tInput.g, at, 3 * unit())
+        : undefined;
+    }
+
+    function updateOnPointerDown2() {
+      if (!e.shiftKey && !toggle) {
+        const slide = session.currentSlide();
+        smartArt.pointerDown(slide ? hitTest(slide.shapes, at) : undefined, at);
+      }
+    }
+
+    function updateOnPointerDown() {
+      if (cellEdit())
+        fireAndForget(
+          commitCell(
+            (document.getElementById('pptx-cell-input') as HTMLTextAreaElement)
+              ?.value ?? ''
+          ),
+          'pptx-editor'
+        );
+    }
+
+    function buildT() {
+      return !e.shiftKey && !toggle && !readonly() ? tableHit(at) : undefined;
+    }
+
+    function buildSameCell(
+      edit: EditingState | null,
+      tInput: NonNullable<typeof t>
+    ) {
+      return (
+        edit?.shape === tInput.shape.id &&
+        edit.cell &&
+        anchorOf(tInput.shape, edit.cell).row ===
+          anchorOf(tInput.shape, tInput.cell).row &&
+        anchorOf(tInput.shape, edit.cell).col ===
+          anchorOf(tInput.shape, tInput.cell).col
+      );
     }
   };
 
@@ -995,16 +1038,27 @@ export function PptxEditor() {
       const geometry = shape && tableGeometry(shape);
       const cell = geometry && cellAt(geometry, at);
       if (!cell) return;
-      if (cell.row !== g.from.row || cell.col !== g.from.col || g.moved) {
-        if (!g.moved && editor.editing()) editor.stopEditing();
-        g.moved = true;
-        setTableRange({ shape: g.shape, from: g.from, to: cell });
-      } else if (editor.editing()) {
-        editor.pointerMove(at, { shift: e.shiftKey });
-      }
+      updateMoved(cell, g);
       return;
     }
     editor.pointerMove(at, { shift: e.shiftKey, alt: e.altKey });
+
+    function updateMoved(
+      cell: CellRef,
+      gInput: Extract<NonNullable<typeof g>, { kind: 'cells' }>
+    ) {
+      if (
+        cell.row !== gInput.from.row ||
+        cell.col !== gInput.from.col ||
+        gInput.moved
+      ) {
+        if (!gInput.moved && editor.editing()) editor.stopEditing();
+        gInput.moved = true;
+        setTableRange({ shape: gInput.shape, from: gInput.from, to: cell });
+      } else if (editor.editing()) {
+        editor.pointerMove(at, { shift: e.shiftKey });
+      }
+    }
   };
 
   const onPointerUp = (e: PointerEvent) => {
@@ -1029,15 +1083,13 @@ export function PptxEditor() {
     }
     if (g?.kind === 'frame') {
       const moved = !!editor.drag()?.active;
-      fireAndForget(
-        editor.pointerUp().then(() => {
-          if (moved) return;
-          const shape = editor.findShape(g.shape);
-          if (shape)
-            fireAndForget(editCell(shape, g.from, g.at), 'pptx-editor');
-        }),
-        'pptx-editor'
-      );
+      const editCellAfterDrop = async () => {
+        await editor.pointerUp();
+        if (moved) return;
+        const shape = editor.findShape(g.shape);
+        if (shape) await editCell(shape, g.from, g.at);
+      };
+      fireAndForget(editCellAfterDrop(), 'pptx-editor');
       return;
     }
     if (g?.kind === 'cells') {
@@ -1069,11 +1121,11 @@ export function PptxEditor() {
       if (node) smartArt.startEditing(node.id);
       return;
     }
-    if (hit.textEditable)
-      fireAndForget(
-        startEditing(hit.id, at).then(() => pickEquationAt(at)),
-        'pptx-editor'
-      );
+    const editTextAt = async () => {
+      await startEditing(hit.id, at);
+      pickEquationAt(at);
+    };
+    if (hit.textEditable) fireAndForget(editTextAt(), 'pptx-editor');
   };
 
   // ---- right-click -------------------------------------------------------
@@ -1118,12 +1170,7 @@ export function PptxEditor() {
     const t = tableHit(at);
     if (t) {
       const range = tableRange();
-      const inRange =
-        range?.shape === t.shape.id &&
-        t.cell.row >= Math.min(range.from.row, range.to.row) &&
-        t.cell.row <= Math.max(range.from.row, range.to.row) &&
-        t.cell.col >= Math.min(range.from.col, range.to.col) &&
-        t.cell.col <= Math.max(range.from.col, range.to.col);
+      const inRange = buildInRange(range, t);
       editor.select(t.shape.id);
       if (!inRange)
         setTableRange({ shape: t.shape.id, from: t.cell, to: t.cell });
@@ -1141,15 +1188,33 @@ export function PptxEditor() {
     if (!editor.selectedIds().includes(hit.id)) editor.select(hit.id);
     setTableRange(null);
     setMenuTarget({
-      kind:
-        hit.smartArt && editor.selection().length === 1
-          ? 'smartArt'
-          : hit.kind === 'chart' && editor.selection().length === 1
-            ? 'chart'
-            : hit.kind === 'table' && editor.selection().length === 1
-              ? 'table'
-              : 'shapes',
+      kind: buildKind(hit),
     });
+
+    function buildInRange(
+      range: TableRange | null,
+      tInput: NonNullable<typeof t>
+    ) {
+      return (
+        range?.shape === tInput.shape.id &&
+        tInput.cell.row >= Math.min(range.from.row, range.to.row) &&
+        tInput.cell.row <= Math.max(range.from.row, range.to.row) &&
+        tInput.cell.col >= Math.min(range.from.col, range.to.col) &&
+        tInput.cell.col <= Math.max(range.from.col, range.to.col)
+      );
+    }
+
+    function buildKind(
+      hitInput: NonNullable<typeof hit>
+    ): 'table' | 'chart' | 'smartArt' | 'shapes' {
+      return hitInput.smartArt && editor.selection().length === 1
+        ? 'smartArt'
+        : hitInput.kind === 'chart' && editor.selection().length === 1
+          ? 'chart'
+          : hitInput.kind === 'table' && editor.selection().length === 1
+            ? 'table'
+            : 'shapes';
+    }
   };
 
   // ---- keyboard ----------------------------------------------------------
@@ -1186,60 +1251,99 @@ export function PptxEditor() {
       return true;
     }
     // Ctrl+Alt+M: New Comment (Alt changes the key, so match the key's code).
-    if (mod && e.altKey && e.code === 'KeyM') {
+    if (isSharedShortcutAllowed4()) {
       comments.newComment();
       return true;
     }
-    if (e.altKey && !mod && e.code === 'Equal' && !readonly()) {
+    if (hasAltKey()) {
       startEquation();
       return true;
     }
     if (!mod) return false;
-    if (key === 'c' && e.shiftKey) fireAndForget(painter.copy(), 'pptx-editor');
-    else if (key === 'v' && e.shiftKey && !readonly())
-      fireAndForget(painter.pasteToSelection(), 'pptx-editor');
-    else if (key === 'z')
-      fireAndForget(e.shiftKey ? redo() : undo(), 'pptx-editor');
-    else if (key === 'y') fireAndForget(redo(), 'pptx-editor');
-    else if (key === 's') void session.save().catch(() => {});
-    else if (key === 'p') setPrinting(true);
-    else if ((key === 'f' || key === 'h') && masterActive()) return true;
-    else if (key === 'f') setFind({ replace: false });
-    else if (key === 'h') setFind({ replace: true });
-    else if (key === 'k' && !readonly())
-      fireAndForget(openLinkDialog(), 'pptx-editor');
-    else if (key === 'm' && !readonly())
-      fireAndForget(
-        masterActive() ? master.insertLayout() : commands.addSlide(),
-        'pptx-editor'
-      );
-    else if (key === 'e' && !readonly())
-      fireAndForget(commands.align('center'), 'pptx-editor');
-    else if (key === 'l' && !readonly())
-      fireAndForget(commands.align('left'), 'pptx-editor');
-    else if (key === 'r' && !readonly())
-      fireAndForget(commands.align('right'), 'pptx-editor');
-    else if (key === 'j' && !readonly())
-      fireAndForget(commands.align('justify'), 'pptx-editor');
-    else if ((e.key === '>' || e.key === '.') && e.shiftKey && !readonly())
-      fireAndForget(commands.stepSize(1), 'pptx-editor');
-    else if ((e.key === '<' || e.key === ',') && e.shiftKey && !readonly())
-      fireAndForget(commands.stepSize(-1), 'pptx-editor');
-    else if ((e.key === '=' || e.key === '+') && e.shiftKey && !readonly())
-      fireAndForget(commands.toggleBaseline('super'), 'pptx-editor');
-    else if (e.key === '=' && !readonly())
-      fireAndForget(commands.toggleBaseline('sub'), 'pptx-editor');
-    else if (['b', 'i', 'u'].includes(key) && !readonly())
-      fireAndForget(
-        commands.toggle(
-          ({ b: 'bold', i: 'italic', u: 'underline' } as const)[
-            key as 'b' | 'i' | 'u'
-          ]
-        ),
-        'pptx-editor'
-      );
-    else return false;
-    return true;
+
+    return modifiedShortcut();
+
+    function modifiedShortcut(): boolean {
+      if (key === 'c' && e.shiftKey)
+        fireAndForget(painter.copy(), 'pptx-editor');
+      else if (isSharedShortcutAllowed5())
+        fireAndForget(painter.pasteToSelection(), 'pptx-editor');
+      else if (key === 'z')
+        fireAndForget(e.shiftKey ? redo() : undo(), 'pptx-editor');
+      else if (key === 'y') fireAndForget(redo(), 'pptx-editor');
+      else if (key === 's') fireAndForget(saveNow(), 'pptx-editor');
+      else if (key === 'p') setPrinting(true);
+      else if (isSharedShortcutAllowed6()) return true;
+      else if (key === 'f') setFind({ replace: false });
+      else if (key === 'h') setFind({ replace: true });
+      else if (key === 'k' && !readonly())
+        fireAndForget(openLinkDialog(), 'pptx-editor');
+      else return formattingShortcut();
+      return true;
+    }
+
+    function formattingShortcut(): boolean {
+      if (key === 'm' && !readonly())
+        fireAndForget(
+          masterActive() ? master.insertLayout() : commands.addSlide(),
+          'pptx-editor'
+        );
+      else if (key === 'e' && !readonly())
+        fireAndForget(commands.align('center'), 'pptx-editor');
+      else if (key === 'l' && !readonly())
+        fireAndForget(commands.align('left'), 'pptx-editor');
+      else if (key === 'r' && !readonly())
+        fireAndForget(commands.align('right'), 'pptx-editor');
+      else if (key === 'j' && !readonly())
+        fireAndForget(commands.align('justify'), 'pptx-editor');
+      else if (isSharedShortcutAllowed())
+        fireAndForget(commands.stepSize(1), 'pptx-editor');
+      else if (isSharedShortcutAllowed2())
+        fireAndForget(commands.stepSize(-1), 'pptx-editor');
+      else if (isSharedShortcutAllowed3())
+        fireAndForget(commands.toggleBaseline('super'), 'pptx-editor');
+      else if (e.key === '=' && !readonly())
+        fireAndForget(commands.toggleBaseline('sub'), 'pptx-editor');
+      else if (['b', 'i', 'u'].includes(key) && !readonly())
+        fireAndForget(
+          commands.toggle(
+            ({ b: 'bold', i: 'italic', u: 'underline' } as const)[
+              key as 'b' | 'i' | 'u'
+            ]
+          ),
+          'pptx-editor'
+        );
+      else return false;
+      return true;
+    }
+
+    function isSharedShortcutAllowed6() {
+      return (key === 'f' || key === 'h') && masterActive();
+    }
+
+    function isSharedShortcutAllowed5() {
+      return key === 'v' && e.shiftKey && !readonly();
+    }
+
+    function isSharedShortcutAllowed4() {
+      return mod && e.altKey && e.code === 'KeyM';
+    }
+
+    function isSharedShortcutAllowed3() {
+      return (e.key === '=' || e.key === '+') && e.shiftKey && !readonly();
+    }
+
+    function isSharedShortcutAllowed2() {
+      return (e.key === '<' || e.key === ',') && e.shiftKey && !readonly();
+    }
+
+    function isSharedShortcutAllowed() {
+      return (e.key === '>' || e.key === '.') && e.shiftKey && !readonly();
+    }
+
+    function hasAltKey() {
+      return e.altKey && !mod && e.code === 'Equal' && !readonly();
+    }
   };
 
   const onStageKeyDown = (e: KeyboardEvent) => {
@@ -1259,7 +1363,119 @@ export function PptxEditor() {
       if (lower === 'a') {
         e.preventDefault();
         editor.selectAll();
-      } else if (lower === 'g' && !readonly()) {
+      } else updateOnStageKeyDown(lower);
+      return;
+    }
+    if (key === 'PageDown' || key === 'PageUp') {
+      e.preventDefault();
+      editor.goToSlide(session.slideIndex() + (key === 'PageDown' ? 1 : -1));
+      return;
+    }
+    if (key === 'Tab') {
+      // Tab walks through the shapes on the slide, as in PowerPoint.
+      const shapes = currentSlideShapes();
+      if (shapes.length === 0) return;
+      e.preventDefault();
+      const at = shapes.findIndex((s) => s.id === editor.selected());
+      const next =
+        (at + buildOnStageKeyDown2() + shapes.length) % shapes.length;
+      editor.select(shapes[buildOnStageKeyDown(at, shapes, next)].id);
+      return;
+    }
+    if (key === 'Escape' && find()) {
+      e.preventDefault();
+      setFind(null);
+      return;
+    }
+    const list = editor.selection();
+    if (list.length === 0 && !tableRange()) return;
+    if (smartArtKey(e)) return;
+    if (key === 'Escape') {
+      e.preventDefault();
+      if (tableRange()) setTableRange(null);
+      else editor.setSelection([]);
+    } else if (readonly()) {
+      return;
+    } else updateOnStageKeyDown3();
+
+    function buildOnStageKeyDown2() {
+      return e.shiftKey ? -1 : 1;
+    }
+
+    function buildOnStageKeyDown(
+      at: number,
+      shapes: ShapeOutline[],
+      next: number
+    ) {
+      return at < 0 && e.shiftKey ? shapes.length - 1 : next;
+    }
+
+    function updateOnStageKeyDown3() {
+      if (key === 'Delete' || key === 'Backspace') {
+        e.preventDefault();
+        const range = tableRange();
+        const t = tableTarget();
+        if (range && t) {
+          // Clears the selected cells' text, as PowerPoint does.
+          fireAndForget(
+            commands.tableOp((slideId, target) =>
+              commands.cellsOf(target).map((cell) => ({
+                op: 'setText' as const,
+                slide: slideId,
+                shape: target.shape.id,
+                cell,
+                text: '',
+              }))
+            ),
+            'pptx-editor'
+          );
+        } else {
+          fireAndForget(editor.deleteSelected(), 'pptx-editor');
+        }
+      } else if (key.startsWith('Arrow')) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : e.altKey ? 0.5 : 1;
+        const dx =
+          key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0;
+        const dy = key === 'ArrowUp' ? -step : key === 'ArrowDown' ? step : 0;
+        fireAndForget(editor.nudge(dx, dy), 'pptx-editor');
+      } else updateOnStageKeyDown2();
+    }
+
+    function updateOnStageKeyDown2() {
+      if (key === 'Enter' || key === 'F2') {
+        const shape = editor.selectedShape();
+        if (shape?.kind === 'table') {
+          e.preventDefault();
+          fireAndForget(
+            editCell(shape, tableRange()?.from ?? { row: 0, col: 0 }),
+            'pptx-editor'
+          );
+        } else if (shape?.textEditable) {
+          e.preventDefault();
+          fireAndForget(startEditing(shape.id), 'pptx-editor');
+        }
+      } else if (
+        key.length === 1 &&
+        !e.altKey &&
+        list.length === 1 &&
+        list[0].textEditable
+      ) {
+        // Typing on a selected shape replaces its text, as in PowerPoint.
+        e.preventDefault();
+        const id = list[0].id;
+        fireAndForget(
+          (async () => {
+            await startEditing(id);
+            await editor.typeText(key);
+          })(),
+          'pptx-editor'
+        );
+      }
+    }
+
+    function updateOnStageKeyDown(lower: string) {
+      if (lower === 'g' && !readonly()) {
         e.preventDefault();
         fireAndForget(
           e.shiftKey ? commands.ungroup() : commands.group(),
@@ -1284,92 +1500,6 @@ export function PptxEditor() {
         e.preventDefault();
         setZoom('fit');
       }
-      return;
-    }
-    if (key === 'PageDown' || key === 'PageUp') {
-      e.preventDefault();
-      editor.goToSlide(session.slideIndex() + (key === 'PageDown' ? 1 : -1));
-      return;
-    }
-    if (key === 'Tab') {
-      // Tab walks through the shapes on the slide, as in PowerPoint.
-      const shapes = session.currentSlide()?.shapes ?? [];
-      if (shapes.length === 0) return;
-      e.preventDefault();
-      const at = shapes.findIndex((s) => s.id === editor.selected());
-      const next = (at + (e.shiftKey ? -1 : 1) + shapes.length) % shapes.length;
-      editor.select(shapes[at < 0 && e.shiftKey ? shapes.length - 1 : next].id);
-      return;
-    }
-    if (key === 'Escape' && find()) {
-      e.preventDefault();
-      setFind(null);
-      return;
-    }
-    const list = editor.selection();
-    if (list.length === 0 && !tableRange()) return;
-    if (smartArtKey(e)) return;
-    if (key === 'Escape') {
-      e.preventDefault();
-      if (tableRange()) setTableRange(null);
-      else editor.setSelection([]);
-    } else if (readonly()) {
-      return;
-    } else if (key === 'Delete' || key === 'Backspace') {
-      e.preventDefault();
-      const range = tableRange();
-      const t = tableTarget();
-      if (range && t) {
-        // Clears the selected cells' text, as PowerPoint does.
-        fireAndForget(
-          commands.tableOp((slideId, target) =>
-            commands.cellsOf(target).map((cell) => ({
-              op: 'setText' as const,
-              slide: slideId,
-              shape: target.shape.id,
-              cell,
-              text: '',
-            }))
-          ),
-          'pptx-editor'
-        );
-      } else {
-        fireAndForget(editor.deleteSelected(), 'pptx-editor');
-      }
-    } else if (key.startsWith('Arrow')) {
-      e.preventDefault();
-      const step = e.shiftKey ? 10 : e.altKey ? 0.5 : 1;
-      const dx = key === 'ArrowLeft' ? -step : key === 'ArrowRight' ? step : 0;
-      const dy = key === 'ArrowUp' ? -step : key === 'ArrowDown' ? step : 0;
-      fireAndForget(editor.nudge(dx, dy), 'pptx-editor');
-    } else if (key === 'Enter' || key === 'F2') {
-      const shape = editor.selectedShape();
-      if (shape?.kind === 'table') {
-        e.preventDefault();
-        fireAndForget(
-          editCell(shape, tableRange()?.from ?? { row: 0, col: 0 }),
-          'pptx-editor'
-        );
-      } else if (shape?.textEditable) {
-        e.preventDefault();
-        fireAndForget(startEditing(shape.id), 'pptx-editor');
-      }
-    } else if (
-      key.length === 1 &&
-      !e.altKey &&
-      list.length === 1 &&
-      list[0].textEditable
-    ) {
-      // Typing on a selected shape replaces its text, as in PowerPoint.
-      e.preventDefault();
-      const id = list[0].id;
-      fireAndForget(
-        (async () => {
-          await startEditing(id);
-          await editor.typeText(key);
-        })(),
-        'pptx-editor'
-      );
     }
   };
 
@@ -1463,47 +1593,55 @@ export function PptxEditor() {
         editor.typeText(e.shiftKey ? '\u000b' : '\n'),
         'pptx-editor'
       );
-    } else if (key === 'Backspace' || key === 'Delete') {
-      handled();
-      const unit = e.metaKey ? 'line' : e.altKey || e.ctrlKey ? 'word' : 'char';
-      fireAndForget(
-        editor.deleteText(key === 'Backspace' ? -1 : 1, unit),
-        'pptx-editor'
-      );
-    } else if (key.startsWith('Arrow') || key === 'Home' || key === 'End') {
-      handled();
-      const dir = {
-        ArrowLeft: 'left',
-        ArrowRight: 'right',
-        ArrowUp: 'up',
-        ArrowDown: 'down',
-        Home: 'home',
-        End: 'end',
-      } as const;
-      fireAndForget(
-        editor.moveCaret(dir[key as keyof typeof dir], {
-          extend: e.shiftKey,
-          word: e.altKey || e.ctrlKey,
-          line: e.metaKey,
-        }),
-        'pptx-editor'
-      );
-    } else if (key === 'Tab') {
-      handled();
-      const level = commands.paragraphStyle()?.level ?? 0;
-      fireAndForget(
-        editor.formatWith((t, range) =>
-          paragraphCommand(t, range ?? null, {
-            level: Math.max(0, Math.min(8, level + (e.shiftKey ? -1 : 1))),
-          })
-        ),
-        'pptx-editor'
-      );
-    } else if (mod && key.toLowerCase() === 'a') {
-      handled();
-      editor.selectAllText();
-    } else if (sharedShortcut(e)) {
-      handled();
+    } else updateOnInputKeyDown();
+
+    function updateOnInputKeyDown() {
+      if (key === 'Backspace' || key === 'Delete') {
+        handled();
+        const unit = e.metaKey
+          ? 'line'
+          : e.altKey || e.ctrlKey
+            ? 'word'
+            : 'char';
+        fireAndForget(
+          editor.deleteText(key === 'Backspace' ? -1 : 1, unit),
+          'pptx-editor'
+        );
+      } else if (key.startsWith('Arrow') || key === 'Home' || key === 'End') {
+        handled();
+        const dir = {
+          ArrowLeft: 'left',
+          ArrowRight: 'right',
+          ArrowUp: 'up',
+          ArrowDown: 'down',
+          Home: 'home',
+          End: 'end',
+        } as const;
+        fireAndForget(
+          editor.moveCaret(dir[key as keyof typeof dir], {
+            extend: e.shiftKey,
+            word: e.altKey || e.ctrlKey,
+            line: e.metaKey,
+          }),
+          'pptx-editor'
+        );
+      } else if (key === 'Tab') {
+        handled();
+        const level = commands.paragraphStyle()?.level ?? 0;
+        fireAndForget(
+          editor.formatWith((t, range) =>
+            paragraphCommand(t, range ?? null, {
+              level: Math.max(0, Math.min(8, level + (e.shiftKey ? -1 : 1))),
+            })
+          ),
+          'pptx-editor'
+        );
+      } else if (mod && key.toLowerCase() === 'a') {
+        handled();
+        editor.selectAllText();
+      } else if (sharedShortcut(e)) {
+        handled();
+      }
     }
   };
 
@@ -1840,69 +1978,80 @@ export function PptxEditor() {
     const guide = borderGuide();
     const guideShape = guide && editor.findShape(guide.shape);
     const guideGeometry = guideShape && tableGeometry(guideShape);
-    return {
-      selection: edit?.bounds
+    return buildOverlay();
+
+    function buildOverlay() {
+      return {
+        selection: buildSelection(),
+        outlines: multiple ? list.map(boxOf) : undefined,
+        rotatable: list.length === 1,
+        previews: buildPreviews(),
+        marquee: editor.marquee(),
+        cellRange:
+          range && rangeShape && g
+            ? rangeBox(rangeShape, g, range.from, range.to)
+            : undefined,
+        guide:
+          guide?.kind === 'border' && guideGeometry
+            ? guide.axis === 'col'
+              ? {
+                  x1:
+                    guideGeometry.xs[guide.index + 1] +
+                    guide.current.x -
+                    guide.start.x,
+                  x2:
+                    guideGeometry.xs[guide.index + 1] +
+                    guide.current.x -
+                    guide.start.x,
+                  y1: guideGeometry.ys[0],
+                  y2: guideGeometry.ys[guideGeometry.ys.length - 1],
+                }
+              : {
+                  x1: guideGeometry.xs[0],
+                  x2: guideGeometry.xs[guideGeometry.xs.length - 1],
+                  y1:
+                    guideGeometry.ys[guide.index + 1] +
+                    guide.current.y -
+                    guide.start.y,
+                  y2:
+                    guideGeometry.ys[guide.index + 1] +
+                    guide.current.y -
+                    guide.start.y,
+                }
+            : undefined,
+        caret:
+          edit?.layout &&
+          edit.selection.anchor.paragraph === edit.selection.focus.paragraph &&
+          edit.selection.anchor.offset === edit.selection.focus.offset
+            ? (caretSegment(edit.layout, edit.selection.focus) ?? undefined)
+            : undefined,
+        textSelection: edit?.layout
+          ? selectionQuads(
+              edit.layout,
+              edit.selection.anchor,
+              edit.selection.focus
+            )
+          : undefined,
+      };
+    }
+
+    function buildSelection() {
+      return edit?.bounds
         ? edit.bounds
         : multiple && bounds
           ? ({ ...bounds, rotation: 0 } as Box)
           : list[0]
             ? boxOf(list[0])
-            : undefined,
-      outlines: multiple ? list.map(boxOf) : undefined,
-      rotatable: list.length === 1,
-      previews:
-        d?.active && d.kind !== 'marquee'
-          ? d.kind === 'move' && d.shape !== undefined && editor.images().layer
-            ? []
-            : editor.dragBoxes(d).map((b) => b.box)
-          : [],
-      marquee: editor.marquee(),
-      cellRange:
-        range && rangeShape && g
-          ? rangeBox(rangeShape, g, range.from, range.to)
-          : undefined,
-      guide:
-        guide?.kind === 'border' && guideGeometry
-          ? guide.axis === 'col'
-            ? {
-                x1:
-                  guideGeometry.xs[guide.index + 1] +
-                  guide.current.x -
-                  guide.start.x,
-                x2:
-                  guideGeometry.xs[guide.index + 1] +
-                  guide.current.x -
-                  guide.start.x,
-                y1: guideGeometry.ys[0],
-                y2: guideGeometry.ys[guideGeometry.ys.length - 1],
-              }
-            : {
-                x1: guideGeometry.xs[0],
-                x2: guideGeometry.xs[guideGeometry.xs.length - 1],
-                y1:
-                  guideGeometry.ys[guide.index + 1] +
-                  guide.current.y -
-                  guide.start.y,
-                y2:
-                  guideGeometry.ys[guide.index + 1] +
-                  guide.current.y -
-                  guide.start.y,
-              }
-          : undefined,
-      caret:
-        edit?.layout &&
-        edit.selection.anchor.paragraph === edit.selection.focus.paragraph &&
-        edit.selection.anchor.offset === edit.selection.focus.offset
-          ? (caretSegment(edit.layout, edit.selection.focus) ?? undefined)
-          : undefined,
-      textSelection: edit?.layout
-        ? selectionQuads(
-            edit.layout,
-            edit.selection.anchor,
-            edit.selection.focus
-          )
-        : undefined,
-    };
+            : undefined;
+    }
+
+    function buildPreviews() {
+      return d?.active && d.kind !== 'marquee'
+        ? d.kind === 'move' && d.shape !== undefined && editor.images().layer
+          ? []
+          : editor.dragBoxes(d).map((b) => b.box)
+        : [];
+    }
   };
 
   // Keep the hidden input next to the caret so IME candidate windows appear there.
@@ -2493,9 +2642,7 @@ export function PptxEditor() {
                 class="flex items-center gap-1 rounded-md px-1.5 py-1 text-ink-muted text-xs hover:bg-ink/5"
                 data-testid="pptx-save-state"
                 title="Save (⌘S)"
-                onClick={() => {
-                  session.save().catch(() => {});
-                }}
+                onClick={() => fireAndForget(saveNow(), 'pptx-editor')}
               >
                 <Show
                   when={session.saveState() === 'error'}
@@ -2578,9 +2725,7 @@ export function PptxEditor() {
             class="relative flex min-h-0 flex-1"
             classList={{ hidden: sorter() }}
           >
-            <Show
-              when={previewing() && session.outline() && session.currentSlide()}
-            >
+            <Show when={getPptxEditorWhen5()}>
               <AnimationPreview
                 engine={engine}
                 deck={session.outline()!}
@@ -2625,16 +2770,7 @@ export function PptxEditor() {
               </Show>
               <div
                 class="flex min-h-full min-w-full items-center justify-center"
-                style={{
-                  width:
-                    zoom() === 'fit'
-                      ? undefined
-                      : `${slideW() * scale() + 2 * STAGE_MARGIN}px`,
-                  height:
-                    zoom() === 'fit'
-                      ? undefined
-                      : `${slideH() * scale() + 2 * STAGE_MARGIN}px`,
-                }}
+                style={getPptxEditorStyle()}
               >
                 <Show
                   when={session.outline() && scale() > 0}
@@ -2751,7 +2887,7 @@ export function PptxEditor() {
                           marquee={overlay().marquee}
                           cellRange={overlay().cellRange}
                           guide={overlay().guide}
-                          smartGuides={editor.guides() ?? undefined}
+                          smartGuides={getPptxEditorSmartGuides()}
                           caret={overlay().caret}
                           textSelection={overlay().textSelection}
                           editing={!!editor.editing()}
@@ -2836,138 +2972,7 @@ export function PptxEditor() {
                           >
                             <StageMenuItems
                               target={menuTarget()}
-                              a={{
-                                commands,
-                                readonly: readonly(),
-                                copy: copyCommand,
-                                cut: cutCommand,
-                                paste: pasteCommand,
-                                canPaste: true,
-                                editText: () => {
-                                  const s = editor.selectedShape();
-                                  if (s)
-                                    fireAndForget(
-                                      startEditing(s.id),
-                                      'pptx-editor'
-                                    );
-                                },
-                                openFormatPane: (section) =>
-                                  setPane(section ?? 'shape'),
-                                replacePicture: () =>
-                                  replacePictureInput.click(),
-                                crop: () =>
-                                  fireAndForget(crop.enter(), 'pptx-editor'),
-                                editPoints: canEditPoints(
-                                  editor.selectedShape()
-                                )
-                                  ? () =>
-                                      fireAndForget(
-                                        editPoints.enter(),
-                                        'pptx-editor'
-                                      )
-                                  : undefined,
-                                editChartData: () => {
-                                  const s = editor.selectedShape();
-                                  if (s) chartEditor(s);
-                                },
-                                changeChartType: () => {
-                                  const s = editor.selectedShape();
-                                  if (s) chartEditor(s);
-                                },
-                                smartArt: () => (
-                                  <SmartArtMenuItems
-                                    smartArt={smartArt}
-                                    readonly={readonly()}
-                                  />
-                                ),
-                                selectRows: selectWholeRows,
-                                selectColumns: selectWholeColumns,
-                                selectTable: selectWholeTable,
-                                layouts: (session.outline()?.layouts ?? []).map(
-                                  (l) => l.name
-                                ),
-                                currentLayout: session.currentSlide()?.layout,
-                                swatches: swatches(),
-                                newSlide: () =>
-                                  fireAndForget(
-                                    commands.addSlide(),
-                                    'pptx-editor'
-                                  ),
-                                hideSlide: () => {
-                                  const s = session.currentSlide();
-                                  if (s)
-                                    fireAndForget(
-                                      commands.toggleHidden(s),
-                                      'pptx-editor'
-                                    );
-                                },
-                                slideHidden: !!session.currentSlide()?.hidden,
-                                isPicture:
-                                  editor.selectedShape()?.kind === 'picture',
-                                isGroup: editor
-                                  .selection()
-                                  .some((s) => s.kind === 'group'),
-                                selectionCount: editor.selection().length,
-                                textShape:
-                                  !!editor.selectedShape()?.textEditable,
-                                savePicture: () =>
-                                  fireAndForget(
-                                    saveShapePicture(),
-                                    'pptx-editor'
-                                  ),
-                                link: menuLink(),
-                                editLink: () =>
-                                  fireAndForget(
-                                    openLinkDialog(),
-                                    'pptx-editor'
-                                  ),
-                                openLink: followLink,
-                                guides: {
-                                  shown: view.options().drawingGuides,
-                                  toggle: () =>
-                                    view.set({
-                                      drawingGuides:
-                                        !view.options().drawingGuides,
-                                    }),
-                                  gridlines: view.options().gridlines,
-                                  toggleGridlines: () =>
-                                    view.set({
-                                      gridlines: !view.options().gridlines,
-                                    }),
-                                  smartGuides: view.options().guides,
-                                  toggleSmartGuides: () =>
-                                    view.set({
-                                      guides: !view.options().guides,
-                                    }),
-                                  add: (orient) =>
-                                    fireAndForget(
-                                      guides.add(orient),
-                                      'pptx-editor'
-                                    ),
-                                  remove: (index) =>
-                                    fireAndForget(
-                                      guides.remove(index),
-                                      'pptx-editor'
-                                    ),
-                                  recolor: (index, color) =>
-                                    fireAndForget(
-                                      guides.recolor(index, color),
-                                      'pptx-editor'
-                                    ),
-                                },
-                                removeLink: () => {
-                                  const target = commands.linkTarget();
-                                  if (target)
-                                    fireAndForget(
-                                      commands.applyLink(target, ''),
-                                      'pptx-editor'
-                                    );
-                                },
-                                newComment: readonly()
-                                  ? undefined
-                                  : () => comments.newComment(),
-                                spelling: spellMenu(),
-                              }}
+                              a={stageMenuActions()}
                             />
                           </Show>
                         </ContextMenuContent>
@@ -2975,7 +2980,7 @@ export function PptxEditor() {
                     </ContextMenu>
                     <SmartArtStage
                       smartArt={smartArt}
-                      shapes={session.currentSlide()?.shapes ?? []}
+                      shapes={currentSlideShapes()}
                       scale={scale()}
                       slideWidth={slideW()}
                       room={() => {
@@ -2995,10 +3000,8 @@ export function PptxEditor() {
                         width={slideW()}
                         height={slideH()}
                         scale={scale()}
-                        guides={session.outline()?.guides ?? []}
-                        layoutGuides={
-                          session.currentSlide()?.layoutGuides ?? []
-                        }
+                        guides={getPptxEditorGuides()}
+                        layoutGuides={getPptxEditorLayoutGuides()}
                         drag={guides.drag()}
                         themeColors={themeColors()}
                       />
@@ -3061,12 +3064,7 @@ export function PptxEditor() {
                         scale={scale()}
                       />
                     </Show>
-                    <Show
-                      when={
-                        comments.markup() &&
-                        (comments.threads().length > 0 || commentDraft())
-                      }
-                    >
+                    <Show when={getPptxEditorWhen6()}>
                       <CommentMarkers
                         threads={comments.threads()}
                         draft={commentDraft()}
@@ -3082,14 +3080,7 @@ export function PptxEditor() {
                 </Show>
               </div>
             </div>
-            <Show
-              when={
-                spellingPane.open() &&
-                !selectionPane() &&
-                !animationPane() &&
-                !pane()
-              }
-            >
+            <Show when={getPptxEditorWhen3()}>
               <SpellingPane
                 pane={spellingPane}
                 readonly={readonly()}
@@ -3099,16 +3090,7 @@ export function PptxEditor() {
                 }}
               />
             </Show>
-            <Show
-              when={
-                comments.paneOpen() &&
-                !spellingPane.open() &&
-                !selectionPane() &&
-                !animationPane() &&
-                !pane() &&
-                session.currentSlide()
-              }
-            >
+            <Show when={getPptxEditorWhen()}>
               {(slide) => (
                 <CommentsPane
                   comments={comments}
@@ -3121,14 +3103,7 @@ export function PptxEditor() {
                 />
               )}
             </Show>
-            <Show
-              when={
-                selectionPane() &&
-                !animationPane() &&
-                !pane() &&
-                session.currentSlide()
-              }
-            >
+            <Show when={getPptxEditorWhen4()}>
               {(slide) => (
                 <SelectionPane
                   slide={slide()}
@@ -3159,7 +3134,7 @@ export function PptxEditor() {
                 />
               )}
             </Show>
-            <Show when={animationPane() && !pane()}>
+            <Show when={getPptxEditorWhen7()}>
               <AnimationPane
                 env={env}
                 onSelectShape={(id) => {
@@ -3192,14 +3167,7 @@ export function PptxEditor() {
               )}
             </Show>
           </div>
-          <Show
-            when={
-              notesVisible() &&
-              !sorter() &&
-              !masterActive() &&
-              session.currentSlide()
-            }
-          >
+          <Show when={getPptxEditorWhen2()}>
             {(slide) => (
               <NotesPanel
                 slideId={slide().id}
@@ -3226,8 +3194,7 @@ export function PptxEditor() {
                   <span data-testid="pptx-status-master">Slide Master</span>
                 }
               >
-                Slide {session.slideIndex() + 1} of{' '}
-                {session.outline()?.slides.length ?? 0}
+                Slide {session.slideIndex() + 1} of {getPptxEditorContent()}
               </Show>
             </span>
             <Show when={selectedSlideIds().length > 1}>
@@ -3246,7 +3213,7 @@ export function PptxEditor() {
             <button
               type="button"
               class="hover:text-ink"
-              classList={{ 'text-ink': !sorter() && !masterActive() }}
+              classList={{ 'text-ink': buildTextink() }}
               aria-pressed={!sorter() && !masterActive()}
               aria-label="Normal view"
               title="Normal"
@@ -3268,11 +3235,11 @@ export function PptxEditor() {
               title="Slide sorter"
               data-testid="pptx-view-sorter"
               onClick={() => {
-                if (masterActive())
-                  fireAndForget(
-                    closeSlideMaster().then(() => setSorter(true)),
-                    'pptx-editor'
-                  );
+                const openSorter = async () => {
+                  await closeSlideMaster();
+                  setSorter(true);
+                };
+                if (masterActive()) fireAndForget(openSorter(), 'pptx-editor');
                 else setSorter(true);
               }}
             >
@@ -3473,4 +3440,170 @@ export function PptxEditor() {
       </Show>
     </div>
   );
+
+  function buildTextink(): boolean | undefined {
+    return !sorter() && !masterActive();
+  }
+
+  function getPptxEditorSmartGuides():
+    | { xs: number[]; ys: number[] }
+    | undefined {
+    return editor.guides() ?? undefined;
+  }
+
+  function getPptxEditorWhen7(): boolean | null | undefined {
+    return animationPane() && !pane();
+  }
+
+  function getPptxEditorStyle(): string | JSX.CSSProperties | undefined {
+    return {
+      width:
+        zoom() === 'fit'
+          ? undefined
+          : `${slideW() * scale() + 2 * STAGE_MARGIN}px`,
+      height:
+        zoom() === 'fit'
+          ? undefined
+          : `${slideH() * scale() + 2 * STAGE_MARGIN}px`,
+    };
+  }
+
+  function getPptxEditorWhen6():
+    | boolean
+    | import('../primitives/create-comments').CommentDraft
+    | null
+    | undefined {
+    return (
+      comments.markup() && (comments.threads().length > 0 || commentDraft())
+    );
+  }
+
+  function getPptxEditorWhen5(): false | SlideOutline | null | undefined {
+    return previewing() && session.outline() && session.currentSlide();
+  }
+
+  function getPptxEditorLayoutGuides(): import('../../../lib/core/pptx-engine/types').GuideOutline[] {
+    return session.currentSlide()?.layoutGuides ?? [];
+  }
+
+  function getPptxEditorContent() {
+    return session.outline()?.slides.length ?? 0;
+  }
+
+  function currentSlideShapes(): ShapeOutline[] {
+    return session.currentSlide()?.shapes ?? [];
+  }
+
+  function getPptxEditorGuides(): import('../../../lib/core/pptx-engine/types').GuideOutline[] {
+    return session.outline()?.guides ?? [];
+  }
+
+  function getPptxEditorWhen4(): false | SlideOutline | null | undefined {
+    return (
+      selectionPane() && !animationPane() && !pane() && session.currentSlide()
+    );
+  }
+
+  function getPptxEditorWhen3(): boolean | null | undefined {
+    return (
+      spellingPane.open() && !selectionPane() && !animationPane() && !pane()
+    );
+  }
+
+  function getPptxEditorWhen2(): false | SlideOutline | null | undefined {
+    return (
+      notesVisible() && !sorter() && !masterActive() && session.currentSlide()
+    );
+  }
+
+  function getPptxEditorWhen(): false | SlideOutline | null | undefined {
+    return (
+      comments.paneOpen() &&
+      !spellingPane.open() &&
+      !selectionPane() &&
+      !animationPane() &&
+      !pane() &&
+      session.currentSlide()
+    );
+  }
+
+  function stageMenuActions(): StageMenuActions {
+    return {
+      commands,
+      readonly: readonly(),
+      copy: copyCommand,
+      cut: cutCommand,
+      paste: pasteCommand,
+      canPaste: true,
+      editText: () => {
+        const s = editor.selectedShape();
+        if (s) fireAndForget(startEditing(s.id), 'pptx-editor');
+      },
+      openFormatPane: (section) => setPane(section ?? 'shape'),
+      replacePicture: () => replacePictureInput.click(),
+      crop: () => fireAndForget(crop.enter(), 'pptx-editor'),
+      editPoints: canEditPoints(editor.selectedShape())
+        ? () => fireAndForget(editPoints.enter(), 'pptx-editor')
+        : undefined,
+      editChartData: () => {
+        const s = editor.selectedShape();
+        if (s) chartEditor(s);
+      },
+      changeChartType: () => {
+        const s = editor.selectedShape();
+        if (s) chartEditor(s);
+      },
+      smartArt: () => (
+        <SmartArtMenuItems smartArt={smartArt} readonly={readonly()} />
+      ),
+      selectRows: selectWholeRows,
+      selectColumns: selectWholeColumns,
+      selectTable: selectWholeTable,
+      layouts: (session.outline()?.layouts ?? []).map((l) => l.name),
+      currentLayout: session.currentSlide()?.layout,
+      swatches: swatches(),
+      newSlide: () => fireAndForget(commands.addSlide(), 'pptx-editor'),
+      hideSlide: () => {
+        const s = session.currentSlide();
+        if (s) fireAndForget(commands.toggleHidden(s), 'pptx-editor');
+      },
+      slideHidden: !!session.currentSlide()?.hidden,
+      isPicture: editor.selectedShape()?.kind === 'picture',
+      isGroup: editor.selection().some((s) => s.kind === 'group'),
+      selectionCount: editor.selection().length,
+      textShape: !!editor.selectedShape()?.textEditable,
+      savePicture: () => fireAndForget(saveShapePicture(), 'pptx-editor'),
+      link: menuLink(),
+      editLink: () => fireAndForget(openLinkDialog(), 'pptx-editor'),
+      openLink: followLink,
+      guides: {
+        shown: view.options().drawingGuides,
+        toggle: () =>
+          view.set({
+            drawingGuides: !view.options().drawingGuides,
+          }),
+        gridlines: view.options().gridlines,
+        toggleGridlines: () =>
+          view.set({
+            gridlines: !view.options().gridlines,
+          }),
+        smartGuides: view.options().guides,
+        toggleSmartGuides: () =>
+          view.set({
+            guides: !view.options().guides,
+          }),
+        add: (orient) => fireAndForget(guides.add(orient), 'pptx-editor'),
+        remove: (index) => fireAndForget(guides.remove(index), 'pptx-editor'),
+        recolor: (index, color) =>
+          fireAndForget(guides.recolor(index, color), 'pptx-editor'),
+      },
+      removeLink: () => {
+        const target = commands.linkTarget();
+        if (target)
+          fireAndForget(commands.applyLink(target, ''), 'pptx-editor');
+      },
+      newComment: readonly() ? undefined : () => comments.newComment(),
+      spelling: spellMenu(),
+    };
+  }
 }

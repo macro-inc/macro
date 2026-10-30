@@ -1,3 +1,4 @@
+import { fileFromDraggedHtml } from '@app/lib/utils/dragged-image';
 import { internalDragExceedsThreshold } from '@core/directive/internalDragState';
 import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { type Accessor, onCleanup } from 'solid-js';
@@ -126,8 +127,12 @@ export function fileFolderDrop(
 
     dragCounter = 0;
     internalDragActivated = false;
-    options?.onDragEnd?.();
-    options?.onMouseUp?.(e.pageX, e.pageY);
+    finishDrag(options);
+
+    function finishDrag(options: NonNullable<ReturnType<typeof accessor>>) {
+      options.onDragEnd?.();
+      options.onMouseUp?.(e.pageX, e.pageY);
+    }
 
     const dataTransfer = e.dataTransfer;
     if (!dataTransfer) {
@@ -139,12 +144,12 @@ export function fileFolderDrop(
 
     // If directories present, prefer directories to avoid duplicate phantom files, which result from selecting a folder and it's contents (e.g. in a list view with the folder toggled open), thus uploading both the directory (and all of its contents) and the contents separately.
     if (directoryEntries.length > 0) {
-      options?.onDrop?.([], directoryEntries, e);
+      options.onDrop?.([], directoryEntries, e);
       return;
     }
 
     if (fileEntries.length > 0) {
-      options?.onDrop?.(fileEntries, [], e);
+      options.onDrop?.(fileEntries, [], e);
       return;
     }
 
@@ -154,7 +159,7 @@ export function fileFolderDrop(
       const fileEntries: FileSystemFileEntry[] = Array.from(files).map(
         fileToFileSystemFileEntry
       );
-      options?.onDrop?.(fileEntries, [], e);
+      options.onDrop?.(fileEntries, [], e);
       return;
     }
 
@@ -168,40 +173,14 @@ export function fileFolderDrop(
 
     const html = dataTransfer.getData('text/html');
     if (html) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const img = doc.querySelector('img');
-      if (img?.src) {
-        try {
-          // Fetch the image and convert to File
-          const response = await fetch(img.src);
-          const blob = await response.blob();
-
-          // Extract filename from URL or use default
-          let filename = 'image';
-          try {
-            const url = new URL(img.src);
-            const pathname = url.pathname;
-            const parts = pathname.split('/');
-            const lastPart = parts[parts.length - 1];
-            if (lastPart) {
-              filename = lastPart;
-            }
-          } catch {}
-
-          // Determine extension from blob type
-          const extension = blob.type.split('/')[1] || 'png';
-          if (!filename.includes('.')) {
-            filename = `${filename}.${extension}`;
-          }
-
-          const file = new File([blob], filename, { type: blob.type });
-          const fileEntry = fileToFileSystemFileEntry(file);
-          options?.onDrop?.([fileEntry], [], e);
+      try {
+        const file = await fileFromDraggedHtml(html);
+        if (file) {
+          options.onDrop?.([fileToFileSystemFileEntry(file)], [], e);
           return;
-        } catch (error) {
-          console.error('Failed to fetch dragged image:', error);
         }
+      } catch (error) {
+        console.error('Failed to fetch dragged image:', error);
       }
     }
   };

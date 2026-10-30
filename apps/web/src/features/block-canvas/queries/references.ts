@@ -1,4 +1,4 @@
-import { getPermissionToken } from '@core/signal/token';
+import { getPermissionToken } from '@app/lib/queries/storage/permission-token';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { attachmentReferencesKeys } from '@queries/storage/keys';

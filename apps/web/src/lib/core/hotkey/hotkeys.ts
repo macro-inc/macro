@@ -179,24 +179,7 @@ export function registerHotkey(
   const existingCommand = hotkeyToken
     ? scopeNode.commands.find((c) => c.hotkeyToken === hotkeyToken)
     : undefined;
-  if (existingCommand && hotkeys && existingCommand.hotkeys) {
-    // Yes, you should be able to register multiple hotkeys with the same token. But if you do this, they should be "the same" hotkey.
-    // Here we check if the existing hotkey strings are the same as the new hotkey strings. This probably isn't exactly what you'd want to check (it especially won't be right if the commmands do not have hotkey strings), but is close enough for now.
-    const existingHotkeys = existingCommand.hotkeys;
-    if (
-      existingHotkeys.length !== hotkeys?.length ||
-      !existingHotkeys.every((el, i) => el === hotkeys[i])
-    ) {
-      Telemetry.warn(
-        `Hotkey token "${hotkeyToken}" is already registered with a different command. ` +
-          `Existing: ${existingCommand.description}, New: ${description}. ` +
-          `This is likely a bug, please fix it. `,
-        {
-          error: 'Hotkey token already registered with a different command',
-        }
-      );
-    }
-  }
+  updateRegisterHotkey();
 
   let commandScopeId: string | undefined;
   // If a specific command scope ID is provided, use it instead of creating a new one
@@ -258,19 +241,7 @@ export function registerHotkey(
   // this scope — replaces the old registration outright instead of stacking:
   // persistent commands (disposeWithOwner: false) re-register on every mount
   // of their view and must not accumulate eclipsed copies.
-  if (registrationType === 'override' && hotkeyToken) {
-    const replaced: HotkeyCommand[] = [];
-    for (let i = scopeNode.commands.length - 1; i >= 0; i--) {
-      const existingCommand = scopeNode.commands[i];
-      if (existingCommand && existingCommand.hotkeyToken === hotkeyToken) {
-        replaced.push(existingCommand);
-        scopeNode.commands.splice(i, 1);
-      }
-    }
-    if (replaced.length > 0) {
-      setHotkeyTokenMap((prev) => removeCommandsFromTokenMap(prev, replaced));
-    }
-  }
+  updateI(scopeNode);
 
   if (hotkeyToken) {
     setHotkeyTokenMap((prev) => {
@@ -341,6 +312,43 @@ export function registerHotkey(
   }
 
   return disposer;
+
+  function updateRegisterHotkey() {
+    if (existingCommand && hotkeys && existingCommand.hotkeys) {
+      // Yes, you should be able to register multiple hotkeys with the same token. But if you do this, they should be "the same" hotkey.
+      // Here we check if the existing hotkey strings are the same as the new hotkey strings. This probably isn't exactly what you'd want to check (it especially won't be right if the commmands do not have hotkey strings), but is close enough for now.
+      const existingHotkeys = existingCommand.hotkeys;
+      if (
+        existingHotkeys.length !== hotkeys?.length ||
+        !existingHotkeys.every((el, i) => el === hotkeys[i])
+      ) {
+        Telemetry.warn(
+          `Hotkey token "${hotkeyToken}" is already registered with a different command. ` +
+            `Existing: ${existingCommand.description}, New: ${description}. ` +
+            `This is likely a bug, please fix it. `,
+          {
+            error: 'Hotkey token already registered with a different command',
+          }
+        );
+      }
+    }
+  }
+
+  function updateI(scopeNodeValue: NonNullable<typeof scopeNode>) {
+    if (registrationType === 'override' && hotkeyToken) {
+      const replaced: HotkeyCommand[] = [];
+      for (let i = scopeNodeValue.commands.length - 1; i >= 0; i--) {
+        const existingCommand = scopeNodeValue.commands[i];
+        if (existingCommand && existingCommand.hotkeyToken === hotkeyToken) {
+          replaced.push(existingCommand);
+          scopeNodeValue.commands.splice(i, 1);
+        }
+      }
+      if (replaced.length > 0) {
+        setHotkeyTokenMap((prev) => removeCommandsFromTokenMap(prev, replaced));
+      }
+    }
+  }
 }
 
 /**
@@ -765,15 +773,7 @@ export function useHotKeyRoot() {
         }
       }
 
-      if (
-        scopeNode.type === 'command' &&
-        ![...currentPressedKeys].some((key) =>
-          ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
-        )
-      ) {
-        // if we're in a command scope, any non-modifier input should jettison us back to closest DOM scope
-        activateClosestDOMScope();
-      }
+      updateCheckHotKeys(scopeNode);
 
       if (commandCaptured || commandScopeActivated) {
         break;
@@ -813,6 +813,23 @@ export function useHotKeyRoot() {
 
     // Notify all subscribers with the context
     onKeypress.forEach((callback) => callback(context));
+
+    function updateCheckHotKeys(
+      scopeNodeInput: Extract<
+        NonNullable<typeof scopeNode>,
+        { type: 'dom' | 'command' }
+      >
+    ) {
+      if (
+        scopeNodeInput.type === 'command' &&
+        ![...currentPressedKeys].some((key) =>
+          ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
+        )
+      ) {
+        // if we're in a command scope, any non-modifier input should jettison us back to closest DOM scope
+        activateClosestDOMScope();
+      }
+    }
   };
 
   return {

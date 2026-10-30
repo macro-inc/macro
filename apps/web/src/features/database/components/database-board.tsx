@@ -270,7 +270,7 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
     );
   }
   return (
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
       <p class="sr-only" role="status" aria-live="polite">
         {announcement()}
       </p>
@@ -691,7 +691,7 @@ function BoardCard(props: {
             fallback={
               <button
                 type="button"
-                class="min-w-0 break-words text-left text-sm font-medium leading-6 text-ink hover:underline"
+                class="min-w-0 break-words text-left text-sm font-medium leading-6 text-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ink/50"
                 onClick={() => props.onOpen(props.row.rowId)}
                 aria-label={`Open ${title()}`}
               >
@@ -882,7 +882,7 @@ function NewBoardCard(props: {
               <button
                 ref={props.ref}
                 type="button"
-                class="w-full text-left text-[13px] leading-5 text-ink-placeholder outline-none"
+                class="w-full text-left text-[13px] leading-5 text-ink-placeholder outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
                 onClick={() => props.onSubmit('open')}
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') onKeyDown(event);

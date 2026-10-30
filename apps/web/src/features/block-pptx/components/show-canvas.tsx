@@ -137,6 +137,21 @@ export function ShowCanvas(props: {
   );
 
   const cache = new Map<string, Promise<Prepared>>();
+  const textLayoutOrNull = async (i: number, shape: number) => {
+    try {
+      return await props.engine.textLayout(i, shape);
+    } catch {
+      return null;
+    }
+  };
+  /** Drops a slide that failed to prepare, so the next request tries again. */
+  const forgetIfFailed = async (key: string, pending: Promise<Prepared>) => {
+    try {
+      await pending;
+    } catch {
+      cache.delete(key);
+    }
+  };
   const prepare = (i: number, width: number, layers: boolean) => {
     const key = `${i}:${width}:${layers}`;
     let hit = cache.get(key);
@@ -153,7 +168,7 @@ export function ShowCanvas(props: {
             .map((a) => a.shapeId)
         );
         for (const id of built) {
-          const layout = await props.engine.textLayout(i, id).catch(() => null);
+          const layout = await textLayoutOrNull(i, id);
           if (layout) boxes.set(id, paragraphBoxes(layout));
         }
         const timeline = buildTimeline(slide, boxes);
@@ -165,9 +180,16 @@ export function ShowCanvas(props: {
         return { kind: 'layered', timeline, bitmaps };
       })();
       cache.set(key, hit);
-      hit.catch(() => cache.delete(key));
+      fireAndForget(forgetIfFailed(key, hit), 'pptx-slideshow');
     }
     return hit;
+  };
+  const preloadSlide = async (i: number, width: number, layers: boolean) => {
+    try {
+      await prepare(i, width, layers);
+    } catch {
+      // Not cached, so showing the slide prepares it again.
+    }
   };
 
   // Morph scenes, newest last; only a few are kept (each holds two slides).
@@ -175,21 +197,31 @@ export function ShowCanvas(props: {
   const morphInto = (i: number) =>
     props.transitions !== false &&
     props.deck.slides[i]?.transition?.kind === 'morph';
+  const prepareMorphOrNull = async (
+    from: number,
+    to: number,
+    width: number
+  ) => {
+    try {
+      return await prepareMorph(props.engine, props.deck, from, to, width);
+    } catch {
+      return null;
+    }
+  };
+  const closeScene = async (scene: Promise<MorphScene | null>) => {
+    const s = await scene;
+    if (s) closeMorph(s);
+  };
   const prepareMorphFor = (from: number, to: number, width: number) => {
     const key = `${from}:${to}:${width}`;
     let hit = morphs.get(key);
     if (hit) morphs.delete(key);
     else {
-      hit = prepareMorph(props.engine, props.deck, from, to, width).catch(
-        () => null
-      );
+      hit = prepareMorphOrNull(from, to, width);
       while (morphs.size >= 3) {
         const [oldest, scene] = morphs.entries().next().value!;
         morphs.delete(oldest);
-        fireAndForget(
-          scene.then((s) => s && closeMorph(s)),
-          'pptx-slideshow'
-        );
+        fireAndForget(closeScene(scene), 'pptx-slideshow');
       }
     }
     morphs.set(key, hit);
@@ -207,20 +239,21 @@ export function ShowCanvas(props: {
   onCleanup(() => {
     morphRun?.cancel();
     for (const scene of morphs.values())
-      fireAndForget(
-        scene.then((s) => s && closeMorph(s)),
-        'pptx-slideshow'
-      );
+      fireAndForget(closeScene(scene), 'pptx-slideshow');
     for (const m of mounted) stop(m);
     for (const p of cache.values())
-      void p
-        .then((r) =>
-          r.kind === 'flat'
-            ? r.bitmap.close()
-            : r.bitmaps.forEach((b) => b.close())
-        )
-        .catch(() => {});
+      fireAndForget(closePrepared(p), 'pptx-slideshow');
   });
+
+  const closePrepared = async (pending: Promise<Prepared>) => {
+    try {
+      const r = await pending;
+      if (r.kind === 'flat') r.bitmap.close();
+      else for (const b of r.bitmaps) b.close();
+    } catch {
+      // A slide that failed to prepare holds no bitmaps.
+    }
+  };
 
   const canvasFor = (bitmap: ImageBitmap) => {
     const canvas = wrapper.ownerDocument.createElement('canvas');
@@ -308,14 +341,19 @@ export function ShowCanvas(props: {
       if (Number.isFinite(timed.iterations)) finite.push(anim.finished);
       else endless = true;
     }
-    void Promise.all(finite)
-      .then(() => {
-        if (m.token !== token) return;
-        // Endless repeats keep going until the next click.
-        if (endless) rest(m, group);
-        else settleAt(m, group);
-      })
-      .catch(() => {});
+    const afterAnimations = async () => {
+      try {
+        await Promise.all(finite);
+      } catch {
+        // Cancelled by `stop`.
+        return;
+      }
+      if (m.token !== token) return;
+      // Endless repeats keep going until the next click.
+      if (endless) rest(m, group);
+      else settleAt(m, group);
+    };
+    fireAndForget(afterAnimations(), 'pptx-slideshow');
   };
 
   /** Puts a prepared slide into a slot. */
@@ -388,14 +426,8 @@ export function ShowCanvas(props: {
       const step = props.step ?? Number.POSITIVE_INFINITY;
       const appearing = previous === null || changed;
       const t = props.deck.slides[value.i]?.transition;
-      const morph =
-        changed && value.morph?.from === previous?.index
-          ? value.morph?.scene
-          : undefined;
-      const frames =
-        changed && props.transitions !== false && !morph
-          ? transitionFrames(t?.kind ?? 'none', t?.direction)
-          : null;
+      const morph = buildMorph(value);
+      const frames = buildFrames();
       const duration = frames || morph ? (t?.durationMs ?? 500) : 0;
       if (appearing && step === 0 && value.prepared.kind === 'layered') {
         // What plays as the slide appears starts after its transition.
@@ -407,41 +439,12 @@ export function ShowCanvas(props: {
       } else {
         settleAt(m, step);
       }
-      if (changed && previous) {
-        const incoming = slots[target];
-        const outgoing = slots[active];
-        const onTop =
-          !!frames &&
-          (['uncover', 'pull', 'reveal'].includes(t?.kind ?? '') ||
-            (t?.kind === 'zoom' && t.direction === 'out'));
-        incoming.style.zIndex = onTop ? '0' : '1';
-        outgoing.style.zIndex = onTop ? '1' : '0';
-        incoming.style.visibility = 'visible';
-        // The Morph scene covers both slots while it plays.
-        if (morph) morphRun = playMorph(wrapper, morph, k(), duration);
-        const timing = { duration, easing: 'ease-in-out' };
-        if (frames?.incoming) incoming.animate(frames.incoming, timing);
-        if (frames) {
-          const leaving = outgoing.animate(
-            frames.outgoing ?? [{ opacity: 1 }, { opacity: 1 }],
-            timing
-          );
-          leaving.onfinish = () => {
-            if (mounted[1 - target] === previous) {
-              outgoing.style.visibility = 'hidden';
-              stop(previous);
-            }
-          };
-        } else {
-          outgoing.style.visibility = 'hidden';
-          stop(previous);
-        }
-        active = target;
-      } else {
-        slots[target].style.visibility = 'visible';
-      }
+      updateZIndex();
       if (props.preload !== undefined) {
-        void prepare(props.preload, pixelWidth(), layered()).catch(() => {});
+        fireAndForget(
+          preloadSlide(props.preload, pixelWidth(), layered()),
+          'pptx-slideshow'
+        );
         if (props.preload !== value.i && morphInto(props.preload))
           fireAndForget(
             prepareMorphFor(value.i, props.preload, pixelWidth()),
@@ -449,6 +452,54 @@ export function ShowCanvas(props: {
           );
       }
       props.onShown?.(value.i);
+
+      function buildMorph(valueValue: NonNullable<typeof value>) {
+        return changed && valueValue.morph?.from === previous?.index
+          ? valueValue.morph?.scene
+          : undefined;
+      }
+
+      function buildFrames() {
+        return changed && props.transitions !== false && !morph
+          ? transitionFrames(t?.kind ?? 'none', t?.direction)
+          : null;
+      }
+
+      function updateZIndex() {
+        if (changed && previous) {
+          const incoming = slots[target];
+          const outgoing = slots[active];
+          const onTop =
+            !!frames &&
+            (['uncover', 'pull', 'reveal'].includes(t?.kind ?? '') ||
+              (t?.kind === 'zoom' && t.direction === 'out'));
+          incoming.style.zIndex = onTop ? '0' : '1';
+          outgoing.style.zIndex = onTop ? '1' : '0';
+          incoming.style.visibility = 'visible';
+          // The Morph scene covers both slots while it plays.
+          if (morph) morphRun = playMorph(wrapper, morph, k(), duration);
+          const timing = { duration, easing: 'ease-in-out' };
+          if (frames?.incoming) incoming.animate(frames.incoming, timing);
+          if (frames) {
+            const leaving = outgoing.animate(
+              frames.outgoing ?? [{ opacity: 1 }, { opacity: 1 }],
+              timing
+            );
+            leaving.onfinish = () => {
+              if (mounted[1 - target] === previous) {
+                outgoing.style.visibility = 'hidden';
+                stop(previous);
+              }
+            };
+          } else {
+            outgoing.style.visibility = 'hidden';
+            stop(previous);
+          }
+          active = target;
+        } else {
+          slots[target].style.visibility = 'visible';
+        }
+      }
     })
   );
 

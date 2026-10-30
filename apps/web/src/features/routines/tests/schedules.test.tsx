@@ -4,12 +4,12 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { scheduledActionKeys } from './keys';
+import { scheduledActionKeys } from '../queries/keys';
 import {
   useCreateScheduleMutation,
   useRunScheduleNowMutation,
   useSetScheduleEnabledMutation,
-} from './schedules';
+} from '../queries/schedules';
 
 const setEnabled = vi.hoisted(() => vi.fn());
 const createSchedule = vi.hoisted(() => vi.fn());

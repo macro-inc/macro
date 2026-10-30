@@ -8,14 +8,11 @@ import { withSplitPanelOwner } from '@components/app/split-layout/layoutUtils';
 import { entityIdSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityData, isTaskEntity } from '@entity/types/entity';
-import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-
-const reportSoupNavigationError = (error: unknown) =>
-  Telemetry.error(error, { surface: 'soup-view' });
 
 type UseSoupNavigationHotkeysOptions = {
   scopeId: string;
@@ -121,14 +118,14 @@ function createPersistentNavigation(
 
   const fetchNextPageIfNeeded = () => {
     if (!hasNextPage?.() || isFetching?.() || isFetchingNextPage?.()) return;
-    fetchNextPage?.().catch(reportSoupNavigationError);
+    fireAndForget(fetchNextPage?.(), 'soup-view');
   };
 
   const navigateDown = () => {
     const groupKey = pendingGroupPage();
     if (groupKey !== undefined) {
       if (!options.groupPaging?.isLoading(groupKey))
-        options.groupPaging?.load(groupKey).catch(reportSoupNavigationError);
+        fireAndForget(options.groupPaging?.load(groupKey), 'soup-view');
       return true;
     }
 
@@ -141,7 +138,7 @@ function createPersistentNavigation(
     }
 
     scrollTo(next.index);
-    openEntity(next.row.original).catch(reportSoupNavigationError);
+    fireAndForget(openEntity(next.row.original), 'soup-view');
 
     if (next.index >= rowCount - 1 - LOAD_MORE_DISTANCE_FROM_END) {
       fetchNextPageIfNeeded();
@@ -156,7 +153,7 @@ function createPersistentNavigation(
     if (!next) return true;
 
     scrollTo(next.index);
-    openEntity(next.row.original).catch(reportSoupNavigationError);
+    fireAndForget(openEntity(next.row.original), 'soup-view');
 
     return true;
   };

@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FoldRequest, FoldResponse } from './protocol';
 
+/** What a promise settles with: its value, or its rejection reason. */
+async function settledValue(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    return await promise;
+  } catch (reason) {
+    return reason;
+  }
+}
+
 const workers: FakeWorker[] = [];
 
 class FakeWorker extends EventTarget {
@@ -100,8 +109,7 @@ describe('agent fold preloading', () => {
     const pushed = pushSession('session', [{ kind: 'snapshot', rows: [] }]);
 
     workers[0]!.dispatchEvent(new ErrorEvent('error', { message: '' }));
-
-    const error = await pushed.catch((reason: unknown) => reason);
+    const error = await settledValue(pushed);
     expect(error).toBeInstanceOf(AgentFoldWorkerUnavailable);
     expect((error as Error).message).not.toContain('no longer served');
     expect((error as Error).message).toContain('fold.worker');
@@ -116,8 +124,7 @@ describe('agent fold preloading', () => {
     workers[0]!.dispatchEvent(
       new ErrorEvent('error', { message: 'Uncaught Error: wasm exploded' })
     );
-
-    const error = await pushed.catch((reason: unknown) => reason);
+    const error = await settledValue(pushed);
     expect(error).not.toBeInstanceOf(AgentFoldWorkerUnavailable);
     expect((error as Error).message).toContain('wasm exploded');
   });
@@ -131,8 +138,8 @@ describe('agent fold preloading', () => {
 
     // One cause, two reports: why a single failure looks like many in Datadog.
     const [a, b] = await Promise.all([
-      first.catch((reason: unknown) => reason),
-      second.catch((reason: unknown) => reason),
+      settledValue(first),
+      settledValue(second),
     ]);
     expect((a as Error).name).toBe('AgentFoldWorkerUnavailable');
     expect((b as Error).name).toBe('AgentFoldWorkerUnavailable');

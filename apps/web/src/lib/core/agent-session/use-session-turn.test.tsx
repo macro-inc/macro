@@ -6,7 +6,7 @@ const session = vi.hoisted(() => ({
   acquire: vi.fn(),
 }));
 
-vi.mock('./AgentSession', () => ({
+vi.mock('../../queries/agent-session/agent-session', () => ({
   AgentSession: {
     get: session.get,
     acquire: session.acquire,

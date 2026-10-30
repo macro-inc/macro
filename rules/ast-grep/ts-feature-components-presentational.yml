@@ -2,16 +2,16 @@ id: ts-feature-components-presentational
 language: typescript
 # Twin of tsx-feature-components-presentational — ast-grep rules are
 # single-language, and `tsx` only scans .ts files.
-severity: warning
+severity: error
 message: Feature components take resolved values and return JSX. Data, reactivity wiring, and navigation belong to primitives/ and views/.
 note: |-
   Rule FE-33 in docs/development/style-guide.md. `components/` never imports
   `queries/`, `primitives/`, `views/`, `@queries/*`, urql, or the split
   navigation helpers. It renders what views hand it: domain values from
-  `core/`, resolved display (typed in `context/`), and event handlers. The
-  one sanctioned `queries/` import is `property-value`, which parses
-  untyped wire JSON for property-changed rows. In block-agent, `ui/` is
-  the presentation layer and `component/` is the composition layer.
+  `core/`, resolved display (typed in `context/`), and event handlers.
+  Property-value formatting lives beside the components that render it.
+  In block-agent, `ui/` is the presentation layer and `component/` is the
+  composition layer.
 files:
   - apps/web/src/features/command/components/**
   - apps/web/src/features/document-composer/components/**
@@ -74,8 +74,6 @@ rule:
                 kind: import
     - kind: string
       regex: ^['"](\.\./)+queries/
-      not:
-        regex: property-value
       any:
         - inside:
             kind: import_statement

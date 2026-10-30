@@ -200,7 +200,8 @@ export function optimisticDraftEntity(
   const existing = args.existingDraft;
   return {
     __typename: 'GraphqlSoupEmailMessage',
-    operationStatus: existing?.operationStatus ?? null,
+    ...retainedDeliveryFields(existing, now),
+    ...retainedContentFields(existing),
     id: String(args.draftId),
     providerId: args.providerId ?? existing?.providerId ?? null,
     threadId: args.threadDbId,
@@ -208,27 +209,43 @@ export function optimisticDraftEntity(
     linkId: args.senderLinkId,
     subject: args.subject,
     snippet: args.bodyText?.trim().slice(0, 200) ?? existing?.snippet ?? null,
-    internalDateTs: existing?.internalDateTs ?? null,
-    sentAt: existing?.sentAt ?? null,
     isRead: true,
-    isStarred: existing?.isStarred ?? false,
     isSent: false,
     isDraft: true,
     draftGeneration: args.draftGeneration ?? 0,
-    hasAttachments: existing?.hasAttachments ?? false,
     scheduledSendTime: args.sendTime ?? existing?.scheduledSendTime ?? null,
-    scheduledSendStatus: existing?.scheduledSendStatus ?? null,
     bodyText: args.bodyText ?? null,
     bodyHtmlSanitized: args.optimisticBodyHtml,
     bodyMacro: args.bodyMacro ?? null,
     bodyReplyless: null,
-    calendarInvitations: existing?.calendarInvitations ?? [],
-    createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     from: { email: args.senderEmail, name: null, photoUrl: null },
     to: (args.to ?? []).map(optimisticContact),
     cc: (args.cc ?? []).map(optimisticContact),
     bcc: (args.bcc ?? []).map(optimisticContact),
+  };
+}
+
+/** Delivery state a body/envelope save leaves as the cached draft has it. */
+function retainedDeliveryFields(
+  existing: OptimisticDraftEntity | undefined,
+  now: string
+) {
+  return {
+    operationStatus: existing?.operationStatus ?? null,
+    internalDateTs: existing?.internalDateTs ?? null,
+    sentAt: existing?.sentAt ?? null,
+    isStarred: existing?.isStarred ?? false,
+    hasAttachments: existing?.hasAttachments ?? false,
+    scheduledSendStatus: existing?.scheduledSendStatus ?? null,
+    createdAt: existing?.createdAt ?? now,
+  };
+}
+
+/** Labels, invitations, and attachments a body/envelope save does not modify. */
+function retainedContentFields(existing: OptimisticDraftEntity | undefined) {
+  return {
+    calendarInvitations: existing?.calendarInvitations ?? [],
     labels: existing?.labels ?? [],
     attachments: existing?.attachments ?? [],
     attachmentsDraft: existing?.attachmentsDraft ?? [],

@@ -89,15 +89,16 @@ export function createFigComments(options: {
         setBounds(new Map());
         return;
       }
-      engine
-        .geometry(page, ids)
-        .then((list) => {
+      const loadBounds = async () => {
+        try {
+          const list = await engine.geometry(page, ids);
           if (r === request)
             setBounds(new Map(list.map((g) => [g.id, g.bounds])));
-        })
-        .catch(() => {
+        } catch {
           if (r === request) setBounds(new Map());
-        });
+        }
+      };
+      fireAndForget(loadBounds(), 'fig-comments');
     })
   );
 

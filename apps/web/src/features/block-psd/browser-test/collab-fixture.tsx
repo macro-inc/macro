@@ -10,6 +10,7 @@
 
 import { MemorySyncServer } from '@app/features/block-fig/browser-test/memory-sync';
 import { PsdEngine } from '@core/psd-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -147,7 +148,14 @@ function Person(props: {
       }
       setEngine(opened);
     };
-    open().catch((e: unknown) => setFailure(String(e)));
+    const start = async () => {
+      try {
+        await open();
+      } catch (e) {
+        setFailure(String(e));
+      }
+    };
+    fireAndForget(start(), 'psd-fixture');
     onCleanup(() => {
       closed = true;
       sharedEngine?.close();
@@ -266,7 +274,14 @@ export function CollabFixture(props: {
     }
     setStored(true);
   };
-  store().catch((e: unknown) => setError(String(e)));
+  const storeOrFail = async () => {
+    try {
+      await store();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+  fireAndForget(storeOrFail(), 'psd-fixture');
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>

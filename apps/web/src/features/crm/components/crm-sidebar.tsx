@@ -1,10 +1,5 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { getIconConfig } from '@core/component/EntityIcon';
-import {
-  enableCrmActivity,
-  enableDatabases,
-} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import ExportIcon from '@icon/system/regular/download-simple.svg';
@@ -56,9 +51,9 @@ export function CrmSidebar(props: {
   onCollapse?: () => void;
   search?: () => JSX.Element;
   searchLabel?: string;
+  activityEnabled?: boolean;
+  databasesEnabled?: boolean;
 }) {
-  const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
@@ -117,10 +112,10 @@ export function CrmSidebar(props: {
               <For
                 each={[
                   ...CRM_RECORDS,
-                  ...(activityFlag().enabled
+                  ...(props.activityEnabled
                     ? CRM_ACTIVITY_TABS.filter(
                         (tab) =>
-                          tab.id !== 'databases' || databasesFlag().enabled
+                          tab.id !== 'databases' || props.databasesEnabled
                       )
                     : []),
                 ]}

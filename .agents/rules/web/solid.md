@@ -24,10 +24,11 @@ State ownership, reactivity, and async error handling.
 - **FE-11** Check `solid-primitives` before writing a custom reactive utility.
 - **FE-12** `async`/`await`, not `.then()`/`.catch()` chains; fallible calls
   return `Result` (FE-36) rather than being wrapped in `try`/`catch`. Enforced
-  by oxlint `promise/prefer-await-to-then` — `bun run lint:oxlint` from the
-  repository root.
+  by oxlint `promise/prefer-await-to-then`, error — `bun run lint:oxlint` from
+  the repository root.
 - **FE-13** Extract multi-step async coordination into named helper functions,
-  and never leave a promise floating: `await` or `return` it, or start a
+  keep each function at or below McCabe complexity 20 (oxlint `complexity`,
+  error), and never leave a promise floating: `await` or `return` it, or start a
   deliberate fire-and-forget with `fireAndForget(promise, surface)` from
   `@core/util/fireAndForget`, which reports a rejection through
   `Telemetry.error`. When a failure needs recovery (reset state, show the

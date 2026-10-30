@@ -162,31 +162,44 @@ export function chartData(
           .join(' ') ||
         series.name ||
         `Series ${index + 1}`;
-      return {
-        name,
-        color: series.color ?? palette[index % palette.length],
-        values: points.map((value) => value.number ?? null),
-        // Text among the x values numbers the points 1, 2, 3, as in Excel.
-        ...(xy && {
-          x:
-            labels &&
-            !labels.some(
-              (value) => value.number === undefined && value.text.trim()
-            )
-              ? labels.map((value) => value.number ?? null)
-              : points.map((_, point) => point + 1),
-        }),
-        ...(plot.kind === 'bubble' && {
-          sizes: (values(series.sizes) ?? points.map(() => undefined)).map(
-            (value) => value?.number ?? null
-          ),
-        }),
-        ...(series.noFill && { noFill: true }),
-        ...(series.noLine && { noLine: true }),
-        ...(points.find((value) => value.number !== undefined) && {
-          sample: points.find((value) => value.number !== undefined)?.text,
-        }),
-      };
+      return seriesValues();
+
+      function seriesValues(): {
+        sample?: string | undefined;
+        noLine?: boolean | undefined;
+        noFill?: boolean | undefined;
+        sizes?: (number | null)[] | undefined;
+        x?: (number | null)[] | undefined;
+        name: string;
+        color: string;
+        values: (number | null)[];
+      } {
+        return {
+          name,
+          color: series.color ?? palette[index % palette.length],
+          values: points.map((value) => value.number ?? null),
+          // Text among the x values numbers the points 1, 2, 3, as in Excel.
+          ...(xy && {
+            x:
+              labels &&
+              !labels.some(
+                (value) => value.number === undefined && value.text.trim()
+              )
+                ? labels.map((value) => value.number ?? null)
+                : points.map((_, point) => point + 1),
+          }),
+          ...(plot.kind === 'bubble' && {
+            sizes: (values(series.sizes) ?? points.map(() => undefined)).map(
+              (value) => value?.number ?? null
+            ),
+          }),
+          ...(series.noFill && { noFill: true }),
+          ...(series.noLine && { noLine: true }),
+          ...(points.find((value) => value.number !== undefined) && {
+            sample: points.find((value) => value.number !== undefined)?.text,
+          }),
+        };
+      }
     }),
   }));
   const longest = Math.max(

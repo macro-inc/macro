@@ -619,15 +619,15 @@ describe('createUrqlQuery refetch', () => {
     fake.executions[0]?.next({ data: { value: 'initial' } });
 
     let settled = false;
-    const refetch = query
-      .refetch({
+    const refetchAndSettle = async () => {
+      const value = await query.refetch({
         requestPolicy: 'network-only',
         context: { fetchOptions: { headers: { refresh: 'yes' } } },
-      })
-      .then((value) => {
-        settled = true;
-        return value;
       });
+      settled = true;
+      return value;
+    };
+    const refetch = refetchAndSettle();
     const execution = fake.executions[1];
     expect(execution?.context.requestPolicy).toBe('network-only');
     expect(execution?.context.fetchOptions).toEqual({
@@ -728,9 +728,11 @@ describe('createUrqlQuery refetch', () => {
     expect(reentrant).toBeDefined();
 
     let reentrantSettled = false;
-    const reentrantSettledFlag = reentrant?.then(() => {
+    const observeReentrant = async () => {
+      await reentrant;
       reentrantSettled = true;
-    });
+    };
+    const reentrantSettledFlag = observeReentrant();
     await Promise.resolve();
     expect(reentrantSettled).toBe(false);
     fake.executions[3]?.next({ data: { value: 'inner' } });

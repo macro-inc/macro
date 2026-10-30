@@ -125,28 +125,32 @@ function Person(props: {
     let opened: FigEngine | undefined;
     let sharedEngine: FigSharing | undefined;
     const open = async () => {
-      const ready = await opening.take((e) => setFailure(e.message));
-      opened = ready.engine;
-      const fingerprint = ready.fingerprint;
-      if (closed) {
-        opened.close();
-        return;
-      }
-      if (shared) {
-        sharedEngine = await shareFigEngine(opened, shared, {
-          fingerprint,
-          delivered: session.delivered,
-        });
+      try {
+        const ready = await opening.take((e) => setFailure(e.message));
+        opened = ready.engine;
+        const fingerprint = ready.fingerprint;
         if (closed) {
-          sharedEngine.close();
+          opened.close();
           return;
         }
-        sharedEngine.onReplaced(() => setReplaced(true));
-        setSharing(sharedEngine);
+        if (shared) {
+          sharedEngine = await shareFigEngine(opened, shared, {
+            fingerprint,
+            delivered: session.delivered,
+          });
+          if (closed) {
+            sharedEngine.close();
+            return;
+          }
+          sharedEngine.onReplaced(() => setReplaced(true));
+          setSharing(sharedEngine);
+        }
+        setEngine(opened);
+      } catch (e) {
+        setFailure(String(e));
       }
-      setEngine(opened);
     };
-    open().catch((e: unknown) => setFailure(String(e)));
+    fireAndForget(open(), 'fig-viewer');
     onCleanup(() => {
       closed = true;
       sharedEngine?.close();
@@ -241,14 +245,16 @@ export function CollabFixture(props: { fileUrl: string; users: string[] }) {
   const server = new MemorySyncServer();
   const [stored, setStored] = createSignal(false);
   const load = async () => {
-    const r = await fetch(props.fileUrl);
-    if (!r.ok) throw new Error(`${props.fileUrl}: ${r.status}`);
-    server.store(new Uint8Array(await r.arrayBuffer()));
-    setStored(true);
+    try {
+      const r = await fetch(props.fileUrl);
+      if (!r.ok) throw new Error(`${props.fileUrl}: ${r.status}`);
+      server.store(new Uint8Array(await r.arrayBuffer()));
+      setStored(true);
+    } catch (e) {
+      console.error('[fig fixture] could not store the file', e);
+    }
   };
-  load().catch((e: unknown) =>
-    console.error('[fig fixture] could not store the file', e)
-  );
+  fireAndForget(load(), 'fig-viewer');
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>

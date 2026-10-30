@@ -299,7 +299,7 @@ function formatRuleDetails(
   }
 
   const base = formatBaseFrequency(frequency, rule.interval);
-  const days = rule.byDay.length > 0 ? formatByDay(rule.byDay, locale) : '';
+  const days = buildDays();
 
   if (frequency === 'WEEKLY' && days) return `${base} on ${days}`;
   if (frequency === 'DAILY' && days) return `${base} on ${days}`;
@@ -309,16 +309,31 @@ function formatRuleDetails(
       return `${base} on the ${formatMonthDays(rule.byMonthDay, locale)}`;
     }
     if (days) {
-      const article = rule.byDay.some((day) => day.ordinal !== undefined)
-        ? 'the '
-        : '';
+      const article = ordinalArticle();
       return `${base} on ${article}${days}`;
     }
   }
 
   if (frequency === 'YEARLY') {
-    const months =
-      rule.byMonth.length > 0 ? formatMonths(rule.byMonth, locale) : '';
+    return formatYearlyRule();
+  }
+
+  return base;
+
+  function ordinalArticle() {
+    return rule.byDay.some((day) => day.ordinal !== undefined) ? 'the ' : '';
+  }
+
+  function buildMonths() {
+    return rule.byMonth.length > 0 ? formatMonths(rule.byMonth, locale) : '';
+  }
+
+  function buildDays() {
+    return rule.byDay.length > 0 ? formatByDay(rule.byDay, locale) : '';
+  }
+
+  function formatYearlyRule() {
+    const months = buildMonths();
     const monthDay = rule.byMonthDay[0];
 
     if (months && monthDay !== undefined) {
@@ -329,24 +344,20 @@ function formatRuleDetails(
       return `${base} on day ${monthDay} in ${months}`;
     }
     if (months && days) {
-      const article = rule.byDay.some((day) => day.ordinal !== undefined)
-        ? 'the '
-        : '';
+      const article = ordinalArticle();
       return `${base} on ${article}${days} in ${months}`;
     }
     if (months) return `${base} in ${months}`;
     if (days) {
-      const article = rule.byDay.some((day) => day.ordinal !== undefined)
-        ? 'the '
-        : '';
+      const article = ordinalArticle();
       return `${base} on ${article}${days}`;
     }
     if (rule.byMonthDay.length > 0) {
       return `${base} on the ${formatMonthDays(rule.byMonthDay, locale)}`;
     }
-  }
 
-  return base;
+    return base;
+  }
 }
 
 function parseUntilDate(value: string) {
@@ -566,15 +577,10 @@ export function parseRecurrenceConfig(
   ) {
     return undefined;
   }
-  if (
-    rule.frequency !== 'DAILY' &&
-    rule.frequency !== 'WEEKLY' &&
-    rule.frequency !== 'MONTHLY' &&
-    rule.frequency !== 'YEARLY'
-  ) {
+  if (!isEditableFrequency(rule.frequency)) {
     return undefined;
   }
-  if (rule.byMonthDay.length > 0 || rule.byMonth.length > 0) {
+  if (hasUnsupportedSelectors(rule)) {
     return undefined;
   }
   if (rule.count !== undefined && rule.until !== undefined) {
@@ -712,6 +718,21 @@ export function defaultCustomConfig(start: Date): RecurrenceConfig {
     byDay: [WEEKDAY_CODES[start.getDay()] as WeekdayCode],
     ends: NEVER,
   };
+}
+
+function isEditableFrequency(
+  frequency: ParsedRecurrenceRule['frequency']
+): frequency is RecurrenceConfig['frequency'] {
+  return (
+    frequency === 'DAILY' ||
+    frequency === 'WEEKLY' ||
+    frequency === 'MONTHLY' ||
+    frequency === 'YEARLY'
+  );
+}
+
+function hasUnsupportedSelectors(rule: ParsedRecurrenceRule): boolean {
+  return rule.byMonthDay.length > 0 || rule.byMonth.length > 0;
 }
 
 /**

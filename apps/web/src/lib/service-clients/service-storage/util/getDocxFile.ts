@@ -95,7 +95,12 @@ export async function getDocxExpandedParts(
               console.warn(
                 `Part ${p.path}'s content does not exist but is expected to exist`
               );
-              await opfsDocHandle.removePart(p.path, p.sha).catch(() => {});
+
+              try {
+                await opfsDocHandle.removePart(p.path, p.sha);
+              } catch {
+                // Best effort: the corrupt part is fetched again next time.
+              }
               return null;
             }
             return { sha: p.sha, path: p.path, content: buffer };

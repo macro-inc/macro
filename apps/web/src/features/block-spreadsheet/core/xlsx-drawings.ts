@@ -280,7 +280,40 @@ export function readChart(
           titleDeleted = value.val === '1' || value.val === 'true';
         else if (node.local === 'legendPos')
           legend = LEGENDS[value.val as keyof typeof LEGENDS] ?? 'right';
-        else if (node.local === 'legend') legend ??= 'right';
+        else readLegendOrLiteral();
+      } else if (node.uri === DRAWING) {
+        if (
+          series &&
+          node.local === 'noFill' &&
+          seriesColorDepth !== undefined
+        ) {
+          if (stack.length - 1 === seriesColorDepth) series.noFill = true;
+          else if (parent === 'ln' && stack.length - 2 === seriesColorDepth)
+            series.noLine = true;
+        }
+        readTitleOrColor();
+      }
+
+      function readTitleOrColor() {
+        if (node.local === 't' && titleDepth !== undefined) text = '';
+        else if (
+          seriesColorDepth !== undefined &&
+          series &&
+          !series.color &&
+          parent === 'solidFill'
+        ) {
+          if (node.local === 'srgbClr')
+            color = { hex: value.val, modifiers: [] };
+          else if (node.local === 'schemeClr')
+            color = { hex: schemeColor(theme, value.val ?? ''), modifiers: [] };
+          else if (node.local === 'sysClr')
+            color = { hex: value.lastClr, modifiers: [] };
+        } else if (color && value.val !== undefined)
+          color.modifiers.push([node.local, Number(value.val)]);
+      }
+
+      function readLegendOrLiteral() {
+        if (node.local === 'legend') legend ??= 'right';
         else if (node.local === 'pivotSource') linked.pivot = true;
         else if (node.local === 'numLit' || node.local === 'strLit')
           literal = {
@@ -301,7 +334,11 @@ export function readChart(
             plot: { kind: kind === 'bar' ? 'column' : kind, series: [] },
             axes: [],
           };
-        } else if (plot && parent === plot.local) {
+        } else readPlotChild();
+      }
+
+      function readPlotChild() {
+        if (plot && parent === plot.local) {
           if (node.local === 'barDir') plot.direction = value.val;
           else if (node.local === 'radarStyle' && value.val === 'filled')
             plot.plot.filled = true;
@@ -321,7 +358,11 @@ export function readChart(
             node.local === 'dateAx')
         )
           axis = {};
-        else if (axis && node.local === 'axId' && parent?.endsWith('Ax'))
+        else readAxisOrSeriesChild();
+      }
+
+      function readAxisOrSeriesChild() {
+        if (axis && node.local === 'axId' && parent?.endsWith('Ax'))
           axis.id = value.val;
         else if (axis && node.local === 'axPos') axis.position = value.val;
         else if (axis && node.local === 'crosses') axis.crosses = value.val;
@@ -333,31 +374,6 @@ export function readChart(
           text = '';
         else if (series && node.local === 'spPr' && parent === 'ser')
           seriesColorDepth = stack.length;
-      } else if (node.uri === DRAWING) {
-        if (
-          series &&
-          node.local === 'noFill' &&
-          seriesColorDepth !== undefined
-        ) {
-          if (stack.length - 1 === seriesColorDepth) series.noFill = true;
-          else if (parent === 'ln' && stack.length - 2 === seriesColorDepth)
-            series.noLine = true;
-        }
-        if (node.local === 't' && titleDepth !== undefined) text = '';
-        else if (
-          seriesColorDepth !== undefined &&
-          series &&
-          !series.color &&
-          parent === 'solidFill'
-        ) {
-          if (node.local === 'srgbClr')
-            color = { hex: value.val, modifiers: [] };
-          else if (node.local === 'schemeClr')
-            color = { hex: schemeColor(theme, value.val ?? ''), modifiers: [] };
-          else if (node.local === 'sysClr')
-            color = { hex: value.lastClr, modifiers: [] };
-        } else if (color && value.val !== undefined)
-          color.modifiers.push([node.local, Number(value.val)]);
       }
     });
     parser.on('text', (chunk) => {
@@ -389,51 +405,59 @@ export function readChart(
       } else if (literal && node.local === 'v' && text !== undefined) {
         literal.points.set(literal.at, text);
         text = undefined;
-      } else if (
-        literal &&
-        (node.local === 'numLit' || node.local === 'strLit')
-      ) {
-        const { kind, points, count } = literal;
-        const length = Math.min(
-          100_000,
-          Math.max(count, ...[...points.keys()].map((index) => index + 1))
-        );
-        const values = Array.from({ length }, (_, index) => {
-          const text = points.get(index) ?? '';
-          const number = text.trim() === '' ? Number.NaN : Number(text);
-          return Number.isFinite(number) ? { text, number } : { text };
-        });
-        literal = undefined;
-        source(chartLiteral(values, kind));
-      } else if (node.local === 'v' && text !== undefined) {
-        if (series && seriesPart() === 'tx') nameParts.push(text.trim());
-        else if (titleDepth !== undefined) title ??= text;
-        text = undefined;
-      } else if (node.local === 'title' && stack.length < (titleDepth ?? 0))
-        titleDepth = undefined;
-      else if (node.local === 'spPr' && stack.length < (seriesColorDepth ?? 0))
-        seriesColorDepth = undefined;
-      else if (node.local === 'ser' && series && plot) {
-        const name = nameParts.filter(Boolean).join(' ');
-        if (name) series.name = name;
-        nameParts = [];
-        if (series.values >= 0) plot.plot.series.push(series);
-        series = undefined;
-        seriesColorDepth = undefined;
-      } else if (plot && node.local === plot.local) {
-        if (plot.direction === 'bar') plot.plot.kind = 'bar';
-        plots.push(plot);
-        plot = undefined;
-      } else if (axis && parent === 'plotArea' && node.local.endsWith('Ax')) {
-        // A value axis crossing at the maximum is drawn on the far side.
-        if (
-          axis.id &&
-          (axis.position === 'r' ||
-            axis.position === 't' ||
-            (node.local === 'valAx' && axis.crosses === 'max'))
+      } else finishLiteral();
+
+      function finishLiteral() {
+        if (literal && (node.local === 'numLit' || node.local === 'strLit')) {
+          const { kind, points, count } = literal;
+          const length = Math.min(
+            100000,
+            Math.max(count, ...[...points.keys()].map((index) => index + 1))
+          );
+          const values = Array.from({ length }, (_, index) => {
+            const text = points.get(index) ?? '';
+            const number = text.trim() === '' ? Number.NaN : Number(text);
+            return Number.isFinite(number) ? { text, number } : { text };
+          });
+          literal = undefined;
+          source(chartLiteral(values, kind));
+        } else if (node.local === 'v' && text !== undefined) {
+          if (series && seriesPart() === 'tx') nameParts.push(text.trim());
+          else if (titleDepth !== undefined) title ??= text;
+          text = undefined;
+        } else if (node.local === 'title' && stack.length < (titleDepth ?? 0))
+          titleDepth = undefined;
+        else if (
+          node.local === 'spPr' &&
+          stack.length < (seriesColorDepth ?? 0)
         )
-          rightAxes.add(axis.id);
-        axis = undefined;
+          seriesColorDepth = undefined;
+        else finishSeries();
+      }
+
+      function finishSeries() {
+        if (node.local === 'ser' && series && plot) {
+          const name = nameParts.filter(Boolean).join(' ');
+          if (name) series.name = name;
+          nameParts = [];
+          if (series.values >= 0) plot.plot.series.push(series);
+          series = undefined;
+          seriesColorDepth = undefined;
+        } else if (plot && node.local === plot.local) {
+          if (plot.direction === 'bar') plot.plot.kind = 'bar';
+          plots.push(plot);
+          plot = undefined;
+        } else if (axis && parent === 'plotArea' && node.local.endsWith('Ax')) {
+          // A value axis crossing at the maximum is drawn on the far side.
+          if (
+            axis.id &&
+            (axis.position === 'r' ||
+              axis.position === 't' ||
+              (node.local === 'valAx' && axis.crosses === 'max'))
+          )
+            rightAxes.add(axis.id);
+          axis = undefined;
+        }
       }
     });
   });
@@ -515,17 +539,17 @@ const DIAGRAM = 'http://schemas.openxmlformats.org/drawingml/2006/diagram';
 /** SmartArt's drawing part, through its data part's link to it. */
 function diagramDrawing(
   archive: XlsxArchive,
-  relations: ReturnType<typeof relationships>,
+  relationsInput: ReturnType<typeof relationships>,
   data: string | undefined
 ): XmlElement | undefined {
-  const dataPath = data ? relations.get(data) : undefined;
+  const dataPath = data ? relationsInput.get(data) : undefined;
   const dataBytes =
     dataPath && !dataPath.external ? archive.read(dataPath.target) : undefined;
   if (!dataBytes) return;
   const id = /dataModelExt\b[^>]*\brelId="([^"]+)"/.exec(
     new TextDecoder().decode(dataBytes)
   )?.[1];
-  const target = id ? relations.get(id) : undefined;
+  const target = id ? relationsInput.get(id) : undefined;
   if (!target || target.external) return;
   const bytes = archive.read(target.target);
   if (!bytes || bytes.length > MAX_DIAGRAM_BYTES) return;
@@ -591,28 +615,11 @@ export function readSheetDrawings(options: {
       return;
     }
     let from = point(value.from);
-    let to = value.kind === 'twoCellAnchor' ? point(value.to) : undefined;
+    let to = anchorEnd();
     let extent = value.extent;
-    if (value.kind === 'absoluteAnchor' && value.position) {
-      from = options.locate(
-        value.position.x / EMU_PER_PIXEL,
-        value.position.y / EMU_PER_PIXEL
-      );
-      to = undefined;
-    }
+    placeAbsoluteAnchor();
     // Pictures that move but do not size with their cells keep their size.
-    if (
-      value.kind === 'twoCellAnchor' &&
-      value.editAs !== undefined &&
-      value.editAs !== 'twoCell' &&
-      content.type === 'pic' &&
-      content.extent &&
-      content.extent.cx > 0 &&
-      content.extent.cy > 0
-    ) {
-      to = undefined;
-      extent = content.extent;
-    }
+    keepPictureSize(content);
     if (!from || (!to && !(extent && extent.cx > 0 && extent.cy > 0))) {
       skipped++;
       return;
@@ -621,24 +628,167 @@ export function readSheetDrawings(options: {
       skipped++;
       return;
     }
-    const name =
-      content.type === 'shape' ? shapeName(content.element) : content.name;
-    const placement = {
-      id: `drawing-${drawings.length + 1}`,
-      ...(name && { name: name.slice(0, 256) }),
-      from,
-      ...(to
-        ? { to }
-        : { width: pixels(extent!.cx), height: pixels(extent!.cy) }),
-    };
+    const name = contentName(content);
+    const placement = placementOf(from);
     if (content.type === 'shape') {
-      const shape =
-        content.element && readShape(content.element, options.theme);
-      if (!shape || !content.element) {
+      return finishShape(content);
+    }
+    if (content.type === 'diagram') {
+      const drawing = diagramDrawing(archive, relations, content.data);
+      // The frame's size in EMU, else the anchor's.
+      const frame = contentFrame(content);
+      const shape = diagramShapeOf(drawing, frame, content);
+      if (shape) drawings.push({ ...placement, type: 'shape', shape });
+      else unsupported = true;
+      return;
+    }
+    const target = relationTarget(content);
+    if (!target || target.external) {
+      skipped++;
+      return;
+    }
+    if (content.type === 'pic') {
+      const image = importImage(
+        archive,
+        target.target,
+        options.state,
+        warnings
+      );
+      if (!image) return;
+      drawings.push(imageDrawing(image, content));
+    } else {
+      const chart = readChart(archive, target.target, options.theme, warnings);
+      if (chart) drawings.push({ ...placement, type: 'chart', chart });
+      else skipped++;
+    }
+
+    function imageDrawing(
+      image: string,
+      contentInput: Extract<NonNullable<typeof content>, { type: 'pic' }>
+    ): SheetDrawing {
+      return {
+        ...placement,
+        type: 'image',
+        image,
+        ...(contentInput.description && {
+          description: contentInput.description.slice(0, 1000),
+        }),
+      };
+    }
+
+    function contentName(
+      contentInput: Extract<
+        NonNullable<typeof content>,
+        { type: 'pic' | 'chart' | 'shape' | 'diagram' }
+      >
+    ) {
+      return contentInput.type === 'shape'
+        ? shapeName(contentInput.element)
+        : contentInput.name;
+    }
+
+    function readShapeContent(
+      contentInput: Extract<NonNullable<typeof content>, { type: 'shape' }>
+    ) {
+      return (
+        contentInput.element && readShape(contentInput.element, options.theme)
+      );
+    }
+
+    function anchorEnd() {
+      return value.kind === 'twoCellAnchor' ? point(value.to) : undefined;
+    }
+
+    function diagramShapeOf(
+      drawing: XmlElement | undefined,
+      frame: { cx: number; cy: number },
+      contentInput: Extract<NonNullable<typeof content>, { type: 'diagram' }>
+    ) {
+      return (
+        drawing &&
+        diagramShape(
+          drawing,
+          { width: frame.cx, height: frame.cy },
+          options.theme,
+          contentInput.name ?? 'Diagram'
+        )
+      );
+    }
+
+    function placementOf(from: DrawingPoint) {
+      return {
+        id: `drawing-${drawings.length + 1}`,
+        ...(name && { name: name.slice(0, 256) }),
+        from,
+        ...(to
+          ? { to }
+          : { width: pixels(extent!.cx), height: pixels(extent!.cy) }),
+      };
+    }
+
+    function placeAbsoluteAnchor() {
+      if (value.kind === 'absoluteAnchor' && value.position) {
+        from = options.locate(
+          value.position.x / EMU_PER_PIXEL,
+          value.position.y / EMU_PER_PIXEL
+        );
+        to = undefined;
+      }
+    }
+
+    function relationTarget(
+      contentInput: Extract<
+        NonNullable<typeof content>,
+        { type: 'pic' | 'chart' }
+      >
+    ) {
+      return relations.get(
+        (contentInput.type === 'pic' ? contentInput.embed : contentInput.id) ??
+          ''
+      );
+    }
+
+    function contentFrame(
+      contentInput: Extract<NonNullable<typeof content>, { type: 'diagram' }>
+    ) {
+      return contentInput.extent &&
+        contentInput.extent.cx > 0 &&
+        contentInput.extent.cy > 0
+        ? contentInput.extent
+        : extent && extent.cx > 0 && extent.cy > 0
+          ? extent
+          : options.extent(placement);
+    }
+
+    function keepPictureSize(
+      contentInput: Extract<
+        NonNullable<typeof content>,
+        { type: 'pic' | 'chart' | 'shape' | 'diagram' }
+      >
+    ) {
+      if (
+        value.kind === 'twoCellAnchor' &&
+        value.editAs !== undefined &&
+        value.editAs !== 'twoCell' &&
+        contentInput.type === 'pic' &&
+        contentInput.extent &&
+        contentInput.extent.cx > 0 &&
+        contentInput.extent.cy > 0
+      ) {
+        to = undefined;
+        extent = contentInput.extent;
+      }
+    }
+
+    function finishShape(
+      contentInput: Extract<NonNullable<typeof content>, { type: 'shape' }>
+    ) {
+      const shape = readShapeContent(contentInput);
+      if (!shape || !contentInput.element) {
         skipped++;
         return;
       }
-      const source = shapeSource(content.element, options.theme);
+      const source = shapeSource(contentInput.element, options.theme);
       // A line anchored with no height (or width) draws flat, however
       // slightly Excel slanted it.
       const size = options.extent(placement);
@@ -655,55 +805,6 @@ export function readSheetDrawings(options: {
         },
       });
       return;
-    }
-    if (content.type === 'diagram') {
-      const drawing = diagramDrawing(archive, relations, content.data);
-      // The frame's size in EMU, else the anchor's.
-      const frame =
-        content.extent && content.extent.cx > 0 && content.extent.cy > 0
-          ? content.extent
-          : extent && extent.cx > 0 && extent.cy > 0
-            ? extent
-            : options.extent(placement);
-      const shape =
-        drawing &&
-        diagramShape(
-          drawing,
-          { width: frame.cx, height: frame.cy },
-          options.theme,
-          content.name ?? 'Diagram'
-        );
-      if (shape) drawings.push({ ...placement, type: 'shape', shape });
-      else unsupported = true;
-      return;
-    }
-    const target = relations.get(
-      (content.type === 'pic' ? content.embed : content.id) ?? ''
-    );
-    if (!target || target.external) {
-      skipped++;
-      return;
-    }
-    if (content.type === 'pic') {
-      const image = importImage(
-        archive,
-        target.target,
-        options.state,
-        warnings
-      );
-      if (!image) return;
-      drawings.push({
-        ...placement,
-        type: 'image',
-        image,
-        ...(content.description && {
-          description: content.description.slice(0, 1_000),
-        }),
-      });
-    } else {
-      const chart = readChart(archive, target.target, options.theme, warnings);
-      if (chart) drawings.push({ ...placement, type: 'chart', chart });
-      else skipped++;
     }
   };
   parse(bytes, drawingPath, (parser) => {
@@ -734,95 +835,116 @@ export function readSheetDrawings(options: {
         return;
       }
       if (!anchor) return;
-      if (node.uri === XDR) {
-        if (
-          (node.local === 'from' || node.local === 'to') &&
-          parent === anchor.kind
-        ) {
-          anchor.marker = { col: 0, colOff: 0, row: 0, rowOff: 0 };
-          anchor[node.local] = anchor.marker;
+      readAnchorMarker(anchor);
+
+      function readAnchorMarker(anchorInput: NonNullable<typeof anchor>) {
+        if (node.uri === XDR) {
+          if (
+            (node.local === 'from' || node.local === 'to') &&
+            parent === anchorInput.kind
+          ) {
+            anchorInput.marker = { col: 0, colOff: 0, row: 0, rowOff: 0 };
+            anchorInput[node.local] = anchorInput.marker;
+          } else if (
+            anchorInput.marker &&
+            ['col', 'colOff', 'row', 'rowOff'].includes(node.local)
+          ) {
+            anchorInput.field = node.local as keyof Marker;
+            text = '';
+          } else if (node.local === 'pos' && parent === anchorInput.kind)
+            anchorInput.position = {
+              x: Number(value.x) || 0,
+              y: Number(value.y) || 0,
+            };
+          else readAnchorExtent(anchorInput);
+        } else readPictureChild(anchorInput);
+      }
+
+      function readPictureChild(anchorInput: NonNullable<typeof anchor>) {
+        if (node.uri === DRAWING && anchorInput.content?.type === 'pic') {
+          if (node.local === 'blip') anchorInput.content.embed = value.embed;
+          else if (node.local === 'ext' && parent === 'xfrm')
+            anchorInput.content.extent = {
+              cx: Number(value.cx) || 0,
+              cy: Number(value.cy) || 0,
+            };
         } else if (
-          anchor.marker &&
-          ['col', 'colOff', 'row', 'rowOff'].includes(node.local)
+          node.uri === DRAWING &&
+          node.local === 'graphicData' &&
+          anchorInput.content?.type === 'chart' &&
+          value.uri !== CHART_NAMESPACE
+        )
+          anchorInput.content =
+            value.uri === DIAGRAM
+              ? { type: 'diagram', name: anchorInput.content.name }
+              : { type: 'other' };
+        else readShapeExtent(anchorInput);
+      }
+
+      function readShapeExtent(anchorInput: NonNullable<typeof anchor>) {
+        if (
+          node.uri === DRAWING &&
+          node.local === 'ext' &&
+          parent === 'xfrm' &&
+          (anchorInput.content?.type === 'chart' ||
+            anchorInput.content?.type === 'diagram')
         ) {
-          anchor.field = node.local as keyof Marker;
-          text = '';
-        } else if (node.local === 'pos' && parent === anchor.kind)
-          anchor.position = {
-            x: Number(value.x) || 0,
-            y: Number(value.y) || 0,
-          };
-        else if (node.local === 'ext' && parent === anchor.kind)
-          anchor.extent = {
+          if (anchorInput.content.type === 'diagram')
+            anchorInput.content.extent = {
+              cx: Number(value.cx) || 0,
+              cy: Number(value.cy) || 0,
+            };
+          else
+            frameExtent = {
+              cx: Number(value.cx) || 0,
+              cy: Number(value.cy) || 0,
+            };
+        } else readDiagramData(anchorInput);
+      }
+
+      function readDiagramData(anchorInput: NonNullable<typeof anchor>) {
+        if (
+          node.uri === DIAGRAM &&
+          node.local === 'relIds' &&
+          anchorInput.content?.type === 'diagram'
+        ) {
+          anchorInput.content.data = value.dm;
+          anchorInput.content.extent ??= frameExtent;
+        } else if (
+          node.uri === CHART_NAMESPACE &&
+          node.local === 'chart' &&
+          anchorInput.content?.type === 'chart'
+        )
+          anchorInput.content.id = value.id;
+      }
+
+      function readAnchorExtent(anchorInput: NonNullable<typeof anchor>) {
+        if (node.local === 'ext' && parent === anchorInput.kind)
+          anchorInput.extent = {
             cx: Number(value.cx) || 0,
             cy: Number(value.cy) || 0,
           };
-        else if (parent === anchor.kind && !anchor.content) {
-          if (node.local === 'pic') anchor.content = { type: 'pic' };
+        else if (parent === anchorInput.kind && !anchorInput.content) {
+          if (node.local === 'pic') anchorInput.content = { type: 'pic' };
           else if (node.local === 'graphicFrame')
-            anchor.content = { type: 'chart' };
+            anchorInput.content = { type: 'chart' };
           else if (['sp', 'grpSp', 'cxnSp'].includes(node.local)) {
             const builder = elementBuilder();
             builder.start(node);
-            anchor.content = { type: 'shape', builder };
+            anchorInput.content = { type: 'shape', builder };
           } else if (node.local === 'contentPart')
-            anchor.content = { type: 'other' };
+            anchorInput.content = { type: 'other' };
         } else if (
           node.local === 'cNvPr' &&
-          anchor.content &&
-          anchor.content.type !== 'other' &&
-          anchor.content.type !== 'shape'
+          anchorInput.content &&
+          anchorInput.content.type !== 'other' &&
+          anchorInput.content.type !== 'shape'
         ) {
-          anchor.content.name = value.name;
-          if (anchor.content.type === 'pic' && value.descr)
-            anchor.content.description = value.descr;
+          anchorInput.content.name = value.name;
+          if (anchorInput.content.type === 'pic' && value.descr)
+            anchorInput.content.description = value.descr;
         }
-      } else if (node.uri === DRAWING && anchor.content?.type === 'pic') {
-        if (node.local === 'blip') anchor.content.embed = value.embed;
-        else if (node.local === 'ext' && parent === 'xfrm')
-          anchor.content.extent = {
-            cx: Number(value.cx) || 0,
-            cy: Number(value.cy) || 0,
-          };
-      } else if (
-        node.uri === DRAWING &&
-        node.local === 'graphicData' &&
-        anchor.content?.type === 'chart' &&
-        value.uri !== CHART_NAMESPACE
-      )
-        anchor.content =
-          value.uri === DIAGRAM
-            ? { type: 'diagram', name: anchor.content.name }
-            : { type: 'other' };
-      else if (
-        node.uri === DRAWING &&
-        node.local === 'ext' &&
-        parent === 'xfrm' &&
-        (anchor.content?.type === 'chart' || anchor.content?.type === 'diagram')
-      ) {
-        if (anchor.content.type === 'diagram')
-          anchor.content.extent = {
-            cx: Number(value.cx) || 0,
-            cy: Number(value.cy) || 0,
-          };
-        else
-          frameExtent = {
-            cx: Number(value.cx) || 0,
-            cy: Number(value.cy) || 0,
-          };
-      } else if (
-        node.uri === DIAGRAM &&
-        node.local === 'relIds' &&
-        anchor.content?.type === 'diagram'
-      ) {
-        anchor.content.data = value.dm;
-        anchor.content.extent ??= frameExtent;
-      } else if (
-        node.uri === CHART_NAMESPACE &&
-        node.local === 'chart' &&
-        anchor.content?.type === 'chart'
-      )
-        anchor.content.id = value.id;
+      }
     });
     parser.on('text', (chunk) => {
       if (text !== undefined) text += chunk;
@@ -1082,20 +1204,8 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
         const index = seriesIndex++;
         const color = (value.color ?? palette[index % palette.length]).slice(1);
         const solid = `<a:solidFill><a:srgbClr val="${color}"/></a:solidFill>`;
-        const lined =
-          plot.kind === 'line' ||
-          plot.kind === 'scatter' ||
-          (plot.kind === 'radar' && !plot.filled);
-        const fill = lined
-          ? `<c:spPr><a:ln w="28575" cap="rnd">${value.noLine ? '<a:noFill/>' : solid}<a:round/></a:ln></c:spPr>`
-          : plot.kind === 'stock'
-            ? // Prices are drawn by high-low lines and up-down bars.
-              '<c:spPr><a:ln w="19050"><a:noFill/></a:ln></c:spPr>'
-            : plot.kind === 'pie' ||
-                plot.kind === 'doughnut' ||
-                plot.kind === 'surface'
-              ? ''
-              : `<c:spPr>${value.noFill ? '<a:noFill/>' : solid}</c:spPr>`;
+        const lined = isLinePlot();
+        const fill = seriesShapeXml();
         // A fixed name is written as its text.
         const fixed =
           value.nameRef === undefined
@@ -1105,12 +1215,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
                 .filter(Boolean)
                 .join(' ');
         const label = fixed ?? value.name;
-        const name =
-          value.nameRef !== undefined && fixed === undefined
-            ? `<c:tx>${reference(value.nameRef, 'strRef')}</c:tx>`
-            : label
-              ? `<c:tx><c:v>${xml(label)}</c:v></c:tx>`
-              : '';
+        const name = seriesNameXml();
         const xy = plot.kind === 'scatter' || plot.kind === 'bubble';
         const categories = xy
           ? value.categories === undefined
@@ -1126,14 +1231,7 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
                 : ''
             }`
           : `<c:val>${reference(value.values, 'numRef')}</c:val>`;
-        const marker =
-          plot.kind === 'stock'
-            ? '<c:marker><c:symbol val="none"/></c:marker>'
-            : plot.kind === 'line' ||
-                plot.kind === 'scatter' ||
-                (plot.kind === 'radar' && !plot.filled)
-              ? '<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>'
-              : '';
+        const marker = markerXml();
         const inverted =
           plot.kind === 'column' ||
           plot.kind === 'bar' ||
@@ -1143,6 +1241,45 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
           plot.kind === 'scatter' ||
           plot.kind === 'stock';
         return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/>${name}${fill}${inverted ? '<c:invertIfNegative val="0"/>' : ''}${marker}${categories}${numbers}${smooth ? '<c:smooth val="0"/>' : ''}</c:ser>`;
+
+        function seriesNameXml() {
+          return value.nameRef !== undefined && fixed === undefined
+            ? `<c:tx>${reference(value.nameRef, 'strRef')}</c:tx>`
+            : label
+              ? `<c:tx><c:v>${xml(label)}</c:v></c:tx>`
+              : '';
+        }
+
+        function isLinePlot() {
+          return (
+            plot.kind === 'line' ||
+            plot.kind === 'scatter' ||
+            (plot.kind === 'radar' && !plot.filled)
+          );
+        }
+
+        function markerXml() {
+          return plot.kind === 'stock'
+            ? '<c:marker><c:symbol val="none"/></c:marker>'
+            : plot.kind === 'line' ||
+                plot.kind === 'scatter' ||
+                (plot.kind === 'radar' && !plot.filled)
+              ? '<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>'
+              : '';
+        }
+
+        function seriesShapeXml() {
+          return lined
+            ? `<c:spPr><a:ln w="28575" cap="rnd">${value.noLine ? '<a:noFill/>' : solid}<a:round/></a:ln></c:spPr>`
+            : plot.kind === 'stock'
+              ? // Prices are drawn by high-low lines and up-down bars.
+                '<c:spPr><a:ln w="19050"><a:noFill/></a:ln></c:spPr>'
+              : plot.kind === 'pie' ||
+                  plot.kind === 'doughnut' ||
+                  plot.kind === 'surface'
+                ? ''
+                : `<c:spPr>${value.noFill ? '<a:noFill/>' : solid}</c:spPr>`;
+        }
       })
       .join('');
     const grouping = plot.grouping ?? 'clustered';

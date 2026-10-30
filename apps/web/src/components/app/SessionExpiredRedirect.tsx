@@ -33,9 +33,11 @@ export function SessionExpiredRedirect() {
       );
       if (!stillUnauthorized) return false;
     }
-    await clearLocalAuthSession('session-expired').catch((error) => {
+    try {
+      await clearLocalAuthSession('session-expired');
+    } catch (error) {
       console.error('Failed to clear local auth session', error);
-    });
+    }
     return true;
   });
 

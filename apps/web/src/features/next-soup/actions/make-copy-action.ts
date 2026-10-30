@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { canDuplicateItemType } from '@core/component/FileList/itemOperations';
+import { canDuplicateItemType } from '@app/lib/queries/items/operations';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { createBulkCopyDssEntityMutation } from '@entity';

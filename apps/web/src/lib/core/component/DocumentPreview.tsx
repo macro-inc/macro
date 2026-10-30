@@ -70,7 +70,7 @@ import {
   type PreviewCalendarEventAccess,
 } from '@queries/preview';
 import { useBinaryDocumentQuery } from '@queries/storage/binary-document';
-import { blockNameToItemType } from '@service-storage/client';
+import { blockNameToItemType } from '@service-storage/itemType';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -109,25 +109,18 @@ import { getShareItemNoun } from './TopBar/linkShare';
  * @returns JSX element for the icon or undefined
  */
 export const getMentionsIcon = (icon: string | undefined) => {
-  if (!icon) return;
+  if (!icon) return undefined;
 
-  const iconClasses =
-    'relative top-[-0.125em] size-4 inline-flex items-center mx-1';
-
-  switch (icon) {
-    case 'highlight':
-      return <HighlightIcon class={iconClasses} />;
-    case 'map-pin':
-      return <MapPinIcon class={iconClasses} />;
-    case 'message':
-      return <MessageIcon class={iconClasses} />;
-    case 'thread':
-      return <ThreadIcon class={iconClasses} />;
-    case 'text':
-      return <MapPinIcon class={iconClasses} />;
-    default:
-      return;
-  }
+  const Icon = match(icon)
+    .with('highlight', () => HighlightIcon)
+    .with('map-pin', 'text', () => MapPinIcon)
+    .with('message', () => MessageIcon)
+    .with('thread', () => ThreadIcon)
+    .otherwise(() => undefined);
+  if (!Icon) return undefined;
+  return (
+    <Icon class="relative top-[-0.125em] size-4 inline-flex items-center mx-1" />
+  );
 };
 
 /**
@@ -141,28 +134,7 @@ export const mentionsAccessories = (
 
   // PDF block handling
   if (blockName === 'pdf') {
-    const id = params[URL_PARAMS_PDF.annotationId];
-    if (id?.trim()) {
-      return { note: `Annotation: ${id}` };
-    }
-
-    const pageIndex = Number(params[URL_PARAMS_PDF.pageNumber]);
-    const y = parseInt(params[URL_PARAMS_PDF.yPos], 10);
-    const width = Number(params[URL_PARAMS_PDF.width]);
-    const height = Number(params[URL_PARAMS_PDF.height]);
-
-    if (!isNaN(pageIndex) && pageIndex > 0) {
-      if (
-        !isNaN(y) &&
-        !isNaN(width) &&
-        !isNaN(height) &&
-        width > 0 &&
-        height > 0
-      ) {
-        return { note: `Page ${pageIndex}`, icon: 'highlight' };
-      }
-      return { note: `Page ${pageIndex}` };
-    }
+    return pdfMentionAccessories();
   }
   // Canvas block handling
   else if (blockName === 'canvas') {
@@ -191,7 +163,7 @@ export const mentionsAccessories = (
   else if (resolveBlockAlias(blockName) === 'md') {
     const id = params[URL_PARAMS_MD.nodeId];
     const loc = params[URL_PARAMS_MD.location];
-    if (id?.trim() || loc?.trim()) {
+    if (hasSnippetTarget(id, loc)) {
       return { icon: 'highlight', note: 'Snippet' };
     }
 
@@ -199,6 +171,37 @@ export const mentionsAccessories = (
     if (comment?.trim()) {
       return { icon: 'message', note: 'Comment' };
     }
+  }
+
+  function hasSnippetTarget(id: string, loc: string) {
+    return id?.trim() || loc?.trim();
+  }
+
+  function pdfMentionAccessories() {
+    const id = params[URL_PARAMS_PDF.annotationId];
+    if (id?.trim()) {
+      return { note: `Annotation: ${id}` };
+    }
+
+    const pageIndex = Number(params[URL_PARAMS_PDF.pageNumber]);
+    const y = parseInt(params[URL_PARAMS_PDF.yPos], 10);
+    const width = Number(params[URL_PARAMS_PDF.width]);
+    const height = Number(params[URL_PARAMS_PDF.height]);
+
+    if (!isNaN(pageIndex) && pageIndex > 0) {
+      if (
+        !isNaN(y) &&
+        !isNaN(width) &&
+        !isNaN(height) &&
+        width > 0 &&
+        height > 0
+      ) {
+        return { note: `Page ${pageIndex}`, icon: 'highlight' };
+      }
+      return { note: `Page ${pageIndex}` };
+    }
+
+    return undefined;
   }
 };
 
@@ -254,19 +257,17 @@ function ImageCoverStrip(props: {
 
     const controller = new AbortController();
     let objectUrl: string | undefined;
-    fireAndForget(
-      fetchBinary(presignedUrl, 'blob', { signal: controller.signal }).then(
-        (result) => {
-          if (controller.signal.aborted || result.isErr()) return;
-          const blob = result.value;
-          objectUrl = URL.createObjectURL(
-            new Blob([blob], { type: 'image/svg+xml' })
-          );
-          setSvgObjectUrl(objectUrl);
-        }
-      ),
-      'document-preview'
-    );
+    const loadSvgObjectUrl = async () => {
+      const result = await fetchBinary(presignedUrl, 'blob', {
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted || result.isErr()) return;
+      objectUrl = URL.createObjectURL(
+        new Blob([result.value], { type: 'image/svg+xml' })
+      );
+      setSvgObjectUrl(objectUrl);
+    };
+    fireAndForget(loadSvgObjectUrl(), 'document-preview');
 
     onCleanup(() => {
       controller.abort();

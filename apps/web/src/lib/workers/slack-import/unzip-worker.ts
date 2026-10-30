@@ -158,17 +158,21 @@ export function installArchiveWorker(port: ArchiveWorkerPort): void {
     else port.postMessage({ type: 'complete', sessionId: current.id });
   }
 
-  port.onmessage = ({ data }) => {
-    match(data)
-      .with({ type: 'discover' }, (request) => {
-        discover(request).catch((error: unknown) =>
-          reportError(request.sessionId, error)
-        );
+  port.onmessage = async ({ data }) => {
+    await match(data)
+      .with({ type: 'discover' }, async (request) => {
+        try {
+          await discover(request);
+        } catch (error: unknown) {
+          reportError(request.sessionId, error);
+        }
       })
-      .with({ type: 'read_history' }, (request) => {
-        readHistory(request).catch((error: unknown) =>
-          reportError(request.sessionId, error)
-        );
+      .with({ type: 'read_history' }, async (request) => {
+        try {
+          await readHistory(request);
+        } catch (error: unknown) {
+          reportError(request.sessionId, error);
+        }
       })
       .with({ type: 'ack_part' }, (request) => {
         if (

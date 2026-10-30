@@ -13,7 +13,7 @@ vi.mock('@service-connection/websocket', () => ({
     mock.events.push(handler);
   },
 }));
-vi.mock('@service-connection/client', () => ({
+vi.mock('@queries/connection/tracked-entities', () => ({
   useEntitySubscription: (entity: () => unknown, refresh: () => void) => {
     mock.subscribe(entity());
     mock.refresh = refresh;

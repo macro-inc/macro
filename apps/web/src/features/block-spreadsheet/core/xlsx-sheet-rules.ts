@@ -3,12 +3,14 @@ import {
   CONDITIONAL_FORMAT_TYPES,
   type ComparisonOperator,
   type ConditionalFormat,
+  type ConditionalStyle,
   type ConditionalThreshold,
   DATA_VALIDATION_TYPES,
   type DataValidation,
   MAX_SHEET_RULES,
   TIME_PERIODS,
 } from '@macro-inc/spreadsheet/sheet-rules';
+import { match as matchBranch } from 'ts-pattern';
 import {
   formatCellAddress,
   parseCellAddress,
@@ -216,13 +218,7 @@ export function createSheetRulesReader(options: {
     let type = value.type as ConditionalFormat['type'];
     // Excel evaluates these rules' formulas. Some writers leave out the text
     // or period they were made from; the formula still defines the rule.
-    if (
-      pending.formulas.length &&
-      ((TEXT_RULES.has(type) && value.text === undefined) ||
-        (type === 'timePeriod' &&
-          !(TIME_PERIODS as readonly string[]).includes(value.timePeriod)))
-    )
-      type = 'expression';
+    fallBackToExpression();
     if (
       !range ||
       !(CONDITIONAL_FORMAT_TYPES as readonly string[]).includes(type)
@@ -258,13 +254,8 @@ export function createSheetRulesReader(options: {
       }
       result.period = value.timePeriod as ConditionalFormat['period'];
     }
-    if (type === 'top10') {
-      result.rank = Math.max(1, Math.round(Number(value.rank ?? 10)) || 10);
-      if (on(value.percent, false)) result.percent = true;
-      if (on(value.bottom, false)) result.bottom = true;
-    }
-    if (type === 'aboveAverage' && !on(value.aboveAverage, true))
-      result.below = true;
+    readRank();
+    readBelowAverage();
     if (['colorScale', 'dataBar', 'iconSet'].includes(type)) {
       if (!pending.thresholds.length) {
         skipped = true;
@@ -272,31 +263,70 @@ export function createSheetRulesReader(options: {
       }
       result.thresholds = pending.thresholds;
       if (pending.colors.length) result.colors = pending.colors;
+      readIconSet();
+      if (!on(pending.attributes.showValue, true)) result.showValue = false;
+    } else {
+      const style = ruleStyle();
+      applyRuleStyle(style);
+    }
+    if (on(value.stopIfTrue, false)) result.stopIfTrue = true;
+    conditional.push({
+      priority: rulePriority(),
+      rule: result,
+    });
+
+    function ruleStyle() {
+      return (
+        pending.style ??
+        (value.dxfId === undefined
+          ? undefined
+          : styles.differentialStyle(Number(value.dxfId)))
+      );
+    }
+
+    function readBelowAverage() {
+      if (type === 'aboveAverage' && !on(value.aboveAverage, true))
+        result.below = true;
+    }
+
+    function applyRuleStyle(style: ConditionalStyle | undefined) {
+      if (style && Object.keys(style).length) result.style = style;
+    }
+
+    function rulePriority(): number {
+      return Number(value.priority ?? 0) || 0;
+    }
+
+    function readIconSet() {
       if (type === 'iconSet') {
         result.iconSet = pending.attributes.iconSet ?? '3TrafficLights1';
         if (on(pending.attributes.reverse, false)) result.reverse = true;
       }
-      if (!on(pending.attributes.showValue, true)) result.showValue = false;
-    } else {
-      const style =
-        pending.style ??
-        (value.dxfId === undefined
-          ? undefined
-          : styles.differentialStyle(Number(value.dxfId)));
-      if (style && Object.keys(style).length) result.style = style;
     }
-    if (on(value.stopIfTrue, false)) result.stopIfTrue = true;
-    conditional.push({
-      priority: Number(value.priority ?? 0) || 0,
-      rule: result,
-    });
+
+    function fallBackToExpression() {
+      if (
+        pending.formulas.length &&
+        ((TEXT_RULES.has(type) && value.text === undefined) ||
+          (type === 'timePeriod' &&
+            !(TIME_PERIODS as readonly string[]).includes(value.timePeriod)))
+      )
+        type = 'expression';
+    }
+
+    function readRank() {
+      if (type === 'top10') {
+        result.rank = Math.max(1, Math.round(Number(value.rank ?? 10)) || 10);
+        if (on(value.percent, false)) result.percent = true;
+        if (on(value.bottom, false)) result.bottom = true;
+      }
+    }
   }
 
   function finishValidation(pending: Pending, range: string | undefined) {
     const value = pending.attributes;
     // Any value: only an input message makes it worth keeping.
-    const type =
-      (value.type ?? 'none') === 'none' ? 'any' : (value.type as string);
+    const type = validationType();
     if (type === 'any' && !value.prompt) return;
     if (
       !range ||
@@ -321,8 +351,7 @@ export function createSheetRulesReader(options: {
     if (on(value.allowBlank, false)) result.allowBlank = true;
     // OOXML's showDropDown="1" hides the in-cell dropdown.
     if (on(value.showDropDown, false)) result.dropdown = false;
-    if (value.errorStyle === 'warning' || value.errorStyle === 'information')
-      result.errorStyle = value.errorStyle;
+    readErrorStyle();
     if (on(value.showErrorMessage, false)) result.showError = true;
     if (value.errorTitle) result.errorTitle = value.errorTitle.slice(0, 64);
     if (value.error) result.error = value.error.slice(0, 1024);
@@ -330,6 +359,15 @@ export function createSheetRulesReader(options: {
     if (value.promptTitle) result.promptTitle = value.promptTitle.slice(0, 64);
     if (value.prompt) result.prompt = value.prompt.slice(0, 1024);
     validations.push(result);
+
+    function readErrorStyle() {
+      if (value.errorStyle === 'warning' || value.errorStyle === 'information')
+        result.errorStyle = value.errorStyle;
+    }
+
+    function validationType() {
+      return (value.type ?? 'none') === 'none' ? 'any' : (value.type as string);
+    }
   }
 
   return {
@@ -340,23 +378,111 @@ export function createSheetRulesReader(options: {
         differential.stack.push(local);
         return true;
       }
-      const main = uri === MAIN || uri === STRICT || uri === '';
-      if (main && local === 'conditionalFormatting') {
-        sqref = importSqref(value.sqref);
-        return true;
+      const main = inMainNamespace();
+      if (openContainer() || openConditionalValue()) return true;
+      return openValidation();
+
+      function openContainer(): boolean {
+        if (main && local === 'conditionalFormatting') {
+          sqref = importSqref(value.sqref);
+          return true;
+        }
+        if (main && local === 'cfRule') {
+          rule = {
+            attributes: value,
+            formulas: [],
+            thresholds: [],
+            colors: [],
+          };
+          return true;
+        }
+        if (uri === X14 && local === 'conditionalFormatting') {
+          extensionRules = [];
+          extensionSqref = undefined;
+          return true;
+        }
+        if (uri === X14 && local === 'cfRule') {
+          // A data bar here extends the main list's rule with the same id.
+          if (value.type === 'dataBar') return true;
+          startExtensionRule();
+          return true;
+        }
+        if (extensionRule && uri === X14 && local === 'dxf') {
+          differential = {
+            reader: styles.inlineDifferential(),
+            stack: ['dxf'],
+          };
+          return true;
+        }
+        if (
+          extensionRules &&
+          uri === XM &&
+          (local === 'f' || local === 'sqref')
+        ) {
+          text = '';
+          return true;
+        }
+        return false;
       }
-      if (main && local === 'cfRule') {
-        rule = { attributes: value, formulas: [], thresholds: [], colors: [] };
-        return true;
+
+      function openConditionalValue(): boolean {
+        if (rule && (main || uri === X14) && local === 'cfvo') {
+          pushThreshold(thresholdType(), rule);
+          return true;
+        }
+        if (!rule || !main) return false;
+        switch (local) {
+          case 'color': {
+            const color = styles.color(value);
+            if (color) rule.colors.push(color);
+            return true;
+          }
+          case 'iconSet':
+            rule.attributes = { ...rule.attributes, ...value };
+            return true;
+          case 'dataBar':
+            if (value.showValue !== undefined)
+              rule.attributes = {
+                ...rule.attributes,
+                showValue: value.showValue,
+              };
+            return true;
+          case 'formula':
+            text = '';
+            return true;
+          default:
+            return false;
+        }
       }
-      if (uri === X14 && local === 'conditionalFormatting') {
-        extensionRules = [];
-        extensionSqref = undefined;
-        return true;
+
+      function openValidation(): boolean {
+        if ((main || uri === X14) && local === 'dataValidation') {
+          validation = {
+            attributes: value,
+            formulas: [],
+            thresholds: [],
+            colors: [],
+            extension: uri === X14,
+          };
+          return true;
+        }
+        if (
+          validation &&
+          ((main && (local === 'formula1' || local === 'formula2')) ||
+            (uri === XM && local === 'f') ||
+            (uri === XM && local === 'sqref'))
+        ) {
+          text = '';
+          return true;
+        }
+        return false;
       }
-      if (uri === X14 && local === 'cfRule') {
-        // A data bar here extends the main list's rule with the same id.
-        if (value.type === 'dataBar') return true;
+
+      function thresholdType() {
+        return THRESHOLD_TYPES[value.type ?? ''];
+      }
+
+      function startExtensionRule() {
         if (FORMULA_RULES.has(value.type ?? ''))
           extensionRule = {
             attributes: value,
@@ -365,68 +491,23 @@ export function createSheetRulesReader(options: {
             colors: [],
           };
         else skipped = true;
-        return true;
       }
-      if (extensionRule && uri === X14 && local === 'dxf') {
-        differential = { reader: styles.inlineDifferential(), stack: ['dxf'] };
-        return true;
+
+      function inMainNamespace() {
+        return uri === MAIN || uri === STRICT || uri === '';
       }
-      if (
-        extensionRules &&
-        uri === XM &&
-        (local === 'f' || local === 'sqref')
+
+      function pushThreshold(
+        type: ConditionalThreshold['type'] | undefined,
+        ruleInput: NonNullable<typeof rule>
       ) {
-        text = '';
-        return true;
-      }
-      if (rule && (main || uri === X14) && local === 'cfvo') {
-        const type = THRESHOLD_TYPES[value.type ?? ''];
         if (type)
-          rule.thresholds.push({
+          ruleInput.thresholds.push({
             type,
             ...(value.val !== undefined && { value: value.val }),
             ...(value.gte === '0' && { gte: false }),
           });
-        return true;
       }
-      if (rule && main && local === 'color') {
-        const color = styles.color(value);
-        if (color) rule.colors.push(color);
-        return true;
-      }
-      if (rule && main && local === 'iconSet') {
-        rule.attributes = { ...rule.attributes, ...value };
-        return true;
-      }
-      if (rule && main && local === 'dataBar') {
-        if (value.showValue !== undefined)
-          rule.attributes = { ...rule.attributes, showValue: value.showValue };
-        return true;
-      }
-      if (rule && main && local === 'formula') {
-        text = '';
-        return true;
-      }
-      if ((main || uri === X14) && local === 'dataValidation') {
-        validation = {
-          attributes: value,
-          formulas: [],
-          thresholds: [],
-          colors: [],
-          extension: uri === X14,
-        };
-        return true;
-      }
-      if (
-        validation &&
-        ((main && (local === 'formula1' || local === 'formula2')) ||
-          (uri === XM && local === 'f') ||
-          (uri === XM && local === 'sqref'))
-      ) {
-        text = '';
-        return true;
-      }
-      return false;
     },
     text(chunk: string) {
       if (text !== undefined) text += chunk;
@@ -441,20 +522,7 @@ export function createSheetRulesReader(options: {
         return;
       }
       if (extensionRules) {
-        if (uri === XM && local === 'f') {
-          extensionRule?.formulas.push(text ?? '');
-          text = undefined;
-        } else if (uri === XM && local === 'sqref') {
-          extensionSqref = text;
-          text = undefined;
-        } else if (extensionRule && uri === X14 && local === 'cfRule') {
-          extensionRules.push(extensionRule);
-          extensionRule = undefined;
-        } else if (uri === X14 && local === 'conditionalFormatting') {
-          const range = importSqref(extensionSqref);
-          for (const pending of extensionRules) finishRule(pending, range);
-          extensionRules = undefined;
-        }
+        closeExtensionElement(extensionRules);
         return;
       }
       if (main && local === 'conditionalFormatting') sqref = undefined;
@@ -464,29 +532,52 @@ export function createSheetRulesReader(options: {
       } else if (rule && main && local === 'cfRule') {
         finishRule(rule, sqref);
         rule = undefined;
-      } else if (
-        validation &&
-        main &&
-        (local === 'formula1' || local === 'formula2')
+      } else closeValidationElement();
+
+      function closeExtensionElement(
+        extensionRulesValue: NonNullable<typeof extensionRules>
       ) {
-        validation.formulas.push(text ?? '');
-        text = undefined;
-      } else if (validation && uri === XM && local === 'f') {
-        validation.formulas.push(text ?? '');
-        text = undefined;
-      } else if (validation && uri === XM && local === 'sqref') {
-        validation.sqref = text;
-        text = undefined;
-      } else if (validation && local === 'dataValidation') {
-        finishValidation(
-          validation,
-          importSqref(
-            validation.extension
-              ? validation.sqref
-              : validation.attributes.sqref
-          )
-        );
-        validation = undefined;
+        if (uri === XM && local === 'f') {
+          extensionRule?.formulas.push(text ?? '');
+          text = undefined;
+        } else if (uri === XM && local === 'sqref') {
+          extensionSqref = text;
+          text = undefined;
+        } else if (extensionRule && uri === X14 && local === 'cfRule') {
+          extensionRulesValue.push(extensionRule);
+          extensionRule = undefined;
+        } else if (uri === X14 && local === 'conditionalFormatting') {
+          const range = importSqref(extensionSqref);
+          for (const pending of extensionRulesValue) finishRule(pending, range);
+          extensionRules = undefined;
+        }
+      }
+
+      function closeValidationElement() {
+        if (
+          validation &&
+          main &&
+          (local === 'formula1' || local === 'formula2')
+        ) {
+          validation.formulas.push(text ?? '');
+          text = undefined;
+        } else if (validation && uri === XM && local === 'f') {
+          validation.formulas.push(text ?? '');
+          text = undefined;
+        } else if (validation && uri === XM && local === 'sqref') {
+          validation.sqref = text;
+          text = undefined;
+        } else if (validation && local === 'dataValidation') {
+          finishValidation(
+            validation,
+            importSqref(
+              validation.extension
+                ? validation.sqref
+                : validation.attributes.sqref
+            )
+          );
+          validation = undefined;
+        }
       }
     },
     finish() {
@@ -544,24 +635,32 @@ function impliedFormula(rule: ConditionalFormat): string | undefined {
   const text = `"${(rule.text ?? '').replace(/"/g, '""')}"`;
   const day = `FLOOR(${cell},1)`;
   const date = `ROUNDDOWN(${cell},0)`;
-  switch (rule.type) {
-    case 'containsText':
+  return matchBranch(rule)
+    .with({ type: 'containsText' }, (): string | undefined => {
       return `NOT(ISERROR(SEARCH(${text},${cell})))`;
-    case 'notContainsText':
+    })
+    .with({ type: 'notContainsText' }, (): string | undefined => {
       return `ISERROR(SEARCH(${text},${cell}))`;
-    case 'beginsWith':
+    })
+    .with({ type: 'beginsWith' }, (): string | undefined => {
       return `LEFT(${cell},LEN(${text}))=${text}`;
-    case 'endsWith':
+    })
+    .with({ type: 'endsWith' }, (): string | undefined => {
       return `RIGHT(${cell},LEN(${text}))=${text}`;
-    case 'containsBlanks':
+    })
+    .with({ type: 'containsBlanks' }, (): string | undefined => {
       return `LEN(TRIM(${cell}))=0`;
-    case 'notContainsBlanks':
+    })
+    .with({ type: 'notContainsBlanks' }, (): string | undefined => {
       return `LEN(TRIM(${cell}))>0`;
-    case 'containsErrors':
+    })
+    .with({ type: 'containsErrors' }, (): string | undefined => {
       return `ISERROR(${cell})`;
-    case 'notContainsErrors':
+    })
+    .with({ type: 'notContainsErrors' }, (): string | undefined => {
       return `NOT(ISERROR(${cell}))`;
-    case 'timePeriod':
+    })
+    .with({ type: 'timePeriod' }, (rule): string | undefined => {
       return {
         today: `${day}=TODAY()`,
         yesterday: `${day}=TODAY()-1`,
@@ -574,7 +673,8 @@ function impliedFormula(rule: ConditionalFormat): string | undefined {
         lastMonth: `AND(MONTH(${cell})=MONTH(EDATE(TODAY(),0-1)),YEAR(${cell})=YEAR(EDATE(TODAY(),0-1)))`,
         nextMonth: `AND(MONTH(${cell})=MONTH(EDATE(TODAY(),0+1)),YEAR(${cell})=YEAR(EDATE(TODAY(),0+1)))`,
       }[rule.period ?? 'today'];
-  }
+    })
+    .otherwise(() => undefined);
 }
 
 function thresholdXml(
@@ -614,12 +714,7 @@ export function conditionalFormattingXml(
           .map((threshold) => thresholdXml(threshold, formula))
           .join('');
         const colors = (rule.colors ?? []).map(colorXml).join('');
-        if (rule.type === 'colorScale')
-          body = `<colorScale>${thresholds}${colors}</colorScale>`;
-        else if (rule.type === 'dataBar')
-          body = `<dataBar${rule.showValue === false ? ' showValue="0"' : ''}>${thresholds}${colors || colorXml('#638EC6')}</dataBar>`;
-        else
-          body = `<iconSet${attribute('iconSet', rule.iconSet)}${rule.reverse ? ' reverse="1"' : ''}${rule.showValue === false ? ' showValue="0"' : ''}>${thresholds}</iconSet>`;
+        ruleBodyXml(thresholds, colors);
       } else {
         attributes += ` dxfId="${dxf(rule.style)}"`;
         if (rule.type === 'cellIs')
@@ -653,6 +748,15 @@ export function conditionalFormattingXml(
       }
       if (rule.stopIfTrue) attributes += ' stopIfTrue="1"';
       return `<conditionalFormatting sqref="${rule.range}"><cfRule ${attributes}>${body}</cfRule></conditionalFormatting>`;
+
+      function ruleBodyXml(thresholds: string, colors: string) {
+        if (rule.type === 'colorScale')
+          body = `<colorScale>${thresholds}${colors}</colorScale>`;
+        else if (rule.type === 'dataBar')
+          body = `<dataBar${rule.showValue === false ? ' showValue="0"' : ''}>${thresholds}${colors || colorXml('#638EC6')}</dataBar>`;
+        else
+          body = `<iconSet${attribute('iconSet', rule.iconSet)}${rule.reverse ? ' reverse="1"' : ''}${rule.showValue === false ? ' showValue="0"' : ''}>${thresholds}</iconSet>`;
+      }
     })
     .join('');
 }

@@ -54,20 +54,9 @@ export function cssFor(info: NodeInfo): string[] {
   lines.push(`width: ${px(info.width)};`, `height: ${px(info.height)};`);
   if (Math.abs(info.rotation) > 0.01)
     lines.push(`transform: rotate(${round(-info.rotation)}deg);`);
-  if (info.type !== 'TEXT') {
-    const fills = info.fills.map(paintCss).filter(Boolean).reverse();
-    if (fills.length === 1 && !fills[0]?.includes('gradient'))
-      lines.push(`background: ${fills[0]};`);
-    else if (fills.length > 0) lines.push(`background: ${fills.join(', ')};`);
-  } else {
-    const color = info.fills.map(paintCss).find(Boolean);
-    if (color) lines.push(`color: ${color};`);
-  }
+  pushFillCss();
   const stroke = info.strokes.map(paintCss).find(Boolean);
-  if (stroke && info.strokeWeight) {
-    const style = info.dashPattern?.length ? 'dashed' : 'solid';
-    lines.push(`border: ${px(info.strokeWeight)} ${style} ${stroke};`);
-  }
+  pushBorderCss();
   const r = info.cornerRadius;
   if (r) {
     const values = [r.top_left, r.top_right, r.bottom_right, r.bottom_left];
@@ -88,53 +77,85 @@ export function cssFor(info: NodeInfo): string[] {
     lines.push(`backdrop-filter: blur(${px(backdrop.radius / 2)});`);
   if (info.opacity < 0.999) lines.push(`opacity: ${round(info.opacity)};`);
   const t = info.text;
-  if (t) {
-    if (t.fontFamily) lines.push(`font-family: "${t.fontFamily}";`);
-    if (t.fontSize) lines.push(`font-size: ${px(t.fontSize)};`);
-    const weight = fontWeight(t.fontStyle);
-    if (weight) lines.push(`font-weight: ${weight};`);
-    if (t.fontStyle?.toLowerCase().includes('italic'))
-      lines.push('font-style: italic;');
-    if (t.lineHeight && t.lineHeight[1] !== 'RAW') {
-      const [v, unit] = t.lineHeight;
-      lines.push(
-        `line-height: ${unit === 'PERCENT' ? `${round(v)}%` : px(v)};`
-      );
-    }
-    if (t.letterSpacing && t.letterSpacing[0] !== 0) {
-      const [v, unit] = t.letterSpacing;
-      lines.push(
-        `letter-spacing: ${unit === 'PERCENT' ? `${round(v / 100)}em` : px(v)};`
-      );
-    }
-    if (t.alignHorizontal && t.alignHorizontal !== 'LEFT')
-      lines.push(
-        `text-align: ${t.alignHorizontal === 'JUSTIFIED' ? 'justify' : t.alignHorizontal.toLowerCase()};`
-      );
-    if (t.decoration === 'UNDERLINE') lines.push('text-decoration: underline;');
-    if (t.decoration === 'STRIKETHROUGH')
-      lines.push('text-decoration: line-through;');
-    if (t.case === 'UPPER') lines.push('text-transform: uppercase;');
-    if (t.case === 'LOWER') lines.push('text-transform: lowercase;');
-  }
+  pushTypographyCss();
   const al = info.autoLayout;
-  if (al) {
-    lines.push(
-      'display: flex;',
-      `flex-direction: ${al.mode === 'VERTICAL' ? 'column' : 'row'};`
-    );
-    if (al.spacing) lines.push(`gap: ${px(al.spacing)};`);
-    const pad = [
-      al.paddingTop,
-      al.paddingRight,
-      al.paddingBottom,
-      al.paddingLeft,
-    ];
-    if (pad.some((p) => p !== 0))
-      lines.push(`padding: ${pad.map(px).join(' ')};`);
-    if (al.wrap) lines.push('flex-wrap: wrap;');
-  }
+  pushAutoLayoutCss();
   return lines;
+
+  function pushTypographyCss() {
+    if (t) {
+      if (t.fontFamily) lines.push(`font-family: "${t.fontFamily}";`);
+      if (t.fontSize) lines.push(`font-size: ${px(t.fontSize)};`);
+      const weight = fontWeight(t.fontStyle);
+      if (weight) lines.push(`font-weight: ${weight};`);
+      if (t.fontStyle?.toLowerCase().includes('italic'))
+        lines.push('font-style: italic;');
+      if (t.lineHeight && t.lineHeight[1] !== 'RAW') {
+        const [v, unit] = t.lineHeight;
+        lines.push(
+          `line-height: ${unit === 'PERCENT' ? `${round(v)}%` : px(v)};`
+        );
+      }
+      if (t.letterSpacing && t.letterSpacing[0] !== 0) {
+        const [v, unit] = t.letterSpacing;
+        lines.push(
+          `letter-spacing: ${unit === 'PERCENT' ? `${round(v / 100)}em` : px(v)};`
+        );
+      }
+      pushTextAlignCss(t);
+      if (t.decoration === 'UNDERLINE')
+        lines.push('text-decoration: underline;');
+      if (t.decoration === 'STRIKETHROUGH')
+        lines.push('text-decoration: line-through;');
+      if (t.case === 'UPPER') lines.push('text-transform: uppercase;');
+      if (t.case === 'LOWER') lines.push('text-transform: lowercase;');
+    }
+  }
+
+  function pushTextAlignCss(tInput: NonNullable<typeof t>) {
+    if (tInput.alignHorizontal && tInput.alignHorizontal !== 'LEFT')
+      lines.push(
+        `text-align: ${tInput.alignHorizontal === 'JUSTIFIED' ? 'justify' : tInput.alignHorizontal.toLowerCase()};`
+      );
+  }
+
+  function pushBorderCss() {
+    if (stroke && info.strokeWeight) {
+      const style = info.dashPattern?.length ? 'dashed' : 'solid';
+      lines.push(`border: ${px(info.strokeWeight)} ${style} ${stroke};`);
+    }
+  }
+
+  function pushAutoLayoutCss() {
+    if (al) {
+      lines.push(
+        'display: flex;',
+        `flex-direction: ${al.mode === 'VERTICAL' ? 'column' : 'row'};`
+      );
+      if (al.spacing) lines.push(`gap: ${px(al.spacing)};`);
+      const pad = [
+        al.paddingTop,
+        al.paddingRight,
+        al.paddingBottom,
+        al.paddingLeft,
+      ];
+      if (pad.some((p) => p !== 0))
+        lines.push(`padding: ${pad.map(px).join(' ')};`);
+      if (al.wrap) lines.push('flex-wrap: wrap;');
+    }
+  }
+
+  function pushFillCss() {
+    if (info.type !== 'TEXT') {
+      const fills = info.fills.map(paintCss).filter(Boolean).reverse();
+      if (fills.length === 1 && !fills[0]?.includes('gradient'))
+        lines.push(`background: ${fills[0]};`);
+      else if (fills.length > 0) lines.push(`background: ${fills.join(', ')};`);
+    } else {
+      const color = info.fills.map(paintCss).find(Boolean);
+      if (color) lines.push(`color: ${color};`);
+    }
+  }
 }
 
 const WEIGHTS: [RegExp, number][] = [

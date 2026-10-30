@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { trackMention } from '@app/lib/queries/storage/mentions';
 import { useHasPaidAccess } from '@core/auth';
 import {
   createFilesReadyHandler,
@@ -15,7 +16,6 @@ import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useEmail, useUserContext, useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { trackMention } from '@core/signal/mention';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { deviceLooksOffline } from '@core/util/connectivity';
@@ -102,10 +102,12 @@ import {
   type DraftSaveResult,
   type EmailComposeContext,
   type SaveEmailDraft,
+  type SendEmailDraft,
 } from './context/compose-capabilities';
 import { localDraftReadyForDelivery } from './core/local-draft';
 import { readDroppedEmailFiles, withVideoAttachments } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
+import { startReported } from './primitives/background-work';
 import {
   emailDraftLifecycleSource,
   publishDraftLifecycleChange,
@@ -186,6 +188,10 @@ export function createEmailComposeContext(
   });
   const reportError = (error: unknown) =>
     Telemetry.error(error instanceof Error ? error : new Error(String(error)));
+  // Post-commit UI work runs in the background; a failure is reported, never
+  // surfaced as a failure of the operation that started it.
+  const startPostCommit = (work: Promise<unknown>) =>
+    startReported(work, reportError);
   const requireSavedDraftForDelivery = async (
     draftId: string | null | undefined
   ) => {
@@ -198,27 +204,26 @@ export function createEmailComposeContext(
   };
   // A thread view renders its latest draft as the composer until the thread
   // is read again, so every delivery change refetches it.
+  const refreshCachedThread = async (threadId: string) => {
+    const result = await fetchAndCacheThread(threadId);
+    if (result.isErr())
+      reportError(
+        new Error(
+          `Failed to refresh email thread ${threadId}: ${result.error
+            .map((error) => `${error.code}: ${error.message}`)
+            .join(', ')}`
+        )
+      );
+  };
   const refreshThread = (threadId: string | undefined) => {
     if (!threadId) return;
     if (isFeatureEnabled(enableGraphqlSoup)) {
-      void (async () => {
-        const result = await fetchAndCacheThread(threadId);
-        if (result.isErr())
-          reportError(
-            new Error(
-              `Failed to refresh email thread ${threadId}: ${result.error
-                .map((error) => `${error.code}: ${error.message}`)
-                .join(', ')}`
-            )
-          );
-      })().catch(reportError);
+      startPostCommit(refreshCachedThread(threadId));
       return;
     }
-    void queryClient
-      .invalidateQueries({
-        queryKey: emailKeys.threadMessages(threadId).queryKey,
-      })
-      .catch(reportError);
+    queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(threadId).queryKey,
+    });
   };
 
   // Queued writes address a draft by handles: the composer's minted ones, or a
@@ -238,12 +243,127 @@ export function createEmailComposeContext(
       : undefined;
   };
 
+  const senderEmailFor = (senderLinkId: string) =>
+    inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
+      ?.email_address ??
+    viewerEmail() ??
+    '';
+
+  /** The signature the backend injects: replies follow the inbox's reply setting. */
+  const sendingSignatureHtml = (
+    message: SendEmailDraft['message'],
+    senderLinkId: string
+  ) => {
+    const inbox = inboxSource
+      .inboxes()
+      .find((inbox) => inbox.id === senderLinkId);
+    if (!inbox) throw new Error('The sending account is unavailable');
+    return message.include_signature === false ||
+      (message.replying_to_id &&
+        message.include_signature !== true &&
+        !inbox.settings.signature_on_replies_forwards)
+      ? ''
+      : (inbox.settings.signature ?? '');
+  };
+
+  const saveQueuedDraft = async (
+    handles: DraftClientHandles & { threadId: string },
+    { completingThread, previousThreadId, inboxId, ...input }: SaveEmailDraft
+  ): Promise<DraftSaveResult> => {
+    if (!(await readLocalDraft(handles.draftId)))
+      await saveLocalDraft({
+        ...input,
+        clientHandles: handles,
+        inboxId: inboxId ?? primaryId(),
+        attachments: [],
+      });
+    const local = await readLocalDraft(handles.draftId);
+    const senderLinkId = local?.inboxId ?? inboxId ?? primaryId() ?? '';
+    const outcome = await saveEmailDraftQueued({
+      args: {
+        ...queuedDraftSaveArgs({
+          draft: local?.content ?? input.draft,
+          handles: local
+            ? {
+                draftId: local.draftId,
+                threadId: local.threadId ?? handles.threadId,
+              }
+            : handles,
+          senderLinkId,
+          senderAccount: accounts.isSuccess
+            ? accounts.data?.links.find((link) => link.id === senderLinkId)
+            : undefined,
+          senderEmail: senderEmailFor(senderLinkId),
+        }),
+        localRevision: local?.revision,
+      },
+      completingThread,
+      previousThreadId,
+    });
+    if (outcome.kind === 'rejected') {
+      throw new DraftPersistRejected(outcome.code);
+    }
+    return outcome.kind === 'queued'
+      ? { ...handles, inboxId: senderLinkId, persistence: 'queued' }
+      : {
+          draftId: outcome.draftId,
+          threadId: outcome.threadId,
+          inboxId: senderLinkId,
+          persistence: 'committed',
+        };
+  };
+
+  // Cache refreshes after a committed save must not fail the save.
+  const refreshAfterSave = (
+    threadId: string | undefined,
+    previousThreadId: string | undefined,
+    completingThread: boolean | undefined
+  ) => {
+    if (threadId) {
+      markThreadDraftSaved(threadId);
+      fireAndForget(
+        refreshEmailLists(threadId, !!completingThread),
+        'email-compose'
+      );
+    }
+    if (previousThreadId && previousThreadId !== threadId) {
+      markThreadDraftSaved(previousThreadId);
+      invalidateSoupEntity(previousThreadId);
+      startPostCommit(refetchSoupEntity(previousThreadId, 'emailThread'));
+    }
+  };
+
+  const saveDraftDirectly = async ({
+    completingThread,
+    previousThreadId,
+    inboxId,
+    ...input
+  }: SaveEmailDraft) => {
+    const localId = input.clientHandles?.draftId ?? input.draft.db_id;
+    const local = localId ? await readLocalDraft(localId) : undefined;
+    const result = await saveEmailComposeDraft({
+      ...input,
+      inboxId: inboxId ?? primaryId(),
+    });
+    try {
+      await confirmLocalDraftSave(local, result);
+    } catch (error) {
+      reportError(error);
+    }
+    try {
+      refreshAfterSave(result.threadId, previousThreadId, completingThread);
+    } catch (error) {
+      reportError(error);
+    }
+    return result;
+  };
+
   return {
     draftLifecycle: emailDraftLifecycleSource,
     operations: createMessageOperationSource,
     recipientName: (id) => getDisplayName(tryMacroId(id)),
     recordMention: (sourceId, targetId) => {
-      void trackMention(sourceId, 'document', targetId).catch(reportError);
+      startPostCommit(trackMention(sourceId, 'document', targetId));
     },
     accounts: {
       ...inboxSource,
@@ -268,24 +388,26 @@ export function createEmailComposeContext(
       uploadDocuments: uploadAttachmentDocuments,
       uploadEditorFiles(input) {
         if (!input.editor) return;
-        handleFileFolderDrop(
-          input.files,
-          input.directories,
-          withVideoAttachments(
-            createFilesReadyHandler(
-              input.editor,
-              input.sourceId,
-              input.sourceId ? 'email' : undefined,
-              input.dropEvent && input.editor
-                ? () =>
-                    getDragDropPosition(input.editor!, input.dropEvent!, true)
-                : undefined,
-              input.onUploaded,
-              { width: 542, height: 542 }
-            ),
-            input.onVideos
+        startPostCommit(
+          handleFileFolderDrop(
+            input.files,
+            input.directories,
+            withVideoAttachments(
+              createFilesReadyHandler(
+                input.editor,
+                input.sourceId,
+                input.sourceId ? 'email' : undefined,
+                input.dropEvent && input.editor
+                  ? () =>
+                      getDragDropPosition(input.editor!, input.dropEvent!, true)
+                  : undefined,
+                input.onUploaded,
+                { width: 542, height: 542 }
+              ),
+              input.onVideos
+            )
           )
-        ).catch(reportError);
+        );
       },
     },
     notices: {
@@ -362,98 +484,11 @@ export function createEmailComposeContext(
       forgetLocalDraft: (draftId) => forgetLocalDraft(draftId),
       readDraft: readEmailDraft,
       watchDrafts: watchEmailDrafts,
-      async saveDraft({
-        completingThread,
-        previousThreadId,
-        inboxId,
-        ...input
-      }) {
+      async saveDraft(input) {
         assertEmailDraftQueueAvailable();
         const handles = queueHandles(input);
-        if (handles) {
-          if (!(await readLocalDraft(handles.draftId)))
-            await saveLocalDraft({
-              ...input,
-              clientHandles: handles,
-              inboxId: inboxId ?? primaryId(),
-              attachments: [],
-            });
-          const local = await readLocalDraft(handles.draftId);
-          const senderLinkId = local?.inboxId ?? inboxId ?? primaryId() ?? '';
-          const outcome = await saveEmailDraftQueued({
-            args: {
-              ...queuedDraftSaveArgs({
-                draft: local?.content ?? input.draft,
-                handles: local
-                  ? {
-                      draftId: local.draftId,
-                      threadId: local.threadId ?? handles.threadId,
-                    }
-                  : handles,
-                senderLinkId,
-                senderAccount: accounts.isSuccess
-                  ? accounts.data?.links.find(
-                      (link) => link.id === senderLinkId
-                    )
-                  : undefined,
-                senderEmail:
-                  inboxSource
-                    .inboxes()
-                    .find((inbox) => inbox.id === senderLinkId)
-                    ?.email_address ??
-                  viewerEmail() ??
-                  '',
-              }),
-              localRevision: local?.revision,
-            },
-            completingThread,
-            previousThreadId,
-          });
-          if (outcome.kind === 'rejected') {
-            throw new DraftPersistRejected(outcome.code);
-          }
-          const saved: DraftSaveResult =
-            outcome.kind === 'queued'
-              ? { ...handles, inboxId: senderLinkId, persistence: 'queued' }
-              : {
-                  draftId: outcome.draftId,
-                  threadId: outcome.threadId,
-                  inboxId: senderLinkId,
-                  persistence: 'committed',
-                };
-          return saved;
-        }
-        const localId = input.clientHandles?.draftId ?? input.draft.db_id;
-        const local = localId ? await readLocalDraft(localId) : undefined;
-        const result = await saveEmailComposeDraft({
-          ...input,
-          inboxId: inboxId ?? primaryId(),
-        });
-        try {
-          await confirmLocalDraftSave(local, result);
-        } catch (error) {
-          reportError(error);
-        }
-        try {
-          const threadId = result.threadId;
-          if (threadId) {
-            markThreadDraftSaved(threadId);
-            fireAndForget(
-              refreshEmailLists(threadId, !!completingThread),
-              'email-compose'
-            );
-          }
-          if (previousThreadId && previousThreadId !== threadId) {
-            markThreadDraftSaved(previousThreadId);
-            invalidateSoupEntity(previousThreadId);
-            void refetchSoupEntity(previousThreadId, 'emailThread').catch(
-              reportError
-            );
-          }
-        } catch (error) {
-          reportError(error);
-        }
-        return result;
+        if (handles) return await saveQueuedDraft(handles, input);
+        return await saveDraftDirectly(input);
       },
       async deleteDraft({ completingThread, inboxId, ...input }) {
         assertEmailDraftQueueAvailable();
@@ -590,17 +625,7 @@ export function createEmailComposeContext(
           input.clientHandles?.threadId ?? input.message.thread_db_id;
         if (!draftId || !threadId)
           throw new Error('Draft identity is required to queue a send');
-        const inbox = inboxSource
-          .inboxes()
-          .find((inbox) => inbox.id === senderLinkId);
-        if (!inbox) throw new Error('The sending account is unavailable');
-        const signatureHtml =
-          input.message.include_signature === false ||
-          (input.message.replying_to_id &&
-            input.message.include_signature !== true &&
-            !inbox.settings.signature_on_replies_forwards)
-            ? ''
-            : (inbox.settings.signature ?? '');
+        const signatureHtml = sendingSignatureHtml(input.message, senderLinkId);
         const queued = await sendEmailQueued({
           signatureHtml,
           expectedLocalVersion: input.expectedLocalVersion,
@@ -612,11 +637,7 @@ export function createEmailComposeContext(
               senderAccount: accounts.isSuccess
                 ? accounts.data?.links.find((link) => link.id === senderLinkId)
                 : undefined,
-              senderEmail:
-                inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
-                  ?.email_address ??
-                viewerEmail() ??
-                '',
+              senderEmail: senderEmailFor(senderLinkId),
             }),
             sendTime: input.sendTime,
           },
@@ -677,11 +698,9 @@ export function createEmailComposeContext(
         try {
           publishDraftLifecycleChange(draftId, inboxId);
           refreshThread(threadId);
-          void queryClient
-            .invalidateQueries({
-              queryKey: emailKeys.scheduledMessages._def,
-            })
-            .catch(reportError);
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.scheduledMessages._def,
+          });
         } catch (error) {
           // Cache and cross-tab notifications are post-commit UI work. A
           // failure here must not make a successful schedule retryable.
@@ -767,13 +786,15 @@ export function createEmailComposeContext(
                 );
               },
               onAttachmentUploadFailed: (uploadedFile) => {
-                void recordLocalAttachment(
-                  draftId,
-                  uploadedFile,
-                  undefined,
-                  false,
-                  generation
-                ).catch(reportError);
+                startPostCommit(
+                  recordLocalAttachment(
+                    draftId,
+                    uploadedFile,
+                    undefined,
+                    false,
+                    generation
+                  )
+                );
                 input.onAttachmentUploadFailed?.(uploadedFile);
               },
             });

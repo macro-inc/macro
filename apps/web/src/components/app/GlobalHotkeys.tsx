@@ -216,6 +216,14 @@ export default function GlobalShortcuts() {
   const { openSettings, settingsOpen, selectTab, toggleSettings } =
     useSettingsState();
   const logout = useLogout();
+  const logoutOrReport = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      Telemetry.error(error, { surface: 'logout' });
+      toast.failure(t('commands.failedToSignOut'));
+    }
+  };
 
   const handleFileUpload = useHandleFileUpload();
   const snippetsFlag = useFeatureFlag(enableSnippets);
@@ -425,10 +433,7 @@ export default function GlobalShortcuts() {
     description: () => t('commands.logout'),
     icon: LogoutIcon,
     keyDownHandler: () => {
-      logout().catch((error) => {
-        Telemetry.error(error, { surface: 'logout' });
-        toast.failure(t('commands.failedToSignOut'));
-      });
+      fireAndForget(logoutOrReport(), 'logout');
       return true;
     },
     runWithInputFocused: true,

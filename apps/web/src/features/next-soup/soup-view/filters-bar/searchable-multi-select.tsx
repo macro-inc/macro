@@ -42,7 +42,6 @@ export type SearchableSelectAction = {
 const ACTION_ID = '__searchable-multi-select-action__';
 
 const ITEM_HEIGHT = 36;
-const LISTBOX_CLASS = 'max-h-[240px] overflow-y-auto scrollbar-hidden';
 
 type SearchableMultiSelectProps = {
   options: Accessor<SearchableOption[]>;
@@ -229,7 +228,7 @@ const VirtualizedListbox = (props: {
         );
         if (idx !== -1) handle?.scrollToIndex(idx, { align: 'nearest' });
       }}
-      class={cn(LISTBOX_CLASS, props.class)}
+      class={cn('max-h-[240px] overflow-y-auto scrollbar-hidden', props.class)}
     >
       {(items) => {
         visibleItems = items;

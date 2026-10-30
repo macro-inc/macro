@@ -11,7 +11,7 @@ const mock = vi.hoisted(() => ({
   listProperties: vi.fn(),
   refetch: vi.fn(),
 }));
-vi.mock('@core/util/create', () => ({
+vi.mock('@app/lib/queries/items/create', () => ({
   createTaskWithInitialSnapshot: mock.create,
 }));
 vi.mock('@queries/properties/entity', () => ({

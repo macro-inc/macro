@@ -3,6 +3,7 @@ import type { FilterID } from '@app/features/next-soup/filters';
 import type { FilterContext } from '@app/features/next-soup/filters/configs';
 import {
   type Query,
+  type QueryState,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
@@ -60,6 +61,8 @@ const VIEW_SCOPED_REFINEMENTS: ListView[] = ['calls'];
 export const shouldPreserveFiltersOnTabChange = (view: ListView) =>
   PRESERVE_FILTERS_ON_TAB_CHANGE.includes(view);
 
+type ViewPreset = NonNullable<ReturnType<typeof getViewPreset>>;
+
 export const useApplyPreset = () => {
   const soup = useSoup();
   const {
@@ -87,6 +90,104 @@ export const useApplyPreset = () => {
       : (filter.query as Query);
   };
 
+  /**
+   * The next tab's preset with the current refinements layered on: active
+   * predicates beyond the current tab's own, plus the query-only refinements
+   * no predicate backs.
+   */
+  const withPreservedRefinements = (
+    view: ListView,
+    preset: ViewPreset,
+    presetContext: PresetContext,
+    filterContext: FilterContext
+  ) => {
+    const currentPreset = getViewPreset(
+      view,
+      activeTab() ?? VIEW_TAB_PRESETS[view]?.default,
+      presetContext
+    );
+
+    const currentFilterIds: FilterID[] = [
+      ...(currentPreset?.clientFilters.and ?? []),
+      ...(currentPreset?.clientFilters.or ?? []),
+    ];
+
+    const nextAndIds = (soup.predicates.andIds() as FilterID[]).filter(
+      (id) => !currentFilterIds.includes(id)
+    );
+
+    const nextOrIds = (soup.predicates.orIds() as FilterID[]).filter(
+      (id) => !currentFilterIds.includes(id)
+    );
+
+    const refinementIds = [...nextAndIds, ...nextOrIds];
+
+    let mergedFilters = queryStateFrom(preset.filters);
+    for (const id of refinementIds) {
+      const query = getFilterQuery(id, filterContext);
+
+      if (!query) continue;
+
+      mergedFilters = mergeQuery(mergedFilters, query);
+    }
+
+    return {
+      filters: withQueryOnlyRefinements(mergedFilters, currentPreset),
+      clientFilters: {
+        and: [...new Set([...(preset.clientFilters.and ?? []), ...nextAndIds])],
+        or: [...new Set([...(preset.clientFilters.or ?? []), ...nextOrIds])],
+      },
+    };
+  };
+
+  const withQueryOnlyRefinements = (
+    filters: QueryState,
+    currentPreset: ViewPreset | undefined
+  ): QueryState => {
+    let mergedFilters = filters;
+
+    // Tags are a query-only refinement with no backing predicate, so the
+    // predicate-driven reconstruction above never carries them. Preserve the
+    // active selection (and its combine mode) explicitly like any other
+    // refinement.
+    const activeTagFilters = queryFilters.state.include.tagFilters;
+    if (activeTagFilters?.length) {
+      mergedFilters = mergeQuery(mergedFilters, {
+        include: {
+          tagFilters: activeTagFilters.map((t) => ({ ...t })),
+          tagFilterMode: queryFilters.state.include.tagFilterMode,
+        },
+      });
+    }
+
+    // Created by is a direct server-side document-owner refinement rather
+    // than a client predicate, so retain an explicit choice across the
+    // Tasks and Files tabs just as we do tags above. Do not carry a tab's
+    // own owner scope (e.g. Files → Owned) into another tab.
+    const currentCreatorIds = queryFilters.state.include.documentOwnerId ?? [];
+    const presetCreatorIds =
+      currentPreset?.filters.include?.documentOwnerId ?? [];
+    const isExplicitCreatorFilter =
+      currentCreatorIds.length !== presetCreatorIds.length ||
+      currentCreatorIds.some((id) => !presetCreatorIds.includes(id));
+    if (isExplicitCreatorFilter) {
+      mergedFilters.include.documentOwnerId = currentCreatorIds.length
+        ? [...currentCreatorIds]
+        : undefined;
+    }
+
+    // A channel chosen in the Calls sidebar is a direct server refinement,
+    // and no tab scopes by channel, so it carries over unchanged.
+    const channelIds = queryFilters.state.include.callChannelId;
+    if (channelIds?.length) {
+      mergedFilters = mergeQuery(mergedFilters, {
+        include: { callChannelId: [...channelIds] },
+      });
+    }
+
+    return mergedFilters;
+  };
+
   const applyTabPreset = (view: ListView, tabId: string) => {
     const presetContext = getPresetContext();
     const preset = getViewPreset(view, tabId, presetContext);
@@ -101,82 +202,14 @@ export const useApplyPreset = () => {
     let nextClientFilters = preset.clientFilters;
 
     if (shouldPreserveFiltersOnTabChange(view)) {
-      const currentPreset = getViewPreset(
+      const preserved = withPreservedRefinements(
         view,
-        activeTab() ?? VIEW_TAB_PRESETS[view]?.default,
-        presetContext
+        preset,
+        presetContext,
+        filterContext
       );
-
-      const currentFilterIds: FilterID[] = [
-        ...(currentPreset?.clientFilters.and ?? []),
-        ...(currentPreset?.clientFilters.or ?? []),
-      ];
-
-      const nextAndIds = (soup.predicates.andIds() as FilterID[]).filter(
-        (id) => !currentFilterIds.includes(id)
-      );
-
-      const nextOrIds = (soup.predicates.orIds() as FilterID[]).filter(
-        (id) => !currentFilterIds.includes(id)
-      );
-
-      const refinementIds = [...nextAndIds, ...nextOrIds];
-
-      let mergedFilters = queryStateFrom(preset.filters);
-      for (const id of refinementIds) {
-        const query = getFilterQuery(id, filterContext);
-
-        if (!query) continue;
-
-        mergedFilters = mergeQuery(mergedFilters, query);
-      }
-
-      // Tags are a query-only refinement with no backing predicate, so the
-      // predicate-driven reconstruction above never carries them. Preserve the
-      // active selection (and its combine mode) explicitly like any other
-      // refinement.
-      const activeTagFilters = queryFilters.state.include.tagFilters;
-      if (activeTagFilters?.length) {
-        mergedFilters = mergeQuery(mergedFilters, {
-          include: {
-            tagFilters: activeTagFilters.map((t) => ({ ...t })),
-            tagFilterMode: queryFilters.state.include.tagFilterMode,
-          },
-        });
-      }
-
-      // Created by is a direct server-side document-owner refinement rather
-      // than a client predicate, so retain an explicit choice across the
-      // Tasks and Files tabs just as we do tags above. Do not carry a tab's
-      // own owner scope (e.g. Files → Owned) into another tab.
-      const currentCreatorIds =
-        queryFilters.state.include.documentOwnerId ?? [];
-      const presetCreatorIds =
-        currentPreset?.filters.include?.documentOwnerId ?? [];
-      const isExplicitCreatorFilter =
-        currentCreatorIds.length !== presetCreatorIds.length ||
-        currentCreatorIds.some((id) => !presetCreatorIds.includes(id));
-      if (isExplicitCreatorFilter) {
-        mergedFilters.include.documentOwnerId = currentCreatorIds.length
-          ? [...currentCreatorIds]
-          : undefined;
-      }
-
-      // A channel chosen in the Calls sidebar is a direct server refinement,
-      // and no tab scopes by channel, so it carries over unchanged.
-      const channelIds = queryFilters.state.include.callChannelId;
-      if (channelIds?.length) {
-        mergedFilters = mergeQuery(mergedFilters, {
-          include: { callChannelId: [...channelIds] },
-        });
-      }
-
-      nextFilters = mergedFilters;
-
-      nextClientFilters = {
-        and: [...new Set([...(preset.clientFilters.and ?? []), ...nextAndIds])],
-        or: [...new Set([...(preset.clientFilters.or ?? []), ...nextOrIds])],
-      };
+      nextFilters = preserved.filters;
+      nextClientFilters = preserved.clientFilters;
     }
 
     // Calls sidebar refinements belong to the view, not to one tab, so a
@@ -329,9 +362,6 @@ export const MobileSoupViewTabs = () => {
 // flex sizing and span the header container itself (100cqw resolves against
 // @container/split-header = the panel width): -ml cancels the row gutter so
 // the strip runs device edge to device edge, over the scrollbar.
-const MOBILE_TAB_STRIP_CLASS =
-  '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
-const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
 
 const MobileViewTabs = (props: { view: TabbedListView }) => {
   const { applyTabPreset } = useApplyPreset();
@@ -342,8 +372,8 @@ const MobileViewTabs = (props: { view: TabbedListView }) => {
   return (
     <PillTabs
       scrollable
-      class={MOBILE_TAB_STRIP_CLASS}
-      contentClass={MOBILE_TAB_CONTENT_CLASS}
+      class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
+      contentClass="px-(--mobile-chrome-gutter)"
       leading={<MobileFilterDrawer />}
       items={visibleViewTabs(props.view)}
       value={activeValue()}

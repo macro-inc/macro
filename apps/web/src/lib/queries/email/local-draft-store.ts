@@ -1,6 +1,7 @@
 import type {
   DraftAttempt,
   LocalDraft,
+  LocalDraftAttachment,
 } from '@app/features/email-compose/core/local-draft';
 import { RecoverableIDB } from '../../persistence/recoverable-idb';
 import {
@@ -17,11 +18,66 @@ type AttemptRecord = DraftAttempt & {
 export type DraftStorageSession = { accountId: string; epoch: string };
 /** `writeId` identifies the save that produced the record, so a replay can recognize its own commit. */
 type StoredDraft = LocalDraft & { epoch: string; writeId?: string };
+type LocalDraftSnapshot = Omit<
+  LocalDraft,
+  'revision' | 'acknowledgedRevision' | 'updatedAt'
+>;
 const STORES = ['drafts', 'files', 'attempts', 'sends', 'meta'] as const;
 
 export type DraftStorageEvent =
   | { type: 'closed' | 'recovered' }
   | { type: 'failed'; error: unknown };
+
+/** Upload callbacks can commit while file bytes are being copied. The working-copy snapshot must not erase a newer receipt. */
+function keepUploadReceipt(
+  attachment: LocalDraftAttachment,
+  previous: StoredDraft | undefined
+): LocalDraftAttachment {
+  if (attachment.type !== 'local') return attachment;
+  const receipt = previous?.attachments.find(
+    (saved) => saved.type === 'local' && saved.id === attachment.id
+  );
+  if (receipt?.type !== 'local') return attachment;
+  return {
+    ...attachment,
+    attachmentId:
+      receipt.attachmentId ??
+      (attachment.uploaded ? attachment.attachmentId : undefined),
+    uploaded:
+      receipt.uploaded ||
+      (attachment.uploaded &&
+        (!receipt.attachmentId ||
+          receipt.attachmentId === attachment.attachmentId)),
+  };
+}
+
+/** The record a working-copy save commits over `previous`. */
+function nextStoredDraft(
+  snapshot: LocalDraftSnapshot,
+  previous: StoredDraft | undefined,
+  write: { epoch: string; writeId: string }
+): StoredDraft {
+  const paused =
+    previous?.status === 'failed' ||
+    previous?.status === 'unconfirmed' ||
+    previous?.status === 'delete-failed';
+  return {
+    ...snapshot,
+    ...write,
+    latestAttemptId: previous?.latestAttemptId,
+    queuedAttemptId: previous?.queuedAttemptId,
+    attachments: snapshot.attachments.map((attachment) =>
+      keepUploadReceipt(attachment, previous)
+    ),
+    serverDraftId: previous?.serverDraftId ?? snapshot.serverDraftId,
+    serverThreadId: previous?.serverThreadId ?? snapshot.serverThreadId,
+    revision: (previous?.revision ?? 0) + 1,
+    acknowledgedRevision: previous?.acknowledgedRevision ?? 0,
+    status: paused ? previous.status : 'dirty',
+    errorCode: paused ? previous.errorCode : undefined,
+    updatedAt: Date.now(),
+  };
+}
 
 /** Transactional working-copy storage. Unlike a query cache, it never evicts edits. */
 export function createLocalDraftStore(
@@ -270,10 +326,7 @@ export function createLocalDraftStore(
     /** Compare the snapshot revision and commit its content and files atomically. */
     async save(
       session: DraftStorageSession,
-      input: Omit<
-        LocalDraft,
-        'revision' | 'acknowledgedRevision' | 'updatedAt'
-      > & { expectedRevision: number },
+      input: LocalDraftSnapshot & { expectedRevision: number },
       files: ReadonlyMap<string, Blob> = new Map()
     ): Promise<LocalDraft> {
       const writeId = crypto.randomUUID();
@@ -314,10 +367,6 @@ export function createLocalDraftStore(
                       finish(undefined);
                       return;
                     }
-                    const paused =
-                      previous?.status === 'failed' ||
-                      previous?.status === 'unconfirmed' ||
-                      previous?.status === 'delete-failed';
                     if (previous?.status === 'deleting') {
                       finish(undefined);
                       return;
@@ -332,47 +381,10 @@ export function createLocalDraftStore(
                     }
                     const { expectedRevision: _expectedRevision, ...snapshot } =
                       input;
-                    const draft: StoredDraft = {
-                      ...snapshot,
+                    const draft = nextStoredDraft(snapshot, previous, {
                       epoch: session.epoch,
                       writeId,
-                      latestAttemptId: previous?.latestAttemptId,
-                      queuedAttemptId: previous?.queuedAttemptId,
-                      attachments: input.attachments.map((attachment) => {
-                        if (attachment.type !== 'local') return attachment;
-                        const receipt = previous?.attachments.find(
-                          (saved) =>
-                            saved.type === 'local' && saved.id === attachment.id
-                        );
-                        // Upload callbacks can commit while file bytes are being copied.
-                        // The working-copy snapshot must not erase a newer receipt.
-                        return receipt?.type === 'local'
-                          ? {
-                              ...attachment,
-                              attachmentId:
-                                receipt.attachmentId ??
-                                (attachment.uploaded
-                                  ? attachment.attachmentId
-                                  : undefined),
-                              uploaded:
-                                receipt.uploaded ||
-                                (attachment.uploaded &&
-                                  (!receipt.attachmentId ||
-                                    receipt.attachmentId ===
-                                      attachment.attachmentId)),
-                            }
-                          : attachment;
-                      }),
-                      serverDraftId:
-                        previous?.serverDraftId ?? input.serverDraftId,
-                      serverThreadId:
-                        previous?.serverThreadId ?? input.serverThreadId,
-                      revision: (previous?.revision ?? 0) + 1,
-                      acknowledgedRevision: previous?.acknowledgedRevision ?? 0,
-                      status: paused ? previous.status : 'dirty',
-                      errorCode: paused ? previous.errorCode : undefined,
-                      updatedAt: Date.now(),
-                    };
+                    });
                     for (const [id, blob] of files)
                       tx.objectStore('files').put(blob, [input.key, id]);
                     const retained = new Set(

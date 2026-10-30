@@ -1,4 +1,3 @@
-import * as engine from '@core/docx-engine/client';
 import type {
   EditOp,
   EditResult,
@@ -7,7 +6,8 @@ import type {
   Pos,
   Selection,
   StyleInfo,
-} from '@core/docx-engine/types';
+} from '@app/lib/docx/types';
+import * as engine from '@core/docx-engine/client';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { LoroDoc } from 'loro-crdt';
 import { createSignal, onCleanup } from 'solid-js';
@@ -131,22 +131,28 @@ export function createDocxEditor(options: DocxEditorOptions) {
       if (docxFormatVersion(doc) !== DOCX_FORMAT_VERSION) return;
       unsubscribe();
       stopMigrationWatch = undefined;
-      void (async () => {
-        if (disposed) return;
-        const reopened = await engine.openCollabDocument(
-          docKey,
-          readCollabState(doc),
-          Math.floor(Math.random() * 2 ** 48)
-        );
-        if (disposed) return;
-        follow(doc);
-        show(reopened);
-        renderer.invalidate();
-      })().catch((error: unknown) => options.onError?.(error));
+      fireAndForget(reopenMigrated(doc), 'docx-editor');
     });
     // Runs after an await, outside the owner: the editor's own cleanup
     // stops it.
     stopMigrationWatch = unsubscribe;
+  }
+
+  async function reopenMigrated(doc: LoroDoc) {
+    try {
+      if (disposed) return;
+      const reopened = await engine.openCollabDocument(
+        docKey,
+        readCollabState(doc),
+        Math.floor(Math.random() * 2 ** 48)
+      );
+      if (disposed) return;
+      follow(doc);
+      show(reopened);
+      renderer.invalidate();
+    } catch (error) {
+      options.onError?.(error);
+    }
   }
 
   function show(opened: { pages: PageInfo[]; state: EditResult }) {
@@ -269,14 +275,30 @@ export function createDocxEditor(options: DocxEditorOptions) {
     take(await engine.setMarkup(docKey, next));
   }
 
-  open().catch((error: unknown) => options.onError?.(error));
+  async function start() {
+    try {
+      await open();
+    } catch (error) {
+      options.onError?.(error);
+    }
+  }
+
+  async function close() {
+    try {
+      await engine.closeDocument(docKey);
+    } catch {
+      // The worker may already be gone; there is nothing left to release.
+    }
+  }
+
+  fireAndForget(start(), 'docx-editor');
 
   onCleanup(() => {
     disposed = true;
     stopMigrationWatch?.();
     collab?.dispose();
     renderer.dispose();
-    void engine.closeDocument(docKey).catch(() => {});
+    fireAndForget(close(), 'docx-editor');
   });
 
   return {

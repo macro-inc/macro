@@ -4,7 +4,7 @@ import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '../hooks/usePropertyUserDisplay';
-import type { Property } from '../types';
+import type { EntityProperty, Property } from '../types';
 import {
   formatBoolean,
   formatDate,
@@ -162,6 +162,19 @@ function UserPropertyText(props: {
   );
 }
 
+/** How many people (or bots) or items an entity property holds. */
+function entityCountText(property: EntityProperty): string {
+  const entities = getEntityValues(property);
+  if (entities.length === 0) return '';
+  if (property.specificEntityType === 'USER') {
+    if (entities.some((entity) => isBotPrincipalId(entity.entity_id))) {
+      return `${entities.length} assignees`;
+    }
+    return entities.length === 2 ? '2 people' : `${entities.length} people`;
+  }
+  return entities.length === 1 ? '1 item' : `${entities.length} items`;
+}
+
 function extractText(property: Property): string {
   if (!hasValue(property)) return '';
 
@@ -180,17 +193,7 @@ function extractText(property: Property): string {
     return first ? formatPropertyValue(property, first) : '';
   }
 
-  if (isEntityProperty(property)) {
-    const entities = getEntityValues(property);
-    if (entities.length === 0) return '';
-    if (property.specificEntityType === 'USER') {
-      if (entities.some((entity) => isBotPrincipalId(entity.entity_id))) {
-        return `${entities.length} assignees`;
-      }
-      return entities.length === 2 ? '2 people' : `${entities.length} people`;
-    }
-    return entities.length === 1 ? '1 item' : `${entities.length} items`;
-  }
+  if (isEntityProperty(property)) return entityCountText(property);
 
   if (isLinkProperty(property)) {
     return getLinkValues(property)[0] ?? '';

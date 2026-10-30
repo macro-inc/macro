@@ -3,8 +3,9 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { refreshCrmAssociatedSoupQueries } from '@queries/soup/crm-association';
 import { attachmentReferencesKeys } from '@queries/storage/keys';
-import { type ItemType, storageServiceClient } from '@service-storage/client';
-import { getPermissionToken } from './token';
+import { storageServiceClient } from '@service-storage/client';
+import type { ItemType } from '@service-storage/itemType';
+import { getPermissionToken } from './permission-token';
 
 type MentionId = string;
 

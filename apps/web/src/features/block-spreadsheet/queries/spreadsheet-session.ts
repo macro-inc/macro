@@ -52,21 +52,25 @@ function serializeSnapshotOperation<T>(
   documentId: string,
   operation: () => Promise<T>
 ): Promise<T> {
-  const pending = (
-    snapshotOperations.get(documentId) ?? Promise.resolve()
-  ).then(operation);
-  const settled = pending.then(
-    () => {},
-    () => {}
-  );
+  const runAfterPrevious = async () => {
+    await (snapshotOperations.get(documentId) ?? Promise.resolve());
+    return await operation();
+  };
+  const pending = runAfterPrevious();
+  // The next operation waits for this one whether or not it fails.
+  const waitForPending = async () => {
+    try {
+      await pending;
+    } catch {}
+  };
+  const settled = waitForPending();
   snapshotOperations.set(documentId, settled);
-  fireAndForget(
-    settled.then(() => {
-      if (snapshotOperations.get(documentId) === settled)
-        snapshotOperations.delete(documentId);
-    }),
-    'spreadsheet-session'
-  );
+  const forgetWhenSettled = async () => {
+    await settled;
+    if (snapshotOperations.get(documentId) === settled)
+      snapshotOperations.delete(documentId);
+  };
+  fireAndForget(forgetWhenSettled(), 'spreadsheet-session');
   return pending;
 }
 

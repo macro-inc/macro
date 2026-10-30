@@ -13,7 +13,7 @@
  * split so the first streamed frames duplicate fetched ones (they must drop).
  */
 
-import { AgentSession } from '@core/agent-session/AgentSession';
+import { AgentSession } from '@app/lib/queries/agent-session/agent-session';
 import type { ResultError } from '@core/util/result';
 import type {
   AgentSessionLogEntryDto,
@@ -22,7 +22,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { err, ok } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
-import type { ReplayBackend } from './interceptor';
+import type { ReplayBackend } from '../../queries/replay-backend';
 
 export const REPLAY_BOT: SessionBot = {
   id: 'replay-bot',

@@ -5,17 +5,18 @@ import type {
   createLocalDraftStore,
   DraftStorageSession,
 } from './local-draft-store';
-import { type EmailSendIntent, usableEmailSendIntents } from './send-intent';
+import {
+  type EmailSendIntent,
+  emailSendAttemptStatus,
+  usableEmailSendIntents,
+} from './send-intent';
 
 type Journal = Pick<
   ReturnType<typeof createLocalDraftStore>,
   'sends' | 'claimSend' | 'settleSend' | 'subscribe'
 >;
 
-/** One authenticated account owns this runner. Database leases coordinate tabs. */
-export function createEmailSendDispatcher(options: {
-  session: DraftStorageSession;
-  journal: Journal;
+type SendApi = {
   submit(
     intent: EmailSendIntent,
     signal: AbortSignal
@@ -28,8 +29,131 @@ export function createEmailSendDispatcher(options: {
     intent: EmailSendIntent,
     signal: AbortSignal
   ): Promise<EmailSendAttemptFieldsFragment | null>;
-  report(intent: EmailSendIntent, error?: unknown): void;
-}) {
+};
+
+type Settlement = Parameters<Journal['settleSend']>[4];
+
+const REJECTION_CODES = [
+  'INVALID',
+  'INVALID_SENDER',
+  'SEND_ATTEMPT_CONFLICT',
+  'DRAFT_ALREADY_SENT',
+  'DRAFT_VERSION_CONFLICT',
+  'NOT_FOUND',
+  'INBOX_NOT_FOUND',
+  'FORBIDDEN',
+];
+const REAUTHENTICATION_CODES = [
+  'UNAUTHENTICATED',
+  'UNAUTHORIZED',
+  'NEEDS_REAUTH',
+];
+
+/** Cancels, confirms an earlier submission, or submits, as the claimed row needs. */
+async function requestAttempt(
+  api: SendApi,
+  claimed: EmailSendIntent,
+  row: EmailSendIntent,
+  signal: AbortSignal
+): Promise<EmailSendAttemptFieldsFragment> {
+  if (claimed.cancellationRequested) return await api.cancel(claimed, signal);
+  if (!row.submissionStarted && row.phase !== 'committed')
+    return await api.submit(claimed, signal);
+  let attempt = await api.status(claimed, signal);
+  if (!attempt && row.phase !== 'committed')
+    attempt = await api.submit(claimed, signal);
+  if (!attempt) throw new Error('Server acceptance could not be confirmed');
+  return attempt;
+}
+
+function errorCodes(error: unknown): string[] {
+  return error instanceof CombinedError
+    ? error.graphQLErrors.map((entry) => String(entry.extensions.code))
+    : [];
+}
+
+/**
+ * Only the first exclusive submission can prove that no earlier request was
+ * accepted. A status rejection after a timeout cannot.
+ */
+function rejectedBeforeAdmission(
+  error: unknown,
+  codes: string[],
+  claimed: EmailSendIntent,
+  row: EmailSendIntent,
+  leaseGeneration: number
+): boolean {
+  if (
+    claimed.dispatchVersion !== 2 ||
+    leaseGeneration !== 1 ||
+    row.submissionStarted ||
+    row.phase === 'committed' ||
+    claimed.cancellationRequested
+  )
+    return false;
+  if (!(error instanceof CombinedError) || error.networkError) return false;
+  return (
+    error.graphQLErrors.every(
+      (entry) =>
+        !entry.path ||
+        (entry.path.length === 1 && entry.path[0] === 'sendEmailMessage')
+    ) &&
+    codes.length > 0 &&
+    codes.every((code) => ['INBOX_NOT_FOUND', 'FORBIDDEN'].includes(code))
+  );
+}
+
+function nextRetryAt(error: unknown, failures: number): number {
+  const backoff = Math.min(30_000, 1_000 * 2 ** Math.min(failures, 5));
+  const retryAfter =
+    error instanceof CombinedError
+      ? Number(error.response?.headers.get('retry-after')) * 1_000
+      : 0;
+  return (
+    Date.now() +
+    Math.max(retryAfter || 0, backoff * (0.8 + Math.random() * 0.4))
+  );
+}
+
+/** How a failed attempt settles: rejected, paused for reauthentication, or retried. */
+function failedAttemptSettlement(
+  error: unknown,
+  claimed: EmailSendIntent,
+  row: EmailSendIntent,
+  lease: { generation: number; failures: number }
+): Settlement {
+  const codes = errorCodes(error);
+  const rejected = codes.some((code) => REJECTION_CODES.includes(code));
+  const needsAuthentication =
+    codes.some((code) => REAUTHENTICATION_CODES.includes(code)) ||
+    (error instanceof CombinedError && error.response?.status === 401);
+  return {
+    failed: rejected && !claimed.cancellationRequested,
+    rejectedBeforeAdmission: rejectedBeforeAdmission(
+      error,
+      codes,
+      claimed,
+      row,
+      lease.generation
+    ),
+    paused: needsAuthentication,
+    error: needsAuthentication
+      ? 'Reconnect your email account, then check status to resume.'
+      : rejected
+        ? 'Review this message before sending again.'
+        : 'Waiting to confirm server acceptance.',
+    nextAttemptAt: nextRetryAt(error, lease.failures),
+  };
+}
+
+/** One authenticated account owns this runner. Database leases coordinate tabs. */
+export function createEmailSendDispatcher(
+  options: SendApi & {
+    session: DraftStorageSession;
+    journal: Journal;
+    report(intent: EmailSendIntent, error?: unknown): void;
+  }
+) {
   const worker = crypto.randomUUID();
   const controllers = new Set<AbortController>();
   const inFlight = new Map<string, Promise<void>>();
@@ -38,9 +162,7 @@ export function createEmailSendDispatcher(options: {
   let rerun = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const active = (row: EmailSendIntent) => {
-    const status =
-      row.response?.cancelEmailSend?.attempt.status ??
-      row.response?.sendEmailMessage?.attempt.status;
+    const status = emailSendAttemptStatus(row);
     return (
       !row.dispatch?.paused &&
       !row.locallyCancelled &&
@@ -63,18 +185,12 @@ export function createEmailSendDispatcher(options: {
     const timeout = setTimeout(() => controller.abort(), 15_000);
     const leaseGeneration = claimed.dispatch.generation;
     try {
-      let attempt: EmailSendAttemptFieldsFragment | null;
-      if (claimed.cancellationRequested) {
-        attempt = await options.cancel(claimed, controller.signal);
-      } else if (row.submissionStarted || row.phase === 'committed') {
-        attempt = await options.status(claimed, controller.signal);
-        if (!attempt && row.phase !== 'committed')
-          attempt = await options.submit(claimed, controller.signal);
-        if (!attempt)
-          throw new Error('Server acceptance could not be confirmed');
-      } else {
-        attempt = await options.submit(claimed, controller.signal);
-      }
+      const attempt = await requestAttempt(
+        options,
+        claimed,
+        row,
+        controller.signal
+      );
       if (disposed) return;
       await options.journal.settleSend(
         options.session,
@@ -89,80 +205,30 @@ export function createEmailSendDispatcher(options: {
       options.report(claimed);
     } catch (error) {
       if (disposed) return;
-      const codes =
-        error instanceof CombinedError
-          ? error.graphQLErrors.map((entry) => entry.extensions.code)
-          : [];
-      const rejected = codes.some((code) =>
-        [
-          'INVALID',
-          'INVALID_SENDER',
-          'SEND_ATTEMPT_CONFLICT',
-          'DRAFT_ALREADY_SENT',
-          'DRAFT_VERSION_CONFLICT',
-          'NOT_FOUND',
-          'INBOX_NOT_FOUND',
-          'FORBIDDEN',
-        ].includes(String(code))
-      );
-      const needsAuthentication =
-        codes.some((code) =>
-          ['UNAUTHENTICATED', 'UNAUTHORIZED', 'NEEDS_REAUTH'].includes(
-            String(code)
-          )
-        ) ||
-        (error instanceof CombinedError && error.response?.status === 401);
-      const backoff = Math.min(
-        30_000,
-        1_000 * 2 ** Math.min(claimed.dispatch.failures, 5)
-      );
-      const retryAfter =
-        error instanceof CombinedError
-          ? Number(error.response?.headers.get('retry-after')) * 1_000
-          : 0;
       await options.journal.settleSend(
         options.session,
         row.uuid,
         worker,
         leaseGeneration,
-        {
-          failed: rejected && !claimed.cancellationRequested,
-          // Only the first exclusive submission can prove that no earlier
-          // request was accepted. A status rejection after a timeout cannot.
-          rejectedBeforeAdmission:
-            claimed.dispatchVersion === 2 &&
-            leaseGeneration === 1 &&
-            !row.submissionStarted &&
-            row.phase !== 'committed' &&
-            !claimed.cancellationRequested &&
-            error instanceof CombinedError &&
-            !error.networkError &&
-            error.graphQLErrors.every(
-              (entry) =>
-                !entry.path ||
-                (entry.path.length === 1 &&
-                  entry.path[0] === 'sendEmailMessage')
-            ) &&
-            codes.length > 0 &&
-            codes.every((code) =>
-              ['INBOX_NOT_FOUND', 'FORBIDDEN'].includes(String(code))
-            ),
-          paused: needsAuthentication,
-          error: needsAuthentication
-            ? 'Reconnect your email account, then check status to resume.'
-            : rejected
-              ? 'Review this message before sending again.'
-              : 'Waiting to confirm server acceptance.',
-          nextAttemptAt:
-            Date.now() +
-            Math.max(retryAfter || 0, backoff * (0.8 + Math.random() * 0.4)),
-        }
+        failedAttemptSettlement(error, claimed, row, claimed.dispatch)
       );
       options.report(claimed, error);
     } finally {
       clearTimeout(timeout);
       controllers.delete(controller);
     }
+  }
+  async function dispatchAndRelease(row: EmailSendIntent) {
+    try {
+      await dispatch(row);
+    } finally {
+      inFlight.delete(row.uuid);
+      schedule();
+    }
+  }
+  async function afterInFlight(scan: Promise<void>) {
+    await scan;
+    await Promise.allSettled([...inFlight.values()]);
   }
   async function run() {
     try {
@@ -180,10 +246,7 @@ export function createEmailSendDispatcher(options: {
       // The journal also reserves each draft; unrelated drafts never share a
       // head-of-line queue. Limit concurrent HTTP work rather than ordering it.
       for (const row of due.slice(0, Math.max(0, 4 - inFlight.size))) {
-        const task = dispatch(row).finally(() => {
-          inFlight.delete(row.uuid);
-          schedule();
-        });
+        const task = dispatchAndRelease(row);
         inFlight.set(row.uuid, task);
         fireAndForget(task, 'email-outbox-attempt');
       }
@@ -203,10 +266,7 @@ export function createEmailSendDispatcher(options: {
     // Scan ownership ends before HTTP completes, so a newly approved message
     // can use a free slot while another request is slow. Await current work for
     // explicit callers; event-driven wakeups remain non-blocking.
-    const completion = running.then(async () => {
-      await Promise.allSettled([...inFlight.values()]);
-    });
-    return completion;
+    return afterInFlight(running);
   }
   function schedule() {
     const completion = wake();

@@ -1,3 +1,4 @@
+import { startDetached } from '@core/util/startDetached';
 import { match } from 'ts-pattern';
 import type { CacheRequest, CacheResponse } from '../../protocol';
 import {
@@ -46,16 +47,17 @@ const report = (
 
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
-const failCommand =
-  (commandId: string) =>
-  (error: unknown): void => {
+/** Starts a command's work, reporting a failure as the command's result. */
+const runCommand = (commandId: string, work: () => Promise<void>): void => {
+  startDetached(work(), (error) => {
     report({
       kind: 'command-result',
       commandId,
       ok: false,
       error: errorText(error),
     });
-  };
+  });
+};
 const reportProtocolError = (error: unknown): void => {
   report({ kind: 'protocol-error', error: errorText(error) });
 };
@@ -94,9 +96,10 @@ const adapter = createCacheCoordinatorPageAdapter({
     report({ kind: 'cache-superseded', reason });
     // What the app's host does: leave like a navigating page, which stops
     // this tab's engine so the newer build can open the database.
-    adapter
-      .dispose({ graceful: false, preserveDatabase: true })
-      .catch(reportProtocolError);
+    startDetached(
+      adapter.dispose({ graceful: false, preserveDatabase: true }),
+      reportProtocolError
+    );
   },
 });
 
@@ -145,51 +148,55 @@ const sendRequest = async (
 const handleCommand = (command: ProductionHarnessCommand): void => {
   match(command)
     .with({ kind: 'write' }, (value) => {
-      sendRequest(value.commandId, {
-        kind: 'write',
-        query: QUERY,
-        operationName: 'Soup',
-        variables: VARIABLES,
-        data: {
-          user: {
-            id: 'production-user',
-            soup: {
-              nextCursor: null,
-              items: [{ __typename: 'GraphqlSoupDocument', id: value.value }],
+      runCommand(value.commandId, () =>
+        sendRequest(value.commandId, {
+          kind: 'write',
+          query: QUERY,
+          operationName: 'Soup',
+          variables: VARIABLES,
+          data: {
+            user: {
+              id: 'production-user',
+              soup: {
+                nextCursor: null,
+                items: [{ __typename: 'GraphqlSoupDocument', id: value.value }],
+              },
             },
           },
-        },
-        identity: 'production-test-user',
-      }).catch(failCommand(value.commandId));
+          identity: 'production-test-user',
+        })
+      );
     })
     .with({ kind: 'read' }, (value) => {
-      sendRequest(value.commandId, {
-        kind: 'read',
-        query: QUERY,
-        operationName: 'Soup',
-        variables: VARIABLES,
-      }).catch(failCommand(value.commandId));
+      runCommand(value.commandId, () =>
+        sendRequest(value.commandId, {
+          kind: 'read',
+          query: QUERY,
+          operationName: 'Soup',
+          variables: VARIABLES,
+        })
+      );
     })
     .with({ kind: 'slow-read' }, (value) => {
-      sendRequest(value.commandId, {
-        kind: 'read',
-        query: SLOW_QUERY,
-        operationName: 'Slow',
-        variables: VARIABLES,
-      }).catch(failCommand(value.commandId));
+      runCommand(value.commandId, () =>
+        sendRequest(value.commandId, {
+          kind: 'read',
+          query: SLOW_QUERY,
+          operationName: 'Slow',
+          variables: VARIABLES,
+        })
+      );
     })
     .with({ kind: 'graceful-close' }, (value) => {
-      adapter
-        .dispose({ graceful: true })
-        .then(() => {
-          report({
-            kind: 'command-result',
-            commandId: value.commandId,
-            ok: true,
-          });
-          setTimeout(() => window.close());
-        })
-        .catch(failCommand(value.commandId));
+      runCommand(value.commandId, async () => {
+        await adapter.dispose({ graceful: true });
+        report({
+          kind: 'command-result',
+          commandId: value.commandId,
+          ok: true,
+        });
+        setTimeout(() => window.close());
+      });
     })
     .with({ kind: 'crash-worker' }, (value) => {
       if (!currentWorker) {
@@ -221,8 +228,8 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
       report({ kind: 'command-result', commandId: value.commandId, ok: true });
     })
     .with({ kind: 'request' }, (value) => {
-      sendRequest(value.commandId, value.request).catch(
-        failCommand(value.commandId)
+      runCommand(value.commandId, () =>
+        sendRequest(value.commandId, value.request)
       );
     })
     .with({ kind: 'terminate-worker' }, (value) => {
@@ -239,7 +246,7 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
       report({ kind: 'command-result', commandId: value.commandId, ok: true });
     })
     .with({ kind: 'navigate-away' }, (value) => {
-      (async () => {
+      runCommand(value.commandId, async () => {
         await adapter.dispose({ graceful: false, preserveDatabase: true });
         report({
           kind: 'command-result',
@@ -247,7 +254,7 @@ const handleCommand = (command: ProductionHarnessCommand): void => {
           ok: true,
         });
         setTimeout(() => window.close());
-      })().catch(failCommand(value.commandId));
+      });
     })
     .exhaustive();
 };
@@ -260,7 +267,8 @@ channel.onmessage = (event: MessageEvent<ProductionHarnessEnvelope>) => {
 };
 
 adapter.postMessage({ id: nextRequestId++, kind: 'init', scope });
-adapter
-  .start()
-  .then(() => report({ kind: 'registered' }))
-  .catch(reportProtocolError);
+const register = async () => {
+  await adapter.start();
+  report({ kind: 'registered' });
+};
+startDetached(register(), reportProtocolError);

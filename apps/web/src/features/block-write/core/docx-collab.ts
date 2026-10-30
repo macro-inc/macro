@@ -4,7 +4,7 @@ import type {
   EditResult,
   RemoteChange,
   Selection,
-} from '@core/docx-engine/types';
+} from '@app/lib/docx/types';
 import { type LoroDoc, type LoroEventBatch, UndoManager } from 'loro-crdt';
 import { transform } from './delta';
 import {
@@ -54,6 +54,24 @@ function isSelection(value: unknown): value is Selection {
   );
 }
 
+/** Runs `run` once `previous`, which never rejects, has finished. */
+async function runAfter<T>(
+  previous: Promise<void>,
+  run: () => Promise<T>
+): Promise<T> {
+  await previous;
+  return run();
+}
+
+/** Finishes when `work` does, whether it resolved or rejected. */
+async function settled(work: Promise<unknown>): Promise<void> {
+  try {
+    await work;
+  } catch {
+    // The caller of the failed call handles its failure.
+  }
+}
+
 /**
  * Keeps one engine session and one collaborative Loro document in step.
  *
@@ -68,7 +86,8 @@ function isSelection(value: unknown): value is Selection {
  * engine again so both sides converge.
  */
 export class DocxCollab {
-  private chain: Promise<unknown> = Promise.resolve();
+  /** Every queued engine call; never rejects. */
+  private chain: Promise<void> = Promise.resolve();
   /** Remote changes the engine has not seen yet. */
   private pending: Touched = emptyTouched();
   /** Remote changes seen while a local edit is in flight. */
@@ -120,9 +139,14 @@ export class DocxCollab {
   }
 
   private serial<T>(run: () => Promise<T>): Promise<T> {
-    const next = this.chain.then(run, run);
-    this.chain = next.catch(() => {});
+    const next = runAfter(this.chain, run);
+    this.chain = settled(next);
     return next;
+  }
+
+  /** Queues work that handles its own failures behind every engine call. */
+  private enqueue(run: () => Promise<void>) {
+    this.chain = runAfter(this.chain, run);
   }
 
   private onEvents(batch: LoroEventBatch) {
@@ -214,10 +238,8 @@ export class DocxCollab {
       }
       return result;
     });
-    void run.then(
-      () => this.flushSoon(),
-      () => this.flushSoon()
-    );
+    // Whether the edit landed or failed, changes that arrived meanwhile go next.
+    this.enqueue(async () => this.flushSoon());
     return run;
   }
 
@@ -227,12 +249,13 @@ export class DocxCollab {
     if (this.pending.blocks.size === 0 && this.pending.entries.size === 0)
       return;
     this.flushing = true;
-    void this.serial(async () => {
+    this.enqueue(async () => {
       this.flushing = false;
-      await this.flushPending();
-    }).catch((error: unknown) => {
-      this.flushing = false;
-      this.options.onError?.(error);
+      try {
+        await this.flushPending();
+      } catch (error) {
+        this.options.onError?.(error);
+      }
     });
   }
 
@@ -255,8 +278,8 @@ export class DocxCollab {
   }
 
   /** Resolves once every queued engine call has finished. */
-  idle(): Promise<void> {
-    return this.chain.then(() => undefined);
+  async idle(): Promise<void> {
+    await this.chain;
   }
 
   /** Undoes this peer's last step in the shared document. */

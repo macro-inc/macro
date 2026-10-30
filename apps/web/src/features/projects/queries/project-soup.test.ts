@@ -10,7 +10,7 @@ import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromPromise, mergeMap, pipe } from 'wonka';
 
-vi.mock('@service-storage/graphql-soup', () => ({
+vi.mock('@service-storage/graphql-properties', () => ({
   mapGraphqlProperties: () => [],
 }));
 vi.mock('@queries/activity/push-registry', () => ({

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   AnyVariables,
   Client,
@@ -141,7 +142,14 @@ export class MutationObserver<
       OnMutateResult
     > = {}
   ): void => {
-    void this.mutateAsync(input, options).catch(() => undefined);
+    const run = async () => {
+      try {
+        await this.mutateAsync(input, options);
+      } catch {
+        // mutate reports failures through the observer state, not a rejection.
+      }
+    };
+    fireAndForget(run(), 'urql-mutation');
   };
 
   readonly mutateAsync = async (
@@ -244,20 +252,7 @@ export class MutationObserver<
       ] as const;
 
       try {
-        if (error) {
-          const errorArgs = [error, input, onMutateResult, result] as const;
-          await options.onError?.(...errorArgs);
-          await executionOptions.onError?.(...errorArgs);
-        } else {
-          const successArgs = [
-            result.data,
-            input,
-            onMutateResult,
-            result,
-          ] as const;
-          await options.onSuccess?.(...successArgs);
-          await executionOptions.onSuccess?.(...successArgs);
-        }
+        await updateMutateAsync(error, result);
       } finally {
         await options.onSettled?.(...settledArgs);
         await executionOptions.onSettled?.(...settledArgs);
@@ -269,6 +264,26 @@ export class MutationObserver<
       if (!this.destroyed) {
         this.setState({ isPending: this.activeExecutions > 0 });
         this.result.notify();
+      }
+    }
+
+    async function updateMutateAsync(
+      error: ReturnType<typeof toCombinedError> | null,
+      result: OperationResult<MutationData, Variables>
+    ) {
+      if (error) {
+        const errorArgs = [error, input, onMutateResult, result] as const;
+        await options.onError?.(...errorArgs);
+        await executionOptions.onError?.(...errorArgs);
+      } else {
+        const successArgs = [
+          result.data,
+          input,
+          onMutateResult,
+          result,
+        ] as const;
+        await options.onSuccess?.(...successArgs);
+        await executionOptions.onSuccess?.(...successArgs);
       }
     }
   };

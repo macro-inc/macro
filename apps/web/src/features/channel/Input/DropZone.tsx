@@ -1,6 +1,6 @@
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { Telemetry } from '@macro-inc/observability';
 import type { ParentProps } from 'solid-js';
 import { useInputCommands } from './context';
 
@@ -21,10 +21,11 @@ export function DropZone(props: DropZoneProps) {
         onDragStart: (valid) => props.onDragStart?.(valid),
         onDragEnd: () => props.onDragEnd?.(),
         onDrop: (files, folders) => {
-          handleFileFolderDrop(files, folders, (entries) =>
-            commands.attachFiles(entries.map((e) => e.file))
-          ).catch((error) =>
-            Telemetry.error(error, { surface: 'channel-input' })
+          fireAndForget(
+            handleFileFolderDrop(files, folders, (entries) =>
+              commands.attachFiles(entries.map((e) => e.file))
+            ),
+            'channel-input'
           );
         },
       }}

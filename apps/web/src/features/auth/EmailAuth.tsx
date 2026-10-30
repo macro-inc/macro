@@ -21,7 +21,6 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { whenSettled } from '@core/util/whenSettled';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
-import { Telemetry } from '@macro-inc/observability';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
   invalidateAllAfterLogin,
@@ -94,9 +93,7 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     query,
     async () => {
       const onSuccess = () => {
-        onSuccessfulAuth().catch((error) =>
-          Telemetry.error(error, { surface: 'email-auth' })
-        );
+        fireAndForget(onSuccessfulAuth(), 'email-auth');
         navigateToSuccess();
       };
 

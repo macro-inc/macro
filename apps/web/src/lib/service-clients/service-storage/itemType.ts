@@ -1,6 +1,20 @@
 import type { BlockAlias, BlockName } from '@core/block';
 import { match } from 'ts-pattern';
-import type { CloudStorageItemType } from './generated/schemas/cloudStorageItemType';
+import { ChannelType } from './generated/schemas/channelType';
+import { CloudStorageItemType } from './generated/schemas/cloudStorageItemType';
+
+export const ChannelTypeEnum = {
+  Public: ChannelType.public,
+  Private: ChannelType.private,
+  DirectMessage: ChannelType.direct_message,
+  Team: ChannelType.team,
+} as const satisfies Record<string, ChannelType>;
+
+export function isCloudStorageItem(
+  item: ItemType
+): item is CloudStorageItemType {
+  return Object.values(CloudStorageItemType).some((type) => type === item);
+}
 
 /** Item type accepted by user history endpoints. */
 export type ItemType =

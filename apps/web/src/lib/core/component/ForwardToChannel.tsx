@@ -22,13 +22,13 @@ import { chatRuleset, uploadFile } from '@core/util/upload';
 import CheckIcon from '@icon/system/regular/check.svg?component-solid';
 import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import {
-  blockNameToItemType,
-  itemTypeToReferenceEntityType,
-} from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SharePermissionV2ChannelSharePermissions } from '@service-storage/generated/schemas/sharePermissionV2ChannelSharePermissions';
+import {
+  blockNameToItemType,
+  itemTypeToReferenceEntityType,
+} from '@service-storage/itemType';
 import { Button, cn, Hotkey } from '@ui';
 import {
   type Accessor,

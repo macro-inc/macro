@@ -199,6 +199,11 @@ export function parseTime(
     }
   }
 
+  return parseTimeAtStart(trimmed);
+}
+
+function parseTimeAtStart(trimmed: string): ReturnType<typeof parseTime> {
+  let match: RegExpMatchArray | null;
   // Compact meridiem at start: "830p tomorrow"
   const compactAtStart = /^(\d{3,4})\s*(a|am|p|pm)\s+(.+)$/i;
   match = trimmed.match(compactAtStart);

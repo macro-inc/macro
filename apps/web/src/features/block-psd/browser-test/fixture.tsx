@@ -12,6 +12,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { PsdEngine } from '@core/psd-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { PsdEditorProvider } from '../context/psd-editor-context';
@@ -109,11 +110,15 @@ function Fixture() {
   };
 
   const start = async () => {
-    const file = params.get('file');
-    if (file) await openCorpusFile(file);
-    else if (params.has('new')) await openNew();
+    try {
+      const file = params.get('file');
+      if (file) await openCorpusFile(file);
+      else if (params.has('new')) await openNew();
+    } catch (e) {
+      setError(String(e));
+    }
   };
-  start().catch((e: unknown) => setError(String(e)));
+  fireAndForget(start(), 'psd-fixture');
 
   return (
     <div class="flex h-screen flex-col bg-page text-ink">

@@ -71,6 +71,15 @@ const hasFilterCategoryRefinement = (
  * Hook that provides detection of active filter refinements beyond tab defaults,
  * and a function to reset filters to the current tab's default state.
  */
+type CategoryGroup = {
+  category: FilterCategory;
+  allOptions: FilterValue[];
+  multiple: boolean;
+  showTabDefaults: boolean;
+  presetAndOptionIds: FilterID[];
+  presetOrOptionIds: FilterID[];
+};
+
 export function useFilterRefinements() {
   const {
     soup,
@@ -354,42 +363,15 @@ export function useFilterRefinements() {
   };
 
   /**
-   * Returns consolidated filters grouped by category.
-   * Multiple values in the same category are shown in a single chip.
+   * View category filters grouped by category. A category is a refinement only
+   * when its effective selection differs from the current tab's baseline.
    */
-  const consolidatedFiltersList = createMemo((): ConsolidatedFilter[] => {
-    const view = currentView();
-    const preset = currentPreset();
-    const tab = activeTab();
-
-    // Invalidate cache when view or tab changes, since cached chips
-    // close over render-local values like group.allOptions, coveredByView, presetFilterIds
-    if (view !== lastCacheViewId || tab !== lastCacheTab) {
-      consolidatedChipCache.clear();
-      lastCacheViewId = view;
-      lastCacheTab = tab;
-    }
-
-    const presetAndFilterIds = new Set(preset?.clientFilters.and ?? []);
-    const presetOrFilterIds = new Set(preset?.clientFilters.or ?? []);
-
-    const filters: ConsolidatedFilter[] = [];
-    const seenKeys = new Set<string>();
-
-    // Group view category filters by category. A category is a refinement only
-    // when its effective selection differs from the current tab's baseline.
-    const categoryGroups = new Map<
-      string,
-      {
-        category: FilterCategory;
-        allOptions: FilterValue[];
-        multiple: boolean;
-        showTabDefaults: boolean;
-        presetAndOptionIds: FilterID[];
-        presetOrOptionIds: FilterID[];
-      }
-    >();
-
+  const refinedCategoryGroups = (
+    isMyTasksTab: boolean,
+    presetAndFilterIds: ReadonlySet<FilterID>,
+    presetOrFilterIds: ReadonlySet<FilterID>
+  ): Map<string, CategoryGroup> => {
+    const categoryGroups = new Map<string, CategoryGroup>();
     for (const category of viewCategories()) {
       const activeValues: FilterValue[] = [];
       const allOptions: FilterValue[] = [];
@@ -420,8 +402,7 @@ export function useFilterRefinements() {
       }
 
       const presetOptionIds = [...presetAndOptionIds, ...presetOrOptionIds];
-      const isMyTasksDefaultStatus =
-        view === 'tasks' && tab === 'my-tasks' && category.id === 'status';
+      const isMyTasksDefaultStatus = isMyTasksTab && category.id === 'status';
       if (
         activeValues.length > 0 &&
         (isMyTasksDefaultStatus ||
@@ -440,6 +421,37 @@ export function useFilterRefinements() {
         });
       }
     }
+    return categoryGroups;
+  };
+
+  /**
+   * Returns consolidated filters grouped by category.
+   * Multiple values in the same category are shown in a single chip.
+   */
+  const consolidatedFiltersList = createMemo((): ConsolidatedFilter[] => {
+    const view = currentView();
+    const preset = currentPreset();
+    const tab = activeTab();
+
+    // Invalidate cache when view or tab changes, since cached chips
+    // close over render-local values like group.allOptions, coveredByView, presetFilterIds
+    if (view !== lastCacheViewId || tab !== lastCacheTab) {
+      consolidatedChipCache.clear();
+      lastCacheViewId = view;
+      lastCacheTab = tab;
+    }
+
+    const presetAndFilterIds = new Set(preset?.clientFilters.and ?? []);
+    const presetOrFilterIds = new Set(preset?.clientFilters.or ?? []);
+
+    const filters: ConsolidatedFilter[] = [];
+    const seenKeys = new Set<string>();
+
+    const categoryGroups = refinedCategoryGroups(
+      view === 'tasks' && tab === 'my-tasks',
+      presetAndFilterIds,
+      presetOrFilterIds
+    );
 
     // Build consolidated chips for each category group
     for (const [categoryId, group] of categoryGroups) {

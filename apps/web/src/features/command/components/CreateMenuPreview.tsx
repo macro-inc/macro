@@ -88,36 +88,40 @@ export function CreateMenuPreview(props: {
     const previous =
       event.key === 'ArrowUp' ||
       (!input && props.layout === 'carousel' && event.key === 'ArrowLeft');
-    if (next || previous) {
-      event.preventDefault();
-      step(next ? 1 : -1);
-      const item = selected();
-      if (item) {
-        const option =
-          props.layout === 'details'
-            ? root.querySelector<HTMLElement>('[aria-selected="true"]')
-            : document.getElementById(itemId(item));
-        if (props.layout !== 'carousel')
-          option?.scrollIntoView({ block: 'nearest' });
-        if (
-          !input &&
-          event.target instanceof HTMLElement &&
-          event.target.closest('[data-create-card], [data-create-option]')
-        )
-          option?.focus({ preventScroll: true });
+    updateOnKeyDown();
+
+    function updateOnKeyDown() {
+      if (next || previous) {
+        event.preventDefault();
+        step(next ? 1 : -1);
+        const item = selected();
+        if (item) {
+          const option =
+            props.layout === 'details'
+              ? root.querySelector<HTMLElement>('[aria-selected="true"]')
+              : document.getElementById(itemId(item));
+          if (props.layout !== 'carousel')
+            option?.scrollIntoView({ block: 'nearest' });
+          if (
+            !input &&
+            event.target instanceof HTMLElement &&
+            event.target.closest('[data-create-card], [data-create-option]')
+          )
+            option?.focus({ preventScroll: true });
+        }
+      } else if (
+        event.key === 'Enter' &&
+        (input ||
+          event.target === root ||
+          (event.target instanceof HTMLElement &&
+            event.target.closest('[data-create-card], [data-create-option]')))
+      ) {
+        event.preventDefault();
+        c.selectSelected();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        changeQuery('');
       }
-    } else if (
-      event.key === 'Enter' &&
-      (input ||
-        event.target === root ||
-        (event.target instanceof HTMLElement &&
-          event.target.closest('[data-create-card], [data-create-option]')))
-    ) {
-      event.preventDefault();
-      c.selectSelected();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      changeQuery('');
     }
   }
 

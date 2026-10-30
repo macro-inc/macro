@@ -1,6 +1,6 @@
 id: tsx-no-descendant-button-styles
 language: tsx
-severity: warning
+severity: error
 message: Don't restyle buttons from a wrapper (`[&_button]:...`); give the Button the right size or variant.
 note: |-
   Rule FE-63 in .agents/rules/web/design-system.md. Descendant overrides hide

@@ -125,48 +125,56 @@ function getChangeType(
     return OTHER;
   }
 
-  const nextDirtyNode = dirtyNodes[0];
-  const prevDirtyNode = prevEditorState._nodeMap.get(nextDirtyNode.__key);
+  return classifyTextChange(nextSelection, prevSelection, prevEditorState);
 
-  if (
-    !$isTextNode(prevDirtyNode) ||
-    !$isTextNode(nextDirtyNode) ||
-    prevDirtyNode.__mode !== nextDirtyNode.__mode
-  ) {
+  function classifyTextChange(
+    nextSelection: import('lexical').RangeSelection,
+    prevSelection: import('lexical').RangeSelection,
+    prevEditorState: EditorState
+  ): ChangeType {
+    const nextDirtyNode = dirtyNodes[0];
+    const prevDirtyNode = prevEditorState._nodeMap.get(nextDirtyNode.__key);
+
+    if (
+      !$isTextNode(prevDirtyNode) ||
+      !$isTextNode(nextDirtyNode) ||
+      prevDirtyNode.__mode !== nextDirtyNode.__mode
+    ) {
+      return OTHER;
+    }
+
+    const prevText = prevDirtyNode.__text;
+    const nextText = nextDirtyNode.__text;
+
+    if (prevText === nextText) {
+      return OTHER;
+    }
+
+    const nextAnchor = nextSelection.anchor;
+    const prevAnchor = prevSelection.anchor;
+
+    if (nextAnchor.key !== prevAnchor.key || nextAnchor.type !== 'text') {
+      return OTHER;
+    }
+
+    const nextAnchorOffset = nextAnchor.offset;
+    const prevAnchorOffset = prevAnchor.offset;
+    const textDiff = nextText.length - prevText.length;
+
+    if (textDiff === 1 && prevAnchorOffset === nextAnchorOffset - 1) {
+      return INSERT_CHARACTER_AFTER_SELECTION;
+    }
+
+    if (textDiff === -1 && prevAnchorOffset === nextAnchorOffset + 1) {
+      return DELETE_CHARACTER_BEFORE_SELECTION;
+    }
+
+    if (textDiff === -1 && prevAnchorOffset === nextAnchorOffset) {
+      return DELETE_CHARACTER_AFTER_SELECTION;
+    }
+
     return OTHER;
   }
-
-  const prevText = prevDirtyNode.__text;
-  const nextText = nextDirtyNode.__text;
-
-  if (prevText === nextText) {
-    return OTHER;
-  }
-
-  const nextAnchor = nextSelection.anchor;
-  const prevAnchor = prevSelection.anchor;
-
-  if (nextAnchor.key !== prevAnchor.key || nextAnchor.type !== 'text') {
-    return OTHER;
-  }
-
-  const nextAnchorOffset = nextAnchor.offset;
-  const prevAnchorOffset = prevAnchor.offset;
-  const textDiff = nextText.length - prevText.length;
-
-  if (textDiff === 1 && prevAnchorOffset === nextAnchorOffset - 1) {
-    return INSERT_CHARACTER_AFTER_SELECTION;
-  }
-
-  if (textDiff === -1 && prevAnchorOffset === nextAnchorOffset + 1) {
-    return DELETE_CHARACTER_BEFORE_SELECTION;
-  }
-
-  if (textDiff === -1 && prevAnchorOffset === nextAnchorOffset) {
-    return DELETE_CHARACTER_AFTER_SELECTION;
-  }
-
-  return OTHER;
 }
 
 function isTextNodeUnchanged(

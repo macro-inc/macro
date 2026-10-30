@@ -556,6 +556,22 @@ export function createCalendarEventFormController(
         (option) => option.id === effectiveCalendarId()
       ));
 
+  /** The provider conferencing a save sends; undefined leaves it as it is. */
+  const conferenceUpdate = (choice: ReturnType<typeof state>['conference']) => {
+    const providerConference = choice === 'macro' ? 'none' : choice;
+    const initialProviderConference =
+      initialValue().conference === 'macro'
+        ? 'none'
+        : initialValue().conference;
+    return isOutOfOffice() ||
+      providerConference === 'existing' ||
+      (providerConference === 'none' && initialProviderConference === 'none') ||
+      (options.isEdit === true &&
+        providerConference === initialProviderConference)
+      ? undefined
+      : providerConference;
+  };
+
   const submitValues = (): EventEditorSubmitValues | undefined => {
     const time = recurrence.eventTime();
     if (!time || !canSave()) return undefined;
@@ -569,20 +585,7 @@ export function createCalendarEventFormController(
       !isOutOfOffice() &&
       selectedCalendarOption()?.capabilities?.guestPolicy !== false &&
       !guestPoliciesEqual(guestPolicy, guestPolicyOf(initialValue()));
-    const providerConference =
-      current.conference === 'macro' ? 'none' : current.conference;
-    const initialProviderConference =
-      initialValue().conference === 'macro'
-        ? 'none'
-        : initialValue().conference;
-    const conference =
-      isOutOfOffice() ||
-      providerConference === 'existing' ||
-      (providerConference === 'none' && initialProviderConference === 'none') ||
-      (options.isEdit === true &&
-        providerConference === initialProviderConference)
-        ? undefined
-        : providerConference;
+    const conference = conferenceUpdate(current.conference);
     return {
       title: current.title,
       time,

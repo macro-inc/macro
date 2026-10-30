@@ -185,36 +185,41 @@ export function useReminderEmailSource(
         });
       });
     });
+  const loadNextPage = async (requestScope: ReturnType<typeof scope>) => {
+    // Yield first so loadMore publishes inFlight before any work starts.
+    await Promise.resolve();
+    const retries = failed();
+    if (retries.length) {
+      await Promise.all(retries.map((query) => query.refresh()));
+    } else if (
+      !pending() &&
+      collection.hasNextPage &&
+      !collection.isFetchingNextPage
+    ) {
+      const result = await collection.fetchNextPage();
+      if (result?.error) setLoadError(result.error);
+    }
+    await waitForHydration(requestScope);
+  };
   const loadMore = (): Promise<void> => {
     if (inFlight) return inFlight;
     const requestScope = scope();
     setLoadingMore(true);
     setLoadError(undefined);
-    inFlight = Promise.resolve()
-      .then(async () => {
-        const retries = failed();
-        if (retries.length) {
-          await Promise.all(retries.map((query) => query.refresh()));
-        } else if (
-          !pending() &&
-          collection.hasNextPage &&
-          !collection.isFetchingNextPage
-        ) {
-          const result = await collection.fetchNextPage();
-          if (result?.error) setLoadError(result.error);
-        }
-        await waitForHydration(requestScope);
-      })
-      .catch((cause) => {
+    const run = async () => {
+      try {
+        await loadNextPage(requestScope);
+      } catch (cause) {
         if (scope() !== requestScope || disposed()) throw cause;
         setLoadError(
           cause instanceof Error ? cause : new Error('Email couldn’t be loaded')
         );
-      })
-      .finally(() => {
+      } finally {
         inFlight = undefined;
         setLoadingMore(false);
-      });
+      }
+    };
+    inFlight = run();
     return inFlight;
   };
 

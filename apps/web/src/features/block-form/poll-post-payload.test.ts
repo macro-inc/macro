@@ -22,7 +22,9 @@ vi.hoisted(() => {
   }
   vi.stubGlobal('WebSocket', FakeWebSocket);
 });
-vi.mock('@core/signal/mention', () => ({ untrackMention: vi.fn() }));
+vi.mock('@app/lib/queries/storage/mentions', () => ({
+  untrackMention: vi.fn(),
+}));
 
 it('posts a poll with its form as a message reference, so the channel is granted View', () => {
   createRoot((dispose) => {

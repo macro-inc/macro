@@ -791,7 +791,7 @@ ${build} is reused, only the submission is retried.
 ${distributionUrl}`);
 }
 
-async function submit() {
+async function requireProcessedBuild() {
   const buildRecord = await findBuild();
   if (buildRecord?.attributes.processingState !== "VALID") {
     console.error(
@@ -801,124 +801,125 @@ async function submit() {
     );
     exit(1);
   }
+  return buildRecord;
+}
 
-  let versionRecord = await findAppStoreVersion();
-  if (versionRecord && SUBMITTED_STATES.has(versionState(versionRecord))) {
-    const attached = await api(`/v1/appStoreVersions/${versionRecord.id}/build`);
-    const attachedNumber = attached.data?.attributes.version ?? null;
-    if (attachedNumber === build) {
-      console.log(
-        `App Store version ${version} (${build}) is already submitted ` +
-          `(state ${versionState(versionRecord)}); nothing to do.\n${distributionUrl}`,
-      );
-      return;
-    }
-    // Submitted with another build. Ours (same PR, i.e. a stale submission
-    // the drift workflow didn't get to) is withdrawn and replaced below;
-    // anyone else's is left alone.
-    const state = versionState(versionRecord);
-    const stamp = attached.data ? await buildStamp(attached.data.id) : null;
-    if (!LIVE_STATES.has(state) && releasePr && stamp?.pr === releasePr) {
-      console.log(
-        `App Store version ${version} is ${state} with this PR's stale build ` +
-          `${attachedNumber}; withdrawing it to resubmit with build ${build}.`,
-      );
-      if (!(await cancelOpenSubmission())) {
-        console.error(
-          `App Store version ${version} (build ${attachedNumber}) is ${state}: past the point ` +
-            "where a submission can be withdrawn, so that build will ship. Bump " +
-            "(`just ios-bump`), commit, and re-add the ios-update label to release " +
-            `build ${build} as the follow-up.\n${distributionUrl}`,
-        );
-        exit(1);
-      }
-    } else if (LIVE_STATES.has(state)) {
-      console.error(
-        `App Store version ${version} is already live with build ${attachedNumber ?? "none"}` +
-          (stamp?.pr ? ` (released for PR #${stamp.pr})` : " (released outside the release flow)") +
-          ", so the version string is used up. `just ios-bump` moves the marketing version: " +
-          `bump, commit, and re-add the ios-update label.\n${distributionUrl}`,
-      );
-      exit(1);
-    } else {
-      console.error(
-        `App Store version ${version} is ${state} with build ${attachedNumber ?? "none"}, ` +
-          `not this PR's build ${build}` +
-          (stamp?.pr ? ` (uploaded for PR #${stamp.pr})` : " (uploaded outside the release flow)") +
-          ". App Store Connect allows one version in flight at a time: wait for it to " +
-          "ship (then `just ios-bump` moves the version) or remove it from review in App " +
-          `Store Connect, then remove and re-add the ios-update label — the uploaded build ${build} ` +
-          `is reused.\n${distributionUrl}`,
-      );
-      exit(1);
-    }
+// Returns true when this build is already submitted and nothing is left to do.
+// Exits on a version held by another build; a stale submission of this PR's own
+// build is withdrawn so the caller can resubmit.
+async function checkSubmittedVersion(versionRecord) {
+  const attached = await api(`/v1/appStoreVersions/${versionRecord.id}/build`);
+  const attachedNumber = attached.data?.attributes.version ?? null;
+  if (attachedNumber === build) {
+    console.log(
+      `App Store version ${version} (${build}) is already submitted ` +
+        `(state ${versionState(versionRecord)}); nothing to do.\n${distributionUrl}`,
+    );
+    return true;
   }
-  // Take over this PR's own in-flight version from an earlier release whose
-  // version string has since moved on (its submission was withdrawn by the
-  // drift workflow, or is withdrawn here): App Store Connect allows one
-  // editable version, and its version string can be changed until approval.
-  if (!versionRecord && releasePr) {
-    const mine = await inFlightVersionForPr(releasePr);
-    if (mine) {
-      const from = mine.record.attributes.versionString;
-      console.log(
-        `Taking over this PR's in-flight App Store version ${from} ` +
-          `(build ${mine.buildNumber}, ${versionState(mine.record)}) as ${version}.`,
+  // Submitted with another build. Ours (same PR, i.e. a stale submission
+  // the drift workflow didn't get to) is withdrawn and replaced below;
+  // anyone else's is left alone.
+  const state = versionState(versionRecord);
+  const stamp = attached.data ? await buildStamp(attached.data.id) : null;
+  if (!LIVE_STATES.has(state) && releasePr && stamp?.pr === releasePr) {
+    console.log(
+      `App Store version ${version} is ${state} with this PR's stale build ` +
+        `${attachedNumber}; withdrawing it to resubmit with build ${build}.`,
+    );
+    if (!(await cancelOpenSubmission())) {
+      console.error(
+        `App Store version ${version} (build ${attachedNumber}) is ${state}: past the point ` +
+          "where a submission can be withdrawn, so that build will ship. Bump " +
+          "(`just ios-bump`), commit, and re-add the ios-update label to release " +
+          `build ${build} as the follow-up.\n${distributionUrl}`,
       );
-      await cancelOpenSubmission();
-      versionRecord = (
-        await api(`/v1/appStoreVersions/${mine.record.id}`, {
-          method: "PATCH",
-          body: {
-            data: {
-              type: "appStoreVersions",
-              id: mine.record.id,
-              attributes: { versionString: version },
-            },
+      exit(1);
+    }
+  } else if (LIVE_STATES.has(state)) {
+    console.error(
+      `App Store version ${version} is already live with build ${attachedNumber ?? "none"}` +
+        (stamp?.pr ? ` (released for PR #${stamp.pr})` : " (released outside the release flow)") +
+        ", so the version string is used up. `just ios-bump` moves the marketing version: " +
+        `bump, commit, and re-add the ios-update label.\n${distributionUrl}`,
+    );
+    exit(1);
+  } else {
+    console.error(
+      `App Store version ${version} is ${state} with build ${attachedNumber ?? "none"}, ` +
+        `not this PR's build ${build}` +
+        (stamp?.pr ? ` (uploaded for PR #${stamp.pr})` : " (uploaded outside the release flow)") +
+        ". App Store Connect allows one version in flight at a time: wait for it to " +
+        "ship (then `just ios-bump` moves the version) or remove it from review in App " +
+        `Store Connect, then remove and re-add the ios-update label — the uploaded build ${build} ` +
+        `is reused.\n${distributionUrl}`,
+    );
+    exit(1);
+  }
+  return false;
+}
+
+// Take over this PR's own in-flight version from an earlier release whose
+// version string has since moved on (its submission was withdrawn by the
+// drift workflow, or is withdrawn here): App Store Connect allows one
+// editable version, and its version string can be changed until approval.
+async function takeOverInFlightVersion() {
+  const mine = await inFlightVersionForPr(releasePr);
+  if (!mine) {
+    return null;
+  }
+  const from = mine.record.attributes.versionString;
+  console.log(
+    `Taking over this PR's in-flight App Store version ${from} ` +
+      `(build ${mine.buildNumber}, ${versionState(mine.record)}) as ${version}.`,
+  );
+  await cancelOpenSubmission();
+  const versionRecord = (
+    await api(`/v1/appStoreVersions/${mine.record.id}`, {
+      method: "PATCH",
+      body: {
+        data: {
+          type: "appStoreVersions",
+          id: mine.record.id,
+          attributes: { versionString: version },
+        },
+      },
+    })
+  ).data;
+  console.log(`Renamed App Store version ${from} → ${version}.`);
+  return versionRecord;
+}
+
+async function createAppStoreVersion() {
+  const versionRecord = (
+    await api("/v1/appStoreVersions", {
+      method: "POST",
+      onError: explainVersionInFlight,
+      body: {
+        data: {
+          type: "appStoreVersions",
+          attributes: {
+            platform: "IOS",
+            versionString: version,
+            // Release to the App Store as soon as Apple approves — the
+            // merge gate (`status --require-live`) waits for exactly that.
+            releaseType: "AFTER_APPROVAL",
           },
-        })
-      ).data;
-      console.log(`Renamed App Store version ${from} → ${version}.`);
-    }
-  }
-  if (!versionRecord) {
-    versionRecord = (
-      await api("/v1/appStoreVersions", {
-        method: "POST",
-        onError: explainVersionInFlight,
-        body: {
-          data: {
-            type: "appStoreVersions",
-            attributes: {
-              platform: "IOS",
-              versionString: version,
-              // Release to the App Store as soon as Apple approves — the
-              // merge gate (`status --require-live`) waits for exactly that.
-              releaseType: "AFTER_APPROVAL",
-            },
-            relationships: {
-              app: { data: { type: "apps", id: app.id } },
-            },
+          relationships: {
+            app: { data: { type: "apps", id: app.id } },
           },
         },
-      })
-    ).data;
-    console.log(`Created App Store version ${version}.`);
-  } else {
-    console.log(
-      `Reusing App Store version ${version} (state ${versionState(versionRecord)}).`,
-    );
-  }
+      },
+    })
+  ).data;
+  console.log(`Created App Store version ${version}.`);
+  return versionRecord;
+}
 
-  await api(`/v1/appStoreVersions/${versionRecord.id}/relationships/build`, {
-    method: "PATCH",
-    body: { data: { type: "builds", id: buildRecord.id } },
-  });
-  console.log(`Attached build ${build} to version ${version}.`);
-
-  // App Review rejects an update without "What's New" text. New versions
-  // inherit the previous version's metadata but start with it empty, so fill
-  // it in (an explicit --whats-new always overwrites).
+// App Review rejects an update without "What's New" text. New versions
+// inherit the previous version's metadata but start with it empty, so fill
+// it in (an explicit --whats-new always overwrites).
+async function fillWhatsNew(versionRecord) {
   const whatsNew = args["whats-new"];
   const localizations = await api(
     `/v1/appStoreVersions/${versionRecord.id}/appStoreVersionLocalizations?limit=50`,
@@ -941,7 +942,11 @@ async function submit() {
     });
     console.log(`Set What's New for ${localization.attributes.locale}.`);
   }
+}
 
+// Returns the open review submission to add our version to, or null when the
+// version is already in review and nothing is left to do.
+async function findReviewSubmission(versionRecord) {
   const openSubmissions = await api(
     `/v1/reviewSubmissions?filter[app]=${app.id}&filter[platform]=IOS` +
       `&filter[state]=READY_FOR_REVIEW,WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES&limit=25`,
@@ -964,7 +969,7 @@ async function submit() {
           `App Store version ${version} (${build}) is already in a review submission ` +
             `(state ${candidate.attributes.state}); nothing to do.\n${distributionUrl}`,
         );
-        return;
+        return null;
       }
       submission = candidate;
       break;
@@ -1000,7 +1005,10 @@ async function submit() {
       })
     ).data;
   }
+  return submission;
+}
 
+async function submitForReview(submission, versionRecord) {
   const items = await api(
     `/v1/reviewSubmissions/${submission.id}/items?include=appStoreVersion&limit=50`,
   );
@@ -1039,6 +1047,43 @@ async function submit() {
   console.log(
     `Submitted ${version} (${build}) for App Review. Track it at:\n${distributionUrl}`,
   );
+}
+
+async function submit() {
+  const buildRecord = await requireProcessedBuild();
+
+  let versionRecord = await findAppStoreVersion();
+  if (
+    versionRecord &&
+    SUBMITTED_STATES.has(versionState(versionRecord)) &&
+    (await checkSubmittedVersion(versionRecord))
+  ) {
+    return;
+  }
+  if (!versionRecord && releasePr) {
+    versionRecord = await takeOverInFlightVersion();
+  }
+  if (!versionRecord) {
+    versionRecord = await createAppStoreVersion();
+  } else {
+    console.log(
+      `Reusing App Store version ${version} (state ${versionState(versionRecord)}).`,
+    );
+  }
+
+  await api(`/v1/appStoreVersions/${versionRecord.id}/relationships/build`, {
+    method: "PATCH",
+    body: { data: { type: "builds", id: buildRecord.id } },
+  });
+  console.log(`Attached build ${build} to version ${version}.`);
+
+  await fillWhatsNew(versionRecord);
+
+  const submission = await findReviewSubmission(versionRecord);
+  if (!submission) {
+    return;
+  }
+  await submitForReview(submission, versionRecord);
 }
 
 async function status() {

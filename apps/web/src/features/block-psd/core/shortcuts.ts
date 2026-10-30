@@ -87,25 +87,7 @@ export function keyAction(e: KeyLike, mac: boolean): KeyAction | undefined {
   // The other system modifier (Ctrl on a Mac) is not the editor's.
   if (mac ? e.ctrlKey : e.metaKey) return undefined;
   const letter = e.code.startsWith('Key') ? e.code.slice(3) : undefined;
-  if (mod) {
-    if (e.code === 'KeyZ') return command(e.shiftKey ? 'redo' : 'undo');
-    if (!mac && e.code === 'KeyY' && !e.shiftKey) return command('redo');
-    if (e.code === 'Digit0' && !e.shiftKey) return command('zoomFit');
-    if (e.code === 'Digit1' && !e.shiftKey) return command('zoom100');
-    if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+')
-      return command('zoomIn');
-    if (e.code === 'Minus' || e.code === 'NumpadSubtract')
-      return command('zoomOut');
-    if (e.altKey) {
-      if (e.code === 'KeyG' && !e.shiftKey) return command('clippingMask');
-      return undefined;
-    }
-    if (e.code === 'Backspace' || e.code === 'Delete')
-      return command('fillBackground');
-    if (e.code === 'Slash') return command('shortcuts');
-    const found = letter && (e.shiftKey ? SHIFT_MOD_KEYS : MOD_KEYS)[letter];
-    return found ? command(found) : undefined;
-  }
+  if (mod) return modifiedAction(e, mac, letter);
   if (e.code === 'F6' && e.shiftKey) return command('featherSelection');
   if (e.code === 'Backspace' || e.code === 'Delete')
     return command(e.altKey ? 'fillForeground' : 'delete');
@@ -122,6 +104,44 @@ export function keyAction(e: KeyLike, mac: boolean): KeyAction | undefined {
     const step = e.shiftKey ? 10 : 1;
     return { t: 'nudge', dx: arrow[0] * step, dy: arrow[1] * step };
   }
+  return toolAction(e, letter);
+}
+
+function zoomAction(e: KeyLike): KeyAction | undefined {
+  if (e.code === 'Digit0' && !e.shiftKey) return command('zoomFit');
+  if (e.code === 'Digit1' && !e.shiftKey) return command('zoom100');
+  if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+')
+    return command('zoomIn');
+  if (e.code === 'Minus' || e.code === 'NumpadSubtract')
+    return command('zoomOut');
+
+  return undefined;
+}
+
+function modifiedAction(
+  e: KeyLike,
+  mac: boolean,
+  letter: string | undefined
+): KeyAction | undefined {
+  if (e.code === 'KeyZ') return command(e.shiftKey ? 'redo' : 'undo');
+  if (!mac && e.code === 'KeyY' && !e.shiftKey) return command('redo');
+  const zoom = zoomAction(e);
+  if (zoom) return zoom;
+  if (e.altKey) {
+    if (e.code === 'KeyG' && !e.shiftKey) return command('clippingMask');
+    return undefined;
+  }
+  if (e.code === 'Backspace' || e.code === 'Delete')
+    return command('fillBackground');
+  if (e.code === 'Slash') return command('shortcuts');
+  const found = letter && (e.shiftKey ? SHIFT_MOD_KEYS : MOD_KEYS)[letter];
+  return found ? command(found) : undefined;
+}
+
+function toolAction(
+  e: KeyLike,
+  letter: string | undefined
+): KeyAction | undefined {
   if (e.altKey) return undefined;
   if (e.code === 'BracketLeft')
     return command(e.shiftKey ? 'brushSofter' : 'brushSmaller');

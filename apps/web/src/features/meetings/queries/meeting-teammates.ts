@@ -1,4 +1,4 @@
-import { macroIdToEmail, tryMacroId } from '@core/user/macroId';
+import { macroIdToEmail, tryMacroId } from '@app/lib/identity/macro-id';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import * as EmailValidator from 'email-validator';

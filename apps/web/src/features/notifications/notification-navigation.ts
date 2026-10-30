@@ -119,8 +119,9 @@ function openSplitIfNotOpen(
     openContent(layoutManager, contentReference(type, id), options);
   }
   if (options.params && type !== 'component') {
-    goToLocationInSplit(layoutManager, type, id, options.params).catch(
-      (error) => Telemetry.error(error, { surface: 'notification-navigation' })
+    fireAndForget(
+      goToLocationInSplit(layoutManager, type, id, options.params),
+      'notification-navigation'
     );
   }
 }

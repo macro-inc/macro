@@ -24,6 +24,37 @@ async function isPasswordLogin(email: string) {
 const referralCode = () =>
   new URL(window.location.href).searchParams.get('referral_code');
 
+/** Requests a sign-in code; undefined when Macro can't be reached. */
+async function requestPasswordless(
+  email: string,
+  referral_code: string | null
+) {
+  try {
+    return await platformFetch(
+      `${SERVER_HOSTS['auth-service']}/login/passwordless`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          redirect_uri: REDIRECT_URI,
+          email,
+          ...(referral_code && { referral_code }),
+        }),
+      }
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+async function jsonOrUndefined(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return undefined;
+  }
+}
+
 /** Starts passwordless sign-in, or signs in a password account directly. */
 export async function sendEmailCode(input: {
   email: string;
@@ -43,24 +74,13 @@ export async function sendEmailCode(input: {
   }
 
   const referral_code = referralCode();
-  const response = await platformFetch(
-    `${SERVER_HOSTS['auth-service']}/login/passwordless`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        redirect_uri: REDIRECT_URI,
-        email,
-        ...(referral_code && { referral_code }),
-      }),
-    }
-  ).catch(() => undefined);
+  const response = await requestPasswordless(email, referral_code);
   if (!response) return { t: 'failed', message: 'Unable to reach Macro.' };
   if (!response.ok) return { t: 'failed', message: await response.text() };
 
   // 202: the address must sign in through its organization's identity provider.
   if (response.status === 202) {
-    const body: unknown = await response.json().catch(() => undefined);
+    const body = await jsonOrUndefined(response);
     if (
       !body ||
       typeof body !== 'object' ||
@@ -82,7 +102,7 @@ export async function sendEmailCode(input: {
 
   // Local backends return the code so seeded persona logins skip the inbox.
   if (import.meta.env.DEV) {
-    const body = (await response.json().catch(() => undefined)) as
+    const body = (await jsonOrUndefined(response)) as
       | { code?: string }
       | undefined;
     if (body?.code) return { t: 'code-sent', autoCode: body.code };

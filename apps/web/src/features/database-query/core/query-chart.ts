@@ -172,16 +172,9 @@ export function prepareQueryChart(
   };
   const xCells = answer.rows.map((row) => cellAt(row, config.x));
   const present = xCells.filter((cell) => cell.kind !== 'empty');
-  const scale: QueryChartData['scale'] =
-    present.length === 0
-      ? 'category'
-      : present.every((cell) => cell.kind === 'number')
-        ? 'number'
-        : present.every((cell) => cell.kind === 'date')
-          ? 'date'
-          : 'category';
+  const scale: QueryChartData['scale'] = buildScale();
   // Only a continuous axis has nowhere to put an empty x; bands label it.
-  const continuous = scale !== 'category' && mode !== 'bar' && mode !== 'pie';
+  const continuous = buildContinuous();
   const xOf = (cell: (typeof xCells)[number], label: string) => {
     if (!continuous) return label;
     if (cell.kind === 'number') return cell.value;
@@ -217,22 +210,38 @@ export function prepareQueryChart(
     };
   const drawn = mode === 'pie' ? foldPie(points) : points;
   return {
-    data: {
+    data: buildData(),
+  };
+
+  function buildContinuous() {
+    return scale !== 'category' && mode !== 'bar' && mode !== 'pie';
+  }
+
+  function buildScale(): 'number' | 'date' | 'category' {
+    return present.length === 0
+      ? 'category'
+      : present.every((cell) => cell.kind === 'number')
+        ? 'number'
+        : present.every((cell) => cell.kind === 'date')
+          ? 'date'
+          : 'category';
+  }
+
+  function buildData(): QueryChartData {
+    return {
       mark: mode,
       config,
       stack: (mode === 'bar' || mode === 'area') && !!config.stack,
       title:
         config.title ||
-        `${config.y.map(columnLabel).join(', ')} by ${columnLabel(config.x)}${
-          config.color ? ` and ${columnLabel(config.color)}` : ''
-        }`,
+        `${config.y.map(columnLabel).join(', ')} by ${columnLabel(config.x)}${config.color ? ` and ${columnLabel(config.color)}` : ''}`,
       scale,
       categories: [...new Set(drawn.map((point) => point.label))],
       series,
       points: drawn,
       omitted,
-    },
-  };
+    };
+  }
 }
 
 /**

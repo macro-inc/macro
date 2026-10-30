@@ -90,16 +90,8 @@ export const getDragDropPosition = (
   return { key, position };
 };
 
-async function onFilesReady(
-  editor: LexicalEditor,
-  uploadEntries: UploadInput[],
-  blockId?: string,
-  parentBlockName?: BlockName,
-  position?: ReturnType<typeof getDragDropPosition>,
-  afterFileUpload?: (uploadedItemIds: string[]) => void,
-  constrainedMediaDimensions?: { width: number; height: number }
-): Promise<void> {
-  if (!editor.isEditable()) return;
+/** Inline media goes into the editor; everything else, folders included, uploads. */
+function partitionUploadEntries(uploadEntries: UploadInput[]) {
   const mediaFiles: File[] = [];
   const filesToUpload: UploadInput[] = [];
 
@@ -115,13 +107,31 @@ async function onFilesReady(
       }
     }
   }
+  return { mediaFiles, filesToUpload };
+}
 
-  if (position) {
-    const { key, position: position_ } = position;
-    if (key !== null && position_ !== null) {
-      editor.dispatchCommand(SET_SELECTION_AT_INSERTION, [key, position_]);
-    }
+function selectInsertionPoint(
+  editor: LexicalEditor,
+  { key, position }: ReturnType<typeof getDragDropPosition>
+) {
+  if (key !== null && position !== null) {
+    editor.dispatchCommand(SET_SELECTION_AT_INSERTION, [key, position]);
   }
+}
+
+async function onFilesReady(
+  editor: LexicalEditor,
+  uploadEntries: UploadInput[],
+  blockId?: string,
+  parentBlockName?: BlockName,
+  position?: ReturnType<typeof getDragDropPosition>,
+  afterFileUpload?: (uploadedItemIds: string[]) => void,
+  constrainedMediaDimensions?: { width: number; height: number }
+): Promise<void> {
+  if (!editor.isEditable()) return;
+  const { mediaFiles, filesToUpload } = partitionUploadEntries(uploadEntries);
+
+  if (position) selectInsertionPoint(editor, position);
 
   await processInlineMediaFiles(editor, mediaFiles, constrainedMediaDimensions);
 

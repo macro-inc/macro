@@ -132,6 +132,13 @@ export async function observeTargetPresentation(
           report.first ??= sample;
           report.last = sample;
 
+          updateFirstPositioned(sample);
+          previousSample = sample;
+        }
+
+        schedulePostPaintCheck();
+
+        function updateFirstPositioned(sample: TargetPresentationSample) {
           if (!report.firstPositioned) {
             if (sample.positioned) {
               report.firstPositioned = sample;
@@ -156,10 +163,7 @@ export async function observeTargetPresentation(
               report.positionLossCount += 1;
             }
           }
-          previousSample = sample;
         }
-
-        schedulePostPaintCheck();
       };
 
       const schedulePostPaintCheck = () => {

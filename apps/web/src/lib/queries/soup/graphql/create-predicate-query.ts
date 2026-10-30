@@ -16,6 +16,7 @@ import {
   type CacheRevision,
   type EntityFilterCacheArgs,
   parseCacheRevision,
+  type SelectedRecordByKeyWire,
 } from '../../../graphql-cache/protocol';
 
 /** A declared source and generated fragment; no mutation-specific query updates. */
@@ -126,14 +127,7 @@ export function createPredicateQuery<T extends object>(options: {
                 throw new Error('live query reset omitted its keys');
               // Check row envelopes and patch bases before updating reactive state.
               for (const row of result.upserts) {
-                if (
-                  !row.recordKey ||
-                  row.record === null ||
-                  typeof row.record !== 'object' ||
-                  Array.isArray(row.record)
-                ) {
-                  throw new Error('invalid live query record');
-                }
+                updateRun(row);
               }
               for (const patch of result.patches) {
                 if (result.reset || !untrack(() => rows[patch.recordKey]))
@@ -205,6 +199,17 @@ export function createPredicateQuery<T extends object>(options: {
           }
         } finally {
           running = false;
+        }
+
+        function updateRun(row: SelectedRecordByKeyWire) {
+          if (
+            !row.recordKey ||
+            row.record === null ||
+            typeof row.record !== 'object' ||
+            Array.isArray(row.record)
+          ) {
+            throw new Error('invalid live query record');
+          }
         }
       };
       const refresh = () => {

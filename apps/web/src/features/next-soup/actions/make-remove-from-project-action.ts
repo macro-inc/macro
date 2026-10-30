@@ -17,11 +17,12 @@ export const makeRemoveFromProjectAction = () => {
     entity.type === 'email';
 
   const execute = async (entities: EntityData[]): Promise<boolean> => {
-    // Failure toast is shown by the mutation
-    const result = await removeMutation
-      .mutateAsync({ entities })
-      .catch(() => null);
-    if (!result) return false;
+    try {
+      // Failure toast is shown by the mutation
+      if (!(await removeMutation.mutateAsync({ entities }))) return false;
+    } catch {
+      return false;
+    }
     toast.success(
       entities.length > 1
         ? t('entityActions.toastRemovedCountFromFolder', {

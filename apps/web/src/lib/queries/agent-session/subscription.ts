@@ -1,4 +1,4 @@
-import { useEntitySubscription } from '@service-connection/client';
+import { useEntitySubscription } from '@queries/connection/tracked-entities';
 import type { Accessor } from 'solid-js';
 
 /**

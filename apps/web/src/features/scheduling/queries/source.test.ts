@@ -61,6 +61,10 @@ it('keeps cached scheduling requests independent of retired scope accessors', as
       () => {
         if (retired) throw new Error('retired user read');
         return 'owner';
+      },
+      () => {
+        if (retired) throw new Error('retired name read');
+        return 'Owner';
       }
     );
     return dispose;

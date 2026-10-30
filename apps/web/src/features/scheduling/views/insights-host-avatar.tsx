@@ -1,7 +1,7 @@
+import { tryMacroId } from '@app/lib/identity/macro-id';
+import { useProfilePictureUrl } from '@app/lib/queries/auth/profile-pictures';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { staticFileSizedUrl } from '@core/constant/servers';
-import { useProfilePictureUrl } from '@core/signal/profilePicture';
-import { tryMacroId } from '@core/user/macroId';
 import { Show } from 'solid-js';
 import { InsightHostAvatar } from '../components/insights-host-filter';
 import type { InsightHostOption } from '../core/insight-host-options';

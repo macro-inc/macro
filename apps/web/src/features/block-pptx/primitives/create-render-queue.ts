@@ -5,6 +5,8 @@
  * Background jobs that are no longer wanted when their turn comes are dropped.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
+
 export interface RenderQueue {
   /** Runs now. */
   urgent: <T>(task: () => Promise<T>) => Promise<T>;
@@ -51,12 +53,17 @@ export function createRenderQueue(): RenderQueue {
             return;
           }
           backgroundInFlight++;
-          task()
-            .then(resolve, reject)
-            .finally(() => {
+          const run = async () => {
+            try {
+              resolve(await task());
+            } catch (error) {
+              reject(error);
+            } finally {
               backgroundInFlight--;
               pump();
-            });
+            }
+          };
+          fireAndForget(run(), 'pptx-editor');
         });
         pump();
       });

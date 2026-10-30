@@ -7,6 +7,7 @@ import {
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { useEntryState } from '@components/app/split-layout/entry-state';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -27,6 +28,7 @@ import {
 } from 'solid-js';
 import { DriveProvider } from './context/drive-context';
 import { driveLocationLabel } from './core/location-label';
+import type { DriveState } from './core/types';
 import {
   DriveDetailNavigationProvider,
   useDriveDetailNavigation,
@@ -63,7 +65,21 @@ function DriveComposition(props: { route: DriveRouteState }) {
   const notificationSource = useGlobalNotificationSource();
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
-  const view = createDriveViewState(props.route, () => list.reset());
+  const persistence = useEntryState<DriveState>('drive.view.v2', {
+    default: {
+      ...props.route.selection(),
+      search: '',
+      expandedFolderIds: [],
+      favoritesOpen: true,
+      databasesOpen: true,
+      rootOpen: true,
+    },
+  });
+  const view = createDriveViewState(
+    props.route,
+    () => list.reset(),
+    persistence
+  );
   const viewState = createMemo(() =>
     availableDriveState(
       view.value(),

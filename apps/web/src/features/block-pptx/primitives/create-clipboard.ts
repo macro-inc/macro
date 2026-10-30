@@ -7,6 +7,7 @@
  * pasting back into a presentation restores the shapes rather than text.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import type { EditorCommands } from './create-editor-commands';
 import type { PresentationSession } from './create-presentation-session';
@@ -95,11 +96,17 @@ export function createClipboard(options: ClipboardOptions) {
       pastes: 0,
       slide: s.id,
     };
-    current.payload.catch(() => {
-      options.notifyError('Those shapes could not be copied.');
-    });
+    fireAndForget(notifyIfCopyFails(current.payload), 'pptx-editor');
     write(data, token, shapesText());
     return true;
+  }
+
+  async function notifyIfCopyFails(payload: Promise<unknown>) {
+    try {
+      await payload;
+    } catch {
+      options.notifyError('Those shapes could not be copied.');
+    }
   }
 
   function write(
@@ -113,20 +120,21 @@ export function createClipboard(options: ClipboardOptions) {
       return;
     }
     // Called from a button: no copy event to write into.
-    try {
-      void navigator.clipboard
-        ?.write([
+    const writeSystemClipboard = async () => {
+      try {
+        await navigator.clipboard?.write([
           new ClipboardItem({
             'text/plain': new Blob([text], { type: 'text/plain' }),
             'text/html': new Blob([markerHtml(token, text)], {
               type: 'text/html',
             }),
           }),
-        ])
-        .catch(() => {});
-    } catch {
-      // The in-tab clipboard still works.
-    }
+        ]);
+      } catch {
+        // The in-tab clipboard still works.
+      }
+    };
+    fireAndForget(writeSystemClipboard(), 'pptx-editor');
   }
 
   async function cut(data?: DataTransfer | null) {

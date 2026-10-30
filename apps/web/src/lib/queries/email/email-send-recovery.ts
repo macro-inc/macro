@@ -53,7 +53,11 @@ export function createEmailSendRecovery(accountId: string) {
   function wake() {
     if (disposed || running) return;
     if (timer !== undefined) clearTimeout(timer);
-    running = Promise.resolve().then(recover);
+    // Defer recover so its synchronous early-return cannot race this assignment.
+    running = (async () => {
+      await Promise.resolve();
+      await recover();
+    })();
     fireAndForget(running, 'email-send-recovery');
   }
   const unsubscribe = watchEmailSends(wake);

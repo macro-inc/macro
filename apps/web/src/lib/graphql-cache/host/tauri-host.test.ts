@@ -10,6 +10,8 @@ vi.mock('@tauri-apps/api/event', () => ({
   emit: emitMock,
 }));
 
+import { fireAndForget } from '@core/util/fireAndForget';
+import { ignoreRejection } from '../ignore-rejection';
 import {
   type EntityFilterCacheArgs,
   type EntityFilterCacheResult,
@@ -981,23 +983,21 @@ describe('createTauriCacheHost', () => {
       });
 
       let settled = false;
-      void host
-        .enqueueOptimisticMutation(
-          {
-            uuid: '00000000-0000-4000-8000-000000000101',
-            query: 'mutation Rename { rename { id } }',
-            data: {},
-          },
-          { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 1_010 }
-        )
-        .then(
-          () => {
-            settled = true;
-          },
-          () => {
-            settled = true;
-          }
+
+      const markSettled = async () => {
+        await ignoreRejection(
+          host.enqueueOptimisticMutation(
+            {
+              uuid: '00000000-0000-4000-8000-000000000101',
+              query: 'mutation Rename { rename { id } }',
+              data: {},
+            },
+            { owner: 'runner', nowMs: 10, leaseExpiresAtMs: 1_010 }
+          )
         );
+        settled = true;
+      };
+      fireAndForget(markSettled(), 'tauri-host-test');
       await vi.dynamicImportSettled();
       await vi.advanceTimersByTimeAsync(60);
 

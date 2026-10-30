@@ -19,6 +19,30 @@ type Target = {
 // Avoid counting edge contact as seeing a message, including very tall replies.
 const INTERSECTION_THRESHOLD = 0.001;
 
+/** What one observer saw of a message; no rectangle when it was not visible. */
+function observationOf(entry: IntersectionObserverEntry): Observation {
+  return {
+    time: entry.time,
+    rect:
+      entry.isIntersecting && entry.intersectionRatio >= INTERSECTION_THRESHOLD
+        ? entry.intersectionRect
+        : undefined,
+  };
+}
+
+/** Whether two rectangles from the same rendering update overlap. */
+function rectsOverlap(
+  a: DOMRectReadOnly | undefined,
+  b: DOMRectReadOnly | undefined
+) {
+  return (
+    !!a &&
+    !!b &&
+    Math.min(a.bottom, b.bottom) > Math.max(a.top, b.top) &&
+    Math.min(a.right, b.right) > Math.max(a.left, b.left)
+  );
+}
+
 /** Share observers across a message list; never infer visibility from mounting. */
 export function createMessageReadVisibility(options: {
   root: Accessor<Element | null | undefined>;
@@ -50,6 +74,40 @@ export function createMessageReadVisibility(options: {
         )
           return;
         let active = true;
+        const reobserve = (
+          element: Element,
+          observers: (IntersectionObserver | undefined)[]
+        ) => {
+          for (const observer of observers) observer?.unobserve(element);
+          for (const observer of observers) observer?.observe(element);
+        };
+        const publishTarget = (element: Element, target: Target) => {
+          const viewportObservation = target.viewport;
+          const scrollerObservation = root
+            ? target.scroller
+            : viewportObservation;
+          if (!viewportObservation || !scrollerObservation) {
+            target.publish(false);
+            return;
+          }
+          if (viewportObservation.time !== scrollerObservation.time) {
+            target.publish(false);
+            // Only one observer may cross a threshold during a scroll. Get
+            // both rectangles from the same rendering update before clipping
+            // them, rather than combining new and old screen coordinates.
+            if (!target.refreshing) {
+              target.refreshing = true;
+              target.viewport = undefined;
+              target.scroller = undefined;
+              reobserve(element, [viewportObserver, scrollerObserver]);
+            }
+            return;
+          }
+          target.refreshing = false;
+          target.publish(
+            rectsOverlap(viewportObservation.rect, scrollerObservation.rect)
+          );
+        };
         const update = (
           entries: IntersectionObserverEntry[],
           kind: 'viewport' | 'scroller'
@@ -61,55 +119,13 @@ export function createMessageReadVisibility(options: {
             if (entry.time <= target.registeredAt) {
               // unobserve() does not discard queued entries from an old batch.
               // Reobserve also handles a new registration in the current frame.
-              const observer =
-                kind === 'viewport' ? viewportObserver : scrollerObserver;
-              observer?.unobserve(entry.target);
-              observer?.observe(entry.target);
+              reobserve(entry.target, [
+                kind === 'viewport' ? viewportObserver : scrollerObserver,
+              ]);
               continue;
             }
-            target[kind] = {
-              time: entry.time,
-              rect:
-                entry.isIntersecting &&
-                entry.intersectionRatio >= INTERSECTION_THRESHOLD
-                  ? entry.intersectionRect
-                  : undefined,
-            };
-            const viewportObservation = target.viewport;
-            const scrollerObservation = root
-              ? target.scroller
-              : viewportObservation;
-            if (!viewportObservation || !scrollerObservation) {
-              target.publish(false);
-              continue;
-            }
-            if (viewportObservation.time !== scrollerObservation.time) {
-              target.publish(false);
-              // Only one observer may cross a threshold during a scroll. Get
-              // both rectangles from the same rendering update before clipping
-              // them, rather than combining new and old screen coordinates.
-              if (!target.refreshing) {
-                target.refreshing = true;
-                target.viewport = undefined;
-                target.scroller = undefined;
-                viewportObserver?.unobserve(entry.target);
-                scrollerObserver?.unobserve(entry.target);
-                viewportObserver?.observe(entry.target);
-                scrollerObserver?.observe(entry.target);
-              }
-              continue;
-            }
-            target.refreshing = false;
-            const viewport = viewportObservation.rect;
-            const scroller = scrollerObservation.rect;
-            target.publish(
-              !!viewport &&
-                !!scroller &&
-                Math.min(viewport.bottom, scroller.bottom) >
-                  Math.max(viewport.top, scroller.top) &&
-                Math.min(viewport.right, scroller.right) >
-                  Math.max(viewport.left, scroller.left)
-            );
+            target[kind] = observationOf(entry);
+            publishTarget(entry.target, target);
           }
         };
         // The implicit root also clips against the window and every ancestor.

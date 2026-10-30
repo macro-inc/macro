@@ -1,8 +1,8 @@
 import { openExternalUrl } from '@core/util/url';
 import LinkIcon from '@icon/system/regular/link.svg';
-import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { UnfurlEmbedType } from '@service-unfurl/generated/schemas/unfurlEmbedType';
+import { proxyResource } from '@service-unfurl/proxy-resource';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { createStore } from 'solid-js/store';

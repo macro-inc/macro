@@ -1,6 +1,6 @@
+import { isMacroId } from '@app/lib/identity/macro-id';
 import { formatCallDuration } from '@block-call/utils';
 import { UserIcon } from '@core/component/UserIcon';
-import { isMacroId } from '@core/user/macroId';
 import { matches } from '@core/util/match';
 import UserCircleIcon from '@icon/system/regular/user-circle.svg';
 import { UserGroup } from '@property/component/propertyValue/UserGroup';

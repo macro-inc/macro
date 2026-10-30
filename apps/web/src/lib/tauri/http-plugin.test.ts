@@ -96,7 +96,11 @@ describe('tauri http plugin fetch', () => {
 
     controller.abort();
     await expect(reader.read()).rejects.toBeDefined();
-    await reader.cancel().catch(() => {});
+    try {
+      await reader.cancel();
+    } catch {
+      // The aborted stream may already be closed.
+    }
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(unhandled).toEqual([]);

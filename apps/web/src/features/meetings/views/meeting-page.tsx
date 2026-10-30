@@ -329,12 +329,7 @@ export function MeetingPage(props: {
                 size="lg"
                 class="w-full bg-hover text-ink not-touch:not-disabled:hover:bg-active focus-visible:outline-2 focus-visible:outline-accent"
                 type="submit"
-                disabled={
-                  session.joining() ||
-                  media.pending() ||
-                  uploadingBackground() ||
-                  (!props.authenticated() && !name().trim())
-                }
+                disabled={getMeetingPageDisabled()}
               >
                 <Phone class="size-5" />
                 {session.joining()
@@ -357,4 +352,13 @@ export function MeetingPage(props: {
       </Switch>
     </main>
   );
+
+  function getMeetingPageDisabled(): boolean | undefined {
+    return (
+      session.joining() ||
+      media.pending() ||
+      uploadingBackground() ||
+      (!props.authenticated() && !name().trim())
+    );
+  }
 }

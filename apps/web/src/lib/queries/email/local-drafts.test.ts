@@ -666,6 +666,15 @@ describe('draft queue recovery', () => {
   });
 });
 
+/** Settles when `holder` does; a failed holder still releases the lock. */
+async function released(holder: Promise<unknown>): Promise<void> {
+  try {
+    await holder;
+  } catch {
+    /* The holder's caller receives its failure. */
+  }
+}
+
 it.each(['web', 'native'] as const)(
   'serializes restored copies of one file and adopts an existing upload receipt: %s',
   async (platform) => {
@@ -677,11 +686,11 @@ it.each(['web', 'native'] as const)(
       value: {
         request: async (name: string, run: () => Promise<void>) => {
           const previous = locks.get(name) ?? Promise.resolve();
-          const next = previous.then(run);
-          locks.set(
-            name,
-            next.catch(() => {})
-          );
+          const next = (async () => {
+            await previous;
+            await run();
+          })();
+          locks.set(name, released(next));
           return await next;
         },
       },

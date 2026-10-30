@@ -1,5 +1,5 @@
 import type { FacetSelection, SortSelection } from '@app/features/soup';
-import type { TaskComposerContext } from '../task-composer/core/context';
+import type { TaskComposerContext } from '../task-composer/context/composer';
 
 export type TaskCreateOptions = {
   dueDate?: Date;

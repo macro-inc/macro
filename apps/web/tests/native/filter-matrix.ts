@@ -287,9 +287,7 @@ function* cases(scope?: Scope): Generator<Case> {
       };
     }
   }
-  for (const tab of !view || view === 'tasks'
-    ? TASK_TABS.filter((tab) => taskTabSources[tab.id] === 'soup')
-    : []) {
+  for (const tab of buildCases3()) {
     for (const selection of combinations({
       status: subsets(STATUS),
       priority: subsets(PRIORITY),
@@ -307,17 +305,20 @@ function* cases(scope?: Scope): Generator<Case> {
       });
       const expected: FixtureRow[] = [];
       for (const row of corpus) {
-        if (
-          row.kind === 'task' &&
-          (tab.id !== 'my-tasks' || row.assignees!.includes(USER_ID)) &&
-          (tab.id !== 'created-by-me' || row.owner === USER_ID) &&
-          intersects(selection.status, [row.status!]) &&
-          intersects(selection.priority, [row.priority!]) &&
-          intersects(selection.assignees, row.assignees!) &&
-          intersects(selection['created-by'], [row.owner]) &&
-          intersects(selection.tags, row.tags)
-        )
-          expected.push(row);
+        const processRow = () => {
+          if (
+            row.kind === 'task' &&
+            (tab.id !== 'my-tasks' || row.assignees!.includes(USER_ID)) &&
+            (tab.id !== 'created-by-me' || row.owner === USER_ID) &&
+            intersects(selection.status, [row.status!]) &&
+            intersects(selection.priority, [row.priority!]) &&
+            intersects(selection.assignees, row.assignees!) &&
+            intersects(selection['created-by'], [row.owner]) &&
+            intersects(selection.tags, row.tags)
+          )
+            expected.push(row);
+        };
+        processRow();
       }
       yield {
         view: 'tasks',
@@ -327,11 +328,7 @@ function* cases(scope?: Scope): Generator<Case> {
       };
     }
   }
-  for (const tab of !view || view === 'files'
-    ? sharedCreators
-      ? ['shared', 'all']
-      : ['owned', 'shared', 'attachments', 'folders', 'all']
-    : []) {
+  for (const tab of buildCases()) {
     const preset = getViewPreset('documents', tab, {
       userId: USER_ID,
       isTeamAdmin: false,
@@ -366,22 +363,25 @@ function* cases(scope?: Scope): Generator<Case> {
       };
       const expected: FixtureRow[] = [];
       for (const row of corpus) {
-        if (!intersects(selection.tags, row.tags)) continue;
-        if (tab === 'folders') {
-          if (row.kind === 'project') expected.push(row);
-          continue;
-        }
-        if (row.kind !== 'file') continue;
-        if (tab === 'owned' && (row.owner !== USER_ID || row.attachment))
-          continue;
-        if (tab === 'shared' && (row.owner === USER_ID || row.attachment))
-          continue;
-        if (tab === 'attachments' && !row.attachment) continue;
-        if (
-          intersects(selection['created-by'], [row.owner]) &&
-          intersects(selection.type, [row.category!])
-        )
-          expected.push(row);
+        const processRow2 = () => {
+          if (!intersects(selection.tags, row.tags)) return;
+          if (tab === 'folders') {
+            if (row.kind === 'project') expected.push(row);
+            return;
+          }
+          if (row.kind !== 'file') return;
+          if (tab === 'owned' && (row.owner !== USER_ID || row.attachment))
+            return;
+          if (tab === 'shared' && (row.owner === USER_ID || row.attachment))
+            return;
+          if (tab === 'attachments' && !row.attachment) return;
+          if (
+            intersects(selection['created-by'], [row.owner]) &&
+            intersects(selection.type, [row.category!])
+          )
+            expected.push(row);
+        };
+        processRow2();
       }
       yield {
         view: 'files',
@@ -391,9 +391,7 @@ function* cases(scope?: Scope): Generator<Case> {
       };
     }
   }
-  for (const scope of !view || view === 'channels'
-    ? (['recents', 'channels', 'direct_messages'] as const)
-    : []) {
+  for (const scope of buildCases2()) {
     assert(CHANNELS_QUERY_DEFINITIONS[scope], `Missing channel scope ${scope}`);
     yield {
       view: 'channels',
@@ -409,6 +407,26 @@ function* cases(scope?: Scope): Generator<Case> {
               : true)
       ),
     };
+  }
+
+  function buildCases3() {
+    return !view || view === 'tasks'
+      ? TASK_TABS.filter((tab) => taskTabSources[tab.id] === 'soup')
+      : [];
+  }
+
+  function buildCases2() {
+    return !view || view === 'channels'
+      ? (['recents', 'channels', 'direct_messages'] as const)
+      : [];
+  }
+
+  function buildCases() {
+    return !view || view === 'files'
+      ? sharedCreators
+        ? ['shared', 'all']
+        : ['owned', 'shared', 'attachments', 'folders', 'all']
+      : [];
   }
 }
 
@@ -519,87 +537,91 @@ export async function runBatch(size = 128, view?: Scope) {
   }
   progress.nativeElapsedMs += performance.now() - nativeStart;
   for (const test of batch) {
-    progress.evaluated++;
-    progress.byView[test.view] = (progress.byView[test.view] ?? 0) + 1;
-    try {
-      const result = responses.get(JSON.stringify(test.args));
-      if (result instanceof Error) throw result;
-      assert(result, 'Missing native evaluation response');
-      assert(
-        result.kind === 'mail-page' || result.kind === 'reconciled',
-        `Local evaluation returned ${result.kind}`
-      );
-      assert(result.revision === revision, 'Matrix crossed cache revisions');
-      assert(
-        JSON.stringify(ordered(result.keys)) ===
-          JSON.stringify(ordered(test.expected.map(key))),
-        `Wrong native matches: ${JSON.stringify(result.keys)}; expected ${JSON.stringify(test.expected.map(key))}`
-      );
-      if (result.kind === 'reconciled')
+    const processTest = () => {
+      progress.evaluated++;
+      progress.byView[test.view] = (progress.byView[test.view] ?? 0) + 1;
+      try {
+        const result = responses.get(JSON.stringify(test.args));
+        if (result instanceof Error) throw result;
+        assert(result, 'Missing native evaluation response');
         assert(
-          result.retainedKeys.length === 0,
-          'Matrix must not use server membership baselines'
+          result.kind === 'mail-page' || result.kind === 'reconciled',
+          `Local evaluation returned ${result.kind}`
         );
-      if (test.attachments && result.kind === 'mail-page') {
-        const view = test.args.mail!.view;
-        const actual = result.keys.filter((key, i) => {
-          const record = records.get(key);
-          assert(record, `No normalized record for ${key}`);
-          const projected = materializeMailView(
-            record,
-            view,
-            result.sortTimestamps[i]
-          );
-          assert(projected, 'Canonical Mail preview is missing');
-          const item = mapGraphqlSoupItem(projected as GraphqlSoupItem);
+        assert(result.revision === revision, 'Matrix crossed cache revisions');
+        assert(
+          JSON.stringify(ordered(result.keys)) ===
+            JSON.stringify(ordered(test.expected.map(key))),
+          `Wrong native matches: ${JSON.stringify(result.keys)}; expected ${JSON.stringify(test.expected.map(key))}`
+        );
+        if (result.kind === 'reconciled')
           assert(
-            item && isDisplayableSoupItem(item),
-            'Cannot materialize Mail row'
+            result.retainedKeys.length === 0,
+            'Matrix must not use server membership baselines'
           );
-          const entity = mapApiSoupItemToEntity(item);
-          assert(entity.type === 'email', 'Expected email entity');
-          return testFacets(
-            { attachments: test.attachments ?? [] },
-            EMAIL_FACETS,
-            entity,
-            tagContext
+        if (test.attachments && result.kind === 'mail-page') {
+          const view = test.args.mail!.view;
+          const actual = result.keys.filter((key, i) => {
+            const record = records.get(key);
+            assert(record, `No normalized record for ${key}`);
+            const projected = materializeMailView(
+              record,
+              view,
+              result.sortTimestamps[i]
+            );
+            assert(projected, 'Canonical Mail preview is missing');
+            const item = mapGraphqlSoupItem(projected as GraphqlSoupItem);
+            assert(
+              item && isDisplayableSoupItem(item),
+              'Cannot materialize Mail row'
+            );
+            const entity = mapApiSoupItemToEntity(item);
+            assert(entity.type === 'email', 'Expected email entity');
+            return testFacets(
+              { attachments: test.attachments ?? [] },
+              EMAIL_FACETS,
+              entity,
+              tagContext
+            );
+          });
+          const expected = test.expected
+            .filter(
+              (row) =>
+                !test.attachments!.length ||
+                test.attachments!.includes(`attachment-${row.attachmentKind}`)
+            )
+            .map(key);
+          assert(
+            JSON.stringify(ordered(actual)) ===
+              JSON.stringify(ordered(expected)),
+            'Cached attachment refinement differs from fixture truth'
           );
-        });
-        const expected = test.expected
-          .filter(
-            (row) =>
-              !test.attachments!.length ||
-              test.attachments!.includes(`attachment-${row.attachmentKind}`)
-          )
-          .map(key);
-        assert(
-          JSON.stringify(ordered(actual)) === JSON.stringify(ordered(expected)),
-          'Cached attachment refinement differs from fixture truth'
-        );
+        }
+      } catch (error) {
+        if (progress.failures.length < 20)
+          progress.failures.push({
+            name: `${test.view}: ${test.name}`,
+            error: String(error),
+            args: test.args,
+            fixture:
+              test.view === 'email'
+                ? {
+                    links: LINKS,
+                    rows: corpus
+                      .filter((row) => row.kind === 'email')
+                      .map((row) => ({
+                        id: row.id,
+                        link: row.linkId,
+                        sent: row.sent,
+                        owner: row.owner,
+                        tags: row.tags,
+                      })),
+                  }
+                : undefined,
+          });
       }
-    } catch (error) {
-      if (progress.failures.length < 20)
-        progress.failures.push({
-          name: `${test.view}: ${test.name}`,
-          error: String(error),
-          args: test.args,
-          fixture:
-            test.view === 'email'
-              ? {
-                  links: LINKS,
-                  rows: corpus
-                    .filter((row) => row.kind === 'email')
-                    .map((row) => ({
-                      id: row.id,
-                      link: row.linkId,
-                      sent: row.sent,
-                      owner: row.owner,
-                      tags: row.tags,
-                    })),
-                }
-              : undefined,
-        });
-    }
+    };
+    processTest();
   }
   try {
     assert(
@@ -621,11 +643,14 @@ export async function runBatch(size = 128, view?: Scope) {
         ? { files: 96 }
         : expectedSelectionCounts;
     for (const [surface, count] of Object.entries(counts)) {
-      if (!view || view === 'files-shared-creators' || view === surface)
-        assert(
-          progress.byView[surface] === count,
-          `Selection coverage changed for ${surface}: ${progress.byView[surface]} != ${count}`
-        );
+      const processSurfacecount = () => {
+        if (!view || view === 'files-shared-creators' || view === surface)
+          assert(
+            progress.byView[surface] === count,
+            `Selection coverage changed for ${surface}: ${progress.byView[surface]} != ${count}`
+          );
+      };
+      processSurfacecount();
     }
   }
   return progress;

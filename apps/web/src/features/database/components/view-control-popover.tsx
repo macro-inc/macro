@@ -38,7 +38,7 @@ export function ToolbarPopover(props: {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          class="menu-surface relative z-action-menu flex min-h-0 max-w-[calc(100vw-2rem)] flex-col text-sm outline-none [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
+          class="menu-surface relative z-action-menu flex min-h-0 max-w-[calc(100vw-2rem)] flex-col text-sm outline-none"
           style={{
             'max-height':
               'min(36rem, var(--kb-popper-content-available-height, calc(100dvh - 1rem)), calc(100dvh - 1rem))',

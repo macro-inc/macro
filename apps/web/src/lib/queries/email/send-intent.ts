@@ -63,17 +63,117 @@ const optionalStrings = (value: unknown) =>
   value == null ||
   (Array.isArray(value) && value.every((entry) => typeof entry === 'string'));
 
-export function isEmailSendIntent(value: unknown): value is EmailSendIntent {
+function hasValidSendState(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.uuid === 'string' &&
+    value.dispatchVersion === 2 &&
+    ['pending', 'committed', 'failed'].includes(String(value.phase)) &&
+    typeof value.locallyCancelled === 'boolean' &&
+    optionalBoolean(value.submissionStarted) &&
+    optionalBoolean(value.cancellationRequested)
+  );
+}
+
+function hasValidRecipients(message: Record<string, unknown>): boolean {
+  return ['to', 'cc', 'bcc'].every((field) => {
+    const recipients = message[field];
+    return (
+      recipients == null ||
+      (Array.isArray(recipients) &&
+        recipients.every(
+          (entry) => isRecord(entry) && typeof entry.email === 'string'
+        ))
+    );
+  });
+}
+
+function isValidAttemptInput(input: unknown, uuid: unknown): boolean {
+  return (
+    isRecord(input) &&
+    isRecord(input.attempt) &&
+    input.attempt.attemptId === uuid &&
+    typeof input.attempt.linkId === 'string' &&
+    isRecord(input.message) &&
+    typeof input.message.draftId === 'string' &&
+    typeof input.message.subject === 'string' &&
+    optionalStrings(input.attachmentIds) &&
+    optionalStrings(input.forwardedAttachmentIds) &&
+    hasValidRecipients(input.message)
+  );
+}
+
+function isValidDraftArgs(draft: unknown): boolean {
+  return (
+    isRecord(draft) &&
+    typeof draft.draftId === 'string' &&
+    typeof draft.subject === 'string' &&
+    typeof draft.threadDbId === 'string' &&
+    typeof draft.senderLinkId === 'string' &&
+    typeof draft.senderEmail === 'string'
+  );
+}
+
+function isValidWorkingCopy(workingCopy: unknown): boolean {
+  return (
+    isRecord(workingCopy) &&
+    typeof workingCopy.key === 'string' &&
+    typeof workingCopy.generation === 'string' &&
+    Number.isSafeInteger(workingCopy.revision) &&
+    Array.isArray(workingCopy.attachments) &&
+    workingCopy.attachments.every(
+      (file) =>
+        isRecord(file) &&
+        ['local', 'remote', 'forwarded', 'native'].includes(
+          String(file.type)
+        ) &&
+        typeof file.attachmentId === 'string' &&
+        (file.type !== 'local' || file.uploaded === true)
+    )
+  );
+}
+
+function isValidDispatch(dispatch: unknown): boolean {
+  return (
+    isRecord(dispatch) &&
+    ['generation', 'leaseUntil', 'nextAttemptAt', 'failures'].every(
+      (key) =>
+        typeof dispatch[key] === 'number' &&
+        Number.isFinite(dispatch[key]) &&
+        dispatch[key] >= 0
+    ) &&
+    optionalBoolean(dispatch.paused)
+  );
+}
+
+function isValidAttemptResponse(response: unknown, uuid: unknown): boolean {
+  if (response === undefined) return true;
   if (
-    !isRecord(value) ||
-    typeof value.uuid !== 'string' ||
-    value.dispatchVersion !== 2 ||
-    !['pending', 'committed', 'failed'].includes(String(value.phase)) ||
-    typeof value.locallyCancelled !== 'boolean' ||
-    !optionalBoolean(value.submissionStarted) ||
-    !optionalBoolean(value.cancellationRequested)
+    !isRecord(response) ||
+    !isRecord(response.attempt) ||
+    response.attempt.attemptId !== uuid ||
+    !statuses.has(String(response.attempt.status))
   )
     return false;
+  const message = response.attempt.message;
+  return (
+    message == null ||
+    (isRecord(message) &&
+      typeof message.id === 'string' &&
+      typeof message.threadId === 'string')
+  );
+}
+
+function isValidResponse(response: unknown, uuid: unknown): boolean {
+  return (
+    isRecord(response) &&
+    ['sendEmailMessage', 'cancelEmailSend'].every((key) =>
+      isValidAttemptResponse(response[key], uuid)
+    )
+  );
+}
+
+export function isEmailSendIntent(value: unknown): value is EmailSendIntent {
+  if (!isRecord(value) || !hasValidSendState(value)) return false;
   const metadata = value.metadata;
   if (
     !isRecord(metadata) ||
@@ -83,86 +183,29 @@ export function isEmailSendIntent(value: unknown): value is EmailSendIntent {
   )
     return false;
   const { input, draft, workingCopy } = metadata.payload;
-  if (
-    !isRecord(input) ||
-    !isRecord(input.attempt) ||
-    input.attempt.attemptId !== value.uuid ||
-    typeof input.attempt.linkId !== 'string' ||
-    !isRecord(input.message) ||
-    typeof input.message.draftId !== 'string' ||
-    typeof input.message.subject !== 'string' ||
-    !optionalStrings(input.attachmentIds) ||
-    !optionalStrings(input.forwardedAttachmentIds) ||
-    !isRecord(draft) ||
-    typeof draft.draftId !== 'string' ||
-    typeof draft.subject !== 'string' ||
-    typeof draft.threadDbId !== 'string' ||
-    typeof draft.senderLinkId !== 'string' ||
-    typeof draft.senderEmail !== 'string'
-  )
-    return false;
-  for (const field of ['to', 'cc', 'bcc']) {
-    const recipients = input.message[field];
-    if (
-      recipients != null &&
-      (!Array.isArray(recipients) ||
-        !recipients.every(
-          (entry) => isRecord(entry) && typeof entry.email === 'string'
-        ))
-    )
-      return false;
-  }
-  if (
-    workingCopy !== undefined &&
-    (!isRecord(workingCopy) ||
-      typeof workingCopy.key !== 'string' ||
-      typeof workingCopy.generation !== 'string' ||
-      !Number.isSafeInteger(workingCopy.revision) ||
-      !Array.isArray(workingCopy.attachments) ||
-      !workingCopy.attachments.every(
-        (file) =>
-          isRecord(file) &&
-          ['local', 'remote', 'forwarded', 'native'].includes(
-            String(file.type)
-          ) &&
-          typeof file.attachmentId === 'string' &&
-          (file.type !== 'local' || file.uploaded === true)
-      ))
-  )
-    return false;
-  if (value.dispatch !== undefined) {
-    const dispatch = value.dispatch;
-    if (
-      !isRecord(dispatch) ||
-      !['generation', 'leaseUntil', 'nextAttemptAt', 'failures'].every(
-        (key) =>
-          typeof dispatch[key] === 'number' &&
-          Number.isFinite(dispatch[key]) &&
-          dispatch[key] >= 0
-      ) ||
-      !optionalBoolean(dispatch.paused)
-    )
-      return false;
-  }
-  if (value.response != null) {
-    if (!isRecord(value.response)) return false;
-    for (const key of ['sendEmailMessage', 'cancelEmailSend']) {
-      const response = value.response[key];
-      if (response === undefined) continue;
-      if (
-        !isRecord(response) ||
-        !isRecord(response.attempt) ||
-        response.attempt.attemptId !== value.uuid ||
-        !statuses.has(String(response.attempt.status)) ||
-        (response.attempt.message != null &&
-          (!isRecord(response.attempt.message) ||
-            typeof response.attempt.message.id !== 'string' ||
-            typeof response.attempt.message.threadId !== 'string'))
-      )
-        return false;
-    }
-  }
-  return true;
+  return (
+    isValidAttemptInput(input, value.uuid) &&
+    isValidDraftArgs(draft) &&
+    (workingCopy === undefined || isValidWorkingCopy(workingCopy)) &&
+    (value.dispatch === undefined || isValidDispatch(value.dispatch)) &&
+    (value.response == null || isValidResponse(value.response, value.uuid))
+  );
+}
+
+/** The latest server attempt recorded for the send. */
+export function emailSendAttempt(intent: EmailSendIntent) {
+  return (
+    intent.response?.cancelEmailSend?.attempt ??
+    intent.response?.sendEmailMessage?.attempt
+  );
+}
+
+/** The latest server status recorded for the send's attempt. */
+export function emailSendAttemptStatus(intent: EmailSendIntent) {
+  return (
+    intent.response?.cancelEmailSend?.attempt.status ??
+    intent.response?.sendEmailMessage?.attempt.status
+  );
 }
 
 /** Even an unsupported record keeps recognizable identities reserved. */

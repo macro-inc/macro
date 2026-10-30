@@ -1,7 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { RemoteFlag } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
-import { Telemetry } from '@macro-inc/observability';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { JsonType } from 'posthog-js';
 import {
   type Accessor,
@@ -40,7 +40,7 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
       // Flags usually arrive after first paint and swap flagged subtrees,
       // often to lazy views. A transition keeps the painted UI until the new
       // one is ready instead of flashing Suspense fallbacks in between.
-      startTransition(() => {
+      const transition = startTransition(() => {
         // Order matters: signals propagate synchronously, so flagsLoaded must
         // only flip after the flag values are in place — the other way around,
         // flag-off fallbacks fire against the still-empty flag list.
@@ -49,7 +49,8 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
         }
         setFlagsUnreachable(ctx?.errorsLoading === true);
         setFlagsLoaded(true);
-      }).catch((error) => Telemetry.error(error, { surface: 'feature-flags' }));
+      });
+      fireAndForget(transition, 'feature-flags');
     });
 
     onCleanup(unsub);

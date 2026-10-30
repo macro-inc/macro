@@ -1,8 +1,8 @@
 import type { ComposeTaskSuccess } from '@app/features/task-composer/core/types';
+import { trackMention } from '@app/lib/queries/storage/mentions';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { toast } from '@core/component/Toast/Toast';
 import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
-import { trackMention } from '@core/signal/mention';
 import CheckSquare from '@icon/system/regular/check-square.svg';
 import CodeBlock from '@icon/system/regular/code-block.svg';
 import FileText from '@icon/system/regular/file-text.svg';

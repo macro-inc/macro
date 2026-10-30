@@ -1,4 +1,4 @@
-import { decodeBase64Bytes } from '@core/util/base64';
+import { decodeBase64Bytes } from '@app/lib/utils/base64';
 
 export function decodeBase64Utf8(input: string): string {
   try {

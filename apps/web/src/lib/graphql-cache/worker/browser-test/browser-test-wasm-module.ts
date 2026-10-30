@@ -1,3 +1,4 @@
+import { startDetached } from '@core/util/startDetached';
 import { loadCacheWasm } from '../wasm-module';
 import {
   assertMatchingCacheWasmBuilds,
@@ -49,7 +50,8 @@ export function loadBrowserTestCacheWasm(): Promise<{
     return { module, wasmUrl, buildInfo };
   })();
   modulePromise = initialization;
-  void initialization.catch(() => {
+
+  startDetached(initialization, () => {
     if (modulePromise === initialization) modulePromise = undefined;
   });
   return initialization;

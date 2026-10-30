@@ -50,7 +50,7 @@ function blockCounts(adds: number, dels: number) {
   let deleted = dels > 0 ? Math.max(1, Math.round(deletedRaw)) : 0;
 
   // Cap bars based on actual change magnitude.
-  if (adds > 0 && adds <= 5) added = Math.min(added, 1);
+  updateAdded();
   if (adds > 5 && adds <= 10) added = Math.min(added, 2);
   if (dels > 0 && dels <= 5) deleted = Math.min(deleted, 1);
   if (dels > 5 && dels <= 10) deleted = Math.min(deleted, 2);
@@ -66,6 +66,10 @@ function blockCounts(adds: number, dels: number) {
   const neutral = Math.max(0, TOTAL_BLOCKS - added - deleted);
 
   return { added, deleted, neutral };
+
+  function updateAdded() {
+    if (adds > 0 && adds <= 5) added = Math.min(added, 1);
+  }
 }
 
 export function DiffChanges(props: DiffChangesProps) {

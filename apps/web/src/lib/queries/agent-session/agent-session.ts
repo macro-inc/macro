@@ -29,6 +29,7 @@ import {
   type SessionFoldSnapshot,
 } from '@core/agent-fold/client';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { startDetached } from '@core/util/startDetached';
 import {
   AgentSessionLogUnavailable,
   canFollowAgentSessionLog,
@@ -58,10 +59,16 @@ import {
   SessionLoadTrace,
   traceAcquire,
   transcriptSize,
-} from './load-telemetry';
-import { frameDelivery, PromptTrace } from './prompt-telemetry';
-import { createdRecently, forgetSessionCreated } from './recently-created';
-import { publishSessionTurn } from './session-turn';
+} from '../../core/agent-session/load-telemetry';
+import {
+  frameDelivery,
+  PromptTrace,
+} from '../../core/agent-session/prompt-telemetry';
+import {
+  createdRecently,
+  forgetSessionCreated,
+} from '../../core/agent-session/recently-created';
+import { publishSessionTurn } from '../../core/agent-session/session-turn';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -296,7 +303,7 @@ export class AgentSession {
     // A surface rendering the cached log has not called `load` yet when a
     // fast failure lands, and an unobserved rejection is reported as
     // unhandled. The failure still reaches every caller of `load`.
-    this.loading.catch(() => undefined);
+    startDetached(this.loading, () => {});
   }
 
   /**
@@ -616,8 +623,9 @@ export class AgentSession {
    * first and reads second misses nothing and double-applies nothing worse
    * than a message it already holds.
    */
-  snapshot(): Promise<SessionFoldSnapshot> {
-    return this.chain.then(() => readSession(this.id));
+  async snapshot(): Promise<SessionFoldSnapshot> {
+    await this.chain;
+    return await readSession(this.id);
   }
 
   /** Observe mounted answer DOM only while this tab awaits that prompt's paint. */
@@ -660,14 +668,7 @@ export class AgentSession {
     // The cached log carries no session row, so the (small) row fetch is
     // part of warming: the transcript can show only inside a session.
     const [cached, session] = await Promise.all([
-      this.watch.cached.then((cached) => {
-        this.trace.cacheRead(
-          readStartedAt,
-          cached && { rows: cached.rows.length },
-          this.watch.cacheMiss()
-        );
-        return cached;
-      }),
+      this.readCached(readStartedAt),
       this.sessionRow,
     ]);
     // `settled` is set in the same tick as the fetched snapshot's push, so
@@ -685,6 +686,16 @@ export class AgentSession {
     return { session: session.value, bot: cached.bot };
   }
 
+  private async readCached(readStartedAt: number) {
+    const cached = await this.watch.cached;
+    this.trace.cacheRead(
+      readStartedAt,
+      cached && { rows: cached.rows.length },
+      this.watch.cacheMiss()
+    );
+    return cached;
+  }
+
   /** A surface put this session's transcript on screen. */
   rendered(
     kind: 'cached' | 'fetched',
@@ -693,21 +704,20 @@ export class AgentSession {
     this.trace.rendered(kind, transcriptSize(messages));
   }
 
-  private startLoad(): Promise<AgentSessionRecord> {
-    return this.fetchFoldAndSettle().then(
-      (record) => {
-        this.trace.end('loaded');
-        return record;
-      },
-      (error: unknown) => {
-        this.loadFailed = true;
-        this.trace.end(
-          error instanceof AgentSessionReleased ? 'released' : 'failed',
-          error
-        );
-        throw error;
-      }
-    );
+  private async startLoad(): Promise<AgentSessionRecord> {
+    let record: AgentSessionRecord;
+    try {
+      record = await this.fetchFoldAndSettle();
+    } catch (error) {
+      this.loadFailed = true;
+      this.trace.end(
+        error instanceof AgentSessionReleased ? 'released' : 'failed',
+        error
+      );
+      throw error;
+    }
+    this.trace.end('loaded');
+    return record;
   }
 
   /**
@@ -762,14 +772,8 @@ export class AgentSession {
   private async fetchAndFold(): Promise<AgentSessionRecord> {
     const fetchStartedAt = performance.now();
     const [session, log] = await Promise.all([
-      this.sessionRow.then((session) => {
-        this.trace.stage('session_fetch', fetchStartedAt);
-        return session;
-      }),
-      this.watch.fetched.then(
-        (log) => ({ ok: true as const, log }),
-        (error: unknown) => ({ ok: false as const, error })
-      ),
+      this.fetchSessionRow(fetchStartedAt),
+      this.fetchLog(),
     ]);
     // Released mid-fetch: the stopped watch answers with a failure that is
     // not one.
@@ -817,12 +821,32 @@ export class AgentSession {
     return { session: session.value, bot: log.log.bot };
   }
 
+  private async fetchSessionRow(fetchStartedAt: number) {
+    const session = await this.sessionRow;
+    this.trace.stage('session_fetch', fetchStartedAt);
+    return session;
+  }
+
+  private async fetchLog() {
+    try {
+      return { ok: true as const, log: await this.watch.fetched };
+    } catch (error: unknown) {
+      return { ok: false as const, error };
+    }
+  }
+
   /** The viewer was refused: nothing cached may render for them again. */
   private forgetCached(): void {
     this.warming = Promise.resolve(undefined);
-    void forgetAgentSessionLog(this.id).catch((error: unknown) => {
+    fireAndForget(this.forgetCachedLog(), 'agent-session');
+  }
+
+  private async forgetCachedLog(): Promise<void> {
+    try {
+      await forgetAgentSessionLog(this.id);
+    } catch (error) {
       console.warn('[agent-session] cached log could not be removed', error);
-    });
+    }
   }
 
   /**
@@ -911,7 +935,18 @@ export class AgentSession {
       pushed.length > 0
         ? frameDelivery('socket', pushed)
         : snapshot && frameDelivery('snapshot', snapshot.rows);
-    const run = this.chain.then(async () => {
+    this.chain = this.pushAfter(this.chain, inputs, delivery);
+    return this.chain;
+  }
+
+  /** Pushes after every earlier input. A failed push must not poison the chain for every input after it. */
+  private async pushAfter(
+    previous: Promise<void>,
+    inputs: FoldInput[],
+    delivery: ReturnType<typeof frameDelivery> | undefined
+  ): Promise<void> {
+    try {
+      await previous;
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);
       if (this.closed || events.length === 0) return;
@@ -922,11 +957,8 @@ export class AgentSession {
         if (prompt.ended) this.prompts.delete(prompt);
       }
       for (const listener of this.listeners) listener(events);
-    });
-    // A failed push must not poison the chain for every input after it.
-    this.chain = run.catch((error: unknown) => {
+    } catch (error) {
       console.error('[agent-session] fold input could not be applied', error);
-    });
-    return this.chain;
+    }
   }
 }

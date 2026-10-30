@@ -86,7 +86,10 @@ function createServerSendObserver(accountId: string) {
     }
     if (timer !== undefined) clearTimeout(timer);
     // Defer load so its synchronous early-return cannot race this assignment.
-    running = Promise.resolve().then(load);
+    running = (async () => {
+      await Promise.resolve();
+      await load();
+    })();
     return running;
   }
   const wake = () => {

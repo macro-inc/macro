@@ -1,4 +1,4 @@
-import { scaleLinear } from 'd3-scale';
+import { type ScaleLinear, scaleLinear } from 'd3-scale';
 import { arc, pie } from 'd3-shape';
 import type { ChartData, ChartPlotData, ChartSeriesData } from './chart-data';
 
@@ -99,6 +99,20 @@ function extent(plots: ChartPlotData[], categories: number): [number, number] {
       if (hasNegative) see(-1);
       continue;
     }
+    seePlotValues(plot);
+    // Bars and areas grow from zero; lines and prices need not.
+    if (plot.kind === 'column' || plot.kind === 'bar' || plot.kind === 'area')
+      see(0);
+  }
+  if (!Number.isFinite(low)) return [0, 1];
+  // Like Excel, an axis starts at zero unless the values sit far from it.
+  if (low > 0 && (high - low) / high >= 1 / 6) low = 0;
+  if (high < 0 && (low - high) / low >= 1 / 6) high = 0;
+  if (low === high)
+    return low === 0 ? [0, 1] : [Math.min(0, low), Math.max(0, high)];
+  return [low, high];
+
+  function seePlotValues(plot: ChartPlotData) {
     if (plot.grouping === 'stacked')
       for (let index = 0; index < categories; index++) {
         let positive = 0;
@@ -114,17 +128,7 @@ function extent(plots: ChartPlotData[], categories: number): [number, number] {
     else
       for (const series of plot.series)
         for (const value of series.values) if (value !== null) see(value);
-    // Bars and areas grow from zero; lines and prices need not.
-    if (plot.kind === 'column' || plot.kind === 'bar' || plot.kind === 'area')
-      see(0);
   }
-  if (!Number.isFinite(low)) return [0, 1];
-  // Like Excel, an axis starts at zero unless the values sit far from it.
-  if (low > 0 && (high - low) / high >= 1 / 6) low = 0;
-  if (high < 0 && (low - high) / low >= 1 / 6) high = 0;
-  if (low === high)
-    return low === 0 ? [0, 1] : [Math.min(0, low), Math.max(0, high)];
-  return [low, high];
 }
 
 const sample = (plots: ChartPlotData[]) =>
@@ -166,104 +170,8 @@ export function chartScene(
   const surface = data.plots.find((plot) => plot.kind === 'surface');
   const bands = surface && surfaceBands(surface, data.palette);
   // Legend entries: slices of a pie, bands of a surface, otherwise series.
-  const entries = round
-    ? data.categories.map((name, index) => ({
-        name,
-        color: data.palette[index % data.palette.length],
-        line: false,
-      }))
-    : bands
-      ? bands.entries
-      : data.plots.flatMap((plot) =>
-          plot.series
-            // Prices draw as high-low lines and bars, not as their series.
-            .filter(
-              (series) =>
-                plot.kind !== 'stock' &&
-                (!series.noFill || plot.kind === 'line')
-            )
-            .map((series) => ({
-              name: series.name,
-              color: series.color,
-              line:
-                plot.kind === 'line' ||
-                plot.kind === 'scatter' ||
-                (plot.kind === 'radar' && !plot.filled),
-            }))
-        );
-  if (data.legend && entries.length) {
-    const swatch = 8 * scale;
-    const row = font * 1.6;
-    if (data.legend === 'right' || data.legend === 'left') {
-      const widest = Math.max(...entries.map((entry) => entry.name.length));
-      const legendWidth = Math.min(
-        width * 0.35,
-        swatch + 6 * scale + widest * font * CHARACTER_WIDTH
-      );
-      const x = data.legend === 'right' ? right - legendWidth : left;
-      const shown = entries.slice(0, Math.floor((bottom - top) / row));
-      let y = (top + bottom) / 2 - (shown.length * row) / 2;
-      for (const entry of shown) {
-        legendSwatch(shapes, entry, x, y + row / 2, swatch);
-        shapes.push({
-          type: 'text',
-          x: x + swatch + 4 * scale,
-          y: y + row / 2,
-          text: truncate(entry.name, legendWidth - swatch - 4 * scale, font),
-          anchor: 'start',
-          size: font,
-          role: 'label',
-          baseline: 'middle',
-        });
-        y += row;
-      }
-      if (data.legend === 'right') right -= legendWidth + pad;
-      else left += legendWidth + pad;
-    } else {
-      // Entries flow in rows across the width.
-      const widths = entries.map(
-        (entry) =>
-          swatch +
-          4 * scale +
-          entry.name.length * font * CHARACTER_WIDTH +
-          10 * scale
-      );
-      const lines: { entries: typeof entries; width: number }[] = [];
-      let line = { entries: [] as typeof entries, width: 0 };
-      entries.forEach((entry, index) => {
-        if (line.entries.length && line.width + widths[index] > right - left) {
-          lines.push(line);
-          line = { entries: [], width: 0 };
-        }
-        line.entries.push(entry);
-        line.width += widths[index];
-      });
-      lines.push(line);
-      const shown = lines.slice(0, 2);
-      const legendHeight = shown.length * row;
-      let y = data.legend === 'top' ? top : bottom - legendHeight;
-      for (const current of shown) {
-        let x = (left + right) / 2 - current.width / 2;
-        for (const entry of current.entries) {
-          legendSwatch(shapes, entry, x, y + row / 2, swatch);
-          shapes.push({
-            type: 'text',
-            x: x + swatch + 4 * scale,
-            y: y + row / 2,
-            text: entry.name,
-            anchor: 'start',
-            size: font,
-            role: 'label',
-            baseline: 'middle',
-          });
-          x += widths[entries.indexOf(entry)];
-        }
-        y += row;
-      }
-      if (data.legend === 'top') top += legendHeight + 2 * scale;
-      else bottom -= legendHeight + 2 * scale;
-    }
-  }
+  const entries = legendEntries();
+  reserveLegendSpace();
   if (right - left < 20 || bottom - top < 20) return { shapes };
   if (round) {
     roundChart(shapes, round, data, { top, bottom, left, right });
@@ -321,77 +229,52 @@ export function chartScene(
       6 * scale
     );
   };
-  if (horizontal) {
-    const labelWidth = Math.min(
-      (right - left) * 0.35,
-      Math.max(...data.categories.map((label) => label.length), 1) *
-        font *
-        CHARACTER_WIDTH +
-        6 * scale
-    );
-    left += labelWidth;
-    bottom -= font * 1.6;
-  } else {
-    left += measure(primary.length ? primary : data.plots);
-    right -= measure(secondary);
-    bottom -= font * 1.6;
-  }
+  reserveAxisLabelSpace();
   if (right - left < 20 || bottom - top < 20) return { shapes };
   const box = { top, bottom, left, right };
   if (scatter) {
     scatterChart(shapes, data, box, font, scale, valueScale);
     return { shapes };
   }
-  const values = valueScale(
-    primary.length ? primary : data.plots,
-    horizontal ? [left, right] : [bottom, top]
-  );
+  const values = primaryValueAxis();
   // Gridlines and value labels.
   for (const tick of values.ticks) {
-    const at = values.scale(tick);
-    shapes.push(
-      horizontal
-        ? { type: 'line', x1: at, y1: top, x2: at, y2: bottom, role: 'grid' }
-        : { type: 'line', x1: left, y1: at, x2: right, y2: at, role: 'grid' }
-    );
-    shapes.push(
-      horizontal
-        ? {
-            type: 'text',
-            x: at,
-            y: bottom + font * 1.2,
-            text: values.axisFormat(tick),
-            anchor: 'middle',
-            size: font,
-            role: 'label',
-          }
-        : {
-            type: 'text',
-            x: left - 4 * scale,
-            y: at,
-            text: values.axisFormat(tick),
-            anchor: 'end',
-            size: font,
-            role: 'label',
-            baseline: 'middle',
-          }
-    );
+    const pushGridTick = () => {
+      const at = values.scale(tick);
+      shapes.push(
+        horizontal
+          ? { type: 'line', x1: at, y1: top, x2: at, y2: bottom, role: 'grid' }
+          : { type: 'line', x1: left, y1: at, x2: right, y2: at, role: 'grid' }
+      );
+      shapes.push(
+        horizontal
+          ? {
+              type: 'text',
+              x: at,
+              y: bottom + font * 1.2,
+              text: values.axisFormat(tick),
+              anchor: 'middle',
+              size: font,
+              role: 'label',
+            }
+          : {
+              type: 'text',
+              x: left - 4 * scale,
+              y: at,
+              text: values.axisFormat(tick),
+              anchor: 'end',
+              size: font,
+              role: 'label',
+              baseline: 'middle',
+            }
+      );
+    };
+    pushGridTick();
   }
   const secondaryValues = secondary.length
     ? valueScale(secondary, [bottom, top])
     : undefined;
-  if (secondaryValues)
-    for (const tick of secondaryValues.ticks)
-      shapes.push({
-        type: 'text',
-        x: right + 4 * scale,
-        y: secondaryValues.scale(tick),
-        text: secondaryValues.axisFormat(tick),
-        anchor: 'start',
-        size: font,
-        role: 'label',
-        baseline: 'middle',
-      });
+  pushSecondaryAxisLabels();
   // Category bands; horizontal bars list the first category at the bottom.
   const span = horizontal ? bottom - top : right - left;
   const band = span / count;
@@ -438,21 +321,8 @@ export function chartScene(
     (a, b) => Number(a.kind === 'line') - Number(b.kind === 'line')
   );
   for (const plot of ordered) {
-    const axis = plot.secondary && secondaryValues ? secondaryValues : values;
-    if (plot.kind === 'column' || plot.kind === 'bar')
-      bars(
-        shapes,
-        plot,
-        data,
-        axis.scale,
-        center,
-        band,
-        horizontal,
-        axis.format
-      );
-    else if (plot.kind === 'stock')
-      stocks(shapes, plot, data, axis.scale, center, band, axis.format, scale);
-    else lines(shapes, plot, data, axis.scale, center, axis.format, scale);
+    const axis = valueAxisFor(plot);
+    pushPlotShapes(plot, axis);
   }
   shapes.push(
     horizontal
@@ -484,6 +354,182 @@ export function chartScene(
         }
   );
   return { shapes };
+
+  function legendEntries() {
+    return round
+      ? data.categories.map((name, index) => ({
+          name,
+          color: data.palette[index % data.palette.length],
+          line: false,
+        }))
+      : bands
+        ? bands.entries
+        : data.plots.flatMap((plot) =>
+            plot.series
+              // Prices draw as high-low lines and bars, not as their series.
+              .filter(
+                (series) =>
+                  plot.kind !== 'stock' &&
+                  (!series.noFill || plot.kind === 'line')
+              )
+              .map((series) => ({
+                name: series.name,
+                color: series.color,
+                line:
+                  plot.kind === 'line' ||
+                  plot.kind === 'scatter' ||
+                  (plot.kind === 'radar' && !plot.filled),
+              }))
+          );
+  }
+
+  function reserveAxisLabelSpace() {
+    if (horizontal) {
+      const labelWidth = Math.min(
+        (right - left) * 0.35,
+        Math.max(...data.categories.map((label) => label.length), 1) *
+          font *
+          CHARACTER_WIDTH +
+          6 * scale
+      );
+      left += labelWidth;
+      bottom -= font * 1.6;
+    } else {
+      left += measure(primary.length ? primary : data.plots);
+      right -= measure(secondary);
+      bottom -= font * 1.6;
+    }
+  }
+
+  function pushSecondaryAxisLabels() {
+    if (secondaryValues)
+      for (const tick of secondaryValues.ticks)
+        shapes.push({
+          type: 'text',
+          x: right + 4 * scale,
+          y: secondaryValues.scale(tick),
+          text: secondaryValues.axisFormat(tick),
+          anchor: 'start',
+          size: font,
+          role: 'label',
+          baseline: 'middle',
+        });
+  }
+
+  function primaryValueAxis() {
+    return valueScale(
+      primary.length ? primary : data.plots,
+      horizontal ? [left, right] : [bottom, top]
+    );
+  }
+
+  function valueAxisFor(plot: ChartPlotData) {
+    return plot.secondary && secondaryValues ? secondaryValues : values;
+  }
+
+  function pushPlotShapes(
+    plot: ChartPlotData,
+    axis: {
+      scale: ScaleLinear<number, number, never>;
+      ticks: number[];
+      format: (value: number) => string;
+      axisFormat: (value: number) => string;
+    }
+  ) {
+    if (plot.kind === 'column' || plot.kind === 'bar')
+      bars(
+        shapes,
+        plot,
+        data,
+        axis.scale,
+        center,
+        band,
+        horizontal,
+        axis.format
+      );
+    else if (plot.kind === 'stock')
+      stocks(shapes, plot, data, axis.scale, center, band, axis.format, scale);
+    else lines(shapes, plot, data, axis.scale, center, axis.format, scale);
+  }
+
+  function reserveLegendSpace() {
+    if (data.legend && entries.length) {
+      const swatch = 8 * scale;
+      const row = font * 1.6;
+      if (data.legend === 'right' || data.legend === 'left') {
+        const widest = Math.max(...entries.map((entry) => entry.name.length));
+        const legendWidth = Math.min(
+          width * 0.35,
+          swatch + 6 * scale + widest * font * CHARACTER_WIDTH
+        );
+        const x = data.legend === 'right' ? right - legendWidth : left;
+        const shown = entries.slice(0, Math.floor((bottom - top) / row));
+        let y = (top + bottom) / 2 - (shown.length * row) / 2;
+        for (const entry of shown) {
+          legendSwatch(shapes, entry, x, y + row / 2, swatch);
+          shapes.push({
+            type: 'text',
+            x: x + swatch + 4 * scale,
+            y: y + row / 2,
+            text: truncate(entry.name, legendWidth - swatch - 4 * scale, font),
+            anchor: 'start',
+            size: font,
+            role: 'label',
+            baseline: 'middle',
+          });
+          y += row;
+        }
+        if (data.legend === 'right') right -= legendWidth + pad;
+        else left += legendWidth + pad;
+      } else {
+        // Entries flow in rows across the width.
+        const widths = entries.map(
+          (entry) =>
+            swatch +
+            4 * scale +
+            entry.name.length * font * CHARACTER_WIDTH +
+            10 * scale
+        );
+        const lines: { entries: typeof entries; width: number }[] = [];
+        let line = { entries: [] as typeof entries, width: 0 };
+        entries.forEach((entry, index) => {
+          if (
+            line.entries.length &&
+            line.width + widths[index] > right - left
+          ) {
+            lines.push(line);
+            line = { entries: [], width: 0 };
+          }
+          line.entries.push(entry);
+          line.width += widths[index];
+        });
+        lines.push(line);
+        const shown = lines.slice(0, 2);
+        const legendHeight = shown.length * row;
+        let y = data.legend === 'top' ? top : bottom - legendHeight;
+        for (const current of shown) {
+          let x = (left + right) / 2 - current.width / 2;
+          for (const entry of current.entries) {
+            legendSwatch(shapes, entry, x, y + row / 2, swatch);
+            shapes.push({
+              type: 'text',
+              x: x + swatch + 4 * scale,
+              y: y + row / 2,
+              text: entry.name,
+              anchor: 'start',
+              size: font,
+              role: 'label',
+              baseline: 'middle',
+            });
+            x += widths[entries.indexOf(entry)];
+          }
+          y += row;
+        }
+        if (data.legend === 'top') top += legendHeight + 2 * scale;
+        else bottom -= legendHeight + 2 * scale;
+      }
+    }
+  }
 }
 
 function legendSwatch(

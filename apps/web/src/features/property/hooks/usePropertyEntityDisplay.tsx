@@ -84,7 +84,7 @@ export function usePropertyEntityDisplay(
     if (!projectsFlag()?.().enabled) return;
     return untrack(() => {
       const userId = useUserId();
-      return useProjectIdentityQuery(entityId, userId);
+      return useProjectIdentityQuery(getGraphqlSoupClient, entityId, userId);
     });
   });
   const nativeProjectId = () => {
@@ -233,3 +233,5 @@ export function usePropertyEntityDisplay(
     linkParams,
   };
 }
+
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';

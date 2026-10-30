@@ -18,7 +18,6 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityData, isEmailEntity, isTaskEntity } from '@entity';
-import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createEffect, onCleanup } from 'solid-js';
@@ -37,9 +36,6 @@ import {
   makeMuteAction,
   makeRenameAction,
 } from './index';
-
-const reportEntityActionError = (error: unknown) =>
-  Telemetry.error(error, { surface: 'entity-actions' });
 
 /**
  * Common manipulations scoped to the current block.
@@ -223,14 +219,15 @@ export const useBlockEntityCommands = (
     // triage flow, or the entity is no longer in the surviving soup list.
     const selectedRow = triageRow();
     if (!soup || !selectedRow) {
-      markDone.execute([entity]).catch(reportEntityActionError);
+      fireAndForget(markDone.execute([entity]), 'entity-actions');
       return true;
     }
 
     // Triage flow: mark done and advance to the next item in the list.
-    markDone
-      .executeWithSoup([selectedRow.original], soup, advanceSplitTo)
-      .catch(reportEntityActionError);
+    fireAndForget(
+      markDone.executeWithSoup([selectedRow.original], soup, advanceSplitTo),
+      'entity-actions'
+    );
 
     return true;
   };
@@ -430,7 +427,7 @@ export const useBlockEntityCommands = (
         const entity = getEntity();
         if (!entity) return false;
         if (!copyAction.canExecute(entity)) return false;
-        copyAction.execute([entity]).catch(reportEntityActionError);
+        fireAndForget(copyAction.execute([entity]), 'entity-actions');
         return true;
       },
       condition: () => {
@@ -473,7 +470,7 @@ export const useBlockEntityCommands = (
         const entity = getEntity();
         if (!entity) return true;
         if (!copyLinkAction.canExecute(entity)) return true;
-        copyLinkAction.execute([entity]).catch(reportEntityActionError);
+        fireAndForget(copyLinkAction.execute([entity]), 'entity-actions');
         return true;
       },
       condition: () => {
@@ -518,7 +515,10 @@ export const useBlockEntityCommands = (
       scopeId,
       description: () => t('entityActions.copyId'),
       keyDownHandler: () => {
-        copyEntityIdAction.executeById(blockId).catch(reportEntityActionError);
+        fireAndForget(
+          copyEntityIdAction.executeById(blockId),
+          'entity-actions'
+        );
         return true;
       },
       displayPriority: 10,

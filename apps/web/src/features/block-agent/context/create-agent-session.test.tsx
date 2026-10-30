@@ -48,7 +48,9 @@ vi.mock('@queries/agent-session/session-metadata-sync', () => ({
 }));
 
 const { cleanup, render, screen } = await import('@solidjs/testing-library');
-const { AgentSession } = await import('@core/agent-session/AgentSession');
+const { AgentSession } = await import(
+  '@app/lib/queries/agent-session/agent-session'
+);
 const { createAgentSession } = await import('./create-agent-session');
 
 const SESSION = '01a0ced3-b839-75ee-bc9b-7b0a11ce0789';

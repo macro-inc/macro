@@ -20,14 +20,9 @@ import { SoupViewContextGroup } from '@app/features/next-soup/soup-view/filters-
 import { SoupViewContextSort } from '@app/features/next-soup/soup-view/filters-bar/soup-view-context-sort';
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { usePreference } from '@app/preferences/use-preference';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SplitPanel } from '@components/app/split-panel';
-import {
-  enableCrmActivity,
-  enableDatabases,
-} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -246,6 +241,19 @@ function CrmFilterChips(props: { onReset: () => void }) {
   );
 }
 
+/** The tab to show for `id`; a tab whose feature is off shows Companies. */
+function availableTab(
+  id: string,
+  enabled: { lists: boolean; activity: boolean; databases: boolean }
+) {
+  if (!enabled.lists && id.startsWith('list:')) return 'active';
+  if (!enabled.activity && isCrmActivityTab(id)) return 'active';
+  if (id === 'databases' && !enabled.databases) return 'active';
+  if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
+    return 'active';
+  return id;
+}
+
 export function CrmWorkspaceView(props: {
   children: (options: {
     onOpenEntity?: (entity: EntityData) => boolean;
@@ -253,15 +261,17 @@ export function CrmWorkspaceView(props: {
     editList?: () => void;
   }) => JSX.Element;
 }) {
-  const activityFlag = useFeatureFlag(enableCrmActivity);
-  const databasesFlag = useFeatureFlag(enableDatabases);
   const {
     openCreateCompany: openCreateCompanyModal,
     openCreateContact: openCreateContactModal,
     exportCompanies: fetchCrmExportCompanies,
     PipelineEditor,
     copyPipelineLink,
+    activityRollout,
+    databasesRollout,
   } = useCrmContext();
+  const activityFlag = activityRollout();
+  const databasesFlag = databasesRollout();
   const view = useCrmWorkspace();
   const [peopleSearch, setPeopleSearch] = createSignal(
     view.queryFilters.state.include.crmContactSearch ?? ''
@@ -362,6 +372,17 @@ export function CrmWorkspaceView(props: {
     (activityFlag().loading ||
       (active() === 'databases' && databasesFlag().loading));
   const [exporting, setExporting] = createSignal(false);
+  // Company lists show their filters; people, pipelines and activity do not.
+  const companyFiltersShown = () =>
+    !peopleActive() && !pipelineId() && !activityTab();
+  const listShown = () => !recordOpen() && !pipelineId();
+  const companyListShown = () =>
+    listShown() && !activityTab() && !activityPending();
+  const searchLabel = () =>
+    peopleActive() ? 'Search people' : 'Search companies';
+  const shownPipelines = () =>
+    pipelinesEnabled() ? pipelines.pipelines() : [];
+  const shownLists = () => (listsEnabled() ? lists.lists() : []);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
   const editActiveList = () => {
@@ -408,13 +429,13 @@ export function CrmWorkspaceView(props: {
       (record) => record.id === activeRecord()
     )?.label ??
     'Companies';
-  const navigate = (id: string) => {
+  const navigate = (requested: string) => {
     settings.close();
-    if (!listsEnabled() && id.startsWith('list:')) id = 'active';
-    if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
-    if (id === 'databases' && !databasesFlag().enabled) id = 'active';
-    if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
-      id = 'active';
+    const id = availableTab(requested, {
+      lists: listsEnabled(),
+      activity: activityFlag().enabled,
+      databases: databasesFlag().enabled,
+    });
     if (id === active()) view.host.record.close();
     if (isCrmActivityTab(id)) {
       view.setActiveTab(id);
@@ -490,7 +511,9 @@ export function CrmWorkspaceView(props: {
   );
   const sidebar = (onCollapse?: () => void) => (
     <CrmSidebar
-      searchLabel={peopleActive() ? 'Search people' : 'Search companies'}
+      activityEnabled={activityFlag().enabled}
+      databasesEnabled={databasesFlag().enabled}
+      searchLabel={searchLabel()}
       search={() => (
         <Show when={peopleActive()} fallback={<CrmSearchBar />}>
           <PeopleSearchBar
@@ -597,18 +620,18 @@ export function CrmWorkspaceView(props: {
           <Show when={isTouchDevice() && !recordOpen()}>
             <ViewShell.Header>
               <CrmMobileTabs
+                activityEnabled={activityFlag().enabled}
+                databasesEnabled={databasesFlag().enabled}
                 active={activeRecord()}
-                pipelines={pipelinesEnabled() ? pipelines.pipelines() : []}
-                lists={listsEnabled() ? lists.lists() : []}
+                pipelines={shownPipelines()}
+                lists={shownLists()}
                 onNavigate={(id) => {
                   const pipeline = pipelineIdOfTab(id);
                   if (pipeline) selectPipeline(pipeline);
                   else navigate(id);
                 }}
                 leading={
-                  <Show
-                    when={!peopleActive() && !pipelineId() && !activityTab()}
-                  >
+                  <Show when={companyFiltersShown()}>
                     <Suspense>
                       <MobileFilterDrawer />
                     </Suspense>
@@ -616,7 +639,7 @@ export function CrmWorkspaceView(props: {
                 }
               />
             </ViewShell.Header>
-            <Show when={!peopleActive() && !pipelineId() && !activityTab()}>
+            <Show when={companyFiltersShown()}>
               <Suspense>
                 <SoupFiltersBar />
               </Suspense>
@@ -687,10 +710,10 @@ export function CrmWorkspaceView(props: {
               </Button>
             </Show>
           </Show>
-          <Show when={!recordOpen() && !pipelineId() && activityPending()}>
+          <Show when={listShown() && activityPending()}>
             <CrmListSkeleton label="Loading CRM activity" />
           </Show>
-          <Show when={!recordOpen() && !pipelineId() && activityTab()} keyed>
+          <Show when={listShown() && activityTab()} keyed>
             {(tab) => (
               <Suspense
                 fallback={<CrmListSkeleton label="Loading CRM activity" />}
@@ -711,14 +734,7 @@ export function CrmWorkspaceView(props: {
               </Suspense>
             )}
           </Show>
-          <Show
-            when={
-              !recordOpen() &&
-              !pipelineId() &&
-              !activityTab() &&
-              !activityPending()
-            }
-          >
+          <Show when={companyListShown()}>
             <Show
               when={!isTouchDevice()}
               fallback={
@@ -777,7 +793,7 @@ export function CrmWorkspaceView(props: {
                 </Show>
                 {toolbarCreateMenu()}
                 <CrmHeaderSearch
-                  label={peopleActive() ? 'Search people' : 'Search companies'}
+                  label={searchLabel()}
                   value={peopleActive() ? peopleSearch() : view.searchText()}
                   onValueChange={(value) =>
                     peopleActive()

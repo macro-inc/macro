@@ -8,12 +8,12 @@ import {
   setYear,
 } from 'date-fns';
 import { type Accessor, createMemo } from 'solid-js';
+import { type ParsedTime, parseTime } from '../../../utils/parse-time';
 import {
   formatDuration,
   parseDateFromDuration,
   parseDurationString,
 } from './dateParser';
-import { type ParsedTime, parseTime } from './parseTime';
 import { searchPresets } from './presets';
 
 // Max number of presets to include
@@ -343,27 +343,7 @@ export function useDateSearch(params: {
     // 3. Try parsing as natural date (feb 17, march 3, thursday, etc.)
     const naturalQuery = dateQuery || query;
     let naturalDate = parseNaturalDate(naturalQuery, baseDate);
-    if (naturalDate) {
-      const naturalTime = parsedTime?.time ?? params.defaultTime;
-      if (naturalTime) {
-        naturalDate = applyTime(naturalDate, naturalTime);
-      }
-      const displayText = parsedTime
-        ? `${naturalQuery} at ${formatParsedTime(parsedTime.time)}`
-        : query;
-      options.push({
-        id: `natural-${query}`,
-        displayText,
-        secondaryText: formatDateWithContext(
-          naturalDate,
-          baseDate,
-          params.showTimeInResults ?? true
-        ),
-        date: naturalDate,
-        type: 'natural',
-        score: 95,
-      });
-    }
+    updateNaturalDate();
 
     // Search presets using both the full query and the date-only part (time stripped)
     const presetQuery = parsedTime && dateQuery ? dateQuery : query;
@@ -403,6 +383,30 @@ export function useDateSearch(params: {
     });
 
     return options.slice(0, params.maxItems ?? DEFAULT_MAX_ITEMS);
+
+    function updateNaturalDate() {
+      if (naturalDate) {
+        const naturalTime = parsedTime?.time ?? params.defaultTime;
+        if (naturalTime) {
+          naturalDate = applyTime(naturalDate, naturalTime);
+        }
+        const displayText = parsedTime
+          ? `${naturalQuery} at ${formatParsedTime(parsedTime.time)}`
+          : query;
+        options.push({
+          id: `natural-${query}`,
+          displayText,
+          secondaryText: formatDateWithContext(
+            naturalDate,
+            baseDate,
+            params.showTimeInResults ?? true
+          ),
+          date: naturalDate,
+          type: 'natural',
+          score: 95,
+        });
+      }
+    }
   });
 
   return dateOptions;

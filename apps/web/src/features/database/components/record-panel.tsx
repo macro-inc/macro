@@ -195,9 +195,11 @@ function RecordFields(
     queueMicrotask(focus);
   }
   function options(
-    column: Accessor<DatabaseViewColumn>
+    column: Accessor<DatabaseViewColumn>,
+    heading = false
   ): GridCellEditorOptions {
     return {
+      heading,
       get initialEdit() {
         return column().id === initialEditColumnId;
       },
@@ -243,8 +245,8 @@ function RecordFields(
       >
         <Key each={title() ? [title()!] : []} by="id">
           {(column) => (
-            <div class="-mx-2.5 mb-3 [&_button]:text-lg [&_button]:font-semibold [&_input]:text-lg [&_input]:font-semibold">
-              {props.renderCell(() => props.row, column, options(column))}
+            <div class="-mx-2.5 mb-3 [&_input]:text-lg [&_input]:font-semibold">
+              {props.renderCell(() => props.row, column, options(column, true))}
             </div>
           )}
         </Key>

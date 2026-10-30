@@ -2,15 +2,18 @@ import { whenSplitManagerReady } from '@app/signal/splitLayout';
 import { registerPushRegistrationLifecycle } from '@core/auth/push-registration-lifecycle';
 import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { useUserNamesQuery } from '@queries/auth';
 import { invalidateActiveCallQueries } from '@queries/call/call';
 import type { UserName } from '@service-auth/generated/schemas/userName';
-import { notificationServiceClient } from '@service-notification/client';
-import type { DeviceType } from '@service-notification/generated/schemas/deviceType';
 import { raceTimeout } from '@solid-primitives/promise';
 import { addPluginListener, Channel, invoke } from '@tauri-apps/api/core';
 import { createEffect, createMemo, on, onCleanup, onMount } from 'solid-js';
+import {
+  registerVoipDevice,
+  unregisterVoipDevice,
+} from '../queries/voip-device-registration';
 import { joinChannelCall } from './join-channel-call';
 import { isNativeCallEnabled } from './native-call-platform';
 import {
@@ -23,10 +26,6 @@ import { useCallKitThemeSync } from './use-callkit-theme-sync';
 
 export { isNativeCallEnabled } from './native-call-platform';
 
-// The 'iosvoip' variant exists in the backend but the generated schema has not been
-// regenerated to include it yet. Cast until a regeneration picks it up.
-const DEVICE_TYPE_IOS_VOIP = 'iosvoip' as DeviceType;
-
 async function getCachedVoipToken(): Promise<string | null> {
   const { token } = await invoke<{ token: string | null }>(
     'plugin:call-kit|get_voip_token'
@@ -35,10 +34,7 @@ async function getCachedVoipToken(): Promise<string | null> {
 }
 
 async function registerVoipToken(token: string): Promise<void> {
-  const res = await notificationServiceClient.registerDevice({
-    token,
-    deviceType: DEVICE_TYPE_IOS_VOIP,
-  });
+  const res = await registerVoipDevice(token);
   if (res.isErr()) {
     // The client returns a Result and never rejects — throw so callers (and
     // the push lifecycle's retry) can see the failure.
@@ -61,10 +57,7 @@ async function syncVoipRegistration(): Promise<void> {
 async function unregisterVoipForLogout(): Promise<void> {
   const token = await getCachedVoipToken();
   if (!token) return;
-  const res = await notificationServiceClient.unregisterDevice({
-    token,
-    deviceType: DEVICE_TYPE_IOS_VOIP,
-  });
+  const res = await unregisterVoipDevice(token);
   if (res.isErr()) {
     throw new Error(
       `failed to unregister VoIP token: ${res.error.map((e) => e.code).join(',')}`
@@ -149,9 +142,24 @@ type NativeParticipantDisplayNames =
       errors: unknown[];
     };
 
+/** Awaits `work`, logging a rejection under `message` instead of rethrowing. */
+async function logFailure(work: Promise<unknown>, message: string) {
+  try {
+    await work;
+  } catch (err) {
+    console.error(message, err);
+  }
+}
+
+/** Starts `work` without waiting for it, logging a rejection under `message`. */
+function startLogged(work: Promise<unknown>, message: string) {
+  fireAndForget(logFailure(work, message), 'callkit');
+}
+
 function refreshActiveCallQueriesAfterLeave() {
-  void invalidateActiveCallQueries().catch((err) =>
-    console.error('[callkit] failed to refresh active call state', err)
+  startLogged(
+    invalidateActiveCallQueries(),
+    '[callkit] failed to refresh active call state'
   );
 }
 
@@ -299,9 +307,7 @@ export function useCallKitSetup() {
     onCleanup(() => {
       cleaned = true;
       unregisters.forEach((u) =>
-        u().catch((err) =>
-          console.error('[callkit] failed to unregister listener', err)
-        )
+        startLogged(u(), '[callkit] failed to unregister listener')
       );
       unregisters.length = 0;
       channelWatchers.length = 0;
@@ -311,19 +317,18 @@ export function useCallKitSetup() {
       promise: Promise<{ unregister: () => Promise<void> }>,
       label: string
     ) {
-      promise
-        .then((l) => {
-          if (cleaned) {
-            l.unregister().catch((err) =>
-              console.error(`[callkit] failed to unregister ${label}`, err)
-            );
-            return;
-          }
-          unregisters.push(() => l.unregister());
-        })
-        .catch((err) =>
-          console.error(`[callkit] failed to register ${label}`, err)
-        );
+      const track = async () => {
+        const l = await promise;
+        if (cleaned) {
+          startLogged(
+            l.unregister(),
+            `[callkit] failed to unregister ${label}`
+          );
+          return;
+        }
+        unregisters.push(() => l.unregister());
+      };
+      startLogged(track(), `[callkit] failed to register ${label}`);
     }
 
     function registerChannelWatcher<T>(
@@ -336,11 +341,11 @@ export function useCallKitSetup() {
         handler(payload);
       });
       channelWatchers.push(channel as Channel<unknown>);
-      invoke(`plugin:call-kit|${command}`, { channel })
-        .then(() => console.info(`[callkit] ${label} watcher registered`))
-        .catch((err) =>
-          console.error(`[callkit] failed to register ${label} watcher`, err)
-        );
+      const register = async () => {
+        await invoke(`plugin:call-kit|${command}`, { channel });
+        console.info(`[callkit] ${label} watcher registered`);
+      };
+      startLogged(register(), `[callkit] failed to register ${label} watcher`);
     }
 
     if (isPlatform('ios')) {
@@ -353,8 +358,9 @@ export function useCallKitSetup() {
             console.info('[callkit] received VoIP token update', {
               tokenLength: token.length,
             });
-            await registerVoipToken(token).catch((err) =>
-              console.error('[callkit] failed to register VoIP token', err)
+            await logFailure(
+              registerVoipToken(token),
+              '[callkit] failed to register VoIP token'
             );
           }
         ),
@@ -363,8 +369,9 @@ export function useCallKitSetup() {
 
       // Cold start: drain any token that arrived from PushKit before the
       // listener above was registered.
-      syncVoipRegistration().catch((err) =>
-        console.error('[callkit] failed to register cached VoIP token', err)
+      startLogged(
+        syncVoipRegistration(),
+        '[callkit] failed to register cached VoIP token'
       );
 
       // Account switch: rebind on login and remove on logout so the previous account's calls stop ringing this device. Registrations are idempotent upserts, so overlap between these three triggers is harmless.
@@ -412,8 +419,9 @@ export function useCallKitSetup() {
       });
       markNativeCallActivity();
       nativeCall.setBootstrapChannelId(channelId);
-      joinChannelCallWhenReady(channelId, nativeMedia).catch((err) =>
-        console.error('[callkit] joinChannelCallWhenReady failed', err)
+      startLogged(
+        joinChannelCallWhenReady(channelId, nativeMedia),
+        '[callkit] joinChannelCallWhenReady failed'
       );
     };
 
@@ -429,40 +437,43 @@ export function useCallKitSetup() {
     );
 
     function drainPendingAnsweredCall(handled?: CallAnsweredPayload) {
-      invoke<GetPendingAnsweredCallResponse>(
-        'plugin:call-kit|get_pending_answered_call'
-      )
-        .then(({ channelId, nativeMedia, callId, answeredAtMs }) => {
-          console.info('[callkit] drained pending answered call', {
-            channelId,
-            nativeMedia,
-            callId,
-          });
-          if (!channelId) return;
-          if (
-            handled &&
-            answeredCallIdentity(handled) ===
-              answeredCallIdentity({
-                channelId,
-                nativeMedia: nativeMedia ?? false,
-                callId: callId ?? undefined,
-              })
-          ) {
-            return;
-          }
-          handleCallAnswered(
-            {
-              channelId,
-              nativeMedia: nativeMedia ?? false,
-              callId: callId ?? undefined,
-              answeredAtMs: answeredAtMs ?? undefined,
-            },
-            'pending'
-          );
-        })
-        .catch((err) =>
-          console.error('[callkit] get_pending_answered_call failed', err)
+      startLogged(
+        handlePendingAnsweredCall(handled),
+        '[callkit] get_pending_answered_call failed'
+      );
+    }
+
+    async function handlePendingAnsweredCall(handled?: CallAnsweredPayload) {
+      const { channelId, nativeMedia, callId, answeredAtMs } =
+        await invoke<GetPendingAnsweredCallResponse>(
+          'plugin:call-kit|get_pending_answered_call'
         );
+      console.info('[callkit] drained pending answered call', {
+        channelId,
+        nativeMedia,
+        callId,
+      });
+      if (!channelId) return;
+      if (
+        handled &&
+        answeredCallIdentity(handled) ===
+          answeredCallIdentity({
+            channelId,
+            nativeMedia: nativeMedia ?? false,
+            callId: callId ?? undefined,
+          })
+      ) {
+        return;
+      }
+      handleCallAnswered(
+        {
+          channelId,
+          nativeMedia: nativeMedia ?? false,
+          callId: callId ?? undefined,
+          answeredAtMs: answeredAtMs ?? undefined,
+        },
+        'pending'
+      );
     }
 
     drainPendingAnsweredCall();
@@ -500,8 +511,9 @@ export function useCallKitSetup() {
           );
           return;
         }
-        Promise.resolve(handler(payload)).catch((err) =>
-          console.error('[callkit] failed to handle ended call', err)
+        startLogged(
+          Promise.resolve(handler(payload)),
+          '[callkit] failed to handle ended call'
         );
       }
     );
@@ -532,17 +544,16 @@ export function useCallKitSetup() {
         });
         markNativeCallActivity();
         nativeCall.setBootstrapChannelId(channelId);
-        joinChannelCallWhenReady(channelId, true).catch((err) =>
-          console.error(
-            '[callkit] joinChannelCallWhenReady (drawer opened) failed',
-            err
-          )
+        startLogged(
+          joinChannelCallWhenReady(channelId, true),
+          '[callkit] joinChannelCallWhenReady (drawer opened) failed'
         );
       }
     );
 
-    syncNativeCallState(nativeCall).catch((err) =>
-      console.error('[callkit] initial native call state sync failed', err)
+    startLogged(
+      syncNativeCallState(nativeCall),
+      '[callkit] initial native call state sync failed'
     );
 
     // The webview misses connection-state/call-ended channel events while iOS
@@ -552,8 +563,9 @@ export function useCallKitSetup() {
     const handleVisibilityChange = () => {
       if (document.visibilityState !== 'visible') return;
       drainPendingAnsweredCall();
-      syncNativeCallState(nativeCall).catch((err) =>
-        console.error('[callkit] foreground native call state sync failed', err)
+      startLogged(
+        syncNativeCallState(nativeCall),
+        '[callkit] foreground native call state sync failed'
       );
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -708,8 +720,9 @@ function useCallKitNativeMetadataSync() {
 
       if (syncValue === null) {
         if (previousSyncValue === null) return;
-        setNativeCallKitChannelTitle(null).catch((err) =>
-          console.error('[callkit] failed to clear native channel title', err)
+        startLogged(
+          setNativeCallKitChannelTitle(null),
+          '[callkit] failed to clear native channel title'
         );
         return;
       }
@@ -722,8 +735,9 @@ function useCallKitNativeMetadataSync() {
       }
 
       console.info('[callkit] syncing native channel title', syncValue);
-      setNativeCallKitChannelTitle(syncValue.channelTitle).catch((err) =>
-        console.error('[callkit] failed to sync native channel title', err)
+      startLogged(
+        setNativeCallKitChannelTitle(syncValue.channelTitle),
+        '[callkit] failed to sync native channel title'
       );
     })
   );
@@ -853,11 +867,9 @@ function syncNativeParticipantDisplayNames(
   displayNames: Record<string, string>
 ) {
   for (const [identity, displayName] of Object.entries(displayNames)) {
-    setNativeCallKitParticipantDisplayName(identity, displayName).catch((err) =>
-      console.error(
-        '[callkit] failed to sync native participant display name',
-        err
-      )
+    startLogged(
+      setNativeCallKitParticipantDisplayName(identity, displayName),
+      '[callkit] failed to sync native participant display name'
     );
   }
 }
@@ -912,8 +924,9 @@ function fallbackParticipantName(identity: string): string {
  */
 export async function endCallKitCall(): Promise<void> {
   if (!isNativeCallEnabled()) return;
-  await invoke('plugin:call-kit|end_active_call').catch((err) =>
-    console.error('[callkit] failed to end active call', err)
+  await logFailure(
+    invoke('plugin:call-kit|end_active_call'),
+    '[callkit] failed to end active call'
   );
 }
 
@@ -963,9 +976,9 @@ export async function setNativeCallKitVideoOverlayMode(
   mode: NativeCallSnapshot['videoOverlayMode']
 ): Promise<void> {
   if (!isNativeCallEnabled()) return;
-  await invoke('plugin:call-kit|set_video_overlay_mode', { mode }).catch(
-    (err) =>
-      console.error('[callkit] failed to set native video overlay mode', err)
+  await logFailure(
+    invoke('plugin:call-kit|set_video_overlay_mode', { mode }),
+    '[callkit] failed to set native video overlay mode'
   );
 }
 
@@ -973,10 +986,9 @@ async function setNativeCallKitChannelTitle(
   channelTitle: string | null
 ): Promise<void> {
   if (!isNativeCallEnabled()) return;
-  await invoke('plugin:call-kit|set_call_drawer_channel_title', {
-    channelTitle,
-  }).catch((err) =>
-    console.error('[callkit] failed to set native channel title', err)
+  await logFailure(
+    invoke('plugin:call-kit|set_call_drawer_channel_title', { channelTitle }),
+    '[callkit] failed to set native channel title'
   );
 }
 
@@ -985,13 +997,11 @@ async function setNativeCallKitParticipantDisplayName(
   displayName: string | null
 ): Promise<void> {
   if (!isNativeCallEnabled()) return;
-  await invoke('plugin:call-kit|set_participant_display_name', {
-    identity,
-    displayName,
-  }).catch((err) =>
-    console.error(
-      '[callkit] failed to set native participant display name',
-      err
-    )
+  await logFailure(
+    invoke('plugin:call-kit|set_participant_display_name', {
+      identity,
+      displayName,
+    }),
+    '[callkit] failed to set native participant display name'
   );
 }

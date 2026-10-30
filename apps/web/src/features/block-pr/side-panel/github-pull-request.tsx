@@ -32,9 +32,6 @@ const STATUS_TEXT_CLASS: Record<string, string> = {
   draft: 'text-ink-muted',
 };
 
-const PR_PILL_CLASS =
-  'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted px-2 py-1 leading-tight text-left rounded-full bg-surface';
-
 function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -118,7 +115,7 @@ export function GithubPullRequestStatusChip(props: {
     <Layer depth={2}>
       <span
         class={cn(
-          PR_PILL_CLASS,
+          'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted px-2 py-1 leading-tight text-left rounded-full bg-surface',
           'shrink-0',
           STATUS_TEXT_CLASS[props.status],
           props.class

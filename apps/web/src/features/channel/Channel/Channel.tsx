@@ -81,7 +81,7 @@ import {
 } from '@queries/messages/timeline';
 import { timelineEntryKey } from '@queries/messages/timeline-entries';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
-import { ChannelTypeEnum } from '@service-storage/client';
+import { ChannelTypeEnum } from '@service-storage/itemType';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createEffect,
@@ -134,6 +134,7 @@ import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
 import {
   ThreadList,
+  type ThreadListInitialPosition,
   type ThreadListNavigation,
   type ThreadListScrollSnapshot,
   type ThreadListScrollState,
@@ -505,8 +506,9 @@ export function Channel(props: ChannelProps) {
       });
     },
     onChat: (ctx) => {
-      openChatWithInput(`${buildChannelMessageMention(ctx.message)}\n\n`).catch(
-        (error) => Telemetry.error(error, { surface: 'channel' })
+      fireAndForget(
+        openChatWithInput(`${buildChannelMessageMention(ctx.message)}\n\n`),
+        'channel'
       );
     },
   });
@@ -742,6 +744,18 @@ export function Channel(props: ChannelProps) {
     });
   });
 
+  const threadListTargetId = () =>
+    targetMessageController.hasPendingElementScroll()
+      ? targetMessageController.activeTargetMessageId()
+      : undefined;
+  // Open on the target message, else where the user last left off, else the latest.
+  const initialThreadListPosition = (): ThreadListInitialPosition => {
+    const targetId = targetMessageController.activeTargetMessageId();
+    if (targetId) return { type: 'element', id: targetId };
+    const scroll = props.initialMessagesStateSnapshot?.scroll;
+    return scroll ? { type: 'restore', snapshot: scroll } : { type: 'latest' };
+  };
+
   return (
     <AgentConversationsProvider
       channelId={props.channelId}
@@ -812,11 +826,7 @@ export function Channel(props: ChannelProps) {
                             >
                               <ThreadList
                                 keys={() => messageIndex.entryKeys}
-                                targetId={
-                                  targetMessageController.hasPendingElementScroll()
-                                    ? targetMessageController.activeTargetMessageId()
-                                    : undefined
-                                }
+                                targetId={threadListTargetId()}
                                 insets={threadListScrollInsets()}
                                 followOnAppend={!messagesQuery.hasPreviousPage}
                                 onScrollNearTop={threadPaginator.shiftPaginate}
@@ -826,21 +836,7 @@ export function Channel(props: ChannelProps) {
                                 onReady={onThreadListReady}
                                 onScroll={onThreadListScroll}
                                 onUserNavigation={cancelLatestNavigation}
-                                initialPosition={
-                                  targetMessageController.activeTargetMessageId()
-                                    ? {
-                                        type: 'element',
-                                        id: targetMessageController.activeTargetMessageId()!,
-                                      }
-                                    : props.initialMessagesStateSnapshot?.scroll
-                                      ? {
-                                          type: 'restore',
-                                          snapshot:
-                                            props.initialMessagesStateSnapshot
-                                              .scroll,
-                                        }
-                                      : { type: 'latest' }
-                                }
+                                initialPosition={initialThreadListPosition()}
                               >
                                 {(item) => {
                                   const isNewestRow = () =>

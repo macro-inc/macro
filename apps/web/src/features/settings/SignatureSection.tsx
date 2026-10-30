@@ -8,7 +8,7 @@ import {
   useImportGmailSignatureMutation,
   useUpdateEmailSettingsMutation,
 } from '@queries/email/settings';
-import { SIGNATURE_IMAGES_UNRESOLVED_CODE } from '@service-email/client';
+import { SIGNATURE_IMAGES_UNRESOLVED_CODE } from '@service-email/errors';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { createSignal } from 'solid-js';
 import { SignatureForm } from './components/signature-form';

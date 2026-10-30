@@ -2,7 +2,7 @@ import type { LexicalEditor } from 'lexical';
 import { expect, it, vi } from 'vitest';
 
 const { trackMention } = vi.hoisted(() => ({ trackMention: vi.fn() }));
-vi.mock('@core/signal/mention', () => ({ trackMention }));
+vi.mock('@app/lib/queries/storage/mentions', () => ({ trackMention }));
 // The block table loads every block module; events here never need it.
 vi.mock('@core/constant/allBlocks', () => ({ fileTypeToBlockName: vi.fn() }));
 vi.mock('../../../../plugins', () => ({

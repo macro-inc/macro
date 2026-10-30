@@ -172,7 +172,7 @@ function readColor(
     number(attribute(entry, 'val')),
   ]);
   const alphaModifier = modifiers.find(([name]) => name === 'alpha');
-  const alpha = alphaModifier ? alphaModifier[1] / 100_000 : undefined;
+  const alpha = alphaOf();
   const pending: PendingColor = {
     modifiers: modifiers.filter(([name]) => name !== 'alpha'),
   };
@@ -203,13 +203,25 @@ function readColor(
     } else {
       // The theme's text color follows the app's theme, unless modified.
       if ((scheme === 'tx1' || scheme === 'dk1') && !pending.modifiers.length)
-        return { ...(alpha !== undefined && { alpha }) };
+        return themeTextColor();
       pending.hex = schemeColor(theme, scheme ?? '') ?? DEFAULT_THEME[1];
     }
   } else return;
   if (!pending.hex || !/^[0-9a-f]{6}$/i.test(pending.hex)) return;
   const hex = finishColor(pending);
-  return hex ? { hex, ...(alpha !== undefined && { alpha }) } : undefined;
+  return finishedColor();
+
+  function alphaOf() {
+    return alphaModifier ? alphaModifier[1] / 100000 : undefined;
+  }
+
+  function themeTextColor(): Color | undefined {
+    return { ...(alpha !== undefined && { alpha }) };
+  }
+
+  function finishedColor(): Color | undefined {
+    return hex ? { hex, ...(alpha !== undefined && { alpha }) } : undefined;
+  }
 }
 
 // Geometry ------------------------------------------------------------------
@@ -328,33 +340,14 @@ function customPaths(geometry: XmlElement): ShapePart['paths'] {
       const points = elements(command)
         .filter((entry) => entry.local === 'pt')
         .map(point);
-      if (command.local === 'moveTo' && points[0]) {
-        current = start = points[0];
-        commands.push(`M${text(current)}`);
-      } else if (command.local === 'lnTo' && points[0]) {
-        current = points[0];
-        commands.push(`L${text(current)}`);
-      } else if (command.local === 'cubicBezTo' && points.length === 3) {
-        current = points[2];
-        commands.push(`C${points.map(text).join(' ')}`);
-      } else if (command.local === 'quadBezTo' && points.length === 2) {
-        current = points[1];
-        commands.push(`Q${points.map(text).join(' ')}`);
-      } else if (command.local === 'arcTo') {
-        const arc = arcCurves(
-          current,
-          number(attribute(command, 'wR')),
-          number(attribute(command, 'hR')),
-          (number(attribute(command, 'stAng')) / 60_000) * (Math.PI / 180),
-          (number(attribute(command, 'swAng')) / 60_000) * (Math.PI / 180)
-        );
-        for (const curve of arc.curves)
-          commands.push(`C${curve.map(text).join(' ')}`);
-        current = arc.end;
-      } else if (command.local === 'close') {
-        current = start;
-        commands.push('Z');
-      }
+      ({ current, start } = followPathCommand(
+        command,
+        points,
+        current,
+        start,
+        commands,
+        text
+      ));
     }
     const d = commands.join('');
     if (!d || d.length > 100_000) continue;
@@ -368,6 +361,44 @@ function customPaths(geometry: XmlElement): ShapePart['paths'] {
     });
   }
   return result.length ? result : undefined;
+
+  function followPathCommand(
+    command: XmlElement,
+    points: [number, number][],
+    current: [number, number],
+    start: [number, number],
+    commands: string[],
+    text: (value: [number, number]) => string
+  ) {
+    if (command.local === 'moveTo' && points[0]) {
+      current = start = points[0];
+      commands.push(`M${text(current)}`);
+    } else if (command.local === 'lnTo' && points[0]) {
+      current = points[0];
+      commands.push(`L${text(current)}`);
+    } else if (command.local === 'cubicBezTo' && points.length === 3) {
+      current = points[2];
+      commands.push(`C${points.map(text).join(' ')}`);
+    } else if (command.local === 'quadBezTo' && points.length === 2) {
+      current = points[1];
+      commands.push(`Q${points.map(text).join(' ')}`);
+    } else if (command.local === 'arcTo') {
+      const arc = arcCurves(
+        current,
+        number(attribute(command, 'wR')),
+        number(attribute(command, 'hR')),
+        (number(attribute(command, 'stAng')) / 60000) * (Math.PI / 180),
+        (number(attribute(command, 'swAng')) / 60000) * (Math.PI / 180)
+      );
+      for (const curve of arc.curves)
+        commands.push(`C${curve.map(text).join(' ')}`);
+      current = arc.end;
+    } else if (command.local === 'close') {
+      current = start;
+      commands.push('Z');
+    }
+    return { current, start };
+  }
 }
 
 // Style references ----------------------------------------------------------
@@ -575,10 +606,7 @@ function readText(
     for (const run of elements(paragraph)) {
       if (runs.length >= 1_000) break;
       let text: string | undefined;
-      if (run.local === 'r' || run.local === 'fld') {
-        const characters = child(run, 't');
-        text = characters ? textOf(characters) : '';
-      } else if (run.local === 'br') text = '\n';
+      text = runText(run, text);
       if (text === undefined) continue;
       text = text.slice(0, Math.max(0, 32_767 - characters));
       characters += text.length;
@@ -598,11 +626,7 @@ function readText(
       paragraphDefaults,
       theme
     );
-    paragraphs.push({
-      ...(align && align !== 'left' && { align }),
-      runs: runs.filter((run) => run.text),
-      ...(!runs.some((run) => run.text) && { size: end.size ?? 11 }),
-    });
+    paragraphs.push(paragraphOf(align, runs, end));
   }
   // Trailing empty paragraphs take no room in Excel's text boxes either way.
   while (paragraphs.length > 1 && !paragraphs.at(-1)?.runs.length && !link)
@@ -620,21 +644,45 @@ function readText(
     inset('rIns', 91_440),
     inset('bIns', 45_720),
   ];
-  return {
-    paragraphs,
-    ...(anchor === 'ctr' && { anchor: 'middle' as const }),
-    ...(anchor === 'b' && { anchor: 'bottom' as const }),
-    insets,
-    ...(attribute(bodyProperties, 'wrap') === 'none' && { noWrap: true }),
-    ...(['clip', 'ellipsis'].includes(
-      attribute(bodyProperties, 'vertOverflow') ?? ''
-    ) && { clip: true }),
-    ...((vertical === 'vert' || vertical === 'eaVert') && {
-      vertical: 'down' as const,
-    }),
-    ...(vertical === 'vert270' && { vertical: 'up' as const }),
-    ...(link && { link: link.slice(0, 1_000) }),
-  };
+  return textBody();
+
+  function paragraphOf(
+    align: ShapeParagraph['align'],
+    runs: ShapeRun[],
+    end: RunDefaults
+  ): ShapeParagraph {
+    return {
+      ...(align && align !== 'left' && { align }),
+      runs: runs.filter((run) => run.text),
+      ...(!runs.some((run) => run.text) && { size: end.size ?? 11 }),
+    };
+  }
+
+  function runText(run: XmlElement, text: string | undefined) {
+    if (run.local === 'r' || run.local === 'fld') {
+      const characters = child(run, 't');
+      text = characters ? textOf(characters) : '';
+    } else if (run.local === 'br') text = '\n';
+    return text;
+  }
+
+  function textBody(): ShapeText | undefined {
+    return {
+      paragraphs,
+      ...(anchor === 'ctr' && { anchor: 'middle' as const }),
+      ...(anchor === 'b' && { anchor: 'bottom' as const }),
+      insets,
+      ...(attribute(bodyProperties, 'wrap') === 'none' && { noWrap: true }),
+      ...(['clip', 'ellipsis'].includes(
+        attribute(bodyProperties, 'vertOverflow') ?? ''
+      ) && { clip: true }),
+      ...((vertical === 'vert' || vertical === 'eaVert') && {
+        vertical: 'down' as const,
+      }),
+      ...(vertical === 'vert270' && { vertical: 'up' as const }),
+      ...(link && { link: link.slice(0, 1000) }),
+    };
+  }
 }
 
 const sameLook = (a: RunDefaults, b: RunDefaults) =>
@@ -698,29 +746,14 @@ function readParts(
   const style = readStyle(child(element, 'style'), theme);
   const preset = child(properties, 'prstGeom');
   const custom = child(properties, 'custGeom');
-  const geometry = preset
-    ? (attribute(preset, 'prst') ?? 'rect')
-    : custom
-      ? 'custom'
-      : element.local === 'cxnSp'
-        ? 'line'
-        : 'rect';
+  const geometry = geometryName();
   const adjust: Record<string, number> = {};
   for (const guide of elements(child(preset, 'avLst'))) {
     const name = attribute(guide, 'name') ?? '';
     const value = /^val\s+(-?\d+(?:\.\d+)?)$/.exec(
       attribute(guide, 'fmla') ?? ''
     );
-    if (
-      guide.local === 'gd' &&
-      value &&
-      /^[A-Za-z]{1,8}\d{0,2}$/.test(name) &&
-      Object.keys(adjust).length < 8
-    )
-      adjust[name] = Math.max(
-        -10_000_000,
-        Math.min(10_000_000, Number(value[1]))
-      );
+    readAdjustGuide(guide, value, name);
   }
   const paths = custom ? customPaths(custom) : undefined;
   // Pictures in groups are drawn as their frames.
@@ -739,31 +772,65 @@ function readParts(
     link || undefined
   );
   const placed = place(frame);
-  parts.push({
-    frame: placed,
-    ...(geometry !== 'rect' &&
-      /^[A-Za-z0-9]{1,40}$/.test(geometry) && { geometry }),
-    ...(Object.keys(adjust).length && { adjust }),
-    ...(paths && { paths }),
-    ...(frame.rotation && { rotation: ((frame.rotation % 360) + 360) % 360 }),
-    ...(frame.flipH && { flipH: true }),
-    ...(frame.flipV && { flipV: true }),
-    ...(fill?.hex && { fill: fill.hex }),
-    ...(fill?.hex &&
-      fill.alpha !== undefined &&
-      fill.alpha < 1 && {
-        opacity: Math.max(0, Math.round(fill.alpha * 100) / 100),
-      }),
-    ...(line && { line }),
-    ...(text && { text }),
-  });
+  parts.push(shapePart(frame));
   // SmartArt places some text apart from its shape.
   const textFrame = readFrame(child(element, 'txXfrm'));
   const last = parts.at(-1);
-  if (textFrame && last?.text) {
-    const { text: shapeText, ...shape } = last;
-    parts[parts.length - 1] = shape;
-    parts.push({ frame: place(textFrame), text: shapeText });
+  splitSmartArtText();
+
+  function shapePart(frameInput: NonNullable<typeof frame>): ReadPart {
+    return {
+      frame: placed,
+      ...(geometry !== 'rect' &&
+        /^[A-Za-z0-9]{1,40}$/.test(geometry) && { geometry }),
+      ...(Object.keys(adjust).length && { adjust }),
+      ...(paths && { paths }),
+      ...(frameInput.rotation && {
+        rotation: ((frameInput.rotation % 360) + 360) % 360,
+      }),
+      ...(frameInput.flipH && { flipH: true }),
+      ...(frameInput.flipV && { flipV: true }),
+      ...(fill?.hex && { fill: fill.hex }),
+      ...(fill?.hex &&
+        fill.alpha !== undefined &&
+        fill.alpha < 1 && {
+          opacity: Math.max(0, Math.round(fill.alpha * 100) / 100),
+        }),
+      ...(line && { line }),
+      ...(text && { text }),
+    };
+  }
+
+  function splitSmartArtText() {
+    if (textFrame && last?.text) {
+      const { text: shapeText, ...shape } = last;
+      parts[parts.length - 1] = shape;
+      parts.push({ frame: place(textFrame), text: shapeText });
+    }
+  }
+
+  function readAdjustGuide(
+    guide: XmlElement,
+    value: RegExpExecArray | null,
+    name: string
+  ) {
+    if (
+      guide.local === 'gd' &&
+      value &&
+      /^[A-Za-z]{1,8}\d{0,2}$/.test(name) &&
+      Object.keys(adjust).length < 8
+    )
+      adjust[name] = Math.max(-10000000, Math.min(10000000, Number(value[1])));
+  }
+
+  function geometryName() {
+    return preset
+      ? (attribute(preset, 'prst') ?? 'rect')
+      : custom
+        ? 'custom'
+        : element.local === 'cxnSp'
+          ? 'line'
+          : 'rect';
   }
 }
 
@@ -1202,9 +1269,7 @@ function partXml(part: ShapePart, box: Box, id: number, name: string): string {
   const fill = part.fill
     ? `<a:solidFill><a:srgbClr val="${hex(part.fill)}">${part.opacity !== undefined ? `<a:alpha val="${Math.round(part.opacity * 100_000)}"/>` : ''}</a:srgbClr></a:solidFill>`
     : '<a:noFill/>';
-  const line = part.line
-    ? `<a:ln w="${Math.round(part.line.width * 9525)}">${part.line.color ? `<a:solidFill><a:srgbClr val="${hex(part.line.color)}"/></a:solidFill>` : '<a:solidFill><a:schemeClr val="tx1"/></a:solidFill>'}${part.line.dash ? `<a:prstDash val="${({ longDash: 'lgDash', longDashDot: 'lgDashDot' } as Record<string, string>)[part.line.dash] ?? part.line.dash}"/>` : ''}${part.line.head ? `<a:headEnd type="${part.line.head}"/>` : ''}${part.line.tail ? `<a:tailEnd type="${part.line.tail}"/>` : ''}</a:ln>`
-    : '<a:ln><a:noFill/></a:ln>';
+  const line = lineXml();
   const properties = `<xdr:spPr>${transform}${outline}${connector ? '' : fill}${line}</xdr:spPr>`;
   const label = `<xdr:cNvPr id="${id}" name="${xmlAttribute(name)}"/>`;
   if (connector)
@@ -1213,6 +1278,12 @@ function partXml(part: ShapePart, box: Box, id: number, name: string): string {
     ? ` textlink="${xmlAttribute(part.text.link)}"`
     : '';
   return `<xdr:sp macro=""${link}><xdr:nvSpPr>${label}<xdr:cNvSpPr/></xdr:nvSpPr>${properties}${part.text ? textXml(part.text) : ''}</xdr:sp>`;
+
+  function lineXml() {
+    return part.line
+      ? `<a:ln w="${Math.round(part.line.width * 9525)}">${part.line.color ? `<a:solidFill><a:srgbClr val="${hex(part.line.color)}"/></a:solidFill>` : '<a:solidFill><a:schemeClr val="tx1"/></a:solidFill>'}${part.line.dash ? `<a:prstDash val="${({ longDash: 'lgDash', longDashDot: 'lgDashDot' } as Record<string, string>)[part.line.dash] ?? part.line.dash}"/>` : ''}${part.line.head ? `<a:headEnd type="${part.line.head}"/>` : ''}${part.line.tail ? `<a:tailEnd type="${part.line.tail}"/>` : ''}</a:ln>`
+      : '<a:ln><a:noFill/></a:ln>';
+  }
 }
 
 /**

@@ -8,13 +8,16 @@ import type { MutationInspection } from '../protocol';
 
 import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
+import { ignoreRejection } from '../ignore-rejection';
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type AffectedOperationsResult,
   type CachedQueryInstanceWire,
   type CachedQueryVariantWire,
+  type CachePush,
   type CacheRequest,
+  type CacheResponse,
   type CacheResponseErrorCode,
   type CacheRevision,
   type CalendarCommitArgs,
@@ -308,60 +311,61 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     });
   };
 
-  const onMessage = (event: MessageEvent<WorkerMessage>) => {
-    const msg = event.data;
-    if (isCachePush(msg)) {
-      if (msg.kind === 'cache-hydrated') {
-        for (const cb of hydrationSubscribers) {
-          if (msg.searchChangedBuckets === undefined) cb(msg.revision);
-          else
-            cb(msg.revision, {
-              searchChangedBuckets: msg.searchChangedBuckets,
-            });
-        }
-        return;
-      }
-      if (msg.kind === 'cache-changed') {
-        if (msg.reset) {
-          for (const cb of generationChangeSubscribers)
-            cb({ storage: 'reset' });
-        }
-        for (const cb of cacheChangeSubscribers) {
-          if (msg.reset || msg.searchChangedBuckets === undefined)
-            cb(msg.revision);
-          else
-            cb(msg.revision, {
-              searchChangedBuckets: msg.searchChangedBuckets,
-            });
-        }
-        return;
-      }
-      if (msg.kind === 'mutation-settled') {
-        for (const cb of settlementSubscribers) cb(msg.settlement);
-        return;
-      }
-      const prefix = `${clientId}:`;
-      const opKeys = [
-        ...new Set(
-          msg.opIds.flatMap((id) => {
-            if (!id.startsWith(prefix)) return [];
-            const suffix = id.slice(prefix.length);
-            const opKey = Number(suffix);
-            return Number.isSafeInteger(opKey) && String(opKey) === suffix
-              ? [opKey]
-              : [];
-          })
-        ),
-      ];
-      if (opKeys.length > 0) {
-        for (const cb of affectedSubscribers) {
-          if (msg.fieldChanges) cb(opKeys, msg.fieldChanges);
-          else cb(opKeys);
-        }
+  const opKeysForClient = (opIds: readonly string[]): number[] => {
+    const prefix = `${clientId}:`;
+    return [
+      ...new Set(
+        opIds.flatMap((id) => {
+          if (!id.startsWith(prefix)) return [];
+          const suffix = id.slice(prefix.length);
+          const opKey = Number(suffix);
+          return Number.isSafeInteger(opKey) && String(opKey) === suffix
+            ? [opKey]
+            : [];
+        })
+      ),
+    ];
+  };
+
+  const onCachePush = (msg: CachePush) => {
+    if (msg.kind === 'cache-hydrated') {
+      for (const cb of hydrationSubscribers) {
+        if (msg.searchChangedBuckets === undefined) cb(msg.revision);
+        else
+          cb(msg.revision, {
+            searchChangedBuckets: msg.searchChangedBuckets,
+          });
       }
       return;
     }
-    if (!isCacheResponse(msg)) return;
+    if (msg.kind === 'cache-changed') {
+      if (msg.reset) {
+        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+      }
+      for (const cb of cacheChangeSubscribers) {
+        if (msg.reset || msg.searchChangedBuckets === undefined)
+          cb(msg.revision);
+        else
+          cb(msg.revision, {
+            searchChangedBuckets: msg.searchChangedBuckets,
+          });
+      }
+      return;
+    }
+    if (msg.kind === 'mutation-settled') {
+      for (const cb of settlementSubscribers) cb(msg.settlement);
+      return;
+    }
+    const opKeys = opKeysForClient(msg.opIds);
+    if (opKeys.length > 0) {
+      for (const cb of affectedSubscribers) {
+        if (msg.fieldChanges) cb(opKeys, msg.fieldChanges);
+        else cb(opKeys);
+      }
+    }
+  };
+
+  const onCacheResponse = (msg: CacheResponse) => {
     const entry = pending.get(msg.id);
     if (!entry) return;
     if (!msg.ok) {
@@ -387,6 +391,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     recordRequestOutcome(entry, 'success');
     entry.resolve(msg.result);
     finishGracefulDisposeIfDrained();
+  };
+
+  const onMessage = (event: MessageEvent<WorkerMessage>) => {
+    const msg = event.data;
+    if (isCachePush(msg)) onCachePush(msg);
+    else if (isCacheResponse(msg)) onCacheResponse(msg);
   };
 
   function beginRecoveryGeneration(): void {
@@ -441,7 +451,16 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       markPendingRegistrations(replacementReadOpKeys);
     }
     if (state !== 'ready' && state !== 'awaiting-replacement') return;
-    void startInitialization().catch(() => undefined);
+    fireAndForget(reinitialize(), 'graphql-cache-host');
+  }
+
+  /** Restarts the handshake; its failure is already handled by the host. */
+  async function reinitialize(): Promise<void> {
+    try {
+      await startInitialization();
+    } catch {
+      // startInitialization records and reports its own failure.
+    }
   }
 
   function resumeCacheReads(): void {
@@ -725,11 +744,12 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     if (!adapter) return Promise.resolve();
     adapterDisposeWasGraceful = graceful;
     try {
-      adapterDisposePromise = adapter
-        .dispose(
+      // Disposal is best effort; the host is closing either way.
+      adapterDisposePromise = ignoreRejection(
+        adapter.dispose(
           preserveDatabase ? { graceful, preserveDatabase: true } : { graceful }
         )
-        .catch(() => undefined);
+      );
     } catch {
       // The host is already closed and cannot safely retry disposal.
       adapterDisposePromise = Promise.resolve();
@@ -788,10 +808,11 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     rejectPending(error, uncertain);
     clearSubscribers();
     unregisterPagehide();
-    fireAndForget(
-      disposeAdapter(false, preserveDatabase).then(finishTelemetry),
-      'graphql-cache-host'
-    );
+    const disposeThenFinishTelemetry = async () => {
+      await disposeAdapter(false, preserveDatabase);
+      finishTelemetry();
+    };
+    fireAndForget(disposeThenFinishTelemetry(), 'graphql-cache-host');
   }
 
   /**
@@ -856,16 +877,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const quarantine = storageWasUntouched
       ? Promise.resolve()
       : quarantineCacheScope(options.scope);
-    fireAndForget(
-      quarantine.then(() => {
-        try {
-          reportFailure(error);
-        } catch {
-          // Failure reporting cannot reopen or invalidate completed quarantine.
-        }
-      }),
-      'graphql-cache-host'
-    );
+    const reportAfterQuarantine = async () => {
+      await quarantine;
+      try {
+        reportFailure(error);
+      } catch {
+        // Failure reporting cannot reopen or invalidate completed quarantine.
+      }
+    };
+    fireAndForget(reportAfterQuarantine(), 'graphql-cache-host');
   }
 
   function stopStorageHealthSampling(): void {
@@ -895,15 +915,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       return;
     }
     adapterDisposalStarted = true;
-    fireAndForget(
-      disposeAdapter(graceful, preserveDatabase).then(() => {
-        if (state !== 'disposing') return;
-        state = 'disposed';
-        unregisterPagehide();
-        finishTelemetry();
-      }),
-      'graphql-cache-host'
-    );
+    const disposeThenFinish = async () => {
+      await disposeAdapter(graceful, preserveDatabase);
+      if (state !== 'disposing') return;
+      state = 'disposed';
+      unregisterPagehide();
+      finishTelemetry();
+    };
+    fireAndForget(disposeThenFinish(), 'graphql-cache-host');
   }
 
   function finishGracefulDisposeIfDrained(): void {
@@ -1241,40 +1260,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       if (attempt !== initializationAttempt) throw new CacheNavigationError();
       return await sendInit();
     })();
-    const handshake = ready.then(
-      () => {
-        if (attempt !== initializationAttempt || state !== 'initializing')
-          return;
-        state = 'ready';
-        initialization = undefined;
-        coordinatorRestarts = 0;
-        if (suspended) {
-          // A surviving coordinator need not send engine-replaced to a late
-          // joiner. Resets while frozen are unknowable, so conservatively
-          // invalidate local checkpoints as well as revision/dependency state.
-          for (const cb of generationChangeSubscribers)
-            cb({ storage: 'reset' });
-        }
-        telemetry?.record({
-          name: 'graphql_cache.host_ready',
-          operationCategory: 'initialization',
-          outcome: 'success',
-          errorCode: 'none',
-          durationMs: now() - initializationStartedAt,
-        });
-        startStorageHealthSampling();
-        if (recoveryInProgress) {
-          const opKeys = [...lostRegisteredOpKeys].filter(
-            (opKey) =>
-              activeOpKeys.has(opKey) && !replacementReadOpKeys.has(opKey)
-          );
-          recoveryInProgress = false;
-          lostRegisteredOpKeys.clear();
-          replacementReadOpKeys.clear();
-          emitAffectedKeys(opKeys);
-        }
-      },
-      (error: unknown) => {
+    const completeHandshake = async () => {
+      try {
+        await ready;
+      } catch (error) {
         const initializationFailure = asError(error);
         if (attempt !== initializationAttempt) throw initializationFailure;
         initialization = undefined;
@@ -1285,7 +1274,36 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         }
         throw initializationFailure;
       }
-    );
+      if (attempt !== initializationAttempt || state !== 'initializing') return;
+      state = 'ready';
+      initialization = undefined;
+      coordinatorRestarts = 0;
+      if (suspended) {
+        // A surviving coordinator need not send engine-replaced to a late
+        // joiner. Resets while frozen are unknowable, so conservatively
+        // invalidate local checkpoints as well as revision/dependency state.
+        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
+      }
+      telemetry?.record({
+        name: 'graphql_cache.host_ready',
+        operationCategory: 'initialization',
+        outcome: 'success',
+        errorCode: 'none',
+        durationMs: now() - initializationStartedAt,
+      });
+      startStorageHealthSampling();
+      if (recoveryInProgress) {
+        const opKeys = [...lostRegisteredOpKeys].filter(
+          (opKey) =>
+            activeOpKeys.has(opKey) && !replacementReadOpKeys.has(opKey)
+        );
+        recoveryInProgress = false;
+        lostRegisteredOpKeys.clear();
+        replacementReadOpKeys.clear();
+        emitAffectedKeys(opKeys);
+      }
+    };
+    const handshake = completeHandshake();
     initialization = handshake;
     return handshake;
   }

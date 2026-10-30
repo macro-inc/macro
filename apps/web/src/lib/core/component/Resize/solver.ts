@@ -68,77 +68,7 @@ function computeFractionalShares(
   const sumClamped = sumArray(clamped);
   let diff = usable - sumClamped;
 
-  if (Math.abs(diff) > 0) {
-    const free = new Array(n).fill(0).map((_, i) => {
-      const min = panels[i].minSize ?? 0;
-      const max = panels[i].maxSize ?? Infinity;
-      return diff > 0 ? max - clamped[i] : clamped[i] - min;
-    });
-    let totalFree = free.reduce((a, b) => a + Math.max(0, b), 0);
-    if (totalFree > 0) {
-      for (let i = 0; i < n; i++) {
-        const room = Math.max(0, free[i]);
-        // Cap each take at the panel's own room: when the total diff
-        // exceeds the total free room, an uncapped take would push the
-        // panel past its min/max (a large panel could hit zero width while
-        // its neighbors sit at their minimums). The capped remainder falls
-        // through to the too-small handling below, which shrinks every
-        // panel together.
-        const take = Math.min(
-          room,
-          Math.round((room / totalFree) * Math.abs(diff))
-        );
-        if (Number.isFinite(take)) {
-          clamped[i] += diff > 0 ? take : -take;
-        }
-      }
-    }
-
-    const finalSum = clamped.reduce((a, b) => a + b, 0);
-    let tailFix = usable - finalSum;
-
-    if (Math.abs(tailFix) > 0) {
-      if (tailFix > 0) {
-        // find panels that can grow
-        for (let i = n - 1; i >= 0 && tailFix > 0; i--) {
-          const max = panels[i].maxSize ?? Infinity;
-          const canTake = Math.max(0, max - clamped[i]);
-          const take = Math.min(tailFix, canTake);
-          clamped[i] += take;
-          tailFix -= take;
-        }
-      } else {
-        // find panels that can shrink
-        let remaining = -tailFix;
-        for (let i = n - 1; i >= 0 && remaining > 0; i--) {
-          const min = panels[i].minSize ?? 0;
-          const canGive = Math.max(0, clamped[i] - min);
-          const give = Math.min(remaining, canGive);
-          clamped[i] -= give;
-          remaining -= give;
-        }
-
-        if (remaining > 0) {
-          const totalMinSizes = sumArray(panels.map((p) => p.minSize ?? 0));
-          const containerTooSmall = usable < totalMinSizes;
-
-          if (containerTooSmall) {
-            // Below the summed minimums nothing has room left to give, so
-            // every panel shrinks together by the same factor — sizes stay
-            // proportional to the minimums and always sum to the usable
-            // space.
-            const totalCurrentSize = sumArray(clamped);
-            if (totalCurrentSize > 0) {
-              const scale = usable / totalCurrentSize;
-              for (let i = 0; i < n; i++) {
-                clamped[i] *= scale;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+  updateI();
 
   const offsets = new Array(n).fill(0);
   const shares = new Array(n).fill(0);
@@ -156,6 +86,80 @@ function computeFractionalShares(
     offsets: new Map(panels.map(({ id }, i) => [id, offsets[i]])),
     shares: new Map(panels.map(({ id }, i) => [id, shares[i]])),
   };
+
+  function updateI() {
+    if (Math.abs(diff) > 0) {
+      const free = new Array(n).fill(0).map((_, i) => {
+        const min = panels[i].minSize ?? 0;
+        const max = panels[i].maxSize ?? Infinity;
+        return diff > 0 ? max - clamped[i] : clamped[i] - min;
+      });
+      let totalFree = free.reduce((a, b) => a + Math.max(0, b), 0);
+      if (totalFree > 0) {
+        for (let i = 0; i < n; i++) {
+          const room = Math.max(0, free[i]);
+          // Cap each take at the panel's own room: when the total diff
+          // exceeds the total free room, an uncapped take would push the
+          // panel past its min/max (a large panel could hit zero width while
+          // its neighbors sit at their minimums). The capped remainder falls
+          // through to the too-small handling below, which shrinks every
+          // panel together.
+          const take = Math.min(
+            room,
+            Math.round((room / totalFree) * Math.abs(diff))
+          );
+          if (Number.isFinite(take)) {
+            clamped[i] += diff > 0 ? take : -take;
+          }
+        }
+      }
+
+      const finalSum = clamped.reduce((a, b) => a + b, 0);
+      let tailFix = usable - finalSum;
+
+      if (Math.abs(tailFix) > 0) {
+        if (tailFix > 0) {
+          // find panels that can grow
+          for (let i = n - 1; i >= 0 && tailFix > 0; i--) {
+            const max = panels[i].maxSize ?? Infinity;
+            const canTake = Math.max(0, max - clamped[i]);
+            const take = Math.min(tailFix, canTake);
+            clamped[i] += take;
+            tailFix -= take;
+          }
+        } else {
+          // find panels that can shrink
+          let remaining = -tailFix;
+          for (let i = n - 1; i >= 0 && remaining > 0; i--) {
+            const min = panels[i].minSize ?? 0;
+            const canGive = Math.max(0, clamped[i] - min);
+            const give = Math.min(remaining, canGive);
+            clamped[i] -= give;
+            remaining -= give;
+          }
+
+          if (remaining > 0) {
+            const totalMinSizes = sumArray(panels.map((p) => p.minSize ?? 0));
+            const containerTooSmall = usable < totalMinSizes;
+
+            if (containerTooSmall) {
+              // Below the summed minimums nothing has room left to give, so
+              // every panel shrinks together by the same factor — sizes stay
+              // proportional to the minimums and always sum to the usable
+              // space.
+              const totalCurrentSize = sumArray(clamped);
+              if (totalCurrentSize > 0) {
+                const scale = usable / totalCurrentSize;
+                for (let i = 0; i < n; i++) {
+                  clamped[i] *= scale;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 /** panel config -> panel with state */

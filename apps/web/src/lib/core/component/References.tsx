@@ -13,9 +13,9 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { compareDateDesc, type DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { formatRelativeTimestamp } from '@entity';
-import { Telemetry } from '@macro-inc/observability';
 import {
   isAccessiblePreviewItem,
   type PreviewItem,
@@ -385,15 +385,18 @@ export function References(props: ReferenceProps) {
     messageId: string;
     threadId?: string;
   }) => {
-    navigateToChannelMessage(
-      blockOrchestrator,
-      channelId,
-      messageId,
-      threadId,
-      {
-        preferNewSplit: true,
-      }
-    ).catch((error) => Telemetry.error(error, { surface: 'references' }));
+    fireAndForget(
+      navigateToChannelMessage(
+        blockOrchestrator,
+        channelId,
+        messageId,
+        threadId,
+        {
+          preferNewSplit: true,
+        }
+      ),
+      'references'
+    );
   };
 
   const navigateToGenericReference = (

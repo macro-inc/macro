@@ -10,7 +10,7 @@ const doubles = vi.hoisted(() => ({
 vi.mock('@service-storage/initiative', () => ({
   initiativeClient: { ensureDescriptionSurface: doubles.ensure },
 }));
-vi.mock('@core/collab-surface/token', () => ({
+vi.mock('@app/lib/queries/storage/collab-surface-token', () => ({
   getCollabSurfaceToken: doubles.token,
 }));
 vi.mock('@service-sync/source', () => ({

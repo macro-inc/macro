@@ -1,5 +1,19 @@
 import { debounce } from '@solid-primitives/scheduled';
 import { createSignal, onCleanup } from 'solid-js';
+import { startReported } from './background-work';
+
+/** Runs `next` once `previous` settles, whether it fulfilled or rejected. */
+async function afterSettled<T>(
+  previous: Promise<unknown>,
+  next: () => Promise<T>
+): Promise<T> {
+  try {
+    await previous;
+  } catch {
+    // The next write runs whatever the previous one's outcome.
+  }
+  return await next();
+}
 
 /** Capture live editor values before queuing; each write sees the preceding draft ID. */
 export function createDraftAutosave<Snapshot, Result>(options: {
@@ -51,7 +65,7 @@ export function createDraftAutosave<Snapshot, Result>(options: {
       }
     };
     // A failed disk write must not prevent the next edit from trying again.
-    localWrites = localWrites.then(writeNewestSnapshot, writeNewestSnapshot);
+    localWrites = afterSettled(localWrites, writeNewestSnapshot);
     return flushLocal();
   };
   const cancel = () => {
@@ -64,23 +78,26 @@ export function createDraftAutosave<Snapshot, Result>(options: {
       await local;
       return await options.persist(snapshot);
     };
-    queue = queue.then(write, write);
+    queue = afterSettled(queue, write);
     return queue;
   };
   const save = (snapshot = options.capture()) => {
     cancel();
     return enqueue(snapshot, saveLocally(snapshot));
   };
+  // Background saves report failures through onError instead of rejecting.
+  const startSave = (work: Promise<unknown>) =>
+    startReported(work, (error) => options.onError?.(error));
   const scheduled = debounce(() => {
     if (options.paused()) return;
-    void save().catch((error) => options.onError?.(error));
+    startSave(save());
   }, 500);
   // WebKit can suspend storage and timers once the app is hidden, and aborts
   // writes in flight. Send the debounced server save before that happens, and
   // retry a failed local write whenever visibility changes.
   const flushOnVisibilityChange = () => {
     if (options.paused() || (!pending && !failed)) return;
-    void save().catch((error) => options.onError?.(error));
+    startSave(save());
   };
   document.addEventListener('visibilitychange', flushOnVisibilityChange);
   onCleanup(() => {
@@ -92,10 +109,12 @@ export function createDraftAutosave<Snapshot, Result>(options: {
     // that same view. The last edit already captured its local copy; a copy
     // that failed is written again before the editor holding it is gone.
     if (flush && !options.paused())
-      void enqueue(
-        flush.snapshot,
-        retry ? saveLocally(flush.snapshot) : flushLocal()
-      ).catch((error) => options.onError?.(error));
+      startSave(
+        enqueue(
+          flush.snapshot,
+          retry ? saveLocally(flush.snapshot) : flushLocal()
+        )
+      );
   });
   return {
     save,
@@ -111,7 +130,7 @@ export function createDraftAutosave<Snapshot, Result>(options: {
       if (options.paused()) return;
       const snapshot = options.capture();
       pending = { snapshot };
-      void saveLocally(snapshot).catch((error) => options.onError?.(error));
+      startSave(saveLocally(snapshot));
       scheduled();
     },
   };

@@ -13,7 +13,7 @@ vi.mock('@core/util/url', async (original) => ({
   ...(await original<typeof import('@core/util/url')>()),
   openExternalUrl: open,
 }));
-vi.mock('@core/signal/unfurl', () => ({
+vi.mock('@app/lib/queries/unfurl/unfurl', () => ({
   useUnfurl: (url: string) => [
     () => ({ type: 'success', data: { url, title: 'Shared channel preview' } }),
   ],

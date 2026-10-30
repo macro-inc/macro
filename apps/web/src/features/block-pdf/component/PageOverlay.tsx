@@ -15,7 +15,6 @@ import type { ThreadId } from '@core/comments/commentType';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useCopyLink } from '@core/util/useCopyLink';
-import { Telemetry } from '@macro-inc/observability';
 import { cn } from '@ui';
 import { detect } from 'detect-browser';
 import type { PageViewport } from 'pdfjs-dist';
@@ -423,9 +422,7 @@ export function PageOverlay(props: IPageOverlayProps) {
       )}
       on:click={(e) => {
         if (mode() !== PayloadMode.NoMode) {
-          createPlaceable(e).catch((error) =>
-            Telemetry.error(error, { surface: 'pdf-page-overlay' })
-          );
+          fireAndForget(createPlaceable(e), 'pdf-page-overlay');
         }
       }}
     >

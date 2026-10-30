@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { startDetached } from '@core/util/startDetached';
 import type { CacheEngineRuntimeEvent } from '../cache-engine-runtime';
 
 let channel: BroadcastChannel | undefined;
@@ -7,6 +8,15 @@ let activationStartedAt = 0;
 let nestedWorkerConstructions = 0;
 let wasmFetchCount = 0;
 let wasmSha256: Promise<string> | undefined;
+
+async function sha256Hex(response: Response): Promise<string> {
+  const bytes = await response.arrayBuffer();
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 const nativeFetch: typeof fetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (...argumentsList: Parameters<typeof fetch>) => {
   const response = await nativeFetch(...argumentsList);
@@ -19,15 +29,7 @@ globalThis.fetch = async (...argumentsList: Parameters<typeof fetch>) => {
         : input.url;
   if (/\/cache_wasm_bg(?:-[\w-]+)?\.wasm(?:[?#]|$)/.test(requestUrl)) {
     wasmFetchCount++;
-    wasmSha256 = response
-      .clone()
-      .arrayBuffer()
-      .then(async (bytes) => {
-        const digest = await crypto.subtle.digest('SHA-256', bytes);
-        return [...new Uint8Array(digest)]
-          .map((byte) => byte.toString(16).padStart(2, '0'))
-          .join('');
-      });
+    wasmSha256 = sha256Hex(response.clone());
   }
   return response;
 };
@@ -92,7 +94,7 @@ const { installCacheEngineWorker } = await import('../cache-engine-runtime');
 installCacheEngineWorker({
   hooks: {
     onEvent: (event) => {
-      report(event).catch(failWorker);
+      startDetached(report(event), failWorker);
     },
   },
 });

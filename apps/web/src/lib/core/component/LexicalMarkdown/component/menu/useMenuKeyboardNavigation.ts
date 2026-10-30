@@ -116,27 +116,19 @@ function createMenuKeyboardNavigation(handlers: MenuKeyboardHandlers): {
         break;
 
       case 'j':
-        if (e.ctrlKey || e.metaKey) {
-          handler = onDown;
-        }
+        updateHandler2();
         break;
 
       case 'k':
-        if (e.ctrlKey || e.metaKey) {
-          handler = onUp;
-        }
+        updateHandler();
         break;
 
       case 'h':
-        if (e.ctrlKey || e.metaKey) {
-          handler = onLeft;
-        }
+        updateHandler3();
         break;
 
       case 'l':
-        if (e.ctrlKey || e.metaKey) {
-          handler = onRight;
-        }
+        updateHandler4();
         break;
 
       case 'n':
@@ -160,24 +152,56 @@ function createMenuKeyboardNavigation(handlers: MenuKeyboardHandlers): {
         break;
 
       case ' ':
-        if (onSpace) {
-          const shouldPrevent = onSpace(e);
-          if (shouldPrevent) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-        }
+        updateHandleKeyDown2();
         return;
     }
 
-    if (handler) {
-      if (preventDefault) {
-        e.preventDefault();
-        e.stopPropagation();
+    updateHandleKeyDown();
+
+    function updateHandleKeyDown2() {
+      if (onSpace) {
+        const shouldPrevent = onSpace(e);
+        if (shouldPrevent) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
       }
-      handler(e);
-    } else {
-      onOtherKey?.(e);
+    }
+
+    function updateHandler4() {
+      if (e.ctrlKey || e.metaKey) {
+        handler = onRight;
+      }
+    }
+
+    function updateHandler3() {
+      if (e.ctrlKey || e.metaKey) {
+        handler = onLeft;
+      }
+    }
+
+    function updateHandler2() {
+      if (e.ctrlKey || e.metaKey) {
+        handler = onDown;
+      }
+    }
+
+    function updateHandler() {
+      if (e.ctrlKey || e.metaKey) {
+        handler = onUp;
+      }
+    }
+
+    function updateHandleKeyDown() {
+      if (handler) {
+        if (preventDefault) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        handler(e);
+      } else {
+        onOtherKey?.(e);
+      }
     }
   };
 

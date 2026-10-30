@@ -119,13 +119,19 @@ function warmRouteViews(views: readonly PreloadableView[]): void {
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
+  const preloadThenSchedule = async (view: PreloadableView) => {
+    try {
+      await view.preload();
+    } catch {
+      // Preloading is best effort; the view loads again when opened.
+    } finally {
+      schedule();
+    }
+  };
   const next = () => {
     const view = disposed ? undefined : queue.shift();
     if (!view) return;
-    void view
-      .preload()
-      .catch(() => {})
-      .finally(schedule);
+    fireAndForget(preloadThenSchedule(view), 'route-preload');
   };
   function schedule() {
     if (disposed || queue.length === 0) return;

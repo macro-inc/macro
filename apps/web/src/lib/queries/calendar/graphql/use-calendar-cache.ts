@@ -1,4 +1,5 @@
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
@@ -84,9 +85,7 @@ export function useCalendarCache(active: Accessor<boolean>): void {
     const poll = setInterval(() => {
       if (latestCalendarSyncStatus() !== CalendarSyncStatus.syncing) return;
       controller.markStale('syncing');
-      refreshSyncStatus().catch((error) => {
-        console.warn('Calendar sync status refresh failed', error);
-      });
+      fireAndForget(pollSyncStatus(), 'calendar-sync');
     }, SYNCING_POLL_MS);
     onCleanup(() => {
       clearInterval(poll);
@@ -107,11 +106,26 @@ export function useCalendarCache(active: Accessor<boolean>): void {
     if (!cacheHost || !active() || !isLeader()) return;
     generation();
     const abort = new AbortController();
-    runCalendarBackfill(cacheHost, { signal: abort.signal }).catch((error) => {
-      if (!abort.signal.aborted) {
-        console.warn('Calendar backfill stopped', error);
-      }
-    });
+    fireAndForget(backfill(cacheHost, abort.signal), 'calendar-backfill');
     onCleanup(() => abort.abort());
   });
+}
+
+async function pollSyncStatus(): Promise<void> {
+  try {
+    await refreshSyncStatus();
+  } catch (error) {
+    console.warn('Calendar sync status refresh failed', error);
+  }
+}
+
+async function backfill(
+  cacheHost: Parameters<typeof runCalendarBackfill>[0],
+  signal: AbortSignal
+): Promise<void> {
+  try {
+    await runCalendarBackfill(cacheHost, { signal });
+  } catch (error) {
+    if (!signal.aborted) console.warn('Calendar backfill stopped', error);
+  }
 }

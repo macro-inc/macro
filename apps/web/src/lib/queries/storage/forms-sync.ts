@@ -1,7 +1,6 @@
 /** Gateway liveness for forms, apart from `./forms` to keep the websocket out of startup. */
-
 import { fireAndForget } from '@core/util/fireAndForget';
-import { useEntitySubscription } from '@service-connection/client';
+import { useEntitySubscription } from '@queries/connection/tracked-entities';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';

@@ -138,17 +138,20 @@ describe('uploadInputAttachments', () => {
     );
 
     let completed = false;
-    const uploadPromise = uploadInputAttachments({
-      files: [file],
-      tracker,
-      uploadFile: async () => ({
-        failed: false,
-        destination: 'static',
-        id: media.uploadedId,
-      }),
-    }).then(() => {
+
+    const upload = async () => {
+      await uploadInputAttachments({
+        files: [file],
+        tracker,
+        uploadFile: async () => ({
+          failed: false,
+          destination: 'static',
+          id: media.uploadedId,
+        }),
+      });
       completed = true;
-    });
+    };
+    const uploadPromise = upload();
 
     await vi.waitFor(() => {
       expect(media.getDimensionsMock).toHaveBeenCalledOnce();

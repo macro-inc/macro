@@ -145,13 +145,12 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   /** The selected cell range, when formatting goes to cells. */
   const cellRange = () =>
     editor.editing() ? undefined : options.tableTarget();
-  const runs = (props: RunPatch) => {
+  const runs = async (props: RunPatch) => {
     if (cellRange()) return formatCells(props);
-    return editor
-      .formatWith((t, range) => formatCommand(t, range, props))
-      .then(options.refocus);
+    await editor.formatWith((t, range) => formatCommand(t, range, props));
+    options.refocus();
   };
-  const paragraphs = (props: ParaPatch) => {
+  const paragraphs = async (props: ParaPatch) => {
     if (cellRange())
       return tableOp((slideId, t) =>
         cellsOf(t).map((cell) => ({
@@ -162,9 +161,8 @@ export function createEditorCommands(options: EditorCommandsOptions) {
           props,
         }))
       );
-    return editor
-      .formatWith((t, range) => paragraphCommand(t, range, props))
-      .then(options.refocus);
+    await editor.formatWith((t, range) => paragraphCommand(t, range, props));
+    options.refocus();
   };
 
   const toggle = (key: TextToggle) => runs({ [key]: !format()[key] });
@@ -1220,11 +1218,11 @@ export function createEditorCommands(options: EditorCommandsOptions) {
   const serial =
     <A extends unknown[], T>(edit: (...args: A) => Promise<T>) =>
     (...args: A): Promise<T> => {
-      const next = animationQueue.then(
-        () => edit(...args),
-        () => edit(...args)
-      );
-      animationQueue = next.catch(() => {});
+      const next = (async () => {
+        await animationQueue;
+        return edit(...args);
+      })();
+      animationQueue = Promise.allSettled([next]);
       return next;
     };
   /**

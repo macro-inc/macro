@@ -12,7 +12,12 @@ import type {
   EmailConnectivity,
   EmailDraftStorage,
 } from '../context/compose-capabilities';
-import type { DraftSyncViewState } from '../core/local-draft';
+import type { DraftSyncViewState, LocalDraftStatus } from '../core/local-draft';
+
+type SyncUnavailable = Exclude<
+  ReturnType<NonNullable<EmailDraftStorage['syncAvailability']>>,
+  'ready'
+>;
 
 /** Recovery reads only metadata; file blobs are restored once when opening a draft. */
 export function createDraftSyncStatus(options: {
@@ -44,6 +49,49 @@ export function createDraftSyncStatus(options: {
     (local()?.status === 'deleting' &&
       (!local()?.queuedAttemptId ||
         local()?.queuedAttemptId !== local()?.latestAttemptId));
+  const unavailableState = (
+    hasLocalDraft: boolean,
+    availability: SyncUnavailable
+  ): DraftSyncViewState => ({
+    message: hasLocalDraft
+      ? 'Saved on this device; waiting to sync'
+      : 'Draft synchronization unavailable',
+    detail:
+      availability === 'recovering'
+        ? 'Reconnecting to saved changes…'
+        : availability === 'recovery-required'
+          ? 'Queued changes are preserved. Update or reload Macro to recover local storage.'
+          : 'Reconnect or retry to resume draft synchronization.',
+    failed: true,
+    action: match(availability)
+      .with('unavailable', () => 'retry' as const)
+      .with('recovery-required', () => 'reload' as const)
+      .with('recovering', () => undefined)
+      .exhaustive(),
+    canKeepEditing: false,
+  });
+  const failureState = (
+    disk: 'saving' | 'saved' | 'failed',
+    draftStatus: LocalDraftStatus | undefined
+  ): DraftSyncViewState => ({
+    message:
+      disk === 'failed'
+        ? 'Changes could not be saved on this device'
+        : 'Draft could not be synced',
+    detail:
+      disk === 'failed'
+        ? 'Keep this editor open until saving succeeds.'
+        : deletePending()
+          ? 'Discard could not be confirmed.'
+          : draftStatus === 'unconfirmed'
+            ? 'The last save could not be confirmed.'
+            : draftStatus === 'failed'
+              ? 'The server could not save this draft.'
+              : undefined,
+    failed: true,
+    action: deletePending() ? 'retry-discard' : 'retry',
+    canKeepEditing: deletePending(),
+  });
   // Saving is silent online. Offline, edits wait on this device.
   const offlineState = (): DraftSyncViewState | undefined => {
     const draft = local();
@@ -75,46 +123,10 @@ export function createDraftSyncStatus(options: {
       ) ||
       deletePending();
     const availability = options.drafts.syncAvailability?.() ?? 'ready';
-    if (disk !== 'failed' && availability !== 'ready') {
-      return {
-        message: draft
-          ? 'Saved on this device; waiting to sync'
-          : 'Draft synchronization unavailable',
-        detail:
-          availability === 'recovering'
-            ? 'Reconnecting to saved changes…'
-            : availability === 'recovery-required'
-              ? 'Queued changes are preserved. Update or reload Macro to recover local storage.'
-              : 'Reconnect or retry to resume draft synchronization.',
-        failed: true,
-        action: match(availability)
-          .with('unavailable', () => 'retry' as const)
-          .with('recovery-required', () => 'reload' as const)
-          .with('recovering', () => undefined)
-          .exhaustive(),
-        canKeepEditing: false,
-      };
-    }
+    if (disk !== 'failed' && availability !== 'ready')
+      return unavailableState(!!draft, availability);
     if (!failed) return offlineState();
-    return {
-      message:
-        disk === 'failed'
-          ? 'Changes could not be saved on this device'
-          : 'Draft could not be synced',
-      detail:
-        disk === 'failed'
-          ? 'Keep this editor open until saving succeeds.'
-          : deletePending()
-            ? 'Discard could not be confirmed.'
-            : draft?.status === 'unconfirmed'
-              ? 'The last save could not be confirmed.'
-              : draft?.status === 'failed'
-                ? 'The server could not save this draft.'
-                : undefined,
-      failed,
-      action: deletePending() ? 'retry-discard' : 'retry',
-      canKeepEditing: deletePending(),
-    };
+    return failureState(disk, draft?.status);
   });
   const run = async (action: () => Promise<unknown>) => {
     if (busy()) return;

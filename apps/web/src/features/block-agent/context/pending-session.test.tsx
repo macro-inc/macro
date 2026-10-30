@@ -63,7 +63,9 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 const { cleanup, render } = await import('@solidjs/testing-library');
-const { AgentSession } = await import('@core/agent-session/AgentSession');
+const { AgentSession } = await import(
+  '@app/lib/queries/agent-session/agent-session'
+);
 const { PromptTrace } = await import('@core/agent-session/prompt-telemetry');
 const { createAgentSession } = await import('./create-agent-session');
 const { forgetPendingSession, pendingSession, startPendingSession } =

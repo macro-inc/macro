@@ -8,6 +8,7 @@ import { createWebTracingProvider } from '@macro-inc/observability/web';
 import { ZoneContextManager } from '@macro-inc/observability/zone';
 import {
   createDesktopMemoryRecording,
+  type DesktopSnapshot,
   desktopResourceAttributes,
   readDesktopDiagnostics,
 } from './desktop';
@@ -56,6 +57,26 @@ async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
   });
 }
 
+function resolveTracesUrl(
+  desktop: DesktopSnapshot | undefined
+): string | undefined {
+  const configuredTracesUrl =
+    desktop?.identity.tracesUrl ??
+    import.meta.env.VITE_OTEL_EXPORTER_URL ??
+    (import.meta.hot ? 'http://localhost:8098/i/otlp/v1/traces' : undefined);
+  // Local stacks use a same-origin path; exporters expect an absolute URL.
+  return configuredTracesUrl
+    ? new URL(configuredTracesUrl, window.location.origin).href
+    : undefined;
+}
+
+function telemetryEnvironment(): string {
+  return (
+    import.meta.env.VITE_OTEL_ENV ??
+    (import.meta.env.MODE === 'production' ? 'prod' : 'dev')
+  );
+}
+
 /** Initialize browser telemetry and its application-level lifecycle hooks. */
 export async function initializeBrowserObservability(): Promise<void> {
   const lifecycle = isTauri() ? startDocumentLifecycle() : undefined;
@@ -67,19 +88,10 @@ export async function initializeBrowserObservability(): Promise<void> {
   const recording = desktop?.identity.recordingId
     ? createDesktopMemoryRecording(desktop)
     : undefined;
-  const configuredTracesUrl =
-    desktop?.identity.tracesUrl ??
-    import.meta.env.VITE_OTEL_EXPORTER_URL ??
-    (import.meta.hot ? 'http://localhost:8098/i/otlp/v1/traces' : undefined);
-  // Local stacks use a same-origin path; exporters expect an absolute URL.
-  const tracesUrl = configuredTracesUrl
-    ? new URL(configuredTracesUrl, window.location.origin).href
-    : undefined;
+  const tracesUrl = resolveTracesUrl(desktop);
   const telemetryConfig = {
     serviceName: 'web-app',
-    environment:
-      import.meta.env.VITE_OTEL_ENV ??
-      (import.meta.env.MODE === 'production' ? 'prod' : 'dev'),
+    environment: telemetryEnvironment(),
     tracesUrl,
     logsUrl: tracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
     contextManager: new ZoneContextManager(),
@@ -109,11 +121,15 @@ export async function initializeBrowserObservability(): Promise<void> {
     tracingProvider: (resource, getUserId) =>
       createWebTracingProvider(telemetryConfig, resource, getUserId),
   });
-  await configureNativeCallTracing({
-    enabled: browserEnabled,
-    tracesUrl,
-    environment: telemetryConfig.environment,
-  }).catch(() => Telemetry.warn('Native call tracing configuration failed'));
+  try {
+    await configureNativeCallTracing({
+      enabled: browserEnabled,
+      tracesUrl,
+      environment: telemetryConfig.environment,
+    });
+  } catch {
+    Telemetry.warn('Native call tracing configuration failed');
+  }
   if (isTauri()) recordNativeWebviewStart(desktop, lifecycle?.attributes);
   if (recording && desktop) {
     recording.accept(desktop);

@@ -400,21 +400,30 @@ export function createEquationEditor(options: EquationEditorOptions) {
     const key = `${ink()}|${text}`;
     let found = thumbnails.get(key);
     if (!found) {
-      found = render(text, THUMBNAIL_SIZE, false).catch(() => undefined);
+      found = renderThumbnail(text);
       thumbnails.set(key, found);
     }
     return found;
+  }
+
+  async function renderThumbnail(text: string) {
+    try {
+      return await render(text, THUMBNAIL_SIZE, false);
+    } catch {
+      return undefined;
+    }
   }
 
   onCleanup(() => {
     if (timer) clearTimeout(timer);
     const picture = preview();
     if (picture) URL.revokeObjectURL(picture.url);
+    const revoke = async (pending: Promise<EquationPicture | undefined>) => {
+      const thumb = await pending;
+      if (thumb) URL.revokeObjectURL(thumb.url);
+    };
     for (const p of thumbnails.values())
-      fireAndForget(
-        p.then((picture) => picture && URL.revokeObjectURL(picture.url)),
-        'pptx-editor'
-      );
+      fireAndForget(revoke(p), 'pptx-editor');
   });
 
   return {

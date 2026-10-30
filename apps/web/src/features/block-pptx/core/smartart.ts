@@ -14,6 +14,7 @@ import type {
   SmartArtNodeOutline,
   SmartArtOutline,
 } from '@core/pptx-engine/types';
+import { match as matchBranch } from 'ts-pattern';
 
 /** PowerPoint's prompt in empty SmartArt nodes. */
 export const PROMPT = '[Text]';
@@ -75,8 +76,8 @@ export function paneKey(
 ): PaneAction {
   const line = lines[index];
   if (!line) return { kind: 'none' };
-  switch (key.key) {
-    case 'Enter':
+  return matchBranch(key)
+    .with({ key: 'Enter' }, (key): PaneAction => {
       if (key.shift) return { kind: 'none' };
       return {
         kind: 'split',
@@ -84,7 +85,8 @@ export function paneKey(
         before: value.slice(0, caret.start),
         after: value.slice(caret.end),
       };
-    case 'Tab':
+    })
+    .with({ key: 'Tab' }, (key): PaneAction => {
       if (key.shift)
         return canPromote(lines, index)
           ? { kind: 'promote', node: line.id }
@@ -92,28 +94,31 @@ export function paneKey(
       return canDemote(lines, index)
         ? { kind: 'demote', node: line.id }
         : { kind: 'none' };
-    case 'Backspace':
+    })
+    .with({ key: 'Backspace' }, (): PaneAction => {
       if (value === '' && lines.length > 1)
         return {
           kind: 'delete',
           node: line.id,
           focus: lines[index - 1]?.id ?? lines[index + 1]?.id,
         };
-      // At the start of a bullet below the top level, Backspace promotes it.
       if (caret.start === 0 && caret.end === 0 && line.level > 1)
         return { kind: 'promote', node: line.id };
       return { kind: 'none' };
-    case 'ArrowUp':
+    })
+    .with({ key: 'ArrowUp' }, (): PaneAction => {
       return index > 0
         ? { kind: 'focus', node: lines[index - 1].id, at: 'end' }
         : { kind: 'none' };
-    case 'ArrowDown':
+    })
+    .with({ key: 'ArrowDown' }, (): PaneAction => {
       return index + 1 < lines.length
         ? { kind: 'focus', node: lines[index + 1].id, at: 'end' }
         : { kind: 'none' };
-    default:
+    })
+    .otherwise((): PaneAction => {
       return { kind: 'none' };
-  }
+    });
 }
 
 /** The node an edit created: the one in `after` that `before` lacks. */
@@ -241,21 +246,25 @@ export function shortId(id: string): string {
 
 /** The edit that applies a pane action (`split` adds a node; see `PaneAction`). */
 export function paneEdit(action: PaneAction): SmartArtEdit | undefined {
-  switch (action.kind) {
-    case 'split':
+  return matchBranch(action)
+    .with({ kind: 'split' }, (action): SmartArtEdit | undefined => {
       return {
         action: 'addNode',
         node: action.node,
         position: 'after',
         text: action.after,
       };
-    case 'demote':
+    })
+    .with({ kind: 'demote' }, (action): SmartArtEdit | undefined => {
       return { action: 'demote', node: action.node };
-    case 'promote':
+    })
+    .with({ kind: 'promote' }, (action): SmartArtEdit | undefined => {
       return { action: 'promote', node: action.node };
-    case 'delete':
+    })
+    .with({ kind: 'delete' }, (action): SmartArtEdit | undefined => {
       return { action: 'deleteNode', node: action.node };
-    default:
+    })
+    .otherwise((): SmartArtEdit | undefined => {
       return undefined;
-  }
+    });
 }

@@ -80,6 +80,7 @@ it.each(['accepted', 'rejected'] as const)(
       );
       if (outcome === 'accepted') {
         pending.resolve();
+        await pending.promise;
       } else {
         pending.reject(new Error('Deletion failed'));
         await waitFor(() =>
@@ -87,8 +88,8 @@ it.each(['accepted', 'rejected'] as const)(
             'Failed to delete draft'
           )
         );
+        await expect(pending.promise).rejects.toThrow('Deletion failed');
       }
-      await pending.promise.catch(() => {});
       expect(view.getByText('Email list')).toBeTruthy();
       expect(returnToList).toHaveBeenCalledOnce();
       expect(splitBack).not.toHaveBeenCalled();

@@ -180,18 +180,8 @@ export function createRespond(options: RespondOptions) {
     const current = phase();
     // What this visit just did comes first: reading the response again
     // never unmounts a booking in progress or the fresh receipt.
-    if (current?.kind === 'booking' || current?.kind === 'preview-complete')
-      return current;
-    if (current?.kind === 'confirmation')
-      return {
-        kind: 'confirmation',
-        answers: current.answers,
-        fresh: true,
-        alreadyResponded: false,
-        canEdit: canEdit(),
-        submittedAt: current.submittedAt,
-        booking: current.booking,
-      };
+    const completed = completedView(current);
+    if (completed) return completed;
     if (
       !options.preview &&
       options.signedIn() &&
@@ -206,7 +196,7 @@ export function createRespond(options: RespondOptions) {
         kind: 'confirmation',
         answers: answersOf(previous.answers),
         fresh: false,
-        alreadyResponded: current?.kind === 'already-responded',
+        alreadyResponded: respondedBefore(),
         canEdit: canEdit(),
         submittedAt: previous.submittedAt,
         booking: previous.booking,
@@ -219,35 +209,78 @@ export function createRespond(options: RespondOptions) {
       return { kind: 'closed', reason: 'table-gone' };
     if (open.kind === 'closed' && !options.preview)
       return { kind: 'closed', reason: open.reason };
-    if (current?.kind === 'updating') return { kind: 'updating' };
-    if (current?.kind === 'stopped')
-      return { kind: 'stopped', message: current.message };
+    const interrupted = interruptedView(current);
+    if (interrupted) return interrupted;
     const sectionIndex = currentIndex();
     const indices = questionSectionIndices(layout());
-    const section =
-      sectionIndex === undefined ? undefined : layout().sections[sectionIndex];
+    const section = currentSection();
     if (sectionIndex === undefined) {
       const first = nextStep(layout(), -1, answers());
       if (first.kind === 'stop')
         return { kind: 'stopped', message: first.message };
       if (first.kind === 'updating') return { kind: 'updating' };
     }
-    const position =
-      sectionIndex === undefined ? 0 : indices.indexOf(sectionIndex) + 1;
+    const position = sectionPosition();
     return {
       kind: 'answering',
       section,
       position,
       total: indices.length,
-      isFirst:
-        sectionIndex === undefined ||
-        previousSectionIndex(layout(), sectionIndex) === undefined,
+      isFirst: isFirstSection(),
       // Structural: a gate that would stop someone still shows "Next".
       isLast: position === indices.length,
       submitting: submitting(),
       uploading: uploads() > 0,
       continuesToBooking: endsWithBooking(layout()),
     };
+
+    function completedView(
+      current: ReturnType<typeof phase>
+    ): RespondView | undefined {
+      if (current?.kind === 'booking' || current?.kind === 'preview-complete')
+        return current;
+      if (current?.kind === 'confirmation')
+        return {
+          kind: 'confirmation',
+          answers: current.answers,
+          fresh: true,
+          alreadyResponded: false,
+          canEdit: canEdit(),
+          submittedAt: current.submittedAt,
+          booking: current.booking,
+        };
+      return undefined;
+    }
+
+    function interruptedView(
+      current: ReturnType<typeof phase>
+    ): RespondView | undefined {
+      if (current?.kind === 'updating') return { kind: 'updating' };
+      if (current?.kind === 'stopped')
+        return { kind: 'stopped', message: current.message };
+      return undefined;
+    }
+
+    function isFirstSection(): boolean {
+      return (
+        sectionIndex === undefined ||
+        previousSectionIndex(layout(), sectionIndex) === undefined
+      );
+    }
+
+    function currentSection() {
+      return sectionIndex === undefined
+        ? undefined
+        : layout().sections[sectionIndex];
+    }
+
+    function sectionPosition() {
+      return sectionIndex === undefined ? 0 : indices.indexOf(sectionIndex) + 1;
+    }
+
+    function respondedBefore(): boolean {
+      return current?.kind === 'already-responded';
+    }
   });
 
   /** Where a step leads: a section, the stop screen, or the update notice. */

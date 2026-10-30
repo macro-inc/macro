@@ -87,26 +87,10 @@ export function drawOverlay(
     Math.round(docY1 - docY0) + 1
   );
 
-  if (model.pixelGrid && s >= GRID_FROM) drawPixelGrid(ctx, model, X, Y);
+  updateDrawOverlay();
 
   // Guides.
-  if (model.guides.length > 0) {
-    ctx.strokeStyle = 'rgba(0, 200, 255, 0.9)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (const g of model.guides) {
-      if (g.vertical) {
-        const x = Math.round(X(g.position)) + 0.5;
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, ctx.canvas.height);
-      } else {
-        const y = Math.round(Y(g.position)) + 0.5;
-        ctx.moveTo(0, y);
-        ctx.lineTo(ctx.canvas.width, y);
-      }
-    }
-    ctx.stroke();
-  }
+  updateStrokeStyle2();
 
   // Other people's selections, in their colors.
   for (const peer of model.peers) {
@@ -171,24 +155,7 @@ export function drawOverlay(
     ants(ctx, model.antsPhase, dpr);
   }
 
-  if (tools.lasso && tools.lasso.points.length > 0) {
-    ctx.beginPath();
-    tools.lasso.points.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(X(p.x), Y(p.y));
-      else ctx.lineTo(X(p.x), Y(p.y));
-    });
-    if (tools.lasso.cursor)
-      ctx.lineTo(X(tools.lasso.cursor.x), Y(tools.lasso.cursor.y));
-    ants(ctx, model.antsPhase, dpr);
-    if (tools.lasso.closing) {
-      const first = tools.lasso.points[0];
-      ctx.beginPath();
-      ctx.arc(X(first.x), Y(first.y), 5 * dpr, 0, Math.PI * 2);
-      ctx.strokeStyle = model.accent;
-      ctx.lineWidth = 1.5 * dpr;
-      ctx.stroke();
-    }
-  }
+  updateStrokeStyle();
 
   if (tools.line) {
     const [a, b] = tools.line;
@@ -271,6 +238,51 @@ export function drawOverlay(
     ctx.lineWidth = 1 * dpr;
     ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.stroke();
+  }
+
+  function updateDrawOverlay() {
+    if (model.pixelGrid && s >= GRID_FROM) drawPixelGrid(ctx, model, X, Y);
+  }
+
+  function updateStrokeStyle2() {
+    if (model.guides.length > 0) {
+      ctx.strokeStyle = 'rgba(0, 200, 255, 0.9)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const g of model.guides) {
+        if (g.vertical) {
+          const x = Math.round(X(g.position)) + 0.5;
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, ctx.canvas.height);
+        } else {
+          const y = Math.round(Y(g.position)) + 0.5;
+          ctx.moveTo(0, y);
+          ctx.lineTo(ctx.canvas.width, y);
+        }
+      }
+      ctx.stroke();
+    }
+  }
+
+  function updateStrokeStyle() {
+    if (tools.lasso && tools.lasso.points.length > 0) {
+      ctx.beginPath();
+      tools.lasso.points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(X(p.x), Y(p.y));
+        else ctx.lineTo(X(p.x), Y(p.y));
+      });
+      if (tools.lasso.cursor)
+        ctx.lineTo(X(tools.lasso.cursor.x), Y(tools.lasso.cursor.y));
+      ants(ctx, model.antsPhase, dpr);
+      if (tools.lasso.closing) {
+        const first = tools.lasso.points[0];
+        ctx.beginPath();
+        ctx.arc(X(first.x), Y(first.y), 5 * dpr, 0, Math.PI * 2);
+        ctx.strokeStyle = model.accent;
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.stroke();
+      }
+    }
   }
 }
 

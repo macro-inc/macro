@@ -38,6 +38,7 @@ import type {
   EntryChange,
   FindOptions,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type LoroDoc, UndoManager } from 'loro-crdt';
 import type {
   EditOutcome,
@@ -199,8 +200,11 @@ export async function openCollaborativePresentation(
 
   /** Runs worker calls and document writes strictly one after another. */
   function serial<T>(task: () => Promise<T>): Promise<T> {
-    const run = tail.then(task, task);
-    tail = run.catch(() => {});
+    const run = (async () => {
+      await tail;
+      return task();
+    })();
+    tail = Promise.allSettled([run]);
     return run;
   }
 
@@ -237,12 +241,17 @@ export async function openCollaborativePresentation(
       });
     // Undo and redo flush their own changes and report the result.
     if (capturing) return;
-    void serial(async () => {
-      const result = await flushPending();
-      if (result) notify(result);
-    }).catch((error: unknown) => {
-      console.error('[pptx] remote change could not be applied', error);
-    });
+    const applyRemote = async () => {
+      try {
+        await serial(async () => {
+          const result = await flushPending();
+          if (result) notify(result);
+        });
+      } catch (error) {
+        console.error('[pptx] remote change could not be applied', error);
+      }
+    };
+    fireAndForget(applyRemote(), 'pptx-collab');
   });
 
   function closeGroup() {

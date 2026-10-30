@@ -22,7 +22,7 @@ vi.mock(
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({}));
 vi.mock('@components/app/split-layout/split-router/mention-links', () => ({}));
 vi.mock('@core/hotkey/hotkeys', () => ({}));
-vi.mock('../components/attachment-viewer', () => ({}));
+vi.mock('./attachment-viewer', () => ({}));
 vi.mock('./reply-envelope', () => ({}));
 
 afterEach(() => {

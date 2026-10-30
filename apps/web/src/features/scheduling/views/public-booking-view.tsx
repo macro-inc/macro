@@ -1,9 +1,9 @@
 import { Show } from 'solid-js';
-import { BookingPicker } from '../components/booking-picker';
 import { PublicBookingLayout } from '../components/public-booking-layout';
 import { PublicBookingProfile } from '../components/public-booking-profile';
 import type { BookingReceipt, PublicEvent, PublicProfile } from '../core/types';
 import type { BookingSource } from '../primitives/booking-flow';
+import { BookingPicker } from './booking-picker';
 
 export function PublicBookingView(props: {
   profile: PublicProfile;

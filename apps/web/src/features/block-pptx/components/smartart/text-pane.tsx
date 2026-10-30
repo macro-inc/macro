@@ -61,8 +61,11 @@ export function SmartArtTextPane(props: {
   /** Pane edits run one after another, in the order they were made. */
   let chain: Promise<unknown> = Promise.resolve();
   const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
-    const next = chain.then(task, task);
-    chain = next.catch(() => undefined);
+    const next = (async () => {
+      await chain;
+      return task();
+    })();
+    chain = Promise.allSettled([next]);
     return next;
   };
 
@@ -270,13 +273,12 @@ export function SmartArtTextPane(props: {
                   }}
                   onBlur={(e) => {
                     const el = e.currentTarget;
-                    fireAndForget(
-                      commit(id, el.value).then(() => {
-                        if (document.activeElement !== el)
-                          setDraft(id, undefined);
-                      }),
-                      'pptx-editor'
-                    );
+                    const commitDraft = async () => {
+                      await commit(id, el.value);
+                      if (document.activeElement !== el)
+                        setDraft(id, undefined);
+                    };
+                    fireAndForget(commitDraft(), 'pptx-editor');
                   }}
                   onKeyDown={(e) => onKeyDown(e, id)}
                 />

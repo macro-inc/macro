@@ -18,6 +18,7 @@ import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/m
 import type { MeetingPreparation } from '@service-storage/generated/schemas/meetingPreparation';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
+import { readJsonBody } from '../read-json-body';
 
 export type {
   CallRecord,
@@ -99,7 +100,9 @@ export const callServiceClient = {
         {
           errorResponseHandler: async (response) => {
             if (response.status === 400) {
-              const body = await response.json().catch(() => undefined);
+              const body = (await readJsonBody(response)) as {
+                message?: unknown;
+              } | null;
               // Older servers route the literal "meetings" as a channel UUID.
               if (body?.message === 'Bad request: Invalid channel ID format')
                 return {

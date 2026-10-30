@@ -1,4 +1,4 @@
-import { type MacroId, tryMacroId } from '@core/user/macroId';
+import { type MacroId, tryMacroId } from '@app/lib/identity/macro-id';
 
 /**
  * Who performed an activity event, parsed once from the wire `actorId`.

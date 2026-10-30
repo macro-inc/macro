@@ -152,13 +152,17 @@ try {
     operationName: 'Slow',
     variables: VARIABLES,
   });
-  const slowOutcome = slowRead.then(
-    () => undefined,
-    (error: unknown) => {
+
+  const slowReadError = async (): Promise<unknown> => {
+    try {
+      await slowRead;
+      return undefined;
+    } catch (error) {
       order.push('old-request-rejected');
       return error;
     }
-  );
+  };
+  const slowOutcome = slowReadError();
   await waitUntil('slow request admission', () =>
     telemetryEvents.some((event) => event.slow === true)
   );

@@ -9,10 +9,7 @@ const flags = vi.hoisted(() => ({ agents: false }));
 vi.mock('@app/features/agents-view/primitives/open-composer', () => ({}));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({}));
 vi.mock('@app/features/block-agent/ui/AgentInput', () => ({}));
-vi.mock(
-  '@app/features/block-spreadsheet/primitives/use-spreadsheet-access',
-  () => ({})
-);
+vi.mock('@app/features/block-spreadsheet/use-spreadsheet-access', () => ({}));
 vi.mock(
   '@app/features/block-spreadsheet/queries/create-spreadsheet',
   () => ({})
@@ -49,7 +46,7 @@ vi.mock('@core/directive/focusInput', () => ({}));
 vi.mock('@core/hotkey/hotkeys', () => ({}));
 vi.mock('@core/hotkey/state', () => ({}));
 vi.mock('@core/mobile/isMobile', () => ({}));
-vi.mock('@core/util/create', () => ({}));
+vi.mock('@app/lib/queries/items/create', () => ({}));
 vi.mock('@macro-inc/lexical-core/markdown-golden', () => ({}));
 vi.mock('@queries/storage/databases', () => ({}));
 vi.mock('@queries/storage/forms', () => ({}));

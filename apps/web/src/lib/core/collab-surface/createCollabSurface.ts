@@ -13,11 +13,11 @@ import {
 } from '@macro-inc/collaboration/collab/wal';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { Telemetry } from '@macro-inc/observability';
-import { storageServiceClient } from '@service-storage/client';
+import { ensureCollabSurface } from '@queries/storage/requests';
 import type { CollabSurfaceResponse } from '@service-storage/service';
 import { createCollabSurfaceSource } from '@service-sync/source';
 import { type Accessor, createSignal } from 'solid-js';
-import { getCollabSurfaceToken } from './token';
+import { getCollabSurfaceToken } from '../../queries/storage/collab-surface-token';
 
 export type CollabSurfaceLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
 
@@ -124,23 +124,21 @@ export function createCollabSurfaceSession(
 
   const optimisticSnapshot = opts.optimisticSnapshot;
   if (optimisticSnapshot) {
-    void loroManager
-      .ingest({ kind: 'optimistic', snapshot: optimisticSnapshot })
-      .catch((error) => {
-        console.error('collab surface: optimistic ingest failed', error);
-      });
+    fireAndForget(
+      loroManager.ingest({ kind: 'optimistic', snapshot: optimisticSnapshot }),
+      'collab-surface-optimistic-ingest'
+    );
   }
 
-  void ingestLocalSnapshot(loroManager, snapshotStore, walStore).catch(
-    (error) => {
-      console.error('collab surface: local snapshot ingest failed', error);
-    }
+  fireAndForget(
+    ingestLocalSnapshot(loroManager, snapshotStore, walStore),
+    'collab-surface-local-snapshot'
   );
 
   const connect = async () => {
     // Load-or-create. Idempotent on the backend, so mounting the same
     // surface in several places (or racing another client) is fine.
-    const ensured = await storageServiceClient.collabSurfaces.ensure({
+    const ensured = await ensureCollabSurface({
       id: surfaceId,
       parentEntityType: opts.parent.entityType,
       parentEntityId: opts.parent.entityId,

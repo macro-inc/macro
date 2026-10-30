@@ -48,11 +48,7 @@ function reportTrashedEmails(
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId != null) toast.dismiss(toastId);
-            handle.undo().then(
-              () => toast.success(t('entityActions.toastRestoredFromTrash')),
-              () =>
-                toast.failure(t('entityActions.toastRestoreFromTrashFailed'))
-            );
+            fireAndForget(undoTrash(handle), 'entity-actions');
           },
         },
       ],
@@ -60,10 +56,26 @@ function reportTrashedEmails(
     }
   );
 
-  // Surface background API failures
-  handle.done.catch(() => {
+  fireAndForget(reportTrashFailure(handle), 'entity-actions');
+}
+
+async function undoTrash(handle: ReturnType<typeof trashEmails>) {
+  try {
+    await handle.undo();
+  } catch {
+    toast.failure(t('entityActions.toastRestoreFromTrashFailed'));
+    return;
+  }
+  toast.success(t('entityActions.toastRestoredFromTrash'));
+}
+
+/** Surfaces background API failures. */
+async function reportTrashFailure(handle: ReturnType<typeof trashEmails>) {
+  try {
+    await handle.done;
+  } catch {
     toast.failure(t('entityActions.toastMoveToTrashFailed'));
-  });
+  }
 }
 
 type MakeDeleteOptions = {

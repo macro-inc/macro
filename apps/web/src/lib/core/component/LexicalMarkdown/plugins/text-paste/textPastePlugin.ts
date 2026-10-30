@@ -232,37 +232,140 @@ function $insertPastedGithubPullRequest(
   $insertNodes([placeholder]);
   const placeholderKey = placeholder.getKey();
 
-  fireAndForget(
-    fetchPullRequestByGithubKey(githubKey).then((entity) => {
-      if (!entity) return;
-      editor.update(
-        () => {
-          const node = $getNodeByKey(placeholderKey);
-          if (!node || !node.isAttached() || node.getTextContent() !== url) {
-            return;
-          }
-          if ($isLinkNode(node) && node.getURL() !== url) return;
+  const upgradePlaceholder = async () => {
+    const entity = await fetchPullRequestByGithubKey(githubKey);
+    if (!entity) return;
+    editor.update(
+      () => {
+        const node = $getNodeByKey(placeholderKey);
+        if (!node || !node.isAttached() || node.getTextContent() !== url) {
+          return;
+        }
+        if ($isLinkNode(node) && node.getURL() !== url) return;
 
-          const selection = $getSelection();
-          const caretInPlaceholder =
-            $isRangeSelection(selection) &&
-            selection.isCollapsed() &&
-            (selection.anchor.key === placeholderKey ||
-              node.isParentOf(selection.anchor.getNode()));
+        const selection = $getSelection();
+        const caretInPlaceholder =
+          $isRangeSelection(selection) &&
+          selection.isCollapsed() &&
+          (selection.anchor.key === placeholderKey ||
+            node.isParentOf(selection.anchor.getNode()));
 
-          const mention = $createPullRequestMentionNode({
-            id: entity.id,
-            label,
-            url: prUrl,
-          });
-          node.replace(mention);
-          if (caretInPlaceholder) mention.selectEnd();
-        },
-        { tag: HISTORY_MERGE_TAG }
-      );
-    }),
-    'markdown-text-paste'
+        const mention = $createPullRequestMentionNode({
+          id: entity.id,
+          label,
+          url: prUrl,
+        });
+        node.replace(mention);
+        if (caretInPlaceholder) mention.selectEnd();
+      },
+      { tag: HISTORY_MERGE_TAG }
+    );
+  };
+  fireAndForget(upgradePlaceholder(), 'markdown-text-paste');
+}
+
+function $insertLargePlainTextPaste(
+  editor: LexicalEditor,
+  event: ClipboardEvent,
+  pastedText: string
+): boolean {
+  // Defer rich clipboards to their handlers; collapse only genuine plain text.
+  const clipboard = event.clipboardData;
+  const isRichClipboard = Boolean(
+    clipboard?.getData('application/x-lexical-editor') ||
+      clipboard?.getData('text/html')
   );
+  if (
+    isRichClipboard ||
+    !editor.hasNode(PasteNode) ||
+    pastedText.length <= LARGE_PASTE_CHAR_THRESHOLD
+  ) {
+    return false;
+  }
+  const selection = $getSelection();
+  if ($isRangeSelection(selection) && !selection.isCollapsed()) return false;
+  event.preventDefault();
+  $insertNodesAndSplitList([$createPasteNode({ content: pastedText })]);
+  return true;
+}
+
+/**
+ * Code blocks hold plain text, so paste it verbatim: the code highlighter
+ * drops mentions and chips inserted there, and parsing the text as Markdown
+ * strips its syntax. Files, including mobile pasteboard images, still go to
+ * the file paste handler.
+ */
+function $pasteIntoCode(event: ClipboardEvent, pastedText: string): boolean {
+  const clipboard = event.clipboardData;
+  if (
+    !clipboard ||
+    !pastedText ||
+    clipboard.files.length > 0 ||
+    shouldUseMobileClipboardImageRecovery(clipboard)
+  ) {
+    return false;
+  }
+  event.preventDefault();
+  $getSelection()?.insertRawText(pastedText);
+  return true;
+}
+
+function parsePastedTheme(pastedText: string) {
+  const themeV3 = parseThemeV3Json(pastedText);
+  if (themeV3) return themeV3;
+  const legacy = parseThemeV2Json(pastedText);
+  return legacy ? convertThemev2v3(legacy) : null;
+}
+
+function $insertPastedTheme(
+  editor: LexicalEditor,
+  event: ClipboardEvent,
+  themeV3: NonNullable<ReturnType<typeof parsePastedTheme>>
+): boolean {
+  const selection = $getSelection();
+  if ($isRangeSelection(selection) && !selection.isCollapsed()) return false;
+
+  event.preventDefault();
+  editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
+    name: themeV3.name,
+    data: themeV3,
+  });
+  return true;
+}
+
+/** A pasted Macro app link becomes a mention; other text may become a paste chip. */
+function $insertPastedMacroAppLink(
+  editor: LexicalEditor,
+  event: ClipboardEvent,
+  pastedText: string,
+  resolveAppLink?: MentionLinkResolver
+): boolean {
+  const parsedMacroAppUrl = resolvePastedMacroAppUrl(
+    pastedText,
+    resolveAppLink
+  );
+  if (!parsedMacroAppUrl?.id || !parsedMacroAppUrl.block) {
+    return $insertLargePlainTextPaste(editor, event, pastedText);
+  }
+
+  const selection = $getSelection();
+  if ($isRangeSelection(selection) && !selection.isCollapsed()) return false;
+
+  event.preventDefault();
+  if (parsedMacroAppUrl.block === 'pr') {
+    editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
+      id: parsedMacroAppUrl.id,
+    });
+    return true;
+  }
+
+  editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: parsedMacroAppUrl.id,
+    documentName: '',
+    blockName: parsedMacroAppUrl.block,
+    blockParams: parsedMacroAppUrl.params || {},
+  });
+  return true;
 }
 
 function registerTextPastePlugin(
@@ -277,44 +380,11 @@ function registerTextPastePlugin(
           const pastedText: string =
             event.clipboardData?.getData('text/plain') || '';
 
-          // Code blocks hold plain text, so paste it verbatim: the code
-          // highlighter drops mentions and chips inserted there, and parsing
-          // the text as Markdown strips its syntax. Files, including mobile
-          // pasteboard images, still go to the file paste handler.
-          if ($isSelectionInCode()) {
-            const clipboard = event.clipboardData;
-            if (
-              !clipboard ||
-              !pastedText ||
-              clipboard.files.length > 0 ||
-              shouldUseMobileClipboardImageRecovery(clipboard)
-            ) {
-              return false;
-            }
-            event.preventDefault();
-            $getSelection()?.insertRawText(pastedText);
-            return true;
-          }
+          if ($isSelectionInCode()) return $pasteIntoCode(event, pastedText);
 
           // Check for theme JSON before checking for Macro URL
-          const themeV3 =
-            parseThemeV3Json(pastedText) ??
-            (() => {
-              const legacy = parseThemeV2Json(pastedText);
-              return legacy ? convertThemev2v3(legacy) : null;
-            })();
-          if (themeV3) {
-            const selection = $getSelection();
-            if ($isRangeSelection(selection) && !selection.isCollapsed())
-              return false;
-
-            event.preventDefault();
-            editor.dispatchCommand(INSERT_THEME_MENTION_COMMAND, {
-              name: themeV3.name,
-              data: themeV3,
-            });
-            return true;
-          }
+          const themeV3 = parsePastedTheme(pastedText);
+          if (themeV3) return $insertPastedTheme(editor, event, themeV3);
 
           const githubPr = parsePastedGithubPrUrl(pastedText);
           if (githubPr && editor.hasNode(PullRequestMentionNode)) {
@@ -352,57 +422,12 @@ function registerTextPastePlugin(
             }
           }
 
-          const parsedMacroAppUrl = resolvePastedMacroAppUrl(
+          return $insertPastedMacroAppLink(
+            editor,
+            event,
             pastedText,
             resolveAppLink
           );
-          if (!parsedMacroAppUrl?.id || !parsedMacroAppUrl.block) {
-            // Large plain-text pastes collapse into a block-level PasteNode
-            // (Anthropic-style "pasted" chip). Only handle genuine plain text
-            // pastes: defer to the richer paste handlers for HTML / Lexical
-            // clipboards, and only when the cursor is a collapsed selection.
-            const clipboard = event.clipboardData;
-            const isRichClipboard = Boolean(
-              clipboard?.getData('application/x-lexical-editor') ||
-                clipboard?.getData('text/html')
-            );
-            if (
-              !isRichClipboard &&
-              editor.hasNode(PasteNode) &&
-              pastedText.length > LARGE_PASTE_CHAR_THRESHOLD
-            ) {
-              const selection = $getSelection();
-              if ($isRangeSelection(selection) && !selection.isCollapsed()) {
-                return false;
-              }
-              event.preventDefault();
-              $insertNodesAndSplitList([
-                $createPasteNode({ content: pastedText }),
-              ]);
-              return true;
-            }
-            return false;
-          }
-
-          const selection = $getSelection();
-          if ($isRangeSelection(selection) && !selection.isCollapsed())
-            return false;
-
-          event.preventDefault();
-          if (parsedMacroAppUrl.block === 'pr') {
-            editor.dispatchCommand(INSERT_PR_MENTION_COMMAND, {
-              id: parsedMacroAppUrl.id,
-            });
-            return true;
-          }
-
-          editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
-            documentId: parsedMacroAppUrl.id,
-            documentName: '',
-            blockName: parsedMacroAppUrl.block,
-            blockParams: parsedMacroAppUrl.params || {},
-          });
-          return true;
         }
         return false;
       },

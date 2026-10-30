@@ -153,35 +153,52 @@ function Fixture() {
       reads: (id) => memory()?.reads(id) ?? 0,
     };
     const library = params.get('library') ?? 'design-system.fig';
-    void Promise.all([
-      fetch(`${__FIG_CORPUS_URL__}${library}`).then((r) => r.arrayBuffer()),
-      FigEngine.blank('App'),
-    ])
-      .then(([lib, app]) => {
+    const fetchLibrary = async () => {
+      const response = await fetch(`${__FIG_CORPUS_URL__}${library}`);
+      return await response.arrayBuffer();
+    };
+    const loadLibraries = async () => {
+      try {
+        const [lib, app] = await Promise.all([
+          fetchLibrary(),
+          FigEngine.blank('App'),
+        ]);
         setMemory(
           createMemoryLibraries([
             { id: 'design-system', name: 'Design system', bytes: lib },
             { id: 'app', name: 'App', bytes: app.slice().buffer },
           ])
         );
-        return openDesign(params.get('open') ?? 'design-system');
-      })
-      .catch((e: unknown) => setError(String(e)));
+        await openDesign(params.get('open') ?? 'design-system');
+      } catch (e) {
+        setError(String(e));
+      }
+    };
+    fireAndForget(loadLibraries(), 'fig-viewer');
   }
 
   const file = params.get('file');
   if (params.has('new')) {
-    void FigEngine.blank('Untitled')
-      .then((bytes) => open(bytes.slice().buffer, 'Untitled'))
-      .catch((e: unknown) => setError(String(e)));
+    const openBlank = async () => {
+      try {
+        const bytes = await FigEngine.blank('Untitled');
+        await open(bytes.slice().buffer, 'Untitled');
+      } catch (e) {
+        setError(String(e));
+      }
+    };
+    fireAndForget(openBlank(), 'fig-viewer');
   } else if (file) {
-    void fetch(`${__FIG_CORPUS_URL__}${file}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`${file}: ${r.status}`);
-        return r.arrayBuffer();
-      })
-      .then((bytes) => open(bytes, file))
-      .catch((e: unknown) => setError(String(e)));
+    const openCorpusFile = async () => {
+      try {
+        const response = await fetch(`${__FIG_CORPUS_URL__}${file}`);
+        if (!response.ok) throw new Error(`${file}: ${response.status}`);
+        await open(await response.arrayBuffer(), file);
+      } catch (error) {
+        setError(String(error));
+      }
+    };
+    fireAndForget(openCorpusFile(), 'fig-viewer');
   }
 
   return (
@@ -256,9 +273,7 @@ function Fixture() {
                   libraries: design && store ? store.source(design) : undefined,
                   save: async (bytes) => {
                     if (params.has('reload'))
-                      await FigEngine.open(bytes.slice().buffer).then((e) =>
-                        e.close()
-                      );
+                      (await FigEngine.open(bytes.slice().buffer)).close();
                     if (design) store?.store(design, bytes);
                     setSaves((x) => [...x, bytes]);
                   },

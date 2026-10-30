@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   autoUpdate,
   type ComputePositionReturn,
@@ -5,7 +6,6 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom';
-import { Telemetry } from '@macro-inc/observability';
 import {
   createEffect,
   createMemo,
@@ -117,18 +117,22 @@ export function DefinitionLookup(props: IProps) {
     strategy: 'absolute',
     middlewareData: undefined,
   });
+  const positionTerm = async (anchor: Element, term: HTMLDivElement) => {
+    setCoord(
+      await computePosition(anchor, term, {
+        placement: 'bottom',
+        strategy: 'absolute',
+        middleware: [offset(props.index === 0 ? 2 : 8), shift({ padding: 8 })],
+      })
+    );
+  };
   const updatePosition = () => {
     if (!props.anchorRef || !termRef) return;
 
-    computePosition(props.anchorRef, termRef, {
-      placement: 'bottom',
-      strategy: 'absolute',
-      middleware: [offset(props.index === 0 ? 2 : 8), shift({ padding: 8 })],
-    })
-      .then(setCoord)
-      .catch((error) =>
-        Telemetry.error(error, { surface: 'pdf-definition-lookup' })
-      );
+    fireAndForget(
+      positionTerm(props.anchorRef, termRef),
+      'pdf-definition-lookup'
+    );
   };
   createEffect((prevPageWidth) => {
     const newPageWidth = pageWidth();

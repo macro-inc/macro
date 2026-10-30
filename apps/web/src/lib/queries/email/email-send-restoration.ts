@@ -3,7 +3,12 @@ import type {
   LocalDraftAttachment,
 } from '@app/features/email-compose/core/local-draft';
 import type { DraftStorageSession } from './local-draft-store';
-import { type EmailSendIntent, isEmailSendIntent } from './send-intent';
+import type { SendWorkingCopy } from './send-draft-lifecycle';
+import {
+  type EmailSendIntent,
+  emailSendAttempt,
+  isEmailSendIntent,
+} from './send-intent';
 
 export type RestoredEmailSend = { draft: LocalDraft; intent: EmailSendIntent };
 
@@ -43,9 +48,7 @@ export function restoreEmailSendTransaction(
       finish(undefined);
       return;
     }
-    const attempt =
-      intent.response?.cancelEmailSend?.attempt ??
-      intent.response?.sendEmailMessage?.attempt;
+    const attempt = emailSendAttempt(intent);
     if (
       !(
         intent.locallyCancelled && !intent.metadata.requiresServerConfirmation
@@ -73,80 +76,28 @@ export function restoreEmailSendTransaction(
             (id) => id && ids.has(id)
           )
       );
-      const exact =
-        !!current &&
-        !!copy &&
-        current.key === copy.key &&
-        current.generation === copy.generation &&
-        current.revision === copy.revision;
+      const exact = isExactCopy(current, copy);
       // Preserve newer contents/files, but fence saves issued before cancellation:
       // their server generation is stale and their callbacks cannot retire this copy.
       const generation = Math.max(
         current?.content.draft_generation ?? 0,
         server?.draftGeneration ?? frozen.draftGeneration ?? 0
       );
-      const restored: LocalDraft =
+      const restored =
         current && !exact
-          ? {
-              ...current,
-              generation: crypto.randomUUID(),
-              revision: current.revision + 1,
-              acknowledgedRevision: 0,
-              latestAttemptId: undefined,
-              queuedAttemptId: undefined,
-              status: 'dirty',
-              errorCode: undefined,
-              updatedAt: Date.now(),
-              content: { ...current.content, draft_generation: generation },
-            }
-          : {
-              key: copy?.key ?? String(frozen.draftId),
-              draftId: copy?.key ?? String(frozen.draftId),
-              threadId:
-                server?.threadId ??
-                intent.resolvedThreadId ??
-                frozen.threadDbId,
-              serverDraftId: server?.id ?? current?.serverDraftId,
-              serverThreadId: server?.threadId ?? current?.serverThreadId,
-              accountId: session.accountId,
-              generation: crypto.randomUUID(),
-              revision: (current?.revision ?? 0) + 1,
-              acknowledgedRevision: 0,
-              status: 'dirty',
-              updatedAt: Date.now(),
-              inboxId: frozen.senderLinkId,
-              senderEmail: frozen.senderEmail,
-              content: {
-                draft_generation: generation,
-                subject: frozen.subject,
-                sender_email: frozen.senderEmail,
-                to: frozen.to,
-                cc: frozen.cc,
-                bcc: frozen.bcc,
-                replying_to_id:
-                  frozen.replyingToId == null
-                    ? frozen.replyingToId
-                    : String(frozen.replyingToId),
-                thread_db_id: server?.threadId ?? frozen.threadDbId,
-                provider_id: frozen.providerId,
-                provider_thread_id: frozen.providerThreadId,
-                include_signature: input.includeSignature,
-                body_html: input.restoreBodyHtml ?? frozen.bodyHtml,
-                body_text: input.restoreBodyText ?? frozen.bodyText,
-                body_macro: input.restoreBodyMacro ?? frozen.bodyMacro,
-              },
-              attachments: restoreAttachments(intent),
-            };
-      if (current)
+          ? fencedWorkingCopy(current, generation)
+          : rebuiltWorkingCopy(intent, session.accountId, current, generation);
+      if (current) {
         tx.objectStore('meta').put(true, [
           'retired',
           current.key,
           current.generation,
         ]);
-      if (exact) {
-        for (const attachment of current.attachments)
-          if (attachment.type === 'local')
-            tx.objectStore('files').delete([current.key, attachment.id]);
+        if (exact) {
+          for (const attachment of current.attachments)
+            if (attachment.type === 'local')
+              tx.objectStore('files').delete([current.key, attachment.id]);
+        }
       }
       drafts.put({ ...restored, epoch: session.epoch }, restored.key);
       tx.objectStore('meta').put(restored.generation, [
@@ -167,6 +118,94 @@ export function restoreEmailSendTransaction(
   };
 }
 
+function isExactCopy(
+  current: LocalDraft | undefined,
+  copy: SendWorkingCopy | undefined
+): boolean {
+  return (
+    !!current &&
+    !!copy &&
+    current.key === copy.key &&
+    current.generation === copy.generation &&
+    current.revision === copy.revision
+  );
+}
+
+function fencedWorkingCopy(
+  current: LocalDraft,
+  generation: number
+): LocalDraft {
+  return {
+    ...current,
+    generation: crypto.randomUUID(),
+    revision: current.revision + 1,
+    acknowledgedRevision: 0,
+    latestAttemptId: undefined,
+    queuedAttemptId: undefined,
+    status: 'dirty',
+    errorCode: undefined,
+    updatedAt: Date.now(),
+    content: { ...current.content, draft_generation: generation },
+  };
+}
+
+/** The frozen send's draft content, preferring the input's restore bodies. */
+function frozenDraftContent(
+  intent: EmailSendIntent,
+  generation: number
+): LocalDraft['content'] {
+  const { input, draft: frozen } = intent.metadata.payload;
+  const server = emailSendAttempt(intent)?.message;
+  return {
+    draft_generation: generation,
+    subject: frozen.subject,
+    sender_email: frozen.senderEmail,
+    to: frozen.to,
+    cc: frozen.cc,
+    bcc: frozen.bcc,
+    replying_to_id:
+      frozen.replyingToId == null
+        ? frozen.replyingToId
+        : String(frozen.replyingToId),
+    thread_db_id: server?.threadId ?? frozen.threadDbId,
+    provider_id: frozen.providerId,
+    provider_thread_id: frozen.providerThreadId,
+    include_signature: input.includeSignature,
+    body_html: input.restoreBodyHtml ?? frozen.bodyHtml,
+    body_text: input.restoreBodyText ?? frozen.bodyText,
+    body_macro: input.restoreBodyMacro ?? frozen.bodyMacro,
+  };
+}
+
+/** A working copy rebuilt from the send's frozen payload and the server's answer. */
+function rebuiltWorkingCopy(
+  intent: EmailSendIntent,
+  accountId: string,
+  current: LocalDraft | undefined,
+  generation: number
+): LocalDraft {
+  const { workingCopy: copy, draft: frozen } = intent.metadata.payload;
+  const server = emailSendAttempt(intent)?.message;
+  const key = copy?.key ?? String(frozen.draftId);
+  return {
+    key,
+    draftId: key,
+    threadId: server?.threadId ?? intent.resolvedThreadId ?? frozen.threadDbId,
+    serverDraftId: server?.id ?? current?.serverDraftId,
+    serverThreadId: server?.threadId ?? current?.serverThreadId,
+    accountId,
+    generation: crypto.randomUUID(),
+    revision: (current?.revision ?? 0) + 1,
+    acknowledgedRevision: 0,
+    status: 'dirty',
+    updatedAt: Date.now(),
+    inboxId: frozen.senderLinkId,
+    senderEmail: frozen.senderEmail,
+    content: frozenDraftContent(intent, generation),
+    attachments: restoreAttachments(intent),
+  };
+}
+
 function restoreAttachments(intent: EmailSendIntent): LocalDraftAttachment[] {
   const copy = intent.metadata.payload.workingCopy;
   if (copy)
@@ -184,10 +223,8 @@ function restoreAttachments(intent: EmailSendIntent): LocalDraftAttachment[] {
       };
     });
   const message =
-    (
-      intent.response?.cancelEmailSend?.attempt ??
-      intent.response?.sendEmailMessage?.attempt
-    )?.message ?? intent.metadata.payload.draft.existingDraft;
+    emailSendAttempt(intent)?.message ??
+    intent.metadata.payload.draft.existingDraft;
   return [
     ...(message?.attachmentsDraft ?? []).map((file) => ({
       type: 'remote' as const,

@@ -150,7 +150,7 @@ vi.mock('./queries/task-field-source', () => ({
     values: () => ({ values: mocks.taskValues, unresolved: [] }),
   }),
 }));
-vi.mock('@core/util/create', () => ({
+vi.mock('@app/lib/queries/items/create', () => ({
   createTaskWithInitialSnapshot: mocks.taskSnapshot,
 }));
 vi.mock('@app/features/email-compose/compose-adapter', () => ({

@@ -85,7 +85,7 @@ vi.mock('../components/draft-back-menu', () => ({
     </Show>
   ),
 }));
-vi.mock('../components/attachment-viewer', () => ({
+vi.mock('./attachment-viewer', () => ({
   createAttachmentViewer: () => ({}),
 }));
 vi.mock('../components/draft-sync-status', () => ({

@@ -1,3 +1,8 @@
+import {
+  executeChatTool,
+  updateChatToolCall,
+  updateChatToolResponse,
+} from '@queries/cognition/requests';
 /**
  * Chat's half of a deferred `SendEmail`: the composer over the pending call,
  * finished through the cognition tool endpoints.
@@ -13,7 +18,7 @@ import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useChatQuery } from '@queries/chat';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import type { JSX } from 'solid-js';
 import type { UserToolReviewSink } from '../user-tool-review';
@@ -161,25 +166,23 @@ export function ComposeTool(props: ComposeToolProps) {
     const nextSnapshot = createSendEmailSnapshot(args);
     if (sameSendEmailSnapshot(nextSnapshot, lastPersistedSnapshot)) return;
 
-    const updateCallResult =
-      await cognitionApiServiceClient.updateToolCall<'SendEmail'>({
-        chat_id: props.chatId,
-        messageId: props.messageId,
-        toolCallId: props.toolCallId,
-        args,
-      });
+    const updateCallResult = await updateChatToolCall<'SendEmail'>({
+      chat_id: props.chatId,
+      messageId: props.messageId,
+      toolCallId: props.toolCallId,
+      args,
+    });
     if (updateCallResult.isErr()) {
       toast.failure('Failed to save changes');
       return;
     }
 
-    const updateResponseResult =
-      await cognitionApiServiceClient.updateToolResponse<'SendEmail'>({
-        chat_id: props.chatId,
-        messageId: props.messageId,
-        toolCallId: props.toolCallId,
-        response: { UserAction: 'userEdited' },
-      });
+    const updateResponseResult = await updateChatToolResponse<'SendEmail'>({
+      chat_id: props.chatId,
+      messageId: props.messageId,
+      toolCallId: props.toolCallId,
+      response: { UserAction: 'userEdited' },
+    });
     if (updateResponseResult.isErr()) {
       toast.failure('Failed to save changes');
       return;
@@ -193,7 +196,7 @@ export function ComposeTool(props: ComposeToolProps) {
     lockedNotice,
     onEdit: (args) => fireAndForget(persistEdit(args), 'ai-email-draft'),
     onExecute: async (args) => {
-      const result = await cognitionApiServiceClient.callTool<'SendEmail'>({
+      const result = await executeChatTool<'SendEmail'>({
         chat_id: props.chatId,
         messageId: props.messageId,
         toolCallId: props.toolCallId,

@@ -8,7 +8,9 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   invalidate: vi.fn(),
 }));
-vi.mock('@core/signal/token', () => ({ getPermissionToken: mocks.token }));
+vi.mock('@app/lib/queries/storage/permission-token', () => ({
+  getPermissionToken: mocks.token,
+}));
 vi.mock('@queries/client', () => ({
   queryClient: { invalidateQueries: mocks.invalidate },
 }));

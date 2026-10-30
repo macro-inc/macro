@@ -157,15 +157,31 @@ vi.mock('@queries/agent-session/log', () => ({
   watchAgentSessionLog: logSource.watch,
   canFollowAgentSessionLog: () => logSource.following,
   forgetAgentSessionLog: logSource.forget,
+  settled: async (work: Promise<unknown>) => {
+    try {
+      await work;
+    } catch {
+      // Callers that need the failure await `work` themselves.
+    }
+  },
 }));
 
 import {
   AgentSession,
   AgentSessionAccessDenied,
   AgentSessionReleased,
-} from './AgentSession';
+} from '../../queries/agent-session/agent-session';
 import { forgetSessionCreated, markSessionCreated } from './recently-created';
 import { resetSessionTurns, sessionTurn } from './session-turn';
+
+/** What a promise settles with: its value, or its rejection reason. */
+async function settledValue(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    return await promise;
+  } catch (reason) {
+    return reason;
+  }
+}
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -930,7 +946,8 @@ describe('AgentSession', () => {
       harness.get.mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]));
 
       const live = AgentSession.acquire(SESSION);
-      const settled = live.load().catch((error: unknown) => error);
+
+      const settled = settledValue(live.load());
       // Past every retry, but still inside the window in which this tab's
       // creates are given the benefit of the doubt.
       await vi.advanceTimersByTimeAsync(20_000);

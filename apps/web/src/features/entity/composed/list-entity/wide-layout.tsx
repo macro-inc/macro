@@ -70,30 +70,7 @@ export function WideLayout(props: LayoutProps) {
 
   return (
     <Entity.Layout
-      class={cn(
-        // Leading edge (left padding, indicator column, column gap) comes from
-        // the --soup-row-* geometry in ListEntity.css so group headers can line
-        // their label up with this row's content.
-        SOUP_ROW_CLASS.wide,
-        'w-full min-h-[inherit] items-center text-sm pl-(--soup-row-padding-l) pr-2',
-        'gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr]',
-        // Drop the indicator column entirely when the checkbox is hidden so the
-        // content isn't indented by an empty gutter.
-        // Action slots and scheduled-send badges size their own column.
-        props.actions ||
-          props.leadingAction ||
-          props.scheduleStatus ||
-          (isEmailEntity(props.entity) && props.entity.scheduledSendTime)
-          ? props.hideCheckbox
-            ? 'grid-cols-[1fr_auto_auto]'
-            : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_auto]'
-          : props.hideCheckbox
-            ? 'grid-cols-[1fr_auto_8ch]'
-            : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
-        '[--title-width:10rem]',
-        // Pull request pills give way to the title rather than starve it.
-        isGithubPrEntity(props.entity) && '[container-type:inline-size]'
-      )}
+      class={getWideLayoutClass()}
       data-pill-row={isGithubPrEntity(props.entity) ? '' : undefined}
       style={{
         'grid-template-areas': props.hideCheckbox
@@ -164,7 +141,7 @@ export function WideLayout(props: LayoutProps) {
               />
             )}
           </Match>
-          <Match when={isCallEntity(props.entity) && props.entity}>
+          <Match when={callEntity()}>
             {(entity) => (
               <CallWideContent
                 entity={entity()}
@@ -260,7 +237,7 @@ export function WideLayout(props: LayoutProps) {
             />
           )}
         </Show>
-        <Show when={isChatEntity(props.entity) && props.entity}>
+        <Show when={getWideLayoutWhen5()}>
           {(entity) => (
             <RowTags
               entityId={entity().id}
@@ -270,7 +247,7 @@ export function WideLayout(props: LayoutProps) {
             />
           )}
         </Show>
-        <Show when={isCallEntity(props.entity) && props.entity}>
+        <Show when={callEntity()}>
           {(entity) => (
             <RowTags
               entityId={entity().id}
@@ -280,11 +257,7 @@ export function WideLayout(props: LayoutProps) {
             />
           )}
         </Show>
-        <Show
-          when={
-            props.isShared && !owningInbox() && !isGithubPrEntity(props.entity)
-          }
-        >
+        <Show when={getWideLayoutWhen()}>
           <SharedBadge ownerId={props.entity.ownerId} />
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
@@ -332,13 +305,7 @@ export function WideLayout(props: LayoutProps) {
         <Show when={isChannelEntity(props.entity) && props.entity}>
           {(entity) => <ChannelActiveCallBadge channelId={entity().id} />}
         </Show>
-        <Show
-          when={
-            isChannelEntity(props.entity) &&
-            props.entity.isParticipant === false &&
-            props.entity
-          }
-        >
+        <Show when={getWideLayoutWhen3()}>
           {(entity) => <ChannelJoinButton entity={entity()} />}
         </Show>
         {props.metaEnd}
@@ -349,12 +316,7 @@ export function WideLayout(props: LayoutProps) {
       >
         {props.scheduleStatus}
         <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
-          <Show
-            when={
-              !props.hasNotifications &&
-              !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
-            }
-          >
+          <Show when={getWideLayoutWhen2()}>
             <Switch fallback={<Entity.Timestamp entity={props.entity} />}>
               {/* The event's own date, not its sync time. */}
               <Match
@@ -368,4 +330,58 @@ export function WideLayout(props: LayoutProps) {
       </Entity.Slot>
     </Entity.Layout>
   );
+
+  function callEntity() {
+    return isCallEntity(props.entity) && props.entity;
+  }
+
+  function getWideLayoutWhen5() {
+    return isChatEntity(props.entity) && props.entity;
+  }
+
+  function getWideLayoutWhen3() {
+    return (
+      isChannelEntity(props.entity) &&
+      props.entity.isParticipant === false &&
+      props.entity
+    );
+  }
+
+  function getWideLayoutWhen2(): boolean | null | undefined {
+    return (
+      !props.hasNotifications &&
+      !(isChannelEntity(props.entity) && isSearchEntity(props.entity))
+    );
+  }
+
+  function getWideLayoutWhen(): boolean | null | undefined {
+    return props.isShared && !owningInbox() && !isGithubPrEntity(props.entity);
+  }
+
+  function getWideLayoutClass(): string | undefined {
+    return cn(
+      // Leading edge (left padding, indicator column, column gap) comes from
+      // the --soup-row-* geometry in ListEntity.css so group headers can line
+      // their label up with this row's content.
+      SOUP_ROW_CLASS.wide,
+      'w-full min-h-[inherit] items-center text-sm pl-(--soup-row-padding-l) pr-2',
+      'gap-y-2 gap-x-(--soup-row-column-gap) grid grid-rows-[1fr]',
+      // Drop the indicator column entirely when the checkbox is hidden so the
+      // content isn't indented by an empty gutter.
+      // Action slots and scheduled-send badges size their own column.
+      props.actions ||
+        props.leadingAction ||
+        props.scheduleStatus ||
+        (isEmailEntity(props.entity) && props.entity.scheduledSendTime)
+        ? props.hideCheckbox
+          ? 'grid-cols-[1fr_auto_auto]'
+          : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_auto]'
+        : props.hideCheckbox
+          ? 'grid-cols-[1fr_auto_8ch]'
+          : 'grid-cols-[var(--soup-row-indicator-width)_1fr_auto_8ch]',
+      '[--title-width:10rem]',
+      // Pull request pills give way to the title rather than starve it.
+      isGithubPrEntity(props.entity) && '[container-type:inline-size]'
+    );
+  }
 }

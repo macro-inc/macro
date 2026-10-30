@@ -314,13 +314,18 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
     !inputState.view().hasPendingAttachments &&
     hasSendableInputContent(inputState.view());
 
-  const handleHeaderSend = () => {
-    void inputState.commands.send().catch((error) => {
+  const sendFromHeader = async () => {
+    try {
+      await inputState.commands.send();
+    } catch (error) {
       console.error(
         'failed to send from native share sheet header action',
         error
       );
-    });
+    }
+  };
+  const handleHeaderSend = () => {
+    fireAndForget(sendFromHeader(), 'native-share-sheet');
   };
 
   return (

@@ -1,4 +1,4 @@
-import { AgentSession } from '@core/agent-session/AgentSession';
+import { AgentSession } from '@app/lib/queries/agent-session/agent-session';
 import { noteSessionActivity } from '@core/agent-session/session-turn';
 import {
   enableGraphqlSoup,

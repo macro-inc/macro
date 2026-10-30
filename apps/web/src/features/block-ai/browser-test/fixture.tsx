@@ -14,6 +14,7 @@ import '../../../index.css';
 import { fixtureFontSource } from '@app/features/block-fig/browser-test/font-source';
 import { AiEngine } from '@core/ai-engine/client';
 import type { Row } from '@core/ai-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { AiEditorProvider } from '../context/ai-editor-context';
@@ -117,12 +118,14 @@ function Fixture() {
   };
 
   const start = async () => {
-    const bytes = await initialDocument(params);
-    await open(bytes, params.get('file') ?? 'Illustration');
+    try {
+      const bytes = await initialDocument(params);
+      await open(bytes, params.get('file') ?? 'Illustration');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
-  start().catch((e: unknown) =>
-    setError(e instanceof Error ? e.message : String(e))
-  );
+  fireAndForget(start(), 'ai-fixture');
 
   const save = async (bytes: Uint8Array) => {
     if (params.has('reload')) {

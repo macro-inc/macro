@@ -4,8 +4,8 @@ import { MODEL_PRETTYNAME, MODEL_PROVIDER } from '@core/component/AI/constant';
 import { Model } from '@core/component/AI/types';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import LockIcon from '@icon/system/regular/lock-simple.svg?component-solid';
+import { sendChatMessage } from '@queries/cognition/requests';
 
-import { cognitionApiServiceClient } from '@service-cognition/client';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 import { Button, cn } from '@ui';
@@ -133,7 +133,7 @@ function ChatInputBoxConnectedInner() {
 
   const [_gen, setGen] = createSignal(false);
   const onSend = async (input: ChatSendInput) => {
-    const response = await cognitionApiServiceClient.sendStreamChatMessage({
+    const response = await sendChatMessage({
       content: input.content,
       model: input.model,
       attachments: input.attachments.length > 0 ? input.attachments : undefined,
@@ -247,7 +247,7 @@ function FullChatInner() {
         id: '',
       },
     ]);
-    const response = await cognitionApiServiceClient.sendStreamChatMessage({
+    const response = await sendChatMessage({
       content: input.content,
       model: input.model,
       chat_id: chat.chatId(),

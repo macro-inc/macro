@@ -14,6 +14,7 @@ import type { SplitHandle } from '@components/app/split-layout/layoutManager';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isScopeInActiveBranch } from '@core/hotkey/utils';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   filterNotDoneNotifications,
@@ -22,7 +23,6 @@ import {
   isWithNotification,
   type SearchLocation,
 } from '@entity';
-import { Telemetry } from '@macro-inc/observability';
 import { openSingleStackNotification } from '@notifications';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -32,9 +32,6 @@ import {
   useVisibleViewTabs,
   VIEW_TAB_LISTS,
 } from './soup-view-tabs';
-
-const reportSoupViewError = (error: unknown) =>
-  Telemetry.error(error, { surface: 'soup-view' });
 
 type UseSoupViewHotkeysOptions = {
   onOpenProject?: (id: string) => void;
@@ -236,8 +233,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       // If focused on a load more row, trigger load more and stay at same index
       if (focusedRow.getIsLoadMore() && focusedRow.group) {
-        loadMoreInGroup(focusedRow.group.key, focusedRow.index).catch(
-          reportSoupViewError
+        fireAndForget(
+          loadMoreInGroup(focusedRow.group.key, focusedRow.index),
+          'soup-view'
         );
         return true;
       }
@@ -260,7 +258,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       const location =
         contentHitData?.length === 1 ? contentHitData[0]?.location : undefined;
 
-      openEntityFromList(entity, { location }).catch(reportSoupViewError);
+      fireAndForget(openEntityFromList(entity, { location }), 'soup-view');
       return true;
     },
     displayPriority: 4,
@@ -346,8 +344,9 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
-      openEntityFromList(entity, { openInNewSplit: true }).catch(
-        reportSoupViewError
+      fireAndForget(
+        openEntityFromList(entity, { openInNewSplit: true }),
+        'soup-view'
       );
       return true;
     },

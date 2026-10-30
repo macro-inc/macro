@@ -1,4 +1,4 @@
-import type { Band, PageInfo } from '@core/docx-engine/types';
+import type { Band, PageInfo } from '@app/lib/docx/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Call = {

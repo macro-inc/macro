@@ -84,6 +84,42 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
 
   const [scale, setScale] = createSignal(props.scale);
 
+  const loadVideoUrl = async () => {
+    const maybeUrl = await getMediaUrl({
+      type: props.srcType,
+      id: props.id,
+      url: props.url,
+    });
+
+    if (maybeUrl.isErr()) {
+      setState('error');
+      if (
+        maybeUrl.isErr() &&
+        maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
+      )
+        setVideoError('UNAUTHORIZED');
+      else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
+        setVideoError('MISSING');
+      else if (
+        maybeUrl.isErr() &&
+        maybeUrl.error.some((error) => error.code === 'GONE')
+      )
+        setVideoError('GONE');
+      else setVideoError('FALLBACK');
+      return;
+    }
+    const url = maybeUrl.value;
+    setVideoUrl(url);
+    if (props.srcType === 'dss') {
+      editor()?.update(
+        () => {
+          $upgradeDSSMediaUrl(props.key, url, 'video');
+        },
+        { discrete: true, tag: 'historic' }
+      );
+    }
+  };
+
   createEffect(() => {
     if (props.srcType === 'local') {
       setVideoUrl(props.url);
@@ -93,42 +129,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
       setVideoUrl(props.url);
       return;
     }
-    fireAndForget(
-      getMediaUrl({
-        type: props.srcType,
-        id: props.id,
-        url: props.url,
-      }).then((maybeUrl) => {
-        if (maybeUrl.isErr()) {
-          setState('error');
-          if (
-            maybeUrl.isErr() &&
-            maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
-          )
-            setVideoError('UNAUTHORIZED');
-          else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
-            setVideoError('MISSING');
-          else if (
-            maybeUrl.isErr() &&
-            maybeUrl.error.some((error) => error.code === 'GONE')
-          )
-            setVideoError('GONE');
-          else setVideoError('FALLBACK');
-          return;
-        }
-        const url = maybeUrl.value;
-        setVideoUrl(url);
-        if (props.srcType === 'dss') {
-          editor()?.update(
-            () => {
-              $upgradeDSSMediaUrl(props.key, url, 'video');
-            },
-            { discrete: true, tag: 'historic' }
-          );
-        }
-      }),
-      'markdown-media'
-    );
+    fireAndForget(loadVideoUrl(), 'markdown-media');
   });
 
   const isSelectedAsNode = () => {
@@ -316,13 +317,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
         </Show>
         <video
           crossorigin="anonymous"
-          class={cn(
-            'h-full object-contain',
-            (state() === 'loading' || state() === 'error') && 'invisible',
-            state() === 'loading' &&
-              !videoDims()[0] &&
-              'absolute inset-0 size-0'
-          )}
+          class={getMarkdownVideoClass()}
           draggable={true}
           ref={videoRef}
           src={videoUrl()}
@@ -406,4 +401,12 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
       </Dialog.Portal>
     </Dialog>
   );
+
+  function getMarkdownVideoClass(): string | undefined {
+    return cn(
+      'h-full object-contain',
+      (state() === 'loading' || state() === 'error') && 'invisible',
+      state() === 'loading' && !videoDims()[0] && 'absolute inset-0 size-0'
+    );
+  }
 }

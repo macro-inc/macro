@@ -47,10 +47,10 @@ import { clipboardTargetInScope } from './core/clipboard-scope';
 import type { SpreadsheetData } from './definition';
 import { createSpreadsheetDownload } from './primitives/create-spreadsheet-download';
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
-import { useSpreadsheetAccess } from './primitives/use-spreadsheet-access';
 import { createSpreadsheetSession } from './queries/spreadsheet-session';
 import { SpreadsheetComments } from './SpreadsheetComments';
 import { spreadsheetMentions } from './spreadsheet-mentions';
+import { useSpreadsheetAccess } from './use-spreadsheet-access';
 import { SpreadsheetEditor } from './views/SpreadsheetEditor';
 
 export default function SpreadsheetBlock(props: { share?: string }) {

@@ -1,6 +1,6 @@
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
-import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
+import { dateBucket } from '@app/lib/utils/date-buckets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ListEntity,

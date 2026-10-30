@@ -649,29 +649,22 @@ function AgentEditorPage(props: {
   onSave: (agent: CreateAgentParams) => Promise<string | undefined>;
   onDelete?: () => void;
 }) {
-  const [name, setName] = createSignal(props.agent?.bot.name ?? '');
-  const [tag, setTag] = createSignal(props.agent?.bot.handle ?? '');
+  const initial = initialAgentFields(
+    props.agent,
+    props.connectedHarnesses,
+    props.initialKind
+  );
+  const [name, setName] = createSignal(initial.name);
+  const [tag, setTag] = createSignal(initial.tag);
   const [tagEdited, setTagEdited] = createSignal(props.agent !== undefined);
   const [avatarUrl, setAvatarUrl] = createSignal<string | undefined>(
-    props.agent?.bot.avatar_url ?? undefined
+    initial.avatarUrl
   );
   const uploadAvatar = useUploadAgentAvatarMutation();
   const [uploadingAvatar, setUploadingAvatar] = createSignal(false);
   const busy = () => props.pending || uploadingAvatar();
-  const [instructions, setInstructions] = createSignal(
-    props.agent?.instructions ?? ''
-  );
-  const [harnessId, setHarnessId] = createSignal(
-    props.agent?.harness_id ??
-      props.agent?.harness ??
-      (props.initialKind === 'coder'
-        ? props.connectedHarnesses.find((harness) =>
-            isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)
-          )?.id
-        : undefined) ??
-      props.connectedHarnesses[0]?.id ??
-      ''
-  );
+  const [instructions, setInstructions] = createSignal(initial.instructions);
+  const [harnessId, setHarnessId] = createSignal(initial.harnessId);
   const modelQueries = useAgentModelsQueries(() =>
     props.connectedHarnesses.map((harness) => harness.target)
   );
@@ -702,7 +695,7 @@ function AgentEditorPage(props: {
     return data.models[0]?.id ?? '';
   };
   const [defaultModelId, setDefaultModelId] = createSignal(
-    props.agent?.default_model ?? ''
+    initial.defaultModelId
   );
   const selectedDefaultModelId = () =>
     defaultModelId() || preferredModelId(harnessId());
@@ -745,19 +738,15 @@ function AgentEditorPage(props: {
       group: model.group ?? undefined,
     }));
   const [channelMode, setChannelMode] = createSignal<ChannelMode>(
-    props.agent?.channel_scope ?? 'all'
+    initial.channelMode
   );
   const [selectedChannelIds, setSelectedChannelIds] = createSignal<string[]>(
-    props.agent?.channel_ids ?? []
+    initial.channelIds
   );
-  const [share, setShare] = createSignal<AgentShare>(
-    props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
-  );
+  const [share, setShare] = createSignal<AgentShare>(initial.share);
   const pipedreamMcp = usePipedreamMcpFlag();
   const connections = usePipedreamConnectedSlugs();
-  const [mcp, setMcp] = createSignal<AgentMcpServers>(
-    props.agent?.mcp ?? { scope: 'owner_connections' }
-  );
+  const [mcp, setMcp] = createSignal<AgentMcpServers>(initial.mcp);
   const selectedMcpServers = (): AgentMcpServer[] => {
     const current = mcp();
     return current.scope === 'selected' ? current.servers : [];
@@ -778,7 +767,7 @@ function AgentEditorPage(props: {
     setMcp({ scope: 'selected', servers });
   };
   const [autoAcceptChoice, setAutoAcceptChoice] = createSignal(
-    props.agent?.auto_accept_permissions === true
+    initial.autoAccept
   );
   const allowPermissionBypass = () =>
     selectedHarness()?.allowPermissionBypass === true;
@@ -788,8 +777,7 @@ function AgentEditorPage(props: {
   // The saved choice, or none: an agent that never chose follows its
   // harness, so a fresh form and a re-picked runtime both start from there.
   const [codingChoice, setCodingChoice] = createSignal<boolean | undefined>(
-    props.agent?.is_coding ??
-      (props.initialKind ? props.initialKind === 'coder' : undefined)
+    initial.codingChoice
   );
   const harnessCodes = () => {
     const harness = selectedHarness();
@@ -1568,6 +1556,74 @@ function AgentEditorPage(props: {
       </Match>
     </Switch>
   );
+}
+
+type AgentEditorFields = {
+  name: string;
+  tag: string;
+  avatarUrl: string | undefined;
+  instructions: string;
+  harnessId: string;
+  defaultModelId: string;
+  channelMode: ChannelMode;
+  channelIds: string[];
+  share: AgentShare;
+  mcp: AgentMcpServers;
+  autoAccept: boolean;
+  codingChoice: boolean | undefined;
+};
+
+/** A saved agent's runtime, else the first connected one that suits a new agent. */
+function initialHarnessId(
+  agent: AgentWithHarnessId | undefined,
+  connectedHarnesses: readonly ConnectedHarness[],
+  initialKind: AgentKind | undefined
+): string {
+  const coderHarnessId =
+    initialKind === 'coder'
+      ? connectedHarnesses.find((harness) =>
+          isCoderHarness(harness.kind === 'macrod' ? 'macrod' : harness.id)
+        )?.id
+      : undefined;
+  return (
+    agent?.harness_id ??
+    agent?.harness ??
+    coderHarnessId ??
+    connectedHarnesses[0]?.id ??
+    ''
+  );
+}
+
+/** The editor's starting values: the saved agent's, else a new agent's defaults. */
+function initialAgentFields(
+  agent: AgentWithHarnessId | undefined,
+  connectedHarnesses: readonly ConnectedHarness[],
+  initialKind: AgentKind | undefined
+): AgentEditorFields {
+  return {
+    ...initialAgentProfile(agent),
+    harnessId: initialHarnessId(agent, connectedHarnesses, initialKind),
+    defaultModelId: agent?.default_model ?? '',
+    channelMode: agent?.channel_scope ?? 'all',
+    channelIds: agent?.channel_ids ?? [],
+    mcp: agent?.mcp ?? { scope: 'owner_connections' },
+    autoAccept: agent?.auto_accept_permissions === true,
+    codingChoice:
+      agent?.is_coding ?? (initialKind ? initialKind === 'coder' : undefined),
+  };
+}
+
+function initialAgentProfile(agent: AgentWithHarnessId | undefined) {
+  return {
+    name: agent?.bot.name ?? '',
+    tag: agent?.bot.handle ?? '',
+    avatarUrl: agent?.bot.avatar_url ?? undefined,
+    instructions: agent?.instructions ?? '',
+    share:
+      agent?.bot.owner?.type === 'team'
+        ? ('Team' as const)
+        : ('Private' as const),
+  };
 }
 
 function AgentFormSection(props: {

@@ -8,6 +8,59 @@ import {
 } from './native-diagnostics';
 import { consumeReloadIntent } from './reload';
 
+/** The native shell's launch, termination and reload counts, when it reports them. */
+function nativeSnapshotAttributes(snapshot: DesktopSnapshot | undefined) {
+  return {
+    native_instance_id: snapshot?.identity.instanceId,
+    native_version: snapshot?.identity.nativeVersion,
+    native_diagnostics_available: snapshot !== undefined,
+    ...webContentAttributes(snapshot),
+    ...bundleReloadAttributes(snapshot?.bundleReloads),
+    ...breadcrumbAttributes(snapshot?.recentEvents),
+  };
+}
+
+function webContentAttributes(snapshot: DesktopSnapshot | undefined) {
+  // Native snapshots include this field on every platform, but only the iOS
+  // and macOS termination callbacks record it. Other platforms remain unknown.
+  const webContent =
+    snapshot?.identity.os === 'ios' || snapshot?.identity.os === 'macos'
+      ? snapshot.webContent
+      : undefined;
+  return {
+    native_termination_reporting_available: webContent !== undefined,
+    native_web_content_terminations: webContent?.terminations,
+    native_last_termination_ms: webContent?.lastTerminationMs ?? undefined,
+  };
+}
+
+function bundleReloadAttributes(reloads: DesktopSnapshot['bundleReloads']) {
+  return {
+    native_bundle_reload_dispatches: reloads?.dispatches,
+    native_bundle_reload_last_source: reloads?.lastSource ?? undefined,
+    native_bundle_reload_last_id: reloads?.lastReloadId ?? undefined,
+    native_bundle_reload_last_dispatch_ms: reloads?.lastDispatchMs ?? undefined,
+  };
+}
+
+function breadcrumbAttributes(recentEvents: DesktopSnapshot['recentEvents']) {
+  return {
+    native_breadcrumbs_available: recentEvents !== undefined,
+    native_memory_warning_reporting_available:
+      recentEvents?.memoryWarningReporting ?? false,
+    native_breadcrumbs_dropped: recentEvents?.dropped,
+  };
+}
+
+function navigationType(): string {
+  const navigation = performance.getEntriesByType('navigation')[0];
+  return navigation &&
+    'type' in navigation &&
+    typeof navigation.type === 'string'
+    ? navigation.type
+    : 'unknown';
+}
+
 /** Called once per document, including recovery after a WebContent termination. */
 export function recordNativeWebviewStart(
   snapshot: DesktopSnapshot | undefined,
@@ -16,38 +69,12 @@ export function recordNativeWebviewStart(
   const bundleBuild = document
     .querySelector('meta[name="macro-bundle-build"]')
     ?.getAttribute('content');
-  const navigation = performance.getEntriesByType('navigation')[0];
-  // Native snapshots include this field on every platform, but only the iOS
-  // and macOS termination callbacks record it. Other platforms remain unknown.
-  const webContent =
-    snapshot?.identity.os === 'ios' || snapshot?.identity.os === 'macos'
-      ? snapshot.webContent
-      : undefined;
   const attributes = {
     frontend_instance_id: frontendInstanceId,
-    native_instance_id: snapshot?.identity.instanceId,
-    native_version: snapshot?.identity.nativeVersion,
-    native_diagnostics_available: snapshot !== undefined,
-    native_termination_reporting_available: webContent !== undefined,
-    native_web_content_terminations: webContent?.terminations,
-    native_last_termination_ms: webContent?.lastTerminationMs ?? undefined,
-    native_bundle_reload_dispatches: snapshot?.bundleReloads?.dispatches,
-    native_bundle_reload_last_source:
-      snapshot?.bundleReloads?.lastSource ?? undefined,
-    native_bundle_reload_last_id:
-      snapshot?.bundleReloads?.lastReloadId ?? undefined,
-    native_bundle_reload_last_dispatch_ms:
-      snapshot?.bundleReloads?.lastDispatchMs ?? undefined,
-    native_breadcrumbs_available: snapshot?.recentEvents !== undefined,
-    native_memory_warning_reporting_available:
-      snapshot?.recentEvents?.memoryWarningReporting ?? false,
-    native_breadcrumbs_dropped: snapshot?.recentEvents?.dropped,
+    ...nativeSnapshotAttributes(snapshot),
     loaded_bundle_build: bundleBuild ?? undefined,
     web_version: import.meta.env.__APP_VERSION__,
-    navigation_type:
-      navigation && 'type' in navigation && typeof navigation.type === 'string'
-        ? navigation.type
-        : 'unknown',
+    navigation_type: navigationType(),
   };
   // Include the native launch and termination count on subsequent exceptions.
   // These are runtime identifiers, not account data.

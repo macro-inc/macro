@@ -328,9 +328,11 @@ it('shares the in-flight final-page wait until native hydration publishes the ne
   const concurrent = source.loadMore();
   expect(concurrent).toBe(first);
   let settled = false;
-  const observed = first.then(() => {
+  const observeFirst = async () => {
+    await first;
     settled = true;
-  });
+  };
+  const observed = observeFirst();
   await Promise.resolve();
   release();
   await Promise.resolve();

@@ -1,6 +1,6 @@
+import { useProfilePictureUrl } from '@app/lib/queries/auth/profile-pictures';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { staticFileSizedUrl } from '@core/constant/servers';
-import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 
 /** Transparent pixels don't contribute to the visible picture's average. */

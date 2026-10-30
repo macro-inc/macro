@@ -1,3 +1,4 @@
+import { match as matchBranch } from 'ts-pattern';
 import {
   type CachePush,
   type CacheRequest,
@@ -495,18 +496,116 @@ const commonRequest = (record: UnknownRecord): boolean =>
 /** Strictly validates a cache RPC request nested in a coordinator envelope. */
 export function isCacheRequest(value: unknown): value is CacheRequest {
   if (!isRecord(value) || !commonRequest(value)) return false;
-  switch (value.kind) {
-    case 'init':
+  const isQueryOrMaintenanceRequest = (): boolean =>
+    matchBranch(value)
+      .with({ kind: 'entity-filter' }, (value): boolean => {
+        const request = value.request;
+        return (
+          hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+          isRecord(request) &&
+          hasOnlyKeys(request, [
+            'filters',
+            'sortMethod',
+            'sortDirection',
+            'limit',
+            'baseline',
+            'mail',
+            'liveQuery',
+          ]) &&
+          isRecord(request.filters) &&
+          ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
+            request.sortMethod as string
+          ) &&
+          (request.sortDirection === 'ASC' ||
+            request.sortDirection === 'DESC') &&
+          isEntityFilterLimit(request) &&
+          isOptionalEntityLiveQuery(request) &&
+          isOptionalEntityMailView(request) &&
+          isOptionalReconciliationBaseline(request)
+        );
+      })
+      .with({ kind: 'calendar-range' }, (value): boolean => {
+        return (
+          hasOnlyKeys(value, ['id', 'kind', 'request']) &&
+          isValidCalendarRangeArgs(value.request)
+        );
+      })
+      .with({ kind: 'calendar-commit' }, (value): boolean => {
+        return (
+          hasOnlyKeys(value, ['id', 'kind', 'commit']) &&
+          isValidCalendarCommitArgs(value.commit)
+        );
+      })
+      .with({ kind: 'inspect-query' }, (value): boolean => {
+        return (
+          hasOnlyKeys(value, [
+            'id',
+            'kind',
+            'query',
+            'operationName',
+            'path',
+            'variableFilters',
+          ]) &&
+          isString(value.query) &&
+          isOptionalString(value.operationName) &&
+          isPath(value.path) &&
+          (value.variableFilters === undefined ||
+            (Array.isArray(value.variableFilters) &&
+              value.variableFilters.every(isRecord)))
+        );
+      })
+      .with({ kind: 'inspect-query-variants' }, (value): boolean => {
+        return (
+          hasOnlyKeys(value, [
+            'id',
+            'kind',
+            'query',
+            'operationName',
+            'path',
+          ]) &&
+          isString(value.query) &&
+          isOptionalString(value.operationName) &&
+          isPath(value.path)
+        );
+      })
+      .with({ kind: 'teardown' }, (value): boolean => {
+        return (
+          hasOnlyKeys(value, ['id', 'kind', 'opId']) && isString(value.opId)
+        );
+      })
+      .with(
+        { kind: 'invalidate' },
+        { kind: 'delete-records' },
+        (value): boolean => {
+          return (
+            hasOnlyKeys(value, ['id', 'kind', 'keys']) &&
+            isStringArray(value.keys)
+          );
+        }
+      )
+      .with({ kind: 'clear' }, (value): boolean => {
+        return hasOnlyKeys(value, ['id', 'kind']);
+      })
+      .otherwise((): boolean => {
+        return false;
+      });
+  return matchBranch(value)
+    .with({ kind: 'init' }, (value): boolean => {
       return (
         hasOnlyKeys(value, ['id', 'kind', 'scope', 'hotCapacity']) &&
         isNonEmptyString(value.scope) &&
         isOptionalPositiveInteger(value.hotCapacity)
       );
-    case 'current-revision':
-    case 'current-storage-generation':
-    case 'inspect-mutations':
-      return hasOnlyKeys(value, ['id', 'kind']);
-    case 'read':
+    })
+    .with(
+      { kind: 'current-revision' },
+      { kind: 'current-storage-generation' },
+      { kind: 'inspect-mutations' },
+      (value): boolean => {
+        return hasOnlyKeys(value, ['id', 'kind']);
+      }
+    )
+    .with({ kind: 'read' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -532,7 +631,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
             (value.watch.since === undefined ||
               isCacheRevision(value.watch.since))))
       );
-    case 'write':
+    })
+    .with({ kind: 'write' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -553,7 +653,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         hasOwn(value, 'data') &&
         isOptionalString(value.identity)
       );
-    case 'hydrate':
+    })
+    .with({ kind: 'hydrate' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -570,7 +671,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         hasOwn(value, 'data') &&
         isOptionalString(value.identity)
       );
-    case 'enqueue-optimistic-mutation':
+    })
+    .with({ kind: 'enqueue-optimistic-mutation' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -603,42 +705,17 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&
         hasOwn(value, 'data') &&
-        (value.linkPatches === undefined || Array.isArray(value.linkPatches)) &&
-        (value.revalidations === undefined ||
-          Array.isArray(value.revalidations)) &&
+        isOptionalArray(value.linkPatches) &&
+        isOptionalArray(value.revalidations) &&
         isOptionalRecord(value.clientMetadata) &&
-        (value.identityBindings === undefined ||
-          (Array.isArray(value.identityBindings) &&
-            value.identityBindings.length <= 32 &&
-            value.identityBindings.every(
-              (binding) =>
-                isRecord(binding) &&
-                hasOnlyKeys(binding, [
-                  'localKey',
-                  'responsePath',
-                  'referenceFields',
-                  'revalidationVariables',
-                  'deleteRecord',
-                ]) &&
-                (binding.deleteRecord === undefined ||
-                  typeof binding.deleteRecord === 'boolean') &&
-                isValidNormalizedRecordKey(binding.localKey) &&
-                Array.isArray(binding.responsePath) &&
-                binding.responsePath.length <= 16 &&
-                binding.responsePath.every(isString) &&
-                (binding.referenceFields === undefined ||
-                  (Array.isArray(binding.referenceFields) &&
-                    binding.referenceFields.every(isString))) &&
-                (binding.revalidationVariables === undefined ||
-                  (Array.isArray(binding.revalidationVariables) &&
-                    binding.revalidationVariables.every(isString)))
-            ))) &&
+        isOptionalIdentityBindings(value) &&
         isSafeNonNegativeInteger(value.createdAtMs) &&
         isString(value.owner) &&
         isSafeNonNegativeInteger(value.nowMs) &&
         isSafeNonNegativeInteger(value.leaseExpiresAtMs)
       );
-    case 'claim-next-mutation':
+    })
+    .with({ kind: 'claim-next-mutation' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -651,7 +728,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isSafeNonNegativeInteger(value.nowMs) &&
         isSafeNonNegativeInteger(value.leaseExpiresAtMs)
       );
-    case 'defer-optimistic-write':
+    })
+    .with({ kind: 'defer-optimistic-write' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -671,7 +749,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         (value.serverFailure === undefined ||
           typeof value.serverFailure === 'boolean')
       );
-    case 'commit-optimistic-write':
+    })
+    .with({ kind: 'commit-optimistic-write' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -692,7 +771,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isOptionalRecord(value.variables) &&
         hasOwn(value, 'data')
       );
-    case 'rollback-optimistic-write':
+    })
+    .with({ kind: 'rollback-optimistic-write' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -709,7 +789,8 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         isString(value.error) &&
         isOptionalString(value.errorCode)
       );
-    case 'read-records-by-keys':
+    })
+    .with({ kind: 'read-records-by-keys' }, (value): boolean => {
       return (
         hasOnlyKeys(value, [
           'id',
@@ -724,137 +805,62 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
         value.keys.length <= MAX_RECORD_SELECTION_PAGE_SIZE &&
         value.keys.every(isValidNormalizedRecordKey)
       );
-    case 'search':
+    })
+    .with({ kind: 'search' }, (value): boolean => {
       return (
         hasOnlyKeys(value, ['id', 'kind', 'request']) &&
         isSearchRequest(value.request)
       );
-    case 'entity-filter': {
-      const request = value.request;
-      // A Mail read through a position takes `limit` as its fewest rows.
-      const through =
-        isRecord(request) && isRecord(request.mail)
-          ? request.mail.through
-          : undefined;
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
-        isRecord(request) &&
-        hasOnlyKeys(request, [
-          'filters',
-          'sortMethod',
-          'sortDirection',
-          'limit',
-          'baseline',
-          'mail',
-          'liveQuery',
-        ]) &&
-        isRecord(request.filters) &&
-        ['CREATED_AT', 'UPDATED_AT', 'VIEWED_AT', 'VIEWED_UPDATED'].includes(
-          request.sortMethod as string
-        ) &&
-        (request.sortDirection === 'ASC' || request.sortDirection === 'DESC') &&
-        (through === undefined
-          ? isValidCacheSearchLimit(request.limit)
-          : Number.isSafeInteger(request.limit) &&
-            (request.limit as number) >= 1 &&
-            (request.limit as number) <= MAX_MAIL_THROUGH_ROWS) &&
-        (request.liveQuery === undefined ||
-          (isRecord(request.liveQuery) &&
-            hasOnlyKeys(request.liveQuery, [
-              'id',
-              'document',
-              'fragmentName',
-              'since',
-              'release',
-            ]) &&
-            typeof request.liveQuery.id === 'string' &&
-            request.liveQuery.id.length > 0 &&
-            request.liveQuery.id.length <= 128 &&
-            typeof request.liveQuery.document === 'string' &&
-            request.liveQuery.document.length > 0 &&
-            typeof request.liveQuery.fragmentName === 'string' &&
-            request.liveQuery.fragmentName.length > 0 &&
-            (request.liveQuery.since === undefined ||
-              isCacheRevision(request.liveQuery.since)) &&
-            (request.liveQuery.release === undefined ||
-              typeof request.liveQuery.release === 'boolean') &&
-            request.mail === undefined &&
-            request.baseline !== undefined)) &&
-        (request.mail === undefined ||
-          (isRecord(request.mail) &&
-            hasOnlyKeys(request.mail, ['view', 'cursor', 'through']) &&
-            ['ALL', 'INBOX', 'DRAFTS', 'SENT'].includes(
-              request.mail.view as string
-            ) &&
-            (through === undefined
-              ? (request.limit as number) < 500
-              : request.mail.cursor === undefined &&
-                typeof through === 'string' &&
-                through.length <= 4096) &&
-            (request.baseline === undefined ||
-              request.mail.cursor === undefined) &&
-            (request.mail.cursor === undefined ||
-              (typeof request.mail.cursor === 'string' &&
-                request.mail.cursor.length <= 4096)))) &&
-        (request.baseline === undefined ||
-          (Array.isArray(request.baseline) &&
-            request.baseline.length <= MAX_RECONCILIATION_BASELINE &&
-            request.baseline.every(
-              (entry) =>
-                isRecord(entry) &&
-                hasOnlyKeys(entry, ['key', 'sortTimestamp']) &&
-                isValidNormalizedRecordKey(entry.key) &&
-                typeof entry.sortTimestamp === 'string' &&
-                entry.sortTimestamp.length <= 64
-            )))
-      );
-    }
-    case 'calendar-range':
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'request']) &&
-        isValidCalendarRangeArgs(value.request)
-      );
-    case 'calendar-commit':
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'commit']) &&
-        isValidCalendarCommitArgs(value.commit)
-      );
-    case 'inspect-query':
-      return (
-        hasOnlyKeys(value, [
-          'id',
-          'kind',
-          'query',
-          'operationName',
-          'path',
-          'variableFilters',
-        ]) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isPath(value.path) &&
-        (value.variableFilters === undefined ||
-          (Array.isArray(value.variableFilters) &&
-            value.variableFilters.every(isRecord)))
-      );
-    case 'inspect-query-variants':
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'query', 'operationName', 'path']) &&
-        isString(value.query) &&
-        isOptionalString(value.operationName) &&
-        isPath(value.path)
-      );
-    case 'teardown':
-      return hasOnlyKeys(value, ['id', 'kind', 'opId']) && isString(value.opId);
-    case 'invalidate':
-    case 'delete-records':
-      return (
-        hasOnlyKeys(value, ['id', 'kind', 'keys']) && isStringArray(value.keys)
-      );
-    case 'clear':
-      return hasOnlyKeys(value, ['id', 'kind']);
-    default:
-      return false;
-  }
+    })
+    .otherwise(isQueryOrMaintenanceRequest);
+}
+
+function isAttachEnginePortEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'tabId',
+      'ownerEpoch',
+      'enginePort',
+    ]) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isMessagePort(envelope.enginePort)
+  );
+}
+
+function hasOwnerDepartureFields(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'tabId',
+      'ownerEpoch',
+      'reason',
+    ]) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isNonEmptyString(envelope.reason)
+  );
+}
+
+function isRegisterTabEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'scope',
+      'tabId',
+      'livenessLockName',
+      'visible',
+      'hotCapacity',
+      'buildTime',
+    ]) &&
+    isNonEmptyString(envelope.scope) &&
+    isNonEmptyString(envelope.livenessLockName) &&
+    typeof envelope.visible === 'boolean' &&
+    isOptionalPositiveInteger(envelope.hotCapacity) &&
+    isSafeNonNegativeInteger(envelope.buildTime)
+  );
 }
 
 /** Validates an untrusted page-to-coordinator message. */
@@ -885,109 +891,107 @@ export function validateTabToCoordinatorEnvelope(
       : fail('invalid tab-visibility coordinator envelope');
   }
 
-  switch (value.kind) {
-    case 'register-tab':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'scope',
-          'tabId',
-          'livenessLockName',
-          'visible',
-          'hotCapacity',
-          'buildTime',
-        ]) &&
-        isNonEmptyString(value.scope) &&
-        isNonEmptyString(value.livenessLockName) &&
-        typeof value.visible === 'boolean' &&
-        isOptionalPositiveInteger(value.hotCapacity) &&
-        isSafeNonNegativeInteger(value.buildTime)
-      ) {
-        return pass(value as TabToCoordinatorEnvelope);
-      }
-      break;
-    case 'cache-request':
-      if (
+  const valid = matchBranch(value.kind)
+    .with('register-tab', () => isRegisterTabEnvelope(value))
+    .with(
+      'cache-request',
+      () =>
         hasOnlyKeys(value, [
           'coordinatorVersion',
           'kind',
           'tabId',
           'request',
-        ]) &&
-        isCacheRequest(value.request)
-      ) {
-        return pass(value as TabToCoordinatorEnvelope);
-      }
-      break;
-    case 'attach-engine-port':
-      if (
+        ]) && isCacheRequest(value.request)
+    )
+    .with('attach-engine-port', () => isAttachEnginePortEnvelope(value))
+    .with(
+      'graceful-departure',
+      () =>
         hasOnlyKeys(value, [
           'coordinatorVersion',
           'kind',
           'tabId',
           'ownerEpoch',
-          'enginePort',
-        ]) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isMessagePort(value.enginePort)
-      ) {
-        return pass(value as TabToCoordinatorEnvelope);
-      }
-      break;
-    case 'graceful-departure':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-        ]) &&
-        isPositiveInteger(value.ownerEpoch)
-      ) {
-        return pass(value as TabToCoordinatorEnvelope);
-      }
-      break;
-    case 'navigation-departure':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-          'reason',
-        ]) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isNonEmptyString(value.reason)
-      ) {
-        return pass(value as TabToCoordinatorEnvelope);
-      }
-      break;
-    case 'engine-lost':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-          'reason',
-        ]) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isNonEmptyString(value.reason)
-      ) {
-        return pass(value as TabToCoordinatorEnvelope);
-      }
-      break;
-    case 'disconnect-tab':
-      if (
+        ]) && isPositiveInteger(value.ownerEpoch)
+    )
+    .with('navigation-departure', () => hasOwnerDepartureFields(value))
+    .with('engine-lost', () => hasOwnerDepartureFields(value))
+    .with(
+      'disconnect-tab',
+      () =>
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId', 'reason']) &&
         isNonEmptyString(value.reason)
-      ) {
-        return pass(value as TabToCoordinatorEnvelope);
-      }
-      break;
-  }
-  return fail(`invalid ${value.kind} coordinator envelope`);
+    )
+    .otherwise(() => false);
+  return valid
+    ? pass(value as TabToCoordinatorEnvelope)
+    : fail(`invalid ${value.kind} coordinator envelope`);
+}
+
+function isEngineReplacedEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'ownerEpoch',
+      'openOutcome',
+    ]) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isEngineOpenOutcome(envelope.openOutcome)
+  );
+}
+
+function isTerminateEngineEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'tabId',
+      'ownerEpoch',
+      'reason',
+    ]) &&
+    isNonEmptyString(envelope.tabId) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isNonEmptyString(envelope.reason)
+  );
+}
+
+function isEngineStartupEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'ownerEpoch',
+      'phase',
+      'databaseAction',
+      'timeoutMs',
+    ]) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isEngineStartupPhase(envelope.phase) &&
+    isDatabaseAction(envelope.databaseAction) &&
+    isPositiveInteger(envelope.timeoutMs)
+  );
+}
+
+function isBecomeOwnerEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'scope',
+      'tabId',
+      'ownerEpoch',
+      'databaseAction',
+      'ownerLockName',
+      'hotCapacity',
+    ]) &&
+    isNonEmptyString(envelope.scope) &&
+    isNonEmptyString(envelope.tabId) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isDatabaseAction(envelope.databaseAction) &&
+    isNonEmptyString(envelope.ownerLockName) &&
+    isOptionalPositiveInteger(envelope.hotCapacity)
+  );
 }
 
 /** Validates an untrusted coordinator-to-page message. */
@@ -1017,109 +1021,27 @@ export function validateCoordinatorToTabEnvelope(
         })
       : fail('invalid cache-read-availability coordinator envelope');
   }
-  switch (value.kind) {
-    case 'registered':
-      if (
+  const valid = matchBranch(value.kind)
+    .with(
+      'registered',
+      () =>
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'tabId']) &&
         isNonEmptyString(value.tabId)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'become-owner':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'scope',
-          'tabId',
-          'ownerEpoch',
-          'databaseAction',
-          'ownerLockName',
-          'hotCapacity',
-        ]) &&
-        isNonEmptyString(value.scope) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isDatabaseAction(value.databaseAction) &&
-        isNonEmptyString(value.ownerLockName) &&
-        isOptionalPositiveInteger(value.hotCapacity)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'cache-message':
-      if (
+    )
+    .with('become-owner', () => isBecomeOwnerEnvelope(value))
+    .with(
+      'cache-message',
+      () =>
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'message']) &&
         isWorkerMessage(value.message)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'terminate-engine':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-          'reason',
-        ]) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isNonEmptyString(value.reason)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'retire-complete':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-        ]) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'engine-startup':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'ownerEpoch',
-          'phase',
-          'databaseAction',
-          'timeoutMs',
-        ]) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isEngineStartupPhase(value.phase) &&
-        isDatabaseAction(value.databaseAction) &&
-        isPositiveInteger(value.timeoutMs)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'engine-replaced':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'ownerEpoch',
-          'openOutcome',
-        ]) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isEngineOpenOutcome(value.openOutcome)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'terminal-error':
-      if (
+    )
+    .with('terminate-engine', () => isTerminateEngineEnvelope(value))
+    .with('retire-complete', () => hasTabOwnerFields(value))
+    .with('engine-startup', () => isEngineStartupEnvelope(value))
+    .with('engine-replaced', () => isEngineReplacedEnvelope(value))
+    .with(
+      'terminal-error',
+      () =>
         hasOnlyKeys(value, [
           'coordinatorVersion',
           'kind',
@@ -1129,42 +1051,25 @@ export function validateCoordinatorToTabEnvelope(
         isNonEmptyString(value.error) &&
         (value.storageUntouched === undefined ||
           value.storageUntouched === true)
-      )
-        return pass(value as CoordinatorToTabEnvelope);
-      break;
-    case 'protocol-error':
-      if (
+    )
+    .with(
+      'protocol-error',
+      () =>
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'error']) &&
         isNonEmptyString(value.error)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'cache-unavailable':
-    case 'cache-superseded':
-      if (
+    )
+    .with(
+      'cache-unavailable',
+      'cache-superseded',
+      () =>
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'reason']) &&
         isNonEmptyString(value.reason)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-    case 'remove-stale-databases':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-        ]) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch)
-      ) {
-        return pass(value as CoordinatorToTabEnvelope);
-      }
-      break;
-  }
-  return fail(`invalid ${value.kind} coordinator envelope`);
+    )
+    .with('remove-stale-databases', () => hasTabOwnerFields(value))
+    .otherwise(() => false);
+  return valid
+    ? pass(value as CoordinatorToTabEnvelope)
+    : fail(`invalid ${value.kind} coordinator envelope`);
 }
 
 /** Validates the page's message starting a stale-database cleanup worker. */
@@ -1246,9 +1151,10 @@ export function validateCoordinatorToEngineEnvelope(
   if (!isRecord(value) || !hasVersion(value) || !isString(value.kind)) {
     return fail('invalid coordinator envelope header');
   }
-  switch (value.kind) {
-    case 'engine-request':
-      if (
+  const valid = matchBranch(value.kind)
+    .with(
+      'engine-request',
+      () =>
         hasOnlyKeys(value, [
           'coordinatorVersion',
           'kind',
@@ -1260,21 +1166,17 @@ export function validateCoordinatorToEngineEnvelope(
         isPositiveInteger(value.routeId) &&
         isCacheRequest(value.request) &&
         value.request.id === value.routeId
-      ) {
-        return pass(value as CoordinatorToEngineEnvelope);
-      }
-      break;
-    case 'open-engine':
-    case 'drain-engine':
-      if (
+    )
+    .with(
+      'open-engine',
+      'drain-engine',
+      () =>
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'ownerEpoch']) &&
         isPositiveInteger(value.ownerEpoch)
-      ) {
-        return pass(value as CoordinatorToEngineEnvelope);
-      }
-      break;
-    case 'heartbeat':
-      if (
+    )
+    .with(
+      'heartbeat',
+      () =>
         hasOnlyKeys(value, [
           'coordinatorVersion',
           'kind',
@@ -1283,12 +1185,92 @@ export function validateCoordinatorToEngineEnvelope(
         ]) &&
         isPositiveInteger(value.ownerEpoch) &&
         isPositiveInteger(value.heartbeatId)
-      ) {
-        return pass(value as CoordinatorToEngineEnvelope);
-      }
-      break;
-  }
-  return fail(`invalid ${value.kind} coordinator envelope`);
+    )
+    .otherwise(() => false);
+  return valid
+    ? pass(value as CoordinatorToEngineEnvelope)
+    : fail(`invalid ${value.kind} coordinator envelope`);
+}
+
+function isHeartbeatAckEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'ownerEpoch',
+      'heartbeatId',
+    ]) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isPositiveInteger(envelope.heartbeatId)
+  );
+}
+
+function isEnginePushEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'ownerEpoch',
+      'push',
+    ]) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isCachePush(envelope.push)
+  );
+}
+
+function isActivationFailedEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'tabId',
+      'ownerEpoch',
+      'reason',
+      'failureCode',
+    ]) &&
+    isNonEmptyString(envelope.tabId) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isNonEmptyString(envelope.reason) &&
+    isActivationFailureCode(envelope.failureCode)
+  );
+}
+
+function isEngineFatalEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'tabId',
+      'ownerEpoch',
+      'reason',
+      'fatalCode',
+    ]) &&
+    isNonEmptyString(envelope.tabId) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isNonEmptyString(envelope.reason) &&
+    isEngineFatalCode(envelope.fatalCode)
+  );
+}
+
+function isEngineReadyEnvelope(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'tabId',
+      'ownerEpoch',
+      'ownerLockName',
+      'ownerLockHeld',
+      'databaseActionProof',
+      'openOutcome',
+    ]) &&
+    isNonEmptyString(envelope.tabId) &&
+    isPositiveInteger(envelope.ownerEpoch) &&
+    isNonEmptyString(envelope.ownerLockName) &&
+    envelope.ownerLockHeld === true &&
+    isDatabaseActionProof(envelope.databaseActionProof) &&
+    isEngineOpenOutcome(envelope.openOutcome)
+  );
 }
 
 /** Validates an untrusted engine-to-coordinator direct-port message. */
@@ -1298,31 +1280,11 @@ export function validateEngineToCoordinatorEnvelope(
   if (!isRecord(value) || !hasVersion(value) || !isString(value.kind)) {
     return fail('invalid coordinator envelope header');
   }
-  switch (value.kind) {
-    case 'engine-ready':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-          'ownerLockName',
-          'ownerLockHeld',
-          'databaseActionProof',
-          'openOutcome',
-        ]) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isNonEmptyString(value.ownerLockName) &&
-        value.ownerLockHeld === true &&
-        isDatabaseActionProof(value.databaseActionProof) &&
-        isEngineOpenOutcome(value.openOutcome)
-      ) {
-        return pass(value as EngineToCoordinatorEnvelope);
-      }
-      break;
-    case 'engine-response':
-      if (
+  const valid = matchBranch(value.kind)
+    .with('engine-ready', () => isEngineReadyEnvelope(value))
+    .with(
+      'engine-response',
+      () =>
         hasOnlyKeys(value, [
           'coordinatorVersion',
           'kind',
@@ -1335,94 +1297,23 @@ export function validateEngineToCoordinatorEnvelope(
         isCacheResponse(value.response) &&
         (value.response.ok || value.response.errorCode === undefined) &&
         value.response.id === value.routeId
-      ) {
-        return pass(value as EngineToCoordinatorEnvelope);
-      }
-      break;
-    case 'engine-push':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'ownerEpoch',
-          'push',
-        ]) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isCachePush(value.push)
-      ) {
-        return pass(value as EngineToCoordinatorEnvelope);
-      }
-      break;
-    case 'engine-assets-ready':
-    case 'owner-lock-acquired':
-    case 'owner-lock-busy':
-    case 'owner-lock-unavailable':
-    case 'engine-drained':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-        ]) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch)
-      ) {
-        return pass(value as EngineToCoordinatorEnvelope);
-      }
-      break;
-    case 'engine-fatal':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-          'reason',
-          'fatalCode',
-        ]) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isNonEmptyString(value.reason) &&
-        isEngineFatalCode(value.fatalCode)
-      ) {
-        return pass(value as EngineToCoordinatorEnvelope);
-      }
-      break;
-    case 'activation-failed':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'tabId',
-          'ownerEpoch',
-          'reason',
-          'failureCode',
-        ]) &&
-        isNonEmptyString(value.tabId) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isNonEmptyString(value.reason) &&
-        isActivationFailureCode(value.failureCode)
-      ) {
-        return pass(value as EngineToCoordinatorEnvelope);
-      }
-      break;
-    case 'heartbeat-ack':
-      if (
-        hasOnlyKeys(value, [
-          'coordinatorVersion',
-          'kind',
-          'ownerEpoch',
-          'heartbeatId',
-        ]) &&
-        isPositiveInteger(value.ownerEpoch) &&
-        isPositiveInteger(value.heartbeatId)
-      ) {
-        return pass(value as EngineToCoordinatorEnvelope);
-      }
-      break;
-  }
-  return fail(`invalid ${value.kind} coordinator envelope`);
+    )
+    .with('engine-push', () => isEnginePushEnvelope(value))
+    .with(
+      'engine-assets-ready',
+      'owner-lock-acquired',
+      'owner-lock-busy',
+      'owner-lock-unavailable',
+      'engine-drained',
+      () => hasTabOwnerFields(value)
+    )
+    .with('engine-fatal', () => isEngineFatalEnvelope(value))
+    .with('activation-failed', () => isActivationFailedEnvelope(value))
+    .with('heartbeat-ack', () => isHeartbeatAckEnvelope(value))
+    .otherwise(() => false);
+  return valid
+    ? pass(value as EngineToCoordinatorEnvelope)
+    : fail(`invalid ${value.kind} coordinator envelope`);
 }
 
 const TAB_LIVENESS_LOCK_PREFIX = 'graphql-cache-tab:';
@@ -1544,4 +1435,124 @@ export function databaseOwnerLockName(scope: string): string {
   const databaseIdentity = cacheDatabaseIdentity(scope);
   const byteLength = new TextEncoder().encode(databaseIdentity).byteLength;
   return `macro:turso-opfs:v1:${byteLength}:${databaseIdentity}`;
+}
+
+function hasTabOwnerFields(envelope: UnknownRecord) {
+  return (
+    hasOnlyKeys(envelope, [
+      'coordinatorVersion',
+      'kind',
+      'tabId',
+      'ownerEpoch',
+    ]) &&
+    isNonEmptyString(envelope.tabId) &&
+    isPositiveInteger(envelope.ownerEpoch)
+  );
+}
+
+function isOptionalEntityLiveQuery(request: UnknownRecord): boolean {
+  return (
+    request.liveQuery === undefined ||
+    (isRecord(request.liveQuery) &&
+      hasOnlyKeys(request.liveQuery, [
+        'id',
+        'document',
+        'fragmentName',
+        'since',
+        'release',
+      ]) &&
+      typeof request.liveQuery.id === 'string' &&
+      request.liveQuery.id.length > 0 &&
+      request.liveQuery.id.length <= 128 &&
+      typeof request.liveQuery.document === 'string' &&
+      request.liveQuery.document.length > 0 &&
+      typeof request.liveQuery.fragmentName === 'string' &&
+      request.liveQuery.fragmentName.length > 0 &&
+      (request.liveQuery.since === undefined ||
+        isCacheRevision(request.liveQuery.since)) &&
+      (request.liveQuery.release === undefined ||
+        typeof request.liveQuery.release === 'boolean') &&
+      request.mail === undefined &&
+      request.baseline !== undefined)
+  );
+}
+
+/** A Mail read through a position takes `limit` as its fewest rows. */
+function isEntityFilterLimit(request: UnknownRecord): boolean {
+  const through = isRecord(request.mail) ? request.mail.through : undefined;
+  return through === undefined
+    ? isValidCacheSearchLimit(request.limit)
+    : Number.isSafeInteger(request.limit) &&
+        (request.limit as number) >= 1 &&
+        (request.limit as number) <= MAX_MAIL_THROUGH_ROWS;
+}
+
+function isOptionalEntityMailView(request: UnknownRecord): boolean {
+  const mail = request.mail;
+  if (mail === undefined) return true;
+  if (!isRecord(mail)) return false;
+  const through = mail.through;
+  return (
+    hasOnlyKeys(mail, ['view', 'cursor', 'through']) &&
+    ['ALL', 'INBOX', 'DRAFTS', 'SENT'].includes(mail.view as string) &&
+    (through === undefined
+      ? (request.limit as number) < 500
+      : mail.cursor === undefined &&
+        typeof through === 'string' &&
+        through.length <= 4096) &&
+    (request.baseline === undefined || mail.cursor === undefined) &&
+    (mail.cursor === undefined ||
+      (typeof mail.cursor === 'string' && mail.cursor.length <= 4096))
+  );
+}
+
+function isOptionalReconciliationBaseline(request: UnknownRecord): boolean {
+  return (
+    request.baseline === undefined ||
+    (Array.isArray(request.baseline) &&
+      request.baseline.length <= MAX_RECONCILIATION_BASELINE &&
+      request.baseline.every(
+        (entry) =>
+          isRecord(entry) &&
+          hasOnlyKeys(entry, ['key', 'sortTimestamp']) &&
+          isValidNormalizedRecordKey(entry.key) &&
+          typeof entry.sortTimestamp === 'string' &&
+          entry.sortTimestamp.length <= 64
+      ))
+  );
+}
+
+function isOptionalIdentityBindings(value: UnknownRecord): boolean {
+  return (
+    value.identityBindings === undefined ||
+    (Array.isArray(value.identityBindings) &&
+      value.identityBindings.length <= 32 &&
+      value.identityBindings.every(
+        (binding) =>
+          isRecord(binding) &&
+          hasOnlyKeys(binding, [
+            'localKey',
+            'responsePath',
+            'referenceFields',
+            'revalidationVariables',
+            'deleteRecord',
+          ]) &&
+          (binding.deleteRecord === undefined ||
+            typeof binding.deleteRecord === 'boolean') &&
+          isValidNormalizedRecordKey(binding.localKey) &&
+          Array.isArray(binding.responsePath) &&
+          binding.responsePath.length <= 16 &&
+          binding.responsePath.every(isString) &&
+          (binding.referenceFields === undefined ||
+            (Array.isArray(binding.referenceFields) &&
+              binding.referenceFields.every(isString))) &&
+          (binding.revalidationVariables === undefined ||
+            (Array.isArray(binding.revalidationVariables) &&
+              binding.revalidationVariables.every(isString)))
+      ))
+  );
+}
+
+function isOptionalArray(value: unknown): boolean {
+  return value === undefined || Array.isArray(value);
 }

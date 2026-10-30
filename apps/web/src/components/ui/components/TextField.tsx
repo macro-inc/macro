@@ -2,7 +2,7 @@ import { TextField as KobalteTextField } from '@kobalte/core/text-field';
 import type { ComponentProps, ValidComponent } from 'solid-js';
 import { For, Match, Switch, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
-import { Input, type InputProps, inputOutlineFocusClasses } from './Input';
+import { Input, type InputProps } from './Input';
 
 // Adapted from hngngn/shadcn-solid's MIT-licensed TextField primitive.
 // The slot API follows our compound-component convention and the visual
@@ -58,7 +58,7 @@ function TextFieldTextArea<T extends ValidComponent = 'textarea'>(
       class={cn(
         'flex min-h-20 w-full resize-none rounded-xl border border-edge-frame bg-control not-touch:elevated px-2.5 py-2 text-base text-ink caret-current outline-none transition-[border-color,box-shadow] duration-120 motion-reduce:transition-none',
         'placeholder:text-ink-placeholder',
-        inputOutlineFocusClasses,
+        'focus-visible:ring-2 focus-visible:ring-edge-muted',
         'aria-invalid:border-failure aria-invalid:ring-2 aria-invalid:ring-failure/20',
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
         local.class

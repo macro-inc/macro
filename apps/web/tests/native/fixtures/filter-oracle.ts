@@ -34,7 +34,13 @@ export function emailMatchesSelection(
     .with('calendar', () => row.calendar === true)
     .with('shared', 'all', () => true)
     .exhaustive();
-  if (!matchesTab) return false;
+  return matchesTab && matchesFacets(row, selection);
+}
+
+function matchesFacets(
+  row: FixtureRow,
+  selection: Record<string, string[]>
+): boolean {
   if (
     (selection.inboxes[0] !== ALL_INBOXES &&
       !selection.inboxes.includes(row.linkId!)) ||

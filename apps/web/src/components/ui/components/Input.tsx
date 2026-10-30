@@ -28,10 +28,6 @@ const TOUCH_INPUT_SHAPE: Record<InputSize, string> = {
   xl: 'rounded-lg px-4',
 };
 
-/** Shared focus treatment for outlined text-entry controls. */
-export const inputOutlineFocusClasses =
-  'focus-visible:ring-2 focus-visible:ring-edge-muted';
-
 /** Canonical visual variants for standalone inputs. */
 export const inputVariants = createVariants(
   cn(
@@ -45,7 +41,7 @@ export const inputVariants = createVariants(
     variant: {
       outline: cn(
         'border-edge-frame bg-control not-touch:elevated',
-        inputOutlineFocusClasses
+        'focus-visible:ring-2 focus-visible:ring-edge-muted'
       ),
       bare: 'border-transparent bg-transparent',
     },

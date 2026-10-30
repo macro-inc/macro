@@ -17,7 +17,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
-import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
+import { useSpreadsheetAccess } from '../../block-spreadsheet/use-spreadsheet-access';
 import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
 import { type CodeBlockMode, CodeContent } from './CodeContent';

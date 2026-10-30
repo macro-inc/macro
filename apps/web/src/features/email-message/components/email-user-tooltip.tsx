@@ -1,6 +1,6 @@
+import { emailToMacroId } from '@app/lib/identity/macro-id';
 import { HoverCard } from '@core/component/HoverCard';
 import { UserTooltip } from '@core/component/UserTooltip';
-import { emailToMacroId } from '@core/user/macroId';
 import { createSignal, type JSX } from 'solid-js';
 
 interface Recipient {

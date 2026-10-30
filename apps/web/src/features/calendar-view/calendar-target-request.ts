@@ -1,4 +1,4 @@
-import { Telemetry } from '@macro-inc/observability';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fetchCalendarMentionPreview } from '@queries/calendar/mention-preview';
 import { type Accessor, createSignal } from 'solid-js';
 import {
@@ -33,6 +33,17 @@ export function targetRequestFromParams(
   };
 }
 
+async function fetchPreviewOrNull(
+  eventId: string,
+  occurrenceKey: string | undefined
+) {
+  try {
+    return await fetchCalendarMentionPreview(eventId, occurrenceKey);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A target with an event id but no usable range — a copied `/app/calendar`
  * link or a mention without preview data — resolves through the calendar
@@ -48,10 +59,7 @@ export async function resolveTargetRequestFromPreview(
   }
   const occurrenceKey =
     typeof params.occurrenceKey === 'string' ? params.occurrenceKey : undefined;
-  const event = await fetchCalendarMentionPreview(
-    params.eventId,
-    occurrenceKey
-  ).catch(() => null);
+  const event = await fetchPreviewOrNull(params.eventId, occurrenceKey);
   // A channel-shared meeting is on none of the viewer's calendars, so there
   // is no event of theirs for the block to focus.
   if (!event?.viewerEventId) return undefined;
@@ -123,6 +131,13 @@ export function createCalendarTargetAim(options: {
     setTarget(resolved);
   };
 
+  const applyFromPreview = async (
+    params: CalendarViewTarget,
+    requestId: number
+  ) => {
+    applyResolvedTarget(requestId, await resolveFromPreview(params, requestId));
+  };
+
   const aimAt = (params: CalendarViewTarget) => {
     const requestId = nextRequestId++;
     latestRequestId = requestId;
@@ -132,13 +147,7 @@ export function createCalendarTargetAim(options: {
       return;
     }
     if (typeof params.eventId === 'string' && params.eventId.length > 0) {
-      resolveFromPreview(params, requestId)
-        .then((resolved) => {
-          applyResolvedTarget(requestId, resolved);
-        })
-        .catch((error) =>
-          Telemetry.error(error, { surface: 'calendar-target' })
-        );
+      fireAndForget(applyFromPreview(params, requestId), 'calendar-target');
       return;
     }
     applyResolvedTarget(requestId, undefined);

@@ -1,4 +1,8 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  trackMention,
+  untrackMention,
+} from '@app/lib/queries/storage/mentions';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { applyAiOps } from '@block-md/ai-edit/applyAiOps';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -52,7 +56,6 @@ import {
   readNativePasteboardText,
   setNativeEditMenuSuppressed,
 } from '@core/mobile/nativeEditMenu';
-import { trackMention, untrackMention } from '@core/signal/mention';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getScrollParentElement } from '@core/util/scrollParent';

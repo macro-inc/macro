@@ -1,15 +1,16 @@
+import { createMarkdownFile } from '@app/lib/queries/items/create';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
-import { createMarkdownFile } from '@core/util/create';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { PulsingStar } from '@entity/components/PulsingStar';
 import CheckIcon from '@icon/system/bold/check-bold.svg?component-solid';
 import ClipboardIcon from '@icon/system/bold/clipboard-bold.svg?component-solid';
 import LoadingIcon from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import WideFileMd from '@icon/system/regular/file.svg';
 import { Telemetry } from '@macro-inc/observability';
-import { generateTitle } from '@service-cognition/client';
+import { generateTitle } from '@queries/cognition/title';
 import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import { createCallback } from '@solid-primitives/rootless';
@@ -126,6 +127,15 @@ export function AssistantMessage(props: {
     setIsLoading(false);
   });
 
+  const editInMarkdown = async () => {
+    try {
+      await handleEditInMarkdown();
+    } catch (error) {
+      setIsLoading(false);
+      Telemetry.error(error, { surface: 'assistant-message-edit-in-notes' });
+    }
+  };
+
   return (
     <div
       class="max-w-full flex flex-col justify-start items-start min-w-0 w-full"
@@ -186,12 +196,10 @@ export function AssistantMessage(props: {
                   }
                   onClick={() => {
                     if (isLoading()) return;
-                    handleEditInMarkdown().catch((error) => {
-                      setIsLoading(false);
-                      Telemetry.error(error, {
-                        surface: 'assistant-message-edit-in-notes',
-                      });
-                    });
+                    fireAndForget(
+                      editInMarkdown(),
+                      'assistant-message-edit-in-notes'
+                    );
                   }}
                 >
                   <Show

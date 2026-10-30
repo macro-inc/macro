@@ -5,6 +5,7 @@ import type {
   MakePersistedStateOptions,
   PersistenceStorage,
 } from '@app/lib/persistence';
+import { schemaWithFallback } from '@app/lib/utils/schema-fallback';
 import {
   createEntryPersistenceStorage,
   type EntryPersistenceHandle,
@@ -27,17 +28,23 @@ const emailLocalStateStorage = createUserScopedStorage(
   'macro:email:view-state:v1'
 );
 
-const emailTabSchema = z.enum(EMAIL_TAB_IDS).catch(DEFAULT_EMAIL_TAB);
+const emailTabSchema = schemaWithFallback(
+  z.enum(EMAIL_TAB_IDS),
+  DEFAULT_EMAIL_TAB
+);
 
 const emailFacetsSchema = z.record(z.string(), z.array(z.string()));
-const aliasFilterSchema = z
-  .object({ inboxId: z.string().min(1), emailAddress: z.string().email() })
-  .optional()
-  .catch(undefined);
+const aliasFilterSchema = schemaWithFallback(
+  z
+    .object({ inboxId: z.string().min(1), emailAddress: z.string().email() })
+    .optional(),
+  undefined
+).optional();
 
-const emailFocusSortSchema = z
-  .enum(EMAIL_FOCUS_SORT_IDS)
-  .catch(DEFAULT_EMAIL_FOCUS_SORT);
+const emailFocusSortSchema = schemaWithFallback(
+  z.enum(EMAIL_FOCUS_SORT_IDS),
+  DEFAULT_EMAIL_FOCUS_SORT
+);
 
 const emailEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -51,16 +58,18 @@ type EmailEntryState = z.infer<typeof emailEntryStateSchemaWithDefaults>;
 
 const DEFAULT_EMAIL_ENTRY_STATE: EmailEntryState =
   emailEntryStateSchemaWithDefaults.parse({});
-const emailEntryStateSchema = emailEntryStateSchemaWithDefaults.catch(
+const emailEntryStateSchema = schemaWithFallback(
+  emailEntryStateSchemaWithDefaults,
   DEFAULT_EMAIL_ENTRY_STATE
 );
 
 // The legacy mail view stores the raw `string[] | undefined` under its key;
 // anything else restores as "every inbox".
-const inboxIdsEntrySchema = z
-  .array(z.string())
+const inboxIdsEntrySchema = schemaWithFallback(
+  z.array(z.string()).optional(),
+  undefined
+)
   .optional()
-  .catch(undefined)
   .transform(normalizeInboxSelection);
 
 const emailListStateSchemaWithDefaults = z.object({
@@ -73,7 +82,8 @@ type EmailListEntryState = z.infer<typeof emailListStateSchemaWithDefaults>;
 
 const DEFAULT_EMAIL_LIST_ENTRY_STATE: EmailListEntryState =
   emailListStateSchemaWithDefaults.parse({});
-const emailListStateSchema = emailListStateSchemaWithDefaults.catch(
+const emailListStateSchema = schemaWithFallback(
+  emailListStateSchemaWithDefaults,
   DEFAULT_EMAIL_LIST_ENTRY_STATE
 );
 
@@ -132,7 +142,8 @@ type EmailLocalState = z.infer<typeof emailLocalStateSchemaWithDefaults>;
 
 const DEFAULT_EMAIL_LOCAL_STATE: EmailLocalState =
   emailLocalStateSchemaWithDefaults.parse({});
-const emailLocalStateSchema = emailLocalStateSchemaWithDefaults.catch(
+const emailLocalStateSchema = schemaWithFallback(
+  emailLocalStateSchemaWithDefaults,
   DEFAULT_EMAIL_LOCAL_STATE
 );
 

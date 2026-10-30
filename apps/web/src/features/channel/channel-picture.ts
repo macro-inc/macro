@@ -1,5 +1,5 @@
+import { createStaticFile } from '@app/lib/queries/items/create';
 import { toast } from '@core/component/Toast/Toast';
-import { createStaticFile } from '@core/util/create';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openFilePicker } from '@core/util/upload';
 import {

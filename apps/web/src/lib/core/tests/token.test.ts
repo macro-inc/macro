@@ -3,10 +3,6 @@ import { createRoot } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@core/block', () => ({
-  useBlockId: vi.fn(),
-}));
-
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
     permissionsTokens: {
@@ -15,17 +11,15 @@ vi.mock('@service-storage/client', () => ({
   },
 }));
 
-vi.mock('@solid-primitives/rootless', () => ({
-  createCallback: vi.fn((fn) => fn),
-  createSingletonRoot: vi.fn((fn) => fn()),
-}));
-
 import { storageServiceClient } from '@service-storage/client';
-import { getPermissionToken } from '../signal/token';
+import { getPermissionToken } from '../../queries/storage/permission-token';
 
 describe('getPermissionToken', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    vi.mocked(
+      storageServiceClient.permissionsTokens.createPermissionToken
+    ).mockReset();
   });
 
   afterEach(() => {

@@ -57,14 +57,7 @@ function archiveEntries(
   const count = data.getUint16(end + 10, true);
   const centralSize = data.getUint32(end + 12, true);
   const centralStart = data.getUint32(end + 16, true);
-  if (
-    data.getUint32(end + 4, true) !== 0 ||
-    count !== data.getUint16(end + 8, true) ||
-    !count ||
-    count > XLSX_MAX_ENTRIES ||
-    centralStart + centralSize !== end
-  )
-    throw invalid();
+  checkCentralDirectory();
   const entries: ArchiveEntry[] = [];
   let offset = centralStart;
   let expanded = 0;
@@ -83,19 +76,9 @@ function archiveEntries(
       nameSize +
       data.getUint16(offset + 30, true) +
       data.getUint16(offset + 32, true);
-    if (next > end || flags & 1 || (method !== 0 && method !== 8))
-      throw invalid();
+    checkEntryHeader(next, flags, method);
     const name = strFromU8(bytes.subarray(offset + 46, offset + 46 + nameSize));
-    if (
-      !name ||
-      name.startsWith('/') ||
-      name.includes('\\') ||
-      name.includes('//') ||
-      name.split('/').includes('.') ||
-      name.split('/').includes('..') ||
-      names.has(name)
-    )
-      throw invalid();
+    checkEntryName(name);
     names.add(name);
     expanded += size;
     if (expanded > XLSX_MAX_EXPANDED_BYTES)
@@ -123,6 +106,35 @@ function archiveEntries(
   if (!allowMacros && [...names].some(isMacroPart))
     throw new Error('Workbooks written by Macro must not contain macros.');
   return { entries, centralStart };
+
+  function checkEntryHeader(next: number, flags: number, method: number) {
+    if (next > end || flags & 1 || (method !== 0 && method !== 8))
+      throw invalid();
+  }
+
+  function checkCentralDirectory() {
+    if (
+      data.getUint32(end + 4, true) !== 0 ||
+      count !== data.getUint16(end + 8, true) ||
+      !count ||
+      count > XLSX_MAX_ENTRIES ||
+      centralStart + centralSize !== end
+    )
+      throw invalid();
+  }
+
+  function checkEntryName(name: string) {
+    if (
+      !name ||
+      name.startsWith('/') ||
+      name.includes('\\') ||
+      name.includes('//') ||
+      name.split('/').includes('.') ||
+      name.split('/').includes('..') ||
+      names.has(name)
+    )
+      throw invalid();
+  }
 }
 
 function inflateEntry(

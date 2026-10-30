@@ -1,4 +1,4 @@
-import { type MacroId, tryMacroId } from '@core/user/macroId';
+import { type MacroId, tryMacroId } from '@app/lib/identity/macro-id';
 import { isHexHyphenatedId } from '@queries/bots/bot-id';
 import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
 

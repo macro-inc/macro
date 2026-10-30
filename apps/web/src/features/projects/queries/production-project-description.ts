@@ -1,4 +1,4 @@
-import { getCollabSurfaceToken } from '@core/collab-surface/token';
+import { getCollabSurfaceToken } from '@app/lib/queries/storage/collab-surface-token';
 import { throwOnErr } from '@core/util/result';
 import { initiativeClient } from '@service-storage/initiative';
 import { createCollabSurfaceSource } from '@service-sync/source';

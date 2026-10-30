@@ -350,16 +350,23 @@ export function parseQueryProposal(
     return err(
       generationFailure('AI returned incomplete chart settings. Try again.')
     );
-  return ok({
-    sql,
-    explanation: record.explanation.trim(),
-    ...(typeof record.title === 'string' && record.title.trim()
-      ? { title: record.title.trim().slice(0, 100) }
-      : {}),
-    ...(typeof record.databaseId === 'string' && record.databaseId.trim()
-      ? { databaseId: record.databaseId.trim() }
-      : {}),
-    ...(displayMode ? { displayMode } : {}),
-    ...(chart ? { chart } : {}),
-  });
+  return buildParseQueryProposal(record.explanation, displayMode);
+
+  function buildParseQueryProposal(
+    explanation: string,
+    displayMode: QueryProposal['displayMode']
+  ): Result<QueryProposal, QueryFailure> {
+    return ok({
+      sql,
+      explanation: explanation.trim(),
+      ...(typeof record.title === 'string' && record.title.trim()
+        ? { title: record.title.trim().slice(0, 100) }
+        : {}),
+      ...(typeof record.databaseId === 'string' && record.databaseId.trim()
+        ? { databaseId: record.databaseId.trim() }
+        : {}),
+      ...(displayMode ? { displayMode } : {}),
+      ...(chart ? { chart } : {}),
+    });
+  }
 }

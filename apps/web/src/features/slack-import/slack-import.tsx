@@ -20,8 +20,6 @@ import { queryClient } from '@queries/client';
 import { revalidateChannelLists } from '@queries/soup/graphql/channel-list-revalidation';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
-// ast-grep-ignore: tsx-no-service-client-outside-queries -- Composition only; endpoint calls remain in the query adapter.
-import { storageServiceClient } from '@service-storage/client';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { uploadSlackImport } from '@service-storage/slack-import-upload';
 import { type JSX, Show, Suspense } from 'solid-js';
@@ -31,7 +29,7 @@ import {
   createArchiveSource,
   protectImportFile,
 } from './queries/archive-source';
-import { createImportSource } from './queries/import-source';
+import { createStorageImportSource } from './queries/storage-import-source';
 import { ImportDialog, type ImportDialogTrigger } from './views/import-dialog';
 
 type Props = {
@@ -118,9 +116,8 @@ function SlackImportSettings(props: {
     <ImportProvider
       context={{
         createSource: (inputs) =>
-          createImportSource(
+          createStorageImportSource(
             {
-              client: storageServiceClient,
               queryClient,
               gatewayEffect: createConnectionWebsocketEffect,
               upload: uploadSlackImport,

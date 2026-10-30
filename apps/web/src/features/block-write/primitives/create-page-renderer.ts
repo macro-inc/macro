@@ -1,9 +1,9 @@
+import type { Band, PageInfo } from '@app/lib/docx/types';
 import {
   type Rendered,
   renderBand,
   renderPage,
 } from '@core/docx-engine/client';
-import type { Band, PageInfo } from '@core/docx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 
 /** The most pixels per CSS pixel a page is drawn with. */

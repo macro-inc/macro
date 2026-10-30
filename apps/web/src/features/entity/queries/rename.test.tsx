@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@block-database/queries/rename-database', () => ({
   renameDatabase: mocks.renameDatabase,
 }));
-vi.mock('@core/component/FileList/itemOperations', () => ({
+vi.mock('@app/lib/queries/items/operations', () => ({
   renameItem: mocks.renameItem,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({

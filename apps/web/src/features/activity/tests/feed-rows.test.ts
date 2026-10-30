@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { decodeActivityEvent } from '../queries/decode';
-import { createdEvent, editedEvent } from '../queries/fixtures';
-import type { FeedEntry } from './collapse-runs';
+import type { FeedEntry } from '../core/collapse-runs';
 import {
   type FeedRow,
   flattenFeed,
   pinnedDayLabel,
   reuseRows,
   shouldFetchMore,
-} from './feed-rows';
+} from '../core/feed-rows';
+import { decodeActivityEvent } from '../queries/decode';
+import { createdEvent, editedEvent } from '../queries/fixtures';
 
 const created: FeedEntry = {
   kind: 'single',

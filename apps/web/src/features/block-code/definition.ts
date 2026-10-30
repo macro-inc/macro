@@ -4,7 +4,8 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { storageServiceClient } from '@service-storage/client';
+import { requestTextDocument } from '@queries/storage/requests';
+
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
 import { supportedExtensions } from './util/languageSupport';
@@ -28,7 +29,7 @@ export const definition = defineBlock({
     }
     if (source.type !== 'dss') return LoadErrors.INVALID;
     const document = await loadResult(
-      storageServiceClient.getTextDocument({
+      requestTextDocument({
         documentId: source.id,
       })
     );

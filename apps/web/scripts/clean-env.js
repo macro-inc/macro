@@ -29,10 +29,10 @@ const { result } = concurrently([
   },
 ]);
 
-result.then(
-  () => console.log('done'),
-  (e) => {
-    console.error(e);
-    process.exit(1);
-  }
-);
+try {
+  await result;
+  console.log('done');
+} catch (e) {
+  console.error(e);
+  process.exit(1);
+}

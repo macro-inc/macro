@@ -493,8 +493,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
           class={cn(
             'relative flex flex-col w-full text-xs p-4 touch:pt-4',
             isTouchDevice() && 'rounded-lg bg-surface',
-            uiDisabled() &&
-              '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
+            uiDisabled() && '[&_input:disabled]:text-ink-muted'
           )}
           header={header()}
           notice={

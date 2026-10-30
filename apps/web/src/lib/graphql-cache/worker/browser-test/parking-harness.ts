@@ -271,13 +271,11 @@ const api = {
         fetchExchange,
       ],
     });
-    readResult = client
-      .query(query, {})
-      .toPromise()
-      .then((result) => ({
-        data: result.data,
-        error: !!result.error,
-      }));
+    const read = async () => {
+      const result = await client.query(query, {}).toPromise();
+      return { data: result.data, error: !!result.error };
+    };
+    readResult = read();
     await started.promise;
   },
   readResult: () => readResult,

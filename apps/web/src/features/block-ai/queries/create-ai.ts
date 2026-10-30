@@ -6,7 +6,6 @@ import { analytics } from '@app/lib/analytics';
 import { AiEngine } from '@core/ai-engine/client';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { contentHash } from '@core/util/hash';
-import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserQuota } from '@queries/auth';
 import { postNewHistoryItem } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
@@ -52,11 +51,12 @@ export async function createAiDocument(args: {
     name: title,
     fileType: 'ai',
   });
-  refetchSoupEntity(documentId, 'document', {
-    ownTouch: true,
-    refreshGraphql: true,
-  }).catch((error) =>
-    Telemetry.error(error, { surface: 'create-ai-document' })
+  fireAndForget(
+    refetchSoupEntity(documentId, 'document', {
+      ownTouch: true,
+      refreshGraphql: true,
+    }),
+    'create-ai-document'
   );
   analytics.track('create_entity', {
     entityType: 'ai',

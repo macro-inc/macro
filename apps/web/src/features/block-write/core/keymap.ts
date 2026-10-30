@@ -1,4 +1,5 @@
-import type { EditOp, Unit } from '@core/docx-engine/types';
+import type { EditOp, Unit } from '@app/lib/docx/types';
+import { match as matchKey } from 'ts-pattern';
 
 /** What a key press does in the DOCX editor. */
 export type KeyAction =
@@ -36,53 +37,57 @@ export function keyAction(event: Key, mac: boolean): KeyAction | null {
         : { op: 'move', unit, forward, extend },
     ],
   });
-  switch (event.key) {
-    case 'ArrowLeft':
-    case 'ArrowRight': {
-      // Left and right on the page (reversed in right-to-left text).
-      const forward = event.key === 'ArrowRight';
-      if (mac && event.metaKey) return move('lineBoundary', forward, true);
-      return move(word ? 'word' : 'char', forward, true);
-    }
-    case 'ArrowUp':
-    case 'ArrowDown': {
-      const forward = event.key === 'ArrowDown';
-      if (mac && event.metaKey) return move('document', forward);
-      if (word) return move('paragraph', forward);
-      return move('line', forward);
-    }
-    case 'Home':
-    case 'End': {
-      const forward = event.key === 'End';
-      return move(mod ? 'document' : 'lineBoundary', forward);
-    }
-    case 'PageUp':
-    case 'PageDown':
+  const navigationAction = matchKey(event.key)
+    .with('ArrowLeft', 'ArrowRight', (): KeyAction | null => {
+      {
+        // Left and right on the page (reversed in right-to-left text).
+        const forward = event.key === 'ArrowRight';
+        if (mac && event.metaKey) return move('lineBoundary', forward, true);
+        return move(word ? 'word' : 'char', forward, true);
+      }
+    })
+    .with('ArrowUp', 'ArrowDown', (): KeyAction | null => {
+      {
+        const forward = event.key === 'ArrowDown';
+        if (mac && event.metaKey) return move('document', forward);
+        if (word) return move('paragraph', forward);
+        return move('line', forward);
+      }
+    })
+    .with('Home', 'End', (): KeyAction | null => {
+      {
+        const forward = event.key === 'End';
+        return move(mod ? 'document' : 'lineBoundary', forward);
+      }
+    })
+    .with('PageUp', 'PageDown', (): KeyAction | null => {
       return { kind: 'page', forward: event.key === 'PageDown', extend };
-    case 'Backspace':
-    case 'Delete': {
-      const forward = event.key === 'Delete';
-      const unit: Unit =
-        mac && event.metaKey ? 'lineBoundary' : word ? 'word' : 'char';
-      return {
-        kind: 'ops',
-        ops: [{ op: 'delete', forward, unit }],
-        group: 'delete',
-      };
-    }
-    case 'Enter': {
+    })
+    .with('Backspace', 'Delete', (): KeyAction | null => {
+      {
+        const forward = event.key === 'Delete';
+        const unit: Unit =
+          mac && event.metaKey ? 'lineBoundary' : word ? 'word' : 'char';
+        return {
+          kind: 'ops',
+          ops: [{ op: 'delete', forward, unit }],
+          group: 'delete',
+        };
+      }
+    })
+    .with('Enter', (): KeyAction | null => {
       if (mod)
         return { kind: 'ops', ops: [{ op: 'insertBreak', kind: 'page' }] };
       if (event.shiftKey)
         return { kind: 'ops', ops: [{ op: 'insertBreak', kind: 'line' }] };
       return { kind: 'ops', ops: [{ op: 'insertParagraph' }] };
-    }
-    case 'Tab':
+    })
+    .with('Tab', (): KeyAction | null => {
       if (mod || event.altKey) return null;
       return { kind: 'tab', forward: !event.shiftKey };
-    default:
-      break;
-  }
+    })
+    .otherwise(() => undefined);
+  if (navigationAction !== undefined) return navigationAction;
   if (!mod) return null;
   const letter = event.code.startsWith('Key') ? event.code.slice(3) : '';
   if (event.altKey) {
@@ -95,43 +100,55 @@ export function keyAction(event: Key, mac: boolean): KeyAction | null {
       return { kind: 'ops', ops: [{ op: 'insertNote', endnote: true }] };
     return null;
   }
-  switch (letter) {
-    case 'Z':
+  const letterAction = matchKey(letter)
+    .with('Z', (): KeyAction | null => {
       return event.shiftKey ? { kind: 'redo' } : { kind: 'undo' };
-    case 'Y':
+    })
+    .with('Y', (): KeyAction | null => {
       return mac ? null : { kind: 'redo' };
-    case 'A':
+    })
+    .with('A', (): KeyAction | null => {
       return { kind: 'ops', ops: [{ op: 'selectAll' }] };
-    case 'F':
+    })
+    .with('F', (): KeyAction | null => {
       return { kind: 'find', replace: false };
-    case 'G':
+    })
+    .with('G', (): KeyAction | null => {
       return { kind: 'findNext', forward: !event.shiftKey };
-    case 'H':
+    })
+    .with('H', (): KeyAction | null => {
       // Cmd+H hides the app on macOS, so replace is Cmd+Shift+H there.
       if (mac && !event.shiftKey) return null;
       return { kind: 'find', replace: true };
-    case 'B':
+    })
+    .with('B', (): KeyAction | null => {
       return { kind: 'ops', ops: [{ op: 'toggleFormat', format: 'bold' }] };
-    case 'I':
+    })
+    .with('I', (): KeyAction | null => {
       return { kind: 'ops', ops: [{ op: 'toggleFormat', format: 'italic' }] };
-    case 'U':
+    })
+    .with('U', (): KeyAction | null => {
       return {
         kind: 'ops',
         ops: [{ op: 'toggleFormat', format: 'underline' }],
       };
-    case 'E':
+    })
+    .with('E', (): KeyAction | null => {
       return { kind: 'ops', ops: [{ op: 'setParagraph', align: 'center' }] };
-    case 'L':
+    })
+    .with('L', (): KeyAction | null => {
       return event.shiftKey
         ? { kind: 'ops', ops: [{ op: 'toggleList', kind: 'bullet' }] }
         : { kind: 'ops', ops: [{ op: 'setParagraph', align: 'left' }] };
-    case 'R':
+    })
+    .with('R', (): KeyAction | null => {
       return { kind: 'ops', ops: [{ op: 'setParagraph', align: 'right' }] };
-    case 'J':
+    })
+    .with('J', (): KeyAction | null => {
       return { kind: 'ops', ops: [{ op: 'setParagraph', align: 'justify' }] };
-    default:
-      break;
-  }
+    })
+    .otherwise(() => undefined);
+  if (letterAction !== undefined) return letterAction;
   if (event.key === '=' && event.shiftKey)
     return {
       kind: 'ops',

@@ -69,6 +69,7 @@ import {
   type DocumentEntity,
   type EntityData,
   emailQueryKeyExcludesDone,
+  type GithubPullRequestEntity,
   getSnippetHit,
   isEmailEntity,
   isGithubPrEntity,
@@ -618,6 +619,190 @@ export const getRowClickFallbackLocation = (
       ? getSnippetHit(entity)?.location
       : undefined;
 
+type SplitManager = NonNullable<ReturnType<typeof globalSplitManager>>;
+
+function alertIfOpenElsewhere(
+  result: ReturnType<SplitManager['openWithSplit']>
+) {
+  if (result.status === 'reused' && result.owner !== result.sourceOwner) {
+    toast.alert('Content already open');
+  }
+}
+
+function openGithubPullRequest(
+  entity: GithubPullRequestEntity,
+  splitManager: SplitManager,
+  options: OpenEntityOptions
+) {
+  if (!USE_MACRO_PR_SUMMARY_BLOCK) {
+    openExternalUrl(entity.metadata.url);
+    return;
+  }
+  const content = { type: 'pr' as const, id: entity.id };
+  alertIfOpenElsewhere(
+    splitManager.openWithSplit(reviewsHostedContent(content) ?? content, {
+      referredFrom: options.referredFrom,
+      activate: true,
+      preferNewSplit: options.openInNewSplit,
+      handle: options.splitHandle,
+      mergeHistory: options.mergeHistory,
+      allowDuplicate: true,
+    })
+  );
+}
+
+function openCalendarEventEntity(
+  entity: CalendarEventEntity,
+  splitManager: SplitManager,
+  options: OpenEntityOptions
+) {
+  if (!isFeatureEnabled(enableCalendarUi)) return;
+  openCalendarView(calendarViewTargetForEntity(entity), {
+    manager: splitManager,
+    handle: options.splitHandle,
+    openInNewSplit: options.openInNewSplit,
+    mergeHistory: options.mergeHistory,
+    referredFrom: options.referredFrom,
+  });
+}
+
+/**
+ * Latest opens do not need notifications to choose their destination. Snapshot
+ * the list row before navigation can dispose its Solid store, and hydrate only
+ * after the open is accepted. Inbox notification-targeted opens still wait.
+ */
+function deferredChannelSnapshot(
+  entity: EntityData,
+  options: OpenEntityOptions
+): ChannelEntity | undefined {
+  return entity.type === 'channel' &&
+    entity.unreadNotifications !== undefined &&
+    options.channelNavigation === 'latest'
+    ? { ...entity }
+    : undefined;
+}
+
+/** Resolves undefined, after telling the user, when the notifications the open waits on fail to load. */
+async function hydrateChannelForOpen(
+  entity: ChannelEntity,
+  options: OpenEntityOptions
+): Promise<EntityData | undefined> {
+  try {
+    return await hydrateChannelNotificationSelection(
+      entity,
+      options.notificationSource?.withLocalOverrides
+    );
+  } catch (error) {
+    console.error('Failed to load conversation notifications', error);
+    toast.failure('Unable to open conversation. Please try again.');
+    return undefined;
+  }
+}
+
+/** Where the open lands: the explicit location, else a channel row's target message. */
+function entityOpenTarget(
+  entity: EntityData,
+  location: SearchLocation | undefined,
+  channelNavigation: OpenEntityOptions['channelNavigation']
+) {
+  const channelTarget = getChannelEntityTarget(entity, { channelNavigation });
+  const channelMessageTarget =
+    channelTarget?.kind === 'message' ? channelTarget : undefined;
+  const target =
+    location ??
+    (channelMessageTarget
+      ? {
+          type: 'channel' as const,
+          messageId: channelMessageTarget.messageId,
+          threadId: channelMessageTarget.threadId,
+        }
+      : undefined);
+  return { target, openChannelAtLatest: channelTarget?.kind === 'latest' };
+}
+
+// A row keeps pointing at its comment notification until that notification is
+// done, so on touch — where the thread is a drawer over the whole page, not a
+// margin card beside the text — the row would cover the document with the
+// same comment on every open. A tap on a document row asks for the document;
+// the notification list still opens the comment itself.
+function documentCommentParams(entity: EntityData, hasTarget: boolean) {
+  return !hasTarget && entity.type === 'document' && !isTouchDevice()
+    ? getDocumentCommentTarget(entity)?.params
+    : undefined;
+}
+
+/** The list view the open starts from, when it starts from one. */
+function sourceListViewOf(
+  splitManager: SplitManager,
+  splitHandle: SplitHandle | undefined
+) {
+  const sourceContent =
+    splitHandle?.content() ?? splitManager.activeSplit()?.content();
+  return sourceContent?.type === 'component' && isListViewID(sourceContent.id)
+    ? sourceContent.id
+    : undefined;
+}
+
+function entitySplitContent(
+  content: ReturnType<typeof getEntitySplitContent>,
+  commentParams: ReturnType<typeof documentCommentParams>,
+  navigation: { splitHandle?: SplitHandle; referredFrom?: ReferredFrom }
+): { splitContent: SplitContent; hosted: boolean } {
+  // Construct hosted content before opening the split so details do not mount
+  // legacy blocks. Comment targets keep their document block.
+  const hostedContent =
+    reviewsHostedContent(content) ??
+    callsHostedContent(content) ??
+    driveHostedContent(content, {
+      allowDocuments: !isTouchDevice() && !commentParams,
+    });
+  const splitContent: SplitContent = hostedContent ?? {
+    ...content,
+    params: commentParams,
+  };
+  const { splitHandle, referredFrom } = navigation;
+  return {
+    hosted: hostedContent !== undefined,
+    splitContent:
+      splitHandle && referredFrom && isListViewID(referredFrom)
+        ? withListNavigationSource(splitContent, splitHandle)
+        : splitContent,
+  };
+}
+
+/**
+ * Moves an opened entity to its comment or latest message. The split is
+ * already open; a failed in-block navigation leaves it at its default
+ * position, so report it rather than rejecting every caller.
+ */
+async function navigateOpenedEntity(
+  entity: EntityData,
+  blockOrchestrator: BlockOrchestrator,
+  {
+    contentId,
+    hasCommentTarget,
+    openChannelAtLatest,
+  }: {
+    contentId: string;
+    hasCommentTarget: boolean;
+    openChannelAtLatest: boolean;
+  }
+) {
+  try {
+    if (hasCommentTarget && entity.type === 'document') {
+      // An already-open document ignores new split params.
+      await navigateDocumentEntityToComment(entity, blockOrchestrator);
+    } else if (openChannelAtLatest) {
+      // Force the scroll-to-bottom even when the channel is already open in a
+      // (preview) split, where reopen: 'latest' only reactivates the parked
+      // split without re-pinning it to the newest message.
+      await goToChannelLatest(blockOrchestrator, contentId);
+    }
+  } catch (error) {
+    Telemetry.error(error, { surface: 'open-entity-in-split' });
+  }
+}
+
 /**
  * Opens an entity in a split, handling navigation to specific locations within the entity.
  * Supports both regular entities (channel, email, etc.) and document entities.
@@ -630,11 +815,7 @@ export const openEntityInSplitFromUnifiedList = async (
   options: OpenEntityOptions
 ): Promise<void> => {
   const { allowDuplicate, openInNewSplit, splitHandle, mergeHistory } = options;
-  let { location } = options;
-
-  if (!location) {
-    location = getRowClickFallbackLocation(entity);
-  }
+  const location = options.location ?? getRowClickFallbackLocation(entity);
 
   // Get dependencies internally
   const splitManager = globalSplitManager();
@@ -649,121 +830,42 @@ export const openEntityInSplitFromUnifiedList = async (
   }
 
   if (isGithubPrEntity(entity)) {
-    if (USE_MACRO_PR_SUMMARY_BLOCK) {
-      const content = { type: 'pr' as const, id: entity.id };
-      const result = splitManager.openWithSplit(
-        reviewsHostedContent(content) ?? content,
-        {
-          referredFrom: options.referredFrom,
-          activate: true,
-          preferNewSplit: openInNewSplit,
-          handle: splitHandle,
-          mergeHistory,
-          allowDuplicate: true,
-        }
-      );
-      if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-        toast.alert('Content already open');
-      }
-    } else {
-      openExternalUrl(entity.metadata.url);
-    }
+    openGithubPullRequest(entity, splitManager, options);
     return;
   }
   if (entity.type === 'foreign') return;
 
   if (entity.type === 'calendar_event') {
-    if (!isFeatureEnabled(enableCalendarUi)) return;
-    openCalendarView(calendarViewTargetForEntity(entity), {
-      manager: splitManager,
-      handle: splitHandle,
-      openInNewSplit,
-      mergeHistory,
-      referredFrom: options.referredFrom,
-    });
+    openCalendarEventEntity(entity, splitManager, options);
     return;
   }
 
   const blockOrchestrator = splitManager.getOrchestrator();
 
-  // Latest opens do not need notifications to choose their destination. Snapshot
-  // the list row before navigation can dispose its Solid store, and hydrate only
-  // after the open is accepted. Inbox notification-targeted opens still wait.
-  const deferredChannel =
-    entity.type === 'channel' &&
-    entity.unreadNotifications !== undefined &&
-    options.channelNavigation === 'latest'
-      ? { ...entity }
-      : undefined;
+  const deferredChannel = deferredChannelSnapshot(entity, options);
   if (
     entity.type === 'channel' &&
     entity.unreadNotifications !== undefined &&
     !deferredChannel
   ) {
-    try {
-      entity = await hydrateChannelNotificationSelection(
-        entity,
-        options.notificationSource?.withLocalOverrides
-      );
-    } catch (error) {
-      console.error('Failed to load conversation notifications', error);
-      toast.failure('Unable to open conversation. Please try again.');
-      return;
-    }
+    const hydrated = await hydrateChannelForOpen(entity, options);
+    if (!hydrated) return;
+    entity = hydrated;
   }
 
   const content = getEntitySplitContent(entity);
-
-  const channelTarget = getChannelEntityTarget(entity, {
-    channelNavigation: options.channelNavigation,
+  const { target, openChannelAtLatest } = entityOpenTarget(
+    entity,
+    location,
+    options.channelNavigation
+  );
+  const commentParams = documentCommentParams(entity, !!target);
+  const referredFrom =
+    options.referredFrom ?? sourceListViewOf(splitManager, splitHandle);
+  const { splitContent, hosted } = entitySplitContent(content, commentParams, {
+    splitHandle,
+    referredFrom,
   });
-  const channelMessageTarget =
-    channelTarget?.kind === 'message' ? channelTarget : undefined;
-  const openChannelAtLatest = channelTarget?.kind === 'latest';
-
-  const target =
-    location ??
-    (channelMessageTarget
-      ? {
-          type: 'channel' as const,
-          messageId: channelMessageTarget.messageId,
-          threadId: channelMessageTarget.threadId,
-        }
-      : undefined);
-  // A row keeps pointing at its comment notification until that notification is
-  // done, so on touch — where the thread is a drawer over the whole page, not a
-  // margin card beside the text — the row would cover the document with the
-  // same comment on every open. A tap on a document row asks for the document;
-  // the notification list still opens the comment itself.
-  const commentParams =
-    !target && entity.type === 'document' && !isTouchDevice()
-      ? getDocumentCommentTarget(entity)?.params
-      : undefined;
-
-  const sourceContent =
-    splitHandle?.content() ?? splitManager.activeSplit()?.content();
-
-  const sourceListView =
-    sourceContent?.type === 'component' && isListViewID(sourceContent.id)
-      ? sourceContent.id
-      : undefined;
-  const referredFrom = options.referredFrom ?? sourceListView;
-
-  // Construct hosted content before opening the split so details do not mount
-  // legacy blocks. Comment targets keep their document block.
-  const hostedContent =
-    reviewsHostedContent(content) ??
-    callsHostedContent(content) ??
-    driveHostedContent(content, {
-      allowDocuments: !isTouchDevice() && !commentParams,
-    });
-  let splitContent: SplitContent = hostedContent ?? {
-    ...content,
-    params: commentParams,
-  };
-  if (splitHandle && referredFrom && isListViewID(referredFrom)) {
-    splitContent = withListNavigationSource(splitContent, splitHandle);
-  }
 
   const hydrateNotificationsAndMarkSeen = async (
     channel: ChannelEntity,
@@ -817,35 +919,23 @@ export const openEntityInSplitFromUnifiedList = async (
     handle: splitHandle,
     mergeHistory,
     // Hosted details have distinct routes even when they share a component identity.
-    allowDuplicate: allowDuplicate || hostedContent !== undefined,
+    allowDuplicate: allowDuplicate || hosted,
     reopen:
       entity.type === 'channel' && !location && openChannelAtLatest
         ? 'latest'
         : undefined,
   });
-  if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-    toast.alert('Content already open');
-  }
+  alertIfOpenElsewhere(result);
 
   if (result.status === 'opened' || result.status === 'reused') {
     markNotificationsSeen();
   }
 
-  // The split is already open; a failed in-block navigation leaves it at its
-  // default position, so report it rather than rejecting every caller.
-  try {
-    if (commentParams && entity.type === 'document') {
-      // An already-open document ignores new split params.
-      await navigateDocumentEntityToComment(entity, blockOrchestrator);
-    } else if (!target && openChannelAtLatest) {
-      // Force the scroll-to-bottom even when the channel is already open in a
-      // (preview) split, where reopen: 'latest' only reactivates the parked
-      // split without re-pinning it to the newest message.
-      await goToChannelLatest(blockOrchestrator, content.id);
-    }
-  } catch (error) {
-    Telemetry.error(error, { surface: 'open-entity-in-split' });
-  }
+  await navigateOpenedEntity(entity, blockOrchestrator, {
+    contentId: content.id,
+    hasCommentTarget: !!commentParams,
+    openChannelAtLatest: !target && openChannelAtLatest,
+  });
 };
 
 /**
@@ -883,9 +973,21 @@ export function markChannelNotificationsSeenOnOpen(
   );
   if (notifications.length === 0) return;
 
-  void notificationSource.bulkMarkAsRead(notifications).catch((error) => {
+  fireAndForget(
+    markChannelNotificationsRead(notificationSource, notifications),
+    'open-entity-in-split'
+  );
+}
+
+async function markChannelNotificationsRead(
+  notificationSource: NotificationSource,
+  notifications: Parameters<NotificationSource['bulkMarkAsRead']>[0]
+) {
+  try {
+    await notificationSource.bulkMarkAsRead(notifications);
+  } catch (error) {
     console.error('Failed to mark channel notifications as read', error);
-  });
+  }
 }
 
 /**

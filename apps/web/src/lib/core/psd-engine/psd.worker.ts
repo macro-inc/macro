@@ -28,12 +28,14 @@ let scheduled = false;
 let busy = false;
 
 const channel = new MessageChannel();
-channel.port1.onmessage = () => {
+channel.port1.onmessage = async () => {
   scheduled = false;
-  // pump reports each request's failure itself; this is only a failed report.
-  pump().catch((error: unknown) => {
+  try {
+    await pump();
+  } catch (error: unknown) {
+    // pump reports each request's failure itself; this is only a failed report.
     console.error('[psd-engine] worker could not report a failure', error);
-  });
+  }
 };
 
 function schedule() {

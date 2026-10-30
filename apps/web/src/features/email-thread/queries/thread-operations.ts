@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { refreshEmailThreadCache } from '@queries/email/cache-cleanup';
 import { emailKeys } from '@queries/email/keys';
@@ -37,7 +38,7 @@ function threadOperationsQueryOptions(threadId: string, enabled: boolean) {
         emailClient.threadOperations(threadId)
       );
       if (wasPending && !hasPending(operations))
-        void refreshEmailThreadCache(threadId).catch(() => {});
+        fireAndForget(refreshEmailThreadCache(threadId), 'email-thread');
       return operations;
     },
     refetchInterval: operationsPollInterval,

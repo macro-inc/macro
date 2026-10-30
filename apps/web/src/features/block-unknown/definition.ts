@@ -4,7 +4,8 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { storageServiceClient } from '@service-storage/client';
+import { requestDocumentMetadata } from '@queries/storage/requests';
+
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
 
@@ -15,7 +16,7 @@ export const definition = defineBlock({
   async load(source, intent) {
     if (source.type === 'dss') {
       const maybeDocument = await loadResult(
-        storageServiceClient.getDocumentMetadata({ documentId: source.id })
+        requestDocumentMetadata({ documentId: source.id })
       );
 
       if (intent === 'preload') {

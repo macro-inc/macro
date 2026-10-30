@@ -11,7 +11,7 @@ import {
 
 export { onceFromCron } from './routine-trigger-mapping';
 
-import { getDefaultTimezone } from '@core/util/cron';
+import { getDefaultTimezone } from '@app/lib/utils/cron';
 import type {
   CreateScheduledAction,
   ScheduledAction,
@@ -142,6 +142,28 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
   };
 }
 
+/** The task with the draft's edits, or undefined when it has none. */
+function editTask(
+  draft: ScheduleDraft,
+  previousTask: RoutineTask,
+  target: RoutineTarget
+): RoutineTask | undefined {
+  const targetChanged = !routineTargetsEqual(
+    target,
+    targetFromTask(previousTask)
+  );
+  const promptChanged = draft.prompt !== previousTask.user_prompt;
+  const appsChanged =
+    draft.apps.map((app) => app.app_slug).join(',') !==
+    (previousTask.mcp_servers ?? []).map((app) => app.app_slug).join(',');
+  if (!targetChanged && !promptChanged && !appsChanged) return undefined;
+  const task = { ...previousTask };
+  if (targetChanged) applyTarget(task, target);
+  if (promptChanged) task.user_prompt = draft.prompt.trim();
+  if (appsChanged) task.mcp_servers = draft.apps;
+  return task;
+}
+
 export function draftToUpdateBody(
   draft: ScheduleDraft,
   previous: ScheduledAction
@@ -152,22 +174,7 @@ export function draftToUpdateBody(
   if ((!trigger && !draft.triggers) || !previousTask || !target.success)
     return undefined;
 
-  const targetChanged = !routineTargetsEqual(
-    target.data,
-    targetFromTask(previousTask)
-  );
-  const promptChanged = draft.prompt !== previousTask.user_prompt;
-  const appsChanged =
-    draft.apps.map((app) => app.app_slug).join(',') !==
-    (previousTask.mcp_servers ?? []).map((app) => app.app_slug).join(',');
-  let task = previous.task;
-  if (targetChanged || promptChanged || appsChanged) {
-    const editedTask = { ...previousTask };
-    if (targetChanged) applyTarget(editedTask, target.data);
-    if (promptChanged) editedTask.user_prompt = draft.prompt.trim();
-    if (appsChanged) editedTask.mcp_servers = draft.apps;
-    task = editedTask;
-  }
+  const task = editTask(draft, previousTask, target.data) ?? previous.task;
   const runVisibility = draft.runVisibility ?? previous.run_visibility;
 
   // Preserve API-written cron expressions and raw task data when not edited.
@@ -191,15 +198,7 @@ export function draftToUpdateBody(
     };
   if (!trigger) return;
   const parsed = parseCron(trigger.schedule);
-  const scheduleChanged =
-    draft.frequency !==
-      (onceFromCron(trigger.schedule, trigger.timezone)?.frequency ??
-        parsed.frequency) ||
-    draft.onceAt !== onceFromCron(trigger.schedule, trigger.timezone)?.onceAt ||
-    (draft.timezone !== undefined && draft.timezone !== trigger.timezone) ||
-    draft.time !== parsed.time ||
-    draft.dayOfMonth !== parsed.dayOfMonth ||
-    draft.daysOfWeek.join(',') !== parsed.daysOfWeek.join(',');
+  const scheduleChanged = buildScheduleChanged(trigger);
   return {
     name:
       draft.name === previous.name
@@ -212,6 +211,21 @@ export function draftToUpdateBody(
     task,
     run_visibility: runVisibility,
   };
+
+  function buildScheduleChanged(triggerValue: NonNullable<typeof trigger>) {
+    return (
+      draft.frequency !==
+        (onceFromCron(triggerValue.schedule, triggerValue.timezone)
+          ?.frequency ?? parsed.frequency) ||
+      draft.onceAt !==
+        onceFromCron(triggerValue.schedule, triggerValue.timezone)?.onceAt ||
+      (draft.timezone !== undefined &&
+        draft.timezone !== triggerValue.timezone) ||
+      draft.time !== parsed.time ||
+      draft.dayOfMonth !== parsed.dayOfMonth ||
+      draft.daysOfWeek.join(',') !== parsed.daysOfWeek.join(',')
+    );
+  }
 }
 
 export function scheduleToDuplicateBody(

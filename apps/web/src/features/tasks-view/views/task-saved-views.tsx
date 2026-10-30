@@ -11,6 +11,7 @@ import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import {
   Button,
   ButtonGroup,
@@ -167,6 +168,7 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
     return openDialog(
       SavedViewDialog,
       () => ({
+        client: getGraphqlSoupClient,
         refresh: savedViewsList.refresh,
         viewerId,
         isCurrent: request.isCurrent,
@@ -243,6 +245,7 @@ function TaskSavedViewMenuItems(props: {
         SavedViewDialog,
         () => ({
           mode: 'edit' as const,
+          client: getGraphqlSoupClient,
           refresh: savedViewsList.refresh,
           viewerId,
           record,
@@ -265,6 +268,7 @@ function TaskSavedViewMenuItems(props: {
       openDialog(
         DeleteSavedViewDialog,
         {
+          client: getGraphqlSoupClient,
           refresh: savedViewsList.refresh,
           viewerId,
           record,
@@ -621,6 +625,7 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
   const showCreate = (record?: SavedView) =>
     props.onCreate ? props.onCreate(() => create(record)) : create(record);
   const update = useUpdateSavedView({
+    client: getGraphqlSoupClient,
     refresh: savedViewsList.refresh,
   });
   const selected = () => {
@@ -767,7 +772,10 @@ export function TaskSavedViewWarning() {
   const reload = useReloadTaskSavedView();
   if (!savedViews || !savedViewsList) return null;
   const viewerId = useUserId();
-  const update = useUpdateSavedView({ refresh: savedViewsList.refresh });
+  const update = useUpdateSavedView({
+    client: getGraphqlSoupClient,
+    refresh: savedViewsList.refresh,
+  });
   const selected = () => {
     const view = savedViews.view();
     return view.kind === 'saved' ? view : undefined;

@@ -192,6 +192,32 @@ export interface SafeFetchInit extends RequestInit {
 
 export type TextResponse = { contentType: 'text/plain'; body: string };
 
+/** A successful response's body, read by its content type. */
+async function readResponseBody<T>(
+  response: Response,
+  method: string | undefined
+): Promise<T> {
+  if (method === 'HEAD') return {} as T;
+
+  const contentType = response.headers.get('Content-Type');
+  if (!contentType) return {} as T;
+
+  if (contentType.includes('text/plain')) {
+    const text = await response.text();
+    return { contentType, body: text } as T;
+  }
+
+  if (
+    contentType.includes('application/octet-stream') ||
+    contentType.includes('text/calendar') ||
+    contentType.includes('message/rfc822')
+  ) {
+    return new Uint8Array(await response.arrayBuffer()) as T;
+  }
+
+  return (await response.json()) as T;
+}
+
 /**
  * Performs a safe fetch operation with structured error handling and retry capability.
  *
@@ -284,7 +310,7 @@ export async function safeFetch<
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
   const { retry, trace, ...fetchInit } = init || {};
   const maxTries = retry?.maxTries ?? 1;
-  const delay = retry?.delay ?? 0;
+  const delay = buildDelay();
   type ErrorCode = BaseFetchErrorCode | CustomErrorCode;
   const fetchErr = (errors: ResultError<ErrorCode>[]) =>
     err<T, ResultError<ErrorCode>[]>(errors);
@@ -296,17 +322,7 @@ export async function safeFetch<
         input,
         {
           ...fetchInit,
-          headers: {
-            ...(fetchInit?.method !== 'GET' &&
-              fetchInit?.method !== 'HEAD' &&
-              !(fetchInit?.body instanceof FormData) && {
-                'Content-Type':
-                  (fetchInit?.headers as Record<string, string> | undefined)?.[
-                    'Content-Type'
-                  ] ?? 'application/json',
-              }),
-            ...fetchInit?.headers,
-          } as Record<string, string>,
+          headers: buildHeaders(),
         },
         trace
       );
@@ -321,26 +337,7 @@ export async function safeFetch<
         if (failure.code !== 'SERVER_ERROR') return fetchErr([failure]);
         lastError = fetchErr([failure]);
       } else {
-        if (fetchInit.method === 'HEAD') return ok({} as T);
-
-        const contentType = response.headers.get('Content-Type');
-        if (!contentType) return ok({} as T);
-
-        if (contentType.includes('text/plain')) {
-          const text = await response.text();
-          return ok({ contentType, body: text } as T);
-        }
-
-        if (
-          contentType.includes('application/octet-stream') ||
-          contentType.includes('text/calendar') ||
-          contentType.includes('message/rfc822')
-        ) {
-          return ok(new Uint8Array(await response.arrayBuffer()) as T);
-        }
-
-        const data = await response.json();
-        return ok(data as T);
+        return ok(await readResponseBody<T>(response, fetchInit.method));
       }
     } catch (error) {
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
@@ -375,6 +372,24 @@ export async function safeFetch<
       },
     ])
   );
+
+  function buildDelay() {
+    return retry?.delay ?? 0;
+  }
+
+  function buildHeaders(): (HeadersInit | undefined) & Record<string, string> {
+    return {
+      ...(fetchInit?.method !== 'GET' &&
+        fetchInit?.method !== 'HEAD' &&
+        !(fetchInit?.body instanceof FormData) && {
+          'Content-Type':
+            (fetchInit?.headers as Record<string, string> | undefined)?.[
+              'Content-Type'
+            ] ?? 'application/json',
+        }),
+      ...fetchInit?.headers,
+    } as Record<string, string>;
+  }
 }
 function calculateDelay(
   delay: 'exponential' | number,

@@ -1,4 +1,4 @@
-import type { TaskComposerContext } from '@app/features/task-composer/core/context';
+import type { TaskComposerContext } from '@app/features/task-composer/context/composer';
 import {
   type Accessor,
   createContext,

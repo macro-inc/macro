@@ -91,9 +91,6 @@ function EditorRow(props: {
   );
 }
 
-const inputClass =
-  'h-9 min-w-0 w-full flex-1 rounded-md border border-edge-muted bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent';
-
 const hasOptionValue = (value: string | number) =>
   typeof value === 'string' ? value.trim() !== '' : !isNaN(value);
 
@@ -144,7 +141,9 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
               }}
               onKeyDown={(e) => handleKeyDown(e, option().id, option().value)}
               placeholder={props.placeholder}
-              class={inputClass}
+              class={
+                'h-9 min-w-0 w-full flex-1 rounded-md border border-edge-muted bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent'
+              }
               data-option-id={option().id}
             />
             <Button
@@ -592,7 +591,9 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                   }
                 }}
                 placeholder="Property name"
-                class={inputClass}
+                class={
+                  'h-9 min-w-0 w-full flex-1 rounded-md border border-edge-muted bg-surface px-3 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent'
+                }
               />
             </EditorRow>
 

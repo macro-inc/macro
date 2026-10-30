@@ -4,6 +4,7 @@ import {
   isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { authKeys } from '@queries/auth/keys';
 import type { UserInfoData } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
@@ -316,9 +317,15 @@ function cachedUserId(): string | undefined {
 }
 
 function runGraphqlPreviewWrite(write: Promise<void>) {
-  void write.catch((error) => {
+  fireAndForget(logGraphqlPreviewWriteFailure(write), 'graphql-preview');
+}
+
+async function logGraphqlPreviewWriteFailure(write: Promise<void>) {
+  try {
+    await write;
+  } catch (error) {
     console.error('[graphql-preview] failed to update normalized cache', error);
-  });
+  }
 }
 
 function getPreviewData(itemId: string): PreviewItem | undefined {

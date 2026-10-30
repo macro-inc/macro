@@ -5,11 +5,10 @@ import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
-import { Telemetry } from '@macro-inc/observability';
 import { PlatformNotificationProvider } from '@notifications';
 import { queryPersistence } from '@queries/client';
 import type { RouteSectionProps } from '@solidjs/router';
-import { invoke } from '@tauri-apps/api/core';
+import { type InvokeArgs, invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import { Dialog, Surface } from '@ui';
@@ -31,6 +30,7 @@ import {
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
+import { unlistenWhenReady } from './unlisten';
 
 export type BundleUpdateStatus =
   | { status: 'Idle' }
@@ -78,6 +78,14 @@ function shouldShowNativeAppUpdateRequiredDialog(status: BundleUpdateStatus) {
   );
 }
 
+async function invokeBundleUpdateCommand(command: string, args?: InvokeArgs) {
+  try {
+    await invoke<boolean>(command, args);
+  } catch (e) {
+    console.error(`[bundle-update] ${command} failed`, e);
+  }
+}
+
 function TauriProvider(props: { children: JSX.Element }) {
   const nativeUpdates = createNativeUpdates(queryPersistence.flush);
   useAndroidWindowInsets();
@@ -91,9 +99,7 @@ function TauriProvider(props: { children: JSX.Element }) {
   let hasShownNativeAppUpdateRequiredDialog = false;
 
   function performBundleUpdate() {
-    invoke<boolean>('perform_update').catch((e) =>
-      console.error('[bundle-update] perform_update failed', e)
-    );
+    fireAndForget(invokeBundleUpdateCommand('perform_update'), 'bundle-update');
   }
 
   createEffect(() => {
@@ -127,23 +133,23 @@ function TauriProvider(props: { children: JSX.Element }) {
       }
     );
     if (LOADED_BUNDLE_BUILD !== undefined) {
-      invoke<boolean>('ack_bundle_update_reload', {
-        loadedBundleBuild: LOADED_BUNDLE_BUILD,
-      }).catch((e) =>
-        console.error('[bundle-update] ack_bundle_update_reload failed', e)
+      fireAndForget(
+        invokeBundleUpdateCommand('ack_bundle_update_reload', {
+          loadedBundleBuild: LOADED_BUNDLE_BUILD,
+        }),
+        'bundle-update'
       );
     }
     // Fetch current status since events emitted before the listener registered are missed
-    invoke<BundleUpdateStatus>('get_bundle_update_status')
-      .then((status) => {
-        setBundleUpdateStatus(status);
-      })
-      .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
-    onCleanup(() => {
-      unlistenPromise
-        .then((unlisten) => unlisten())
-        .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
-    });
+    const loadBundleUpdateStatus = async () => {
+      setBundleUpdateStatus(
+        await invoke<BundleUpdateStatus>('get_bundle_update_status')
+      );
+    };
+    fireAndForget(loadBundleUpdateStatus(), 'bundle-update');
+    onCleanup(() =>
+      fireAndForget(unlistenWhenReady(unlistenPromise), 'bundle-update')
+    );
 
     document.body.classList.add('tauri');
     document.body.classList.add(`tauri-${value.os}`);

@@ -4,7 +4,6 @@ import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
-import { Telemetry } from '@macro-inc/observability';
 import {
   messageReferencesCrmRecord,
   refreshCrmAssociatedSoupQueries,
@@ -502,8 +501,9 @@ export function useSendMessageMutation(
           // this soup entity. Refresh root messages here so the channel moves to
           // its updated position in soup lists.
           if (threadId === undefined && variables.parent.type === 'channel') {
-            refetchSoupEntity(variables.parent.id, 'channel').catch((error) =>
-              Telemetry.error(error, { surface: 'messages' })
+            fireAndForget(
+              refetchSoupEntity(variables.parent.id, 'channel'),
+              'messages'
             );
             invalidateSoupEntity(variables.parent.id);
           }

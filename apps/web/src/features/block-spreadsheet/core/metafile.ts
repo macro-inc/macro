@@ -1,3 +1,4 @@
+import { match as matchBranch, match as matchEmfRecord } from 'ts-pattern';
 /**
  * EMF and WMF metafiles, which Office uses for logos and pasted drawings and
  * browsers cannot show. Macro plays their drawing records onto a canvas for
@@ -196,16 +197,8 @@ export function readBitmap(
     });
   }
   const height = Math.abs(rawHeight);
-  if (
-    width <= 0 ||
-    height <= 0 ||
-    width > 8192 ||
-    height > 8192 ||
-    ![1, 4, 8, 16, 24, 32].includes(depth) ||
-    (compression !== 0 && compression !== 3)
-  )
-    return;
-  const paletteSize = depth <= 8 ? colorsUsed || 1 << depth : 0;
+  if (unsupportedBitmap()) return;
+  const paletteSize = paletteEntries();
   const entry = headerSize === 12 ? 3 : 4;
   const palette: number[][] = [];
   for (let index = 0; index < paletteSize; index++) {
@@ -240,30 +233,7 @@ export function readBitmap(
       let g = 0;
       let b = 0;
       let a = 255;
-      if (depth <= 8) {
-        const perByte = 8 / depth;
-        const byte = bytes[row + Math.floor(x / perByte)];
-        const shift = 8 - depth * ((x % perByte) + 1);
-        const index = (byte >> shift) & ((1 << depth) - 1);
-        [r, g, b] = palette[index] ?? [0, 0, 0];
-      } else if (depth === 16) {
-        const value = view.getUint16(row + x * 2, true);
-        [r, g, b] = masks.map((mask) => channel(value, mask));
-      } else if (depth === 24) {
-        b = bytes[row + x * 3];
-        g = bytes[row + x * 3 + 1];
-        r = bytes[row + x * 3 + 2];
-      } else {
-        const value = view.getUint32(row + x * 4, true);
-        if (compression === 3)
-          [r, g, b] = masks.map((mask) => channel(value, mask));
-        else {
-          b = value & 0xff;
-          g = (value >> 8) & 0xff;
-          r = (value >> 16) & 0xff;
-        }
-        a = 255;
-      }
+      ({ r, g, b, a } = pixelAt(row, x, r, g, b, a));
       rgba[out] = r;
       rgba[out + 1] = g;
       rgba[out + 2] = b;
@@ -271,6 +241,56 @@ export function readBitmap(
     }
   }
   return { width, height, rgba };
+
+  function paletteEntries() {
+    return depth <= 8 ? colorsUsed || 1 << depth : 0;
+  }
+
+  function unsupportedBitmap() {
+    return (
+      width <= 0 ||
+      height <= 0 ||
+      width > 8192 ||
+      height > 8192 ||
+      ![1, 4, 8, 16, 24, 32].includes(depth) ||
+      (compression !== 0 && compression !== 3)
+    );
+  }
+
+  function pixelAt(
+    row: number,
+    x: number,
+    r: number,
+    g: number,
+    b: number,
+    a: number
+  ) {
+    if (depth <= 8) {
+      const perByte = 8 / depth;
+      const byte = bytes[row + Math.floor(x / perByte)];
+      const shift = 8 - depth * ((x % perByte) + 1);
+      const index = (byte >> shift) & ((1 << depth) - 1);
+      [r, g, b] = palette[index] ?? [0, 0, 0];
+    } else if (depth === 16) {
+      const value = view.getUint16(row + x * 2, true);
+      [r, g, b] = masks.map((mask) => channel(value, mask));
+    } else if (depth === 24) {
+      b = bytes[row + x * 3];
+      g = bytes[row + x * 3 + 1];
+      r = bytes[row + x * 3 + 2];
+    } else {
+      const value = view.getUint32(row + x * 4, true);
+      if (compression === 3)
+        [r, g, b] = masks.map((mask) => channel(value, mask));
+      else {
+        b = value & 0xff;
+        g = (value >> 8) & 0xff;
+        r = (value >> 16) & 0xff;
+      }
+      a = 255;
+    }
+    return { r, g, b, a };
+  }
 }
 
 /** The shared work of playing EMF and WMF records onto a canvas. */
@@ -696,20 +716,7 @@ export async function playEmf(
     device[0] / (millimeters[0] || 1),
     device[1] / (millimeters[1] || 1),
   ];
-  const box =
-    frame[2] > frame[0] && frame[3] > frame[1] && device[0] > 0 && device[1] > 0
-      ? [
-          (frame[0] / 100) * perMillimeter[0],
-          (frame[1] / 100) * perMillimeter[1],
-          ((frame[2] - frame[0]) / 100) * perMillimeter[0],
-          ((frame[3] - frame[1]) / 100) * perMillimeter[1],
-        ]
-      : [
-          bounds[0],
-          bounds[1],
-          Math.max(1, bounds[2] - bounds[0] + 1),
-          Math.max(1, bounds[3] - bounds[1] + 1),
-        ];
+  const box = frameBox();
   const output: Matrix = [
     width / box[2],
     0,
@@ -737,26 +744,39 @@ export async function playEmf(
     if (size < 8 || offset + size > bytes.length) break;
     const at = offset + 8;
     const s = player.state;
-    switch (type) {
-      case 14: // EOF
-        offset = bytes.length;
-        continue;
-      case 9: // SETWINDOWEXTEX
+    if (type === 14) {
+      // EOF
+      offset = bytes.length;
+      continue;
+    }
+    const pendingRecord = matchEmfRecord(type)
+      .with(9, () => {
+        // SETWINDOWEXTEX
         s.windowExtent = [i32(at), i32(at + 4)];
-        break;
-      case 10: // SETWINDOWORGEX
+        return;
+      })
+      .with(10, () => {
+        // SETWINDOWORGEX
         s.windowOrigin = [i32(at), i32(at + 4)];
-        break;
-      case 11: // SETVIEWPORTEXTEX
+        return;
+      })
+      .with(11, () => {
+        // SETVIEWPORTEXTEX
         s.viewportExtent = [i32(at), i32(at + 4)];
-        break;
-      case 12: // SETVIEWPORTORGEX
+        return;
+      })
+      .with(12, () => {
+        // SETVIEWPORTORGEX
         s.viewportOrigin = [i32(at), i32(at + 4)];
-        break;
-      case 17: // SETMAPMODE
+        return;
+      })
+      .with(17, () => {
+        // SETMAPMODE
         s.mapMode = u32(at);
-        break;
-      case 35: // SETWORLDTRANSFORM
+        return;
+      })
+      .with(35, () => {
+        // SETWORLDTRANSFORM
         s.world = [
           f32(at),
           f32(at + 4),
@@ -765,46 +785,61 @@ export async function playEmf(
           f32(at + 16),
           f32(at + 20),
         ];
-        break;
-      case 36: {
-        // MODIFYWORLDTRANSFORM
-        const matrix: Matrix = [
-          f32(at),
-          f32(at + 4),
-          f32(at + 8),
-          f32(at + 12),
-          f32(at + 16),
-          f32(at + 20),
-        ];
-        const mode = u32(at + 24);
-        if (mode === 1) s.world = identity();
-        else if (mode === 2) s.world = multiply(matrix, s.world);
-        else if (mode === 3) s.world = multiply(s.world, matrix);
-        else if (mode === 4) s.world = matrix;
-        break;
-      }
-      case 33: // SAVEDC
+        return;
+      })
+      .with(36, () => {
+        {
+          // MODIFYWORLDTRANSFORM
+          const matrix: Matrix = [
+            f32(at),
+            f32(at + 4),
+            f32(at + 8),
+            f32(at + 12),
+            f32(at + 16),
+            f32(at + 20),
+          ];
+          const mode = u32(at + 24);
+          applyWorldTransform(mode, s, matrix);
+          return;
+        }
+      })
+      .with(33, () => {
+        // SAVEDC
         player.save();
-        break;
-      case 34: // RESTOREDC
+        return;
+      })
+      .with(34, () => {
+        // RESTOREDC
         player.restore(i32(at));
-        break;
-      case 24: // SETTEXTCOLOR
+        return;
+      })
+      .with(24, () => {
+        // SETTEXTCOLOR
         s.textColor = colorref(u32(at));
-        break;
-      case 25: // SETBKCOLOR
+        return;
+      })
+      .with(25, () => {
+        // SETBKCOLOR
         s.backgroundColor = colorref(u32(at));
-        break;
-      case 18: // SETBKMODE
+        return;
+      })
+      .with(18, () => {
+        // SETBKMODE
         s.opaqueBackground = u32(at) === 2;
-        break;
-      case 19: // SETPOLYFILLMODE
+        return;
+      })
+      .with(19, () => {
+        // SETPOLYFILLMODE
         s.fillRule = u32(at) === 2 ? 'nonzero' : 'evenodd';
-        break;
-      case 22: // SETTEXTALIGN
+        return;
+      })
+      .with(22, () => {
+        // SETTEXTALIGN
         s.textAlign = u32(at);
-        break;
-      case 38: // CREATEPEN
+        return;
+      })
+      .with(38, () => {
+        // CREATEPEN
         player.objects.set(u32(at), {
           type: 'pen',
           pen: {
@@ -813,8 +848,10 @@ export async function playEmf(
             color: colorref(u32(at + 16)),
           },
         });
-        break;
-      case 95: // EXTCREATEPEN
+        return;
+      })
+      .with(95, () => {
+        // EXTCREATEPEN
         player.objects.set(u32(at), {
           type: 'pen',
           pen: {
@@ -823,8 +860,10 @@ export async function playEmf(
             color: colorref(u32(at + 32)),
           },
         });
-        break;
-      case 39: // CREATEBRUSHINDIRECT
+        return;
+      })
+      .with(39, () => {
+        // CREATEBRUSHINDIRECT
         player.objects.set(u32(at), {
           type: 'brush',
           brush: {
@@ -832,59 +871,74 @@ export async function playEmf(
             color: colorref(u32(at + 8)),
           },
         });
-        break;
-      case 93: // CREATEDIBPATTERNBRUSHPT
-      case 94: // CREATEMONOBRUSH
+        return;
+      })
+      .with(93, 94, () => {
+        // CREATEMONOBRUSH
         // Patterns are drawn in their average gray.
         player.objects.set(u32(at), {
           type: 'brush',
           brush: { style: 0, color: '#808080' },
         });
-        break;
-      case 82: // EXTCREATEFONTINDIRECTW
+        return;
+      })
+      .with(82, () => {
+        // EXTCREATEFONTINDIRECTW
         player.objects.set(u32(at), {
           type: 'font',
           font: readLogFont(bytes, at + 4),
         });
-        break;
-      case 37: {
-        // SELECTOBJECT
-        const index = u32(at);
-        player.select(
-          index & 0x80000000
-            ? stockObject(index & 0x7fffffff)
-            : player.objects.get(index)
-        );
-        break;
-      }
-      case 40: // DELETEOBJECT
+        return;
+      })
+      .with(37, () => {
+        {
+          // SELECTOBJECT
+          const index = u32(at);
+          player.select(
+            index & 0x80000000
+              ? stockObject(index & 0x7fffffff)
+              : player.objects.get(index)
+          );
+          return;
+        }
+      })
+      .with(40, () => {
+        // DELETEOBJECT
         player.objects.delete(u32(at));
-        break;
-      case 27: // MOVETOEX
+        return;
+      })
+      .with(27, () => {
+        // MOVETOEX
         s.position = [i32(at), i32(at + 4)];
         if (player.inPath) {
           const [x, y] = player.point(...s.position);
           canvas.moveTo(x, y);
         }
-        break;
-      case 54: {
-        // LINETO
-        const to: Point = [i32(at), i32(at + 4)];
-        player.shape(() => {
-          if (!player.inPath) {
-            const [x, y] = player.point(...s.position);
-            canvas.moveTo(x, y);
-          }
-          const [x, y] = player.point(...to);
-          canvas.lineTo(x, y);
-        }, false);
-        s.position = to;
-        break;
-      }
-      case 43: // RECTANGLE
+        return;
+      })
+      .with(54, () => {
+        {
+          // LINETO
+          const to: Point = [i32(at), i32(at + 4)];
+          player.shape(() => {
+            if (!player.inPath) {
+              const [x, y] = player.point(...s.position);
+              canvas.moveTo(x, y);
+            }
+            const [x, y] = player.point(...to);
+            canvas.lineTo(x, y);
+          }, false);
+          s.position = to;
+          return;
+        }
+      })
+      .with(43, () => {
+        // RECTANGLE
         player.rectangle(i32(at), i32(at + 4), i32(at + 8), i32(at + 12));
-        break;
-      case 44: // ROUNDRECT
+        return;
+      })
+      .with(44, () => {
+        // ROUNDRECT
         player.roundRectangle(
           i32(at),
           i32(at + 4),
@@ -893,217 +947,265 @@ export async function playEmf(
           i32(at + 16),
           i32(at + 20)
         );
-        break;
-      case 42: // ELLIPSE
+        return;
+      })
+      .with(42, () => {
+        // ELLIPSE
         player.ellipse(i32(at), i32(at + 4), i32(at + 8), i32(at + 12));
-        break;
-      case 45: // ARC
-      case 46: // CHORD
-      case 47: // PIE
+        return;
+      })
+      .with(45, 46, 47, () => {
+        // PIE
         player.arc(
           type === 45 ? 'arc' : type === 46 ? 'chord' : 'pie',
           [i32(at), i32(at + 4), i32(at + 8), i32(at + 12)],
           [i32(at + 16), i32(at + 20)],
           [i32(at + 24), i32(at + 28)]
         );
-        break;
-      case 3: // POLYGON
-      case 4: // POLYLINE
-      case 86: // POLYGON16
-      case 87: {
-        // POLYLINE16
-        const count = u32(at + 16);
-        const points =
-          type === 3 || type === 4
-            ? points32(at + 20, count)
-            : points16(at + 20, count);
-        const closed = type === 3 || type === 86;
-        player.shape(() => player.trace(points, closed), closed);
-        break;
-      }
-      case 6: // POLYLINETO
-      case 89: {
-        // POLYLINETO16
-        const count = u32(at + 16);
-        const points =
-          type === 6 ? points32(at + 20, count) : points16(at + 20, count);
-        player.shape(() => {
-          if (!player.inPath) {
-            const [x, y] = player.point(...s.position);
-            canvas.moveTo(x, y);
-          }
-          player.trace(points, false, true);
-        }, false);
-        if (points.length) s.position = points[points.length - 1];
-        break;
-      }
-      case 2: // POLYBEZIER
-      case 85: // POLYBEZIER16
-      case 5: // POLYBEZIERTO
-      case 88: {
-        // POLYBEZIERTO16
-        const count = u32(at + 16);
-        const points =
-          type === 2 || type === 5
-            ? points32(at + 20, count)
-            : points16(at + 20, count);
-        const to = type === 5 || type === 88;
-        player.shape(
-          () =>
-            player.beziers(
-              points,
-              !to ? 'first' : player.inPath ? 'current' : s.position
-            ),
-          false
-        );
-        if (points.length) s.position = points[points.length - 1];
-        break;
-      }
-      case 7: // POLYPOLYLINE
-      case 8: // POLYPOLYGON
-      case 90: // POLYPOLYLINE16
-      case 91: {
-        // POLYPOLYGON16
-        const groups = u32(at + 16);
-        const total = u32(at + 20);
-        const counts = Array.from({ length: groups }, (_, index) =>
-          u32(at + 24 + index * 4)
-        );
-        const start = at + 24 + groups * 4;
-        const all =
-          type === 7 || type === 8
-            ? points32(start, total)
-            : points16(start, total);
-        const closed = type === 8 || type === 91;
-        player.shape(() => {
-          let index = 0;
-          for (const count of counts) {
-            player.trace(all.slice(index, index + count), closed);
-            index += count;
-          }
-        }, closed);
-        break;
-      }
-      case 59: // BEGINPATH
+        return;
+      })
+      .with(3, 4, 86, 87, () => {
+        {
+          // POLYLINE16
+          const count = u32(at + 16);
+          const points =
+            type === 3 || type === 4
+              ? points32(at + 20, count)
+              : points16(at + 20, count);
+          const closed = type === 3 || type === 86;
+          player.shape(() => player.trace(points, closed), closed);
+          return;
+        }
+      })
+      .with(6, 89, () => {
+        {
+          // POLYLINETO16
+          const count = u32(at + 16);
+          const points =
+            type === 6 ? points32(at + 20, count) : points16(at + 20, count);
+          player.shape(() => {
+            if (!player.inPath) {
+              const [x, y] = player.point(...s.position);
+              canvas.moveTo(x, y);
+            }
+            player.trace(points, false, true);
+          }, false);
+          if (points.length) s.position = points[points.length - 1];
+          return;
+        }
+      })
+      .with(2, 85, 5, 88, () => {
+        {
+          // POLYBEZIERTO16
+          const count = u32(at + 16);
+          const points =
+            type === 2 || type === 5
+              ? points32(at + 20, count)
+              : points16(at + 20, count);
+          const to = type === 5 || type === 88;
+          player.shape(
+            () =>
+              player.beziers(
+                points,
+                !to ? 'first' : player.inPath ? 'current' : s.position
+              ),
+            false
+          );
+          if (points.length) s.position = points[points.length - 1];
+          return;
+        }
+      })
+      .with(7, 8, 90, 91, () => {
+        {
+          // POLYPOLYGON16
+          const groups = u32(at + 16);
+          const total = u32(at + 20);
+          const counts = Array.from({ length: groups }, (_, index) =>
+            u32(at + 24 + index * 4)
+          );
+          const start = at + 24 + groups * 4;
+          const all =
+            type === 7 || type === 8
+              ? points32(start, total)
+              : points16(start, total);
+          const closed = type === 8 || type === 91;
+          player.shape(() => {
+            let index = 0;
+            for (const count of counts) {
+              player.trace(all.slice(index, index + count), closed);
+              index += count;
+            }
+          }, closed);
+          return;
+        }
+      })
+      .with(59, () => {
+        // BEGINPATH
         canvas.beginPath();
         player.inPath = true;
-        break;
-      case 60: // ENDPATH
+        return;
+      })
+      .with(60, () => {
+        // ENDPATH
         player.inPath = false;
-        break;
-      case 61: // CLOSEFIGURE
+        return;
+      })
+      .with(61, () => {
+        // CLOSEFIGURE
         canvas.closePath();
-        break;
-      case 62: // FILLPATH
+        return;
+      })
+      .with(62, () => {
+        // FILLPATH
         player.paint(true, false);
-        break;
-      case 63: // STROKEANDFILLPATH
+        return;
+      })
+      .with(63, () => {
+        // STROKEANDFILLPATH
         player.paint(true, true);
-        break;
-      case 64: // STROKEPATH
+        return;
+      })
+      .with(64, () => {
+        // STROKEPATH
         player.paint(false, true);
-        break;
-      case 67: // SELECTCLIPPATH
+        return;
+      })
+      .with(67, () => {
+        // SELECTCLIPPATH
         canvas.clip(s.fillRule);
-        break;
-      case 30: {
-        // INTERSECTCLIPRECT
-        const [x1, y1] = player.point(i32(at), i32(at + 4));
-        const [x2, y2] = player.point(i32(at + 8), i32(at + 12));
-        canvas.beginPath();
-        canvas.rect(
-          Math.min(x1, x2),
-          Math.min(y1, y2),
-          Math.abs(x2 - x1),
-          Math.abs(y2 - y1)
-        );
-        canvas.clip();
-        canvas.beginPath();
-        break;
-      }
-      case 84: // EXTTEXTOUTW
-      case 83: {
-        // EXTTEXTOUTA
-        const text = at + 28;
-        const x = i32(text);
-        const y = i32(text + 4);
-        const count = u32(text + 8);
-        const start = offset + u32(text + 12);
-        const value =
-          type === 84
-            ? utf16(bytes, start, Math.min(count, 10_000))
-            : new TextDecoder('windows-1252').decode(
-                bytes.subarray(start, start + Math.min(count, 10_000))
-              );
-        player.text(value, x, y);
-        break;
-      }
-      case 81: {
-        // STRETCHDIBITS
-        const destination: [number, number, number, number] = [
-          i32(at + 16),
-          i32(at + 20),
-          i32(at + 64),
-          i32(at + 68),
-        ];
-        const info = offset + u32(at + 40);
-        const bits = offset + u32(at + 48);
-        await player.bitmap(
-          readBitmap(bytes, info, bits, u32(at + 52)),
-          destination
-        );
-        break;
-      }
-      case 80: {
-        // SETDIBITSTODEVICE
-        const destination: [number, number, number, number] = [
-          i32(at + 16),
-          i32(at + 20),
-          i32(at + 32),
-          i32(at + 36),
-        ];
-        const info = offset + u32(at + 40);
-        const bits = offset + u32(at + 48);
-        await player.bitmap(
-          readBitmap(bytes, info, bits, u32(at + 52)),
-          destination
-        );
-        break;
-      }
-      case 76: // BITBLT
-      case 77: {
-        // STRETCHBLT
-        const destination: [number, number, number, number] = [
-          i32(at + 16),
-          i32(at + 20),
-          i32(at + 24),
-          i32(at + 28),
-        ];
-        const infoOffset = u32(at + 76);
-        if (infoOffset) {
-          const info = offset + infoOffset;
-          const bits = offset + u32(at + 84);
+        return;
+      })
+      .with(30, () => {
+        {
+          // INTERSECTCLIPRECT
+          const [x1, y1] = player.point(i32(at), i32(at + 4));
+          const [x2, y2] = player.point(i32(at + 8), i32(at + 12));
+          canvas.beginPath();
+          canvas.rect(
+            Math.min(x1, x2),
+            Math.min(y1, y2),
+            Math.abs(x2 - x1),
+            Math.abs(y2 - y1)
+          );
+          canvas.clip();
+          canvas.beginPath();
+          return;
+        }
+      })
+      .with(84, 83, () => {
+        {
+          // EXTTEXTOUTA
+          const text = at + 28;
+          const x = i32(text);
+          const y = i32(text + 4);
+          const count = u32(text + 8);
+          const start = offset + u32(text + 12);
+          const value =
+            type === 84
+              ? utf16(bytes, start, Math.min(count, 10_000))
+              : new TextDecoder('windows-1252').decode(
+                  bytes.subarray(start, start + Math.min(count, 10_000))
+                );
+          player.text(value, x, y);
+          return;
+        }
+      })
+      .with(81, async () => {
+        {
+          // STRETCHDIBITS
+          const destination: [number, number, number, number] = [
+            i32(at + 16),
+            i32(at + 20),
+            i32(at + 64),
+            i32(at + 68),
+          ];
+          const info = offset + u32(at + 40);
+          const bits = offset + u32(at + 48);
           await player.bitmap(
-            readBitmap(bytes, info, bits, u32(at + 88)),
+            readBitmap(bytes, info, bits, u32(at + 52)),
             destination
           );
-        } else if (u32(at + 32) === 0x00f00021) {
-          // PATCOPY: a rectangle of the brush.
-          player.rectangle(
-            destination[0],
-            destination[1],
-            destination[0] + destination[2],
-            destination[1] + destination[3]
-          );
+          return;
         }
-        break;
-      }
-      default:
-        break;
-    }
+      })
+      .with(80, async () => {
+        {
+          // SETDIBITSTODEVICE
+          const destination: [number, number, number, number] = [
+            i32(at + 16),
+            i32(at + 20),
+            i32(at + 32),
+            i32(at + 36),
+          ];
+          const info = offset + u32(at + 40);
+          const bits = offset + u32(at + 48);
+          await player.bitmap(
+            readBitmap(bytes, info, bits, u32(at + 52)),
+            destination
+          );
+          return;
+        }
+      })
+      .with(76, 77, async () => {
+        {
+          // STRETCHBLT
+          const destination: [number, number, number, number] = [
+            i32(at + 16),
+            i32(at + 20),
+            i32(at + 24),
+            i32(at + 28),
+          ];
+          const infoOffset = u32(at + 76);
+          if (infoOffset) {
+            const info = offset + infoOffset;
+            const bits = offset + u32(at + 84);
+            await player.bitmap(
+              readBitmap(bytes, info, bits, u32(at + 88)),
+              destination
+            );
+          } else if (u32(at + 32) === 0x00f00021) {
+            // PATCOPY: a rectangle of the brush.
+            player.rectangle(
+              destination[0],
+              destination[1],
+              destination[0] + destination[2],
+              destination[1] + destination[3]
+            );
+          }
+          return;
+        }
+      })
+      .otherwise(() => {});
+    if (pendingRecord) await pendingRecord;
     offset += size;
   }
   return player.drew;
+
+  function frameBox() {
+    return frame[2] > frame[0] &&
+      frame[3] > frame[1] &&
+      device[0] > 0 &&
+      device[1] > 0
+      ? [
+          (frame[0] / 100) * perMillimeter[0],
+          (frame[1] / 100) * perMillimeter[1],
+          ((frame[2] - frame[0]) / 100) * perMillimeter[0],
+          ((frame[3] - frame[1]) / 100) * perMillimeter[1],
+        ]
+      : [
+          bounds[0],
+          bounds[1],
+          Math.max(1, bounds[2] - bounds[0] + 1),
+          Math.max(1, bounds[3] - bounds[1] + 1),
+        ];
+  }
+
+  function applyWorldTransform(mode: number, s: State, matrix: Matrix) {
+    if (mode === 1) s.world = identity();
+    else if (mode === 2) s.world = multiply(matrix, s.world);
+    else if (mode === 3) s.world = multiply(s.world, matrix);
+    else if (mode === 4) s.world = matrix;
+  }
 }
 
 /** A WMF's placeable header, giving its bounds in units of `inch` per inch. */
@@ -1182,242 +1284,289 @@ export async function playWmf(
     const at = offset + 6;
     const s = player.state;
     if (fn === 0x0000) break;
-    switch (fn) {
-      case 0x020b: // SETWINDOWORG
-        s.windowOrigin = [i16(at + 2), i16(at)];
-        break;
-      case 0x020c: // SETWINDOWEXT
-        s.windowExtent = [i16(at + 2), i16(at)];
-        break;
-      case 0x020d: // SETVIEWPORTORG
-        s.viewportOrigin = [i16(at + 2), i16(at)];
-        break;
-      case 0x020e: // SETVIEWPORTEXT
-        s.viewportExtent = [i16(at + 2), i16(at)];
-        break;
-      case 0x0103: // SETMAPMODE
-        break;
-      case 0x001e: // SAVEDC
-        player.save();
-        break;
-      case 0x0127: // RESTOREDC
-        player.restore(i16(at));
-        break;
-      case 0x0209: // SETTEXTCOLOR
-        s.textColor = colorref(u32(at));
-        break;
-      case 0x0201: // SETBKCOLOR
-        s.backgroundColor = colorref(u32(at));
-        break;
-      case 0x0102: // SETBKMODE
-        s.opaqueBackground = u16(at) === 2;
-        break;
-      case 0x0106: // SETPOLYFILLMODE
-        s.fillRule = u16(at) === 2 ? 'nonzero' : 'evenodd';
-        break;
-      case 0x012e: // SETTEXTALIGN
-        s.textAlign = u16(at);
-        break;
-      case 0x02fa: // CREATEPENINDIRECT
-        player.objects.set(slot(), {
-          type: 'pen',
-          pen: {
-            style: u16(at),
-            width: i16(at + 2),
-            color: colorref(u32(at + 6)),
-          },
-        });
-        break;
-      case 0x02fc: // CREATEBRUSHINDIRECT
-        player.objects.set(slot(), {
-          type: 'brush',
-          brush: { style: u16(at) === 1 ? 1 : 0, color: colorref(u32(at + 2)) },
-        });
-        break;
-      case 0x02fb: {
-        // CREATEFONTINDIRECT
-        const face = new TextDecoder('windows-1252')
-          .decode(
-            bytes.subarray(at + 18, Math.min(offset + words * 2, at + 50))
-          )
-          .replace(/\0[\s\S]*$/, '');
-        player.objects.set(slot(), {
-          type: 'font',
-          font: {
-            height: i16(at),
-            escapement: i16(at + 4),
-            weight: Math.max(100, Math.min(900, i16(at + 8) || 400)),
-            italic: bytes[at + 10] !== 0,
-            underline: bytes[at + 11] !== 0,
-            face: face || 'Arial',
-          },
-        });
-        break;
-      }
-      case 0x00f7: // CREATEPALETTE
-      case 0x06ff: // CREATEREGION
-        player.objects.set(slot(), { type: 'other' });
-        break;
-      case 0x01f9: // CREATEPATTERNBRUSH
-      case 0x0142: // DIBCREATEPATTERNBRUSH
-        player.objects.set(slot(), {
-          type: 'brush',
-          brush: { style: 0, color: '#808080' },
-        });
-        break;
-      case 0x012d: // SELECTOBJECT
-        player.select(player.objects.get(u16(at)));
-        break;
-      case 0x01f0: // DELETEOBJECT
-        player.objects.delete(u16(at));
-        break;
-      case 0x0214: // MOVETO
-        s.position = [i16(at + 2), i16(at)];
-        break;
-      case 0x0213: {
-        // LINETO
-        const to: Point = [i16(at + 2), i16(at)];
-        player.shape(() => player.trace([s.position, to], false), false);
-        s.position = to;
-        break;
-      }
-      case 0x041b: // RECTANGLE
-        player.rectangle(i16(at + 6), i16(at + 4), i16(at + 2), i16(at));
-        break;
-      case 0x061c: // ROUNDRECT
-        player.roundRectangle(
-          i16(at + 10),
-          i16(at + 8),
-          i16(at + 6),
-          i16(at + 4),
-          i16(at + 2),
-          i16(at)
-        );
-        break;
-      case 0x0418: // ELLIPSE
-        player.ellipse(i16(at + 6), i16(at + 4), i16(at + 2), i16(at));
-        break;
-      case 0x0817: // ARC
-      case 0x081a: // PIE
-      case 0x0830: // CHORD
-        player.arc(
-          fn === 0x0817 ? 'arc' : fn === 0x081a ? 'pie' : 'chord',
-          [i16(at + 14), i16(at + 12), i16(at + 10), i16(at + 8)],
-          [i16(at + 6), i16(at + 4)],
-          [i16(at + 2), i16(at)]
-        );
-        break;
-      case 0x0324: // POLYGON
-      case 0x0325: {
-        // POLYLINE
-        const closed = fn === 0x0324;
-        const list = points(at + 2, i16(at));
-        player.shape(() => player.trace(list, closed), closed);
-        break;
-      }
-      case 0x0538: {
-        // POLYPOLYGON
-        const groups = u16(at);
-        const counts = Array.from({ length: groups }, (_, index) =>
-          u16(at + 2 + index * 2)
-        );
-        let start = at + 2 + groups * 2;
-        player.shape(() => {
-          for (const count of counts) {
-            player.trace(points(start, count), true);
-            start += count * 4;
+    const playPathTextOrImageRecord = async () =>
+      matchBranch(fn)
+        .with(0x0817, 0x081a, 0x0830, async (fn) => {
+          player.arc(
+            fn === 0x0817 ? 'arc' : fn === 0x081a ? 'pie' : 'chord',
+            [i16(at + 14), i16(at + 12), i16(at + 10), i16(at + 8)],
+            [i16(at + 6), i16(at + 4)],
+            [i16(at + 2), i16(at)]
+          );
+          return;
+        })
+        .with(0x0324, 0x0325, async (fn) => {
+          {
+            // POLYLINE
+            const closed = fn === 0x0324;
+            const list = points(at + 2, i16(at));
+            player.shape(() => player.trace(list, closed), closed);
+            return;
           }
+        })
+        .with(0x0538, async () => {
+          {
+            // POLYPOLYGON
+            const groups = u16(at);
+            const counts = Array.from({ length: groups }, (_, index) =>
+              u16(at + 2 + index * 2)
+            );
+            let start = at + 2 + groups * 2;
+            player.shape(() => {
+              for (const count of counts) {
+                player.trace(points(start, count), true);
+                start += count * 4;
+              }
+            });
+            return;
+          }
+        })
+        .with(0x0521, async () => {
+          {
+            // TEXTOUT
+            const count = u16(at);
+            const text = new TextDecoder('windows-1252').decode(
+              bytes.subarray(at + 2, at + 2 + count)
+            );
+            const after = at + 2 + count + (count % 2);
+            player.text(text, i16(after + 2), i16(after));
+            return;
+          }
+        })
+        .with(0x0a32, async () => {
+          {
+            // EXTTEXTOUT
+            const y = i16(at);
+            const x = i16(at + 2);
+            const count = u16(at + 4);
+            const options = u16(at + 6);
+            const start = at + 8 + (options & 0x0006 ? 8 : 0);
+            const text = new TextDecoder('windows-1252').decode(
+              bytes.subarray(start, start + count)
+            );
+            player.text(text, x, y);
+            return;
+          }
+        })
+        .with(0x0416, async () => {
+          {
+            // INTERSECTCLIPRECT
+            const [x1, y1] = player.point(i16(at + 6), i16(at + 4));
+            const [x2, y2] = player.point(i16(at + 2), i16(at));
+            canvas.beginPath();
+            canvas.rect(
+              Math.min(x1, x2),
+              Math.min(y1, y2),
+              Math.abs(x2 - x1),
+              Math.abs(y2 - y1)
+            );
+            canvas.clip();
+            canvas.beginPath();
+            return;
+          }
+        })
+        .with(0x0f43, async () => {
+          {
+            // STRETCHDIB
+            const destination: [number, number, number, number] = [
+              i16(at + 20),
+              i16(at + 18),
+              i16(at + 16),
+              i16(at + 14),
+            ];
+            const info = at + 22;
+            await player.bitmap(
+              readBitmap(bytes, info, dibBits(bytes, info)),
+              destination
+            );
+            return;
+          }
+        })
+        .with(0x0b41, async () => {
+          {
+            // DIBSTRETCHBLT
+            const destination: [number, number, number, number] = [
+              i16(at + 18),
+              i16(at + 16),
+              i16(at + 14),
+              i16(at + 12),
+            ];
+            const info = at + 20;
+            if (info + 40 <= offset + words * 2)
+              await player.bitmap(
+                readBitmap(bytes, info, dibBits(bytes, info)),
+                destination
+              );
+            return;
+          }
+        })
+        .with(0x0940, async () => {
+          {
+            // DIBBITBLT
+            const destination: [number, number, number, number] = [
+              i16(at + 14),
+              i16(at + 12),
+              i16(at + 10),
+              i16(at + 8),
+            ];
+            const info = at + 16;
+            if (info + 40 <= offset + words * 2)
+              await player.bitmap(
+                readBitmap(bytes, info, dibBits(bytes, info)),
+                destination
+              );
+            return;
+          }
+        })
+        .otherwise(async () => {
+          return;
         });
-        break;
-      }
-      case 0x0521: {
-        // TEXTOUT
-        const count = u16(at);
-        const text = new TextDecoder('windows-1252').decode(
-          bytes.subarray(at + 2, at + 2 + count)
-        );
-        const after = at + 2 + count + (count % 2);
-        player.text(text, i16(after + 2), i16(after));
-        break;
-      }
-      case 0x0a32: {
-        // EXTTEXTOUT
-        const y = i16(at);
-        const x = i16(at + 2);
-        const count = u16(at + 4);
-        const options = u16(at + 6);
-        const start = at + 8 + (options & 0x0006 ? 8 : 0);
-        const text = new TextDecoder('windows-1252').decode(
-          bytes.subarray(start, start + count)
-        );
-        player.text(text, x, y);
-        break;
-      }
-      case 0x0416: {
-        // INTERSECTCLIPRECT
-        const [x1, y1] = player.point(i16(at + 6), i16(at + 4));
-        const [x2, y2] = player.point(i16(at + 2), i16(at));
-        canvas.beginPath();
-        canvas.rect(
-          Math.min(x1, x2),
-          Math.min(y1, y2),
-          Math.abs(x2 - x1),
-          Math.abs(y2 - y1)
-        );
-        canvas.clip();
-        canvas.beginPath();
-        break;
-      }
-      case 0x0f43: {
-        // STRETCHDIB
-        const destination: [number, number, number, number] = [
-          i16(at + 20),
-          i16(at + 18),
-          i16(at + 16),
-          i16(at + 14),
-        ];
-        const info = at + 22;
-        await player.bitmap(
-          readBitmap(bytes, info, dibBits(bytes, info)),
-          destination
-        );
-        break;
-      }
-      case 0x0b41: {
-        // DIBSTRETCHBLT
-        const destination: [number, number, number, number] = [
-          i16(at + 18),
-          i16(at + 16),
-          i16(at + 14),
-          i16(at + 12),
-        ];
-        const info = at + 20;
-        if (info + 40 <= offset + words * 2)
-          await player.bitmap(
-            readBitmap(bytes, info, dibBits(bytes, info)),
-            destination
+    const playObjectOrShapeRecord = async () =>
+      matchBranch(fn)
+        .with(0x02fa, async () => {
+          player.objects.set(slot(), {
+            type: 'pen',
+            pen: {
+              style: u16(at),
+              width: i16(at + 2),
+              color: colorref(u32(at + 6)),
+            },
+          });
+          return;
+        })
+        .with(0x02fc, async () => {
+          player.objects.set(slot(), {
+            type: 'brush',
+            brush: {
+              style: u16(at) === 1 ? 1 : 0,
+              color: colorref(u32(at + 2)),
+            },
+          });
+          return;
+        })
+        .with(0x02fb, async () => {
+          {
+            // CREATEFONTINDIRECT
+            const face = new TextDecoder('windows-1252')
+              .decode(
+                bytes.subarray(at + 18, Math.min(offset + words * 2, at + 50))
+              )
+              .replace(/\0[\s\S]*$/, '');
+            player.objects.set(slot(), {
+              type: 'font',
+              font: {
+                height: i16(at),
+                escapement: i16(at + 4),
+                weight: Math.max(100, Math.min(900, i16(at + 8) || 400)),
+                italic: bytes[at + 10] !== 0,
+                underline: bytes[at + 11] !== 0,
+                face: face || 'Arial',
+              },
+            });
+            return;
+          }
+        })
+        .with(0x00f7, 0x06ff, async () => {
+          player.objects.set(slot(), { type: 'other' });
+          return;
+        })
+        .with(0x01f9, 0x0142, async () => {
+          player.objects.set(slot(), {
+            type: 'brush',
+            brush: { style: 0, color: '#808080' },
+          });
+          return;
+        })
+        .with(0x012d, async () => {
+          player.select(player.objects.get(u16(at)));
+          return;
+        })
+        .with(0x01f0, async () => {
+          player.objects.delete(u16(at));
+          return;
+        })
+        .with(0x0214, async () => {
+          s.position = [i16(at + 2), i16(at)];
+          return;
+        })
+        .with(0x0213, async () => {
+          {
+            // LINETO
+            const to: Point = [i16(at + 2), i16(at)];
+            player.shape(() => player.trace([s.position, to], false), false);
+            s.position = to;
+            return;
+          }
+        })
+        .with(0x041b, async () => {
+          player.rectangle(i16(at + 6), i16(at + 4), i16(at + 2), i16(at));
+          return;
+        })
+        .with(0x061c, async () => {
+          player.roundRectangle(
+            i16(at + 10),
+            i16(at + 8),
+            i16(at + 6),
+            i16(at + 4),
+            i16(at + 2),
+            i16(at)
           );
-        break;
-      }
-      case 0x0940: {
-        // DIBBITBLT
-        const destination: [number, number, number, number] = [
-          i16(at + 14),
-          i16(at + 12),
-          i16(at + 10),
-          i16(at + 8),
-        ];
-        const info = at + 16;
-        if (info + 40 <= offset + words * 2)
-          await player.bitmap(
-            readBitmap(bytes, info, dibBits(bytes, info)),
-            destination
-          );
-        break;
-      }
-      default:
-        break;
-    }
+          return;
+        })
+        .with(0x0418, async () => {
+          player.ellipse(i16(at + 6), i16(at + 4), i16(at + 2), i16(at));
+          return;
+        })
+        .otherwise(playPathTextOrImageRecord);
+    await matchBranch(fn)
+      .with(0x020b, async () => {
+        s.windowOrigin = [i16(at + 2), i16(at)];
+        return;
+      })
+      .with(0x020c, async () => {
+        s.windowExtent = [i16(at + 2), i16(at)];
+        return;
+      })
+      .with(0x020d, async () => {
+        s.viewportOrigin = [i16(at + 2), i16(at)];
+        return;
+      })
+      .with(0x020e, async () => {
+        s.viewportExtent = [i16(at + 2), i16(at)];
+        return;
+      })
+      .with(0x0103, async () => {
+        return;
+      })
+      .with(0x001e, async () => {
+        player.save();
+        return;
+      })
+      .with(0x0127, async () => {
+        player.restore(i16(at));
+        return;
+      })
+      .with(0x0209, async () => {
+        s.textColor = colorref(u32(at));
+        return;
+      })
+      .with(0x0201, async () => {
+        s.backgroundColor = colorref(u32(at));
+        return;
+      })
+      .with(0x0102, async () => {
+        s.opaqueBackground = u16(at) === 2;
+        return;
+      })
+      .with(0x0106, async () => {
+        s.fillRule = u16(at) === 2 ? 'nonzero' : 'evenodd';
+        return;
+      })
+      .with(0x012e, async () => {
+        s.textAlign = u16(at);
+        return;
+      })
+      .otherwise(playObjectOrShapeRecord);
     offset += words * 2;
   }
   return player.drew;

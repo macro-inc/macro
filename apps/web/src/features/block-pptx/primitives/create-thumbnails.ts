@@ -4,6 +4,7 @@
  */
 
 import type { SlideOutline } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import type { PresentationSession } from './create-presentation-session';
@@ -54,17 +55,17 @@ export function createThumbnails(options: {
     });
     const wanted = () =>
       options.session.outline()?.slides.some((s) => s.id === slide.id) ?? false;
-    void options.queue
-      .background(async () => {
-        // The slide may have moved since it was queued.
-        const index =
-          options.session
-            .outline()
-            ?.slides.findIndex((s) => s.id === slide.id) ?? -1;
-        if (index < 0) return undefined;
-        return options.engine.render(index, width);
-      }, wanted)
-      .then((bitmap) => {
+    const render = async () => {
+      try {
+        const bitmap = await options.queue.background(async () => {
+          // The slide may have moved since it was queued.
+          const index =
+            options.session
+              .outline()
+              ?.slides.findIndex((s) => s.id === slide.id) ?? -1;
+          if (index < 0) return undefined;
+          return options.engine.render(index, width);
+        }, wanted);
         const current = entries().get(slide.id);
         update(slide.id, {
           version,
@@ -79,8 +80,7 @@ export function createThumbnails(options: {
             ?.slides.find((s) => s.id === slide.id);
           if (latest) request(latest);
         }
-      })
-      .catch(() => {
+      } catch {
         const current = entries().get(slide.id);
         update(slide.id, {
           version,
@@ -88,7 +88,9 @@ export function createThumbnails(options: {
           width: current?.width ?? 0,
           pending: false,
         });
-      });
+      }
+    };
+    fireAndForget(render(), 'pptx-editor');
   }
 
   onCleanup(() => {

@@ -1,3 +1,4 @@
+import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableGraphqlSoup,
@@ -65,70 +66,49 @@ export async function retryEmailDraftSynchronization(
   await resumeLocalDraft(id);
 }
 
-/** Read content and persistence state together, including resolved local handles. */
-export async function readEmailDraft(
+async function readCachedDraftMessage(
   draftId: string,
-  options: { attachments?: boolean } = {}
+  local: LocalDraft | undefined
 ) {
-  const local = await readLocalDraft(draftId);
   const host = getGraphqlCacheHost();
-  const cached = host
-    ? await ResultAsync.fromPromise(
-        readRecordsByKeys(
-          host,
-          selectRecords(EmailThreadMessageFieldsFragmentDoc),
-          [`GraphqlSoupEmailMessage:${local?.serverDraftId ?? draftId}`]
-        ),
-        (error: unknown) => error
-      )
-    : undefined;
+  if (!host) return undefined;
+  const cached = await ResultAsync.fromPromise(
+    readRecordsByKeys(
+      host,
+      selectRecords(EmailThreadMessageFieldsFragmentDoc),
+      [`GraphqlSoupEmailMessage:${local?.serverDraftId ?? draftId}`]
+    ),
+    (error: unknown) => error
+  );
   // The independent working copy remains readable when cache startup fails.
   // Without one, preserve the read error rather than inventing an empty draft.
-  if (cached?.isErr() && !local) throw cached.error;
-  const selected = cached?.isOk() ? cached.value.records[0] : undefined;
-  // Cancellation advances the server generation before restoring the local copy.
-  // An older accepted/sent cache record must not hide that restored draft.
-  // At the same or newer generation, server delivery state remains authoritative.
-  if (
-    selected &&
-    (!local ||
-      ((selected.record.draftGeneration ?? 0) >=
-        (local.content.draft_generation ?? 0) &&
-        (!selected.record.isDraft || local.status === 'synced')))
-  ) {
-    return {
-      draft: selected.record.isDraft
-        ? mapGraphqlEmailMessage(selected.record)
-        : undefined,
-      persistence: selected.identity?.pending
-        ? ('queued' as const)
-        : ('committed' as const),
-      mutationUuid: local?.key ?? selected.identity?.mutationUuid ?? undefined,
-      local: selected.record.isDraft ? local : undefined,
-    };
+  if (cached.isErr()) {
+    if (!local) throw cached.error;
+    return undefined;
   }
-  const admittedDelete =
-    local?.status === 'deleting' &&
-    !!local.queuedAttemptId &&
-    local.queuedAttemptId === local.latestAttemptId;
-  if (local && (!admittedDelete || options.attachments === false)) {
-    return {
-      draft: localDraftMessage(local),
-      // Upload receipts are separate from the body save. Pending files must
-      // not demote an acknowledged server identity to a client handle.
-      persistence:
-        local.serverDraftId && local.acknowledgedRevision >= local.revision
-          ? ('committed' as const)
-          : ('queued' as const),
-      mutationUuid: local.key,
-      local,
-      attachments:
-        options.attachments === false
-          ? undefined
-          : await restoreLocalAttachments(local),
-    };
-  }
-  if (!selected) return;
+  return cached.value.records[0];
+}
+
+type CachedDraftMessage = NonNullable<
+  Awaited<ReturnType<typeof readCachedDraftMessage>>
+>;
+
+// Cancellation advances the server generation before restoring the local copy.
+// An older accepted/sent cache record must not hide that restored draft.
+// At the same or newer generation, server delivery state remains authoritative.
+function cachedDraftWins(
+  selected: CachedDraftMessage,
+  local: LocalDraft | undefined
+): boolean {
+  if (!local) return true;
+  return (
+    (selected.record.draftGeneration ?? 0) >=
+      (local.content.draft_generation ?? 0) &&
+    (!selected.record.isDraft || local.status === 'synced')
+  );
+}
+
+function cachedDraftRead(selected: CachedDraftMessage, local?: LocalDraft) {
   return {
     draft: selected.record.isDraft
       ? mapGraphqlEmailMessage(selected.record)
@@ -136,8 +116,47 @@ export async function readEmailDraft(
     persistence: selected.identity?.pending
       ? ('queued' as const)
       : ('committed' as const),
-    mutationUuid: selected.identity?.mutationUuid ?? undefined,
+    mutationUuid: local?.key ?? selected.identity?.mutationUuid ?? undefined,
+    local: selected.record.isDraft ? local : undefined,
   };
+}
+
+async function localDraftRead(local: LocalDraft, withAttachments: boolean) {
+  return {
+    draft: localDraftMessage(local),
+    // Upload receipts are separate from the body save. Pending files must
+    // not demote an acknowledged server identity to a client handle.
+    persistence:
+      local.serverDraftId && local.acknowledgedRevision >= local.revision
+        ? ('committed' as const)
+        : ('queued' as const),
+    mutationUuid: local.key,
+    local,
+    attachments: withAttachments
+      ? await restoreLocalAttachments(local)
+      : undefined,
+  };
+}
+
+/** Read content and persistence state together, including resolved local handles. */
+export async function readEmailDraft(
+  draftId: string,
+  options: { attachments?: boolean } = {}
+) {
+  const local = await readLocalDraft(draftId);
+  const selected = await readCachedDraftMessage(draftId, local);
+  if (selected && cachedDraftWins(selected, local)) {
+    return cachedDraftRead(selected, local);
+  }
+  const admittedDelete =
+    local?.status === 'deleting' &&
+    !!local.queuedAttemptId &&
+    local.queuedAttemptId === local.latestAttemptId;
+  if (local && (!admittedDelete || options.attachments === false)) {
+    return await localDraftRead(local, options.attachments !== false);
+  }
+  if (!selected) return;
+  return cachedDraftRead(selected);
 }
 
 /** Subscribers read durable state; missing a notification is harmless on remount. */
@@ -234,7 +253,10 @@ function rejection(
   if (code === 'DRAFT_ALREADY_SENT') {
     markThreadDraftSaved(threadId);
     invalidateSoupEntity(threadId);
-    void refetchSoupEntity(threadId, 'emailThread').catch(reportError);
+    fireAndForget(
+      refetchSoupEntity(threadId, 'emailThread'),
+      'email-draft-queue'
+    );
     fireAndForget(fetchAndCacheThread(threadId), 'email-draft-queue');
   } else {
     toast.failure(message);
@@ -346,14 +368,16 @@ export async function saveEmailDraftQueued(input: {
     if (input.previousThreadId && input.previousThreadId !== outcome.threadId) {
       markThreadDraftSaved(input.previousThreadId);
       invalidateSoupEntity(input.previousThreadId);
-      void refetchSoupEntity(input.previousThreadId, 'emailThread').catch(
-        reportError
+      fireAndForget(
+        refetchSoupEntity(input.previousThreadId, 'emailThread'),
+        'email-draft-queue'
       );
     }
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
-      void refetchSoupEntity(outcome.threadId, 'emailThread').catch(
-        reportError
+      fireAndForget(
+        refetchSoupEntity(outcome.threadId, 'emailThread'),
+        'email-draft-queue'
       );
     }
   } catch (error) {
@@ -425,7 +449,10 @@ export async function deleteEmailDraftQueued(input: {
     markThreadDraftSaved(input.threadId);
     queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
     if (!input.completingThread) {
-      void refetchSoupEntity(input.threadId, 'emailThread').catch(reportError);
+      fireAndForget(
+        refetchSoupEntity(input.threadId, 'emailThread'),
+        'email-draft-queue'
+      );
       invalidateAllSoup();
     }
   } catch (error) {

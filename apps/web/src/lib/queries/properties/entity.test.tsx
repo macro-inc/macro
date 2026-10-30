@@ -578,12 +578,16 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
           get error() {
             return error;
           },
-          mutate: (input: {
+          mutate: async (input: {
             entityId: string;
             entityType: string;
             propertyDefinitionId: string;
           }) => {
-            void mutateAsync(input).catch(() => undefined);
+            try {
+              await mutateAsync(input);
+            } catch {
+              /* `mutate` reports failures through the mutation state, not a rejection. */
+            }
           },
           mutateAsync,
         };
@@ -646,8 +650,12 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
           get error() {
             return error;
           },
-          mutate: (input: typeof variables) => {
-            void mutateAsync(input).catch(() => undefined);
+          mutate: async (input: typeof variables) => {
+            try {
+              await mutateAsync(input);
+            } catch {
+              /* `mutate` reports failures through the mutation state, not a rejection. */
+            }
           },
           mutateAsync,
         };

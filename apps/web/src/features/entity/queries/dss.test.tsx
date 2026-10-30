@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@block-database/queries/trash-database', () => ({
   trashDatabase: mocks.trashDatabase,
 }));
-vi.mock('@core/component/FileList/itemOperations', () => ({
+vi.mock('@app/lib/queries/items/operations', () => ({
   deleteItem: mocks.deleteItem,
   copyItem: mocks.copyItem,
   canDuplicateItemType: () => true,

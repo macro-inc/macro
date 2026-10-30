@@ -14,8 +14,9 @@ import { syncLoginStorage } from '@core/util/cookies';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isPlatform } from '@core/util/platform';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
+import { redeemSessionCode } from '@queries/auth/requests';
 import { invalidateAllAfterLogin } from '@queries/auth/user-info';
-import { authServiceClient } from '@service-auth/client';
+
 import { useLocation } from '@solidjs/router';
 import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentProxy';
 
@@ -100,7 +101,7 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
         return;
       }
 
-      const res = await authServiceClient.sessionLogin({
+      const res = await redeemSessionCode({
         session_code: result.token,
       });
 

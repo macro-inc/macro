@@ -8,6 +8,7 @@ import {
 import type { DraftStorageSession as Session } from './local-draft-store';
 import {
   type EmailSendIntent,
+  emailSendAttemptStatus,
   emailSendReservedDraftIds,
   isEmailSendIntent,
 } from './send-intent';
@@ -35,6 +36,100 @@ type WithSession = <T>(
   finish: (value: T) => void,
   stale: T
 ) => void;
+
+type SendSettlement = {
+  attempt?: EmailSendAttemptFieldsFragment;
+  error?: string;
+  failed?: boolean;
+  paused?: boolean;
+  rejectedBeforeAdmission?: boolean;
+  nextAttemptAt: number;
+};
+
+/** Whether a stored send is this account's, still deliverable, and due with no live lease. */
+function isClaimable(
+  row: EmailSendIntent | undefined,
+  accountId: string,
+  now: number
+): row is EmailSendIntent {
+  if (!row || row.accountId !== accountId) return false;
+  if (row.dispatch?.paused || row.locallyCancelled) return false;
+  const status = emailSendAttemptStatus(row);
+  if (status === 'SENT' || status === 'CANCELLED') return false;
+  if (
+    !row.cancellationRequested &&
+    (row.phase === 'failed' || status === 'FAILED')
+  )
+    return false;
+  return (
+    (row.dispatch?.leaseUntil ?? 0) <= now &&
+    (row.dispatch?.nextAttemptAt ?? 0) <= now
+  );
+}
+
+function claimedSend(
+  row: EmailSendIntent,
+  worker: string,
+  now: number
+): EmailSendIntent {
+  return {
+    ...row,
+    submissionStarted: true,
+    metadata: {
+      ...row.metadata,
+      requiresServerConfirmation: true,
+    },
+    dispatch: {
+      generation: (row.dispatch?.generation ?? 0) + 1,
+      owner: worker,
+      leaseUntil: now + 60_000,
+      nextAttemptAt: 0,
+      failures: row.dispatch?.failures ?? 0,
+      cancelling: row.cancellationRequested,
+    },
+  };
+}
+
+function settledSend(
+  row: EmailSendIntent,
+  dispatch: NonNullable<EmailSendIntent['dispatch']>,
+  update: SendSettlement
+): EmailSendIntent {
+  const { generation } = dispatch;
+  return {
+    ...row,
+    ...(update.rejectedBeforeAdmission &&
+    generation === 1 &&
+    row.dispatchVersion === 2 &&
+    !row.response &&
+    !update.attempt
+      ? {
+          locallyCancelled: true,
+          metadata: {
+            ...row.metadata,
+            requiresServerConfirmation: false,
+          },
+        }
+      : {}),
+    phase: update.attempt ? 'committed' : update.failed ? 'failed' : row.phase,
+    response: update.attempt
+      ? { sendEmailMessage: { attempt: update.attempt } }
+      : row.response,
+    resolvedDraftId: update.attempt?.message?.id ?? row.resolvedDraftId,
+    resolvedThreadId: update.attempt?.threadId ?? row.resolvedThreadId,
+    dispatch: {
+      generation,
+      leaseUntil: 0,
+      nextAttemptAt:
+        row.cancellationRequested && !dispatch.cancelling
+          ? 0
+          : update.nextAttemptAt,
+      failures: update.error ? dispatch.failures + 1 : 0,
+      error: update.error,
+      paused: update.paused,
+    },
+  };
+}
 
 /** Email-specific transactions share the working-copy database and account fence. */
 export function createEmailSendJournal(
@@ -262,40 +357,11 @@ export function createEmailSendJournal(
               const request = sends.get(uuid);
               request.onsuccess = () => {
                 const row = request.result as EmailSendIntent | undefined;
-                const status =
-                  row?.response?.cancelEmailSend?.attempt.status ??
-                  row?.response?.sendEmailMessage?.attempt.status;
-                if (
-                  !row ||
-                  row.accountId !== session.accountId ||
-                  row.dispatch?.paused ||
-                  status === 'SENT' ||
-                  status === 'CANCELLED' ||
-                  (!row.cancellationRequested &&
-                    (row.phase === 'failed' || status === 'FAILED')) ||
-                  row.locallyCancelled ||
-                  (row.dispatch?.leaseUntil ?? 0) > now ||
-                  (row.dispatch?.nextAttemptAt ?? 0) > now
-                ) {
+                if (!isClaimable(row, session.accountId, now)) {
                   finish(undefined);
                   return;
                 }
-                const next: EmailSendIntent = {
-                  ...row,
-                  submissionStarted: true,
-                  metadata: {
-                    ...row.metadata,
-                    requiresServerConfirmation: true,
-                  },
-                  dispatch: {
-                    generation: (row.dispatch?.generation ?? 0) + 1,
-                    owner: worker,
-                    leaseUntil: now + 60_000,
-                    nextAttemptAt: 0,
-                    failures: row.dispatch?.failures ?? 0,
-                    cancelling: row.cancellationRequested,
-                  },
-                };
+                const next = claimedSend(row, worker, now);
                 sends.put(next, uuid);
                 finish(next);
               };
@@ -312,14 +378,7 @@ export function createEmailSendJournal(
       uuid: string,
       worker: string,
       generation: number,
-      update: {
-        attempt?: EmailSendAttemptFieldsFragment;
-        error?: string;
-        failed?: boolean;
-        paused?: boolean;
-        rejectedBeforeAdmission?: boolean;
-        nextAttemptAt: number;
-      }
+      update: SendSettlement
     ): Promise<boolean> {
       return await transaction('readwrite', (tx, finish) =>
         withSession(
@@ -339,48 +398,7 @@ export function createEmailSendJournal(
                 finish(false);
                 return;
               }
-              sends.put(
-                {
-                  ...row,
-                  ...(update.rejectedBeforeAdmission &&
-                  generation === 1 &&
-                  row.dispatchVersion === 2 &&
-                  !row.response &&
-                  !update.attempt
-                    ? {
-                        locallyCancelled: true,
-                        metadata: {
-                          ...row.metadata,
-                          requiresServerConfirmation: false,
-                        },
-                      }
-                    : {}),
-                  phase: update.attempt
-                    ? 'committed'
-                    : update.failed
-                      ? 'failed'
-                      : row.phase,
-                  response: update.attempt
-                    ? { sendEmailMessage: { attempt: update.attempt } }
-                    : row.response,
-                  resolvedDraftId:
-                    update.attempt?.message?.id ?? row.resolvedDraftId,
-                  resolvedThreadId:
-                    update.attempt?.threadId ?? row.resolvedThreadId,
-                  dispatch: {
-                    generation,
-                    leaseUntil: 0,
-                    nextAttemptAt:
-                      row.cancellationRequested && !row.dispatch.cancelling
-                        ? 0
-                        : update.nextAttemptAt,
-                    failures: update.error ? row.dispatch.failures + 1 : 0,
-                    error: update.error,
-                    paused: update.paused,
-                  },
-                } satisfies EmailSendIntent,
-                uuid
-              );
+              sends.put(settledSend(row, row.dispatch, update), uuid);
               finish(true);
             };
           },

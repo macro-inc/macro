@@ -62,6 +62,7 @@ import {
   NATIVE_OFFLINE_ERROR_MESSAGE,
   nativeNetworkStatus,
 } from '@core/mobile/native-network-status';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type EntityData,
   getPropertyOptionLabel,
@@ -75,7 +76,10 @@ import {
   localDraftMatchesFilters,
 } from '@queries/email/local-draft-source';
 import { invalidateUserNotifications } from '@queries/notification/user-notifications';
-import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
+import {
+  createGroupedSoupQueries,
+  type GroupQueryData,
+} from '@queries/soup/grouped/create-grouped-soup-queries';
 import type {
   GroupMeta as ApiGroupMeta,
   GroupByField,
@@ -1231,80 +1235,13 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
 
   const builtRows = createMemo((): SoupRow[] => {
     const field = groupByField();
-    const groups = itemsSource().data()?.groups;
+    const groups = buildGroups();
 
     // Client-side property grouping (Customers view): bucket the flat
     // (paginated) list by property value; option order comes from the
     // statically-known stage options, then label, with "Not set" last.
     if (enabled() && isClientPropertyGroup() && !search.isSearching()) {
-      const definitionId =
-        field?.type === 'property' ? field.propertyDefinitionId : '';
-      // Stage grouping resolves through the active deal-stage set so legacy
-      // system-stage values land in the matching custom-stage bucket.
-      const buckets = new Map<string, SoupEntity[]>();
-      for (const entity of entities()) {
-        const key =
-          props.extensions?.propertyGrouping?.value(entity, definitionId) ??
-          clientPropertyGroupKey(entity, definitionId);
-        const bucket = buckets.get(key);
-        if (bucket) {
-          bucket.push(entity);
-        } else {
-          buckets.set(key, [entity]);
-        }
-      }
-
-      const stageOrder =
-        props.extensions?.propertyGrouping?.order(definitionId) ?? [];
-      const order = [...buckets.keys()].sort((a, b) => {
-        if (a === '') return 1;
-        if (b === '') return -1;
-        const aStage = stageOrder.indexOf(a);
-        const bStage = stageOrder.indexOf(b);
-        if (aStage !== -1 || bStage !== -1) {
-          return (
-            (aStage === -1 ? stageOrder.length : aStage) -
-            (bStage === -1 ? stageOrder.length : bStage)
-          );
-        }
-        const aLabel = resolveGroupLabel(a) ?? a;
-        const bLabel = resolveGroupLabel(b) ?? b;
-        return aLabel.localeCompare(bLabel);
-      });
-
-      const groupedRows: SoupRow[] = [];
-      let index = 0;
-      for (const key of order) {
-        const groupEntities = buckets.get(key)!;
-        const groupMeta: GroupMeta = {
-          key,
-          value: key,
-          label: key === '' ? 'Not set' : (resolveGroupLabel(key) ?? key),
-          count: groupEntities.length,
-          isExpanded: () => soup.grouping.isExpanded(key),
-          toggle: () => soup.grouping.toggle(key),
-        };
-        groupedRows.push(
-          soup.buildRow({
-            id: `header:${key}`,
-            index: index++,
-            original: groupEntities[0],
-            group: groupMeta,
-            isGrouped: true,
-          })
-        );
-        for (const entity of groupEntities) {
-          groupedRows.push(
-            soup.buildRow({
-              id: entity.id,
-              index: index++,
-              original: entity,
-              group: groupMeta,
-            })
-          );
-        }
-      }
-      return groupedRows;
+      return buildPropertyGroupRows();
     }
 
     // Client-side date grouping: reuse the single flat (paginated) list and
@@ -1321,15 +1258,10 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       // notified about, not the day its content last changed — otherwise a
       // fresh comment on a stale task sits under "Yesterday" while sorting
       // as today's.
-      const bucketOnNotification =
-        clientSort()[0]?.id === SORT_CONFIGS.notified_at.id;
+      const bucketOnNotification = buildBucketOnNotification();
 
       for (const entity of all) {
-        const ts =
-          (bucketOnNotification ? entity.notifiedAt : undefined) ??
-          entity.sortTs ??
-          entity.updatedAt ??
-          entity.createdAt;
+        const ts = buildTs(bucketOnNotification, entity);
         const bucket = dateBucket(ts, now);
         let group = buckets.get(bucket.key);
 
@@ -1391,50 +1323,12 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     const recoveryIds = new Set(
       recovery.map((entity) => `${entity.type}:${entity.id}`)
     );
-    if (recovery.length) {
-      const key = 'local-email-drafts';
-      const group: GroupMeta = {
-        key,
-        value: key,
-        label: 'Saved on this device',
-        count: recovery.length,
-        isExpanded: () => soup.grouping.isExpanded(key),
-        toggle: () => soup.grouping.toggle(key),
-      };
-      result.push(
-        soup.buildRow({
-          id: `header:${key}`,
-          index: globalIndex++,
-          original: recovery[0],
-          group,
-          isGrouped: true,
-        })
-      );
-      for (const entity of recovery)
-        result.push(
-          soup.buildRow({
-            id: entity.id,
-            index: globalIndex++,
-            original: entity,
-            group,
-          })
-        );
-    }
+    updateGlobalIndex();
 
     for (const apiGroup of groups) {
       const groupMeta = buildGroupMeta(apiGroup);
-      const groupData = groupQueryFor(apiGroup.key)?.data();
-      const groupEntities =
-        groupData?.entities
-          ?.map(
-            (entity) =>
-              (isWithNotification(entity)
-                ? entity
-                : attachNotifications(entity)) as SoupEntity
-          )
-          .filter(
-            (entity) => !recoveryIds.has(`${entity.type}:${entity.id}`)
-          ) ?? [];
+      const groupData = buildGroupData(apiGroup);
+      const groupEntities = buildGroupEntities(groupData);
 
       const firstEntity = groupEntities[0];
       if (!firstEntity) continue;
@@ -1475,6 +1369,160 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
     }
 
     return result;
+
+    function buildBucketOnNotification() {
+      return clientSort()[0]?.id === SORT_CONFIGS.notified_at.id;
+    }
+
+    function buildGroupData(apiGroup: ApiGroupMeta) {
+      return groupQueryFor(apiGroup.key)?.data();
+    }
+
+    function buildGroups() {
+      return itemsSource().data()?.groups;
+    }
+
+    function updateGlobalIndex() {
+      if (recovery.length) {
+        const key = 'local-email-drafts';
+        const group: GroupMeta = {
+          key,
+          value: key,
+          label: 'Saved on this device',
+          count: recovery.length,
+          isExpanded: () => soup.grouping.isExpanded(key),
+          toggle: () => soup.grouping.toggle(key),
+        };
+        result.push(
+          soup.buildRow({
+            id: `header:${key}`,
+            index: globalIndex++,
+            original: recovery[0],
+            group,
+            isGrouped: true,
+          })
+        );
+        for (const entity of recovery)
+          result.push(
+            soup.buildRow({
+              id: entity.id,
+              index: globalIndex++,
+              original: entity,
+              group,
+            })
+          );
+      }
+    }
+
+    function buildDefinitionId() {
+      return field?.type === 'property' ? field.propertyDefinitionId : '';
+    }
+
+    function buildLabel(key: string): string {
+      return key === '' ? 'Not set' : (resolveGroupLabel(key) ?? key);
+    }
+
+    function buildGroupEntities(groupData: GroupQueryData | undefined) {
+      return (
+        groupData?.entities
+          ?.map(
+            (entity) =>
+              (isWithNotification(entity)
+                ? entity
+                : attachNotifications(entity)) as SoupEntity
+          )
+          .filter(
+            (entity) => !recoveryIds.has(`${entity.type}:${entity.id}`)
+          ) ?? []
+      );
+    }
+
+    function buildKey(entity: SoupEntity, definitionId: string) {
+      return (
+        props.extensions?.propertyGrouping?.value(entity, definitionId) ??
+        clientPropertyGroupKey(entity, definitionId)
+      );
+    }
+
+    function buildStageOrder(definitionId: string) {
+      return props.extensions?.propertyGrouping?.order(definitionId) ?? [];
+    }
+
+    function buildTs(bucketOnNotification: boolean, entity: SoupEntity) {
+      return (
+        (bucketOnNotification ? entity.notifiedAt : undefined) ??
+        entity.sortTs ??
+        entity.updatedAt ??
+        entity.createdAt
+      );
+    }
+
+    function buildPropertyGroupRows() {
+      const definitionId = buildDefinitionId();
+      // Stage grouping resolves through the active deal-stage set so legacy
+      // system-stage values land in the matching custom-stage bucket.
+      const buckets = new Map<string, SoupEntity[]>();
+      for (const entity of entities()) {
+        const key = buildKey(entity, definitionId);
+        const bucket = buckets.get(key);
+        if (bucket) {
+          bucket.push(entity);
+        } else {
+          buckets.set(key, [entity]);
+        }
+      }
+
+      const stageOrder = buildStageOrder(definitionId);
+      const order = [...buckets.keys()].sort((a, b) => {
+        if (a === '') return 1;
+        if (b === '') return -1;
+        const aStage = stageOrder.indexOf(a);
+        const bStage = stageOrder.indexOf(b);
+        if (aStage !== -1 || bStage !== -1) {
+          return (
+            (aStage === -1 ? stageOrder.length : aStage) -
+            (bStage === -1 ? stageOrder.length : bStage)
+          );
+        }
+        const aLabel = resolveGroupLabel(a) ?? a;
+        const bLabel = resolveGroupLabel(b) ?? b;
+        return aLabel.localeCompare(bLabel);
+      });
+
+      const groupedRows: SoupRow[] = [];
+      let index = 0;
+      for (const key of order) {
+        const groupEntities = buckets.get(key)!;
+        const groupMeta: GroupMeta = {
+          key,
+          value: key,
+          label: buildLabel(key),
+          count: groupEntities.length,
+          isExpanded: () => soup.grouping.isExpanded(key),
+          toggle: () => soup.grouping.toggle(key),
+        };
+        groupedRows.push(
+          soup.buildRow({
+            id: `header:${key}`,
+            index: index++,
+            original: groupEntities[0],
+            group: groupMeta,
+            isGrouped: true,
+          })
+        );
+        for (const entity of groupEntities) {
+          groupedRows.push(
+            soup.buildRow({
+              id: entity.id,
+              index: index++,
+              original: entity,
+              group: groupMeta,
+            })
+          );
+        }
+      }
+      return groupedRows;
+    }
   });
 
   const { searchQuery } = search;
@@ -1546,10 +1594,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
         // query in the app — other mounted panels refetch their whole page
         // chain one request at a time — and would let an unrelated view's
         // failure report the visible refresh as failed.
-        void queryClient
-          .invalidateQueries({ queryKey: soupKeys._def })
-          .catch(() => undefined);
-        void invalidateUserNotifications().catch(() => undefined);
+        queryClient.invalidateQueries({ queryKey: soupKeys._def });
+        fireAndForget(invalidateUserNotifications(), 'soup-view');
 
         // Only the visible list decides the outcome. It throws on refetch
         // failure, so pull-to-refresh can tell "nothing came back" apart from

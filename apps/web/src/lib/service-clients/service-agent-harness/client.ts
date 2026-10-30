@@ -198,19 +198,20 @@ export const agentHarnessServiceClient = {
     );
   },
 
-  rename(sessionId: string, name: string) {
-    return fetchWithToken<Record<string, never>>(
+  async rename(sessionId: string, name: string) {
+    const result = await fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/name`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       }
-    ).then((result) => result.map(() => undefined));
+    );
+    return result.map(() => undefined);
   },
 
-  setArchived(sessionId: string, isArchived: boolean) {
-    return fetchWithToken<Record<string, never>>(
+  async setArchived(sessionId: string, isArchived: boolean) {
+    const result = await fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/archived`,
       {
         method: 'PUT',
@@ -218,7 +219,8 @@ export const agentHarnessServiceClient = {
         body: JSON.stringify({ isArchived }),
         errorResponseHandler: sessionError,
       }
-    ).then((result) => result.map(() => undefined));
+    );
+    return result.map(() => undefined);
   },
 
   /**
@@ -251,26 +253,30 @@ export const agentHarnessServiceClient = {
    * (`NOT_FOUND`) once the action has dispatched, 422 if the queued action
    * is not a prompt.
    */
-  editQueued(sessionId: string, actionId: string, prompt: string) {
-    return fetchWithToken<Record<string, never>>(
+  async editQueued(sessionId: string, actionId: string, prompt: string) {
+    const result = await fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}`,
       {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt }),
       }
-    ).then((result) => result.map(() => undefined));
+    );
+    return result.map(() => undefined);
   },
 
   /**
    * Remove a queued action before it dispatches. Answers 404 (`NOT_FOUND`)
    * once the action has dispatched — there is no un-sending.
    */
-  removeQueued(sessionId: string, actionId: string) {
-    return fetchWithToken<Record<string, never>>(
+  async removeQueued(sessionId: string, actionId: string) {
+    const result = await fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}`,
-      { method: 'DELETE' }
-    ).then((result) => result.map(() => undefined));
+      {
+        method: 'DELETE',
+      }
+    );
+    return result.map(() => undefined);
   },
 
   /**
@@ -278,18 +284,20 @@ export const agentHarnessServiceClient = {
    * flight so it dispatches ahead of anything queued before it. Answers 404
    * (`NOT_FOUND`) once the action has dispatched.
    */
-  steerQueued(sessionId: string, actionId: string) {
-    return fetchWithToken<Record<string, never>>(
+  async steerQueued(sessionId: string, actionId: string) {
+    const result = await fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}/steer`,
       { method: 'POST' }
-    ).then((result) => result.map(() => undefined));
+    );
+    return result.map(() => undefined);
   },
 
-  delete(sessionId: string) {
-    return fetchWithToken<Record<string, never>>(
+  async delete(sessionId: string) {
+    const result = await fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}`,
       { method: 'DELETE' }
-    ).then((result) => result.map(() => undefined));
+    );
+    return result.map(() => undefined);
   },
 
   getSandboxSize() {
@@ -379,8 +387,8 @@ export const agentHarnessServiceClient = {
   },
 
   /** Link the pull request at `url` to a session the caller can edit. */
-  linkPullRequest(sessionId: string, url: string) {
-    return fetchWithToken<Record<string, never>>(
+  async linkPullRequest(sessionId: string, url: string) {
+    const result = await fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests`,
       {
         method: 'PUT',
@@ -388,15 +396,17 @@ export const agentHarnessServiceClient = {
         body: JSON.stringify({ url }),
         errorResponseHandler: sessionError,
       }
-    ).then((result) => result.map(() => undefined));
+    );
+    return result.map(() => undefined);
   },
 
   /** Unlink a pull request a person linked; the agent's own stays linked. */
-  unlinkPullRequest(sessionId: string, url: string) {
-    return fetchWithToken<Record<string, never>>(
+  async unlinkPullRequest(sessionId: string, url: string) {
+    const result = await fetchWithToken<Record<string, never>>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/pull-requests?${new URLSearchParams({ url })}`,
       { method: 'DELETE', errorResponseHandler: sessionError }
-    ).then((result) => result.map(() => undefined));
+    );
+    return result.map(() => undefined);
   },
 
   /**

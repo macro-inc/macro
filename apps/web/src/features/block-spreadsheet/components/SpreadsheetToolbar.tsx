@@ -25,8 +25,8 @@ import type {
   FormulaTextSelection,
 } from '../core/formula-reference';
 import type { SpreadsheetToolbarProps } from '../core/toolbar-types';
-import type { CompleteFormula } from '../primitives/create-formula-assistance';
-import { createTouchPress } from '../primitives/create-touch-press';
+import type { CompleteFormula } from './create-formula-assistance';
+import { createTouchPress } from './create-touch-press';
 import { FormulaInput } from './FormulaInput';
 import {
   DataFormatMenu,

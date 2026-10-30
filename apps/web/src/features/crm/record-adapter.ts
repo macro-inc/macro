@@ -6,7 +6,6 @@ import { toCrmContactItem } from '@core/context/quickAccess/crm-contacts';
 import { debouncedDependent } from '@core/util/debounce';
 import { isCrmContactEntity } from '@entity/types/entity';
 import { queryReadyGate } from '@queries/gate';
-import { storageServiceClient } from '@service-storage/client';
 import { useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { createContactDiscovery } from './primitives/contact-discovery';
@@ -16,14 +15,12 @@ import {
   useCrmContactsQuery,
 } from './queries/contact-suggestions';
 import { useCrmContactByEmailQuery as createContactByEmailQuery } from './queries/contacts';
+import { createCrmRecordDependencies } from './queries/dependencies';
 import { toCrmContactEntity } from './queries/graphql';
 
 /** CRM record capabilities used by app-wide entity actions and user cards. */
 export function useSetCompanyHiddenMutation() {
-  return createHiddenMutation({
-    storage: storageServiceClient,
-    client: useQueryClient(),
-  });
+  return createHiddenMutation(createCrmRecordDependencies(useQueryClient()));
 }
 export function useCrmContactByEmailQuery(
   teamId: Accessor<string>,
@@ -31,7 +28,7 @@ export function useCrmContactByEmailQuery(
   enabled: Accessor<boolean>
 ) {
   return createContactByEmailQuery(
-    { storage: storageServiceClient, client: useQueryClient() },
+    createCrmRecordDependencies(useQueryClient()),
     teamId,
     email,
     enabled
@@ -42,7 +39,7 @@ export function useCrmContactByEmailQuery(
 export function useQuickAccessCrmContactsQuery() {
   const flag = useFeatureFlag(enableCrm);
   return createContactSuggestions(
-    { storage: storageServiceClient, client: useQueryClient() },
+    createCrmRecordDependencies(useQueryClient()),
     () => flag().enabled
   );
 }

@@ -415,17 +415,7 @@ export function compileToAst(state: QueryState): TargetAstMap {
       byTarget.propf.push(AST.or(includeVals.map(propertyToAst)));
     }
 
-    if (excludeVals?.length) {
-      const filtered = includeVals?.length
-        ? excludeVals.filter(
-            (ev) => !includeVals.some((iv) => propertyEquals(iv, ev))
-          )
-        : excludeVals;
-
-      if (filtered.length > 0) {
-        byTarget.propf.push(AST.not(AST.or(filtered.map(propertyToAst))));
-      }
-    }
+    updateCompileToAst(excludeVals, includeVals);
   }
 
   // Tags: one group across every selected tag, regardless of which
@@ -457,12 +447,7 @@ export function compileToAst(state: QueryState): TargetAstMap {
   // Calendar events are not rendered by Soup yet. Persisted query states from
   // before the calendar target existed do not carry its NIL id filter, so keep
   // them scoped unless a calendar filter is explicitly present.
-  if (
-    !('calendarEventId' in state.include) &&
-    !('calendarEventId' in state.exclude)
-  ) {
-    result.calf ??= AST.literal('id', NIL_UUID);
-  }
+  updateCalf();
 
   // Unless explicitly included/excluded, channel threads are excluded by default
   if (
@@ -477,6 +462,32 @@ export function compileToAst(state: QueryState): TargetAstMap {
   }
 
   return result;
+
+  function updateCalf() {
+    if (
+      !('calendarEventId' in state.include) &&
+      !('calendarEventId' in state.exclude)
+    ) {
+      result.calf ??= AST.literal('id', NIL_UUID);
+    }
+  }
+
+  function updateCompileToAst(
+    excludeVals: PropertyFilter[] | undefined,
+    includeVals: PropertyFilter[] | undefined
+  ) {
+    if (excludeVals?.length) {
+      const filtered = includeVals?.length
+        ? excludeVals.filter(
+            (ev) => !includeVals.some((iv) => propertyEquals(iv, ev))
+          )
+        : excludeVals;
+
+      if (filtered.length > 0) {
+        byTarget.propf.push(AST.not(AST.or(filtered.map(propertyToAst))));
+      }
+    }
+  }
 }
 
 const ID_FIELD_NAMES: Partial<Record<QueryTarget, FieldName>> = {

@@ -6,8 +6,9 @@ import {
 } from '@core/block';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { callKeys } from '@queries/call/keys';
+import { fetchCallRecord } from '@queries/call/requests';
 import { queryClient } from '@queries/client';
-import { callServiceClient } from '@service-call/client';
+
 import { err, ok } from 'neverthrow';
 import { lazy } from 'solid-js';
 
@@ -23,7 +24,7 @@ export const definition = defineBlock({
     if (source.type !== 'dss') return LoadErrors.MISSING;
 
     const callId = source.id;
-    const result = await loadResult(callServiceClient.getCallRecord(callId));
+    const result = await loadResult(fetchCallRecord(callId));
     if (result.isErr()) return err(result.error);
     const record = result.value;
 

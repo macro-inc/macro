@@ -1,4 +1,4 @@
-import { getInitialsFromName } from '@core/user/displayName';
+import { getInitialsFromName } from '@app/lib/identity/initials';
 import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';

@@ -17,6 +17,21 @@ vi.mock('@core/mobile/native-network-status', () => ({
   },
 }));
 
+/** Settles to the promise's error, or its value when it does not reject. */
+async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    return await promise;
+  } catch (error) {
+    return error;
+  }
+}
+
+/** Calls `onDone` once the retry wait for `attempt` ends. */
+async function waitThen(attempt: number, onDone: () => void): Promise<void> {
+  await waitToRetryGraphqlSoupWebSocket(attempt);
+  onDone();
+}
+
 function setNativeStatus(status: string) {
   for (const listener of [...nativeStatus.listeners]) listener(status);
 }
@@ -109,14 +124,12 @@ describe('GraphQL Soup websocket auth', () => {
       });
 
     for (const code of ['NETWORK_ERROR', 'UNKNOWN_ERROR', 'HTTP_ERROR']) {
-      const error = await resolverFor(code)().catch((e: unknown) => e);
+      const error = await rejectionOf(resolverFor(code)());
       expect(error).toBeInstanceOf(GraphqlSoupWebSocketAuthUnavailableError);
       expect(shouldRetryGraphqlSoupWebSocket(error)).toBe(true);
     }
 
-    const rejected = await resolverFor('UNAUTHORIZED')().catch(
-      (e: unknown) => e
-    );
+    const rejected = await rejectionOf(resolverFor('UNAUTHORIZED')());
     expect(rejected).toBeInstanceOf(Error);
     expect(shouldRetryGraphqlSoupWebSocket(rejected)).toBe(false);
   });
@@ -142,7 +155,7 @@ describe('GraphQL Soup websocket retry policy', () => {
     vi.useFakeTimers();
     vi.spyOn(Math, 'random').mockReturnValue(1);
     const resolved = vi.fn();
-    const waiting = waitToRetryGraphqlSoupWebSocket(30).then(resolved);
+    const waiting = waitThen(30, resolved);
 
     await vi.advanceTimersByTimeAsync(62_999);
     expect(resolved).not.toHaveBeenCalled();
@@ -161,7 +174,7 @@ describe('GraphQL Soup websocket retry policy', () => {
     setVisibility('hidden');
     setNativeStatus('offline');
     const resolved = vi.fn();
-    const waiting = waitToRetryGraphqlSoupWebSocket(10).then(resolved);
+    const waiting = waitThen(10, resolved);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(resolved).not.toHaveBeenCalled();
 
@@ -175,7 +188,7 @@ describe('GraphQL Soup websocket retry policy', () => {
   it('does not treat the current native status as a reconnect opportunity', async () => {
     vi.useFakeTimers();
     const resolved = vi.fn();
-    const waiting = waitToRetryGraphqlSoupWebSocket(10).then(resolved);
+    const waiting = waitThen(10, resolved);
     await vi.advanceTimersByTimeAsync(0);
     expect(resolved).not.toHaveBeenCalled();
 

@@ -103,19 +103,22 @@ function PresentationHost(props: {
   const author = useAuthor();
   onMount(() => {
     let disposed = false;
-    // A copy is transferred, so a remount can open the original again.
-    (props.open?.() ?? openWorkerPresentation(props.bytes.slice(0)))
-      .then((e) => {
+    const openEngine = async () => {
+      try {
+        // A copy is transferred, so a remount can open the original again.
+        const e = await (props.open?.() ??
+          openWorkerPresentation(props.bytes.slice(0)));
         if (disposed) {
           e.close();
           return;
         }
         setEngine(e);
         props.onEngine(e);
-      })
-      .catch((e: unknown) =>
-        setFailure(e instanceof Error ? e.message : String(e))
-      );
+      } catch (e) {
+        setFailure(e instanceof Error ? e.message : String(e));
+      }
+    };
+    fireAndForget(openEngine(), 'pptx-editor');
     onCleanup(() => {
       disposed = true;
       engine()?.close();

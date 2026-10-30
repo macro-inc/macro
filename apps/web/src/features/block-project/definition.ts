@@ -4,7 +4,8 @@ import {
   LoadErrors,
   loadResult,
 } from '@core/block';
-import { storageServiceClient } from '@service-storage/client';
+import { requestProject } from '@queries/storage/requests';
+
 import type { GetProjectResponseData } from '@service-storage/generated/schemas/getProjectResponseData';
 import { ProjectType } from '@service-storage/generated/schemas/projectType';
 import { ok } from 'neverthrow';
@@ -45,9 +46,7 @@ export const definition = defineBlock({
           userAccessLevel: 'owner',
         } satisfies GetProjectResponseData);
       }
-      const maybeProject = await loadResult(
-        storageServiceClient.projects.getProject({ id: source.id })
-      );
+      const maybeProject = await loadResult(requestProject({ id: source.id }));
       if (maybeProject.isErr()) {
         return maybeProject;
       }

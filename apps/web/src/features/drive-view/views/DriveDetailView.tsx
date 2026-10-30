@@ -18,15 +18,12 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { ErrorBoundary, For, Match, Show, Switch } from 'solid-js';
+import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
 import { useOptionalDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
-import { FileDetailBreadcrumbItem } from '../views/FileDetailBreadcrumbItem';
-import {
-  MarkdownDetail,
-  MarkdownDetailBodyState,
-} from '../views/MarkdownDetail';
-import { DriveBreadcrumbsOutlet } from './DriveBreadcrumbs';
+import { FileDetailBreadcrumbItem } from './FileDetailBreadcrumbItem';
+import { MarkdownDetail, MarkdownDetailBodyState } from './MarkdownDetail';
 
 function DriveDetailAncestorBreadcrumbs(props: { orderOffset: number }) {
   const navigationStack = useDriveDetailNavigation();

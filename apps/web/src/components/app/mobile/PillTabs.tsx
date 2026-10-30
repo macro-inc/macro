@@ -18,28 +18,6 @@ import { MobileDockIsland } from './MobileDockIsland';
 import { MobileDrawer } from './MobileDrawer';
 import { computeVisiblePillValues } from './pillTabsLayout';
 
-const PILL_CLASS =
-  'h-10 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-medium island';
-
-/** Square variant for icon-only pills (the label is the icon). */
-const ICON_PILL_CLASS = 'flex w-10 items-center justify-center px-0';
-
-const MENU_STRIP_CLASS =
-  // The vertical padding gives the pills' shadow room inside the clipping
-  // box; the matching negative margin cancels its layout impact.
-  'pointer-events-auto relative -my-3 flex w-full min-w-0 flex-1 max-w-full items-center gap-2 py-3 pr-2';
-
-const SCROLL_STRIP_CLASS =
-  // The scrollport clips at its box, so the vertical padding must cover the
-  // island's glass shadow bloom (14px offset + 32px blur - 22px spread, well
-  // inside 32px); the matching negative margin cancels its layout impact. The
-  // strip is tap-transparent so the enlarged halo never swallows touches
-  // meant for content behind it — the content row re-enables pointer events
-  // for the pills. A pointer-events:none scroller receives no native scroll
-  // gestures, so panning is driven from the content row's pointer events
-  // instead (see the pan handler in ScrollablePillTabs).
-  'pointer-events-none -my-8 flex w-full min-w-0 flex-1 max-w-full items-center overflow-x-auto py-8 scrollbar-hidden';
-
 /** Momentum decay time constant after a pan release. */
 const MOMENTUM_TIME_CONSTANT_MS = 325;
 /** Momentum below this speed (px/ms) stops animating. */
@@ -119,8 +97,8 @@ export function PillButton(
       data-checked={local.active ? '' : undefined}
       aria-pressed={local.active}
       class={cn(
-        PILL_CLASS,
-        local.iconOnly && ICON_PILL_CLASS,
+        'h-10 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-medium island',
+        local.iconOnly && 'flex w-10 items-center justify-center px-0',
         local.active ? 'bg-ink text-surface' : 'bg-chrome text-ink-extra-muted',
         local.class
       )}
@@ -321,7 +299,16 @@ function ScrollablePillTabs<T extends string>(props: PillTabsProps<T>) {
   );
 
   return (
-    <div ref={setStripRef} class={cn(SCROLL_STRIP_CLASS, props.class)}>
+    // Padding keeps the glass shadow inside the scrollport's clipping box;
+    // the negative margin preserves its layout size. The content below owns
+    // touch panning so the enlarged shadow area does not swallow taps.
+    <div
+      ref={setStripRef}
+      class={cn(
+        'pointer-events-none -my-8 flex w-full min-w-0 flex-1 max-w-full items-center overflow-x-auto py-8 scrollbar-hidden',
+        props.class
+      )}
+    >
       <div
         ref={setContentRef}
         // Tapping a pill while typing (e.g. switching search scope) must not
@@ -446,7 +433,13 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
   });
 
   return (
-    <div ref={setStripRef} class={cn(MENU_STRIP_CLASS, props.class)}>
+    <div
+      ref={setStripRef}
+      class={cn(
+        'pointer-events-auto relative -my-3 flex w-full min-w-0 flex-1 max-w-full items-center gap-2 py-3 pr-2',
+        props.class
+      )}
+    >
       <For each={visibleItems()}>
         {(item) => (
           <PillButton
@@ -520,7 +513,10 @@ function MenuOverflowPillTabs<T extends string>(props: PillTabsProps<T>) {
               type="button"
               ref={(el) => measuredButtons.set(item.value, el)}
               tabIndex={-1}
-              class={cn(PILL_CLASS, item.iconOnly && ICON_PILL_CLASS)}
+              class={cn(
+                'h-10 shrink-0 whitespace-nowrap rounded-full px-3.5 text-xs font-medium island',
+                item.iconOnly && 'flex w-10 items-center justify-center px-0'
+              )}
             >
               {item.label}
             </button>

@@ -166,11 +166,7 @@ export function $convertLexicalSelectionToCursors(
     }
 
     const firstContainer = firstContainerResult.value;
-    if (firstContainer instanceof LoroText) {
-      anchorCursor = firstContainer.getCursor(0);
-    } else if (firstContainer instanceof LoroMovableList) {
-      anchorCursor = firstContainer.getCursor(0);
-    }
+    anchorCursor = updateAnchorCursor(firstContainer, anchorCursor);
 
     // Create cursor at the end of the last node
     const lastContainerResult = loroManager.getContainerById(lastContainerId);
@@ -206,6 +202,18 @@ export function $convertLexicalSelectionToCursors(
   }
 
   return undefined;
+
+  function updateAnchorCursor(
+    firstContainer: Container | undefined,
+    anchorCursor: Cursor | undefined
+  ) {
+    if (firstContainer instanceof LoroText) {
+      anchorCursor = firstContainer.getCursor(0);
+    } else if (firstContainer instanceof LoroMovableList) {
+      anchorCursor = firstContainer.getCursor(0);
+    }
+    return anchorCursor;
+  }
 }
 
 // Convert from Lexical point to Loro cursor

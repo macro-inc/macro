@@ -349,6 +349,43 @@ export function DatabaseTable(props: DatabaseTableProps) {
         })
         .join(' ')} ${hasAddColumn() ? '8.75rem' : ''}`
   );
+  /** Delete and Backspace clear the focused cell; returns whether the key was the grid's. */
+  function clearCell(event: KeyboardEvent, cell: HTMLElement) {
+    if (
+      (event.key !== 'Delete' && event.key !== 'Backspace') ||
+      !props.canEdit ||
+      !props.onClearCells
+    )
+      return false;
+    const row = rows()[Number(cell.dataset.gridRow)];
+    const column = columns()[Number(cell.dataset.gridColumn) - 1];
+    if (!row || !column || !canEditCell(column)) return true;
+    event.preventDefault();
+    event.stopPropagation();
+    fireAndForget(props.onClearCells([row.id], [column.id]), 'database');
+    return true;
+  }
+  /** The context-menu key opens the cell's menu below it. */
+  function openCellMenu(
+    event: KeyboardEvent,
+    cell: HTMLElement,
+    target: HTMLElement
+  ) {
+    if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10'))
+      return false;
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = cell.getBoundingClientRect();
+    target.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: bounds.left + 8,
+        clientY: bounds.bottom,
+      })
+    );
+    return true;
+  }
   function moveFocus(event: KeyboardEvent) {
     if (
       event.defaultPrevented ||
@@ -370,36 +407,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
     const cell = target.closest<HTMLElement>('[data-grid-cell]');
     const grid = cell?.closest<HTMLElement>('[data-grid]');
     if (!cell || !grid) return;
-    if (
-      (event.key === 'Delete' || event.key === 'Backspace') &&
-      props.canEdit &&
-      props.onClearCells
-    ) {
-      const row = rows()[Number(cell.dataset.gridRow)];
-      const column = columns()[Number(cell.dataset.gridColumn) - 1];
-      if (!row || !column || !canEditCell(column)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      fireAndForget(props.onClearCells([row.id], [column.id]), 'database');
-      return;
-    }
-    if (
-      event.key === 'ContextMenu' ||
-      (event.shiftKey && event.key === 'F10')
-    ) {
-      event.preventDefault();
-      event.stopPropagation();
-      const bounds = cell.getBoundingClientRect();
-      target.dispatchEvent(
-        new MouseEvent('contextmenu', {
-          bubbles: true,
-          cancelable: true,
-          clientX: bounds.left + 8,
-          clientY: bounds.bottom,
-        })
-      );
-      return;
-    }
+    if (clearCell(event, cell) || openCellMenu(event, cell, target)) return;
     const deltas: Record<string, [number, number]> = {
       ArrowUp: [-1, 0],
       ArrowDown: [1, 0],
@@ -420,20 +428,25 @@ export function DatabaseTable(props: DatabaseTableProps) {
     const column = columns()[columnIndex - 1];
     const nextControl = row && column ? control(row.id, column.id) : undefined;
     // Stepping down onto the new-record row starts typing there, like a spreadsheet.
-    if (
-      nextControl &&
-      delta[0] === 1 &&
-      props.canEdit &&
-      column &&
-      canEditCell(column) &&
-      props.isUnsavedRow?.(row.id)
-    )
-      nextControl.edit();
-    else if (nextControl) nextControl.focus();
-    else
-      (
-        next.querySelector<HTMLElement>('button, input, [tabindex]') ?? next
-      ).focus();
+    updateMoveFocus(next);
+
+    function updateMoveFocus(nextValue: NonNullable<typeof next>) {
+      if (
+        nextControl &&
+        delta[0] === 1 &&
+        props.canEdit &&
+        column &&
+        canEditCell(column) &&
+        props.isUnsavedRow?.(row.id)
+      )
+        nextControl.edit();
+      else if (nextControl) nextControl.focus();
+      else
+        (
+          nextValue.querySelector<HTMLElement>('button, input, [tabindex]') ??
+          nextValue
+        ).focus();
+    }
   }
   // One menu for every row: right-click (or a long press) picks its row and cell.
   const [contextTarget, setContextTarget] = createSignal<{

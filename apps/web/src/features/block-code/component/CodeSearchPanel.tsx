@@ -77,12 +77,6 @@ function markAsMainField(element: HTMLInputElement) {
   element.setAttribute('main-field', 'true');
 }
 
-const FIELD_CLASS =
-  'flex h-7 w-56 max-w-full min-w-0 shrink items-center gap-1.5 rounded-md px-2';
-
-const INPUT_CLASS =
-  'min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder focus:outline-none focus:ring-0';
-
 export type CodeSearchPanelProps = {
   view: EditorView;
   /** Editor state as of the last update the panel was notified about. */
@@ -195,7 +189,12 @@ export function CodeSearchPanel(props: CodeSearchPanelProps) {
           </Button>
         </Show>
 
-        <Surface depth={1} class={FIELD_CLASS}>
+        <Surface
+          depth={1}
+          class={
+            'flex h-7 w-56 max-w-full min-w-0 shrink items-center gap-1.5 rounded-md px-2'
+          }
+        >
           <MagnifyingGlass class="size-3.5 shrink-0 text-ink-extra-muted" />
           <input
             ref={markAsMainField}
@@ -204,7 +203,9 @@ export function CodeSearchPanel(props: CodeSearchPanelProps) {
             aria-label="Find"
             autocomplete="off"
             spellcheck={false}
-            class={INPUT_CLASS}
+            class={
+              'min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder focus:outline-none focus:ring-0'
+            }
             value={query().search}
             onInput={(event) => commit({ search: event.currentTarget.value })}
             onKeyDown={onFindKeyDown}
@@ -262,14 +263,21 @@ export function CodeSearchPanel(props: CodeSearchPanelProps) {
 
       <Show when={canReplace() && replaceOpen()}>
         <div class="flex min-w-0 items-center gap-1 pl-7">
-          <Surface depth={1} class={FIELD_CLASS}>
+          <Surface
+            depth={1}
+            class={
+              'flex h-7 w-56 max-w-full min-w-0 shrink items-center gap-1.5 rounded-md px-2'
+            }
+          >
             <input
               type="text"
               placeholder="Replace"
               aria-label="Replace"
               autocomplete="off"
               spellcheck={false}
-              class={INPUT_CLASS}
+              class={
+                'min-w-0 flex-1 border-0 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder focus:outline-none focus:ring-0'
+              }
               value={query().replace}
               onInput={(event) =>
                 commit({ replace: event.currentTarget.value })

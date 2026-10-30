@@ -71,12 +71,11 @@ export function createWebsocketPromiseChain<
         }
       }, timeoutMs);
     }) as PromiseHandler;
-    fireAndForget(
-      promise.finally(() => {
-        promise.resolved = true;
-      }),
-      'docx-upload'
-    );
+    const markResolved = async () => {
+      await promise;
+      promise.resolved = true;
+    };
+    fireAndForget(markResolved(), 'docx-upload');
 
     return Object.assign(promise, {
       resolve: resolvePromise!,
@@ -137,20 +136,17 @@ export function createWebsocketPromiseChain<
 
     ws.addEventListener('message', messageHandler);
     ws.addEventListener('close', closeHandler);
-    fireAndForget(
-      Promise.allSettled(results).then(() => {
-        ws.removeEventListener('message', messageHandler);
-        ws.removeEventListener('close', closeHandler);
-      }),
-      'docx-upload'
-    );
+    const removeListenersWhenSettled = async () => {
+      await Promise.allSettled(results);
+      ws.removeEventListener('message', messageHandler);
+      ws.removeEventListener('close', closeHandler);
+    };
+    fireAndForget(removeListenersWhenSettled(), 'docx-upload');
 
-    let maybeInputData = getInputData(...args);
-    if (!(maybeInputData instanceof Promise)) {
-      maybeInputData = Promise.resolve(maybeInputData);
-    }
+    const maybeInputData = getInputData(...args);
+    const sendRequest = async () => {
+      const inputData = await maybeInputData;
 
-    maybeInputData.then((inputData: any) => {
       if (ws.readyState !== WebSocket.OPEN) {
         console.error(
           `${jobType} failed: WebSocket is not open (readyState: ${ws.readyState})`
@@ -168,7 +164,8 @@ export function createWebsocketPromiseChain<
           data: inputData,
         })
       );
-    });
+    };
+    fireAndForget(sendRequest(), 'docx-upload');
 
     return results as Results;
   };

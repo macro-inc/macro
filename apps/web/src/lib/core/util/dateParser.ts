@@ -1,3 +1,4 @@
+import { match as matchBranch } from 'ts-pattern';
 /**
  * Parse natural language date inputs like "today", "tomorrow", "next week", etc.
  */
@@ -147,102 +148,8 @@ function parseDateString(input: string): ParsedDate | null {
     };
   }
 
-  // Weekday names - use the abbreviation lookup for broader matching
-  const weekdayIndex = WEEKDAY_ABBR[normalized];
-  if (weekdayIndex !== undefined) {
-    const targetDay = weekdayIndex;
-    const currentDay = today.getDay();
-    let daysToAdd = targetDay - currentDay;
-
-    // If the day has passed this week or it's today, get next week's
-    if (daysToAdd <= 0) {
-      daysToAdd += 7;
-    }
-
-    const targetDate = new Date(today);
-    targetDate.setDate(targetDate.getDate() + daysToAdd);
-
-    return {
-      date: targetDate,
-      displayFormat: formatDate(targetDate),
-      confidence: normalized === WEEKDAYS[weekdayIndex] ? 1 : 0.9,
-    };
-  }
-
-  // Fallback: try prefix matching for weekdays (e.g., "mo" for Monday)
-  for (let i = 0; i < WEEKDAYS.length; i++) {
-    if (WEEKDAYS[i].startsWith(normalized) && normalized.length >= 2) {
-      const targetDay = i;
-      const currentDay = today.getDay();
-      let daysToAdd = targetDay - currentDay;
-
-      if (daysToAdd <= 0) {
-        daysToAdd += 7;
-      }
-
-      const targetDate = new Date(today);
-      targetDate.setDate(targetDate.getDate() + daysToAdd);
-
-      return {
-        date: targetDate,
-        displayFormat: formatDate(targetDate),
-        confidence: 0.8,
-      };
-    }
-  }
-
-  // Month names (with optional day and year)
-  for (let i = 0; i < MONTHS.length; i++) {
-    if (
-      normalized.startsWith(MONTHS[i]) ||
-      normalized.startsWith(MONTH_ABBR[i])
-    ) {
-      // Extract day and year if present
-      const parts = normalized.split(/\s+/);
-      let day = 1;
-      let year = today.getFullYear();
-
-      if (parts.length > 1) {
-        const dayPart = parts[1].replace(/[^\d]/g, '');
-        if (dayPart) {
-          day = parseInt(dayPart, 10);
-          if (isNaN(day) || day < 1 || day > 31) {
-            day = 1;
-          }
-        }
-      }
-
-      // Check for year in third part
-      if (parts.length > 2) {
-        const yearPart = parts[2].replace(/[^\d]/g, '');
-        if (yearPart) {
-          const parsedYear = parseInt(yearPart, 10);
-          if (!isNaN(parsedYear)) {
-            // Handle 2-digit years
-            if (parsedYear >= 0 && parsedYear <= 99) {
-              // Assume 00-50 means 2000-2050, 51-99 means 1951-1999
-              year = parsedYear <= 50 ? 2000 + parsedYear : 1900 + parsedYear;
-            } else if (parsedYear >= 1900 && parsedYear <= 2100) {
-              year = parsedYear;
-            }
-          }
-        }
-      }
-
-      const targetDate = new Date(year, i, day);
-
-      // Only apply "next year" logic if no year was explicitly provided
-      if (parts.length <= 2 && targetDate < today) {
-        targetDate.setFullYear(targetDate.getFullYear() + 1);
-      }
-
-      return {
-        date: targetDate,
-        displayFormat: formatDate(targetDate),
-        confidence: parts.length > 2 ? 0.95 : parts.length > 1 ? 0.9 : 0.7,
-      };
-    }
-  }
+  const namedDate = parseNamedDate();
+  if (namedDate) return namedDate;
 
   // Relative days (in X days)
   const inDaysMatch = normalized.match(/^in\s+(\d+)\s+days?$/);
@@ -271,63 +178,199 @@ function parseDateString(input: string): ParsedDate | null {
     };
   }
 
-  // Date formats (MM/DD, DD/MM depending on locale)
-  const dateMatch = normalized.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
-  if (dateMatch) {
-    const [, first, second] = dateMatch;
-    const month = parseInt(first, 10) - 1; // Assume MM/DD for now
-    const day = parseInt(second, 10);
+  return parseNumericDate();
 
-    if (month >= 0 && month < 12 && day >= 1 && day <= 31) {
-      const targetDate = new Date(today.getFullYear(), month, day);
+  function parseNamedDate(): ParsedDate | null {
+    // Weekday names - use the abbreviation lookup for broader matching
+    const weekdayIndex = WEEKDAY_ABBR[normalized];
+    if (weekdayIndex !== undefined) {
+      const targetDay = weekdayIndex;
+      const currentDay = today.getDay();
+      let daysToAdd = targetDay - currentDay;
 
-      // If the date has passed this year, use next year
-      if (targetDate < today) {
-        targetDate.setFullYear(targetDate.getFullYear() + 1);
+      // If the day has passed this week or it's today, get next week's
+      if (daysToAdd <= 0) {
+        daysToAdd += 7;
       }
+
+      const targetDate = new Date(today);
+      targetDate.setDate(targetDate.getDate() + daysToAdd);
 
       return {
         date: targetDate,
         displayFormat: formatDate(targetDate),
-        confidence: 0.8,
+        confidence: normalized === WEEKDAYS[weekdayIndex] ? 1 : 0.9,
       };
+    }
+
+    // Fallback: try prefix matching for weekdays (e.g., "mo" for Monday)
+    for (let i = 0; i < WEEKDAYS.length; i++) {
+      if (WEEKDAYS[i].startsWith(normalized) && normalized.length >= 2) {
+        const targetDay = i;
+        const currentDay = today.getDay();
+        let daysToAdd = targetDay - currentDay;
+
+        if (daysToAdd <= 0) {
+          daysToAdd += 7;
+        }
+
+        const targetDate = new Date(today);
+        targetDate.setDate(targetDate.getDate() + daysToAdd);
+
+        return {
+          date: targetDate,
+          displayFormat: formatDate(targetDate),
+          confidence: 0.8,
+        };
+      }
+    }
+
+    // Month names (with optional day and year)
+    for (let i = 0; i < MONTHS.length; i++) {
+      if (
+        normalized.startsWith(MONTHS[i]) ||
+        normalized.startsWith(MONTH_ABBR[i])
+      ) {
+        // Extract day and year if present
+        const parts = normalized.split(/\s+/);
+        let day = 1;
+        let year = today.getFullYear();
+
+        day = updateDay(parts, day);
+
+        // Check for year in third part
+        year = updateYear(parts, year);
+
+        const targetDate = new Date(year, i, day);
+
+        // Only apply "next year" logic if no year was explicitly provided
+        updateParseDateString(parts, targetDate);
+
+        return {
+          date: targetDate,
+          displayFormat: formatDate(targetDate),
+          confidence: buildConfidence(parts),
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function parseNumericDate(): ParsedDate | null {
+    // Date formats (MM/DD, DD/MM depending on locale)
+    const dateMatch = normalized.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+    if (dateMatch) {
+      const [, first, second] = dateMatch;
+      const month = parseInt(first, 10) - 1; // Assume MM/DD for now
+      const day = parseInt(second, 10);
+
+      if (isParseDateStringAllowed2(month, day)) {
+        const targetDate = new Date(today.getFullYear(), month, day);
+
+        // If the date has passed this year, use next year
+        if (targetDate < today) {
+          targetDate.setFullYear(targetDate.getFullYear() + 1);
+        }
+
+        return {
+          date: targetDate,
+          displayFormat: formatDate(targetDate),
+          confidence: 0.8,
+        };
+      }
+    }
+
+    // Date formats with year (MM/DD/YYYY or DD/MM/YYYY)
+    const dateWithYearMatch = normalized.match(
+      /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/
+    );
+    if (dateWithYearMatch) {
+      const [, first, second, yearStr] = dateWithYearMatch;
+      const month = parseInt(first, 10) - 1; // Assume MM/DD/YYYY for now
+      const day = parseInt(second, 10);
+      let year = parseInt(yearStr, 10);
+
+      // Handle 2-digit years
+      year = updateYear2(year);
+
+      if (isParseDateStringAllowed(month, day, year)) {
+        const targetDate = new Date(year, month, day);
+
+        return {
+          date: targetDate,
+          displayFormat: formatDate(targetDate),
+          confidence: 0.9,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function updateParseDateString(parts: string[], targetDate: Date) {
+    if (parts.length <= 2 && targetDate < today) {
+      targetDate.setFullYear(targetDate.getFullYear() + 1);
     }
   }
 
-  // Date formats with year (MM/DD/YYYY or DD/MM/YYYY)
-  const dateWithYearMatch = normalized.match(
-    /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/
-  );
-  if (dateWithYearMatch) {
-    const [, first, second, yearStr] = dateWithYearMatch;
-    const month = parseInt(first, 10) - 1; // Assume MM/DD/YYYY for now
-    const day = parseInt(second, 10);
-    let year = parseInt(yearStr, 10);
+  function buildConfidence(parts: string[]): number {
+    return parts.length > 2 ? 0.95 : parts.length > 1 ? 0.9 : 0.7;
+  }
 
-    // Handle 2-digit years
+  function updateYear2(year: number) {
     if (year >= 0 && year <= 99) {
       year = year <= 50 ? 2000 + year : 1900 + year;
     }
+    return year;
+  }
 
-    if (
+  function isParseDateStringAllowed2(month: number, day: number) {
+    return month >= 0 && month < 12 && day >= 1 && day <= 31;
+  }
+
+  function isParseDateStringAllowed(month: number, day: number, year: number) {
+    return (
       month >= 0 &&
       month < 12 &&
       day >= 1 &&
       day <= 31 &&
       year >= 1900 &&
       year <= 2100
-    ) {
-      const targetDate = new Date(year, month, day);
-
-      return {
-        date: targetDate,
-        displayFormat: formatDate(targetDate),
-        confidence: 0.9,
-      };
-    }
+    );
   }
 
-  return null;
+  function updateDay(parts: string[], day: number) {
+    if (parts.length > 1) {
+      const dayPart = parts[1].replace(/[^\d]/g, '');
+      if (dayPart) {
+        day = parseInt(dayPart, 10);
+        if (isNaN(day) || day < 1 || day > 31) {
+          day = 1;
+        }
+      }
+    }
+    return day;
+  }
+
+  function updateYear(parts: string[], year: number) {
+    if (parts.length > 2) {
+      const yearPart = parts[2].replace(/[^\d]/g, '');
+      if (yearPart) {
+        const parsedYear = parseInt(yearPart, 10);
+        if (!isNaN(parsedYear)) {
+          // Handle 2-digit years
+          if (parsedYear >= 0 && parsedYear <= 99) {
+            // Assume 00-50 means 2000-2050, 51-99 means 1951-1999
+            year = parsedYear <= 50 ? 2000 + parsedYear : 1900 + parsedYear;
+          } else if (parsedYear >= 1900 && parsedYear <= 2100) {
+            year = parsedYear;
+          }
+        }
+      }
+    }
+    return year;
+  }
 }
 
 export function formatDate(date: Date): string {
@@ -376,20 +419,25 @@ export function formatDate(date: Date): string {
  */
 export function formatRelativeDay(date: Date): string {
   const diff = differenceInCalendarDays(date, new Date());
-  switch (diff) {
-    case -2:
+  return matchBranch(diff)
+    .with(-2, (): string => {
       return '2 days ago';
-    case -1:
+    })
+    .with(-1, (): string => {
       return 'Yesterday';
-    case 0:
+    })
+    .with(0, (): string => {
       return 'Today';
-    case 1:
+    })
+    .with(1, (): string => {
       return 'Tomorrow';
-    case 2:
+    })
+    .with(2, (): string => {
       return 'In 2 days';
-    default:
+    })
+    .otherwise((): string => {
       return formatDate(date);
-  }
+    });
 }
 
 /**
@@ -481,6 +529,22 @@ function _getDateSuggestions(input: string): ParsedDate[] {
 
   // Month suggestions
   for (let i = 0; i < MONTHS.length; i++) {
+    updateGetDateSuggestions(i);
+  }
+
+  // Try to parse the full input
+  const parsed = parseDateString(normalized);
+  if (
+    parsed &&
+    !suggestions.some((s) => s.date.getTime() === parsed.date.getTime())
+  ) {
+    suggestions.push(parsed);
+  }
+
+  // Sort by confidence and limit
+  return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
+
+  function updateGetDateSuggestions(i: number) {
     if (MONTHS[i].startsWith(normalized) && normalized.length > 1) {
       const targetDate = new Date(today.getFullYear(), i, 1);
       targetDate.setHours(0, 0, 0, 0);
@@ -497,16 +561,4 @@ function _getDateSuggestions(input: string): ParsedDate[] {
       });
     }
   }
-
-  // Try to parse the full input
-  const parsed = parseDateString(normalized);
-  if (
-    parsed &&
-    !suggestions.some((s) => s.date.getTime() === parsed.date.getTime())
-  ) {
-    suggestions.push(parsed);
-  }
-
-  // Sort by confidence and limit
-  return suggestions.sort((a, b) => b.confidence - a.confidence).slice(0, 5);
 }

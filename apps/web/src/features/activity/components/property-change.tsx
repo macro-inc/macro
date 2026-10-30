@@ -3,10 +3,7 @@ import { TagDot } from '@property/tags/TagDot';
 import type { PropertyDefinitionDomain } from '@property/types';
 import { For, Show } from 'solid-js';
 import type { ActivityAction } from '../core/event';
-import {
-  propertyValueLabel,
-  selectOptionEntries,
-} from '../queries/property-value';
+import { propertyValueLabel, selectOptionEntries } from './property-value';
 
 type PropertyChangedAction = Extract<
   ActivityAction,

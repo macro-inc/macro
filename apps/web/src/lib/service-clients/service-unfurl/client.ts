@@ -6,10 +6,6 @@ import type { GetUnfurlBulkResponse } from './generated/schemas/getUnfurlBulkRes
 import type { GetUnfurlParams } from './generated/schemas/getUnfurlParams';
 import type { GetUnfurlResponse } from './generated/schemas/getUnfurlResponse';
 
-export function proxyResource(url: string) {
-  return `${SERVER_HOSTS['unfurl-service']}/proxy?url=${url}`;
-}
-
 export const UnfurlServiceClient = {
   async unfurl(args: GetUnfurlParams) {
     return (
@@ -30,3 +26,5 @@ export const UnfurlServiceClient = {
     ).map((result) => result);
   },
 };
+
+export { proxyResource } from './proxy-resource';

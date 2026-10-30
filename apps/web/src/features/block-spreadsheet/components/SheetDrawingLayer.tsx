@@ -188,12 +188,7 @@ export function SheetDrawingLayer(props: {
                   'ring-2 ring-accent': selected(),
                   'touch-none': selected() && editable(),
                 }}
-                style={{
-                  left: `${box().left - (target()?.x ?? 0)}px`,
-                  top: `${box().top - (target()?.y ?? 0)}px`,
-                  width: `${box().width + 2 * (target()?.x ?? 0)}px`,
-                  height: `${box().height + 2 * (target()?.y ?? 0)}px`,
-                }}
+                style={drawingFrameStyle(box)}
                 onPointerDown={(event) => {
                   if (event.button !== 0) return;
                   event.stopPropagation();
@@ -414,6 +409,15 @@ export function SheetDrawingLayer(props: {
             )}
           </Show>
         );
+
+        function drawingFrameStyle(box: () => DrawingRect) {
+          return {
+            left: `${box().left - (target()?.x ?? 0)}px`,
+            top: `${box().top - (target()?.y ?? 0)}px`,
+            width: `${box().width + 2 * (target()?.x ?? 0)}px`,
+            height: `${box().height + 2 * (target()?.y ?? 0)}px`,
+          };
+        }
       }}
     </For>
   );

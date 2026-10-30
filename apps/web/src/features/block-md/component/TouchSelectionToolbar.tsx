@@ -30,10 +30,6 @@ type TouchOption = {
 // Toolbar buttons give no touch-down feedback: the ghost variant's
 // hover/active overlays (and iOS's native tap flash) would light options up
 // on every touch and mid-swipe, so they are forcibly neutralized.
-const optionButtonClass =
-  'px-2 text-xs rounded-md py-1.25 shrink-0 whitespace-nowrap hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]';
-const arrowButtonClass =
-  'rounded-md shrink-0 hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]';
 
 /**
  * The touch-device selection toolbar, mirroring the native edit menu (which
@@ -397,14 +393,26 @@ export function TouchSelectionToolbar(props: {
         <div class="flex w-max flex-row items-center" ref={measureRowRef}>
           <For each={options()}>
             {(option) => (
-              <Button size="sm" class={optionButtonClass} variant="ghost">
+              <Button
+                size="sm"
+                class={
+                  'px-2 text-xs rounded-md py-1.25 shrink-0 whitespace-nowrap hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
+                }
+                variant="ghost"
+              >
                 {option.content()}
               </Button>
             )}
           </For>
         </div>
         <div class="w-max" ref={measureArrowRef}>
-          <Button size="icon-sm" class={arrowButtonClass} variant="ghost">
+          <Button
+            size="icon-sm"
+            class={
+              'rounded-md shrink-0 hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
+            }
+            variant="ghost"
+          >
             <CaretRightIcon class="size-4" />
           </Button>
         </div>
@@ -412,7 +420,9 @@ export function TouchSelectionToolbar(props: {
       <Show when={canPagePrev()}>
         <Button
           size="icon-sm"
-          class={arrowButtonClass}
+          class={
+            'rounded-md shrink-0 hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
+          }
           variant="ghost"
           aria-label="Previous options"
           onClick={() => page(-1)}
@@ -471,7 +481,9 @@ export function TouchSelectionToolbar(props: {
                       </Show>
                       <Button
                         size="sm"
-                        class={optionButtonClass}
+                        class={
+                          'px-2 text-xs rounded-md py-1.25 shrink-0 whitespace-nowrap hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
+                        }
                         variant="ghost"
                         onClick={() => option.onSelect()}
                       >
@@ -489,7 +501,9 @@ export function TouchSelectionToolbar(props: {
         <div class="mx-1 w-px shrink-0 self-stretch bg-edge" />
         <Button
           size="icon-sm"
-          class={arrowButtonClass}
+          class={
+            'rounded-md shrink-0 hover:bg-none! active:bg-none! hover:text-ink-muted! [-webkit-tap-highlight-color:transparent]'
+          }
           variant="ghost"
           aria-label="More options"
           onClick={() => page(1)}

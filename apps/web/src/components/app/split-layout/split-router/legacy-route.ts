@@ -29,6 +29,7 @@ import {
   formatPanePath,
   isRecord,
   routeParams,
+  type SerializedSearchParams,
   type SplitLocation,
   type SplitRoutesManifest,
   type SplitSearchState,
@@ -232,50 +233,13 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
-  // Persisted panes can still contain the old block discriminator.
-  if (['routine', 'automation'].includes(content.type))
-    return routineLocation(content.id);
-  if (content.type === 'component' && content.id === 'routines') {
-    return routineLocation(routineIdFromContent(content));
-  }
-  if (
-    content.type === 'component' &&
-    content.id === 'agents' &&
-    content.params?.agentPage === 'routines'
-  ) {
-    return routineLocation(
-      typeof content.params.routineId === 'string'
-        ? content.params.routineId
-        : undefined
-    );
-  }
+  const routine = routineLocationFromContent();
+  if (routine) return routine;
   if (
     (content.type === 'component' && content.id === CALENDAR_VIEW_ID) ||
     (content.type === 'calendar' && content.id === CALENDAR_BLOCK_ID)
   ) {
-    const params: Record<string, unknown> = isRecord(content.params)
-      ? content.params
-      : {};
-    const search = calendarSearchCodec.serialize(
-      calendarTargetSearch({
-        eventId:
-          typeof params.eventId === 'string' && params.eventId.length > 0
-            ? params.eventId
-            : undefined,
-        occurrenceKey:
-          typeof params.occurrenceKey === 'string'
-            ? params.occurrenceKey
-            : undefined,
-        range: isCalendarRange(params.range) ? params.range : undefined,
-      })
-    );
-    return {
-      route: paneRoute({
-        id: CALENDAR_ROUTE_ID,
-        params: { period: getPreferredCalendarPeriodView() },
-      }),
-      ...(search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {}),
-    };
+    return calendarLocation();
   }
 
   if (content.type === 'pr') {
@@ -315,6 +279,59 @@ export function splitLocationFromContent(
 
   const [type, id] = encodeLegacyContent(content);
   return { route: paneRoute({ id: 'legacy-content', params: { type, id } }) };
+
+  function routineLocationFromContent(): SplitLocation | undefined {
+    // Persisted panes can still contain the old block discriminator.
+    if (['routine', 'automation'].includes(content.type))
+      return routineLocation(content.id);
+    if (content.type === 'component' && content.id === 'routines') {
+      return routineLocation(routineIdFromContent(content));
+    }
+    if (
+      content.type === 'component' &&
+      content.id === 'agents' &&
+      content.params?.agentPage === 'routines'
+    ) {
+      return routineLocation(routineIdValue(content.params.routineId));
+    }
+    return undefined;
+  }
+
+  function routineIdValue(value: unknown): string | undefined {
+    return typeof value === 'string' ? value : undefined;
+  }
+
+  function buildSplitLocationFromContent(
+    search: SerializedSearchParams | undefined
+  ): Partial<SplitLocation> {
+    return search ? { search: { [CALENDAR_SEARCH_NAMESPACE]: search } } : {};
+  }
+
+  function calendarLocation() {
+    const params: Record<string, unknown> = isRecord(content.params)
+      ? content.params
+      : {};
+    const search = calendarSearchCodec.serialize(
+      calendarTargetSearch({
+        eventId:
+          typeof params.eventId === 'string' && params.eventId.length > 0
+            ? params.eventId
+            : undefined,
+        occurrenceKey:
+          typeof params.occurrenceKey === 'string'
+            ? params.occurrenceKey
+            : undefined,
+        range: isCalendarRange(params.range) ? params.range : undefined,
+      })
+    );
+    return {
+      route: paneRoute({
+        id: CALENDAR_ROUTE_ID,
+        params: { period: getPreferredCalendarPeriodView() },
+      }),
+      ...buildSplitLocationFromContent(search),
+    };
+  }
 }
 
 /**
@@ -413,10 +430,7 @@ export function splitContentFromLocation(
   if (root.id === ROUTINES_ROUTE_ID) return routineContent();
   if (root.id === ROUTINE_CREATE_ROUTE_ID) return routineContent('new');
   if (root.id === ROUTINE_DETAIL_ROUTE_ID) {
-    const { routineId } = routeParams(location.route);
-    if (typeof routineId === 'string' && routineId.length > 0)
-      return routineContent(routineId);
-    throw new Error('Invalid routine detail split route');
+    return routineDetailContent();
   }
 
   if (root.id.startsWith('view-'))
@@ -439,23 +453,53 @@ export function splitContentFromLocation(
   }
 
   const params = routeParams(location.route);
-  if (
-    root.id === 'agents' ||
-    root.id === 'coders' ||
-    root.id === 'agent-chats'
-  ) {
-    const id = typeof params.id === 'string' ? params.id : undefined;
-    const componentId = id ? agentsRouteFromSegments(root.id, id) : undefined;
+  if (hasId(root)) {
+    const id = legacyRouteId();
+    const componentId = buildComponentId(id, root);
     if (componentId) return { type: 'component', id: componentId };
     throw new Error(`Invalid ${root.id} split route`);
   }
 
   if (root.id === 'legacy-content') {
-    const type = typeof params.type === 'string' ? params.type : undefined;
-    const id = typeof params.id === 'string' ? params.id : undefined;
-    const content = type && id ? decodeLegacyPair(type, id) : undefined;
+    const type = buildType();
+    const id = legacyRouteId();
+    const content = buildContent(type, id);
     if (content) return content;
   }
 
   throw new Error(`No split content matched route "${root.id}"`);
+
+  function buildType() {
+    return typeof params.type === 'string' ? params.type : undefined;
+  }
+
+  function legacyRouteId() {
+    return typeof params.id === 'string' ? params.id : undefined;
+  }
+
+  function buildComponentId(
+    id: string | undefined,
+    rootInput: NonNullable<typeof root>
+  ) {
+    return id ? agentsRouteFromSegments(rootInput.id, id) : undefined;
+  }
+
+  function hasId(rootInput: NonNullable<typeof root>) {
+    return (
+      rootInput.id === 'agents' ||
+      rootInput.id === 'coders' ||
+      rootInput.id === 'agent-chats'
+    );
+  }
+
+  function buildContent(type: string | undefined, id: string | undefined) {
+    return type && id ? decodeLegacyPair(type, id) : undefined;
+  }
+
+  function routineDetailContent() {
+    const { routineId } = routeParams(location.route);
+    if (typeof routineId === 'string' && routineId.length > 0)
+      return routineContent(routineId);
+    throw new Error('Invalid routine detail split route');
+  }
 }

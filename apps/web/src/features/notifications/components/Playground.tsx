@@ -3,8 +3,8 @@ import { createConfiguredChannelMarkdownEditor } from '@channel/Input';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { NotificationRow } from '@entity';
-import { Telemetry } from '@macro-inc/observability';
 import { Button } from '@ui';
 import {
   type Component,
@@ -147,18 +147,23 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
   const hasData = () => hasNotificationMetadata(props.notification);
   const [browserNotif, setBrowserNotif] = createSignal<any>(null);
 
-  createEffect(() => {
-    if (hasData()) {
-      toPlatformNotificationData(
-        props.notification,
+  const loadBrowserNotification = async (notification: UnifiedNotification) => {
+    setBrowserNotif(
+      await toPlatformNotificationData(
+        notification,
         DefaultUserNameResolver,
         DefaultDocumentNameResolver,
         DefaultUserAvatarResolver
       )
-        .then(setBrowserNotif)
-        .catch((error) =>
-          Telemetry.error(error, { surface: 'notifications-playground' })
-        );
+    );
+  };
+
+  createEffect(() => {
+    if (hasData()) {
+      fireAndForget(
+        loadBrowserNotification(props.notification),
+        'notifications-playground'
+      );
     } else {
       setBrowserNotif(null);
     }
@@ -580,24 +585,25 @@ function PlaygroundContent() {
         console.warn('no layout manager');
         return;
       }
-      maybeHandlePlatformNotification(
-        notification,
-        {
-          showNotification: async (data: PlatformNotificationData) => {
-            const notif = new Notification(data.title, data.options);
-            return {
-              onClick: (cb: any) => {
-                notif.addEventListener('click', cb);
-              },
-              close: () => {
-                notif.close();
-              },
-            };
-          },
-        } as PlatformNotificationState,
-        layoutManager
-      ).catch((error) =>
-        Telemetry.error(error, { surface: 'notifications-playground' })
+      fireAndForget(
+        maybeHandlePlatformNotification(
+          notification,
+          {
+            showNotification: async (data: PlatformNotificationData) => {
+              const notif = new Notification(data.title, data.options);
+              return {
+                onClick: (cb: any) => {
+                  notif.addEventListener('click', cb);
+                },
+                close: () => {
+                  notif.close();
+                },
+              };
+            },
+          } as PlatformNotificationState,
+          layoutManager
+        ),
+        'notifications-playground'
       );
     };
 

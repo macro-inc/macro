@@ -12,11 +12,14 @@ import {
   type UpdateSavedViewMutation,
   type UpdateSavedViewMutationVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { CombinedError } from '@urql/core';
+import { type Client, CombinedError } from '@urql/core';
 import type { CreateSavedView, UpdateSavedView } from '../core/saved-view';
 
-type Options = { refresh: () => Promise<unknown> };
+type Options = {
+  /** The shared GraphQL client, read reactively so an account switch follows. */
+  client: () => Client;
+  refresh: () => Promise<unknown>;
+};
 const unconfirmed = () =>
   new CombinedError({
     networkError: new Error(
@@ -32,7 +35,7 @@ export function useCreateSavedView(options: Options) {
     CreateSavedViewMutationVariables,
     CreateSavedView
   >(() => ({
-    client: getGraphqlSoupClient(),
+    client: options.client(),
     mutation: CreateSavedViewDocument,
     execute: ({ client, input, context }) =>
       Telemetry.span('saved_view.create', async (span) => {
@@ -43,7 +46,7 @@ export function useCreateSavedView(options: Options) {
         if (!result.error && !result.data?.createSavedView)
           result.error = unconfirmed();
         if (result.error) span.error('Saved view create failed');
-        else if (client === getGraphqlSoupClient())
+        else if (client === options.client())
           fireAndForget(options.refresh(), 'saved-views');
         return result;
       }),
@@ -56,7 +59,7 @@ export function useUpdateSavedView(options: Options) {
     UpdateSavedViewMutationVariables,
     UpdateSavedView
   >(() => ({
-    client: getGraphqlSoupClient(),
+    client: options.client(),
     mutation: UpdateSavedViewDocument,
     execute: ({ client, input, context }) =>
       Telemetry.span('saved_view.update', async (span) => {
@@ -82,7 +85,7 @@ export function useUpdateSavedView(options: Options) {
         if (!result.error && !result.data?.updateSavedView)
           result.error = unconfirmed();
         if (result.error) span.error('Saved view update failed');
-        else if (client === getGraphqlSoupClient())
+        else if (client === options.client())
           fireAndForget(options.refresh(), 'saved-views');
         return result;
       }),
@@ -95,7 +98,7 @@ export function useDeleteSavedView(options: Options) {
     DeleteSavedViewMutationVariables,
     DeleteSavedViewMutationVariables['input']
   >(() => ({
-    client: getGraphqlSoupClient(),
+    client: options.client(),
     mutation: DeleteSavedViewDocument,
     execute: ({ client, input, context }) =>
       Telemetry.span('saved_view.delete', async (span) => {
@@ -105,7 +108,7 @@ export function useDeleteSavedView(options: Options) {
           .toPromise();
         if (!result.error && !result.data) result.error = unconfirmed();
         if (result.error) span.error('Saved view delete failed');
-        else if (client === getGraphqlSoupClient())
+        else if (client === options.client())
           fireAndForget(options.refresh(), 'saved-views');
         return result;
       }),

@@ -1,4 +1,4 @@
-import type { DeltaOp } from '@core/docx-engine/types';
+import type { DeltaOp } from '@app/lib/docx/types';
 import { describe, expect, it } from 'vitest';
 import { applyToText, transform } from './delta';
 

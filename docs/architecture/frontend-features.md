@@ -587,8 +587,8 @@ From the repository root, the existing scanner invocation can be scoped to a fea
 bunx --yes @ast-grep/cli@0.44.1 scan apps/web/src/features/activity
 ```
 
-These rules currently have warning severity and their `files` lists cover
-activity and the three email features. They do not automatically enforce every
+All four feature rule families have error severity. Their `files` lists register the features
+that have adopted these boundaries. They do not automatically enforce every
 feature directory, resolve the whole transitive import graph, or prove that a
 component is presentational.
 Passing the scan is supporting evidence, not a complete architecture review.
@@ -608,14 +608,12 @@ The reference has specific qualifications worth preserving accurately:
   context's urql client. Its tests therefore drive GraphQL operations. Migrate
   meaningful reactive decisions to feature-owned sources and keep those existing
   tests as integration coverage. This is not full dependency inversion today.
-- `core/group-events.ts` imports the pure `dateBucket` module from soup so feed
-  labels match other views. The rule documents this exception. It does not permit
-  importing the soup barrel or arbitrary feature infrastructure into core.
-- `components/property-change.tsx` imports pure wire-value parsing/formatting from
-  `queries/property-value.ts`. The presentational rules explicitly allow that
-  path. It is not permission to execute a query from a component. For new code,
-  prefer returning display-ready data at the adapter boundary rather than copying
-  this exception by default.
+- `core/group-events.ts` and Soup share `lib/utils/date-buckets.ts` so feed
+  labels match other views. Shared pure helpers and models live outside app
+  context and worker modules; core has no exception allowing those imports.
+- `components/property-change.tsx` imports pure property-value formatting from
+  `components/property-value.ts`. Presentation helpers live with presentation;
+  components have no exception allowing imports from the query layer.
 - Shared UI may carry its own runtime requirements. Activity's entity mention uses
   `StaticMarkdown` and requires `StaticMarkdownContext`; the view tests stub it.
   The branch establishes a feature dependency seam, not complete isolation from

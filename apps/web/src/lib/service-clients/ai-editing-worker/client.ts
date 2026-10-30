@@ -156,7 +156,13 @@ export async function requestAiEdit(args: {
         span.setAttr('edit.blocked', true);
         return { kind: 'usage-limit', error };
       }
-      const body = await res.text().catch(() => '');
+
+      let body = '';
+      try {
+        body = await res.text();
+      } catch {
+        // The status alone still identifies the failure.
+      }
       console.error('ai edit request failed', res.status, body);
       const message = `HTTP ${res.status} for POST /edit`;
       span.error({

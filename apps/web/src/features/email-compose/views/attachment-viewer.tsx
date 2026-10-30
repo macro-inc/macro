@@ -1,6 +1,7 @@
 import { MediaViewerDialog } from '@channel/Media/MediaViewerDialog';
 import type { MediaItem } from '@channel/Media/media-items';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getEmailAttachmentDownloadUrl } from '@queries/email/attachment';
 import { createSignal, onCleanup } from 'solid-js';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
@@ -30,6 +31,27 @@ export function createAttachmentViewer() {
 
   // Remote provider files require a fresh authorized download, never a raw
   // provider ID or a persisted bearer URL.
+  const openRemote = async (
+    attachmentId: string,
+    kind: ReturnType<typeof mediaKind>,
+    tab: Window | null | undefined
+  ) => {
+    try {
+      const url = await getEmailAttachmentDownloadUrl(attachmentId);
+      if (kind)
+        setItem({
+          id: attachmentId,
+          src: url,
+          fullSrc: url,
+          kind,
+        });
+      else if (tab) tab.location.replace(url);
+    } catch {
+      tab?.close();
+      toast.failure('Unable to open this attachment');
+    }
+  };
+
   const onClickFor = (attachment: DraftFormAttachment) => {
     if (attachment.type === 'native' && attachment.referenceUrl) {
       const url = attachment.referenceUrl;
@@ -41,21 +63,10 @@ export function createAttachmentViewer() {
         // Open within the user gesture so browsers permit non-media downloads.
         const tab = kind ? undefined : window.open('', '_blank');
         if (tab) tab.opener = null;
-        void getEmailAttachmentDownloadUrl(attachment.attachmentId)
-          .then((url) => {
-            if (kind)
-              setItem({
-                id: attachment.attachmentId,
-                src: url,
-                fullSrc: url,
-                kind,
-              });
-            else if (tab) tab.location.replace(url);
-          })
-          .catch(() => {
-            tab?.close();
-            toast.failure('Unable to open this attachment');
-          });
+        fireAndForget(
+          openRemote(attachment.attachmentId, kind, tab),
+          'email-compose'
+        );
       };
     }
     if (attachment.type !== 'local') return undefined;

@@ -73,10 +73,8 @@ export function createFigReview(options: {
     })
   );
 
-  /** The screen the selection is on (its top-level layer). */
-  const selectedScreen = async () => {
-    const id = viewer.selected()[0]?.id;
-    if (!id) return undefined;
+  /** The screen a layer is on (its top-level layer). */
+  const screenOf = async (id: string) => {
     try {
       const chain = await engine.ancestry(viewer.page(), id);
       return chain[0]?.id;
@@ -85,9 +83,24 @@ export function createFigReview(options: {
     }
   };
 
+  /** The screen the selection is on. */
+  const selectedScreen = async () => {
+    const id = viewer.selected()[0]?.id;
+    return id ? await screenOf(id) : undefined;
+  };
+
+  /** A page's prototype, or undefined when the engine cannot read it. */
+  const prototypeOf = async (page: number) => {
+    try {
+      return await engine.prototype(page);
+    } catch {
+      return undefined;
+    }
+  };
+
   /** Presents from `frame`, else from the selection's screen or the flow. */
   const present = async (frame?: string) => {
-    const info = await engine.prototype(viewer.page()).catch(() => undefined);
+    const info = await prototypeOf(viewer.page());
     if (!info) return;
     const start = frame ?? presentStart(info, await selectedScreen());
     if (!start) {
@@ -101,7 +114,7 @@ export function createFigReview(options: {
   /** Opens the page holding `frame` and presents it (a frame link). */
   const presentFrame = async (frame: string) => {
     for (let p = 0; p < viewer.pages.length; p++) {
-      const info = await engine.prototype(p).catch(() => undefined);
+      const info = await prototypeOf(p);
       if (!info?.frames.some((f) => f.id === frame)) continue;
       if (p !== viewer.page()) await viewer.openPage(p);
       setPresenting({ info, page: p, start: frame });
@@ -171,8 +184,7 @@ export function createFigReview(options: {
     ];
     // Figma starts a flow at the screen a page's first connection leaves.
     if (edited && flowsOf(info).length === 0) {
-      const chain = await engine.ancestry(viewer.page(), id).catch(() => []);
-      const screen = chain[0]?.id;
+      const screen = await screenOf(id);
       if (screen && info.frames.some((f) => f.id === screen))
         ops.push({ op: 'setFlowStart', id: screen, name: 'Flow 1' });
     }

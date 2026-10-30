@@ -2,13 +2,13 @@
 
 import { databaseEntityMessage } from '@app/features/database/core/write-failure';
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
-import { trashDatabase } from '@block-database/queries/trash-database';
 import {
   canDuplicateItemType,
   copyItem,
   deleteItem,
   moveToFolder,
-} from '@core/component/FileList/itemOperations';
+} from '@app/lib/queries/items/operations';
+import { trashDatabase } from '@block-database/queries/trash-database';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableGraphqlSoup,
@@ -136,14 +136,14 @@ export function createBulkDeleteDssItemsMutation() {
             await permanentlyDeleteEntity({ type: 'CALL', id: e.id });
             return true;
           }
-          return throwOnErr(() =>
-            callServiceClient.deleteCallRecord(e.id)
-          ).then(() => true);
+          await throwOnErr(() => callServiceClient.deleteCallRecord(e.id));
+          return true;
         }
         if (e.type === 'routine') {
-          return throwOnErr(() =>
+          await throwOnErr(() =>
             scheduledActionClient.deleteSchedule({ scheduleId: e.id })
-          ).then(() => true);
+          );
+          return true;
         }
         if (e.type === 'database') {
           await throwOnErr(() =>

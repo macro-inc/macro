@@ -4,6 +4,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import type { NotificationType } from '@core/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { openNotification, type UnifiedNotification } from '@notifications';
@@ -12,10 +13,7 @@ import { type JSX, Match, Show, Switch } from 'solid-js';
 import { Layout } from '../core/Layout';
 import type { EntityData } from '../types/entity';
 import { isNotificationUnread } from '../utils/notification';
-import {
-  reportNotificationActionError,
-  useNotificationActions,
-} from './notification-actions';
+import { useNotificationActions } from './notification-actions';
 import {
   DocumentMentionPill,
   NotificationContent,
@@ -328,7 +326,7 @@ export function NotificationRow(props: NotificationRowProps) {
   };
 
   const handleMarkAsDone = () => {
-    markAsDone().catch(reportNotificationActionError);
+    fireAndForget(markAsDone(), 'notifications');
   };
 
   const handleMarkAsRead = async () => {
@@ -356,7 +354,7 @@ export function NotificationRow(props: NotificationRowProps) {
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              handleClick(e).catch(reportNotificationActionError);
+              fireAndForget(handleClick(e), 'notifications');
             }
             if (e.key === 'e' && canMarkDone()) {
               e.preventDefault();

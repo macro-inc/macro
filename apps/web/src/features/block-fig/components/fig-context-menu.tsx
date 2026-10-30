@@ -4,14 +4,9 @@
  * checked. Presentational: entries and the action come in as props.
  */
 
-import {
-  ContextMenuContent,
-  MENU_ITEM_CLASS,
-  MenuSeparator,
-} from '@core/component/ContextMenu';
+import { ContextMenuContent, MenuSeparator } from '@core/component/ContextMenu';
 import Check from '@icon/system/regular/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { cn } from '@ui';
 import { For, Show } from 'solid-js';
 import {
   type MenuAction,
@@ -70,7 +65,7 @@ export function FigContextMenu(props: {
                   <MenuSeparator />
                 ) : (
                   <DropdownMenu.Item
-                    class={cn(MENU_ITEM_CLASS, 'gap-2 px-2 py-1 text-xs')}
+                    class="group rounded-lg w-full flex items-center gap-2 px-2 py-1 text-xs text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed"
                     disabled={entry.disabled}
                     data-testid={`fig-menu-${entry.action}`}
                     onSelect={() => props.onSelect(entry.action)}

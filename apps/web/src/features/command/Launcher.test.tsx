@@ -34,10 +34,9 @@ vi.mock('@queries/storage/forms', () => ({ createForm: host.createForm }));
 vi.mock('@app/features/agents-view/primitives/open-composer', () => ({}));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({}));
 vi.mock('@app/features/block-agent/ui/AgentInput', () => ({}));
-vi.mock(
-  '@app/features/block-spreadsheet/primitives/use-spreadsheet-access',
-  () => ({ useSpreadsheetAccess: () => () => false })
-);
+vi.mock('@app/features/block-spreadsheet/use-spreadsheet-access', () => ({
+  useSpreadsheetAccess: () => () => false,
+}));
 vi.mock('@app/features/block-spreadsheet/queries/create-spreadsheet', () => ({
   createSpreadsheetDocument: host.createSpreadsheet,
 }));
@@ -75,7 +74,7 @@ vi.mock('@core/directive/focusInput', () => ({}));
 vi.mock('@core/hotkey/hotkeys', () => ({}));
 vi.mock('@core/hotkey/state', () => ({ pressedKeys: () => new Set() }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
-vi.mock('@core/util/create', () => ({}));
+vi.mock('@app/lib/queries/items/create', () => ({}));
 vi.mock('@macro-inc/lexical-core/markdown-golden', () => ({}));
 vi.mock('@ui', () => ({}));
 vi.mock('@ui/components/Hotkey', () => ({}));

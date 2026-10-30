@@ -3,10 +3,11 @@ import { shareEntity } from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useIsAuthenticated } from '@core/context/user';
 import type { OwnedBlockHandle } from '@core/orchestrator';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { useQueryClient } from '@queries/client';
-import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
+import { blockNameToItemType } from '@service-storage/itemType';
 import { createAsync } from '@solidjs/router';
 import { err, ok } from 'neverthrow';
 import { createEffect, type JSX, onCleanup, untrack } from 'solid-js';
@@ -49,6 +50,22 @@ type BlockLoaderProps<
   id: string;
   handle?: OwnedBlockHandle<any>;
 };
+
+// The mutation is imported on demand, outside a query context provider, so
+// it gets a client accessor.
+async function trackBlockOpened(
+  itemId: string,
+  blockName: BlockName,
+  authenticated: () => boolean | undefined
+) {
+  try {
+    const { track } = await import('./trackBlockOpened');
+    if (authenticated() !== true) return;
+    track({ itemId, blockName, client: useQueryClient });
+  } catch (error) {
+    Telemetry.error(error, { surface: 'track-block-opened', blockName });
+  }
+}
 
 export function BlockLoader<
   D extends ObjectLike | FileOrTextLike,
@@ -203,22 +220,10 @@ Check that the load function does not return a preload source when the intent is
     if (!isNested && data) {
       const tracksOpenHistory = props.definition.openTrackingEnabled !== false;
       if (tracksOpenHistory) {
-        // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
-        import('./trackBlockOpened')
-          .then(({ track }) => {
-            if (authenticated() !== true) return;
-            track({
-              itemId: props.id,
-              blockName: data.__block,
-              client: useQueryClient,
-            });
-          })
-          .catch((error) =>
-            Telemetry.error(error, {
-              surface: 'track-block-opened',
-              blockName: data.__block,
-            })
-          );
+        fireAndForget(
+          trackBlockOpened(props.id, data.__block, authenticated),
+          'track-block-opened'
+        );
 
         analytics.pageView(data.__block);
       }

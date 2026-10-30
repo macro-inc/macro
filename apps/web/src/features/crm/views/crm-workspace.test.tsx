@@ -236,6 +236,8 @@ vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     pipelinesEnabled: () => () => fixture.pipelinesEnabled,
     listsEnabled: () => () => fixture.listsEnabled,
+    activityRollout: () => () => fixture.activityFlag(),
+    databasesRollout: () => () => fixture.activityFlag(),
     createNavigation: () => ({ openWithSplit: fixture.openWithSplit }),
     createPipelines: () => ({
       pipelines: () => [{ id: 'sales', name: 'Sales' }],

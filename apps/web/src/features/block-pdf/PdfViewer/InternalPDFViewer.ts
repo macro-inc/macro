@@ -1,6 +1,6 @@
 import { ENABLE_SCRIPTING } from '@core/constant/featureFlags';
 import { showMessageBoxSync } from '@core/util/dialog';
-import { Telemetry } from '@macro-inc/observability';
+import { fireAndForget } from '@core/util/fireAndForget';
 import debounce from 'lodash/debounce';
 import { AnnotationMode, type PageViewport } from 'pdfjs-dist';
 import scriptingSandbox from 'pdfjs-dist/build/pdf.sandbox.js?url';
@@ -290,13 +290,15 @@ export class InternalPDFViewer {
       mountpoint.appendChild(this.#buildPopupOpenInNewTabButton());
     }
 
-    this._viewer._firstPageCapability.promise.then(() => {
+    const scaleOnFirstPage = async () => {
+      await this._viewer._firstPageCapability.promise;
       // if the page views aren't ready, then the zoom/scale value won't be calculated
       if (this._popupViewer != null) {
         this._viewer._setScale('auto', true);
         this.#scalePopupToRootScale();
       }
-    });
+    };
+    fireAndForget(scaleOnFirstPage(), 'pdf-viewer');
   }
 
   unmount() {
@@ -493,9 +495,11 @@ export class InternalPDFViewer {
       scale = null;
     }
     const popupViewer = this._popupViewer;
-    popupViewer._viewer._pagesCapability.promise.then(() => {
+    const applyScale = async () => {
+      await popupViewer._viewer._pagesCapability.promise;
       popupViewer._viewer._setScale(scale || 'auto', false);
-    });
+    };
+    fireAndForget(applyScale(), 'pdf-viewer');
   }
 
   #showPopup(_target?: HTMLElement) {
@@ -561,14 +565,16 @@ export class InternalPDFViewer {
           evt.stopImmediatePropagation();
 
           const popupViewer = this._popupViewer;
-          popupViewer?._viewer._pagesCapability.promise.then(() => {
-            popupViewer._linkService
-              .goToDestination(destination)
-              .catch((error) =>
-                Telemetry.error(error, { surface: 'pdf-viewer' })
-              );
+          const openPopup = async () => {
+            if (!popupViewer) return;
+            await popupViewer._viewer._pagesCapability.promise;
+            fireAndForget(
+              popupViewer._linkService.goToDestination(destination),
+              'pdf-viewer'
+            );
             this.showPopupAt(el);
-          });
+          };
+          fireAndForget(openPopup(), 'pdf-viewer');
         };
       });
   }

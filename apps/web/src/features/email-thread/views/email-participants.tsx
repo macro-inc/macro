@@ -1,6 +1,6 @@
 import { EmailUserTooltip } from '@app/features/email-message/components/email-user-tooltip';
+import { emailToMacroId } from '@app/lib/identity/macro-id';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
-import { emailToMacroId } from '@core/user/macroId';
 import { Key } from '@solid-primitives/keyed';
 import { Badge, Button, badgeTriggerClasses } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';

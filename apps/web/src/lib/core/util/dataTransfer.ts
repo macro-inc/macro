@@ -15,7 +15,13 @@ export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null
   if (!clipboard) return null;
 
   const dataTransfer = new DataTransfer();
-  const items = await clipboard.read().catch(() => []);
+
+  let items: ClipboardItems = [];
+  try {
+    items = await clipboard.read();
+  } catch {
+    // Fall back to plain text below.
+  }
   for (const item of items) {
     for (const type of item.types) {
       if (type !== 'text/html' && type !== 'text/plain') continue;
@@ -25,7 +31,12 @@ export async function readClipboardAsDataTransfer(): Promise<DataTransfer | null
   }
 
   if (dataTransfer.types.length === 0) {
-    const text = await clipboard.readText().catch(() => '');
+    let text = '';
+    try {
+      text = await clipboard.readText();
+    } catch {
+      // Nothing readable on the clipboard.
+    }
     if (text) dataTransfer.setData('text/plain', text);
   }
 
@@ -56,17 +67,21 @@ export async function writeClipboardData(
     if (html !== undefined) {
       items['text/html'] = new Blob([html], { type: 'text/html' });
     }
-    const wrote = await clipboard
-      .write([new ClipboardItem(items)])
-      .then(() => true)
-      .catch(() => false);
-    if (wrote) return true;
+
+    try {
+      await clipboard.write([new ClipboardItem(items)]);
+      return true;
+    } catch {
+      // Fall back to plain text below.
+    }
   }
 
-  return clipboard
-    .writeText(text)
-    .then(() => true)
-    .catch(() => false);
+  try {
+    await clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const EMPTY_RESULT: ExtractedEntries = {

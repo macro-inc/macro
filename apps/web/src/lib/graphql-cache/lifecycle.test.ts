@@ -129,9 +129,11 @@ describe('clearRegisteredCaches', () => {
     );
     let settled = false;
 
-    const clearing = clearRegisteredCaches().then(() => {
+    const clear = async () => {
+      await clearRegisteredCaches();
       settled = true;
-    });
+    };
+    const clearing = clear();
     await Promise.resolve();
     expect(settled).toBe(false);
     expect(localStorage.getItem('graphql-cache:scope')).toBe('current-scope');

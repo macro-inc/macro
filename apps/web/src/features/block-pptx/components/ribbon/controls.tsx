@@ -3,6 +3,7 @@
  * panels, color pickers, and numeric fields. Presentational.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import Eyedropper from '@icon/system/regular/eyedropper.svg';
 import { Popover } from '@kobalte/core/popover';
@@ -277,11 +278,16 @@ export function ColorPicker(props: {
             testId="pptx-eyedropper"
             onClick={() => {
               const Ctor = EyeDropper();
-              new Ctor()
-                .open()
-                .then(({ sRGBHex }) => pickCustom(sRGBHex))
-                // Escape cancels the pick.
-                .catch(() => {});
+
+              const pickFromScreen = async () => {
+                try {
+                  const { sRGBHex } = await new Ctor().open();
+                  pickCustom(sRGBHex);
+                } catch {
+                  // Escape cancels the pick.
+                }
+              };
+              fireAndForget(pickFromScreen(), 'pptx-editor');
             }}
           />
         )}

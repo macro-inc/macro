@@ -1,4 +1,4 @@
-import { emailToMacroId } from '@core/user/macroId';
+import { emailToMacroId } from '@app/lib/identity/macro-id';
 import { createSignal, onCleanup } from 'solid-js';
 import type { SharingSource } from '../context/contracts';
 

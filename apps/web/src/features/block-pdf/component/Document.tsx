@@ -19,7 +19,6 @@ import { IS_MAC } from '@core/constant/isMac';
 import { observedSize } from '@core/directive/observedSize';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isInDOMRect } from '@core/util/rect';
-import { Telemetry } from '@macro-inc/observability';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
@@ -245,16 +244,18 @@ export function Document() {
 
     pdfViewer.detachListeners();
 
-    rootViewer
-      .destroy()
-      .then(() => {})
-      .finally(() => {
+    const viewer = rootViewer;
+    const destroyViewer = async () => {
+      try {
+        await viewer.destroy();
+      } finally {
         popupViewer = undefined;
         rootViewer = undefined;
         pdfViewer.clearPair();
         setDestroying(false);
-      })
-      .catch((error) => Telemetry.error(error, { surface: 'pdf-document' }));
+      }
+    };
+    fireAndForget(destroyViewer(), 'pdf-document');
   });
 
   const saveModificationData = useSaveModificationData();
@@ -275,11 +276,11 @@ export function Document() {
       const annotationsPromise = loadAnnotations(documentProxy);
 
       if (updateModificationDataOnLoad()) {
-        annotationsPromise
-          .then(() => saveModificationData())
-          .catch((error) =>
-            Telemetry.error(error, { surface: 'pdf-document' })
-          );
+        const saveAfterAnnotations = async () => {
+          await annotationsPromise;
+          await saveModificationData();
+        };
+        fireAndForget(saveAfterAnnotations(), 'pdf-document');
       }
 
       const documentId = pdf.documentId();
@@ -540,10 +541,11 @@ export function Document() {
       const revision = currentRevision();
       if (revision <= savedRevision()) return;
 
-      fireAndForget(
-        saveModificationData().then(() => setSavedRevision(revision)),
-        'pdf-document'
-      );
+      const saveRevision = async () => {
+        await saveModificationData();
+        setSavedRevision(revision);
+      };
+      fireAndForget(saveRevision(), 'pdf-document');
     });
   }
 
@@ -605,7 +607,5 @@ export function Document() {
 export default Document;
 
 if (import.meta.hot) {
-  import('./PageOverlay').catch((error) =>
-    Telemetry.error(error, { surface: 'pdf-document' })
-  );
+  fireAndForget(import('./PageOverlay'), 'pdf-document');
 }

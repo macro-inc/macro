@@ -13,6 +13,7 @@ import {
   useContext,
 } from 'solid-js';
 import { useAndroidShares } from './androidShares';
+import { unlistenWhenReady } from './unlisten';
 
 interface StagedSharedFileData {
   token: string;
@@ -71,10 +72,7 @@ async function popSharedFiles(
     results.map(async ({ token, name, mime_type, size, preview_path }) => {
       const isSharedText = isSharedTextMimeType(mime_type);
       const sharedText = isSharedText
-        ? await readSharedFileText(token).catch((error) => {
-            console.error('failed to read shared text', { token, error });
-            return undefined;
-          })
+        ? await readSharedFileTextIfAvailable(token)
         : undefined;
 
       return {
@@ -94,8 +92,30 @@ async function readSharedFileText(token: string): Promise<string> {
   return invoke<string>('read_shared_file_text', { token });
 }
 
+async function readSharedFileTextIfAvailable(
+  token: string
+): Promise<string | undefined> {
+  try {
+    return await readSharedFileText(token);
+  } catch (error) {
+    console.error('failed to read shared text', { token, error });
+    return undefined;
+  }
+}
+
 async function clearSharedFiles(tokens: readonly string[]): Promise<void> {
   await invoke('clear_shared_files', { tokens });
+}
+
+/** Best-effort removal of staged files that are no longer pending. */
+async function discardSharedFiles(
+  files: readonly PendingShareFile[]
+): Promise<void> {
+  try {
+    await clearSharedFiles(files.map((file) => file.token));
+  } catch {
+    // Nothing shows these files any more, so a failure needs no recovery.
+  }
 }
 
 async function uploadPendingShareFile(
@@ -165,7 +185,7 @@ export function ShareTargetProvider(props: {
     setPendingShareFileNames([]);
 
     if (files.length > 0) {
-      void clearSharedFiles(files.map((file) => file.token)).catch(() => {});
+      fireAndForget(discardSharedFiles(files), 'share-target');
     }
   };
 
@@ -205,9 +225,7 @@ export function ShareTargetProvider(props: {
         setPendingShareFiles(files);
         setPendingShareFileNames(filenames);
         if (previousFiles.length > 0 && !isSamePendingShare) {
-          void clearSharedFiles(previousFiles.map((file) => file.token)).catch(
-            () => {}
-          );
+          fireAndForget(discardSharedFiles(previousFiles), 'share-target');
         }
       } catch (error) {
         if (requestId !== nextRequestId) return;
@@ -238,12 +256,7 @@ export function ShareTargetProvider(props: {
       'share-target'
     );
 
-    onCleanup(() =>
-      fireAndForget(
-        unlisten.then((fn) => fn()),
-        'share-target'
-      )
-    );
+    onCleanup(() => fireAndForget(unlistenWhenReady(unlisten), 'share-target'));
   });
 
   const value: ShareTargetContextValue = {

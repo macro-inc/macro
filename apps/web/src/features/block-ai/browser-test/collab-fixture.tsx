@@ -10,6 +10,7 @@
 
 import { MemorySyncServer } from '@app/features/block-fig/browser-test/memory-sync';
 import { AiEngine } from '@core/ai-engine/client';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -125,24 +126,28 @@ function Person(props: {
     let opened: AiEngine | undefined;
     let sharedEngine: AiSharing | undefined;
     const open = async () => {
-      const bytes = props.server.stored();
-      const fingerprint = await fileFingerprint(bytes);
-      opened = await AiEngine.open(bytes);
-      if (closed) return;
-      if (shared) {
-        sharedEngine = await shareAiEngine(opened, shared, {
-          fingerprint,
-          takenSessions: () =>
-            session.collaboration.peers().map((p) => p.presence.session),
-          delivered: session.delivered,
-        });
+      try {
+        const bytes = props.server.stored();
+        const fingerprint = await fileFingerprint(bytes);
+        opened = await AiEngine.open(bytes);
         if (closed) return;
-        sharedEngine.onReplaced(() => setReplaced(true));
-        setSharing(sharedEngine);
+        if (shared) {
+          sharedEngine = await shareAiEngine(opened, shared, {
+            fingerprint,
+            takenSessions: () =>
+              session.collaboration.peers().map((p) => p.presence.session),
+            delivered: session.delivered,
+          });
+          if (closed) return;
+          sharedEngine.onReplaced(() => setReplaced(true));
+          setSharing(sharedEngine);
+        }
+        setEngine(opened);
+      } catch (e: unknown) {
+        setFailure(String(e));
       }
-      setEngine(opened);
     };
-    open().catch((e: unknown) => setFailure(String(e)));
+    fireAndForget(open(), 'ai-fixture');
     onCleanup(() => {
       closed = true;
       sharedEngine?.close();
@@ -241,10 +246,14 @@ export function CollabFixture(props: {
   const [stored, setStored] = createSignal(false);
   const [loadFailure, setLoadFailure] = createSignal<string>();
   const load = async () => {
-    server.store(await props.load());
-    setStored(true);
+    try {
+      server.store(await props.load());
+      setStored(true);
+    } catch (e: unknown) {
+      setLoadFailure(String(e));
+    }
   };
-  load().catch((e: unknown) => setLoadFailure(String(e)));
+  fireAndForget(load(), 'ai-fixture');
   const people = new Map<string, FixturePerson>();
   const [opened, setOpened] = createSignal<Record<string, number>>({});
   const reopen = (user: string) =>

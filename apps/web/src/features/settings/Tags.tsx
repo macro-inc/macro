@@ -18,7 +18,7 @@ import {
   useTagsQuery,
 } from '@queries/properties/tags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { parseTagNameConflict } from '@service-properties/client';
+import { parseTagNameConflict } from '@service-properties/errors';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';

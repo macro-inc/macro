@@ -67,16 +67,7 @@ export function buildHomeSearchRequest(
     context.tab === 'signal' || context.tab === 'noise';
 
   const notificationFilters: NotificationFilters = {
-    states:
-      notification === false
-        ? ['unseen']
-        : notification === true
-          ? filtersIncompleteEntities
-            ? ['seen']
-            : ['seen', 'done']
-          : filtersIncompleteEntities
-            ? ['unseen', 'seen']
-            : [],
+    states: buildStates(),
   };
 
   const documentTypes = [...types].filter(
@@ -139,19 +130,7 @@ export function buildHomeSearchRequest(
     }
   }
 
-  if (documentTypes.length > 0) {
-    const documentFilters: NonNullable<EntityFilters['document_filters']> = {};
-
-    if (documentTypes.length === 1 && documentTypes[0] === 'tasks') {
-      documentFilters.sub_types = ['task'];
-    }
-
-    if (hasNotificationFilter) {
-      documentFilters.notification_filters = notificationFilters;
-    }
-
-    filters.document_filters = documentFilters;
-  }
+  updateSub_types();
 
   if (types.has('email')) {
     const emailFilters: NonNullable<EntityFilters['email_filters']> = {
@@ -218,4 +197,35 @@ export function buildHomeSearchRequest(
       filters,
     },
   };
+
+  function updateSub_types() {
+    if (documentTypes.length > 0) {
+      const documentFilters: NonNullable<EntityFilters['document_filters']> =
+        {};
+
+      if (documentTypes.length === 1 && documentTypes[0] === 'tasks') {
+        documentFilters.sub_types = ['task'];
+      }
+
+      if (hasNotificationFilter) {
+        documentFilters.notification_filters = notificationFilters;
+      }
+
+      filters.document_filters = documentFilters;
+    }
+  }
+
+  function buildStates():
+    | import('../../../lib/service-clients/service-search/generated/models/notificationState').NotificationState[]
+    | undefined {
+    return notification === false
+      ? ['unseen']
+      : notification === true
+        ? filtersIncompleteEntities
+          ? ['seen']
+          : ['seen', 'done']
+        : filtersIncompleteEntities
+          ? ['unseen', 'seen']
+          : [];
+  }
 }

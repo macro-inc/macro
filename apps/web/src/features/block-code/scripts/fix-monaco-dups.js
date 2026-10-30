@@ -117,8 +117,9 @@ async function optimizeDependencies() {
   }
 }
 
-// Execute the function
-optimizeDependencies().catch((err) => {
+try {
+  await optimizeDependencies();
+} catch (err) {
   console.error('Failed to optimize dependencies:', err);
   process.exit(1);
-});
+}

@@ -3,7 +3,7 @@ import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Index } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { createTouchPress } from '../primitives/create-touch-press';
+import { createTouchPress } from './create-touch-press';
 import { EditorPopup } from './EditorPopup';
 
 const monthLabel = new Intl.DateTimeFormat('en-US', {

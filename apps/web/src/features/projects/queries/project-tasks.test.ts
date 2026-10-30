@@ -27,67 +27,61 @@ vi.mock('@app/features/tasks-view/queries/use-tasks-query', () => ({
 }));
 
 it('scopes tasks to the Project property and disables the shared source immediately on access loss', async () => {
-  await new Promise<void>((resolve, reject) =>
-    createRoot((dispose) => {
-      const [project, setProject] = createSignal<ProjectDetail | undefined>({
-        id: 'project',
-        name: 'Launch',
-        ownerId: 'owner',
-        memberIds: [],
-        taskIds: [],
-        access: 'view',
-        createdAt: '',
-        updatedAt: '',
-      });
-      const refresh = vi.fn(async () => {});
-      const [board, setBoard] = createSignal(false);
-      const source = createProjectTasksDataSource(
-        'project',
-        {
-          project,
-          properties: () => [],
-          loading: () => false,
-          error: () => undefined,
-          refresh,
-        },
-        {
-          tab: 'team-tasks',
-          groupBy: 'none',
-          search: '',
-          sort: [],
-          facets: {},
-        },
-        {
-          userId: () => 'user',
-          tagSets: () => [],
-          tagSetsReady: () => true,
-          isGroupExpanded: () => true,
-          board,
-        }
-      );
-      expect(mock.options?.reference?.()).toEqual({
-        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
-        entityId: 'project',
-      });
-      expect(mock.options?.enabled?.()).toBe(true);
-      expect(mock.options?.board?.()).toBe(false);
-      setBoard(true);
-      expect(mock.options?.board?.()).toBe(true);
-      expect(mock.options?.reference?.()).toEqual({
-        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
-        entityId: 'project',
-      });
-      setProject(undefined);
-      expect(mock.options?.enabled?.()).toBe(false);
-      source
-        .refresh()
-        .then(() => {
-          expect(refresh).toHaveBeenCalledOnce();
-          expect(mock.refresh).not.toHaveBeenCalled();
-          dispose();
-          resolve();
-        })
-        .catch(reject);
-    })
-  );
+  const { source, refresh, dispose } = createRoot((dispose) => {
+    const [project, setProject] = createSignal<ProjectDetail | undefined>({
+      id: 'project',
+      name: 'Launch',
+      ownerId: 'owner',
+      memberIds: [],
+      taskIds: [],
+      access: 'view',
+      createdAt: '',
+      updatedAt: '',
+    });
+    const refresh = vi.fn(async () => {});
+    const [board, setBoard] = createSignal(false);
+    const source = createProjectTasksDataSource(
+      'project',
+      {
+        project,
+        properties: () => [],
+        loading: () => false,
+        error: () => undefined,
+        refresh,
+      },
+      {
+        tab: 'team-tasks',
+        groupBy: 'none',
+        search: '',
+        sort: [],
+        facets: {},
+      },
+      {
+        userId: () => 'user',
+        tagSets: () => [],
+        tagSetsReady: () => true,
+        isGroupExpanded: () => true,
+        board,
+      }
+    );
+    expect(mock.options?.reference?.()).toEqual({
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      entityId: 'project',
+    });
+    expect(mock.options?.enabled?.()).toBe(true);
+    expect(mock.options?.board?.()).toBe(false);
+    setBoard(true);
+    expect(mock.options?.board?.()).toBe(true);
+    expect(mock.options?.reference?.()).toEqual({
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      entityId: 'project',
+    });
+    setProject(undefined);
+    expect(mock.options?.enabled?.()).toBe(false);
+    return { source, refresh, dispose };
+  });
+  await source.refresh();
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(mock.refresh).not.toHaveBeenCalled();
+  dispose();
 });

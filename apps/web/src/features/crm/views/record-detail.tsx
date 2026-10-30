@@ -108,6 +108,7 @@ export function CrmRecordDetail(props: {
   let container: HTMLDivElement | undefined;
   const size = createElementSize(() => container);
   const compactTabs = () => !isTouchDevice() && (size.width ?? 0) < 900;
+  const databasesFlag = useCrmContext().databasesRollout();
   onMount(() => container?.focus());
 
   return (
@@ -190,6 +191,7 @@ export function CrmRecordDetail(props: {
                   <RecordTabs
                     sections={COMPANY_SECTIONS}
                     compact={compactTabs()}
+                    databasesEnabled={databasesFlag().enabled}
                     value={companySection()}
                     onChange={props.onSectionChange}
                   />
@@ -198,6 +200,7 @@ export function CrmRecordDetail(props: {
                 <RecordTabs
                   sections={CONTACT_SECTIONS}
                   compact={compactTabs()}
+                  databasesEnabled={databasesFlag().enabled}
                   value={contactSection()}
                   onChange={props.onSectionChange}
                 />

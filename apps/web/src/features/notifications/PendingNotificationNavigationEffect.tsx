@@ -41,6 +41,24 @@ export function usePendingNotificationNavigationEffect(
     activeAttempt = undefined;
   });
 
+  /**
+   * Whether the active attempt already covers this intent and layout: never
+   * overlap a fetch/open, and once one settles without being applied, retry
+   * only after reconciliation changes the live layout.
+   */
+  const attemptPending = (
+    next: Pick<
+      NavigationAttempt,
+      'intent' | 'layoutManager' | 'navigationVersion' | 'eventAtStart'
+    >
+  ) =>
+    activeAttempt?.intent === next.intent &&
+    activeAttempt.layoutManager === next.layoutManager &&
+    activeAttempt.navigationVersion === next.navigationVersion &&
+    (activeAttempt.applied ||
+      !activeAttempt.settled ||
+      activeAttempt.eventAtStart === next.eventAtStart);
+
   createEffect(() => {
     retryRevision();
     const intent = pendingNotificationNavigation();
@@ -68,20 +86,14 @@ export function usePendingNotificationNavigationEffect(
     }
 
     if (
-      activeAttempt?.intent === intent &&
-      activeAttempt.layoutManager === layoutManager &&
-      activeAttempt.navigationVersion === navigationVersion
-    ) {
-      // Do not overlap a fetch/open. Once it settles without being applied,
-      // retry only after reconciliation changes the live layout.
-      if (
-        activeAttempt.applied ||
-        !activeAttempt.settled ||
-        activeAttempt.eventAtStart === currentEvent
-      ) {
-        return;
-      }
-    }
+      attemptPending({
+        intent,
+        layoutManager,
+        navigationVersion,
+        eventAtStart: currentEvent,
+      })
+    )
+      return;
 
     const attempt: NavigationAttempt = {
       notificationId,

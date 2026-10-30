@@ -1,4 +1,4 @@
-import type { DeltaOp } from '@core/docx-engine/types';
+import type { DeltaOp } from '@app/lib/docx/types';
 
 /**
  * Rich-text deltas (Quill's format, as Loro and the DOCX engine exchange

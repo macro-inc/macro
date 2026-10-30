@@ -28,7 +28,7 @@ vi.mock('@core/user', () => ({
   tryMacroId: () => undefined,
   useIsConnectedSecondaryInbox: () => () => false,
 }));
-vi.mock('@core/signal/profilePicture', () => ({
+vi.mock('@app/lib/queries/auth/profile-pictures', () => ({
   useProfilePictureUrl: () => [() => undefined],
 }));
 

@@ -22,6 +22,7 @@ import {
 import type { XlsxArchive } from './xlsx-archive';
 import { addFunctionPrefixes } from './xlsx-formula';
 import {
+  type Attributes,
   attributes,
   parse,
   rangeBounds,
@@ -164,54 +165,60 @@ export function readXlsxTables(
       let column: string | undefined;
       let filter: TableColumnFilter | undefined;
       let custom: { and: boolean; filters: CustomFilter[] } | undefined;
+      const readTableTag = (tag: string, value: Attributes) => {
+        if (tag === 'table') {
+          const range = rangeBounds(value.ref ?? '');
+          const name = value.displayName ?? value.name;
+          if (!range || !name) return;
+          layout = {
+            name,
+            sheet: sheet.name,
+            ...range,
+            headerRows: value.headerRowCount === '0' ? 0 : 1,
+            totalsRows: Number(value.totalsRowCount ?? 0) > 0 ? 1 : 0,
+            columns: [],
+          };
+        } else if (tag === 'tableColumn')
+          layout?.columns.push(unescapeText(value.name ?? ''));
+        else if (tag === 'tableStyleInfo') style = value;
+      };
+      const readFilterTag = (tag: string, value: Attributes) => {
+        if (tag === 'filterColumn') column = value.colId;
+        else if (tag === 'filters' && column !== undefined)
+          filter = {
+            values: [],
+            ...((value.blank === '1' || value.blank === 'true') && {
+              blanks: true,
+            }),
+          };
+        else if (tag === 'filter')
+          filter?.values?.push(unescapeText(value.val ?? ''));
+        else if (tag === 'customFilters' && column !== undefined)
+          custom = {
+            and: value.and === '1' || value.and === 'true',
+            filters: [],
+          };
+        else if (tag === 'customFilter')
+          custom?.filters.push({
+            operator: value.operator ?? 'equal',
+            value: unescapeText(value.val ?? ''),
+          });
+        else if (
+          [
+            'top10',
+            'dynamicFilter',
+            'colorFilter',
+            'iconFilter',
+            'dateGroupItem',
+          ].includes(tag)
+        )
+          warnings.add(TABLE_FILTER_WARNING);
+      };
       parse(bytes, relation.target, (parser) => {
         parser.on('opentag', (node) => {
           const value = attributes(node);
-          if (node.local === 'table') {
-            const range = rangeBounds(value.ref ?? '');
-            const name = value.displayName ?? value.name;
-            if (!range || !name) return;
-            layout = {
-              name,
-              sheet: sheet.name,
-              ...range,
-              headerRows: value.headerRowCount === '0' ? 0 : 1,
-              totalsRows: Number(value.totalsRowCount ?? 0) > 0 ? 1 : 0,
-              columns: [],
-            };
-          } else if (node.local === 'tableColumn')
-            layout?.columns.push(unescapeText(value.name ?? ''));
-          else if (node.local === 'filterColumn') column = value.colId;
-          else if (node.local === 'filters' && column !== undefined)
-            filter = {
-              values: [],
-              ...((value.blank === '1' || value.blank === 'true') && {
-                blanks: true,
-              }),
-            };
-          else if (node.local === 'filter')
-            filter?.values?.push(unescapeText(value.val ?? ''));
-          else if (node.local === 'customFilters' && column !== undefined)
-            custom = {
-              and: value.and === '1' || value.and === 'true',
-              filters: [],
-            };
-          else if (node.local === 'customFilter')
-            custom?.filters.push({
-              operator: value.operator ?? 'equal',
-              value: unescapeText(value.val ?? ''),
-            });
-          else if (
-            [
-              'top10',
-              'dynamicFilter',
-              'colorFilter',
-              'iconFilter',
-              'dateGroupItem',
-            ].includes(node.local)
-          )
-            warnings.add(TABLE_FILTER_WARNING);
-          else if (node.local === 'tableStyleInfo') style = value;
+          readTableTag(node.local, value);
+          readFilterTag(node.local, value);
         });
         parser.on('closetag', (node) => {
           if (node.local === 'filters' && filter && column !== undefined)

@@ -114,6 +114,15 @@ import {
   restoreSoupEntityToDoneFilteredQueries,
 } from '@queries/soup/normalized-cache';
 
+/** Settles with `mutation`, ignoring a rejection the test does not assert on. */
+async function settled(mutation: Promise<unknown>): Promise<void> {
+  try {
+    await mutation;
+  } catch {
+    /* These tests assert the rollback, not the rejection. */
+  }
+}
+
 const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
   optimisticUpdateSoupItemUpdatedAt
 );
@@ -790,9 +799,9 @@ describe('notification mutations', () => {
 
       const TestComponent = () => {
         const mutation = useMarkNotificationsAsSeenMutation();
-        mutatePromise = mutation
-          .mutateAsync({ notificationIds: ['n1'] })
-          .catch(() => {});
+        mutatePromise = settled(
+          mutation.mutateAsync({ notificationIds: ['n1'] })
+        );
         return null;
       };
 
@@ -916,9 +925,9 @@ describe('notification mutations', () => {
 
       const TestComponent = () => {
         const mutation = useMarkNotificationsAsDoneMutation();
-        mutatePromise = mutation
-          .mutateAsync({ notificationIds: ['n1'] })
-          .catch(() => {});
+        mutatePromise = settled(
+          mutation.mutateAsync({ notificationIds: ['n1'] })
+        );
         return null;
       };
 

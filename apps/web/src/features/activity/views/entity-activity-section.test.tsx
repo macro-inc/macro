@@ -132,26 +132,30 @@ describe('EntityActivitySection', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(container.textContent).not.toContain('Show all');
 
-    // The rail starts at the first glyph, runs through the toggle, and ends
-    // at the pinned row's glyph.
-    expect(visible[0]?.querySelector(RAIL_ABOVE)?.classList).toContain(
-      'invisible'
-    );
-    expect(visible[0]?.querySelector(RAIL_BELOW)?.classList).not.toContain(
-      'invisible'
-    );
-    expect(visible[2]?.querySelector(RAIL_BELOW)?.classList).not.toContain(
-      'invisible'
-    );
-    expect(toggle.querySelector(RAIL_BELOW)?.classList).not.toContain(
-      'invisible'
-    );
-    expect(visible[3]?.querySelector(RAIL_ABOVE)?.classList).not.toContain(
-      'invisible'
-    );
-    expect(visible[3]?.querySelector(RAIL_BELOW)?.classList).toContain(
-      'invisible'
-    );
+    expectFoldedRail();
+    function expectFoldedRail() {
+      // The rail starts at the first glyph, runs through the toggle, and ends
+      // at the pinned row's glyph.
+      expect(visible[0]?.querySelector(RAIL_ABOVE)?.classList).toContain(
+        'invisible'
+      );
+      expect(visible[0]?.querySelector(RAIL_BELOW)?.classList).not.toContain(
+        'invisible'
+      );
+      expect(visible[2]?.querySelector(RAIL_BELOW)?.classList).not.toContain(
+        'invisible'
+      );
+      expect(toggle.querySelector(RAIL_BELOW)?.classList).not.toContain(
+        'invisible'
+      );
+      expect(visible[3]?.querySelector(RAIL_ABOVE)?.classList).not.toContain(
+        'invisible'
+      );
+      expect(visible[3]?.querySelector(RAIL_BELOW)?.classList).toContain(
+        'invisible'
+      );
+    }
+
     expect(container.querySelector('.ring')).toBeNull();
 
     fireEvent.click(toggle);

@@ -1,4 +1,4 @@
-import { BookingPicker } from '@app/features/scheduling/components/booking-picker';
+import { BookingPicker } from '@app/features/scheduling/views/booking-picker';
 import Check from '@icon/system/regular/check-circle.svg';
 import Eye from '@icon/system/regular/eye.svg';
 import { Match, Show, Switch } from 'solid-js';

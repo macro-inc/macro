@@ -69,7 +69,9 @@ it('returns the saved identity when a subsequent cache refresh rejects', async (
   await expect(
     mutation.mutateAsync({ draft: { subject: 'Saved' } })
   ).resolves.toEqual(response);
-  expect(mocks.report).toHaveBeenCalledWith(failure);
+  expect(mocks.report).toHaveBeenCalledWith(failure, {
+    surface: 'email-draft',
+  });
   expect(mocks.failure).not.toHaveBeenCalled();
   expect(mocks.save).toHaveBeenCalledExactlyOnceWith(
     { draft: { subject: 'Saved' } },

@@ -131,30 +131,12 @@ describe('generated live query updates', () => {
                   [...first.reads].map(([id, counts]) => [id, { ...counts }])
                 );
                 let patches: QueryFieldPatch[] | undefined;
-                if (action.kind === 'patch' && model.rows.length) {
-                  const index = action.index % model.rows.length;
-                  const { field, value } = action.edit;
-                  Object.assign(model.rows[index], { [field]: value });
-                  patches = [{ path: ['rows', index, field], value }];
-                } else if (action.kind === 'reverse') {
-                  model.rows.reverse();
-                } else if (action.kind === 'remove' && model.rows.length) {
-                  model.rows.splice(action.index % model.rows.length, 1);
-                } else if (action.kind === 'insert') {
-                  model.rows.unshift({
-                    ...action.row,
-                    __typename: 'Task',
-                    id: String(nextId++),
-                  });
-                } else if (action.kind === 'replace') {
-                  // A single server snapshot can reorder, edit, insert and
-                  // remove records together. Exercise those combinations too.
-                  model.rows = action.rows.map(({ id, value }) => ({
-                    ...value,
-                    __typename: 'Task',
-                    id: `replacement-${id}`,
-                  }));
-                }
+                ({ patches, nextId } = applyAction(
+                  action,
+                  model,
+                  patches,
+                  nextId
+                ));
                 if (action.incremental) {
                   patches ??= [
                     { path: ['rows'], value: structuredClone(model.rows) },
@@ -227,6 +209,75 @@ describe('generated live query updates', () => {
               expect(first.snapshots).toHaveLength(observed);
             } finally {
               dispose();
+            }
+
+            function applyAction(
+              action:
+                | {
+                    incremental: boolean;
+                    kind: 'patch';
+                    index: number;
+                    edit:
+                      | { field: 'title'; value: string }
+                      | { field: 'done'; value: boolean }
+                      | { field: 'priority'; value: number | null }
+                      | { field: 'tags'; value: string[] };
+                  }
+                | { incremental: boolean; kind: 'reverse' }
+                | { incremental: boolean; kind: 'remove'; index: number }
+                | {
+                    incremental: boolean;
+                    kind: 'insert';
+                    row: {
+                      title: string;
+                      done: boolean;
+                      priority: number | null;
+                      tags: string[];
+                    };
+                  }
+                | {
+                    incremental: boolean;
+                    kind: 'replace';
+                    rows: {
+                      id: number;
+                      value: {
+                        title: string;
+                        done: boolean;
+                        priority: number | null;
+                        tags: string[];
+                      };
+                    }[];
+                  }
+                | { incremental: boolean; kind: 'poll' },
+              model: Snapshot,
+              patches: QueryFieldPatch[] | undefined,
+              nextId: number
+            ) {
+              if (action.kind === 'patch' && model.rows.length) {
+                const index = action.index % model.rows.length;
+                const { field, value } = action.edit;
+                Object.assign(model.rows[index], { [field]: value });
+                patches = [{ path: ['rows', index, field], value }];
+              } else if (action.kind === 'reverse') {
+                model.rows.reverse();
+              } else if (action.kind === 'remove' && model.rows.length) {
+                model.rows.splice(action.index % model.rows.length, 1);
+              } else if (action.kind === 'insert') {
+                model.rows.unshift({
+                  ...action.row,
+                  __typename: 'Task',
+                  id: String(nextId++),
+                });
+              } else if (action.kind === 'replace') {
+                // A single server snapshot can reorder, edit, insert and
+                // remove records together. Exercise those combinations too.
+                model.rows = action.rows.map(({ id, value }) => ({
+                  ...value,
+                  __typename: 'Task',
+                  id: `replacement-${id}`,
+                }));
+              }
+              return { patches, nextId };
             }
           });
         }

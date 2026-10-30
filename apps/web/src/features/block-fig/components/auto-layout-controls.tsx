@@ -245,7 +245,8 @@ export function SizingControl(props: {
   return (
     <Show when={props.info.sizing && choices().length > 1}>
       <InspectorSelect
-        class="w-10 shrink-0 [&_button]:px-1 [&_svg]:hidden"
+        class="w-10 shrink-0"
+        compact
         label={props.axis === 0 ? 'Width sizing' : 'Height sizing'}
         testId={props.axis === 0 ? 'fig-sizing-w' : 'fig-sizing-h'}
         value={props.info.sizing?.[props.axis] ?? 'FIXED'}

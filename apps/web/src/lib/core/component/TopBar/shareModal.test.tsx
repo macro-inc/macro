@@ -77,7 +77,7 @@ vi.mock('@queries/sync/use-query-sync', () => ({ useQuerySync: () => {} }));
 vi.mock('@queries/undo', () => ({
   MutationUndoProvider: (props: { children: unknown }) => props.children,
 }));
-vi.mock('@service-connection/client', () => ({
+vi.mock('@queries/connection/tracked-entities', () => ({
   useRefreshTrackedEntitiesOnFocus: () => {},
   useReopenTrackedEntitiesOnReconnect: () => {},
 }));

@@ -513,28 +513,27 @@ export function createFigViewer(options: FigViewerOptions) {
   };
 
   const revealLayer = (id: string) => {
-    fireAndForget(
-      selectIds([id]).then(() => {
-        const g = selectionGeometry()[0];
-        if (!g) return;
-        const v = viewport();
-        const c = camera();
-        const visible = {
-          x: c.x,
-          y: c.y,
-          w: v.w / c.zoom,
-          h: v.h / c.zoom,
-        };
-        const b = g.bounds;
-        const inView =
-          b.x >= visible.x &&
-          b.y >= visible.y &&
-          b.x + b.w <= visible.x + visible.w &&
-          b.y + b.h <= visible.y + visible.h;
-        if (!inView) setCamera(centerOn(c, b, v));
-      }),
-      'fig-viewer'
-    );
+    const selectAndPanTo = async () => {
+      await selectIds([id]);
+      const g = selectionGeometry()[0];
+      if (!g) return;
+      const v = viewport();
+      const c = camera();
+      const visible = {
+        x: c.x,
+        y: c.y,
+        w: v.w / c.zoom,
+        h: v.h / c.zoom,
+      };
+      const b = g.bounds;
+      const inView =
+        b.x >= visible.x &&
+        b.y >= visible.y &&
+        b.x + b.w <= visible.x + visible.w &&
+        b.y + b.h <= visible.y + visible.h;
+      if (!inView) setCamera(centerOn(c, b, v));
+    };
+    fireAndForget(selectAndPanTo(), 'fig-viewer');
   };
 
   return {

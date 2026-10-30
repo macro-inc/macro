@@ -6,7 +6,6 @@
  * addressed by a caller-chosen `docKey`.
  */
 
-import type { DocxRequest, DocxResponse } from './protocol';
 import type {
   CaretRect,
   Clip,
@@ -23,7 +22,8 @@ import type {
   RemoteChange,
   StyleInfo,
   V1State,
-} from './types';
+} from '../../docx/types';
+import type { DocxRequest, DocxResponse } from './protocol';
 
 type Ok = Extract<DocxResponse, { ok: true }>;
 

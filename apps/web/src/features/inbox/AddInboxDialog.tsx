@@ -1,5 +1,6 @@
 import { useAddInboxFlow } from '@core/email-link';
 import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import type { ConsentScopes } from '@service-auth/client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
@@ -38,11 +39,15 @@ export function AddInboxDialog() {
     if (!isAddInboxDialogOpen()) return;
     let current = true;
     setOutlookAvailable(false);
-    void fetchEmailConnectionProviders()
-      .then((providers) => {
+    const loadProviders = async () => {
+      try {
+        const providers = await fetchEmailConnectionProviders();
         if (current) setOutlookAvailable(providers.outlook);
-      })
-      .catch(() => {});
+      } catch {
+        // Without the provider list, only Gmail is offered.
+      }
+    };
+    fireAndForget(loadProviders(), 'add-inbox');
     onCleanup(() => {
       current = false;
     });

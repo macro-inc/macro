@@ -1,3 +1,4 @@
+import { startDetached } from '@core/util/startDetached';
 import {
   browserCacheTelemetryContext,
   type CacheRolloutCohort,
@@ -70,8 +71,8 @@ export class CacheTelemetryRelay {
       this.releaseLeadership = resolve;
     });
     try {
-      void locks
-        .request(
+      startDetached(
+        locks.request(
           CACHE_TELEMETRY_REPORTER_LOCK,
           { mode: 'exclusive', signal: abortController.signal },
           async (lock) => {
@@ -83,8 +84,9 @@ export class CacheTelemetryRelay {
               this.leader = false;
             }
           }
-        )
-        .catch(() => undefined);
+        ),
+        () => {}
+      );
     } catch {
       // A relay failure only drops worker-originated telemetry.
     }

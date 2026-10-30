@@ -1,4 +1,4 @@
-import { createMarkdownFile } from '@core/util/create';
+import { createMarkdownFile } from '@app/lib/queries/items/create';
 import { queryClient } from '@queries/client';
 import { calendarNotesClient } from '@service-calendar/notes';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -15,7 +15,9 @@ import type { NotePicker, NoteRead } from '../core/types';
 import { notesKeys } from './keys';
 import { createNotesSource } from './notes-source';
 
-vi.mock('@core/util/create', () => ({ createMarkdownFile: vi.fn() }));
+vi.mock('@app/lib/queries/items/create', () => ({
+  createMarkdownFile: vi.fn(),
+}));
 vi.mock('@service-calendar/notes', () => ({
   calendarNotesClient: { list: vi.fn(), link: vi.fn(), documents: vi.fn() },
 }));

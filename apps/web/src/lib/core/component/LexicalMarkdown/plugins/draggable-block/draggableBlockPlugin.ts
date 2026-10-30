@@ -5,6 +5,7 @@ import {
   type ListItemNode,
 } from '@lexical/list';
 import { mergeRegister } from '@lexical/utils';
+import type { LexicalNode } from 'lexical';
 import {
   $getNearestNodeFromDOMNode,
   $getNodeByKey,
@@ -415,9 +416,7 @@ function registerDraggableBlock(
       if (targetNode === draggedNode) return;
 
       const draggedParent = draggedNode.getParent();
-      const targetParent = $isListItemNode(targetNode)
-        ? targetNode.getParent()
-        : null;
+      const targetParent = buildTargetParent();
 
       // Same-list reorder. Both nodes are ListItemNodes sharing the same
       // ListNode parent.
@@ -427,28 +426,7 @@ function registerDraggableBlock(
         draggedParent &&
         draggedParent === targetParent
       ) {
-        const group = $collectNestedGroup(draggedNode as ListItemNode);
-
-        // Dropping onto a member of the dragged group is a no-op —
-        // prevents detaching nested subtrees from their logical parent.
-        const groupKeys = new Set(group.map((n) => n.getKey()));
-        if (groupKeys.has(targetNode.getKey())) return;
-
-        if (insertBefore) {
-          // Insert the whole group before the target, preserving order.
-          for (const item of group) {
-            targetNode.insertBefore(item);
-          }
-        } else {
-          // Insert the whole group after the target, preserving order.
-          // Walk backwards so each insertAfter stacks correctly.
-          let anchor = targetNode;
-          for (const item of group) {
-            anchor.insertAfter(item);
-            anchor = item;
-          }
-        }
-        return;
+        return reorderListGroup(draggedNode, targetNode);
       }
 
       // List-item extracted to root level. A ListItemNode dragged outside its
@@ -468,13 +446,7 @@ function registerDraggableBlock(
         // Resolve the insertion target to a top-level node when the
         // cursor is over a list item in a *different* list.
         let insertTarget = targetNode;
-        if (
-          $isListItemNode(targetNode) &&
-          targetParent &&
-          $isListNode(targetParent)
-        ) {
-          insertTarget = targetParent;
-        }
+        insertTarget = updateInsertTarget(insertTarget);
 
         if (insertBefore) {
           insertTarget.insertBefore(newList);
@@ -504,29 +476,19 @@ function registerDraggableBlock(
         // include any nesting-wrapper siblings that belong to it.
         const targetGroup = $collectNestedGroup(targetNode as ListItemNode);
         const lastInGroup = targetGroup[targetGroup.length - 1];
-        const splitIndex = insertBefore
-          ? targetNode.getIndexWithinParent()
-          : lastInGroup.getIndexWithinParent() + 1;
+        const splitIndex = buildSplitIndex(lastInGroup, targetNode);
 
         const beforeItems = children.slice(0, splitIndex);
         const afterItems = children.slice(splitIndex);
 
         // Build the "before" list (items above the split).
-        if (beforeItems.length > 0) {
-          const beforeList = $createListNode(listType);
-          for (const item of beforeItems) beforeList.append(item);
-          listNode.insertBefore(beforeList);
-        }
+        updateUpdate2(beforeItems, listType, listNode);
 
         // Insert the dragged block at the split point.
         listNode.insertBefore(draggedNode);
 
         // Build the "after" list (items below the split).
-        if (afterItems.length > 0) {
-          const afterList = $createListNode(listType);
-          for (const item of afterItems) afterList.append(item);
-          listNode.insertBefore(afterList);
-        }
+        updateUpdate(afterItems, listType, listNode);
 
         // Remove the now-empty original list.
         listNode.remove();
@@ -534,13 +496,7 @@ function registerDraggableBlock(
       }
 
       // Default: top-level block move
-      if (
-        $isListItemNode(targetNode) &&
-        targetParent &&
-        $isListNode(targetParent)
-      ) {
-        targetNode = targetParent;
-      }
+      updateTargetNode();
 
       if (targetNode === draggedNode) return;
 
@@ -548,6 +504,99 @@ function registerDraggableBlock(
         targetNode.insertBefore(draggedNode);
       } else {
         targetNode.insertAfter(draggedNode);
+      }
+
+      function buildSplitIndex(
+        lastInGroup: ListItemNode,
+        targetNodeInput: NonNullable<typeof targetNode>
+      ) {
+        return insertBefore
+          ? targetNodeInput.getIndexWithinParent()
+          : lastInGroup.getIndexWithinParent() + 1;
+      }
+
+      function buildTargetParent() {
+        return $isListItemNode(targetNode) ? targetNode.getParent() : null;
+      }
+
+      function updateUpdate2(
+        beforeItems: LexicalNode[],
+        listType: Parameters<typeof $createListNode>[0],
+        listNode: NonNullable<ReturnType<typeof $createListNode>>
+      ) {
+        if (beforeItems.length > 0) {
+          const beforeList = $createListNode(listType);
+          for (const item of beforeItems) beforeList.append(item);
+          listNode.insertBefore(beforeList);
+        }
+      }
+
+      function updateUpdate(
+        afterItems: LexicalNode[],
+        listType: Parameters<typeof $createListNode>[0],
+        listNode: NonNullable<ReturnType<typeof $createListNode>>
+      ) {
+        if (afterItems.length > 0) {
+          const afterList = $createListNode(listType);
+          for (const item of afterItems) afterList.append(item);
+          listNode.insertBefore(afterList);
+        }
+      }
+
+      function updateAnchor(
+        group: ListItemNode[],
+        targetNodeInput: NonNullable<typeof targetNode>
+      ) {
+        if (insertBefore) {
+          // Insert the whole group before the target, preserving order.
+          for (const item of group) {
+            targetNodeInput.insertBefore(item);
+          }
+        } else {
+          // Insert the whole group after the target, preserving order.
+          // Walk backwards so each insertAfter stacks correctly.
+          let anchor = targetNodeInput;
+          for (const item of group) {
+            anchor.insertAfter(item);
+            anchor = item;
+          }
+        }
+      }
+
+      function updateInsertTarget(insertTarget: LexicalNode) {
+        if (
+          $isListItemNode(targetNode) &&
+          targetParent &&
+          $isListNode(targetParent)
+        ) {
+          insertTarget = targetParent;
+        }
+        return insertTarget;
+      }
+
+      function updateTargetNode() {
+        if (
+          $isListItemNode(targetNode) &&
+          targetParent &&
+          $isListNode(targetParent)
+        ) {
+          targetNode = targetParent;
+        }
+      }
+
+      function reorderListGroup(
+        draggedNode: ListItemNode,
+        targetNode: ListItemNode
+      ) {
+        const group = $collectNestedGroup(draggedNode as ListItemNode);
+
+        // Dropping onto a member of the dragged group is a no-op —
+        // prevents detaching nested subtrees from their logical parent.
+        const groupKeys = new Set(group.map((n) => n.getKey()));
+        if (groupKeys.has(targetNode.getKey())) return;
+
+        updateAnchor(group, targetNode);
+        return;
       }
     });
 

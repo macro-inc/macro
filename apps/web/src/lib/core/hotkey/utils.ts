@@ -526,6 +526,16 @@ export function runCommand(
       e?.stopPropagation();
     }
 
+    updateRunCommand();
+  }
+
+  return {
+    commandCaptured,
+    commandScopeActivated,
+    stopPropagation,
+  };
+
+  function updateRunCommand() {
     if (
       command.keyUpHandler &&
       e?.type === 'keydown' &&
@@ -541,12 +551,6 @@ export function runCommand(
       });
     }
   }
-
-  return {
-    commandCaptured,
-    commandScopeActivated,
-    stopPropagation,
-  };
 }
 
 export function normalizeEventKeyPress(e: KeyboardEvent): string {

@@ -11,6 +11,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
 import Stack from '@icon/system/regular/stack.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -20,7 +21,7 @@ type ProjectDetails = NamedTool<'CreateInitiative', 'response'>['data'];
 
 async function refreshProjectsAfterMutation(): Promise<void> {
   if (!isFeatureEnabled(enableProjects)) return;
-  await refreshProjectQueries();
+  await refreshProjectQueries(getGraphqlSoupClient());
 }
 
 function resultCount(count: number, noun: string, more = false): string {

@@ -79,7 +79,7 @@ import {
   moveToFolder,
   permanentlyDelete,
   revertDelete,
-} from './itemOperations';
+} from '../../../queries/items/operations';
 
 beforeEach(() => {
   vi.resetAllMocks();

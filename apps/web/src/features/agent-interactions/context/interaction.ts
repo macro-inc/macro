@@ -1,4 +1,4 @@
-import type { IssueResult } from '@core/agent-session/AgentSession';
+import type { IssueResult } from '@app/lib/queries/agent-session/agent-session';
 import type { PendingInteraction } from '@service-agent-fold/generated/types';
 import type {
   AgentAction,

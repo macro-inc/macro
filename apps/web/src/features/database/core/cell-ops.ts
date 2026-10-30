@@ -17,6 +17,8 @@ import { UNAVAILABLE_OPTION } from './grid-cells';
 import type { DatabaseRowMutation } from './table';
 import type { DatabaseCellFailure } from './write-failure';
 
+export type { CellWrite };
+
 const CLEAR: CellValue = { type: 'clear' };
 
 /**

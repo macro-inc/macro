@@ -121,34 +121,48 @@ export function createChannelMessageActions(
     const canReply = writable && canReplyToMessage(message);
     const isDeleted = !!message.deleted_at;
 
-    return {
-      onReply: canReply ? (options.onReply ?? emptyReplyHandler) : undefined,
-      onReact:
-        writable && !isDeleted
-          ? (ctx) => {
-              const userId = options.userId();
-              if (!userId) return;
+    return buildCreateChannelMessageActions();
 
-              const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
-              const parent = message.parent ?? options.parent();
-              const targetMessage = message;
-              const liveMessage = ctx.message;
-              const threadId =
-                (targetMessage as MessageData & { thread_id?: string | null })
-                  .thread_id ?? undefined;
-              const hasReaction = hasReactionFromUser(
-                liveMessage,
-                emoji,
-                userId
-              );
+    function buildCreateChannelMessageActions(): MessageActions {
+      return {
+        onReply: canReply ? (options.onReply ?? emptyReplyHandler) : undefined,
+        onReact:
+          writable && !isDeleted
+            ? (ctx) => {
+                const userId = options.userId();
+                if (!userId) return;
 
-              analytics.track('channel_reaction', {
-                emoji,
-                action: hasReaction ? 'remove' : 'add',
-              });
+                const emoji = ctx.emoji ?? DEFAULT_REACTION_EMOJI;
+                const parent = message.parent ?? options.parent();
+                const targetMessage = message;
+                const liveMessage = ctx.message;
+                const threadId =
+                  (targetMessage as MessageData & { thread_id?: string | null })
+                    .thread_id ?? undefined;
+                const hasReaction = hasReactionFromUser(
+                  liveMessage,
+                  emoji,
+                  userId
+                );
 
-              if (hasReaction) {
-                options.removeReaction({
+                analytics.track('channel_reaction', {
+                  emoji,
+                  action: hasReaction ? 'remove' : 'add',
+                });
+
+                if (hasReaction) {
+                  options.removeReaction({
+                    parent,
+                    messageId: targetMessage.id,
+                    emoji,
+                    userId,
+                    threadId,
+                    currentReactions: liveMessage.reactions,
+                  });
+                  return;
+                }
+
+                options.addReaction({
                   parent,
                   messageId: targetMessage.id,
                   emoji,
@@ -156,56 +170,46 @@ export function createChannelMessageActions(
                   threadId,
                   currentReactions: liveMessage.reactions,
                 });
-                return;
               }
-
-              options.addReaction({
-                parent,
-                messageId: targetMessage.id,
-                emoji,
-                userId,
-                threadId,
-                currentReactions: liveMessage.reactions,
+            : undefined,
+        onCopyLink: async () => {
+          try {
+            const parent = message.parent ?? options.parent();
+            const url =
+              options.buildLink?.(message) ??
+              buildMessageLink(parent.id, message.id, message.thread_id);
+            await effects.copyToClipboard(url);
+            effects.notifyCopyLinkSuccess();
+          } catch (error) {
+            effects.notifyCopyLinkFailure(error);
+          }
+        },
+        onCopyMessageText:
+          !isDeleted && message.content
+            ? async () => {
+                try {
+                  await effects.copyToClipboard(message.content);
+                  effects.notifyCopyMessageTextSuccess();
+                } catch (error) {
+                  effects.notifyCopyMessageTextFailure(error);
+                }
+              }
+            : undefined,
+        onEdit: canEdit ? options.onEdit : undefined,
+        onDelete: canDelete
+          ? () => {
+              options.deleteMessage({
+                parent: message.parent ?? options.parent(),
+                messageID: message.id,
+                threadID:
+                  (message as MessageData & { thread_id?: string | null })
+                    .thread_id ?? undefined,
               });
             }
           : undefined,
-      onCopyLink: async () => {
-        try {
-          const parent = message.parent ?? options.parent();
-          const url =
-            options.buildLink?.(message) ??
-            buildMessageLink(parent.id, message.id, message.thread_id);
-          await effects.copyToClipboard(url);
-          effects.notifyCopyLinkSuccess();
-        } catch (error) {
-          effects.notifyCopyLinkFailure(error);
-        }
-      },
-      onCopyMessageText:
-        !isDeleted && message.content
-          ? async () => {
-              try {
-                await effects.copyToClipboard(message.content);
-                effects.notifyCopyMessageTextSuccess();
-              } catch (error) {
-                effects.notifyCopyMessageTextFailure(error);
-              }
-            }
-          : undefined,
-      onEdit: canEdit ? options.onEdit : undefined,
-      onDelete: canDelete
-        ? () => {
-            options.deleteMessage({
-              parent: message.parent ?? options.parent(),
-              messageID: message.id,
-              threadID:
-                (message as MessageData & { thread_id?: string | null })
-                  .thread_id ?? undefined,
-            });
-          }
-        : undefined,
-      onCreateTask: options.onCreateTask,
-      onChat: !isDeleted ? options.onChat : undefined,
-    };
+        onCreateTask: options.onCreateTask,
+        onChat: !isDeleted ? options.onChat : undefined,
+      };
+    }
   };
 }

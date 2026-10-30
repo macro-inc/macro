@@ -425,31 +425,64 @@ export function expandCalendarToolPreviewEvents(
   let ruleEnded = false;
   const cursorEnd = new Date(window.end.getTime() + 24 * 60 * 60 * 1000);
   while (cursor < cursorEnd && occurrences.length < limit) {
-    const date = formatLocalDate(cursor);
-    const occurrenceStart = event.allDay
-      ? cursor
-      : calendarDate(
-          cursor.getFullYear(),
-          cursor.getMonth(),
-          cursor.getDate(),
-          start.getHours(),
-          start.getMinutes(),
-          start.getSeconds(),
-          start.getMilliseconds(),
-          timeZone
-        );
-    let matchesRule =
-      !ruleEnded &&
-      recurrenceMatches(cursor, start, config, weekStartsOn, timeZone);
+    const processEntry = () => {
+      const date = formatLocalDate(cursor);
+      const occurrenceStart = event.allDay
+        ? cursor
+        : calendarDate(
+            cursor.getFullYear(),
+            cursor.getMonth(),
+            cursor.getDate(),
+            start.getHours(),
+            start.getMinutes(),
+            start.getSeconds(),
+            start.getMilliseconds(),
+            timeZone
+          );
+      let matchesRule =
+        !ruleEnded &&
+        recurrenceMatches(cursor, start, config, weekStartsOn, timeZone);
+      matchesRule = updateRuleOccurrenceIndex(
+        matchesRule,
+        date,
+        occurrenceStart,
+        config
+      );
+
+      if (matchesRule) {
+        const occurrenceEnd = event.allDay
+          ? addLocalDays(occurrenceStart, duration)
+          : new Date(occurrenceStart.getTime() + duration);
+        if (occurrenceStart < window.end && occurrenceEnd > window.start) {
+          renderedIndex += 1;
+          occurrences.push(
+            occurrenceEvent(event, occurrenceStart, duration, renderedIndex)
+          );
+        }
+      }
+      cursor = addLocalDays(cursor, 1, timeZone);
+    };
+    processEntry();
+  }
+
+  return occurrences.length > 0 ? occurrences : [event];
+
+  function updateRuleOccurrenceIndex(
+    matchesRule: boolean,
+    date: string,
+    occurrenceStart: Date,
+    configValue: NonNullable<typeof config>
+  ) {
     if (matchesRule) {
       ruleOccurrenceIndex += 1;
       const exceedsCount =
-        config.ends.kind === 'after' && ruleOccurrenceIndex > config.ends.count;
+        configValue.ends.kind === 'after' &&
+        ruleOccurrenceIndex > configValue.ends.count;
       const exceedsDateUntil =
         (until?.date !== undefined && date > until.date) ||
         (until === undefined &&
-          config.ends.kind === 'on' &&
-          date > config.ends.date);
+          configValue.ends.kind === 'on' &&
+          date > configValue.ends.date);
       const exceedsInstantUntil =
         until?.instant !== undefined && occurrenceStart > until.instant;
       if (exceedsCount || exceedsDateUntil || exceedsInstantUntil) {
@@ -457,20 +490,6 @@ export function expandCalendarToolPreviewEvents(
         ruleEnded = true;
       }
     }
-
-    if (matchesRule) {
-      const occurrenceEnd = event.allDay
-        ? addLocalDays(occurrenceStart, duration)
-        : new Date(occurrenceStart.getTime() + duration);
-      if (occurrenceStart < window.end && occurrenceEnd > window.start) {
-        renderedIndex += 1;
-        occurrences.push(
-          occurrenceEvent(event, occurrenceStart, duration, renderedIndex)
-        );
-      }
-    }
-    cursor = addLocalDays(cursor, 1, timeZone);
+    return matchesRule;
   }
-
-  return occurrences.length > 0 ? occurrences : [event];
 }

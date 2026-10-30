@@ -1,6 +1,6 @@
 id: tsx-no-cursor-pointer
 language: tsx
-severity: warning
+severity: error
 message: Don't add cursor-pointer to clickable elements.
 note: |-
   Rule FE-27 in docs/development/style-guide.md. The

@@ -53,6 +53,9 @@ import type {
   PipelineTransfer,
 } from './pipelines';
 
+/** A rollout's state; `loading` until its flag resolves. */
+export type CrmRollout = { enabled: boolean; loading: boolean };
+
 export type CrmContext = {
   createPipelines(teamId: Accessor<string | undefined>): PipelinesSource;
   PipelineEditor: PipelineEditor;
@@ -82,6 +85,10 @@ export type CrmContext = {
   };
   listsEnabled(): Accessor<boolean>;
   pipelinesEnabled(): Accessor<boolean>;
+  /** The activity tabs' rollout (Tasks, Email, Calls, Notes, Databases). */
+  activityRollout(): Accessor<CrmRollout>;
+  /** The linked databases rollout. */
+  databasesRollout(): Accessor<CrmRollout>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(

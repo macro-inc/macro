@@ -50,9 +50,14 @@ import {
 } from 'solid-js';
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
-import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
+import type { ComposeTaskProps } from '../context/composer';
+import type { ComposeTaskSuccess } from '../core/types';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
+
+type CreatedTask = NonNullable<
+  Awaited<ReturnType<typeof createTaskWithProperties>>
+>;
 
 /** A task to open, with the snapshot that renders it before it syncs. */
 type OpenableTask = { id: string; optimisticSnapshot?: Uint8Array };
@@ -74,8 +79,10 @@ export type TaskComposerHost = {
     options: { newSplit: boolean; referredFrom: 'launcher' | null }
   ): void;
   /** Holds a new split for a task that is still being created. */
-  openPendingTask(): { show(task: OpenableTask): void; cancel(): void };
+  openPendingTask(): PendingTaskSplit;
 };
+
+type PendingTaskSplit = { show(task: OpenableTask): void; cancel(): void };
 
 /**
  * Draft, property, and submission state for one task composer, shared by the
@@ -402,7 +409,7 @@ export function createTaskComposer(
     const definitions = createDefinitions();
     const snapshot = draftSnapshot();
     const shareWithTeam = sharesWithTeam();
-    let pendingSplit: ReturnType<typeof host.openPendingTask> | undefined;
+    let pendingSplit: PendingTaskSplit | undefined;
     let started = false;
     let createdTask: Awaited<ReturnType<typeof createTaskWithProperties>> =
       null;
@@ -468,27 +475,43 @@ export function createTaskComposer(
 
     if (currentUserId() !== draftOwner) return;
     if (!createdTask) {
-      if (!started) {
-        setErrorMessage(
-          'Unable to save this draft on your device. Keep the composer open and try again.'
-        );
-        return;
-      }
-      if (!inSplit && !keepOpen) props.onCreateFailure?.();
-      pendingSplit?.cancel();
-      if (currentUserId() === draftOwner) {
-        toast.failure('Task creation was not confirmed', {
-          subtext:
-            'Your draft is saved on this device. Check Tasks before retrying.',
-          actions: [
-            { label: 'Recover draft', onClick: () => recoverDraft(id) },
-          ],
-        });
-      }
+      reportUnconfirmed(id, started, !inSplit && !keepOpen, pendingSplit);
       return;
     }
-    if (currentUserId() !== draftOwner) return;
-    const { documentId, initialSnapshot } = createdTask;
+    showCreated(createdTask, inSplit, pendingSplit, taskTitle, taskContent);
+  };
+
+  /** A create the server never confirmed: the draft stays recoverable. */
+  const reportUnconfirmed = (
+    id: string,
+    started: boolean,
+    closed: boolean,
+    pendingSplit: PendingTaskSplit | undefined
+  ) => {
+    if (!started) {
+      setErrorMessage(
+        'Unable to save this draft on your device. Keep the composer open and try again.'
+      );
+      return;
+    }
+    if (closed) props.onCreateFailure?.();
+    pendingSplit?.cancel();
+    toast.failure('Task creation was not confirmed', {
+      subtext:
+        'Your draft is saved on this device. Check Tasks before retrying.',
+      actions: [{ label: 'Recover draft', onClick: () => recoverDraft(id) }],
+    });
+  };
+
+  /** Shows the created task where the submit asked for it. */
+  const showCreated = (
+    created: CreatedTask,
+    inSplit: boolean,
+    pendingSplit: PendingTaskSplit | undefined,
+    taskTitle: string,
+    taskContent: string
+  ) => {
+    const { documentId, initialSnapshot } = created;
     if (inSplit) {
       const task = { id: documentId, optimisticSnapshot: initialSnapshot };
       if (pendingSplit) {

@@ -342,7 +342,11 @@ describe('call team sharing helpers', () => {
     resolveFetch(
       record({ callId: 'call-live', isActive: true, shareWithTeam: false })
     );
-    await fetchResult.catch(() => undefined);
+    try {
+      await fetchResult;
+    } catch {
+      /* How the late fetch settles doesn't matter; the cached record does. */
+    }
 
     expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
       shareWithTeam: true,

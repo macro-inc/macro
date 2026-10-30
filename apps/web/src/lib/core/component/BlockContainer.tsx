@@ -1,7 +1,7 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { type BlockName, useBlockId, useBlockName } from '@core/block';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { useEntitySubscription } from '@service-connection/client';
+import { useEntitySubscription } from '@queries/connection/tracked-entities';
 import {
   children,
   createEffect,

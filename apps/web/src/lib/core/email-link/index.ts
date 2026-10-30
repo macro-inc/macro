@@ -14,14 +14,18 @@ import { useInitGmailLink } from '@queries/auth';
 import { useInitOutlookLink } from '@queries/auth/outlook-link';
 import { invalidateUserInfo } from '@queries/auth/user-info';
 import { invalidateEmailLinks, useEmailLinksQuery } from '@queries/email/link';
+import {
+  initializeEmailLink,
+  resyncEmailLink,
+  stopEmailSync,
+} from '@queries/email/link-requests';
 import { queryReadyGate } from '@queries/gate';
 import type { ConsentScopes } from '@service-auth/client';
 import {
   ALREADY_INITIALIZED_CODE,
-  emailClient,
   NO_GMAIL_GRANT_CODE,
   SHARED_INBOX_CONFLICT_CODE,
-} from '@service-email/client';
+} from '@service-email/errors';
 import type {
   ListLinksResponse,
   ResyncResponse,
@@ -97,7 +101,7 @@ function initEmailLink(args?: {
   forceShare?: boolean;
 }): ResultAsync<void, EmailInitError> {
   return ResultAsync.fromSafePromise(
-    emailClient.init({ linkId: args?.linkId, forceShare: args?.forceShare })
+    initializeEmailLink({ linkId: args?.linkId, forceShare: args?.forceShare })
   ).andThen((initResult) => {
     if (initResult.isErr()) {
       if (isPaymentRequired(initResult.error))
@@ -163,9 +167,8 @@ function stopEmailPolling() {
  * @returns ok if the email service was disconnected, err if it failed to disconnect
  */
 function disconnectEmail(): ResultAsync<void, 'failed-to-disconnect'> {
-  return ResultAsync.fromSafePromise(emailClient.stopSync()).andThen(
-    (response) =>
-      response.isErr() ? err('failed-to-disconnect') : okAsync(void 0)
+  return ResultAsync.fromSafePromise(stopEmailSync()).andThen((response) =>
+    response.isErr() ? err('failed-to-disconnect') : okAsync(void 0)
   );
 }
 
@@ -178,10 +181,9 @@ function disconnectEmail(): ResultAsync<void, 'failed-to-disconnect'> {
 function resyncInbox(
   linkId: string
 ): ResultAsync<ResyncResponse, 'failed-to-resync'> {
-  return ResultAsync.fromSafePromise(
-    emailClient.resyncLink({ linkId })
-  ).andThen((response) =>
-    response.isErr() ? err('failed-to-resync') : okAsync(response.value)
+  return ResultAsync.fromSafePromise(resyncEmailLink({ linkId })).andThen(
+    (response) =>
+      response.isErr() ? err('failed-to-resync') : okAsync(response.value)
   );
 }
 

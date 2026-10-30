@@ -1,6 +1,6 @@
 import type { Attachment, Model } from '@core/component/AI/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+import { sendChatMessage } from '@queries/cognition/requests';
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 import { Button } from '@ui';
@@ -134,7 +134,7 @@ type SimpleRequest = {
 type SendResult = { type: 'ok'; stream: ChatMessageStream } | { type: 'error' };
 
 async function sendRequest(simple: SimpleRequest): Promise<SendResult> {
-  const response = await cognitionApiServiceClient.sendStreamChatMessage({
+  const response = await sendChatMessage({
     content: simple.userRequest,
     model: simple.model,
     attachments: simple.attachments.length > 0 ? simple.attachments : undefined,

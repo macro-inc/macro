@@ -1,5 +1,6 @@
 import { isInBlock } from '@core/block';
 import { blockElementSignal } from '@core/signal/blockElement';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { getScrollParent } from '@core/util/scrollParent';
 import {
   autoUpdate,
@@ -15,7 +16,6 @@ import {
   size,
   type VirtualElement,
 } from '@floating-ui/dom';
-import { Telemetry } from '@macro-inc/observability';
 import type { Accessor, JSX } from 'solid-js';
 import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { iosSafePadding, iosSizeMiddleware } from './iosFloatingMiddleware';
@@ -241,16 +241,16 @@ export function floatWithSelection(
     });
   }
 
-  const reportPositionError = (error: unknown) =>
-    Telemetry.error(error, { surface: 'float-with-selection' });
-
   const placeInBackground = (selection: Selection | null | undefined) => {
-    setInitialFloatingPosition(selection).catch(reportPositionError);
+    fireAndForget(
+      setInitialFloatingPosition(selection),
+      'float-with-selection'
+    );
   };
 
   const repositionInBackground = () => {
     if (currentAnchor()) {
-      updatePosition().catch(reportPositionError);
+      fireAndForget(updatePosition(), 'float-with-selection');
     }
   };
 

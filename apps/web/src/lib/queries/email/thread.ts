@@ -6,6 +6,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
@@ -657,24 +658,21 @@ export function useSendMessageMutation(
           try {
             const threadID = data.message.thread_db_id;
             if (threadID) {
-              void queryClient
-                .invalidateQueries({
-                  queryKey: emailKeys.threadMessages(threadID).queryKey,
-                })
-                .catch(Telemetry.error);
+              queryClient.invalidateQueries({
+                queryKey: emailKeys.threadMessages(threadID).queryKey,
+              });
               // Refresh the thread's soup item so inbox views stop showing it
               // as a draft once the message is sent.
               if (!vars.skipSoupRefetch) {
-                void refetchSoupEntity(threadID, 'emailThread').catch(
-                  Telemetry.error
+                fireAndForget(
+                  refetchSoupEntity(threadID, 'emailThread'),
+                  'email-thread'
                 );
               }
             }
-            void queryClient
-              .invalidateQueries({
-                queryKey: emailKeys.previews._def,
-              })
-              .catch(Telemetry.error);
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.previews._def,
+            });
           } catch (error) {
             Telemetry.error(error);
           }
@@ -763,16 +761,12 @@ export function useUnscheduleMessageMutation(
       {
         onSuccess: () => {
           try {
-            void queryClient
-              .invalidateQueries({
-                queryKey: emailKeys.previews._def,
-              })
-              .catch(Telemetry.error);
-            void queryClient
-              .invalidateQueries({
-                queryKey: emailKeys.scheduledMessages._def,
-              })
-              .catch(Telemetry.error);
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.previews._def,
+            });
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.scheduledMessages._def,
+            });
           } catch (error) {
             Telemetry.error(error);
           }

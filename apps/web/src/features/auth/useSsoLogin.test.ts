@@ -51,11 +51,11 @@ vi.mock('@core/util/fetchWithToken', () => ({
 vi.mock('@core/util/cookies', () => ({
   syncLoginStorage: mocks.syncLoginStorage,
 }));
+vi.mock('@queries/auth/requests', () => ({
+  redeemSessionCode: mocks.sessionLogin,
+}));
 vi.mock('@queries/auth/user-info', () => ({
   invalidateAllAfterLogin: mocks.invalidateAllAfterLogin,
-}));
-vi.mock('@service-auth/client', () => ({
-  authServiceClient: { sessionLogin: mocks.sessionLogin },
 }));
 
 import { useSsoLogin } from './useSsoLogin';

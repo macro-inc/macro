@@ -255,9 +255,11 @@ export async function invalidateCalendarOccurrences(
 ) {
   const controller = activeCalendarSyncController();
   if (controller?.answering()) {
-    await controller.runDelta().catch((error) => {
+    try {
+      await controller.runDelta();
+    } catch (error) {
       console.warn('Calendar delta sync failed', error);
-    });
+    }
   }
   if (!stillCurrent()) return;
   return queryClient.invalidateQueries({

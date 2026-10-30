@@ -10,6 +10,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { type TaskBoardTask, toTaskBoardGrouping } from './core/task-board';
 import { createTaskBoardQueries } from './queries/task-board-queries';
@@ -25,6 +26,7 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
   const layout = useSplitLayout();
   const createContext = useCreateContext();
   const queries = createTaskBoardQueries({
+    client: getGraphqlSoupClient,
     rows: source.boardRows ?? source.items,
     grouping: () => toTaskBoardGrouping(state.groupBy),
     searching: source.boardSearching ?? (() => !!state.search.trim()),

@@ -1,6 +1,6 @@
 id: tsx-no-class-string-consts
 language: tsx
-severity: warning
+severity: error
 message: Don't hoist Tailwind class strings into named constants — shared markup+styling is a component, not a string.
 note: |-
   Rule FE-30 in docs/development/style-guide.md. A named class-string constant
@@ -11,7 +11,7 @@ note: |-
   its single use). For genuine styling variants, use the component's
   props, not exported strings. When a class string must feed an imperative
   DOM/editor API and no component boundary exists, inline it at the call
-  site. ~46 legacy uses exist — don't add new ones.
+  site.
 files:
   - apps/web/**
   - packages/**

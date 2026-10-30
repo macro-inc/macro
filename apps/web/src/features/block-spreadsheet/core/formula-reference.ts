@@ -139,10 +139,7 @@ export function formulaReferenceSlot(
   let quote: string | undefined;
   for (let index = 1; index < start; index++) {
     const char = text[index];
-    if (quote === char) {
-      if (text[index + 1] === quote) index++;
-      else quote = undefined;
-    } else if (!quote && (char === '"' || char === "'")) quote = char;
+    index = trackQuote(char, index);
   }
   if (quote === '"') return;
 
@@ -165,6 +162,14 @@ export function formulaReferenceSlot(
   if (!/[=+\-*/^&<>,;({:]\s*$/.test(text.slice(0, start))) return;
   if (start === end && /^[\w.$!'"]/.test(text.slice(end))) return;
   return { start, end };
+
+  function trackQuote(char: string, index: number) {
+    if (quote === char) {
+      if (text[index + 1] === quote) index++;
+      else quote = undefined;
+    } else if (!quote && (char === '"' || char === "'")) quote = char;
+    return index;
+  }
 }
 
 export function formulaRangeReference(

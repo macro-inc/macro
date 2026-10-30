@@ -1,6 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import { Telemetry } from '@macro-inc/observability';
 import { getEmailAttachmentDownloadUrl } from '@queries/email/attachment';
@@ -90,8 +91,9 @@ export function createEmailAttachmentOpener() {
       );
     }
 
-    refetchSoupEntity(document_id, 'document').catch((error) =>
-      Telemetry.error(error, { surface: 'email-attachment' })
+    fireAndForget(
+      refetchSoupEntity(document_id, 'document'),
+      'email-attachment'
     );
 
     openWithSplit(

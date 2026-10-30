@@ -82,11 +82,13 @@ export class PerformanceMonitor {
     return duration;
   }
 
-  static measureAsync<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  static async measureAsync<T>(key: string, fn: () => Promise<T>): Promise<T> {
     this.startMeasurement(key);
-    return fn().finally(() => {
+    try {
+      return await fn();
+    } finally {
       const duration = this.endMeasurement(key);
       console.debug(`[HEIC Performance] ${key}: ${duration.toFixed(2)}ms`);
-    });
+    }
   }
 }

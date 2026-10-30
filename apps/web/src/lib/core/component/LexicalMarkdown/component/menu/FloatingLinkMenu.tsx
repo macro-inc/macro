@@ -1,8 +1,8 @@
+import { useUnfurl } from '@app/lib/queries/unfurl/unfurl';
 import { LinkHoverCard } from '@core/component/Link';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
-import { useUnfurl } from '@core/signal/unfurl';
 import { openExternalUrl } from '@core/util/url';
 import NewTab from '@icon/system/regular/arrow-square-out.svg';
 import Check from '@icon/system/regular/check-circle.svg';

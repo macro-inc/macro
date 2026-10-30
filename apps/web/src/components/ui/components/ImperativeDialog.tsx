@@ -199,12 +199,11 @@ export function useImperativeDialog<P extends ManagedDialogProps>(
 
     const next = openDialog(component, props, { owner });
     setHandle(next);
-    fireAndForget(
-      next.closed.then(() => {
-        if (handle() === next) setHandle(undefined);
-      }),
-      'imperative-dialog'
-    );
+    const clearWhenClosed = async () => {
+      await next.closed;
+      if (handle() === next) setHandle(undefined);
+    };
+    fireAndForget(clearWhenClosed(), 'imperative-dialog');
     return next;
   };
 

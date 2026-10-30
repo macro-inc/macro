@@ -11,7 +11,9 @@ vi.mock('@core/context/user', () => ({ useUserId: () => () => 'owner' }));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({ isPending: false, isError: false, data: null }),
 }));
-vi.mock('@core/util/create', () => ({ createMarkdownFile: vi.fn() }));
+vi.mock('@app/lib/queries/items/create', () => ({
+  createMarkdownFile: vi.fn(),
+}));
 vi.mock('@service-calendar/notes', () => ({
   calendarNotesClient: { documentLinks: vi.fn() },
 }));

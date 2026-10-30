@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
   failure: vi.fn(),
 }));
 vi.mock('@queries/storage/databases', () => ({ createDatabase: mocks.create }));
-vi.mock('@core/signal/mention', () => ({
+vi.mock('@app/lib/queries/storage/mentions', () => ({
   trackMention: mocks.track,
   untrackMention: mocks.untrack,
 }));

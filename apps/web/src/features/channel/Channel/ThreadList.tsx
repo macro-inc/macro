@@ -566,18 +566,22 @@ export function ThreadList(props: ThreadListProps) {
       : undefined;
     props.onScroll?.(state, snapshot);
     if (!lifecycle.isReady()) return;
-    if (
-      nearTop &&
-      (hasUserIntent || scrollCompensation) &&
-      nearTopKey !== props.keys()[0]
-    ) {
-      nearTopKey = props.keys()[0];
-      props.onScrollNearTop?.();
-    } else if (!nearTop) nearTopKey = undefined;
+    updateNearTopKey();
     if (nearBottom && !nearBottomFired && hasUserIntent) {
       nearBottomFired = true;
       props.onScrollNearBottom?.();
     } else if (!nearBottom) nearBottomFired = false;
+
+    function updateNearTopKey() {
+      if (
+        nearTop &&
+        (hasUserIntent || scrollCompensation) &&
+        nearTopKey !== props.keys()[0]
+      ) {
+        nearTopKey = props.keys()[0];
+        props.onScrollNearTop?.();
+      } else if (!nearTop) nearTopKey = undefined;
+    }
   }
 
   // Floating chrome can resize without resizing the scroll viewport. Compare

@@ -201,6 +201,23 @@ export function EventEditor(props: EventEditorProps) {
     );
   const primaryLabel = () =>
     props.submitLabel ?? (props.isNew ? 'Create link' : 'Save changes');
+  const submitLabel = () =>
+    props.saving
+      ? 'Saving…'
+      : props.step === 'review'
+        ? primaryLabel()
+        : 'Next';
+  /** A step's controls are off while saving and while another step shows. */
+  const stepLocked = (step: EventEditorStep) =>
+    props.saving || props.step !== step;
+  const invalid = (message: string | false | undefined) =>
+    message ? true : undefined;
+  const describedBy = (message: string | false | undefined, id: string) =>
+    message ? id : undefined;
+  const linkLabel = () => props.link ?? `/${props.draft.slug || 'your-link'}`;
+  const reviewActive = () =>
+    ((props.isNew && props.createActive) || props.draft.enabled) &&
+    !props.draft.requiresConfirmation;
   createEffect(
     on(
       () => [props.step, props.validationAttempt] as const,
@@ -279,7 +296,7 @@ export function EventEditor(props: EventEditorProps) {
             <fieldset
               data-booking-step="details"
               tabindex="-1"
-              disabled={props.saving || props.step !== 'details'}
+              disabled={stepLocked('details')}
               aria-labelledby={progressId}
               class="flex min-w-0 flex-col gap-6 outline-none"
             >
@@ -304,7 +321,7 @@ export function EventEditor(props: EventEditorProps) {
                 <div class="flex min-w-0 flex-col gap-1.5">
                   <div class="flex min-w-0 items-start gap-2">
                     <p class="min-w-0 flex-1 break-all text-xs leading-relaxed text-ink-muted">
-                      {props.link ?? `/${props.draft.slug || 'your-link'}`}
+                      {linkLabel()}
                     </p>
                     <Popover
                       placement="bottom-end"
@@ -322,10 +339,11 @@ export function EventEditor(props: EventEditorProps) {
                         size="icon-xs"
                         variant="ghost"
                         class="shrink-0 -mt-0.5 text-ink-muted aria-invalid:ring-2 aria-invalid:ring-failure/40"
-                        aria-invalid={error('slug') ? true : undefined}
-                        aria-describedby={
-                          error('slug') && !linkOpen() ? slugErrorId : undefined
-                        }
+                        aria-invalid={invalid(error('slug'))}
+                        aria-describedby={describedBy(
+                          !linkOpen() && error('slug'),
+                          slugErrorId
+                        )}
                       >
                         <PencilSimple class="size-3.5" />
                       </Popover.Trigger>
@@ -429,7 +447,7 @@ export function EventEditor(props: EventEditorProps) {
             <fieldset
               data-booking-step="location"
               tabindex="-1"
-              disabled={props.saving || props.step !== 'location'}
+              disabled={stepLocked('location')}
               aria-labelledby={progressId}
               class="flex min-w-0 flex-col gap-6 outline-none"
             >
@@ -537,7 +555,7 @@ export function EventEditor(props: EventEditorProps) {
                       label="Availability schedule"
                       value={props.draft.scheduleId}
                       class="h-9 rounded-lg px-3 text-sm"
-                      disabled={props.saving || props.step !== 'location'}
+                      disabled={stepLocked('location')}
                       error={error('scheduleId')}
                       options={props.schedules.map((item) => ({
                         value: item.id,
@@ -551,10 +569,11 @@ export function EventEditor(props: EventEditorProps) {
                     role="group"
                     aria-label="Availability schedule"
                     tabindex="-1"
-                    aria-invalid={error('scheduleId') ? true : undefined}
-                    aria-describedby={
-                      error('scheduleId') ? availabilityErrorId : undefined
-                    }
+                    aria-invalid={invalid(error('scheduleId'))}
+                    aria-describedby={describedBy(
+                      error('scheduleId'),
+                      availabilityErrorId
+                    )}
                     class="flex flex-col gap-2 rounded-lg outline-none aria-invalid:ring-2 aria-invalid:ring-failure/30"
                   >
                     {props.availability}
@@ -581,9 +600,7 @@ export function EventEditor(props: EventEditorProps) {
                       variant="ghost"
                       size="icon-sm"
                       disabled={
-                        props.saving ||
-                        props.step !== 'location' ||
-                        !props.canResetTeamSettings
+                        stepLocked('location') || !props.canResetTeamSettings
                       }
                       onClick={() => props.onRemoveDetail('hosts')}
                     >
@@ -597,7 +614,7 @@ export function EventEditor(props: EventEditorProps) {
                     <Tabs
                       touch="pills"
                       aria-label="Scheduling type"
-                      disabled={props.saving || props.step !== 'location'}
+                      disabled={stepLocked('location')}
                       options={[
                         { value: 'collective', label: 'Collective' },
                         { value: 'roundRobin', label: 'Round robin' },
@@ -611,11 +628,12 @@ export function EventEditor(props: EventEditorProps) {
                           <BookingHostSelector
                             members={props.members}
                             value={props.draft.hosts}
-                            disabled={props.saving || props.step !== 'location'}
+                            disabled={stepLocked('location')}
                             invalid={!!error('hosts')}
-                            descriptionId={
-                              error('hosts') ? hostsErrorId : undefined
-                            }
+                            descriptionId={describedBy(
+                              error('hosts'),
+                              hostsErrorId
+                            )}
                             onChange={(hosts) => props.onUpdate('hosts', hosts)}
                           />
                         </div>
@@ -646,7 +664,7 @@ export function EventEditor(props: EventEditorProps) {
             <fieldset
               data-booking-step="questions"
               tabindex="-1"
-              disabled={props.saving || props.step !== 'questions'}
+              disabled={stepLocked('questions')}
               aria-labelledby={progressId}
               class="flex min-w-0 flex-col gap-6 outline-none"
             >
@@ -702,13 +720,13 @@ export function EventEditor(props: EventEditorProps) {
             <fieldset
               data-booking-step="rules"
               tabindex="-1"
-              disabled={props.saving || props.step !== 'rules'}
+              disabled={stepLocked('rules')}
               aria-labelledby={progressId}
               class="flex min-w-0 flex-col gap-6 outline-none"
             >
               <BookingRuleSliders
                 draft={props.draft}
-                disabled={props.saving || props.step !== 'rules'}
+                disabled={stepLocked('rules')}
                 issues={props.issues}
                 onUpdate={props.onUpdate}
                 onBuffers={props.onBuffers}
@@ -730,11 +748,7 @@ export function EventEditor(props: EventEditorProps) {
                   schedule={schedule()}
                   members={props.members}
                   team={props.team}
-                  active={
-                    ((props.isNew && props.createActive) ||
-                      props.draft.enabled) &&
-                    !props.draft.requiresConfirmation
-                  }
+                  active={reviewActive()}
                   saving={props.saving}
                   onCopyLink={props.onCopyLink}
                   statusControl={
@@ -836,8 +850,8 @@ export function EventEditor(props: EventEditorProps) {
               variant="primary"
               size="lg"
               disabled={props.saving}
-              aria-invalid={primaryError() ? true : undefined}
-              aria-describedby={primaryError() ? submitErrorId : undefined}
+              aria-invalid={invalid(primaryError())}
+              aria-describedby={describedBy(primaryError(), submitErrorId)}
               class="aria-invalid:ring-2 aria-invalid:ring-failure/40"
             >
               <Show
@@ -845,11 +859,7 @@ export function EventEditor(props: EventEditorProps) {
               >
                 <Plus class="size-4" aria-hidden="true" />
               </Show>
-              {props.saving
-                ? 'Saving…'
-                : props.step === 'review'
-                  ? primaryLabel()
-                  : 'Next'}
+              {submitLabel()}
             </Button>
             <FieldError id={submitErrorId} message={primaryError()} />
           </div>

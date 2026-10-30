@@ -1,3 +1,5 @@
+import type { SheetPivotLayout } from '@macro-inc/spreadsheet/pivot-layout';
+import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import { match } from 'ts-pattern';
 import {
   type CalculatedCell,
@@ -57,7 +59,7 @@ function updateWorkbook(
   let replacedInputs = false;
   for (const { changes: delta, cells, ...sheet } of sheets) {
     if (cells || !inputs.has(sheet.id)) replacedInputs = true;
-    const current = cells ?? inputs.get(sheet.id)?.cells ?? {};
+    const current = currentCells(cells, sheet);
     for (const [address, input] of Object.entries(delta ?? {})) {
       if (input) current[address] = input;
       else delete current[address];
@@ -123,6 +125,22 @@ function updateWorkbook(
   }
   previous = results;
   return { id, type: 'update-workbook', values, replaced };
+
+  function currentCells(
+    cells: CalculationCells | undefined,
+    sheet: {
+      id: string;
+      name: string;
+      rowCount: number;
+      metadata?: Pick<
+        WorkbookSheetMetadata,
+        'definedNames' | 'arrayFormulas' | 'hiddenRows' | 'conditionalFormats'
+      >;
+      pivots?: SheetPivotLayout[];
+    }
+  ) {
+    return cells ?? inputs.get(sheet.id)?.cells ?? {};
+  }
 }
 self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
   const request = event.data;

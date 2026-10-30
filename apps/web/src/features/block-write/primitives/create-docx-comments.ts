@@ -3,7 +3,8 @@ import type {
   PageRect,
   ParagraphText,
   Pos,
-} from '@core/docx-engine/types';
+} from '@app/lib/docx/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { MessageListItem } from '@service-storage/messages';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -111,18 +112,28 @@ export function createDocxComments(options: {
     on(options.geometry.revision, () => {
       clearTimeout(textTimer);
       textTimer = setTimeout(() => {
-        options.geometry
-          .paragraphs()
-          .then(setParagraphs)
-          .catch(() => {});
-        options.geometry
-          .documentComments()
-          .then(setWordComments)
-          .catch(() => {});
+        fireAndForget(readParagraphs(), 'docx-comments');
+        fireAndForget(readWordComments(), 'docx-comments');
       }, 120);
     })
   );
   onCleanup(() => clearTimeout(textTimer));
+
+  // A read fails while the engine reopens; the next revision reads again.
+  async function readParagraphs() {
+    try {
+      setParagraphs(await options.geometry.paragraphs());
+    } catch {
+      // Keep the last text.
+    }
+  }
+  async function readWordComments() {
+    try {
+      setWordComments(await options.geometry.documentComments());
+    } catch {
+      // Keep the last comments.
+    }
+  }
 
   /** Marks resolved against the current text. */
   const placement = createMemo(() => {
@@ -198,7 +209,17 @@ export function createDocxComments(options: {
   createEffect(
     on([placement, options.geometry.revision], ([{ threads }]) => {
       const current = ++generation;
-      Promise.all(
+
+      fireAndForget(locate(threads, current), 'docx-comments');
+    })
+  );
+
+  async function locate(
+    threads: ReturnType<typeof placement>['threads'],
+    current: number
+  ) {
+    try {
+      const next = await Promise.all(
         threads.map(async (thread) => {
           const range = thread.word
             ? wordRange(thread.word.comment)
@@ -214,13 +235,12 @@ export function createDocxComments(options: {
             rects: await options.geometry.rangeRects(range.from, range.to),
           };
         })
-      )
-        .then((next) => {
-          if (current === generation) setLocated(next);
-        })
-        .catch(() => {});
-    })
-  );
+      );
+      if (current === generation) setLocated(next);
+    } catch {
+      // The engine is reopening; the next revision locates them again.
+    }
+  }
 
   // Keep stored offsets close to the text so later edits relocate cheaply.
   // Writing a relocated mark re-resolves it in place, so this settles; marks

@@ -2,11 +2,12 @@ import type {
   PreprocessInvoke,
   PreprocessResponseData,
 } from '@coparse/document-processing-types';
-
 import {
-  type ProcessingResultResponseType,
-  storageServiceClient,
-} from '@service-storage/client';
+  fetchDocumentProcessingResult,
+  fetchJobProcessingResult,
+} from '@queries/storage/requests';
+
+import type { ProcessingResultResponseType } from '@service-storage/client';
 import { createWebSocketJob } from '@service-storage/websocket';
 
 export async function preprocess({
@@ -17,7 +18,7 @@ export async function preprocess({
   documentVersionId: number;
 }) {
   try {
-    const parseResult = await storageServiceClient.getDocumentProcessingResult({
+    const parseResult = await fetchDocumentProcessingResult({
       documentId,
       type: 'PREPROCESS',
     });
@@ -42,7 +43,7 @@ export async function preprocess({
       return jobId;
     },
     handleSuccess: async (jobId) => {
-      const result = await storageServiceClient.getJobProcessingResult({
+      const result = await fetchJobProcessingResult({
         documentId,
         jobId,
         type: 'PREPROCESS',

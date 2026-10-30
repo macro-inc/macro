@@ -9,7 +9,6 @@ import {
   type InitiativeQuery,
   type InitiativeQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import {
   mapInitiativeDetail,
   mapInitiativeIdentity,
@@ -177,8 +176,9 @@ export function createProjectIdentityQuery(
 
 /** Authorizes native project previews without exposing backing document identity. */
 export function useProjectIdentityQuery(
+  client: () => Client,
   id: Accessor<string>,
   userId: Accessor<string | undefined>
 ) {
-  return createProjectIdentityQuery(getGraphqlSoupClient, userId, id);
+  return createProjectIdentityQuery(client, userId, id);
 }

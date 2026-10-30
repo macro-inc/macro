@@ -47,6 +47,11 @@ const THEMES = {
 };
 
 /** Max dimensions for gallery image thumbnails */
+async function fetchImageBlob(url: string): Promise<Blob> {
+  const response = await platformFetch(url);
+  return response.blob();
+}
+
 const GALLERY_MAX_WIDTH = 200;
 const GALLERY_MAX_HEIGHT = 200;
 
@@ -104,17 +109,11 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
   // Thumbnail menu actions (operate on a specific image by ID)
   const copyToClipboardById = (id: string) => {
     const url = getImageUrl(id);
-    return copyImageToClipboard(
-      () => platformFetch(url).then((r) => r.blob()),
-      url
-    );
+    return copyImageToClipboard(() => fetchImageBlob(url), url);
   };
 
   const downloadImageById = (id: string) =>
-    downloadImage(
-      () => platformFetch(getImageUrl(id)).then((r) => r.blob()),
-      id
-    );
+    downloadImage(() => fetchImageBlob(getImageUrl(id)), id);
 
   return (
     <Dialog

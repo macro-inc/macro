@@ -237,6 +237,42 @@ export function ListEntity(props: ListEntityProps) {
     return stackNotifications(validNotifs);
   });
 
+  const rowClass = () =>
+    cn(
+      // The row family class carries the --soup-row-* geometry (ListEntity.css)
+      // that the layouts below and the soup group headers both read, so it has
+      // to track which layout the Switch actually renders.
+      isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
+      'soup-list-entity @container/entity relative group/narrow flex flex-col py-0.5',
+      isNarrowEmail()
+        ? // The gutter moves inside, so text still lines up with the headers.
+          'w-full px-(--soup-row-gutter)'
+        : 'rounded-xl w-[calc(100%-0.5rem)] mr-1',
+      // Keep avatar-group separators in sync with the row background so they
+      // blend into it instead of creating visible rings.
+      '[--avatar-group-separator:var(--color-panel)]',
+      {
+        'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
+        'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
+        'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
+        'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
+          props.checked,
+        'bg-list-selected-highlighted [--avatar-group-separator:var(--color-list-selected-highlighted)]':
+          props.checked && props.highlighted,
+        'bg-list-highlighted [--avatar-group-separator:var(--color-list-highlighted)]':
+          props.highlighted && !props.checked && !isTouchDevice(),
+        'hover:bg-list-hover hover:[--avatar-group-separator:var(--color-list-hover)]':
+          !props.highlighted && !props.checked && !isTouchDevice(),
+        'focus-within:bg-list-hover focus-within:[--avatar-group-separator:var(--color-list-hover)]':
+          !!rowActions() && !props.highlighted && !props.checked,
+        'before:absolute before:left-0 before:w-0.5 before:bg-accent':
+          props.current,
+        'before:inset-y-2 before:rounded-full':
+          props.current && !isNarrowEmail(),
+        'before:inset-y-0': props.current && isNarrowEmail(),
+      }
+    );
+
   return (
     <Entity.Root
       role={props.role}
@@ -251,40 +287,7 @@ export function ListEntity(props: ListEntityProps) {
         props.onClick?.(e);
       }}
       ref={mergeRefs(props.ref, draggable)}
-      class={cn(
-        // The row family class carries the --soup-row-* geometry (ListEntity.css)
-        // that the layouts below and the soup group headers both read, so it has
-        // to track which layout the Switch actually renders.
-        isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow,
-        'soup-list-entity @container/entity relative group/narrow flex flex-col py-0.5',
-        isNarrowEmail()
-          ? // The gutter moves inside, so text still lines up with the headers.
-            'w-full px-(--soup-row-gutter)'
-          : 'rounded-xl w-[calc(100%-0.5rem)] mr-1',
-        // Keep avatar-group separators in sync with the row background so they
-        // blend into it instead of creating visible rings.
-        '[--avatar-group-separator:var(--color-panel)]',
-        {
-          'min-h-10': !isMobile() && !usesCondensedNarrowLayout(),
-          'min-h-9': !isMobile() && usesCondensedNarrowLayout(),
-          'mx-(--soup-row-gutter)': !isMobile() && !isNarrowEmail(),
-          'bg-list-selected [--avatar-group-separator:var(--color-list-selected)]':
-            props.checked,
-          'bg-list-selected-highlighted [--avatar-group-separator:var(--color-list-selected-highlighted)]':
-            props.checked && props.highlighted,
-          'bg-list-highlighted [--avatar-group-separator:var(--color-list-highlighted)]':
-            props.highlighted && !props.checked && !isTouchDevice(),
-          'hover:bg-list-hover hover:[--avatar-group-separator:var(--color-list-hover)]':
-            !props.highlighted && !props.checked && !isTouchDevice(),
-          'focus-within:bg-list-hover focus-within:[--avatar-group-separator:var(--color-list-hover)]':
-            !!rowActions() && !props.highlighted && !props.checked,
-          'before:absolute before:left-0 before:w-0.5 before:bg-accent':
-            props.current,
-          'before:inset-y-2 before:rounded-full':
-            props.current && !isNarrowEmail(),
-          'before:inset-y-0': props.current && isNarrowEmail(),
-        }
-      )}
+      class={rowClass()}
       aria-current={props.current ? 'true' : undefined}
       onMouseMove={props.onMouseMove}
     >

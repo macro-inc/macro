@@ -7,7 +7,7 @@ import {
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useItemRawName } from '@queries/preview';
-import { blockNameToItemType } from '@service-storage/client';
+import { blockNameToItemType } from '@service-storage/itemType';
 import { formatDocumentName } from '@service-storage/util/filename';
 
 export const useBlockDocumentName = (defaultName?: string) => {

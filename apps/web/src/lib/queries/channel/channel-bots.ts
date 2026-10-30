@@ -81,15 +81,18 @@ export function useAddBotToChannelsMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: AddBotToChannelsParams) => {
+      const addToChannel = async (channelId: string) => {
+        await throwOnErr(() =>
+          storageServiceClient.addBotToChannel({
+            channel_id: channelId,
+            bot_id: vars.botId,
+          })
+        );
+
+        return channelId;
+      };
       const results = await Promise.allSettled(
-        vars.channelIds.map((channelId) =>
-          throwOnErr(() =>
-            storageServiceClient.addBotToChannel({
-              channel_id: channelId,
-              bot_id: vars.botId,
-            })
-          ).then(() => channelId)
-        )
+        vars.channelIds.map(addToChannel)
       );
       return {
         addedChannelIds: results.flatMap((result) =>

@@ -1,4 +1,5 @@
 import { Telemetry } from '@macro-inc/observability';
+import { startDetached } from './startDetached';
 
 /**
  * Starts `work` without waiting for it, reporting a rejection to Telemetry
@@ -7,7 +8,7 @@ import { Telemetry } from '@macro-inc/observability';
  * where the work starts instead.
  */
 export function fireAndForget(work: unknown, surface: string): void {
-  Promise.resolve(work).catch((error: unknown) => {
+  startDetached(work, (error) => {
     Telemetry.error(error, { surface });
   });
 }

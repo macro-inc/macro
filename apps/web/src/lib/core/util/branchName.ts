@@ -1,13 +1,12 @@
 import { analytics } from '@app/lib/analytics';
 import { toast } from '@core/component/Toast/Toast';
-
-import { storageServiceClient } from '@service-storage/client';
+import { fetchDocumentBranchName } from '@queries/storage/requests';
 
 export const copyBranchNameToClipboard = async (
   documentId: string,
   options: { silent?: boolean } = {}
 ) => {
-  const result = await storageServiceClient.getDocumentBranchName({
+  const result = await fetchDocumentBranchName({
     documentId,
   });
   if (!result.isOk()) {

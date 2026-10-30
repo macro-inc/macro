@@ -4,7 +4,7 @@ import {
   openDocument,
 } from '@core/docx-engine/client';
 import { LoroDoc } from 'loro-crdt';
-import { writeCollabState } from './docx-loro';
+import { writeCollabState } from '../core/docx-loro';
 
 let seeds = 0;
 
@@ -25,6 +25,10 @@ export async function buildSeedSnapshot(
     writeCollabState(doc, state);
     return doc.export({ mode: 'snapshot' });
   } finally {
-    await closeDocument(key).catch(() => {});
+    try {
+      await closeDocument(key);
+    } catch {
+      // The worker may already be gone; there is nothing left to release.
+    }
   }
 }

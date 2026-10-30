@@ -1,4 +1,4 @@
-import { emailToMacroId } from '@core/user/macroId';
+import { emailToMacroId } from '@app/lib/identity/macro-id';
 import type { EmailRecipient } from '../../email-compose/core/email-recipient';
 import { type Recipient, resolveRecipients } from '../core/recipients';
 

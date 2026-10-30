@@ -16,6 +16,7 @@ import type { IRect, Op, SelectMode, Target } from '@core/psd-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
+import { match as matchBranch } from 'ts-pattern';
 import { brushFor, newStrokeId, type PaintingTool } from '../core/brush';
 import { twoColorGradient } from '../core/gradient';
 import {
@@ -651,18 +652,12 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       refreshOverlay();
       return;
     }
-    if (
-      PAINT_TOOLS.has(tool) ||
-      tool === 'move' ||
-      tool === 'type' ||
-      tool === 'rectangle' ||
-      tool === 'ellipse'
-    ) {
+    if (toolRequiresEditPermission()) {
       if (!editable()) return;
     }
     const mode = selectModeFor({ shift: p.shift, alt: p.alt });
-    switch (tool) {
-      case 'move': {
+    return matchBranch(tool)
+      .with('move', () => {
         gesture = {
           kind: 'move',
           start: p.at,
@@ -673,9 +668,8 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           key: gestureKey('move', ++gestureCount),
         };
         return;
-      }
-      case 'marqueeRect':
-      case 'marqueeEllipse':
+      })
+      .with('marqueeRect', 'marqueeEllipse', (tool) => {
         gesture = {
           kind: 'marquee',
           shape: tool === 'marqueeRect' ? 'rect' : 'ellipse',
@@ -687,11 +681,13 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           screenStart: p.screen,
         };
         return;
-      case 'lasso':
+      })
+      .with('lasso', () => {
         gesture = { kind: 'lasso', points: [p.at], mode };
         refreshOverlay();
         return;
-      case 'polygonLasso': {
+      })
+      .with('polygonLasso', () => {
         const poly = polygon();
         if (!poly) {
           setPolygon({ points: [p.at], mode });
@@ -700,8 +696,8 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         } else setPolygon({ ...poly, points: [...poly.points, p.at] });
         refreshOverlay();
         return;
-      }
-      case 'wand':
+      })
+      .with('wand', () => {
         fireAndForget(
           editor.select({
             type: 'wand',
@@ -717,16 +713,17 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           'psd-editor'
         );
         return;
-      case 'eyedropper':
+      })
+      .with('eyedropper', () => {
         gesture = { kind: 'eyedropper' };
         fireAndForget(sampleColor(p), 'psd-editor');
         return;
-      case 'brush':
-      case 'pencil':
-      case 'eraser':
+      })
+      .with('brush', 'pencil', 'eraser', () => {
         if (startStroke(p)) gesture = { kind: 'paint' };
         return;
-      case 'bucket': {
+      })
+      .with('bucket', () => {
         const t = fillTarget();
         if (!t) return;
         fireAndForget(
@@ -748,18 +745,19 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           'psd-editor'
         );
         return;
-      }
-      case 'gradient':
+      })
+      .with('gradient', () => {
         if (!fillTarget()) return;
         gesture = { kind: 'gradient', from: p.at, to: p.at };
         refreshOverlay();
         return;
-      case 'type':
+      })
+      .with('type', () => {
         options.onTypeStart?.();
         fireAndForget(typeAt(p), 'psd-editor');
         return;
-      case 'rectangle':
-      case 'ellipse':
+      })
+      .with('rectangle', 'ellipse', (tool) => {
         gesture = {
           kind: 'shape',
           shape: tool,
@@ -768,11 +766,23 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           startMods: { shift: p.shift, alt: p.alt },
         };
         return;
-      case 'zoom':
+      })
+      .with('zoom', () => {
         gesture = { kind: 'zoom', start: p.at, screenStart: p.screen };
         return;
-      default:
+      })
+      .otherwise(() => {
         return;
+      });
+
+    function toolRequiresEditPermission() {
+      return (
+        PAINT_TOOLS.has(tool) ||
+        tool === 'move' ||
+        tool === 'type' ||
+        tool === 'rectangle' ||
+        tool === 'ellipse'
+      );
     }
   };
 
@@ -782,18 +792,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
     const g = gesture;
     if (!g) {
       const t = transform();
-      if (t) {
-        const part = hitTransform(t.box, p.at, HANDLE_SLOP / zoom());
-        setCursorOverride(part ? partCursor(part) : undefined);
-      } else if (crop() && view.tool() === 'crop') {
-        const c = crop();
-        const part = c
-          ? hitTransform({ ...c, angle: 0 }, p.at, HANDLE_SLOP / zoom())
-          : undefined;
-        setCursorOverride(
-          part && part.kind !== 'rotate' ? partCursor(part) : undefined
-        );
-      } else setCursorOverride(undefined);
+      updateMove(t);
       refreshOverlay();
       return;
     }
@@ -857,6 +856,25 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         return;
     }
     refreshOverlay();
+
+    function updateMove(
+      t:
+        | { box: FreeTransform; ids: number[]; images: TransformImage[] }
+        | undefined
+    ) {
+      if (t) {
+        const part = hitTransform(t.box, p.at, HANDLE_SLOP / zoom());
+        setCursorOverride(part ? partCursor(part) : undefined);
+      } else if (crop() && view.tool() === 'crop') {
+        const c = crop();
+        const part = c
+          ? hitTransform({ ...c, angle: 0 }, p.at, HANDLE_SLOP / zoom())
+          : undefined;
+        setCursorOverride(
+          part && part.kind !== 'rotate' ? partCursor(part) : undefined
+        );
+      } else setCursorOverride(undefined);
+    }
   };
 
   const moveBox = (
@@ -879,21 +897,22 @@ export function createCanvasTools(options: CanvasToolsOptions) {
     const g = gesture;
     gesture = undefined;
     if (!g) return;
-    switch (g.kind) {
-      case 'move':
+    matchBranch(g)
+      .with({ kind: 'move' }, (g) => {
         g.want = {
           dx: Math.round(p.at.x - g.start.x),
           dy: Math.round(p.at.y - g.start.y),
         };
         flushMove();
-        break;
-      case 'marquee': {
+        return;
+      })
+      .with({ kind: 'marquee' }, (g) => {
         const rect = marqueeFor({ ...g, current: p.at });
         if (!g.dragged || rect.w < 1 || rect.h < 1) {
           // A click deselects (unless it adds to or subtracts from it).
           if (g.mode === 'replace')
             fireAndForget(editor.select({ type: 'none' }), 'psd-editor');
-          break;
+          return;
         }
         fireAndForget(
           editor.select({
@@ -907,9 +926,9 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           }),
           'psd-editor'
         );
-        break;
-      }
-      case 'lasso':
+        return;
+      })
+      .with({ kind: 'lasso' }, (g) => {
         if (g.points.length >= 3)
           fireAndForget(
             editor.select({
@@ -923,12 +942,13 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           );
         else if (g.mode === 'replace')
           fireAndForget(editor.select({ type: 'none' }), 'psd-editor');
-        break;
-      case 'gradient': {
+        return;
+      })
+      .with({ kind: 'gradient' }, (g) => {
         const t = fillTarget();
-        if (!t) break;
+        if (!t) return;
         const to = p.shift ? snapLine(g.from, p.at) : p.at;
-        if (Math.hypot(to.x - g.from.x, to.y - g.from.y) < 1) break;
+        if (Math.hypot(to.x - g.from.x, to.y - g.from.y) < 1) return;
         fireAndForget(
           editor.apply([
             {
@@ -951,11 +971,11 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           ]),
           'psd-editor'
         );
-        break;
-      }
-      case 'shape': {
+        return;
+      })
+      .with({ kind: 'shape' }, (g) => {
         const rect = shapeRectFor({ ...g, current: p.at });
-        if (rect.w < 2 || rect.h < 2) break;
+        if (rect.w < 2 || rect.h < 2) return;
         fireAndForget(
           editor.apply([
             newLayerOp(
@@ -965,27 +985,28 @@ export function createCanvasTools(options: CanvasToolsOptions) {
           ]),
           'psd-editor'
         );
-        break;
-      }
-      case 'paint':
+        return;
+      })
+      .with({ kind: 'paint' }, () => {
         endStroke();
-        break;
-      case 'zoom': {
+        return;
+      })
+      .with({ kind: 'zoom' }, () => {
         const out = p.alt;
         view.zoomStep(out ? -1 : 1, p.screen);
-        break;
-      }
-      case 'crop-draw': {
+        return;
+      })
+      .with({ kind: 'crop-draw' }, () => {
         const c = crop();
         if (c && (Math.abs(c.w) < 2 || Math.abs(c.h) < 2)) {
           setCrop(startTransform(canvasRect()));
           cropFresh = true;
         }
-        break;
-      }
-      default:
-        break;
-    }
+        return;
+      })
+      .otherwise(() => {
+        return;
+      });
     refreshOverlay();
   };
 

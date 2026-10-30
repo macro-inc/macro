@@ -54,9 +54,6 @@ type DeleteTarget = {
 // as hovering that border.
 const EDGE_PROXIMITY_PX = 20;
 
-const BUTTON_CLASS =
-  'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface';
-
 function readSelectionDeletePixels(
   editor: LexicalEditor,
   cellElem: HTMLElement,
@@ -274,7 +271,9 @@ export function TableDeleteButtons() {
                     ? 'Delete selected columns'
                     : 'Delete column'
                 }
-                class={BUTTON_CLASS}
+                class={
+                  'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface'
+                }
                 style={{
                   left: `${(t().cellLeft + t().cellRight) / 2}px`,
                   top: `${Math.max(t().tableTop, 12)}px`,
@@ -295,7 +294,9 @@ export function TableDeleteButtons() {
                     ? 'Delete selected rows'
                     : 'Delete row'
                 }
-                class={BUTTON_CLASS}
+                class={
+                  'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface'
+                }
                 style={{
                   left: `${t().tableLeft}px`,
                   top: `${(t().cellTop + t().cellBottom) / 2}px`,
@@ -312,7 +313,9 @@ export function TableDeleteButtons() {
               <button
                 type="button"
                 aria-label="Delete table"
-                class={BUTTON_CLASS}
+                class={
+                  'fixed z-20 flex size-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-surface text-ink-muted shadow-sm hover:border-failure hover:bg-failure hover:text-surface'
+                }
                 style={{
                   left: `${t().tableLeft}px`,
                   top: `${t().tableTop}px`,

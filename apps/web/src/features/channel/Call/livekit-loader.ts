@@ -20,17 +20,19 @@ let livekitPromise: Promise<LivekitModule> | null = null;
 let krisp: KrispModule | null = null;
 let krispPromise: Promise<KrispModule> | null = null;
 
+async function importLivekit(): Promise<LivekitModule> {
+  try {
+    livekit = await import('livekit-client');
+    return livekit;
+  } catch (error) {
+    // A transient chunk/network failure must not poison every later retry.
+    livekitPromise = null;
+    throw error;
+  }
+}
+
 export function loadLivekit(): Promise<LivekitModule> {
-  livekitPromise ??= import('livekit-client')
-    .then((module) => {
-      livekit = module;
-      return module;
-    })
-    .catch((error: unknown) => {
-      // A transient chunk/network failure must not poison every later retry.
-      livekitPromise = null;
-      throw error;
-    });
+  livekitPromise ??= importLivekit();
   return livekitPromise;
 }
 
@@ -38,16 +40,18 @@ export function getLivekit(): LivekitModule | null {
   return livekit;
 }
 
+async function importKrisp(): Promise<KrispModule> {
+  try {
+    krisp = await import('@livekit/krisp-noise-filter');
+    return krisp;
+  } catch (error) {
+    krispPromise = null;
+    throw error;
+  }
+}
+
 export function loadKrisp(): Promise<KrispModule> {
-  krispPromise ??= import('@livekit/krisp-noise-filter')
-    .then((module) => {
-      krisp = module;
-      return module;
-    })
-    .catch((error: unknown) => {
-      krispPromise = null;
-      throw error;
-    });
+  krispPromise ??= importKrisp();
   return krispPromise;
 }
 

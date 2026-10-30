@@ -31,7 +31,7 @@ Components, styling, and interaction conventions.
   small and free of queries/complex state. Prefer children or JSX slots over
   render props when the parent provides no data to the child.
 - **FE-27** Don't add `cursor-pointer` to clickable elements. Enforced by
-  ast-grep `tsx-no-cursor-pointer`, warning.
+  ast-grep `tsx-no-cursor-pointer`, CI error.
 - **FE-28** Dialogs rely on Kobalte's default autofocus: make the intended
   target the first tabbable element and preserve focus ownership for
   restoration. Override `onOpenAutoFocus` only for a proven lifecycle
@@ -42,7 +42,7 @@ Components, styling, and interaction conventions.
   string can't carry structure, props, or behavior. Extract a component, or
   inline the literal at its single use; styling variants are component props,
   not exported strings. Enforced by ast-grep `tsx-no-class-string-consts`,
-  warning.
+  CI error.
 - **FE-32** Prefer styling in the component (Tailwind on the markup). Reserve
   `@utility` in `apps/web/src/index.css` for styles widely shared across many
   components — not one-off or two-callsite layouts.

@@ -29,9 +29,6 @@ type CreateDocTags = () => DocTags;
 const DEFAULT_MAX_VISIBLE = 3;
 const MAX_OVERFLOW_DOTS = 3;
 
-const hoverMenuLabelClass = 'min-w-0 max-w-[30ch] truncate';
-const hoverMenuIconButtonClass = 'size-5 shrink-0 p-0.5 text-ink-extra-muted';
-
 function HoverTagRow(props: {
   tag: ResolvedTag;
   onFilter?: (id: string) => void;
@@ -41,7 +38,7 @@ function HoverTagRow(props: {
     <div class="flex min-w-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-1 text-ink hover:bg-hover">
       <span class="flex min-w-0 flex-1 items-center gap-1.5">
         <TagDot color={props.tag.color} />
-        <span class={hoverMenuLabelClass}>{props.tag.label}</span>
+        <span class="min-w-0 max-w-[30ch] truncate">{props.tag.label}</span>
       </span>
       <Show when={props.onFilter}>
         {(onFilter) => (
@@ -51,7 +48,7 @@ function HoverTagRow(props: {
             size="icon-sm"
             tooltip="Filter by tag"
             aria-label={`Filter by ${props.tag.label}`}
-            class={hoverMenuIconButtonClass}
+            class="size-5 shrink-0 p-0.5 text-ink-extra-muted"
             onMouseDown={(event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -72,7 +69,7 @@ function HoverTagRow(props: {
         size="icon-sm"
         tooltip="Edit tag"
         aria-label={`Edit ${props.tag.label}`}
-        class={hoverMenuIconButtonClass}
+        class="size-5 shrink-0 p-0.5 text-ink-extra-muted"
         onMouseDown={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -112,7 +109,7 @@ function TagHoverContent(props: {
             onClick={() => onFilterByTag()(props.tag.optionId)}
           >
             <FilterIcon class="size-3.5 shrink-0 text-ink-muted" />
-            <span class={hoverMenuLabelClass}>
+            <span class="min-w-0 max-w-[30ch] truncate">
               Filter by <span class="font-medium">{props.tag.label}</span>
             </span>
           </button>
@@ -129,7 +126,7 @@ function TagHoverContent(props: {
         }}
       >
         <PencilIcon class="size-3.5 shrink-0 text-ink-muted" />
-        <span class={hoverMenuLabelClass}>
+        <span class="min-w-0 max-w-[30ch] truncate">
           Edit <span class="font-medium">{props.tag.label}</span>
         </span>
       </button>

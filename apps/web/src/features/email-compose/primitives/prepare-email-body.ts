@@ -3,10 +3,10 @@ import {
   normalizeContentId,
   staticFileIdsByContentId,
 } from '@app/features/email-message/core/inline-images';
+import { encodeBase64UrlUtf8 } from '@app/lib/utils/base64';
 import { convertBookingLinkMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertBookingLinkMentionsToLinks';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
 import { staticFileReferenceEndpoint } from '@core/constant/servers';
-import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode, $isQuoteNode } from '@lexical/rich-text';

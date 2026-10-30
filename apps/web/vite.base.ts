@@ -58,18 +58,17 @@ function gitBranchHmrPlugin(): Plugin {
         return;
       }
       const headPath = resolve(gitDir, 'HEAD');
-      const sendBranch = async () => {
-        const branch = await readGitBranchAsync();
-        server.ws.send({
-          type: 'custom',
-          event: 'git-branch:update',
-          data: branch,
-        });
-      };
-      const emit = () => {
-        sendBranch().catch((error) =>
-          server.config.logger.error(`git-branch-hmr: ${String(error)}`)
-        );
+      const emit = async () => {
+        try {
+          const branch = await readGitBranchAsync();
+          server.ws.send({
+            type: 'custom',
+            event: 'git-branch:update',
+            data: branch,
+          });
+        } catch (error) {
+          server.config.logger.error(`git-branch-hmr: ${String(error)}`);
+        }
       };
       watchFile(headPath, { interval: 100 }, emit);
       server.ws.on('connection', emit);

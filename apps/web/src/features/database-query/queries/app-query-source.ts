@@ -4,6 +4,7 @@ import { databaseSqlAnswer } from '@core/database-sql/answer';
 import { databaseSqlSchema } from '@core/database-sql/catalog';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
+import { useEntitySubscription } from '@queries/connection/tracked-entities';
 import {
   checkDatabaseSql,
   readDatabaseSql,
@@ -18,7 +19,6 @@ import {
   useViewerDatabases,
 } from '@queries/storage/databases';
 import { useDatabaseTableChanges } from '@queries/storage/databases-sync';
-import { useEntitySubscription } from '@service-connection/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';

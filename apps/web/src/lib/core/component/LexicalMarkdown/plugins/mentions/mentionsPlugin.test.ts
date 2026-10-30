@@ -1,5 +1,5 @@
+import { untrackMention } from '@app/lib/queries/storage/mentions';
 import { authoredMentions } from '@channel/Input/message-payload';
-import { untrackMention } from '@core/signal/mention';
 import {
   $convertCardToMention,
   $convertMentionToCard,
@@ -40,7 +40,7 @@ vi.hoisted(() => {
   vi.stubGlobal('WebSocket', FakeWebSocket);
 });
 
-vi.mock('@core/signal/mention', () => ({
+vi.mock('@app/lib/queries/storage/mentions', () => ({
   untrackMention: vi.fn(),
 }));
 

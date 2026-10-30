@@ -39,6 +39,15 @@ import type {
   ArchiveThreadOptions,
   EmailThreadCommands,
 } from './context/email-thread-context';
+
+async function fetchDoneNotificationIdsOrNone(threadId: string) {
+  try {
+    return await fetchDoneNotificationIdsByEventItemIds([threadId]);
+  } catch {
+    return [];
+  }
+}
+
 export function createThreadCompletionAdapter(
   threadSource: Accessor<EmailThread | undefined>,
   toHeaderLinkId: (linkId: string | null | undefined) => string | undefined
@@ -102,17 +111,29 @@ export function createThreadCompletionAdapter(
 
       showToast();
 
+      const syncNotificationsDone = async (
+        ids: string[],
+        nowArchived: boolean
+      ) => {
+        try {
+          await (nowArchived
+            ? bulkMarkNotificationsAsDone(ids)
+            : bulkMarkNotificationsAsUndone(ids));
+        } catch {
+          setDoneOverride(ids, undefined);
+        }
+      };
+
       // Undo/redo replay only the /archived flip; mirror the fallback's
       // notification and soup-list side effects for the resulting state.
       const syncSideEffects = (nowArchived: boolean) => {
         const ids = restoredNotificationIds.get(params.threadId) ?? [];
         if (ids.length > 0) {
           setDoneOverride(ids, nowArchived);
-          void (
-            nowArchived
-              ? bulkMarkNotificationsAsDone(ids)
-              : bulkMarkNotificationsAsUndone(ids)
-          ).catch(() => setDoneOverride(ids, undefined));
+          fireAndForget(
+            syncNotificationsDone(ids, nowArchived),
+            'email-thread'
+          );
         }
         if (!graphqlSoup().enabled && disposition() !== 'queued') {
           if (!nowArchived) {
@@ -223,9 +244,7 @@ export function createThreadCompletionAdapter(
             // notifications, so the thread's done ids may have aged out of
             // the local cache — merge the server's view (best effort: the
             // unarchive itself already succeeded).
-            const serverIds = await fetchDoneNotificationIdsByEventItemIds([
-              threadId,
-            ]).catch(() => []);
+            const serverIds = await fetchDoneNotificationIdsOrNone(threadId);
             const allIds = [...new Set([...notificationIds, ...serverIds])];
             // Record for the undo/redo hooks, which re-mark these when the
             // archive flip is replayed.
@@ -276,20 +295,7 @@ export function createThreadCompletionAdapter(
     // the paths below skip archiveMutation and only mirror its thread-cache
     // handling via trackExternalThreadArchive.
     const { selectedRow, cachedItem } = resolveThreadSoupLookup(thread.db_id);
-    const entity =
-      selectedRow?.original ??
-      (cachedItem &&
-      isDisplayableSoupItem(cachedItem) &&
-      cachedItem.tag !== 'channelThread' &&
-      cachedItem.tag !== 'calendarEvent'
-        ? mapApiSoupItemToEntity(cachedItem)
-        : buildEntityData({
-            blockName: 'email',
-            id: thread.db_id,
-            name: thread.messages.at(-1)?.subject || 'Email Thread',
-            isRead: thread.is_read,
-            done: !thread.inbox_visible,
-          }));
+    const entity = buildEntity(thread);
     if (!entity) return false;
 
     if (opts?.navigate !== false && soup && selectedRow) {
@@ -331,6 +337,24 @@ export function createThreadCompletionAdapter(
     }
 
     return true;
+
+    function buildEntity(threadInput: NonNullable<typeof thread>) {
+      return (
+        selectedRow?.original ??
+        (cachedItem &&
+        isDisplayableSoupItem(cachedItem) &&
+        cachedItem.tag !== 'channelThread' &&
+        cachedItem.tag !== 'calendarEvent'
+          ? mapApiSoupItemToEntity(cachedItem)
+          : buildEntityData({
+              blockName: 'email',
+              id: threadInput.db_id,
+              name: threadInput.messages.at(-1)?.subject || 'Email Thread',
+              isRead: threadInput.is_read,
+              done: !threadInput.inbox_visible,
+            }))
+      );
+    }
   };
 
   return {

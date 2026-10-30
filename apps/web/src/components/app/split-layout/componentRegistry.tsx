@@ -1,5 +1,5 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { HomeRouteView } from '@app/features/home/route-views';
@@ -553,10 +553,9 @@ if (LOCAL_ONLY) {
 
   registerComponent(
     'notifications-playground',
-    lazy(() =>
-      import('@notifications/components/Playground').then((m) => ({
-        default: m.NotificationsPlayground,
-      }))
+    lazyNamed(
+      () => import('@notifications/components/Playground'),
+      'NotificationsPlayground'
     )
   );
 

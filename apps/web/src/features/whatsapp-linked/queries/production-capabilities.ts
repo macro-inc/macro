@@ -1,7 +1,7 @@
+import { isMacroId } from '@app/lib/identity/macro-id';
 import { useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { getDisplayName } from '@core/user/displayName';
-import { isMacroId } from '@core/user/macroId';
+import { getDisplayName } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { queryReadyGate } from '@queries/gate';
 import {

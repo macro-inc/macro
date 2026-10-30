@@ -100,11 +100,7 @@ export function CollapseTransition(props: CollapseTransitionProps) {
       : opening
         ? '0'
         : '1';
-    const from = running
-      ? sizeOf(running.target)
-      : opening
-        ? collapsedSize
-        : (props.expandedSize ?? measuredSize ?? sizeOf(target));
+    const from = buildFrom();
     // Capture neighbors before releasing an interrupted animation's styles.
     const companions = untrack(() =>
       props.companions?.({ opening, from, interrupted: running !== undefined })
@@ -152,20 +148,7 @@ export function CollapseTransition(props: CollapseTransitionProps) {
       [
         {
           target,
-          keyframes: [
-            {
-              ...sizing,
-              [axis()]: `${from}px`,
-              [paddingStart]: opening ? '0' : startPadding,
-              [paddingEnd]: opening ? '0' : endPadding,
-            },
-            {
-              ...sizing,
-              [axis()]: `${to}px`,
-              [paddingStart]: opening ? startPadding : '0',
-              [paddingEnd]: opening ? endPadding : '0',
-            },
-          ],
+          keyframes: buildKeyframes(),
         },
         {
           target: element,
@@ -181,6 +164,31 @@ export function CollapseTransition(props: CollapseTransitionProps) {
         done();
       }
     );
+
+    function buildKeyframes(): Keyframe[] {
+      return [
+        {
+          ...sizing,
+          [axis()]: `${from}px`,
+          [paddingStart]: opening ? '0' : startPadding,
+          [paddingEnd]: opening ? '0' : endPadding,
+        },
+        {
+          ...sizing,
+          [axis()]: `${to}px`,
+          [paddingStart]: opening ? startPadding : '0',
+          [paddingEnd]: opening ? endPadding : '0',
+        },
+      ];
+    }
+
+    function buildFrom() {
+      return running
+        ? sizeOf(running.target)
+        : opening
+          ? collapsedSize
+          : (props.expandedSize ?? measuredSize ?? sizeOf(target));
+    }
   }
 
   return (

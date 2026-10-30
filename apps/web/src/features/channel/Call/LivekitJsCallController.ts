@@ -344,9 +344,7 @@ export function createLivekitJsCallController(
 
     options.cancelPendingMediaSetup();
     stopReceiverStats();
-    room
-      .disconnect()
-      .catch((error) => Telemetry.error(error, { surface: 'livekit-call' }));
+    fireAndForget(room.disconnect(), 'livekit-call');
   }
 
   function dispose() {
@@ -356,9 +354,7 @@ export function createLivekitJsCallController(
     const room = options.room();
     if (!room) return;
 
-    room
-      .disconnect()
-      .catch((error) => Telemetry.error(error, { surface: 'livekit-call' }));
+    fireAndForget(room.disconnect(), 'livekit-call');
     room.removeAllListeners();
   }
 

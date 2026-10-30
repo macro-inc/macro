@@ -62,6 +62,17 @@ export function AnimationPane(props: {
   const ro = () => env.readonly();
   const animations = () => env.slide()?.animations ?? [];
   const numbers = () => clickNumbers(animations());
+  /** Moves the picked animation one place, keeping it picked. */
+  const movePicked = async (delta: -1 | 1) => {
+    const i = anim.picked();
+    if (i === undefined) return;
+    await c.moveAnimation(i, delta);
+    anim.pick(i + delta);
+  };
+  const removeAnimation = async (i: number) => {
+    await c.removeAnimations([i]);
+    anim.pick();
+  };
   return (
     <aside
       class="flex w-72 shrink-0 flex-col border-edge-muted border-l bg-panel"
@@ -98,14 +109,7 @@ export function AnimationPane(props: {
           variant="ghost"
           tooltip="Move Earlier"
           disabled={ro() || (anim.picked() ?? 0) === 0}
-          onClick={() => {
-            const i = anim.picked();
-            if (i !== undefined)
-              fireAndForget(
-                c.moveAnimation(i, -1).then(() => anim.pick(i - 1)),
-                'pptx-editor'
-              );
-          }}
+          onClick={() => fireAndForget(movePicked(-1), 'pptx-editor')}
         >
           <ArrowUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
@@ -119,14 +123,7 @@ export function AnimationPane(props: {
             anim.picked() === undefined ||
             anim.picked()! >= animations().length - 1
           }
-          onClick={() => {
-            const i = anim.picked();
-            if (i !== undefined)
-              fireAndForget(
-                c.moveAnimation(i, 1).then(() => anim.pick(i + 1)),
-                'pptx-editor'
-              );
-          }}
+          onClick={() => fireAndForget(movePicked(1), 'pptx-editor')}
         >
           <ArrowDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
@@ -157,10 +154,7 @@ export function AnimationPane(props: {
                 }}
                 onKeyDown={(e) => {
                   if ((e.key === 'Delete' || e.key === 'Backspace') && !ro())
-                    fireAndForget(
-                      c.removeAnimations([i()]).then(() => anim.pick()),
-                      'pptx-editor'
-                    );
+                    fireAndForget(removeAnimation(i()), 'pptx-editor');
                 }}
               >
                 <span class="w-4 shrink-0 text-right text-ink-muted tabular-nums">
@@ -184,10 +178,7 @@ export function AnimationPane(props: {
                     data-testid="pptx-animation-remove"
                     onClick={(e) => {
                       e.stopPropagation();
-                      fireAndForget(
-                        c.removeAnimations([i()]).then(() => anim.pick()),
-                        'pptx-editor'
-                      );
+                      fireAndForget(removeAnimation(i()), 'pptx-editor');
                     }}
                   >
                     <Trash class="size-3" />

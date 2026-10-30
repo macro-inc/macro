@@ -5,8 +5,8 @@ import { getWebOrigin } from '@core/util/webOrigin';
 import ClipboardIcon from '@icon/system/regular/clipboard.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Telemetry } from '@macro-inc/observability';
-import { authServiceClient } from '@service-auth/client';
-import { contactsClient } from '@service-contacts/client';
+import { sendReferralInvite } from '@queries/auth/requests';
+import { addContact } from '@queries/contacts/requests';
 import { Button, Dialog, Input, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
@@ -18,9 +18,7 @@ function parseEmails(raw: string): string[] {
 }
 
 async function addInvitedContact(email: string) {
-  const result = await contactsClient.addContact(
-    `macro|${email.toLowerCase()}`
-  );
+  const result = await addContact(`macro|${email.toLowerCase()}`);
   if (result.isErr()) {
     Telemetry.error(result.error, { surface: 'team-invitations' });
   }
@@ -43,7 +41,13 @@ export const InviteModal = () => {
   };
 
   const copyReferralUrl = async (url: string) => {
-    await navigator.clipboard.writeText(url);
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'team-invitations' });
+      toast.failure('Failed to copy link');
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -51,10 +55,7 @@ export const InviteModal = () => {
   const handleCopy = () => {
     const url = referralUrl();
     if (!url) return;
-    copyReferralUrl(url).catch((error) => {
-      Telemetry.error(error, { surface: 'team-invitations' });
-      toast.failure('Failed to copy link');
-    });
+    fireAndForget(copyReferralUrl(url), 'team-invitations');
   };
 
   const handleSend = async () => {
@@ -62,7 +63,7 @@ export const InviteModal = () => {
     if (!emails.length) return;
     setSending(true);
     for (const email of emails) {
-      const result = await authServiceClient.sendReferralInvite(email);
+      const result = await sendReferralInvite(email);
       if (result.isOk()) {
         fireAndForget(addInvitedContact(email), 'team-invitations');
       }

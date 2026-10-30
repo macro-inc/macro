@@ -11,26 +11,28 @@ export type AgentConversation = AgentConversationDto;
 export type AgentConversationTurn = AgentConversationTurnDto;
 
 /** The agent conversations in a channel that the caller may see. */
-export function listAgentConversations(
+export async function listAgentConversations(
   channelId: string,
   signal?: AbortSignal
 ) {
-  return fetchWithToken<AgentConversationsDto>(
+  const result = await fetchWithToken<AgentConversationsDto>(
     `${SERVER_HOSTS['agent-harness']}/agent-conversations/${channelId}`,
     { method: 'GET', signal }
-  ).then((result) => result.map((data) => data.conversations));
+  );
+  return result.map((data) => data.conversations);
 }
 
-export function retryAgentConversationTurn(
+export async function retryAgentConversationTurn(
   conversation: Pick<AgentConversation, 'channelId' | 'botId'>,
   turn: AgentConversationTurn
 ) {
-  return fetchWithToken<Record<string, never>>(
+  const result = await fetchWithToken<Record<string, never>>(
     `${SERVER_HOSTS['agent-harness']}/agent-conversations/${conversation.channelId}/${conversation.botId}/turns/${turn.sourceMessageId}/retry`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actionId: turn.actionId }),
     }
-  ).then((result) => result.map(() => undefined));
+  );
+  return result.map(() => undefined);
 }

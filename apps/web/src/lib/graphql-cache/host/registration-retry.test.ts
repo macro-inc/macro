@@ -19,6 +19,25 @@ vi.mock('../worker/coordinator-page-adapter', () => ({
 
 import { createWorkerCacheHost } from './worker-host';
 
+/** Settles to the promise's value, or to its error when it rejects. */
+async function valueOrError(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    return await promise;
+  } catch (error) {
+    return error;
+  }
+}
+
+async function revisionOutcome(
+  revision: Promise<unknown>
+): Promise<{ revision: unknown } | { error: unknown }> {
+  try {
+    return { revision: await revision };
+  } catch (error) {
+    return { error };
+  }
+}
+
 class RegistrationAdapter {
   onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null = null;
   readonly requests: CacheRequest[] = [];
@@ -103,10 +122,7 @@ afterEach(() => {
 
 describe('coordinator registration retry', () => {
   it('recovers when the failed startup becomes reusable between attempts', async () => {
-    const outcome = host.currentRevision().then(
-      (revision) => ({ revision }),
-      (error: unknown) => ({ error })
-    );
+    const outcome = revisionOutcome(host.currentRevision());
     await vi.advanceTimersByTimeAsync(0);
     available = true;
     await vi.advanceTimersByTimeAsync(100);
@@ -148,8 +164,8 @@ describe('coordinator registration retry', () => {
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     const outcomes = Promise.all([
-      host.currentRevision().catch((error: unknown) => error),
-      mutation.catch((error: unknown) => error),
+      valueOrError(host.currentRevision()),
+      valueOrError(mutation),
     ]);
     await vi.advanceTimersByTimeAsync(0);
     expect(adapters).toHaveLength(1);
@@ -185,7 +201,7 @@ describe('coordinator registration retry', () => {
   it.each([0, 100])(
     'cancels disposal during the wait starting at %s ms',
     async (elapsed) => {
-      const outcome = host.currentRevision().catch((error: unknown) => error);
+      const outcome = valueOrError(host.currentRevision());
       await vi.advanceTimersByTimeAsync(elapsed);
       expect(adapters).toHaveLength(elapsed === 0 ? 1 : 2);
       const attempts = adapters.length;
@@ -212,7 +228,7 @@ describe('coordinator registration retry', () => {
   it.each([0, 100])(
     'cancels pagehide during the wait at %s ms and restores without an orphan retry',
     async (elapsed) => {
-      const outcome = host.currentRevision().catch((error: unknown) => error);
+      const outcome = valueOrError(host.currentRevision());
       await vi.advanceTimersByTimeAsync(elapsed);
       expect(adapters).toHaveLength(elapsed === 0 ? 1 : 2);
       const attempts = adapters.length;
@@ -232,7 +248,7 @@ describe('coordinator registration retry', () => {
   );
 
   it('does not construct another adapter if disposed after the delay fires but before its continuation', async () => {
-    const outcome = host.currentRevision().catch((error: unknown) => error);
+    const outcome = valueOrError(host.currentRevision());
     await vi.advanceTimersByTimeAsync(0);
     expect(adapters).toHaveLength(1);
     vi.advanceTimersByTime(100);
@@ -267,10 +283,7 @@ describe('coordinator registration retry', () => {
         return adapter;
       }
     );
-    const result = host.currentRevision().then(
-      (revision) => ({ revision }),
-      (error: unknown) => ({ error })
-    );
+    const result = revisionOutcome(host.currentRevision());
     await vi.advanceTimersByTimeAsync(10);
     first.resolve();
     await vi.advanceTimersByTimeAsync(99);

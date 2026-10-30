@@ -50,12 +50,23 @@ export function createFigContextMenu(options: {
   const selectionFacts = async (): Promise<SelectionFacts> => {
     const ids = viewer.selected().map((s) => s.id);
     const page = viewer.page();
-    const [rows, info] = await Promise.all([
-      engine.rows(page, ids).catch(() => []),
-      ids.length === 1
-        ? engine.nodeInfo(page, ids[0]).catch(() => undefined)
-        : Promise.resolve(undefined),
-    ]);
+    // A failed read leaves out the entries that depend on it.
+    const readRows = async () => {
+      try {
+        return await engine.rows(page, ids);
+      } catch {
+        return [];
+      }
+    };
+    const readSingleInfo = async () => {
+      if (ids.length !== 1) return undefined;
+      try {
+        return await engine.nodeInfo(page, ids[0]);
+      } catch {
+        return undefined;
+      }
+    };
+    const [rows, info] = await Promise.all([readRows(), readSingleInfo()]);
     return {
       count: ids.length,
       canEdit: editor.enabled(),

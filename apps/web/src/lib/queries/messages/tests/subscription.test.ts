@@ -2,7 +2,7 @@ import {
   useEntitySubscription,
   useRefreshTrackedEntitiesOnFocus,
   useReopenTrackedEntitiesOnReconnect,
-} from '@service-connection/client';
+} from '@queries/connection/tracked-entities';
 import type { MessageParent } from '@service-storage/messages';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';

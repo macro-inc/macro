@@ -79,6 +79,20 @@ export function createOptimisticThreadSend(
     })
   );
 
+  /** The sending inbox, else whoever the shown message was already from. */
+  function sentFrom(
+    inbox: ReturnType<typeof compose.accounts.inboxes>[number] | undefined,
+    existing: EmailMessage | undefined
+  ): EmailMessage['from'] {
+    return inbox
+      ? {
+          email: inbox.email_address,
+          name: inbox.displayName,
+          photo_url: inbox.photo_url,
+        }
+      : (existing?.from ?? { email: compose.viewerEmail() ?? '' });
+  }
+
   function sentMessage(current: EmailThread, entry: PendingSend): EmailMessage {
     const { send, shownAt } = entry;
     const existing = current.messages.find((message) =>
@@ -93,13 +107,7 @@ export function createOptimisticThreadSend(
       db_id: existing?.db_id ?? send.messageIds[0],
       thread_db_id: current.db_id,
       link_id: inbox?.id ?? current.link_id,
-      from: inbox
-        ? {
-            email: inbox.email_address,
-            name: inbox.displayName,
-            photo_url: inbox.photo_url,
-          }
-        : (existing?.from ?? { email: compose.viewerEmail() ?? '' }),
+      from: sentFrom(inbox, existing),
       body_replyless: null,
       is_draft: false,
       is_read: existing?.is_read ?? true,

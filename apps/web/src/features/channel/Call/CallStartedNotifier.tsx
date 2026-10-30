@@ -103,6 +103,14 @@ export function startCallRinger(
   return ringer;
 }
 
+async function closeQuietly(ctx: AudioContext) {
+  try {
+    await ctx.close();
+  } catch {
+    // An already-closed context has nothing left to release.
+  }
+}
+
 function playRingSound(): RingSound | undefined {
   const Ctx =
     window.AudioContext ?? (window as WebkitWindow).webkitAudioContext;
@@ -154,7 +162,8 @@ function playRingSound(): RingSound | undefined {
   let stopped = false;
   const timeoutId = window.setTimeout(() => {
     stopped = true;
-    void ctx.close().catch(() => {});
+
+    fireAndForget(closeQuietly(ctx), 'call-ring');
   }, totalMs);
 
   return {
@@ -163,7 +172,8 @@ function playRingSound(): RingSound | undefined {
       if (stopped) return;
       stopped = true;
       window.clearTimeout(timeoutId);
-      void ctx.close().catch(() => {});
+
+      fireAndForget(closeQuietly(ctx), 'call-ring');
     },
   };
 }

@@ -1,10 +1,10 @@
-import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import {
   deduplicateItems,
   groupSoupEntities,
 } from '@app/features/soup/collection/transforms';
 import type { SoupGroup } from '@app/features/soup/collection/types';
 import type { EntityWithRawNotifications } from '@app/features/soup/entity-notifications';
+import { dateBucket } from '@app/lib/utils/date-buckets';
 import type { DateValue } from '@core/util/date';
 import type { EntityData } from '@entity';
 import {

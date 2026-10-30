@@ -58,9 +58,9 @@ import { useCanEdit } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
 import { createRenameDssEntityMutation } from '@entity';
-import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserQuota } from '@queries/auth';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+import { stopChatStream } from '@queries/cognition/requests';
+
 import { createCallback } from '@solid-primitives/rootless';
 import { createEffect, createSignal, getOwner, Show, Suspense } from 'solid-js';
 
@@ -249,7 +249,7 @@ function ChatInner(props: {
     if (!chat.isGenerating()) return;
     const streamId = chat.stream()?.id()?.stream_id;
     if (!streamId) return;
-    await cognitionApiServiceClient.stopChatStream({
+    await stopChatStream({
       chat_id: chat.chatId(),
       stream_id: streamId,
     });
@@ -293,14 +293,15 @@ function ChatInner(props: {
   // Check for pending send data (e.g., from SoupChatInput) and send it
   const pendingSend = getPendingSend();
   if (pendingSend) {
-    onSend({
-      content: pendingSend.content,
-      model: pendingSend.model ?? input.model(),
-      speed: pendingSend.speed,
-      attachments: pendingSend.attachments ?? [],
-      toolset: { type: 'all' },
-    }).catch((error) =>
-      Telemetry.error(error, { surface: 'chat-pending-send' })
+    fireAndForget(
+      onSend({
+        content: pendingSend.content,
+        model: pendingSend.model ?? input.model(),
+        speed: pendingSend.speed,
+        attachments: pendingSend.attachments ?? [],
+        toolset: { type: 'all' },
+      }),
+      'chat-pending-send'
     );
   }
 

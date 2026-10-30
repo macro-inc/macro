@@ -84,6 +84,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { DateValue } from '@core/util/date';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import {
@@ -100,7 +101,6 @@ import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
-import { Telemetry } from '@macro-inc/observability';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';
@@ -176,9 +176,6 @@ const MobileTabLoadingBar = () => (
 );
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
-
-const reportSoupViewError = (error: unknown) =>
-  Telemetry.error(error, { surface: 'soup-view' });
 
 /** The row components a soup view can render. */
 type SoupRowComponent =
@@ -807,7 +804,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     )
       return;
 
-    source.fetchNextPage().catch(reportSoupViewError);
+    fireAndForget(source.fetchNextPage(), 'soup-view');
   }, 15);
 
   type EntityClickArgs = {
@@ -972,9 +969,13 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // gesture's target element mid-refresh).
   const [isPullRefreshing, setIsPullRefreshing] = createSignal(false);
 
-  const pullRefresh = () => {
+  const pullRefresh = async () => {
     setIsPullRefreshing(true);
-    return source.refresh().finally(() => setIsPullRefreshing(false));
+    try {
+      return await source.refresh();
+    } finally {
+      setIsPullRefreshing(false);
+    }
   };
 
   // Shared by the empty-state <Match> and the pull-to-refresh target so the
@@ -990,8 +991,12 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       forceEmptyState: forceEmptyState(),
     });
 
-  const retryLoad = () => {
-    void source.refresh().catch(() => undefined);
+  const retryLoad = async () => {
+    try {
+      await source.refresh();
+    } catch {
+      /* The load error stays on screen for another retry. */
+    }
   };
 
   const entityById = createMemo(
@@ -1219,9 +1224,13 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                       onSwipeLeft={(entityId) => {
                         const entity = entityById().get(entityId);
                         if (!entity) return;
-                        markDoneAction
-                          .executeWithSoup([entity.original], soup)
-                          .catch(reportSoupViewError);
+                        fireAndForget(
+                          markDoneAction.executeWithSoup(
+                            [entity.original],
+                            soup
+                          ),
+                          'soup-view'
+                        );
                       }}
                       setCollapseEntity={soup.collapseEntity.set}
                     >
@@ -1320,8 +1329,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         groupPageError(group().key)
                                       )}
                                       onLoad={() => {
-                                        fetchNextGroupPage(group().key).catch(
-                                          reportSoupViewError
+                                        fireAndForget(
+                                          fetchNextGroupPage(group().key),
+                                          'soup-view'
                                         );
                                       }}
                                     />
@@ -1372,38 +1382,47 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         })
                                       }
                                       onClick={(event: MouseEvent) => {
-                                        onEntityClick({
-                                          type: 'entity',
-                                          entity: row.original,
-                                          event,
-                                          location: undefined,
-                                          rowIndex: row.index,
-                                        }).catch(reportSoupViewError);
+                                        fireAndForget(
+                                          onEntityClick({
+                                            type: 'entity',
+                                            entity: row.original,
+                                            event,
+                                            location: undefined,
+                                            rowIndex: row.index,
+                                          }),
+                                          'soup-view'
+                                        );
                                       }}
                                       onProjectClick={(
                                         projectEntity,
                                         event
                                       ) => {
-                                        onEntityClick({
-                                          type: 'project',
-                                          projectEntity,
-                                          entity: row.original,
-                                          event,
-                                          location: undefined,
-                                          rowIndex: row.index,
-                                        }).catch(reportSoupViewError);
+                                        fireAndForget(
+                                          onEntityClick({
+                                            type: 'project',
+                                            projectEntity,
+                                            entity: row.original,
+                                            event,
+                                            location: undefined,
+                                            rowIndex: row.index,
+                                          }),
+                                          'soup-view'
+                                        );
                                       }}
                                       onContentHitClick={(
                                         e: PointerEvent | MouseEvent,
                                         location?: SearchLocation
                                       ) => {
-                                        onEntityClick({
-                                          type: 'entity',
-                                          entity: row.original,
-                                          event: e,
-                                          location,
-                                          rowIndex: row.index,
-                                        }).catch(reportSoupViewError);
+                                        fireAndForget(
+                                          onEntityClick({
+                                            type: 'entity',
+                                            entity: row.original,
+                                            event: e,
+                                            location,
+                                            rowIndex: row.index,
+                                          }),
+                                          'soup-view'
+                                        );
                                       }}
                                       entityRowConfig={{
                                         swipeLeftColor: 'bg-success',

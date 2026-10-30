@@ -3,6 +3,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
@@ -22,10 +23,7 @@ import {
   filterValidNotifications,
   isNotificationUnread,
 } from '../utils/notification';
-import {
-  reportNotificationActionError,
-  useNotificationStackActions,
-} from './notification-actions';
+import { useNotificationStackActions } from './notification-actions';
 import { NotificationContent } from './notification-content';
 import { copyNotificationLink } from './notification-copy-link';
 import { NotificationDescription } from './notification-description';
@@ -106,7 +104,7 @@ export function NotificationStackRow(props: {
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              handleClick(e).catch(reportNotificationActionError);
+              fireAndForget(handleClick(e), 'notifications');
             }
             if (e.key === 'e' && canMarkDone()) {
               e.preventDefault();

@@ -249,6 +249,50 @@ export function reminderCalendarIdOf(
   return event.reminderCalendarId ?? event.calendarId;
 }
 
+/** The span an occurrence renders over, and a timed one's time zone. */
+function occurrenceTiming(time: CalendarOccurrenceItem['occurrence']['time']) {
+  return time.kind === 'timed'
+    ? {
+        allDay: false,
+        start: time.startsAt,
+        end: time.endsAt,
+        timeZone: time.timeZone ?? undefined,
+      }
+    : {
+        allDay: true,
+        start: time.startDate,
+        end: time.endDate,
+        timeZone: undefined,
+      };
+}
+
+/**
+ * The copy an event displays and the calendar it shows under, with every
+ * shown calendar it is synced to (at least the displayed one).
+ */
+function displayedEventCopy(
+  event: CalendarOccurrenceItem['event'],
+  options: CalendarOccurrenceMappingOptions
+) {
+  const sources = event.sources ?? [];
+  const shown = shownEventCopies(sources, options);
+  const copy =
+    shown[0]?.copy ?? selectEventSource(sources, options.isSourceVisible);
+  const calendarId = copy?.calendarId ?? event.calendarId ?? undefined;
+  const source =
+    shown[0]?.calendar ??
+    (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
+    DEFAULT_CALENDAR_SOURCE;
+  const visibleCalendars = shown.map(({ calendar }) => calendar);
+  return {
+    sources,
+    copy,
+    calendarId,
+    source,
+    visibleCalendars: visibleCalendars.length > 0 ? visibleCalendars : [source],
+  };
+}
+
 /**
  * Maps one backend occurrence projection into the single chip it renders as,
  * showing the first copy whose calendar the viewer has on and loaded, and
@@ -261,26 +305,13 @@ export function mapCalendarOccurrence(
   options: CalendarOccurrenceMappingOptions = {}
 ): CalendarEvent {
   const { event, occurrence } = item;
-  const time = occurrence.time;
-  const range =
-    time.kind === 'timed'
-      ? { allDay: false, start: time.startsAt, end: time.endsAt }
-      : { allDay: true, start: time.startDate, end: time.endDate };
-  const sources = event.sources ?? [];
-  const shown = shownEventCopies(sources, options);
-  const copy =
-    shown[0]?.copy ?? selectEventSource(sources, options.isSourceVisible);
+  const { sources, copy, calendarId, source, visibleCalendars } =
+    displayedEventCopy(event, options);
   const content = copy ?? event;
   const canonical = sources[0] ?? event;
-  const calendarId = copy?.calendarId ?? event.calendarId ?? undefined;
-  const source =
-    shown[0]?.calendar ??
-    (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
-    DEFAULT_CALENDAR_SOURCE;
-  const visibleCalendars = shown.map(({ calendar }) => calendar);
 
   return {
-    ...range,
+    ...occurrenceTiming(occurrence.time),
     id: JSON.stringify([event.id, occurrence.occurrenceKey]),
     eventId: event.id,
     occurrenceKey: occurrence.occurrenceKey,
@@ -307,10 +338,9 @@ export function mapCalendarOccurrence(
     transparency: content.transparency,
     calendarId,
     sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
-    timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: content.title,
     calendar: source,
-    visibleCalendars: visibleCalendars.length > 0 ? visibleCalendars : [source],
+    visibleCalendars,
     location: content.location ?? undefined,
     description: content.description ?? undefined,
   };

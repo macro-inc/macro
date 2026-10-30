@@ -1,8 +1,8 @@
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { Telemetry } from '@macro-inc/observability';
 import { cn } from '@ui';
 import {
   COMMAND_PRIORITY_CRITICAL,
@@ -202,19 +202,20 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
         e?: DragEvent
       ) => {
         if (!e) return;
-        handleFileFolderDrop(
-          fileEntries,
-          folderEntries,
-          createFilesReadyHandler(
-            editor,
-            undefined,
-            undefined,
-            () => getDragDropPosition(editor, e, true),
-            undefined,
-            state.fileDropConfig!.constrainedMediaDimensions
-          )
-        ).catch((error) =>
-          Telemetry.error(error, { surface: 'markdown-file-drop' })
+        fireAndForget(
+          handleFileFolderDrop(
+            fileEntries,
+            folderEntries,
+            createFilesReadyHandler(
+              editor,
+              undefined,
+              undefined,
+              () => getDragDropPosition(editor, e, true),
+              undefined,
+              state.fileDropConfig!.constrainedMediaDimensions
+            )
+          ),
+          'markdown-file-drop'
         );
       }
     : undefined;

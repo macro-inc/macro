@@ -1,5 +1,6 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createEffect, untrack } from 'solid-js';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
@@ -57,10 +58,16 @@ export function ChannelCallAutoJoin(props: {
         return;
       }
 
-      call
-        .joinCall('deep_link')
-        .catch((e) => console.error('Auto-join call failed', e))
-        .finally(() => props.onHandled());
+      const joinFromDeepLink = async () => {
+        try {
+          await call.joinCall('deep_link');
+        } catch (e) {
+          console.error('Auto-join call failed', e);
+        } finally {
+          props.onHandled();
+        }
+      };
+      fireAndForget(joinFromDeepLink(), 'channel-call');
     });
   });
 

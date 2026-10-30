@@ -1,4 +1,4 @@
-import type { DocComment } from '@core/docx-engine/types';
+import type { DocComment } from '@app/lib/docx/types';
 import { For, Show } from 'solid-js';
 
 /** A comment date as the card shows it (the stored text when unparsable). */

@@ -255,9 +255,19 @@ export function createPresentationSession(
     const delay = options.autosaveDelay ?? 1500;
     if (delay <= 0) return;
     clearTimeout(timer);
-    timer = setTimeout(() => {
-      save().catch(() => {});
-    }, delay);
+    timer = setTimeout(
+      () => fireAndForget(saveInBackground(), 'pptx-editor'),
+      delay
+    );
+  }
+
+  /** Saves without waiting; `save` already shows the user a failure. */
+  async function saveInBackground() {
+    try {
+      await save();
+    } catch {
+      // Reported through the save state and `notifyError`.
+    }
   }
 
   async function settle(outcome: EditOutcome): Promise<EditResult | null> {
@@ -371,19 +381,30 @@ export function createPresentationSession(
   const unwatch = options.watchStoredFile?.(() =>
     fireAndForget(onStoredFileChanged(), 'pptx-editor')
   );
+
+  async function breakGroup() {
+    setHistory((await engine.breakGroup()).history);
+  }
+
+  async function showRemoteChange(result: EditResult) {
+    try {
+      await absorb(result);
+    } catch (error) {
+      console.error('[pptx] could not show a change made elsewhere', error);
+    }
+  }
+
   // Other people's edits: re-render, but leave saving them to their editor.
   const unsubscribeRemote = engine.onRemoteChange?.((result, state) => {
     if (disposed) return;
     setHistory(state);
-    void absorb(result).catch((error: unknown) => {
-      console.error('[pptx] could not show a change made elsewhere', error);
-    });
+    fireAndForget(showRemoteChange(result), 'pptx-editor');
   });
 
   // Unsaved work is flushed when the tab is hidden and when the editor closes.
   const onHide = () => {
     if (document.visibilityState === 'hidden' && changeCount !== savedCount) {
-      void save().catch(() => {});
+      fireAndForget(saveInBackground(), 'pptx-editor');
     }
   };
   document.addEventListener('visibilitychange', onHide);
@@ -393,7 +414,8 @@ export function createPresentationSession(
     replacedListeners.clear();
     document.removeEventListener('visibilitychange', onHide);
     clearTimeout(timer);
-    if (changeCount !== savedCount) void save().catch(() => {});
+    if (changeCount !== savedCount)
+      fireAndForget(saveInBackground(), 'pptx-editor');
     disposed = true;
   });
 
@@ -412,12 +434,7 @@ export function createPresentationSession(
     apply: (ops, group) => run(() => engine.apply(ops, group)),
     undo: () => run(() => engine.undo()),
     redo: () => run(() => engine.redo()),
-    breakGroup: () => {
-      void engine
-        .breakGroup()
-        .then((o) => setHistory(o.history))
-        .catch(() => {});
-    },
+    breakGroup: () => fireAndForget(breakGroup(), 'pptx-editor'),
     save,
     refresh,
     reload,

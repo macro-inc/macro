@@ -317,182 +317,202 @@ export function createSoupEntityActions(
 
     // Middle group: Rename, Archive, Set status/priority/assignee, Move to
     // folder, Duplicate, Copy Link, Copy Branch Name, Copy ID, GitHub, Share
-    const middleItems: SoupEntityActionItem[] = [];
-
-    if (canExecuteAll(renameAction.canExecute)) {
-      middleItems.push({
-        id: 'rename',
-        label: t('entityActions.rename'),
-        hotkeyToken: TOKENS.entity.action.rename,
-        onClick: handle(renameAction.executeWithSoup),
-      });
-    }
-
-    if (entities.length === 1 && archiveSessionAction.canExecute(entities[0])) {
-      middleItems.push({
-        id: 'archive-session',
-        label: archiveSessionAction.isArchived(entities[0])
-          ? t('entityActions.unarchive')
-          : t('entityActions.archive'),
-        onClick: () => archiveSessionAction.execute(entities),
-      });
-    }
-
-    // Sits with Rename because it edits the same channel identity, under the
-    // same participant rule. Single-entity only: one upload, one channel.
-    if (entities.length === 1 && channelPictureAction.canExecute(entities[0])) {
-      middleItems.push({
-        id: 'set-channel-picture',
-        label: t('entityActions.setChannelPicture'),
-        onClick: () => channelPictureAction.execute(entities),
-      });
-      if (channelPictureAction.hasPicture(entities[0])) {
-        middleItems.push({
-          id: 'remove-channel-picture',
-          label: t('entityActions.removeChannelPicture'),
-          onClick: () => channelPictureAction.remove(entities),
+    const editItems = (): SoupEntityActionItem[] => {
+      const items: SoupEntityActionItem[] = [];
+      if (canExecuteAll(renameAction.canExecute)) {
+        items.push({
+          id: 'rename',
+          label: t('entityActions.rename'),
+          hotkeyToken: TOKENS.entity.action.rename,
+          onClick: handle(renameAction.executeWithSoup),
         });
       }
-    }
 
-    if (canExecuteAll(favoriteAction.canExecute)) {
-      const allFavorited = entities.every((entity) =>
-        favoriteAction.isFavorited(entity)
-      );
-      // No icon: the other items in this menu don't have one.
-      middleItems.push({
-        id: 'favorite',
-        label: allFavorited
-          ? t('entityActions.unfavorite')
-          : t('entityActions.favorite'),
-        hotkeyToken: TOKENS.entity.action.favorite,
-        onClick: handle(favoriteAction.executeWithSoup),
-      });
-    }
+      if (
+        entities.length === 1 &&
+        archiveSessionAction.canExecute(entities[0])
+      ) {
+        items.push({
+          id: 'archive-session',
+          label: archiveSessionAction.isArchived(entities[0])
+            ? t('entityActions.unarchive')
+            : t('entityActions.archive'),
+          onClick: () => archiveSessionAction.execute(entities),
+        });
+      }
 
-    if (canExecuteAll(muteAction.canExecute)) {
-      middleItems.push({
-        id: 'snooze',
-        label: t('entityActions.snoozeNotifications'),
-        onClick: () => muteAction.snooze(entities),
-      });
-      const allMuted = entities.every((entity) => muteAction.isMuted(entity));
-      middleItems.push({
-        id: 'mute',
-        label: allMuted
-          ? t('entityActions.unmuteNotifications')
-          : t('entityActions.muteNotifications'),
-        onClick: handle(muteAction.executeWithSoup),
-      });
-    }
-
-    // Single-entity only: a reminder points at one thing.
-    if (entities.length === 1 && createReminderAction.canExecute(entities[0])) {
-      middleItems.push({
-        id: 'create-reminder',
-        label: t('entityActions.remindMe'),
-        hotkeyToken: TOKENS.entity.action.createReminder,
-        // Not `handle`: the mark-done that follows needs this view's answer to
-        // whether the list moves on, the same one Mark Done above is gated by.
-        onClick: () => {
-          const onNavigate = createActionNavigationHandler?.();
-          return createReminderAction.executeWithSoup(entities, soup, {
-            advances: marksDoneOnThisView,
-            onNavigate,
+      // Sits with Rename because it edits the same channel identity, under the
+      // same participant rule. Single-entity only: one upload, one channel.
+      if (
+        entities.length === 1 &&
+        channelPictureAction.canExecute(entities[0])
+      ) {
+        items.push({
+          id: 'set-channel-picture',
+          label: t('entityActions.setChannelPicture'),
+          onClick: () => channelPictureAction.execute(entities),
+        });
+        if (channelPictureAction.hasPicture(entities[0])) {
+          items.push({
+            id: 'remove-channel-picture',
+            label: t('entityActions.removeChannelPicture'),
+            onClick: () => channelPictureAction.remove(entities),
           });
-        },
-      });
-    }
+        }
+      }
 
-    if (entities.length === 1 && openTagPicker) {
-      middleItems.push({
-        id: 'add-tag',
-        label: t('entityActions.addTag'),
-        onClick: openTagPicker,
-      });
-    }
-
-    if (
-      projectsFlag().enabled &&
-      openProjectPicker &&
-      canExecuteAll(isTaskEntity)
-    ) {
-      middleItems.push({
-        id: 'set-initiative',
-        label: t('entityActions.addToProject'),
-        onClick: () => {
-          if (isFeatureEnabled(enableProjects)) openProjectPicker();
-        },
-      });
-    }
-
-    // The task properties the hotkeys and command menu set, as the CRM group
-    // below sets a company's.
-    if (canExecuteAll(isTaskEntity)) {
-      for (const [propertyId, label, hotkeyToken] of [
-        [
-          SYSTEM_PROPERTY_IDS.STATUS,
-          t('entityActions.setStatus'),
-          TOKENS.entity.action.status,
-        ],
-        [
-          SYSTEM_PROPERTY_IDS.PRIORITY,
-          t('entityActions.setPriority'),
-          TOKENS.entity.action.priority,
-        ],
-        [
-          SYSTEM_PROPERTY_IDS.ASSIGNEES,
-          t('entityActions.setAssignee'),
-          TOKENS.entity.action.assignee,
-        ],
-      ] as const) {
-        const property = taskProperty(propertyId);
-        if (!property) continue;
-        middleItems.push({
-          id: `set-${propertyId}`,
-          label,
-          hotkeyToken,
-          onClick: () =>
-            openPropertyEditor(entities, 'direct', property, {
-              restoreFocus: () =>
-                fireAndForget(
-                  restoreSoupFocus(entities[0]?.id),
-                  'entity-actions'
-                ),
-            }),
+      if (canExecuteAll(favoriteAction.canExecute)) {
+        const allFavorited = entities.every((entity) =>
+          favoriteAction.isFavorited(entity)
+        );
+        // No icon: the other items in this menu don't have one.
+        items.push({
+          id: 'favorite',
+          label: allFavorited
+            ? t('entityActions.unfavorite')
+            : t('entityActions.favorite'),
+          hotkeyToken: TOKENS.entity.action.favorite,
+          onClick: handle(favoriteAction.executeWithSoup),
         });
       }
-    }
 
-    if (canExecuteAll(moveToProjectAction.canExecute)) {
-      middleItems.push({
-        id: 'move-to-folder',
-        label: t('entityActions.moveToFolder'),
-        hotkeyToken: TOKENS.entity.action.moveToFolder,
-        onClick: handle(moveToProjectAction.executeWithSoup),
-      });
-    }
+      if (canExecuteAll(muteAction.canExecute)) {
+        items.push({
+          id: 'snooze',
+          label: t('entityActions.snoozeNotifications'),
+          onClick: () => muteAction.snooze(entities),
+        });
+        const allMuted = entities.every((entity) => muteAction.isMuted(entity));
+        items.push({
+          id: 'mute',
+          label: allMuted
+            ? t('entityActions.unmuteNotifications')
+            : t('entityActions.muteNotifications'),
+          onClick: handle(muteAction.executeWithSoup),
+        });
+      }
 
-    if (viewedProjectId && canExecuteAll(removeFromProjectAction.canExecute)) {
-      middleItems.push({
-        id: 'remove-from-folder',
-        label: t('entityActions.removeFromFolder'),
-        onClick: handle(removeFromProjectAction.executeWithSoup),
-      });
-    }
+      // Single-entity only: a reminder points at one thing.
+      if (
+        entities.length === 1 &&
+        createReminderAction.canExecute(entities[0])
+      ) {
+        items.push({
+          id: 'create-reminder',
+          label: t('entityActions.remindMe'),
+          hotkeyToken: TOKENS.entity.action.createReminder,
+          // Not `handle`: the mark-done that follows needs this view's answer to
+          // whether the list moves on, the same one Mark Done above is gated by.
+          onClick: () => {
+            const onNavigate = createActionNavigationHandler?.();
+            return createReminderAction.executeWithSoup(entities, soup, {
+              advances: marksDoneOnThisView,
+              onNavigate,
+            });
+          },
+        });
+      }
+      return items;
+    };
 
-    if (canExecuteAll(copyAction.canExecute)) {
-      middleItems.push({
-        id: 'duplicate',
-        label: t('entityActions.duplicate'),
-        hotkeyToken: TOKENS.entity.action.copy,
-        onClick: handle(copyAction.executeWithSoup),
-      });
-    }
+    const organizeItems = (): SoupEntityActionItem[] => {
+      const items: SoupEntityActionItem[] = [];
+      if (entities.length === 1 && openTagPicker) {
+        items.push({
+          id: 'add-tag',
+          label: t('entityActions.addTag'),
+          onClick: openTagPicker,
+        });
+      }
 
-    if (entities.length === 1) {
+      if (
+        projectsFlag().enabled &&
+        openProjectPicker &&
+        canExecuteAll(isTaskEntity)
+      ) {
+        items.push({
+          id: 'set-initiative',
+          label: t('entityActions.addToProject'),
+          onClick: () => {
+            if (isFeatureEnabled(enableProjects)) openProjectPicker();
+          },
+        });
+      }
+
+      // The task properties the hotkeys and command menu set, as the CRM group
+      // below sets a company's.
+      if (canExecuteAll(isTaskEntity)) {
+        for (const [propertyId, label, hotkeyToken] of [
+          [
+            SYSTEM_PROPERTY_IDS.STATUS,
+            t('entityActions.setStatus'),
+            TOKENS.entity.action.status,
+          ],
+          [
+            SYSTEM_PROPERTY_IDS.PRIORITY,
+            t('entityActions.setPriority'),
+            TOKENS.entity.action.priority,
+          ],
+          [
+            SYSTEM_PROPERTY_IDS.ASSIGNEES,
+            t('entityActions.setAssignee'),
+            TOKENS.entity.action.assignee,
+          ],
+        ] as const) {
+          const property = taskProperty(propertyId);
+          if (!property) continue;
+          items.push({
+            id: `set-${propertyId}`,
+            label,
+            hotkeyToken,
+            onClick: () =>
+              openPropertyEditor(entities, 'direct', property, {
+                restoreFocus: () =>
+                  fireAndForget(
+                    restoreSoupFocus(entities[0]?.id),
+                    'entity-actions'
+                  ),
+              }),
+          });
+        }
+      }
+
+      if (canExecuteAll(moveToProjectAction.canExecute)) {
+        items.push({
+          id: 'move-to-folder',
+          label: t('entityActions.moveToFolder'),
+          hotkeyToken: TOKENS.entity.action.moveToFolder,
+          onClick: handle(moveToProjectAction.executeWithSoup),
+        });
+      }
+
+      if (
+        viewedProjectId &&
+        canExecuteAll(removeFromProjectAction.canExecute)
+      ) {
+        items.push({
+          id: 'remove-from-folder',
+          label: t('entityActions.removeFromFolder'),
+          onClick: handle(removeFromProjectAction.executeWithSoup),
+        });
+      }
+
+      if (canExecuteAll(copyAction.canExecute)) {
+        items.push({
+          id: 'duplicate',
+          label: t('entityActions.duplicate'),
+          hotkeyToken: TOKENS.entity.action.copy,
+          onClick: handle(copyAction.executeWithSoup),
+        });
+      }
+      return items;
+    };
+
+    const singleEntityItems = (): SoupEntityActionItem[] => {
+      if (entities.length !== 1) return [];
+      const items: SoupEntityActionItem[] = [];
       if (copyLinkAction.canExecute(entities[0])) {
-        middleItems.push({
+        items.push({
           id: 'copy-link',
           label: t('entityActions.copyLink'),
           hotkeyToken: TOKENS.entity.action.copyLink,
@@ -501,7 +521,7 @@ export function createSoupEntityActions(
       }
 
       if (copyBranchNameAction.canExecute(entities[0])) {
-        middleItems.push({
+        items.push({
           id: 'copy-branch-name',
           label: t('entityActions.copyBranchName'),
           hotkeyToken: TOKENS.entity.action.copyBranchName,
@@ -510,7 +530,7 @@ export function createSoupEntityActions(
       }
 
       if (downloadAction.canExecute(entities[0])) {
-        middleItems.push({
+        items.push({
           id: 'download',
           label: t('entityActions.download'),
           onClick: handle(downloadAction.executeWithSoup),
@@ -518,7 +538,7 @@ export function createSoupEntityActions(
       }
 
       if (copyEntityIdAction.canExecute(entities[0])) {
-        middleItems.push({
+        items.push({
           id: 'copy-entity-id',
           label: t('entityActions.copyId'),
           onClick: handle(copyEntityIdAction.executeWithSoup),
@@ -527,7 +547,7 @@ export function createSoupEntityActions(
 
       const entity = entities[0];
       if (githubLinkAction.canExecute(entity)) {
-        middleItems.push(
+        items.push(
           {
             id: 'copy-github-link',
             label: t('entityActions.copyGithubLink'),
@@ -542,51 +562,61 @@ export function createSoupEntityActions(
       }
 
       if (shareAction.canExecute(entities[0])) {
-        middleItems.push({
+        items.push({
           id: 'share',
           label: t('entityActions.share'),
           onClick: handle(shareAction.executeWithSoup),
         });
       }
-    }
+      return items;
+    };
+
+    const middleItems = [
+      ...editItems(),
+      ...organizeItems(),
+      ...singleEntityItems(),
+    ];
 
     // Sender group: Sender → Signal, Sender → Noise, Block Sender
-    const senderItems: SoupEntityActionItem[] = [];
+    const senderGroupItems = (): SoupEntityActionItem[] => {
+      const items: SoupEntityActionItem[] = [];
+      // Each email's own bucket decides, falling back to the view's tab; with
+      // neither known (some Search rows), both moves are offered.
+      const senderBucketOf = (entity: EntityData) =>
+        emailSenderBucket(entity) ?? viewContext.senderBucket;
 
-    // Each email's own bucket decides, falling back to the view's tab; with
-    // neither known (some Search rows), both moves are offered.
-    const senderBucketOf = (entity: EntityData) =>
-      emailSenderBucket(entity) ?? viewContext.senderBucket;
+      if (
+        canExecuteAll(markSenderSignalAction.canExecute) &&
+        entities.some((entity) => senderBucketOf(entity) !== 'signal')
+      ) {
+        items.push({
+          id: 'sender-signal',
+          label: t('entityActions.senderToSignal'),
+          onClick: handle(markSenderSignalAction.executeWithSoup),
+        });
+      }
 
-    if (
-      canExecuteAll(markSenderSignalAction.canExecute) &&
-      entities.some((entity) => senderBucketOf(entity) !== 'signal')
-    ) {
-      senderItems.push({
-        id: 'sender-signal',
-        label: t('entityActions.senderToSignal'),
-        onClick: handle(markSenderSignalAction.executeWithSoup),
-      });
-    }
+      if (
+        canExecuteAll(markSenderNoiseAction.canExecute) &&
+        entities.some((entity) => senderBucketOf(entity) !== 'noise')
+      ) {
+        items.push({
+          id: 'sender-noise',
+          label: t('entityActions.senderToNoise'),
+          onClick: handle(markSenderNoiseAction.executeWithSoup),
+        });
+      }
 
-    if (
-      canExecuteAll(markSenderNoiseAction.canExecute) &&
-      entities.some((entity) => senderBucketOf(entity) !== 'noise')
-    ) {
-      senderItems.push({
-        id: 'sender-noise',
-        label: t('entityActions.senderToNoise'),
-        onClick: handle(markSenderNoiseAction.executeWithSoup),
-      });
-    }
-
-    if (canExecuteAll(blockSenderAction.canExecute)) {
-      senderItems.push({
-        id: 'block-sender',
-        label: t('entityActions.blockSender'),
-        onClick: handle(blockSenderAction.executeWithSoup),
-      });
-    }
+      if (canExecuteAll(blockSenderAction.canExecute)) {
+        items.push({
+          id: 'block-sender',
+          label: t('entityActions.blockSender'),
+          onClick: handle(blockSenderAction.executeWithSoup),
+        });
+      }
+      return items;
+    };
+    const senderItems = senderGroupItems();
 
     const crmItems = crmActions(entities, soup);
 

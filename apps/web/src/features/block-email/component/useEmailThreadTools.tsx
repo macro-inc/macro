@@ -171,6 +171,22 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     })();
 
     const handle = trashEmails([{ id: thread.db_id, linkId: thread.link_id }]);
+    const restoreFromTrash = async () => {
+      try {
+        await handle.undo();
+      } catch {
+        toast.failure('Failed to restore from Trash');
+        return;
+      }
+      toast.success('Restored from Trash');
+    };
+    const confirmTrashed = async () => {
+      try {
+        await handle.done;
+      } catch {
+        toast.failure('Failed to move to Trash');
+      }
+    };
 
     if (props.onDeleted) {
       props.onDeleted();
@@ -190,19 +206,14 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
           icon: ArrowCounterClockwise,
           onClick: () => {
             if (toastId != null) toast.dismiss(toastId);
-            handle.undo().then(
-              () => toast.success('Restored from Trash'),
-              () => toast.failure('Failed to restore from Trash')
-            );
+            fireAndForget(restoreFromTrash(), 'email-thread-tools');
           },
         },
       ],
       duration: 10_000,
     });
 
-    handle.done.catch(() => {
-      toast.failure('Failed to move to Trash');
-    });
+    fireAndForget(confirmTrashed(), 'email-thread-tools');
   };
 
   const emlMessage = () => {

@@ -1,4 +1,4 @@
-import { parseCron } from '@core/util/cron';
+import { parseCron } from '@app/lib/utils/cron';
 import { TZDate } from '@date-fns/tz';
 import type { ActionTrigger } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';

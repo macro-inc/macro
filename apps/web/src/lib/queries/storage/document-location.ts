@@ -63,9 +63,10 @@ function documentLocationQueryOptions(args: DocumentLocationArgs) {
 async function requestDocumentLocation(
   args: DocumentLocationArgs
 ): Promise<DocumentLocation> {
-  return throwOnErr(async () =>
+  const result = await throwOnErr(async () =>
     storageServiceClient.getDocumentLocation(args)
-  ).then((result) => result.data);
+  );
+  return result.data;
 }
 
 /**

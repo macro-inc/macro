@@ -14,7 +14,7 @@ Queries, caching, and where data is fetched.
 - **FE-01** Never call a service client outside the `queries` package — UI code
   calling an endpoint directly is usually re-fetching data an existing query
   already caches. Enforced by ast-grep `ts-no-service-client-outside-queries` +
-  `tsx-no-service-client-outside-queries`, warning.
+  `tsx-no-service-client-outside-queries`, CI error.
 - **FE-02** Every query module has a `keys.ts` structured like the existing
   ones.
 - **FE-03** Conditional fetching uses a debounced signal passed to TanStack

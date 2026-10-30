@@ -269,6 +269,232 @@ export function BookingWorkspaceView(props: {
       setStartingAgent(false);
     }
   };
+  const mobileHeader = () => (
+    <SchedulingMobileHeader
+      tabs={TABS}
+      tab={search.tab}
+      scopes={scopes()}
+      ownerId={selectedOwnerId()}
+      disabled={isSaving()}
+      editorTitle={
+        editingSchedule()
+          ? owner()
+              ?.source.profile()
+              ?.schedules.some(
+                (schedule) => schedule.id === owner()?.schedule()?.id
+              )
+            ? 'Edit schedule'
+            : 'Create schedule'
+          : undefined
+      }
+      createLabel={
+        owner()?.scope().canEdit &&
+        (search.tab === 'links' || search.tab === 'availability')
+          ? search.tab === 'links'
+            ? 'New booking link'
+            : 'New schedule'
+          : undefined
+      }
+      createDisabled={
+        isSaving() || startingAgent() || !owner()?.source.profile()
+      }
+      createAgentAction={
+        <Show when={search.tab === 'links' && owner()?.scope().canEdit}>
+          <Button
+            aria-label="Create with agent"
+            tooltip="Create with agent"
+            variant="ghost"
+            size="icon-md"
+            class="size-10 rounded-full"
+            disabled={
+              isSaving() || startingAgent() || !owner()?.source.profile()
+            }
+            onClick={() => fireAndForget(createWithAgent(), 'scheduling')}
+          >
+            <SparkleIcon class="size-5" />
+          </Button>
+        </Show>
+      }
+      onTab={selectTab}
+      onOwner={selectOwner}
+      onBack={() => owner()?.closeScheduleEditor()}
+      onCreate={(opener) => fireAndForget(create(opener), 'scheduling')}
+    />
+  );
+  const headerActions = () => (
+    <>
+      <Show when={owner()?.scope().canEdit}>
+        <Show when={search.tab === 'links'}>
+          <HeaderActionGroup label="Booking link tools">
+            <ButtonGroup.Button
+              aria-label="Create with agent"
+              tooltip="Create with agent"
+              variant="ghost"
+              size="icon-md"
+              disabled={
+                !owner()?.source.profile() || isSaving() || startingAgent()
+              }
+              onClick={() => fireAndForget(createWithAgent(), 'scheduling')}
+            >
+              <SparkleIcon class="size-4" />
+            </ButtonGroup.Button>
+          </HeaderActionGroup>
+        </Show>
+        <ViewCreateButton
+          presentation="toolbar"
+          aria-label={
+            search.tab === 'availability' ? 'New schedule' : 'New booking link'
+          }
+          disabled={!owner()?.source.profile() || isSaving() || startingAgent()}
+          onClick={(event) =>
+            fireAndForget(create(event.currentTarget), 'scheduling')
+          }
+        />
+      </Show>
+      <ListHeaderSearch
+        label={
+          search.tab === 'availability'
+            ? 'Search schedules'
+            : 'Search booking links'
+        }
+        value={search.tab === 'availability' ? availabilitySearch() : query()}
+        onValueChange={(value) =>
+          search.tab === 'availability'
+            ? setAvailabilitySearch(value)
+            : setQuery(value)
+        }
+        registerFocus={(focus) => (focusSearch = focus)}
+      />
+    </>
+  );
+  const headerTitle = () => (
+    <Show
+      when={search.tab === 'availability'}
+      fallback={
+        <div class="flex min-w-0 flex-1 items-center gap-2">
+          <div class="flex min-w-0 items-center gap-1">
+            <ViewSidebar.Title caret={false} class="pl-2">
+              {tab().label}
+            </ViewSidebar.Title>
+            <Button
+              aria-label={`About ${tab().label.toLowerCase()}`}
+              variant="ghost"
+              size="icon-sm"
+              tooltip={tab().description}
+            >
+              <InfoIcon class="size-4 text-ink-muted" />
+            </Button>
+          </div>
+          <Show when={owner()}>
+            {(current) => (
+              <div class="hidden min-w-0 sm:block">
+                <OwnerBadge scope={current().scope()} />
+              </div>
+            )}
+          </Show>
+        </div>
+      }
+    >
+      <div class="flex min-w-0 flex-1 items-center gap-2">
+        <AvailabilityTopBar
+          editing={editingSchedule()}
+          creating={
+            !owner()
+              ?.source.profile()
+              ?.schedules.some(
+                (schedule) => schedule.id === owner()?.schedule()?.id
+              )
+          }
+          disabled={isSaving() || !owner()?.source.profile()}
+          onBack={() => owner()?.closeScheduleEditor()}
+        />
+        <Show when={!editingSchedule() && owner()}>
+          {(current) => (
+            <div class="hidden min-w-0 sm:block">
+              <OwnerBadge scope={current().scope()} />
+            </div>
+          )}
+        </Show>
+      </div>
+    </Show>
+  );
+  const mobileListHeader = () => (
+    <ViewShell.Header class="touch:pt-0">
+      <div class="flex min-w-0 flex-wrap items-center gap-3">
+        <Show when={search.tab === 'links'}>
+          <SearchBar
+            label="Search booking links"
+            placeholder="Search booking links…"
+            value={query()}
+            onValueChange={setQuery}
+            class="max-w-md flex-1"
+          />
+          <Show when={owner()?.scope().canEdit}>
+            <div class="ml-auto flex shrink-0 items-center gap-2 touch:hidden">
+              <Button
+                aria-label="Create with agent"
+                tooltip={{ content: 'Create with agent', disabled: true }}
+                variant="secondary"
+                size="md"
+                disabled={
+                  !owner()?.source.profile() ||
+                  owner()?.source.saving() ||
+                  startingAgent()
+                }
+                onClick={() => fireAndForget(createWithAgent(), 'scheduling')}
+              >
+                <SparkleIcon class="size-4" />
+                <span>Create with agent</span>
+              </Button>
+              <Button
+                aria-label="New booking link"
+                tooltip={{ content: 'New booking link', disabled: true }}
+                variant="secondary"
+                size="md"
+                disabled={
+                  !owner()?.source.profile() ||
+                  owner()?.source.saving() ||
+                  startingAgent()
+                }
+                onClick={(event) =>
+                  fireAndForget(create(event.currentTarget), 'scheduling')
+                }
+              >
+                <PlusIcon class="size-4" />
+                <span>New</span>
+              </Button>
+            </div>
+          </Show>
+        </Show>
+        <Show when={search.tab === 'availability'}>
+          <SearchBar
+            label="Search schedules"
+            placeholder="Search schedules…"
+            value={availabilitySearch()}
+            onValueChange={setAvailabilitySearch}
+            class="max-w-md flex-1"
+          />
+          <Show when={owner()?.scope().canEdit}>
+            <div class="ml-auto shrink-0 touch:hidden">
+              <Button
+                aria-label="New schedule"
+                tooltip="New schedule"
+                variant="secondary"
+                size="md"
+                disabled={isSaving() || !owner()?.source.profile()}
+                onClick={(event) =>
+                  fireAndForget(create(event.currentTarget), 'scheduling')
+                }
+              >
+                <PlusIcon class="size-4" />
+                <span>New</span>
+              </Button>
+            </div>
+          </Show>
+        </Show>
+      </div>
+    </ViewShell.Header>
+  );
   return (
     <ViewShell.Root
       asidePreferenceKey="booking-links"
@@ -353,58 +579,7 @@ export function BookingWorkspaceView(props: {
         </ViewSidebar.Root>
       </ViewShell.Aside>
       <ViewShell.Main class="touch:pt-[calc(var(--safe-top,0px)+3.75rem)] touch:pb-(--mobile-content-inset-bottom)">
-        <Show when={isTouchDevice()}>
-          <SchedulingMobileHeader
-            tabs={TABS}
-            tab={search.tab}
-            scopes={scopes()}
-            ownerId={selectedOwnerId()}
-            disabled={isSaving()}
-            editorTitle={
-              editingSchedule()
-                ? owner()
-                    ?.source.profile()
-                    ?.schedules.some(
-                      (schedule) => schedule.id === owner()?.schedule()?.id
-                    )
-                  ? 'Edit schedule'
-                  : 'Create schedule'
-                : undefined
-            }
-            createLabel={
-              owner()?.scope().canEdit &&
-              (search.tab === 'links' || search.tab === 'availability')
-                ? search.tab === 'links'
-                  ? 'New booking link'
-                  : 'New schedule'
-                : undefined
-            }
-            createDisabled={
-              isSaving() || startingAgent() || !owner()?.source.profile()
-            }
-            createAgentAction={
-              <Show when={search.tab === 'links' && owner()?.scope().canEdit}>
-                <Button
-                  aria-label="Create with agent"
-                  tooltip="Create with agent"
-                  variant="ghost"
-                  size="icon-md"
-                  class="size-10 rounded-full"
-                  disabled={
-                    isSaving() || startingAgent() || !owner()?.source.profile()
-                  }
-                  onClick={() => fireAndForget(createWithAgent(), 'scheduling')}
-                >
-                  <SparkleIcon class="size-5" />
-                </Button>
-              </Show>
-            }
-            onTab={selectTab}
-            onOwner={selectOwner}
-            onBack={() => owner()?.closeScheduleEditor()}
-            onCreate={(opener) => fireAndForget(create(opener), 'scheduling')}
-          />
-        </Show>
+        <Show when={isTouchDevice()}>{mobileHeader()}</Show>
         <Show
           when={
             isTouchDevice() ||
@@ -413,118 +588,8 @@ export function BookingWorkspaceView(props: {
               search.tab !== 'insights')
           }
         >
-          <SchedulingHeader
-            list={hasListHeader()}
-            actions={
-              <>
-                <Show when={owner()?.scope().canEdit}>
-                  <Show when={search.tab === 'links'}>
-                    <HeaderActionGroup label="Booking link tools">
-                      <ButtonGroup.Button
-                        aria-label="Create with agent"
-                        tooltip="Create with agent"
-                        variant="ghost"
-                        size="icon-md"
-                        disabled={
-                          !owner()?.source.profile() ||
-                          isSaving() ||
-                          startingAgent()
-                        }
-                        onClick={() =>
-                          fireAndForget(createWithAgent(), 'scheduling')
-                        }
-                      >
-                        <SparkleIcon class="size-4" />
-                      </ButtonGroup.Button>
-                    </HeaderActionGroup>
-                  </Show>
-                  <ViewCreateButton
-                    presentation="toolbar"
-                    aria-label={
-                      search.tab === 'availability'
-                        ? 'New schedule'
-                        : 'New booking link'
-                    }
-                    disabled={
-                      !owner()?.source.profile() ||
-                      isSaving() ||
-                      startingAgent()
-                    }
-                    onClick={(event) =>
-                      fireAndForget(create(event.currentTarget), 'scheduling')
-                    }
-                  />
-                </Show>
-                <ListHeaderSearch
-                  label={
-                    search.tab === 'availability'
-                      ? 'Search schedules'
-                      : 'Search booking links'
-                  }
-                  value={
-                    search.tab === 'availability'
-                      ? availabilitySearch()
-                      : query()
-                  }
-                  onValueChange={(value) =>
-                    search.tab === 'availability'
-                      ? setAvailabilitySearch(value)
-                      : setQuery(value)
-                  }
-                  registerFocus={(focus) => (focusSearch = focus)}
-                />
-              </>
-            }
-          >
-            <Show
-              when={search.tab === 'availability'}
-              fallback={
-                <div class="flex min-w-0 flex-1 items-center gap-2">
-                  <div class="flex min-w-0 items-center gap-1">
-                    <ViewSidebar.Title caret={false} class="pl-2">
-                      {tab().label}
-                    </ViewSidebar.Title>
-                    <Button
-                      aria-label={`About ${tab().label.toLowerCase()}`}
-                      variant="ghost"
-                      size="icon-sm"
-                      tooltip={tab().description}
-                    >
-                      <InfoIcon class="size-4 text-ink-muted" />
-                    </Button>
-                  </div>
-                  <Show when={owner()}>
-                    {(current) => (
-                      <div class="hidden min-w-0 sm:block">
-                        <OwnerBadge scope={current().scope()} />
-                      </div>
-                    )}
-                  </Show>
-                </div>
-              }
-            >
-              <div class="flex min-w-0 flex-1 items-center gap-2">
-                <AvailabilityTopBar
-                  editing={editingSchedule()}
-                  creating={
-                    !owner()
-                      ?.source.profile()
-                      ?.schedules.some(
-                        (schedule) => schedule.id === owner()?.schedule()?.id
-                      )
-                  }
-                  disabled={isSaving() || !owner()?.source.profile()}
-                  onBack={() => owner()?.closeScheduleEditor()}
-                />
-                <Show when={!editingSchedule() && owner()}>
-                  {(current) => (
-                    <div class="hidden min-w-0 sm:block">
-                      <OwnerBadge scope={current().scope()} />
-                    </div>
-                  )}
-                </Show>
-              </div>
-            </Show>
+          <SchedulingHeader list={hasListHeader()} actions={headerActions()}>
+            {headerTitle()}
           </SchedulingHeader>
         </Show>
         <Show
@@ -534,83 +599,7 @@ export function BookingWorkspaceView(props: {
               (search.tab === 'availability' && !editingSchedule()))
           }
         >
-          <ViewShell.Header class="touch:pt-0">
-            <div class="flex min-w-0 flex-wrap items-center gap-3">
-              <Show when={search.tab === 'links'}>
-                <SearchBar
-                  label="Search booking links"
-                  placeholder="Search booking links…"
-                  value={query()}
-                  onValueChange={setQuery}
-                  class="max-w-md flex-1"
-                />
-                <Show when={owner()?.scope().canEdit}>
-                  <div class="ml-auto flex shrink-0 items-center gap-2 touch:hidden">
-                    <Button
-                      aria-label="Create with agent"
-                      tooltip={{ content: 'Create with agent', disabled: true }}
-                      variant="secondary"
-                      size="md"
-                      disabled={
-                        !owner()?.source.profile() ||
-                        owner()?.source.saving() ||
-                        startingAgent()
-                      }
-                      onClick={() =>
-                        fireAndForget(createWithAgent(), 'scheduling')
-                      }
-                    >
-                      <SparkleIcon class="size-4" />
-                      <span>Create with agent</span>
-                    </Button>
-                    <Button
-                      aria-label="New booking link"
-                      tooltip={{ content: 'New booking link', disabled: true }}
-                      variant="secondary"
-                      size="md"
-                      disabled={
-                        !owner()?.source.profile() ||
-                        owner()?.source.saving() ||
-                        startingAgent()
-                      }
-                      onClick={(event) =>
-                        fireAndForget(create(event.currentTarget), 'scheduling')
-                      }
-                    >
-                      <PlusIcon class="size-4" />
-                      <span>New</span>
-                    </Button>
-                  </div>
-                </Show>
-              </Show>
-              <Show when={search.tab === 'availability'}>
-                <SearchBar
-                  label="Search schedules"
-                  placeholder="Search schedules…"
-                  value={availabilitySearch()}
-                  onValueChange={setAvailabilitySearch}
-                  class="max-w-md flex-1"
-                />
-                <Show when={owner()?.scope().canEdit}>
-                  <div class="ml-auto shrink-0 touch:hidden">
-                    <Button
-                      aria-label="New schedule"
-                      tooltip="New schedule"
-                      variant="secondary"
-                      size="md"
-                      disabled={isSaving() || !owner()?.source.profile()}
-                      onClick={(event) =>
-                        fireAndForget(create(event.currentTarget), 'scheduling')
-                      }
-                    >
-                      <PlusIcon class="size-4" />
-                      <span>New</span>
-                    </Button>
-                  </div>
-                </Show>
-              </Show>
-            </div>
-          </ViewShell.Header>
+          {mobileListHeader()}
         </Show>
         <ViewShell.Content
           class={cn('px-4', {

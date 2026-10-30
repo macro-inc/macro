@@ -574,7 +574,31 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
       params.catchUpAfterInitialPass === true &&
       checkpoint.updatedSince === null;
     const passCompletedAt = passCompleted ? new Date().toISOString() : null;
-    checkpoint = {
+    checkpoint = buildRunSoupBackfill(
+      page,
+      passCompleted,
+      transitionToCatchUp,
+      passCompletedAt
+    );
+    yield* Effect.sync(() => {
+      saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
+      onCheckpoint?.(checkpoint);
+    });
+
+    if (checkpoint.completed) return;
+    // The terminal page transitions directly into the narrowed catch-up pass.
+    if (!passCompleted) {
+      yield* Effect.sleep(params.pageDelayMs ?? PAGE_DELAY_MS);
+    }
+  }
+
+  function buildRunSoupBackfill(
+    page: GraphqlSoupHydrationPage,
+    passCompleted: boolean,
+    transitionToCatchUp: boolean,
+    passCompletedAt: string | null
+  ): SoupBackfillCheckpoint {
+    return {
       ...checkpoint,
       nextCursor: page.nextCursor ?? null,
       pagesFetched: checkpoint.pagesFetched + 1,
@@ -599,16 +623,6 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
             }
         : {}),
     };
-    yield* Effect.sync(() => {
-      saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
-      onCheckpoint?.(checkpoint);
-    });
-
-    if (checkpoint.completed) return;
-    // The terminal page transitions directly into the narrowed catch-up pass.
-    if (!passCompleted) {
-      yield* Effect.sleep(params.pageDelayMs ?? PAGE_DELAY_MS);
-    }
   }
 });
 

@@ -16,8 +16,9 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
+import { createChat, sendChatMessage } from '@queries/cognition/requests';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+
 import { $getRoot } from 'lexical';
 import { createEffect, Show } from 'solid-js';
 import { HomeAgentComposer } from './home-agent-composer';
@@ -117,7 +118,7 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
     const backgroundSend = request.metaKey;
 
     // Create a new persistent chat
-    const response = await cognitionApiServiceClient.createChat({});
+    const response = await createChat({});
     if (response.isErr()) {
       restoreDraft(request);
       if (isPaymentError(response)) {
@@ -139,7 +140,7 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
 
     if (backgroundSend) {
       // Send the message in the background without navigating
-      const sent = await cognitionApiServiceClient.sendStreamChatMessage({
+      const sent = await sendChatMessage({
         content: request.content,
         model: request.model,
         speed: request.speed,

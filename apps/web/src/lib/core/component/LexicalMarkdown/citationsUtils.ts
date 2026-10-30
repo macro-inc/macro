@@ -2,14 +2,15 @@ import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { useChannelsContext } from '@core/context/channels';
+import { fetchChatCitation } from '@queries/cognition/requests';
 
 import {
   type AccessiblePreviewItem,
   getItemPreview,
   isAccessiblePreviewItem,
 } from '@queries/preview';
-import { cognitionApiServiceClient } from '@service-cognition/client';
-import type { ItemType } from '@service-storage/client';
+
+import type { ItemType } from '@service-storage/itemType';
 import { validate as uuidValidate } from 'uuid';
 
 export const jsonToXML = (tag: string, data: object) => {
@@ -128,7 +129,7 @@ const _createDateMentionXML = (
 
 const getPdfCitationInfo = async (citationId: string) => {
   try {
-    const response = await cognitionApiServiceClient.getCitation({
+    const response = await fetchChatCitation({
       id: citationId,
     });
     if (response.isOk()) {

@@ -25,7 +25,7 @@ Module layout, layering, and TypeScript conventions.
 - **FE-20** Exhaustive branching uses `match` from `ts-pattern`.
 - **FE-21** No `any` — proper types or `unknown` + type guards.
 - **FE-31** Never cast a string to `ItemType` — parse it with `stringToItemType`
-  from `@service-storage/client`, the one owner of entity-type spellings (email
+  from `@service-storage/itemType`, the one owner of entity-type spellings (email
   threads alone are stored as `email`, `thread`, and `email_thread`). The same
   goes for a service's `EntityType`: each service has its own enum, so parse
   with `parseEntityType` (properties) or type the source rather than casting
@@ -65,7 +65,7 @@ Module layout, layering, and TypeScript conventions.
   and review. Register adopting feature paths in both language variants of every
   feature rule. Enforced by ast-grep `ts-/tsx-feature-core-pure`,
   `ts-/tsx-feature-components-presentational`, `ts-/tsx-feature-data-no-ui`,
-  `ts-/tsx-feature-layers-use-context`, warning; currently scoped to activity.
+  `ts-/tsx-feature-layers-use-context`, CI error; scoped to registered features.
   Separate production composition and source-contract inversion still require
   explicit review; the existing rules do not enforce them.
 - **FE-34** Treat the legacy block state system as adapter-boundary code, not

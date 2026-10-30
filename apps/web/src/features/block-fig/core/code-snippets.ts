@@ -5,7 +5,12 @@
  * auto layout, and type, not complete components.
  */
 
-import type { EffectInfo, NodeInfo, PaintInfo } from '@core/fig-engine/types';
+import type {
+  AutoLayout,
+  EffectInfo,
+  NodeInfo,
+  PaintInfo,
+} from '@core/fig-engine/types';
 import { match } from 'ts-pattern';
 import { cssColor, cssFor, fontWeight } from './css';
 
@@ -57,37 +62,11 @@ export function tailwindFor(info: NodeInfo): string[] {
   const out: string[] = [`w-${twPx(info.width)}`, `h-${twPx(info.height)}`];
   const text = isText(info);
   const fill = solid(info.fills);
-  if (fill) {
-    out.push(`${text ? 'text' : 'bg'}-${arb(cssColor(fill.hex, fill.alpha))}`);
-  } else if (!text) {
-    const gradient = cssFor(info).find((l) => l.startsWith('background:'));
-    if (gradient)
-      out.push(`bg-${arb(gradient.slice(12, -1).replace(/, /g, ','))}`);
-  }
+  pushFillClass();
   const stroke = solid(info.strokes);
-  if (stroke && info.strokeWeight) {
-    out.push(
-      info.strokeWeight === 1 ? 'border' : `border-${twPx(info.strokeWeight)}`,
-      `border-${arb(cssColor(stroke.hex, stroke.alpha))}`
-    );
-    if (info.dashPattern?.length) out.push('border-dashed');
-  }
+  pushBorderClasses();
   const r = uniformRadius(info);
-  if (typeof r === 'number' && r > 0) {
-    out.push(
-      r >= Math.min(info.width, info.height) / 2
-        ? 'rounded-full'
-        : `rounded-${twPx(r)}`
-    );
-  } else if (r === 'mixed' && info.cornerRadius) {
-    const c = info.cornerRadius;
-    out.push(
-      `rounded-tl-${twPx(c.top_left)}`,
-      `rounded-tr-${twPx(c.top_right)}`,
-      `rounded-br-${twPx(c.bottom_right)}`,
-      `rounded-bl-${twPx(c.bottom_left)}`
-    );
-  }
+  pushRadiusClasses();
   const s = shadow(info);
   if (s) {
     const inset = s.type === 'INNER_SHADOW' ? 'inset ' : '';
@@ -100,16 +79,111 @@ export function tailwindFor(info: NodeInfo): string[] {
   if (info.opacity < 0.999)
     out.push(`opacity-${arb(String(round(info.opacity)))}`);
   const al = info.autoLayout;
-  if (al && (al.mode === 'HORIZONTAL' || al.mode === 'VERTICAL')) {
-    out.push('flex', al.mode === 'VERTICAL' ? 'flex-col' : 'flex-row');
-    if (al.wrap) out.push('flex-wrap');
-    if (al.spacing) out.push(`gap-${twPx(al.spacing)}`);
-    const {
-      paddingTop: t,
-      paddingRight: rr,
-      paddingBottom: b,
-      paddingLeft: l,
-    } = al;
+  pushFlexClasses();
+  const t = info.text;
+  pushTypographyClasses();
+  return out;
+
+  function pushTypographyClasses() {
+    if (text && t) {
+      if (t.fontFamily) out.push(`font-${arb(`'${t.fontFamily}'`)}`);
+      if (t.fontSize) out.push(`text-${twPx(t.fontSize)}`);
+      const weight = fontWeight(t.fontStyle);
+      if (weight) out.push(`font-${arb(String(weight))}`);
+      if (t.fontStyle?.toLowerCase().includes('italic')) out.push('italic');
+      pushLeadingClass(t);
+      if (t.letterSpacing && t.letterSpacing[0] !== 0) {
+        const [v, unit] = t.letterSpacing;
+        out.push(
+          `tracking-${unit === 'PERCENT' ? arb(`${round(v / 100)}em`) : twPx(v)}`
+        );
+      }
+      if (t.alignHorizontal === 'CENTER') out.push('text-center');
+      if (t.alignHorizontal === 'RIGHT') out.push('text-right');
+      if (t.alignHorizontal === 'JUSTIFIED') out.push('text-justify');
+      if (t.decoration === 'UNDERLINE') out.push('underline');
+      if (t.decoration === 'STRIKETHROUGH') out.push('line-through');
+      if (t.case === 'UPPER') out.push('uppercase');
+      if (t.case === 'LOWER') out.push('lowercase');
+    }
+  }
+
+  function pushLeadingClass(tInput: NonNullable<typeof t>) {
+    if (tInput.lineHeight && tInput.lineHeight[1] !== 'RAW') {
+      const [v, unit] = tInput.lineHeight;
+      out.push(`leading-${unit === 'PERCENT' ? arb(`${round(v)}%`) : twPx(v)}`);
+    }
+  }
+
+  function pushFillClass() {
+    if (fill) {
+      out.push(
+        `${text ? 'text' : 'bg'}-${arb(cssColor(fill.hex, fill.alpha))}`
+      );
+    } else if (!text) {
+      const gradient = cssFor(info).find((l) => l.startsWith('background:'));
+      if (gradient)
+        out.push(`bg-${arb(gradient.slice(12, -1).replace(/, /g, ','))}`);
+    }
+  }
+
+  function pushRadiusClasses() {
+    if (typeof r === 'number' && r > 0) {
+      out.push(
+        r >= Math.min(info.width, info.height) / 2
+          ? 'rounded-full'
+          : `rounded-${twPx(r)}`
+      );
+    } else if (r === 'mixed' && info.cornerRadius) {
+      const c = info.cornerRadius;
+      out.push(
+        `rounded-tl-${twPx(c.top_left)}`,
+        `rounded-tr-${twPx(c.top_right)}`,
+        `rounded-br-${twPx(c.bottom_right)}`,
+        `rounded-bl-${twPx(c.bottom_left)}`
+      );
+    }
+  }
+
+  function pushBorderClasses() {
+    if (stroke && info.strokeWeight) {
+      out.push(
+        info.strokeWeight === 1
+          ? 'border'
+          : `border-${twPx(info.strokeWeight)}`,
+        `border-${arb(cssColor(stroke.hex, stroke.alpha))}`
+      );
+      if (info.dashPattern?.length) out.push('border-dashed');
+    }
+  }
+
+  function pushFlexClasses() {
+    if (al && (al.mode === 'HORIZONTAL' || al.mode === 'VERTICAL')) {
+      out.push('flex', al.mode === 'VERTICAL' ? 'flex-col' : 'flex-row');
+      if (al.wrap) out.push('flex-wrap');
+      if (al.spacing) out.push(`gap-${twPx(al.spacing)}`);
+      const {
+        paddingTop: t,
+        paddingRight: rr,
+        paddingBottom: b,
+        paddingLeft: l,
+      } = al;
+      pushPaddingClasses(t, b, l, rr);
+      const justify = match(al.primaryAlign ?? 'MIN')
+        .with('CENTER', () => 'justify-center')
+        .with('MAX', () => 'justify-end')
+        .with('SPACE_BETWEEN', () => 'justify-between')
+        .otherwise(() => 'justify-start');
+      const items = match(al.counterAlign ?? 'MIN')
+        .with('CENTER', () => 'items-center')
+        .with('MAX', () => 'items-end')
+        .with('BASELINE', () => 'items-baseline')
+        .otherwise(() => 'items-start');
+      out.push(justify, items);
+    }
+  }
+
+  function pushPaddingClasses(t: number, b: number, l: number, rr: number) {
     if (t === b && l === rr && t === l && t > 0) out.push(`p-${twPx(t)}`);
     else {
       if (l === rr && l > 0) out.push(`px-${twPx(l)}`);
@@ -123,44 +197,7 @@ export function tailwindFor(info: NodeInfo): string[] {
         if (b > 0) out.push(`pb-${twPx(b)}`);
       }
     }
-    const justify = match(al.primaryAlign ?? 'MIN')
-      .with('CENTER', () => 'justify-center')
-      .with('MAX', () => 'justify-end')
-      .with('SPACE_BETWEEN', () => 'justify-between')
-      .otherwise(() => 'justify-start');
-    const items = match(al.counterAlign ?? 'MIN')
-      .with('CENTER', () => 'items-center')
-      .with('MAX', () => 'items-end')
-      .with('BASELINE', () => 'items-baseline')
-      .otherwise(() => 'items-start');
-    out.push(justify, items);
   }
-  const t = info.text;
-  if (text && t) {
-    if (t.fontFamily) out.push(`font-${arb(`'${t.fontFamily}'`)}`);
-    if (t.fontSize) out.push(`text-${twPx(t.fontSize)}`);
-    const weight = fontWeight(t.fontStyle);
-    if (weight) out.push(`font-${arb(String(weight))}`);
-    if (t.fontStyle?.toLowerCase().includes('italic')) out.push('italic');
-    if (t.lineHeight && t.lineHeight[1] !== 'RAW') {
-      const [v, unit] = t.lineHeight;
-      out.push(`leading-${unit === 'PERCENT' ? arb(`${round(v)}%`) : twPx(v)}`);
-    }
-    if (t.letterSpacing && t.letterSpacing[0] !== 0) {
-      const [v, unit] = t.letterSpacing;
-      out.push(
-        `tracking-${unit === 'PERCENT' ? arb(`${round(v / 100)}em`) : twPx(v)}`
-      );
-    }
-    if (t.alignHorizontal === 'CENTER') out.push('text-center');
-    if (t.alignHorizontal === 'RIGHT') out.push('text-right');
-    if (t.alignHorizontal === 'JUSTIFIED') out.push('text-justify');
-    if (t.decoration === 'UNDERLINE') out.push('underline');
-    if (t.decoration === 'STRIKETHROUGH') out.push('line-through');
-    if (t.case === 'UPPER') out.push('uppercase');
-    if (t.case === 'LOWER') out.push('lowercase');
-  }
-  return out;
 }
 
 // ---- SwiftUI ----------------------------------------------------------------
@@ -196,35 +233,69 @@ export function swiftUIFor(info: NodeInfo): string[] {
   const lines: string[] = [];
   const mod = (m: string) => lines.push(`  ${m}`);
   const t = info.text;
-  if (isText(info) && t) {
-    lines.push(`Text(${swiftString(t.characters)})`);
-    const weight = swiftWeight(t.fontStyle);
-    const font = `.custom(${swiftString(t.fontFamily ?? 'Inter')}, size: ${round(t.fontSize ?? 12)})`;
-    mod(`.font(${font}${weight ? `.weight(${weight})` : ''})`);
-    if (t.fontStyle?.toLowerCase().includes('italic')) mod('.italic()');
-    if (t.alignHorizontal === 'CENTER') mod('.multilineTextAlignment(.center)');
-    if (t.alignHorizontal === 'RIGHT')
-      mod('.multilineTextAlignment(.trailing)');
-    if (t.letterSpacing && t.letterSpacing[0] !== 0) {
-      const [v, unit] = t.letterSpacing;
-      const pt = unit === 'PERCENT' ? (v / 100) * (t.fontSize ?? 12) : v;
+  pushViewLines();
+  const s = shadow(info);
+  if (s && s.type === 'DROP_SHADOW')
+    mod(
+      `.shadow(color: ${swiftColor(s.color, s.alpha)}, radius: ${round(s.radius / 2)}, x: ${round(s.x)}, y: ${round(s.y)})`
+    );
+  const blur = info.effects.find((e) => e.visible && e.type === 'LAYER_BLUR');
+  if (blur) mod(`.blur(radius: ${round(blur.radius / 2)})`);
+  if (info.opacity < 0.999) mod(`.opacity(${round(info.opacity)})`);
+  if (Math.abs(info.rotation) > 0.01)
+    mod(`.rotationEffect(.degrees(${round(-info.rotation)}))`);
+  return lines;
+
+  function pushViewLines() {
+    if (isText(info) && t) {
+      lines.push(`Text(${swiftString(t.characters)})`);
+      const weight = swiftWeight(t.fontStyle);
+      const font = `.custom(${swiftString(t.fontFamily ?? 'Inter')}, size: ${round(t.fontSize ?? 12)})`;
+      mod(`.font(${font}${weight ? `.weight(${weight})` : ''})`);
+      if (t.fontStyle?.toLowerCase().includes('italic')) mod('.italic()');
+      if (t.alignHorizontal === 'CENTER')
+        mod('.multilineTextAlignment(.center)');
+      if (t.alignHorizontal === 'RIGHT')
+        mod('.multilineTextAlignment(.trailing)');
+      pushKerning(t);
+      if (t.decoration === 'UNDERLINE') mod('.underline()');
+      if (t.decoration === 'STRIKETHROUGH') mod('.strikethrough()');
+      const fill = solid(info.fills);
+      if (fill) mod(`.foregroundColor(${swiftColor(fill.hex, fill.alpha)})`);
+      mod(`.frame(width: ${round(info.width)}, alignment: .topLeading)`);
+    } else {
+      const al = info.autoLayout;
+      const r = uniformRadius(info);
+      const shape =
+        info.type === 'ELLIPSE'
+          ? 'Ellipse()'
+          : typeof r === 'number' && r > 0
+            ? `RoundedRectangle(cornerRadius: ${round(r)})`
+            : 'Rectangle()';
+      const fill = solid(info.fills);
+      pushStackLines(al, fill, r, shape);
+      const stroke = solid(info.strokes);
+      if (stroke && info.strokeWeight)
+        mod(
+          `.overlay(${shape}.stroke(${swiftColor(stroke.hex, stroke.alpha)}, lineWidth: ${round(info.strokeWeight)}))`
+        );
+    }
+  }
+
+  function pushKerning(tValue: NonNullable<typeof t>) {
+    if (tValue.letterSpacing && tValue.letterSpacing[0] !== 0) {
+      const [v, unit] = tValue.letterSpacing;
+      const pt = unit === 'PERCENT' ? (v / 100) * (tValue.fontSize ?? 12) : v;
       mod(`.kerning(${round(pt)})`);
     }
-    if (t.decoration === 'UNDERLINE') mod('.underline()');
-    if (t.decoration === 'STRIKETHROUGH') mod('.strikethrough()');
-    const fill = solid(info.fills);
-    if (fill) mod(`.foregroundColor(${swiftColor(fill.hex, fill.alpha)})`);
-    mod(`.frame(width: ${round(info.width)}, alignment: .topLeading)`);
-  } else {
-    const al = info.autoLayout;
-    const r = uniformRadius(info);
-    const shape =
-      info.type === 'ELLIPSE'
-        ? 'Ellipse()'
-        : typeof r === 'number' && r > 0
-          ? `RoundedRectangle(cornerRadius: ${round(r)})`
-          : 'Rectangle()';
-    const fill = solid(info.fills);
+  }
+
+  function pushStackLines(
+    al: AutoLayout | null,
+    fill: { hex: string; alpha: number } | undefined,
+    r: string | number | undefined,
+    shape: string
+  ) {
     if (al && (al.mode === 'HORIZONTAL' || al.mode === 'VERTICAL')) {
       const stack = al.mode === 'VERTICAL' ? 'VStack' : 'HStack';
       const align = match(al.counterAlign ?? 'MIN')
@@ -254,23 +325,7 @@ export function swiftUIFor(info: NodeInfo): string[] {
       if (fill) mod(`.fill(${swiftColor(fill.hex, fill.alpha)})`);
       mod(`.frame(width: ${round(info.width)}, height: ${round(info.height)})`);
     }
-    const stroke = solid(info.strokes);
-    if (stroke && info.strokeWeight)
-      mod(
-        `.overlay(${shape}.stroke(${swiftColor(stroke.hex, stroke.alpha)}, lineWidth: ${round(info.strokeWeight)}))`
-      );
   }
-  const s = shadow(info);
-  if (s && s.type === 'DROP_SHADOW')
-    mod(
-      `.shadow(color: ${swiftColor(s.color, s.alpha)}, radius: ${round(s.radius / 2)}, x: ${round(s.x)}, y: ${round(s.y)})`
-    );
-  const blur = info.effects.find((e) => e.visible && e.type === 'LAYER_BLUR');
-  if (blur) mod(`.blur(radius: ${round(blur.radius / 2)})`);
-  if (info.opacity < 0.999) mod(`.opacity(${round(info.opacity)})`);
-  if (Math.abs(info.rotation) > 0.01)
-    mod(`.rotationEffect(.degrees(${round(-info.rotation)}))`);
-  return lines;
 }
 
 // ---- Jetpack Compose ----------------------------------------------------------
@@ -300,25 +355,16 @@ export function composeFor(info: NodeInfo): string[] {
           ? `RoundedCornerShape(topStart = ${round(info.cornerRadius.top_left)}.dp, topEnd = ${round(info.cornerRadius.top_right)}.dp, bottomEnd = ${round(info.cornerRadius.bottom_right)}.dp, bottomStart = ${round(info.cornerRadius.bottom_left)}.dp)`
           : undefined;
   const shape = shapeOf();
-  if (s && s.type === 'DROP_SHADOW')
-    modifiers.push(
-      `.shadow(elevation = ${round(s.radius / 2)}.dp, spotColor = ${composeColor(s.color, s.alpha)}${shape ? `, shape = ${shape}` : ''})`
-    );
+  pushShadowModifier();
   if (Math.abs(info.rotation) > 0.01)
     modifiers.push(`.rotate(degrees = ${round(-info.rotation)}f)`);
   modifiers.push(`.width(${round(info.width)}.dp)`);
   if (!isText(info)) modifiers.push(`.height(${round(info.height)}.dp)`);
   if (info.opacity < 0.999) modifiers.push(`.alpha(${round(info.opacity)}f)`);
   const stroke = solid(info.strokes);
-  if (stroke && info.strokeWeight)
-    modifiers.push(
-      `.border(width = ${round(info.strokeWeight)}.dp, color = ${composeColor(stroke.hex, stroke.alpha)}${shape ? `, shape = ${shape}` : ''})`
-    );
+  pushBorderModifier();
   const fill = solid(info.fills);
-  if (fill && !isText(info))
-    modifiers.push(
-      `.background(color = ${composeColor(fill.hex, fill.alpha)}${shape ? `, shape = ${shape}` : ''})`
-    );
+  pushBackgroundModifier();
   const al = info.autoLayout;
   const flex = al && (al.mode === 'HORIZONTAL' || al.mode === 'VERTICAL');
   if (flex && al) {
@@ -354,12 +400,7 @@ export function composeFor(info: NodeInfo): string[] {
           .with('RIGHT', () => 'Right')
           .otherwise(() => 'Justify')}`
       );
-    if (t.letterSpacing && t.letterSpacing[0] !== 0) {
-      const [v, unit] = t.letterSpacing;
-      style.push(
-        `letterSpacing = ${unit === 'PERCENT' ? `${round(v / 100)}.em` : `${round(v)}.sp`}`
-      );
-    }
+    pushLetterSpacing(style, t);
     return [
       'Text(',
       `  text = ${kotlinString(t.characters)},`,
@@ -372,34 +413,72 @@ export function composeFor(info: NodeInfo): string[] {
       ')',
     ];
   }
-  const container = !flex ? 'Box' : al?.mode === 'VERTICAL' ? 'Column' : 'Row';
+  const container = containerName();
   const args = modifier.map((m) => `  ${m}`);
-  if (flex && al) {
-    const horizontal = al.mode === 'HORIZONTAL';
-    const arrangement =
-      al.primaryAlign === 'SPACE_BETWEEN'
-        ? 'Arrangement.SpaceBetween'
-        : `Arrangement.spacedBy(${round(al.spacing)}.dp, Alignment.${match(
-            al.primaryAlign ?? 'MIN'
-          )
-            .with('CENTER', () =>
-              horizontal ? 'CenterHorizontally' : 'CenterVertically'
-            )
-            .with('MAX', () => (horizontal ? 'End' : 'Bottom'))
-            .otherwise(() => (horizontal ? 'Start' : 'Top'))})`;
-    const alignment = match(al.counterAlign ?? 'MIN')
-      .with('CENTER', () =>
-        horizontal ? 'CenterVertically' : 'CenterHorizontally'
-      )
-      .with('MAX', () => (horizontal ? 'Bottom' : 'End'))
-      .otherwise(() => (horizontal ? 'Top' : 'Start'));
-    args[args.length - 1] += ',';
-    args.push(
-      `  ${horizontal ? 'horizontalArrangement' : 'verticalArrangement'} = ${arrangement},`,
-      `  ${horizontal ? 'verticalAlignment' : 'horizontalAlignment'} = Alignment.${alignment},`
-    );
-  }
+  pushArrangementArgs();
   return [`${container}(`, ...args, ') {', '  // Content', '}'];
+
+  function pushLetterSpacing(style: string[], tInput: NonNullable<typeof t>) {
+    if (tInput.letterSpacing && tInput.letterSpacing[0] !== 0) {
+      const [v, unit] = tInput.letterSpacing;
+      style.push(
+        `letterSpacing = ${unit === 'PERCENT' ? `${round(v / 100)}.em` : `${round(v)}.sp`}`
+      );
+    }
+  }
+
+  function pushBorderModifier() {
+    if (stroke && info.strokeWeight)
+      modifiers.push(
+        `.border(width = ${round(info.strokeWeight)}.dp, color = ${composeColor(stroke.hex, stroke.alpha)}${shape ? `, shape = ${shape}` : ''})`
+      );
+  }
+
+  function pushShadowModifier() {
+    if (s && s.type === 'DROP_SHADOW')
+      modifiers.push(
+        `.shadow(elevation = ${round(s.radius / 2)}.dp, spotColor = ${composeColor(s.color, s.alpha)}${shape ? `, shape = ${shape}` : ''})`
+      );
+  }
+
+  function pushBackgroundModifier() {
+    if (fill && !isText(info))
+      modifiers.push(
+        `.background(color = ${composeColor(fill.hex, fill.alpha)}${shape ? `, shape = ${shape}` : ''})`
+      );
+  }
+
+  function containerName() {
+    return !flex ? 'Box' : al?.mode === 'VERTICAL' ? 'Column' : 'Row';
+  }
+
+  function pushArrangementArgs() {
+    if (flex && al) {
+      const horizontal = al.mode === 'HORIZONTAL';
+      const arrangement =
+        al.primaryAlign === 'SPACE_BETWEEN'
+          ? 'Arrangement.SpaceBetween'
+          : `Arrangement.spacedBy(${round(al.spacing)}.dp, Alignment.${match(
+              al.primaryAlign ?? 'MIN'
+            )
+              .with('CENTER', () =>
+                horizontal ? 'CenterHorizontally' : 'CenterVertically'
+              )
+              .with('MAX', () => (horizontal ? 'End' : 'Bottom'))
+              .otherwise(() => (horizontal ? 'Start' : 'Top'))})`;
+      const alignment = match(al.counterAlign ?? 'MIN')
+        .with('CENTER', () =>
+          horizontal ? 'CenterVertically' : 'CenterHorizontally'
+        )
+        .with('MAX', () => (horizontal ? 'Bottom' : 'End'))
+        .otherwise(() => (horizontal ? 'Top' : 'Start'));
+      args[args.length - 1] += ',';
+      args.push(
+        `  ${horizontal ? 'horizontalArrangement' : 'verticalArrangement'} = ${arrangement},`,
+        `  ${horizontal ? 'verticalAlignment' : 'horizontalAlignment'} = Alignment.${alignment},`
+      );
+    }
+  }
 }
 
 /** The layer's code in `language`. */

@@ -3,9 +3,10 @@
  * shared session when one is already open or a live frame just arrived.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
-import { AgentSession } from './AgentSession';
+import { AgentSession } from '../../queries/agent-session/agent-session';
 import {
   hasSessionActivity,
   isWorkingTurn,
@@ -40,7 +41,14 @@ export function useSessionTurn(
     // A row follows a session to show its turn and renders nothing from the
     // load, so a load it abandons by unmounting is not this caller's problem.
     // Left floating it surfaced as an unhandled rejection on every scroll.
-    void session.load().catch(() => undefined);
+    const load = async () => {
+      try {
+        await session.load();
+      } catch {
+        // Abandoned with the row; nothing here reads the load.
+      }
+    };
+    fireAndForget(load(), 'session-turn');
     onCleanup(() => session.release());
   });
 

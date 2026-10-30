@@ -242,6 +242,29 @@ function DefaultActions(props: {
   );
 }
 
+/** Who the composer can mention: the given participants, or also bots and agents. */
+function useChannelMentionUsers(
+  props: Pick<ChannelInputProps, 'bots' | 'participants' | 'parent'>,
+  participantsOnly: boolean
+) {
+  const parentBots =
+    !props.bots && props.parent
+      ? useMessageBotMentionUsers(() => props.parent!)
+      : () => [];
+  const parentParticipants =
+    !props.participants && props.parent
+      ? useMessageParticipants(() => props.parent!)
+      : () => [];
+  // Connection-prompt behavior for the built-in agents lives in
+  // useAgentMentionUsers; participants and parent agents feed it here.
+  return participantsOnly
+    ? () => props.participants?.() ?? []
+    : useAgentMentionUsers(() => [
+        ...(props.participants?.() ?? parentParticipants()),
+        ...(props.bots?.() ?? parentBots()),
+      ]);
+}
+
 export function ChannelInput(props: ChannelInputProps) {
   const features = (): ChannelInputFeatures => ({
     ...ALL_FEATURES,
@@ -351,25 +374,10 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  const parentBots =
-    !props.bots && props.parent
-      ? useMessageBotMentionUsers(() => props.parent!)
-      : () => [];
-  const parentParticipants =
-    !props.participants && props.parent
-      ? useMessageParticipants(() => props.parent!)
-      : () => [];
-  // Connection-prompt behavior for the built-in agents lives in
-  // useAgentMentionUsers; participants and parent agents feed it here.
   // The editor is configured once, at mount.
   const initialFeatures = features();
   const participantsOnly = initialFeatures.mentions === 'participants';
-  const mentionUsers = participantsOnly
-    ? () => props.participants?.() ?? []
-    : useAgentMentionUsers(() => [
-        ...(props.participants?.() ?? parentParticipants()),
-        ...(props.bots?.() ?? parentBots()),
-      ]);
+  const mentionUsers = useChannelMentionUsers(props, participantsOnly);
 
   const groupMentions =
     !participantsOnly && (!props.parent || props.parent.type === 'channel');
@@ -468,6 +476,20 @@ export function ChannelInput(props: ChannelInputProps) {
     mentionUsers().find(
       (user) => isMacroAgentId(user.id) || isMacroNewId(user.id)
     );
+  // Mention Macro, then leave a space for the request that follows.
+  const mentionMacro = async (
+    editor: LexicalEditor,
+    macro: NonNullable<ReturnType<typeof macroUser>>
+  ) => {
+    await handleUserMention(macro, {
+      editor,
+      blockName: groupMentions ? 'channel' : undefined,
+    });
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) selection.insertText(' ');
+    });
+  };
   const addMenuGroups = (): ComposerAddMenuGroup[] => {
     const create = (
       id: string,
@@ -573,16 +595,7 @@ export function ChannelInput(props: ChannelInputProps) {
                     runInEditor(
                       (editor) => {
                         fireAndForget(
-                          handleUserMention(macro, {
-                            editor,
-                            blockName: groupMentions ? 'channel' : undefined,
-                          }).then(() =>
-                            editor.update(() => {
-                              const selection = $getSelection();
-                              if ($isRangeSelection(selection))
-                                selection.insertText(' ');
-                            })
-                          ),
+                          mentionMacro(editor, macro),
                           'channel-input'
                         );
                       },

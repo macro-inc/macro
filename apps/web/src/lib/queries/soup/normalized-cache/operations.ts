@@ -4,7 +4,6 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type {
   PostSoupRequest,
@@ -487,52 +486,37 @@ export function removeSoupEntitiesFromDoneFilteredQueries(
   return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
 }
 
-/**
- * Prepend a cached entity to the done-excluding soup queries (see
- * `soupQueryExcludesDone`) whose pages don't contain it. A fresh notification
- * puts its entity back into those feeds server-side, but the client row may
- * have been optimistically removed when it was marked done — or the feed was
- * fetched while the entity had nothing outstanding — and the normalized
- * field merge only patches rows already present, so without this the feeds
- * would not show the entity again until their next refetch. Grouped pages
- * and expanded single-group caches (which back grouped views' rows and are
- * cached with staleTime Infinity) are restored the same way; groups that
- * can't be resolved locally (e.g. date buckets) invalidate instead.
- */
-export function restoreSoupEntityToDoneFilteredQueries(
+const cancelLoadedSoupQuery = (key: QueryKey) =>
+  queryClient.cancelQueries({
+    queryKey: key,
+    exact: true,
+    predicate: (query) => query.state.data !== undefined,
+  });
+
+const soupQueryMetaFor = (key: QueryKey) =>
+  getSoupQueryMeta(queryClient.getQueryCache().find({ queryKey: key })?.meta);
+
+const containsSoupEntity = (items: SoupApiItem[], entityId: string) =>
+  items.some((existing) => getSoupItemId(existing) === entityId);
+
+function restoreToFlatSoupQueries(
+  item: SoupApiItem,
   entityId: string,
-  incomingState: 'unseen' | 'seen' = 'unseen'
+  shouldRestore: (key: QueryKey) => boolean
 ): void {
-  const shouldRestore = (key: QueryKey) =>
-    soupQueryExcludesDone(key, incomingState);
-  const item = getSoupEntityById(entityId);
-  if (!item) return;
-
-  const cancelQuery = (key: QueryKey) =>
-    queryClient.cancelQueries({
-      queryKey: key,
-      exact: true,
-      predicate: (query) => query.state.data !== undefined,
-    });
-
-  const metaFor = (key: QueryKey) =>
-    getSoupQueryMeta(queryClient.getQueryCache().find({ queryKey: key })?.meta);
-
-  const containsEntity = (items: SoupApiItem[]) =>
-    items.some((existing) => getSoupItemId(existing) === entityId);
-
   for (const [key, prev] of queryClient.getQueriesData<SoupItemsInfiniteData>({
     queryKey: soupKeys.items._def,
   })) {
     if (!shouldRestore(key)) continue;
     if (!prev?.pages?.length) continue;
-    if (prev.pages.some((page) => containsEntity(page.items))) continue;
+    if (prev.pages.some((page) => containsSoupEntity(page.items, entityId)))
+      continue;
 
-    const flatMeta = metaFor(key);
+    const flatMeta = soupQueryMetaFor(key);
     if (flatMeta.itemFilter && !flatMeta.itemFilter(item)) continue;
     if (flatMeta.insertFilter && !flatMeta.insertFilter(item)) continue;
 
-    fireAndForget(cancelQuery(key), 'soup-normalized-cache');
+    fireAndForget(cancelLoadedSoupQuery(key), 'soup-normalized-cache');
     queryClient.setQueryData<SoupItemsInfiniteData>(key, {
       ...prev,
       pages: prev.pages.map((page, index) =>
@@ -541,7 +525,13 @@ export function restoreSoupEntityToDoneFilteredQueries(
     });
     retainRestoredSoupItem(queryClient, key, item);
   }
+}
 
+function restoreToAstSoupQueries(
+  item: SoupApiItem,
+  entityId: string,
+  shouldRestore: (key: QueryKey) => boolean
+): void {
   for (const [
     key,
     prev,
@@ -551,7 +541,7 @@ export function restoreSoupEntityToDoneFilteredQueries(
     if (!shouldRestore(key)) continue;
     if (!prev?.pages?.length) continue;
 
-    const meta = metaFor(key);
+    const meta = soupQueryMetaFor(key);
     if (meta.itemFilter && !meta.itemFilter(item)) continue;
     if (meta.insertFilter && !meta.insertFilter(item)) continue;
 
@@ -560,13 +550,14 @@ export function restoreSoupEntityToDoneFilteredQueries(
     if (firstPage.kind === 'flat') {
       if (
         prev.pages.some(
-          (page) => page.kind === 'flat' && containsEntity(page.items)
+          (page) =>
+            page.kind === 'flat' && containsSoupEntity(page.items, entityId)
         )
       ) {
         continue;
       }
 
-      fireAndForget(cancelQuery(key), 'soup-normalized-cache');
+      fireAndForget(cancelLoadedSoupQuery(key), 'soup-normalized-cache');
       queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
         ...prev,
         pages: prev.pages.map((page, index) =>
@@ -593,13 +584,37 @@ export function restoreSoupEntityToDoneFilteredQueries(
       continue;
     }
 
-    fireAndForget(cancelQuery(key), 'soup-normalized-cache');
+    fireAndForget(cancelLoadedSoupQuery(key), 'soup-normalized-cache');
     queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
       ...prev,
       pages: [nextPage, ...prev.pages.slice(1)],
     });
   }
+}
 
+/**
+ * Prepend a cached entity to the done-excluding soup queries (see
+ * `soupQueryExcludesDone`) whose pages don't contain it. A fresh notification
+ * puts its entity back into those feeds server-side, but the client row may
+ * have been optimistically removed when it was marked done — or the feed was
+ * fetched while the entity had nothing outstanding — and the normalized
+ * field merge only patches rows already present, so without this the feeds
+ * would not show the entity again until their next refetch. Grouped pages
+ * and expanded single-group caches (which back grouped views' rows and are
+ * cached with staleTime Infinity) are restored the same way; groups that
+ * can't be resolved locally (e.g. date buckets) invalidate instead.
+ */
+export function restoreSoupEntityToDoneFilteredQueries(
+  entityId: string,
+  incomingState: 'unseen' | 'seen' = 'unseen'
+): void {
+  const shouldRestore = (key: QueryKey) =>
+    soupQueryExcludesDone(key, incomingState);
+  const item = getSoupEntityById(entityId);
+  if (!item) return;
+
+  restoreToFlatSoupQueries(item, entityId, shouldRestore);
+  restoreToAstSoupQueries(item, entityId, shouldRestore);
   insertGroupQueries(item, entityId, shouldRestore);
 }
 
@@ -913,8 +928,9 @@ async function updateRecentlyViewedItemLazily(
 export function optimisticUpdateSoupItemViewedAt(itemId: string) {
   const now = new Date().toISOString();
 
-  updateRecentlyViewedItemLazily(itemId, now).catch((error) =>
-    Telemetry.error(error, { surface: 'soup-normalized-cache' })
+  fireAndForget(
+    updateRecentlyViewedItemLazily(itemId, now),
+    'soup-normalized-cache'
   );
 
   const current = getSoupEntityById(itemId);

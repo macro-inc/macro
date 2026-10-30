@@ -17,8 +17,8 @@ import {
 } from '@queries/channel/channel-attachments';
 import { queryReadyGate } from '@queries/gate';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
-import { stringToItemType } from '@service-storage/client';
 import type { ApiChannelAttachment } from '@service-storage/generated/schemas/apiChannelAttachment';
+import { stringToItemType } from '@service-storage/itemType';
 import { createMemo, For, Show } from 'solid-js';
 import {
   AttachmentEntityList,

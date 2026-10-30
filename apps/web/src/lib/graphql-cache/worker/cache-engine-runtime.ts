@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { startDetached } from '@core/util/startDetached';
 import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
@@ -440,7 +441,7 @@ async function activate(
             )
           );
           drainFiber.addObserver(() => {
-            void closeLifecycle().catch(() => undefined);
+            startDetached(closeLifecycle(), () => {});
           });
         })
         .with({ kind: 'heartbeat' }, ({ heartbeatId }) => {
@@ -610,12 +611,10 @@ export function installCacheEngineWorker(
     const cleanup = validatePageToCleanupEnvelope(event.data);
     if (cleanup.ok) {
       activated = true;
-      removeStaleDatabases(
-        cleanup.value,
-        directPort,
-        workerScope,
-        options
-      ).catch(reportEngineTaskFailure);
+      startDetached(
+        removeStaleDatabases(cleanup.value, directPort, workerScope, options),
+        reportEngineTaskFailure
+      );
       return;
     }
     const parsed = validatePageToEngineEnvelope(event.data);
@@ -624,7 +623,8 @@ export function installCacheEngineWorker(
       return;
     }
     activated = true;
-    activate(parsed.value, directPort, workerScope, options).catch(
+    startDetached(
+      activate(parsed.value, directPort, workerScope, options),
       reportEngineTaskFailure
     );
   };

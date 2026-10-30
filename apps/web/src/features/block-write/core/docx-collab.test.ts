@@ -4,7 +4,7 @@ import type {
   EditOp,
   EditResult,
   RemoteChange,
-} from '@core/docx-engine/types';
+} from '@app/lib/docx/types';
 import { LoroDoc, LoroText } from 'loro-crdt';
 import { describe, expect, it } from 'vitest';
 import { applyToText } from './delta';

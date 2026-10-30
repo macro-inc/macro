@@ -279,7 +279,7 @@ export function createKanbanAnimation(options: {
 
     if (!changed) {
       snapshots = next;
-      if (!hovering && moves === 0) disconnect();
+      updatePlay3();
       return;
     }
 
@@ -295,19 +295,7 @@ export function createKanbanAnimation(options: {
     >();
     for (const [key, ghost] of flights) {
       const rect = ghost.getBoundingClientRect();
-      flightStarts.set(key, {
-        rect:
-          rect.width && rect.height
-            ? rect
-            : new DOMRect(
-                Number.parseFloat(ghost.style.left),
-                Number.parseFloat(ghost.style.top),
-                Number.parseFloat(ghost.style.width),
-                Number.parseFloat(ghost.style.height)
-              ),
-        clone: ghost.cloneNode(true) as HTMLElement,
-        opacity: getComputedStyle(ghost).opacity || ghost.style.opacity || '1',
-      });
+      flightStarts.set(key, buildPlay(rect, ghost));
     }
     clearAnimations();
 
@@ -325,66 +313,51 @@ export function createKanbanAnimation(options: {
       };
 
       for (const item of next.values()) {
-        const previous = snapshots.get(item.key);
-        if (previous && flightStarts.has(item.key)) {
-          fly(previous, item, flightStarts.get(item.key), !!item.placeholder);
-          continue;
-        }
-
-        if (previous?.dragOrigin) {
-          fly(previous, item);
-          continue;
-        }
-
-        if (!previous) {
-          if (item.placeholder && hovering) {
-            const source = removed.find(
-              (candidate) => candidate.placeholder && !used.has(candidate)
-            );
-            if (source) {
-              fly(source, item, flightStarts.get(source.key), true);
-              used.add(source);
-            } else {
-              animate(item.element, [{ opacity: 0 }, { opacity: 1 }]);
-            }
+        const processItem = () => {
+          const previous = snapshots.get(item.key);
+          if (previous && flightStarts.has(item.key)) {
+            fly(previous, item, flightStarts.get(item.key), !!item.placeholder);
+            return;
           }
-          const source = item.identity
-            ? removed.find(
-                (candidate) =>
-                  candidate.identity === item.identity && !used.has(candidate)
-              )
+
+          if (previous?.dragOrigin) {
+            fly(previous, item);
+            return;
+          }
+
+          if (!previous) {
+            updatePlay2(item, removed, used);
+            const source = item.identity
+              ? removed.find(
+                  (candidate) =>
+                    candidate.identity === item.identity && !used.has(candidate)
+                )
+              : undefined;
+            updatePlay(source, item, used);
+            return;
+          }
+
+          const total = displacement(item, previous);
+          const oldParent = item.parentKey
+            ? snapshots.get(item.parentKey)
             : undefined;
-          if (
-            source &&
-            (!destinations.has(item.identity!) ||
-              item.parentKey === destinations.get(item.identity!))
-          ) {
-            fly(source, item, flightStarts.get(source.key));
-            used.add(source);
+          const newParent = item.parentKey
+            ? next.get(item.parentKey)
+            : undefined;
+          const parent = buildParent(oldParent, newParent, displacement);
+          const x = total.x - parent.x;
+          const y = total.y - parent.y;
+
+          if (Math.abs(x) < 1 && Math.abs(y) < 1) {
+            return;
           }
-          continue;
-        }
 
-        const total = displacement(item, previous);
-        const oldParent = item.parentKey
-          ? snapshots.get(item.parentKey)
-          : undefined;
-        const newParent = item.parentKey ? next.get(item.parentKey) : undefined;
-        const parent =
-          oldParent && newParent
-            ? displacement(newParent, oldParent)
-            : { x: 0, y: 0 };
-        const x = total.x - parent.x;
-        const y = total.y - parent.y;
-
-        if (Math.abs(x) < 1 && Math.abs(y) < 1) {
-          continue;
-        }
-
-        animate(item.element, [
-          { transform: `translate(${x}px, ${y}px)` },
-          { transform: 'translate(0, 0)' },
-        ]);
+          animate(item.element, [
+            { transform: `translate(${x}px, ${y}px)` },
+            { transform: 'translate(0, 0)' },
+          ]);
+        };
+        processItem();
       }
 
       // A removed placement can merge into an already mounted destination.
@@ -409,7 +382,80 @@ export function createKanbanAnimation(options: {
     }
 
     snapshots = next;
-    if (!hovering && moves === 0) disconnect();
+    updatePlay4();
+
+    function buildParent(
+      oldParent: Snapshot | undefined,
+      newParent: Snapshot | undefined,
+      displacement: (
+        item: Snapshot,
+        previous: Snapshot
+      ) => { x: number; y: number }
+    ) {
+      return oldParent && newParent
+        ? displacement(newParent, oldParent)
+        : { x: 0, y: 0 };
+    }
+
+    function updatePlay4() {
+      if (!hovering && moves === 0) disconnect();
+    }
+
+    function updatePlay3() {
+      if (!hovering && moves === 0) disconnect();
+    }
+
+    function buildPlay(
+      rect: DOMRect,
+      ghost: HTMLElement
+    ): { rect: DOMRect; clone: HTMLElement; opacity: string } {
+      return {
+        rect:
+          rect.width && rect.height
+            ? rect
+            : new DOMRect(
+                Number.parseFloat(ghost.style.left),
+                Number.parseFloat(ghost.style.top),
+                Number.parseFloat(ghost.style.width),
+                Number.parseFloat(ghost.style.height)
+              ),
+        clone: ghost.cloneNode(true) as HTMLElement,
+        opacity: getComputedStyle(ghost).opacity || ghost.style.opacity || '1',
+      };
+    }
+
+    function updatePlay2(
+      item: Snapshot,
+      removed: Snapshot[],
+      used: Set<Snapshot>
+    ) {
+      if (item.placeholder && hovering) {
+        const source = removed.find(
+          (candidate) => candidate.placeholder && !used.has(candidate)
+        );
+        if (source) {
+          fly(source, item, flightStarts.get(source.key), true);
+          used.add(source);
+        } else {
+          animate(item.element, [{ opacity: 0 }, { opacity: 1 }]);
+        }
+      }
+    }
+
+    function updatePlay(
+      source: Snapshot | undefined,
+      item: Snapshot,
+      used: Set<Snapshot>
+    ) {
+      if (
+        source &&
+        (!destinations.has(item.identity!) ||
+          item.parentKey === destinations.get(item.identity!))
+      ) {
+        fly(source, item, flightStarts.get(source.key));
+        used.add(source);
+      }
+    }
   }
 
   function schedule() {

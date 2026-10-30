@@ -572,7 +572,15 @@ describe('worker CacheHost coordinator integration', () => {
     const slowRejected = expect(slowRead).rejects.toMatchObject({
       errorCode: 'owner-epoch-lost',
     });
-    void slowRead.catch(() => order.push('old-request-rejected'));
+
+    const recordRejection = async () => {
+      try {
+        await slowRead;
+      } catch {
+        order.push('old-request-rejected');
+      }
+    };
+    const rejectionRecorded = recordRejection();
     await vi.waitFor(() =>
       expect(
         logs.filter(
@@ -583,6 +591,7 @@ describe('worker CacheHost coordinator integration', () => {
 
     dedicatedWorkers[0]?.fail('integration engine loss');
     await slowRejected;
+    await rejectionRecorded;
     await vi.waitFor(() => expect(order).toContain('affected:7,9'));
     await vi.waitFor(() => expect(replacementRead).toBeDefined());
     await expect(replacementRead).resolves.toEqual({ kind: 'miss' });

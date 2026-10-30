@@ -108,6 +108,170 @@ export interface KeyInput {
   altKey: boolean;
 }
 
+const altShiftActions = new Map<string, ViewerAction>([
+  ['KeyA', 'remove-auto-layout'],
+  ['KeyU', 'boolean-union'],
+  ['KeyS', 'boolean-subtract'],
+  ['KeyI', 'boolean-intersect'],
+  ['KeyE', 'boolean-exclude'],
+  ['KeyX', 'boolean-exclude'],
+]);
+const altActions = new Map<string, ViewerAction>([
+  ['Digit1', 'toggle-layers'],
+  ['Digit2', 'toggle-assets'],
+  ['Digit8', 'toggle-design'],
+  ['KeyL', 'collapse-layers'],
+  ['KeyA', 'align-left'],
+  ['KeyH', 'align-center'],
+  ['KeyD', 'align-right'],
+  ['KeyW', 'align-top'],
+  ['KeyV', 'align-middle'],
+  ['KeyS', 'align-bottom'],
+]);
+const commandAltActions = new Map<string, ViewerAction>([
+  ['KeyG', 'frame-selection'],
+  ['KeyK', 'create-component'],
+  ['KeyB', 'detach-instance'],
+  ['BracketRight', 'bring-to-front'],
+  ['BracketLeft', 'send-to-back'],
+]);
+const commandShiftActions = new Map<string, ViewerAction>([
+  ['KeyC', 'copy-png'],
+  ['KeyE', 'export'],
+  ['KeyZ', 'redo'],
+  ['KeyG', 'ungroup'],
+  ['KeyH', 'toggle-visible'],
+  ['KeyL', 'toggle-locked'],
+  ['KeyK', 'place-image'],
+  ['KeyR', 'paste-replace'],
+]);
+const commandActions = new Map<string, ViewerAction>([
+  ['KeyZ', 'undo'],
+  ['KeyD', 'duplicate'],
+  ['KeyE', 'flatten'],
+  ['KeyC', 'copy'],
+  ['KeyX', 'cut'],
+  ['KeyV', 'paste'],
+  ['KeyG', 'group'],
+  ['KeyR', 'rename'],
+  ['BracketRight', 'bring-forward'],
+  ['BracketLeft', 'send-backward'],
+  ['Equal', 'zoom-in'],
+  ['NumpadAdd', 'zoom-in'],
+  ['Minus', 'zoom-out'],
+  ['NumpadSubtract', 'zoom-out'],
+  ['Digit0', 'zoom-100'],
+  ['Numpad0', 'zoom-100'],
+  ['KeyA', 'select-all'],
+  ['Backslash', 'toggle-ui'],
+  ['Period', 'toggle-ui'],
+  ['KeyP', 'open-actions'],
+  ['Slash', 'open-actions'],
+  ['KeyY', 'toggle-outline'],
+  ['KeyF', 'find'],
+]);
+const shiftActions = new Map<string, ViewerAction>([
+  ['Digit0', 'zoom-100'],
+  ['Digit1', 'zoom-fit'],
+  ['Digit2', 'zoom-selection'],
+  ['KeyN', 'previous-frame'],
+  ['KeyA', 'add-auto-layout'],
+  ['KeyH', 'flip-horizontal'],
+  ['KeyV', 'flip-vertical'],
+  ['KeyL', 'tool-arrow'],
+  ['KeyP', 'tool-pencil'],
+  ['KeyX', 'swap-fill-stroke'],
+  ['KeyR', 'toggle-rulers'],
+  ['Quote', 'toggle-pixel-grid'],
+  ['Tab', 'previous-sibling'],
+  ['Enter', 'select-parent'],
+  ['Equal', 'zoom-in'],
+  ['Slash', 'show-shortcuts'],
+  ['ArrowLeft', 'nudge-left-10'],
+  ['ArrowRight', 'nudge-right-10'],
+  ['ArrowUp', 'nudge-up-10'],
+  ['ArrowDown', 'nudge-down-10'],
+]);
+const plainActions = new Map<string, ViewerAction>([
+  ['v', 'tool-move'],
+  ['h', 'tool-hand'],
+  ['n', 'next-frame'],
+  ['=', 'zoom-in'],
+  ['+', 'zoom-in'],
+  ['-', 'zoom-out'],
+  ['Escape', 'escape'],
+  ['Enter', 'select-children'],
+  ['\\', 'select-parent'],
+  ['Tab', 'next-sibling'],
+  ['PageDown', 'next-page'],
+  ['PageUp', 'previous-page'],
+  ['f', 'tool-frame'],
+  ['a', 'tool-frame'],
+  ['r', 'tool-rectangle'],
+  ['o', 'tool-ellipse'],
+  ['t', 'tool-text'],
+  ['l', 'tool-line'],
+  ['p', 'tool-pen'],
+  ['Delete', 'delete'],
+  ['Backspace', 'delete'],
+  ['ArrowLeft', 'nudge-left'],
+  ['ArrowRight', 'nudge-right'],
+  ['ArrowUp', 'nudge-up'],
+  ['ArrowDown', 'nudge-down'],
+]);
+
+function isLayoutGridShortcut(e: KeyInput, mac: boolean): boolean {
+  return mac
+    ? e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.code === 'KeyG'
+    : e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'Digit4';
+}
+
+function specialShortcut(
+  e: KeyInput,
+  mac: boolean,
+  key: string
+): ViewerAction | undefined {
+  // Figma's shortcuts panel works on either platform, including non-US layouts.
+  if (e.ctrlKey && e.shiftKey && (key === '?' || e.code === 'Slash'))
+    return 'show-shortcuts';
+  if (isLayoutGridShortcut(e, mac)) return 'toggle-layout-grids';
+  if (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey) {
+    if (e.code === 'KeyH') return 'distribute-horizontal';
+    if (e.code === 'KeyV') return 'distribute-vertical';
+  }
+  return undefined;
+}
+
+const commandEditingKeys = new Set([
+  'KeyZ',
+  'KeyD',
+  'KeyE',
+  'KeyC',
+  'KeyX',
+  'KeyV',
+  'KeyG',
+  'KeyR',
+  'BracketRight',
+  'BracketLeft',
+]);
+
+function commandShortcut(e: KeyInput, key: string): ViewerAction | undefined {
+  if (e.altKey) return commandAltActions.get(e.code);
+  if (e.shiftKey) return commandShiftActions.get(e.code);
+  if (key === '+' && !commandEditingKeys.has(e.code)) return 'zoom-in';
+  return commandActions.get(e.code);
+}
+
+function plainShortcut(e: KeyInput, key: string): ViewerAction | undefined {
+  if (!e.shiftKey && /^Digit[0-9]$/.test(e.code))
+    return `opacity-${e.code.slice(5) as Digit}`;
+  if (!e.shiftKey) return plainActions.get(key);
+  return (
+    shiftActions.get(e.code) ??
+    (key === '?' ? 'show-shortcuts' : key === '+' ? 'zoom-in' : undefined)
+  );
+}
+
 /** The action for a key press, if it is one of the viewer's shortcuts. */
 export function shortcutAction(
   e: KeyInput,
@@ -117,197 +281,13 @@ export function shortcutAction(
   // On macOS, Ctrl is never the command modifier.
   const otherMod = mac ? e.ctrlKey : e.metaKey;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  const plain = !mod && !otherMod && !e.altKey;
-
-  // Ctrl+⇧+? (Figma's shortcut for the shortcuts panel), on any platform.
-  if (e.ctrlKey && e.shiftKey && (key === '?' || e.code === 'Slash'))
-    return 'show-shortcuts';
-
-  // Layout grids: ⌃G on macOS, Ctrl+⇧4 elsewhere (Ctrl+G groups there).
-  if (
-    mac
-      ? e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.code === 'KeyG'
-      : e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'Digit4'
-  )
-    return 'toggle-layout-grids';
-
-  // Distribute: ⌃⌥H / ⌃⌥V (Ctrl+Alt elsewhere, where Ctrl is the modifier).
-  if (e.ctrlKey && e.altKey && !e.metaKey && !e.shiftKey) {
-    if (e.code === 'KeyH') return 'distribute-horizontal';
-    if (e.code === 'KeyV') return 'distribute-vertical';
-  }
-
-  if (e.altKey && !mod && !otherMod) {
-    if (e.shiftKey) {
-      if (e.code === 'KeyA') return 'remove-auto-layout';
-      if (e.code === 'KeyU') return 'boolean-union';
-      if (e.code === 'KeyS') return 'boolean-subtract';
-      if (e.code === 'KeyI') return 'boolean-intersect';
-      // ⌥⇧E is Figma's; ⌥⇧X is kept for those used to it here.
-      if (e.code === 'KeyE' || e.code === 'KeyX') return 'boolean-exclude';
-      return undefined;
-    }
-    if (e.code === 'Digit1') return 'toggle-layers';
-    if (e.code === 'Digit2') return 'toggle-assets';
-    if (e.code === 'Digit8') return 'toggle-design';
-    if (e.code === 'KeyL') return 'collapse-layers';
-    if (e.code === 'KeyA') return 'align-left';
-    if (e.code === 'KeyH') return 'align-center';
-    if (e.code === 'KeyD') return 'align-right';
-    if (e.code === 'KeyW') return 'align-top';
-    if (e.code === 'KeyV') return 'align-middle';
-    if (e.code === 'KeyS') return 'align-bottom';
-    return undefined;
-  }
-
-  if (mod && e.altKey) {
-    if (e.code === 'KeyG') return 'frame-selection';
-    if (e.code === 'KeyK') return 'create-component';
-    if (e.code === 'KeyB') return 'detach-instance';
-    if (e.code === 'BracketRight') return 'bring-to-front';
-    if (e.code === 'BracketLeft') return 'send-to-back';
-    return undefined;
-  }
-
-  if (mod && !e.altKey) {
-    if (e.shiftKey) {
-      if (e.code === 'KeyC') return 'copy-png';
-      if (e.code === 'KeyE') return 'export';
-      if (e.code === 'KeyZ') return 'redo';
-      if (e.code === 'KeyG') return 'ungroup';
-      if (e.code === 'KeyH') return 'toggle-visible';
-      if (e.code === 'KeyL') return 'toggle-locked';
-      if (e.code === 'KeyK') return 'place-image';
-      if (e.code === 'KeyR') return 'paste-replace';
-      return undefined;
-    }
-    if (e.code === 'KeyZ') return 'undo';
-    if (e.code === 'KeyD') return 'duplicate';
-    if (e.code === 'KeyE') return 'flatten';
-    if (e.code === 'KeyC') return 'copy';
-    if (e.code === 'KeyX') return 'cut';
-    if (e.code === 'KeyV') return 'paste';
-    if (e.code === 'KeyG') return 'group';
-    if (e.code === 'KeyR') return 'rename';
-    if (e.code === 'BracketRight') return 'bring-forward';
-    if (e.code === 'BracketLeft') return 'send-backward';
-    if (e.code === 'Equal' || e.code === 'NumpadAdd' || key === '+')
-      return 'zoom-in';
-    if (e.code === 'Minus' || e.code === 'NumpadSubtract') return 'zoom-out';
-    if (e.code === 'Digit0' || e.code === 'Numpad0') return 'zoom-100';
-    if (e.code === 'KeyA') return 'select-all';
-    // Figma takes both ⌘\ and ⌘. for showing and hiding the UI.
-    if (e.code === 'Backslash' || e.code === 'Period') return 'toggle-ui';
-    // The actions menu (the browser's print is not used here).
-    if (e.code === 'KeyP' || e.code === 'Slash') return 'open-actions';
-    if (e.code === 'KeyY') return 'toggle-outline';
-    if (e.code === 'KeyF') return 'find';
-    return undefined;
-  }
-
-  if (!plain) return undefined;
-
-  if (!e.shiftKey && /^Digit[0-9]$/.test(e.code))
-    return `opacity-${e.code.slice(5) as Digit}`;
-
-  if (e.shiftKey) {
-    switch (e.code) {
-      case 'Digit0':
-        return 'zoom-100';
-      case 'Digit1':
-        return 'zoom-fit';
-      case 'Digit2':
-        return 'zoom-selection';
-      case 'KeyN':
-        return 'previous-frame';
-      case 'KeyA':
-        return 'add-auto-layout';
-      case 'KeyH':
-        return 'flip-horizontal';
-      case 'KeyV':
-        return 'flip-vertical';
-      case 'KeyL':
-        return 'tool-arrow';
-      case 'KeyP':
-        return 'tool-pencil';
-      case 'KeyX':
-        return 'swap-fill-stroke';
-      case 'KeyR':
-        return 'toggle-rulers';
-      case 'Quote':
-        return 'toggle-pixel-grid';
-      case 'Tab':
-        return 'previous-sibling';
-      case 'Enter':
-        return 'select-parent';
-      case 'Equal':
-        return 'zoom-in';
-      case 'Slash':
-        return 'show-shortcuts';
-      case 'ArrowLeft':
-        return 'nudge-left-10';
-      case 'ArrowRight':
-        return 'nudge-right-10';
-      case 'ArrowUp':
-        return 'nudge-up-10';
-      case 'ArrowDown':
-        return 'nudge-down-10';
-    }
-    if (key === '?') return 'show-shortcuts';
-    if (key === '+') return 'zoom-in';
-    return undefined;
-  }
-
-  switch (key) {
-    case 'v':
-      return 'tool-move';
-    case 'h':
-      return 'tool-hand';
-    case 'n':
-      return 'next-frame';
-    case '=':
-    case '+':
-      return 'zoom-in';
-    case '-':
-      return 'zoom-out';
-    case 'Escape':
-      return 'escape';
-    case 'Enter':
-      return 'select-children';
-    case '\\':
-      return 'select-parent';
-    case 'Tab':
-      return 'next-sibling';
-    case 'PageDown':
-      return 'next-page';
-    case 'PageUp':
-      return 'previous-page';
-    case 'f':
-    case 'a':
-      return 'tool-frame';
-    case 'r':
-      return 'tool-rectangle';
-    case 'o':
-      return 'tool-ellipse';
-    case 't':
-      return 'tool-text';
-    case 'l':
-      return 'tool-line';
-    case 'p':
-      return 'tool-pen';
-    case 'Delete':
-    case 'Backspace':
-      return 'delete';
-    case 'ArrowLeft':
-      return 'nudge-left';
-    case 'ArrowRight':
-      return 'nudge-right';
-    case 'ArrowUp':
-      return 'nudge-up';
-    case 'ArrowDown':
-      return 'nudge-down';
-  }
-  return undefined;
+  const special = specialShortcut(e, mac, key);
+  if (special) return special;
+  if (e.altKey && !mod && !otherMod)
+    return (e.shiftKey ? altShiftActions : altActions).get(e.code);
+  if (mod) return commandShortcut(e, key);
+  if (otherMod || e.altKey) return undefined;
+  return plainShortcut(e, key);
 }
 
 /** Actions that change the file (ignored when it is read-only). */

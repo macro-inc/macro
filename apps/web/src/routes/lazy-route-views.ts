@@ -44,7 +44,7 @@ export const CompaniesRouteView = lazyNamed(
   'CompaniesRouteView'
 );
 export const DriveDetailView = lazyNamed(
-  () => import('@app/features/drive-view/components/DriveDetailView'),
+  () => import('@app/features/drive-view/views/DriveDetailView'),
   'DriveDetailView'
 );
 export const DriveCallRouteView = lazyNamed(

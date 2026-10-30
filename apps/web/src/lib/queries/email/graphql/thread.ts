@@ -106,6 +106,24 @@ type ThreadIdentity = {
   kind: 'remote' | 'local' | 'unknown';
 };
 
+async function readThreadIdentity(
+  host: Parameters<typeof readRecordsByKeys>[0],
+  threadId: string
+) {
+  try {
+    return await readRecordsByKeys(
+      host,
+      selectRecords(EmailThreadIdentityFieldsFragmentDoc),
+      [`GraphqlSoupEmailThread:${threadId}`]
+    );
+  } catch (error) {
+    // Initialization may retire the host while this first read is pending.
+    // Only session-wide fallback makes an unresolved route safe to fetch.
+    if (graphqlCacheEnabled()) throw error;
+    return undefined;
+  }
+}
+
 /** Resolve a durable local route before contacting the server with its ID. */
 async function cachedThreadIdentity(
   threadId: string,
@@ -116,18 +134,7 @@ async function cachedThreadIdentity(
   if (cacheRequired && !host) {
     throw new Error('Email cache is unavailable; thread identity is unknown');
   }
-  const result = host
-    ? await readRecordsByKeys(
-        host,
-        selectRecords(EmailThreadIdentityFieldsFragmentDoc),
-        [`GraphqlSoupEmailThread:${threadId}`]
-      ).catch((error) => {
-        // Initialization may retire the host while this first read is pending.
-        // Only session-wide fallback makes an unresolved route safe to fetch.
-        if (graphqlCacheEnabled()) throw error;
-        return undefined;
-      })
-    : undefined;
+  const result = host ? await readThreadIdentity(host, threadId) : undefined;
   // Cache fallback must not discard positive knowledge of an unsynced draft
   // or an already-resolved server alias, even if the latest lookup failed.
   if (

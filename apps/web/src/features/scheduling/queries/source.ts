@@ -1,4 +1,3 @@
-import { getDisplayNameParts, type MacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
@@ -17,7 +16,7 @@ import { schedulingKeys } from './keys';
 function schedulingProfileQueryOptions(
   scopeId: string,
   teamId: string | undefined,
-  userId?: string
+  owner?: { userId: string; firstName: string }
 ) {
   return queryOptions({
     queryKey: schedulingKeys.settings(scopeId).queryKey,
@@ -25,8 +24,12 @@ function schedulingProfileQueryOptions(
       const { profile } = await throwOnErr(() =>
         schedulingClient.settings(teamId)
       );
-      if (!teamId && userId) {
-        const updated = await createDefaultBookingLinkIfNeeded(profile, userId);
+      if (!teamId && owner?.userId) {
+        const updated = await createDefaultBookingLinkIfNeeded(
+          profile,
+          owner.userId,
+          owner.firstName
+        );
         if (updated) return updated;
       }
       return profile;
@@ -158,13 +161,13 @@ export function useManageBookingMutation() {
 
 async function createDefaultBookingLinkIfNeeded(
   profile: SchedulingProfile,
-  userId: string
+  userId: string,
+  firstName: string
 ): Promise<SchedulingProfile | null> {
   if (profile.revision !== 0 || profile.eventTypes.length > 0) {
     return null;
   }
 
-  const { firstName } = getDisplayNameParts(userId as MacroId);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const schedule = newSchedule(timeZone);
   const bookingLink = newDefaultBookingLink(schedule.id, userId, firstName);
@@ -188,9 +191,13 @@ async function createDefaultBookingLinkIfNeeded(
 
 export function useSchedulingProfileWithAutoSetupQuery(
   scope: Accessor<SchedulingScope>,
-  userId: Accessor<string>
+  userId: Accessor<string>,
+  firstName: Accessor<string>
 ) {
   return useQuery(() =>
-    schedulingProfileQueryOptions(scope().id, scope().teamId, userId())
+    schedulingProfileQueryOptions(scope().id, scope().teamId, {
+      userId: userId(),
+      firstName: firstName(),
+    })
   );
 }

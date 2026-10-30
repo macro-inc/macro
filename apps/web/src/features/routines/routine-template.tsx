@@ -1,5 +1,7 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { tryMacroId } from '@app/lib/identity/macro-id';
+import { getDefaultTimezone } from '@app/lib/utils/cron';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
@@ -10,10 +12,8 @@ import {
 import { useEmail, useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
-import { getDisplayName } from '@core/user/displayName';
-import { tryMacroId } from '@core/user/macroId';
+import { getDisplayName } from '@core/user';
 import { useSendMessageToPeople } from '@core/util/channels';
-import { getDefaultTimezone } from '@core/util/cron';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';

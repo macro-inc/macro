@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   CacheHost,
   CalendarLinkWatermarkWire,
@@ -88,9 +89,7 @@ export class CalendarSyncController {
     if (this.timer !== undefined) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      this.runDelta().catch((error) => {
-        console.warn('Calendar delta sync failed', error);
-      });
+      fireAndForget(this.syncDelta(), 'calendar-sync');
     }, this.debounceMs);
   }
 
@@ -98,6 +97,15 @@ export class CalendarSyncController {
    * Applies every change after the stored watermark. A call during a run
    * joins it and makes it run once more, so the caller sees its change.
    */
+  /** Runs `runDelta`, logging a failure instead of rejecting. */
+  private async syncDelta(): Promise<void> {
+    try {
+      await this.runDelta();
+    } catch (error) {
+      console.warn('Calendar delta sync failed', error);
+    }
+  }
+
   runDelta(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     if (this.running) {

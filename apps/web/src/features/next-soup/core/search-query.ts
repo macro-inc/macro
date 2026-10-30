@@ -79,6 +79,16 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
   Object.assign(exclude, seed.exclude);
   if (excludedSubTypes.length) exclude.subType = [...new Set(excludedSubTypes)];
 
+  includeActiveSection(state, include);
+
+  return { include, exclude };
+}
+
+/** Layers the active type's sub-facets (importance, channel ids, ...) onto its seed. */
+function includeActiveSection(
+  state: SearchFiltersState,
+  include: FieldFilters
+): void {
   if (state.type === 'email') {
     if (state.email.importance !== undefined) {
       include.emailImportance = state.email.importance;
@@ -122,6 +132,4 @@ export function compileSearchQuery(state: SearchFiltersState): Query {
       include.documentOwnerId = state.task.createdBy;
     }
   }
-
-  return { include, exclude };
 }

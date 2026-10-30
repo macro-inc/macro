@@ -3,7 +3,7 @@
  * publishes it (`POST /forms/{id}/collaboration`), the sync service carries
  * it on the collab surface the form owns, under the form's own id.
  */
-import { getCollabSurfaceToken } from '@core/collab-surface/token';
+import { getCollabSurfaceToken } from '@app/lib/queries/storage/collab-surface-token';
 import { collaborateOnForm } from '@queries/storage/forms';
 import type { FormCollaboration } from '@service-storage/generated/schemas/formCollaboration';
 import { createCollabSurfaceSource } from '@service-sync/source';

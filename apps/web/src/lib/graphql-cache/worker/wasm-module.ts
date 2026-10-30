@@ -1,3 +1,4 @@
+import { startDetached } from '@core/util/startDetached';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Typed surface of the generated wasm package (`cache-wasm`), loaded
@@ -371,7 +372,8 @@ export function loadCacheWasm(): Promise<CacheWasmModule> {
       }
     })();
     modulePromise = initialization;
-    void initialization.catch(() => {
+
+    startDetached(initialization, () => {
       if (modulePromise === initialization) modulePromise = undefined;
     });
   }

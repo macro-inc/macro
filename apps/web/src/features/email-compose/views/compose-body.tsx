@@ -19,12 +19,12 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { createAttachmentViewer } from '../components/attachment-viewer';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { useCompose } from '../context/compose-context';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
 import { EMAIL_FORMAT_SHORTCUTS } from '../primitives/format-shortcuts';
 import { addUserMentionToCc } from '../primitives/mention-to-cc';
+import { createAttachmentViewer } from './attachment-viewer';
 
 false && fileFolderDrop;
 

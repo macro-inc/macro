@@ -40,7 +40,7 @@ export function soupQueryExcludesDone(
         : unknown;
     }
     if ('l' in node || 'literal' in node) {
-      const leaf = (node.l ?? node.literal) as Record<string, unknown> | null;
+      const leaf = buildLeaf();
       if (!leaf || typeof leaf !== 'object') return unknown;
       const state = leaf.ns ?? leaf.NotificationState ?? leaf.notificationState;
       if (typeof state === 'string') return states([state.toLowerCase()]);
@@ -55,17 +55,28 @@ export function soupQueryExcludesDone(
     const filter = node.notification_filters as
       | { states?: unknown[] }
       | undefined;
-    if (Array.isArray(filter?.states) && filter.states.length) {
-      matches.push(states(filter.states));
-    }
+    updateInspect();
     // Inbox scoping and DTO selections are witnesses, not terminal nodes:
     // every sibling state constraint must also accept the arriving state.
     for (const [field, child] of Object.entries(node)) {
-      if (field !== 'emailView' && field !== 'notification_filters') {
-        matches.push(inspect(child));
-      }
+      const processFieldchild = () => {
+        if (field !== 'emailView' && field !== 'notification_filters') {
+          matches.push(inspect(child));
+        }
+      };
+      processFieldchild();
     }
     return combine(matches);
+
+    function buildLeaf() {
+      return (node.l ?? node.literal) as Record<string, unknown> | null;
+    }
+
+    function updateInspect() {
+      if (Array.isArray(filter?.states) && filter.states.length) {
+        matches.push(states(filter.states));
+      }
+    }
   };
   const result = inspect(key);
   return result.excludesDone && result.acceptsIncoming;

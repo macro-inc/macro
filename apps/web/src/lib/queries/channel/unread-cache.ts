@@ -7,6 +7,7 @@ import {
   type ChannelUnreadMembershipCacheWriteQuery,
   ChannelUnreadPresenceDocument,
   type ChannelUnreadPresenceQueryVariables,
+  type SoupInitialInput,
   type SoupNotificationFieldsFragment,
 } from '@service-storage/graphql/generated/graphql';
 import { mapGraphqlNotification } from '@service-storage/graphql-soup';
@@ -81,7 +82,7 @@ export async function cacheNewChannelUnread(
     const variables = page.variables as ChannelUnreadPresenceQueryVariables;
     const initial = variables.input.initial;
     // This is the app-shell presence query, not an arbitrary filtered list.
-    const filter = initial?.filters?.channelFilter?.literal;
+    const filter = buildFilter(initial);
     if (
       !initial ||
       !filter ||
@@ -119,4 +120,8 @@ export async function cacheNewChannelUnread(
     });
   }
   return complete && isCurrent();
+
+  function buildFilter(initial: SoupInitialInput | undefined) {
+    return initial?.filters?.channelFilter?.literal;
+  }
 }

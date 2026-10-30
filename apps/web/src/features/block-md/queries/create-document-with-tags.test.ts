@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   failure: vi.fn(),
 }));
-vi.mock('@core/util/create', () => ({ createMarkdownFile: mocks.create }));
+vi.mock('@app/lib/queries/items/create', () => ({
+  createMarkdownFile: mocks.create,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
 }));

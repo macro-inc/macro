@@ -1,3 +1,8 @@
+import {
+  executeChatTool,
+  rejectChatToolCall,
+  updateChatToolCall,
+} from '@queries/cognition/requests';
 /**
  * Chat's half of a deferred `CreateCalendarEvent`: the composer over the
  * pending call, finished through the cognition tool endpoints.
@@ -14,7 +19,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { invalidateCalendarOccurrences } from '@queries/calendar/occurrences';
 import { useChatQuery } from '@queries/chat';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
@@ -120,18 +125,16 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
     if (snapshot === lastEnqueuedSnapshot) return persistenceQueue;
     lastEnqueuedSnapshot = snapshot;
 
-    persistenceQueue = persistenceQueue.then(async () => {
+    const persistAfterQueued = async () => {
+      await persistenceQueue;
       if (finalized) return;
       try {
-        const result =
-          await cognitionApiServiceClient.updateToolCall<'CreateCalendarEvent'>(
-            {
-              chat_id: props.chatId,
-              messageId: props.messageId,
-              toolCallId: props.toolCallId,
-              args,
-            }
-          );
+        const result = await updateChatToolCall<'CreateCalendarEvent'>({
+          chat_id: props.chatId,
+          messageId: props.messageId,
+          toolCallId: props.toolCallId,
+          args,
+        });
         if (result.isOk()) {
           lastPersistedSnapshot = snapshot;
           return;
@@ -143,7 +146,8 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
         lastEnqueuedSnapshot = lastPersistedSnapshot;
       }
       toast.failure('Failed to save calendar event changes');
-    });
+    };
+    persistenceQueue = persistAfterQueued();
     return persistenceQueue;
   }
   const debouncedUpdate = debounce(
@@ -181,13 +185,12 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
     onExecute: async (args) => {
       debouncedUpdate.clear();
       await persistenceQueue;
-      const result =
-        await cognitionApiServiceClient.callTool<'CreateCalendarEvent'>({
-          chat_id: props.chatId,
-          messageId: props.messageId,
-          toolCallId: props.toolCallId,
-          args,
-        });
+      const result = await executeChatTool<'CreateCalendarEvent'>({
+        chat_id: props.chatId,
+        messageId: props.messageId,
+        toolCallId: props.toolCallId,
+        args,
+      });
       if (result.isErr()) {
         toast.failure('Failed to create calendar event');
         return false;
@@ -212,7 +215,7 @@ export function CalendarChatCompose(props: CalendarChatComposeProps) {
     onReject: async () => {
       debouncedUpdate.clear();
       await persistenceQueue;
-      const result = await cognitionApiServiceClient.rejectToolCall({
+      const result = await rejectChatToolCall({
         chat_id: props.chatId,
         messageId: props.messageId,
         toolCallId: props.toolCallId,

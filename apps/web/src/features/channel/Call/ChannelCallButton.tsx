@@ -10,6 +10,8 @@ import { useStartChannelCall } from './use-start-channel-call';
 export function ChannelCallButton(props: {
   channelId: string;
   grouped?: boolean;
+  /** Sits on an island tinted for the ongoing call, so its label reads on the tint. */
+  tinted?: boolean;
 }) {
   const call = useStartChannelCall(() => props.channelId);
 
@@ -27,7 +29,10 @@ export function ChannelCallButton(props: {
         icon={
           <PhoneIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         }
-        class={cn(call.isCallInProgress() && 'text-success')}
+        class={cn(
+          call.isCallInProgress() &&
+            (props.tinted ? 'text-surface' : 'text-success')
+        )}
       />
     </Show>
   );

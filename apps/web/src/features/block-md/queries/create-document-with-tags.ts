@@ -1,6 +1,6 @@
+import { createMarkdownFile } from '@app/lib/queries/items/create';
 import { toast } from '@core/component/Toast/Toast';
-import { createMarkdownFile } from '@core/util/create';
-import { Telemetry } from '@macro-inc/observability';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { propertyValueToApi } from '@property/api/converters';
 import type { PropertyApiValues } from '@property/types';
 import { refetchSoupEntity } from '@queries/soup/cache';
@@ -81,9 +81,9 @@ export async function createDocumentWithTags(
           body: { properties: tagUpdates },
         });
       if (result.isErr()) throw result.error;
-      refetchSoupEntity(documentId, 'document', { refreshGraphql: true }).catch(
-        (error) =>
-          Telemetry.error(error, { surface: 'create-document-with-tags' })
+      fireAndForget(
+        refetchSoupEntity(documentId, 'document', { refreshGraphql: true }),
+        'create-document-with-tags'
       );
     } catch {
       toast.failure(

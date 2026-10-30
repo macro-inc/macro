@@ -40,7 +40,7 @@ export function buildRows(
         purpose: meta?.purpose ?? '',
         archived: meta?.archived ?? false,
         memberCount: meta?.member_count ?? null,
-        matched: meta?.participants?.length ?? 0,
+        matched: buildMatched(),
         membersResolved: meta?.members_resolved ?? false,
         runStatus: run?.status,
         status: entity.status,
@@ -52,6 +52,10 @@ export function buildRows(
           entity.user_id !== currentUserId,
       },
     ];
+
+    function buildMatched(): number {
+      return meta?.participants?.length ?? 0;
+    }
   });
 }
 

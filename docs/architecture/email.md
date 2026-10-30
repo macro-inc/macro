@@ -398,11 +398,11 @@ icon; they verify provider ordering, reply lifetime/focus handoff, and keyboard
 behavior respectively, not complete view isolation. The native image adapter
 test substitutes platform detection and transport to exercise Tauri behavior.
 
-Two narrow shared pure utilities are allowed: `@core/util/base64` for the existing
-codec semantics and `@core/user/macroId` for validated identity formatting. The
+Shared pure helpers live outside app contexts: `@app/lib/utils/base64` retains
+the existing codec semantics and `@app/lib/identity/macro-id` validates identities. The
 attachment pill also reuses the static MIME/file-type map; its shared
 `EntityIcon` component has the app coupling described above. Do not generalize
-the pure utility exceptions to the corresponding barrels.
+these imports to application barrels.
 
 ## Enforcement and verification
 

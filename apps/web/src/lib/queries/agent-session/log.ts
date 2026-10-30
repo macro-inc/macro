@@ -1,3 +1,5 @@
+import { fireAndForget } from '@core/util/fireAndForget';
+import { startDetached } from '@core/util/startDetached';
 /**
  * The session log over GraphQL, through the normalized cache.
  *
@@ -191,7 +193,7 @@ export function watchAgentSessionLog(
     rejectFetched = reject;
   });
   // A rejection nobody has awaited yet must not be reported as unhandled.
-  fetched.catch(() => undefined);
+  startDetached(fetched, () => {});
 
   const appender = follow ? createAppender(sessionId) : undefined;
   const unsubscribeFollow = follow
@@ -340,6 +342,21 @@ type Appender = {
  * replace the list without them. Dedupes by row id, as the fold does, so a
  * row delivered twice is stored once.
  */
+/** Settles with `work`, whether or not it failed; callers that need the failure await `work` itself. */
+async function cacheRows(
+  sessionId: string,
+  rows: Parameters<typeof appendAgentSessionLogRows>[1]
+): Promise<void> {
+  const startedAt = performance.now();
+  try {
+    await appendAgentSessionLogRows(sessionId, rows);
+  } catch (error: unknown) {
+    console.warn('[agent-session] log rows could not be cached', error);
+    return;
+  }
+  traceCacheWrite(sessionId, startedAt, rows.length);
+}
+
 function createAppender(sessionId: string): Appender {
   let known: Set<string> | undefined;
   let pending: AgentSessionLogEntryDto[] = [];
@@ -349,13 +366,7 @@ function createAppender(sessionId: string): Appender {
     const rows = pending;
     if (rows.length === 0) return;
     pending = [];
-    const startedAt = performance.now();
-    void appendAgentSessionLogRows(sessionId, rows).then(
-      () => traceCacheWrite(sessionId, startedAt, rows.length),
-      (error: unknown) => {
-        console.warn('[agent-session] log rows could not be cached', error);
-      }
-    );
+    fireAndForget(cacheRows(sessionId, rows), 'agent-session-log');
   };
   const schedule = () => {
     if (timer !== undefined) return;

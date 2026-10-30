@@ -23,6 +23,9 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: mocks.open }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupClient: vi.fn(),
+}));
 vi.mock('./queries/project-identity', () => ({
   useProjectIdentityQuery: () => {
     mocks.mountQuery();

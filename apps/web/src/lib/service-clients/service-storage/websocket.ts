@@ -1,4 +1,5 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ConstantBackoff,
   type Websocket,
@@ -151,7 +152,14 @@ export function createWebSocketJob<T, R, D, U>({
           return;
         }
 
-        handleSuccess(currentResult).then(resolve).catch(reject);
+        const finishJob = async () => {
+          try {
+            resolve(await handleSuccess(currentResult));
+          } catch (error) {
+            reject(error);
+          }
+        };
+        fireAndForget(finishJob(), 'storage-websocket-job');
         return;
       }
 

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   GoalSeekRequest,
   GoalSeekResult,
@@ -183,22 +184,7 @@ export function createCalculation(
         const pivots = sheetPivotLayouts(sheet.metadata?.pivotTables);
         // Column names come from header cells, so a header edit changes them.
         const tables = sheetTableLayouts(sheet);
-        const descriptor = {
-          id: sheet.id,
-          name: sheet.name,
-          rowCount: sheet.layout.rowCount,
-          metadata: {
-            definedNames: sheet.metadata?.definedNames,
-            arrayFormulas: sheet.metadata?.arrayFormulas,
-            // SUBTOTAL(101-111) and AGGREGATE can leave hidden rows out.
-            hiddenRows: sheet.metadata?.hiddenRows,
-            conditionalFormats: sheet.metadata?.conditionalFormats,
-          },
-          // Where pivot tables show their values, for GETPIVOTDATA; the
-          // tables themselves are too large to send with every edit.
-          ...(pivots.length && { pivots }),
-          ...(tables.length && { tables }),
-        };
+        const descriptor = sheetDescriptor();
         const previous = sent.get(sheet.id);
         if (
           !previous ||
@@ -232,6 +218,25 @@ export function createCalculation(
           changed = true;
         }
         return { ...descriptor, changes: delta };
+
+        function sheetDescriptor() {
+          return {
+            id: sheet.id,
+            name: sheet.name,
+            rowCount: sheet.layout.rowCount,
+            metadata: {
+              definedNames: sheet.metadata?.definedNames,
+              arrayFormulas: sheet.metadata?.arrayFormulas,
+              // SUBTOTAL(101-111) and AGGREGATE can leave hidden rows out.
+              hiddenRows: sheet.metadata?.hiddenRows,
+              conditionalFormats: sheet.metadata?.conditionalFormats,
+            },
+            // Where pivot tables show their values, for GETPIVOTDATA; the
+            // tables themselves are too large to send with every edit.
+            ...(pivots.length && { pivots }),
+            ...(tables.length && { tables }),
+          };
+        }
       });
       for (const id of sent.keys())
         if (!sheets.some((sheet) => sheet.id === id)) {
@@ -291,16 +296,24 @@ export function createCalculation(
       let cells = 0;
       for (const keys of sent.values()) cells += keys.size;
       const current = ++generation;
-      void calculator
-        .run(
-          { type: 'update-workbook', sheets: patches },
-          // Entering a large workbook takes longer than recalculating it
-          // after an edit, which still reevaluates every formula.
-          CALCULATION_TIMEOUT_MS +
-            Math.min(60_000, entered / 20) +
-            Math.min(30_000, cells / 100)
-        )
-        .then((response) => {
+      const finishRun = () => {
+        if (current !== generation) return;
+        running = false;
+        if (queued) {
+          queued = false;
+          run();
+        } else setBusy(false);
+      };
+      const recalculate = async () => {
+        try {
+          const response = await calculator.run(
+            { type: 'update-workbook', sheets: patches },
+            // Entering a large workbook takes longer than recalculating it
+            // after an edit, which still reevaluates every formula.
+            CALCULATION_TIMEOUT_MS +
+              Math.min(60_000, entered / 20) +
+              Math.min(30_000, cells / 100)
+          );
           if (current !== generation || response.type !== 'update-workbook')
             return;
           for (const id of response.replaced) results[id] = {};
@@ -317,8 +330,7 @@ export function createCalculation(
               delete results[id];
           setWorkbookValues(results);
           scheduleMidnight();
-        })
-        .catch((cause: unknown) => {
+        } catch (cause: unknown) {
           if (current !== generation) return;
           // A failed revision must not present old values as current after
           // the pending indicator disappears.
@@ -328,15 +340,11 @@ export function createCalculation(
           setError(
             cause instanceof Error ? cause.message : 'Unable to calculate.'
           );
-        })
-        .finally(() => {
-          if (current !== generation) return;
-          running = false;
-          if (queued) {
-            queued = false;
-            run();
-          } else setBusy(false);
-        });
+        } finally {
+          finishRun();
+        }
+      };
+      fireAndForget(recalculate(), 'spreadsheet-calculation');
     };
     goalSeek = async (request) => {
       // Share the calculator worker, which already holds the workbook, and

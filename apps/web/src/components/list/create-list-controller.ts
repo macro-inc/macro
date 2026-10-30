@@ -291,10 +291,29 @@ export function createListController<TItem, TMetadata = unknown>(
     });
   };
 
+  /** The first navigable row after the focused one `key` names, wrapping to those before it. */
+  const successorOf = (
+    key: ListKey,
+    navigationOptions: ListNavigationOptions<TItem>
+  ) => {
+    const place = focusedPlace();
+    if (place?.key !== key) return undefined;
+    const { all, index } = place;
+    const neighbours = [
+      ...all.slice(index + 1),
+      ...all.slice(0, index).reverse(),
+    ];
+    for (const neighbour of neighbours) {
+      const result = itemResultFor(options.getKey(neighbour));
+      if (result && matchesNavigation(result, navigationOptions)) return result;
+    }
+    return undefined;
+  };
+
   const restoreFocus = (
     key: ListKey | undefined,
     restoreOptions: ListRestoreFocusOptions<TItem> = {}
-  ) => {
+  ): ListItemResult<TItem> | undefined => {
     const reason = restoreOptions.reason ?? 'restore';
     if (key !== undefined) {
       const restored = focusResult(itemResultFor(key), {
@@ -315,20 +334,11 @@ export function createListController<TItem, TMetadata = unknown>(
           { ...restoreOptions, reason }
         );
       case 'successor': {
-        const place = focusedPlace();
-        if (key !== undefined && place?.key === key) {
-          const { all, index } = place;
-          const neighbours = [
-            ...all.slice(index + 1),
-            ...all.slice(0, index).reverse(),
-          ];
-          for (const neighbour of neighbours) {
-            const result = itemResultFor(options.getKey(neighbour));
-            if (!result || !matchesNavigation(result, restoreOptions)) continue;
-            return focusResult(result, { ...restoreOptions, reason });
-          }
-        }
-        return restoreFocus(key, { ...restoreOptions, fallback: 'none' });
+        const successor =
+          key === undefined ? undefined : successorOf(key, restoreOptions);
+        return successor
+          ? focusResult(successor, { ...restoreOptions, reason })
+          : restoreFocus(key, { ...restoreOptions, fallback: 'none' });
       }
       case 'none':
         commitFocus(

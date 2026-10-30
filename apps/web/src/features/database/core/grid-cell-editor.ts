@@ -7,6 +7,8 @@ export type GridCellEditorOptions = {
   initialEdit?: boolean;
   /** Keeps an inline editor within the displayed value's bounds. */
   preserveSize?: boolean;
+  /** Shows the value at heading size, as a record's title. */
+  heading?: boolean;
   onEditorReady?: (focus: () => void) => void;
   onReady?: (control: GridCellControl | undefined) => void;
   onNavigate?: (direction: 1 | -1) => boolean;

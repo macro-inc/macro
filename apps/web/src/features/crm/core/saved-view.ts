@@ -53,9 +53,13 @@ export function isCrmViewConfig(value: unknown): value is CrmViewConfig {
     return false;
   if (value.isDefault !== undefined && typeof value.isDefault !== 'boolean')
     return false;
-  return (
-    optionalStrings(value.sort) &&
-    optionalStrings(value.stageFilter) &&
-    optionalStrings(value.ownerFilter)
-  );
+  return buildIsCrmViewConfig(value);
+
+  function buildIsCrmViewConfig(valueInput: Record<string, unknown>): boolean {
+    return (
+      optionalStrings(valueInput.sort) &&
+      optionalStrings(valueInput.stageFilter) &&
+      optionalStrings(valueInput.ownerFilter)
+    );
+  }
 }

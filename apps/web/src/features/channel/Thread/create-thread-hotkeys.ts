@@ -5,7 +5,7 @@ import {
 } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
-import { Telemetry } from '@macro-inc/observability';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type {
   Message as EntityMessage,
   MessageListItem,
@@ -16,9 +16,6 @@ import type { MessageActions, MessageData } from '../Message';
 import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
 import { scrollMessageIntoView } from '../scroll-utils';
 import { isBotMessage } from './utils/message-actions';
-
-const reportMessageActionError = (error: unknown) =>
-  Telemetry.error(error, { surface: 'channel-thread-hotkeys' });
 
 type CreateThreadHotkeysOptions = {
   messageListScopeId: string;
@@ -186,12 +183,13 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       if (event?.repeat) return true;
       const parentMsg = options.parentMessage();
       const actions = options.getMessageActions(parentMsg);
-      Promise.resolve(
+      fireAndForget(
         actions?.onReply?.({
           message: parentMsg,
           ...getMessageReplyPreviewTexts(parentMsg.id),
-        })
-      ).catch(reportMessageActionError);
+        }),
+        'channel-thread-hotkeys'
+      );
       return true;
     },
   }).withGroup(group);
@@ -221,8 +219,9 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const reply = getReplyById(replyId);
       if (!reply) return false;
       const actions = options.getMessageActions(reply);
-      Promise.resolve(actions?.onEdit?.({ message: reply })).catch(
-        reportMessageActionError
+      fireAndForget(
+        actions?.onEdit?.({ message: reply }),
+        'channel-thread-hotkeys'
       );
       return true;
     },
@@ -270,8 +269,9 @@ export function createThreadHotkeys(options: CreateThreadHotkeysOptions) {
       const reply = getReplyById(replyId);
       if (!reply) return false;
       const actions = options.getMessageActions(reply);
-      Promise.resolve(actions?.onDelete?.({ message: reply })).catch(
-        reportMessageActionError
+      fireAndForget(
+        actions?.onDelete?.({ message: reply }),
+        'channel-thread-hotkeys'
       );
       return true;
     },

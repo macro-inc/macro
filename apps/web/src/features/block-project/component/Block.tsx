@@ -24,7 +24,6 @@ import {
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
-import { Telemetry } from '@macro-inc/observability';
 import { refetchSoupEntity } from '@queries/soup/cache';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { refetchResources } from '@service-storage/util/refetchResources';
@@ -65,8 +64,9 @@ const Block: Component = () => {
       const successfulUploads = uploads.filter((result) => !result.pending);
       for (const upload of successfulUploads) {
         if (upload.type === 'document') {
-          refetchSoupEntity(upload.documentId, 'document').catch((error) =>
-            Telemetry.error(error, { surface: 'project-upload' })
+          fireAndForget(
+            refetchSoupEntity(upload.documentId, 'document'),
+            'project-upload'
           );
         }
       }
@@ -83,8 +83,9 @@ const Block: Component = () => {
         const resolved = await Promise.all(pendingFolderUploads);
         for (const projectId of resolved) {
           if (projectId) {
-            refetchSoupEntity(projectId, 'project').catch((error) =>
-              Telemetry.error(error, { surface: 'project-upload' })
+            fireAndForget(
+              refetchSoupEntity(projectId, 'project'),
+              'project-upload'
             );
           }
         }

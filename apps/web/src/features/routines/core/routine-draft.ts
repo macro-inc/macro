@@ -7,7 +7,7 @@ import {
   getDefaultTimezone,
   isValidTime,
   parseCron as parseCronParts,
-} from '@core/util/cron';
+} from '@app/lib/utils/cron';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from './draft';
 import { routineTargetSchema } from './routine-target';
 import { describeTriggers, validateTriggers } from './routine-triggers';
@@ -17,7 +17,7 @@ export {
   getDefaultTimezone,
   isValidTime,
   WEEKDAY_OPTIONS,
-} from '@core/util/cron';
+} from '@app/lib/utils/cron';
 
 type ParsedCron = Pick<
   ScheduleDraft,

@@ -6,6 +6,7 @@
  * is addressed by a caller-chosen `docKey`.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { HistoryState, PptxRequest, PptxResponse } from './protocol';
 import type {
   CellRef,
@@ -148,10 +149,16 @@ export async function applyCollabChanges(
 }
 
 /** Releases a presentation's worker memory. */
-export function closePresentation(docKey: string): void {
-  void request({ kind: 'close', docKey }, 'close').catch((error: unknown) => {
+async function requestClose(docKey: string): Promise<void> {
+  try {
+    await request({ kind: 'close', docKey }, 'close');
+  } catch (error: unknown) {
     console.warn('[pptx-engine] presentation could not be closed', error);
-  });
+  }
+}
+
+export function closePresentation(docKey: string): void {
+  fireAndForget(requestClose(docKey), 'pptx-engine');
 }
 
 /** Slides, shapes, text, and layouts of the whole deck. */

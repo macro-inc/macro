@@ -226,7 +226,7 @@ it('keeps desktop All email-free while mobile composes emails without desktop co
     const mobile = useEntitySearch(
       () => 'teo',
       () => 'email',
-      { enabled: () => true }
+      { enabled: () => true, viewerId: () => 'owner' }
     );
     expect(mocks.requestedBuckets).toEqual(['email']);
     expect(mobile.rankItems(mobile.items(), 'teo')).toEqual([email]);

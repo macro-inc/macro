@@ -1,3 +1,4 @@
+import { schemaWithFallback } from '@app/lib/utils/schema-fallback';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { z } from 'zod';
 
@@ -54,7 +55,7 @@ const editorState = z.object({
 export const taskComposerDraftSchema = z.object({
   title: z.string(),
   content: z.string(),
-  editorState: editorState.optional().catch(undefined),
+  editorState: schemaWithFallback(editorState.optional(), undefined).optional(),
   propertyValues: z.record(z.string(), propertyValue),
   visiblePropertyIds: z.array(z.string()).optional(),
 });

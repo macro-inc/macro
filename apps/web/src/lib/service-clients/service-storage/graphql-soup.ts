@@ -88,7 +88,6 @@ import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
 import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
 import type { SoupPage } from './generated/schemas/soupPage';
-import type { SoupProperty } from './generated/schemas/soupProperty';
 import {
   type ChannelListItemFieldsFragment,
   type ChannelListNotificationFieldsFragment,
@@ -103,11 +102,11 @@ import {
   type SoupInput,
   type SoupNotificationFieldsFragment,
   type SoupNotificationNavigationMetadataFieldsFragment,
-  type SoupPropertyFieldsFragment,
   type SoupQuery,
 } from './graphql/generated/graphql';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
+import { mapGraphqlProperties } from './graphql-properties';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
@@ -118,6 +117,7 @@ import {
 } from './graphql-soup-websocket';
 
 export { emailThreadSortTs } from './email-thread-sort';
+export { mapGraphqlProperties } from './graphql-properties';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 const QUEUE_CLEAR_INSPECTION_TIMEOUT_MS = 1000;
@@ -887,11 +887,6 @@ export type GraphqlSoupItem =
   | SoupQuery['user']['soup']['items'][number]
   | (ChannelListItemFieldsFragment & { notifications?: never });
 type GraphqlSoupEntity = GraphqlSoupItem;
-type GraphqlProperty = Extract<
-  GraphqlSoupEntity,
-  { __typename: 'GraphqlSoupDocument' }
->['properties'][number];
-type GraphqlPropertyValue = NonNullable<GraphqlProperty['value']>;
 type GraphqlSoupDocument = Extract<
   GraphqlSoupEntity,
   { __typename: 'GraphqlSoupDocument' }
@@ -902,82 +897,6 @@ type GraphqlSoupChannelMessage = NonNullable<
     { __typename: 'GraphqlSoupChannel' }
   >['latestMessage']
 >;
-
-function mapGraphqlPropertyValue(
-  value: GraphqlPropertyValue | null | undefined
-) {
-  if (!value) return value;
-
-  return match(value)
-    .with({ __typename: 'GraphqlBooleanPropertyValue' }, ({ boolValue }) => ({
-      type: 'Boolean' as const,
-      value: boolValue,
-    }))
-    .with({ __typename: 'GraphqlNumberPropertyValue' }, ({ numberValue }) => ({
-      type: 'Number' as const,
-      value: numberValue,
-    }))
-    .with({ __typename: 'GraphqlStringPropertyValue' }, ({ stringValue }) => ({
-      type: 'String' as const,
-      value: stringValue,
-    }))
-    .with({ __typename: 'GraphqlDatePropertyValue' }, ({ dateValue }) => ({
-      type: 'Date' as const,
-      value: dateValue,
-    }))
-    .with(
-      { __typename: 'GraphqlDateRangePropertyValue' },
-      ({ rangeStart, rangeEnd }) => ({
-        type: 'DateRange' as const,
-        value: { start: rangeStart, end: rangeEnd },
-      })
-    )
-    .with(
-      { __typename: 'GraphqlSelectOptionPropertyValue' },
-      ({ optionIds }) => ({
-        type: 'SelectOption' as const,
-        value: optionIds,
-      })
-    )
-    .with(
-      { __typename: 'GraphqlEntityReferencePropertyValue' },
-      ({ references }) => ({
-        type: 'EntityReference' as const,
-        value: references.map((reference) => ({
-          entity_id: reference.entityId,
-          entity_type: reference.entityType,
-          specific_message_id: reference.specificMessageId ?? undefined,
-        })),
-      })
-    )
-    .with({ __typename: 'GraphqlLinkPropertyValue' }, ({ urls }) => ({
-      type: 'Link' as const,
-      value: urls,
-    }))
-    .exhaustive(() => null);
-}
-
-/** Maps GraphQL property fragments to the shared Soup property shape. */
-export function mapGraphqlProperties(
-  properties: SoupPropertyFieldsFragment[]
-): SoupProperty[] {
-  return properties.map((property) => ({
-    id: property.id,
-    definition: {
-      id: property.propertyDefinitionId,
-      display_name: property.displayName,
-      data_type: property.dataType,
-      is_multi_select: property.isMultiSelect,
-      specific_entity_type: property.specificEntityType ?? null,
-      is_system: property.isSystem,
-      is_metadata: property.isMetadata,
-      owner: { scope: 'system' as const },
-      created_at: '',
-      updated_at: '',
-    },
-    value: mapGraphqlPropertyValue(property.value),
-  }));
-}
 
 function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
   if (!subType) return undefined;

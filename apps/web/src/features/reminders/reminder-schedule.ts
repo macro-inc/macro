@@ -1,4 +1,4 @@
-import { getDefaultTimezone } from '@core/util/cron';
+import { getDefaultTimezone } from '@app/lib/utils/cron';
 import { formatReminderOccurrence } from './core/schedule-instant';
 
 export const REMINDER_DEFAULT_TIME = { hours: 9, minutes: 0 } as const;

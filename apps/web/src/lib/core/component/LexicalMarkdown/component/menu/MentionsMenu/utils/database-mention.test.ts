@@ -2,7 +2,7 @@ import type { LexicalEditor } from 'lexical';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { trackMention } = vi.hoisted(() => ({ trackMention: vi.fn() }));
-vi.mock('@core/signal/mention', () => ({ trackMention }));
+vi.mock('@app/lib/queries/storage/mentions', () => ({ trackMention }));
 vi.mock('@service-connection/websocket', () => ({
   ws: { send() {}, addEventListener() {}, removeEventListener() {} },
   state: () => 'closed',

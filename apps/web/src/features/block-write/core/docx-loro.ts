@@ -5,7 +5,7 @@ import type {
   DeltaOp,
   RemoteChange,
   V1State,
-} from '@core/docx-engine/types';
+} from '@app/lib/docx/types';
 import { type LoroDoc, type LoroEvent, LoroMap, LoroText } from 'loro-crdt';
 
 /**

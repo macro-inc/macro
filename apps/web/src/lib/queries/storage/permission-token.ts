@@ -1,7 +1,4 @@
-import { useBlockId } from '@core/block';
-
 import { storageServiceClient } from '@service-storage/client';
-import { createCallback } from '@solid-primitives/rootless';
 import { createStore, type SetStoreFunction, type Store } from 'solid-js/store';
 
 // 60 seconds
@@ -84,11 +81,4 @@ export async function getPermissionToken(
   }
 
   return storedToken;
-}
-
-function _useBlockPermissionToken() {
-  const blockId = useBlockId();
-  return createCallback(
-    async () => await getPermissionToken('document', blockId)
-  );
 }

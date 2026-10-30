@@ -2,6 +2,7 @@ import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { type BlockAlias, type BlockName, useMaybeBlockId } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { Telemetry } from '@macro-inc/observability';
 import { createCallback } from '@solid-primitives/rootless';
@@ -27,13 +28,17 @@ export function isBlockNameWithLocation(
 }
 
 async function openLocation<T extends BlockNameWithLocations>(
-  _blockName: T,
+  blockName: T,
   id: string,
   params?: Record<string, string>
 ): Promise<void> {
   const blockOrchestrator = useGlobalBlockOrchestrator();
-  const blockHandle = await blockOrchestrator.getBlockHandle(id);
-  await blockHandle?.goToLocationFromParams(params ?? {});
+  try {
+    const blockHandle = await blockOrchestrator.getBlockHandle(id);
+    await blockHandle?.goToLocationFromParams(params ?? {});
+  } catch (error) {
+    Telemetry.error(error, { surface: 'block-link', blockName });
+  }
 }
 
 function openLocationInBackground<T extends BlockNameWithLocations>(
@@ -41,9 +46,7 @@ function openLocationInBackground<T extends BlockNameWithLocations>(
   id: string,
   params?: Record<string, string>
 ) {
-  openLocation(blockName, id, params).catch((error) =>
-    Telemetry.error(error, { surface: 'block-link', blockName })
-  );
+  fireAndForget(openLocation(blockName, id, params), 'block-link');
 }
 
 export function openDocument(

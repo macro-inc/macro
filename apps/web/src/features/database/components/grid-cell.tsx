@@ -420,6 +420,7 @@ export function GridCell(props: GridCellProps) {
                 value={props.value}
                 emptyLabel={props.emptyLabel}
                 wrap={props.wrap}
+                heading={props.heading}
                 editable={editable()}
                 isEntity={isEntity()}
                 mentionPreview={mentionPreview()}
@@ -553,6 +554,7 @@ function TextCell(props: {
   value: DatabaseCellValue;
   emptyLabel?: string;
   wrap?: boolean;
+  heading?: boolean;
   editable: boolean;
   isEntity: boolean;
   mentionPreview: MentionPreview | undefined;
@@ -570,22 +572,24 @@ function TextCell(props: {
   const formatted = () => formatCellValue(props.column, value());
   const hint = () =>
     props.onOpen ? 'Click to open' : props.editable ? 'Click to edit' : '';
+  const label = () =>
+    props.hasResolvedMentionLabel
+      ? undefined
+      : `${props.column.name}: ${props.mentionPreview?.mention.label || formatted() || props.emptyLabel || 'Empty'}${hint() ? `. ${hint()}` : ''}`;
   return (
     <button
       ref={props.ref}
       type="button"
       data-cell-display
-      class="flex min-h-9 w-full min-w-0 items-center rounded px-2.5 py-1.5 text-left text-[13px] leading-5 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
+      class="flex min-h-9 w-full min-w-0 items-center rounded px-2.5 py-1.5 text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
       classList={{
+        'text-[13px] leading-5': !props.heading,
+        'text-lg font-semibold': props.heading,
         'text-ink-muted': !props.editable,
         'text-ink-placeholder': value() === null && !props.mentionPreview,
-        'font-medium': props.column.dataType === 'STRING',
+        'font-medium': props.column.dataType === 'STRING' && !props.heading,
       }}
-      aria-label={
-        props.hasResolvedMentionLabel
-          ? undefined
-          : `${props.column.name}: ${props.mentionPreview?.mention.label || formatted() || props.emptyLabel || 'Empty'}${hint() ? `. ${hint()}` : ''}`
-      }
+      aria-label={label()}
       aria-description={
         props.hasResolvedMentionLabel && hint() ? hint() : undefined
       }
@@ -777,18 +781,22 @@ function InlineEditor(props: {
       commit(false);
       if (props.onNavigate?.(event.shiftKey ? -1 : 1)) event.preventDefault();
     }
+    navigateRowAtEdge(event);
+  };
+  /** Up and Down on the caret's first or last line commit and move rows. */
+  const navigateRowAtEdge = (event: KeyboardEvent) => {
     if (
-      (event.key === 'ArrowDown' || event.key === 'ArrowUp') &&
-      !event.shiftKey &&
-      !event.altKey &&
-      props.onNavigateRow
-    ) {
-      const direction = event.key === 'ArrowDown' ? 1 : -1;
-      if (!caretOnEdgeLine(event.currentTarget, direction)) return;
-      event.preventDefault();
-      commit(false);
-      props.onNavigateRow(direction);
-    }
+      (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') ||
+      event.shiftKey ||
+      event.altKey ||
+      !props.onNavigateRow
+    )
+      return;
+    const direction = event.key === 'ArrowDown' ? 1 : -1;
+    if (!caretOnEdgeLine(event.currentTarget, direction)) return;
+    event.preventDefault();
+    commit(false);
+    props.onNavigateRow(direction);
   };
   return (
     <Tooltip

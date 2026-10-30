@@ -120,7 +120,7 @@ vi.mock('@app/features/channels-view/channels-view', () => ({
   ChannelDetailRouteView: () => null,
 }));
 vi.mock('@app/features/drive-view/drive-view', () => ({}));
-vi.mock('@app/features/drive-view/components/DriveDetailView', () => ({
+vi.mock('@app/features/drive-view/views/DriveDetailView', () => ({
   DriveDetailView: () => null,
 }));
 vi.mock('@app/features/email-compose/email-compose', () => ({}));

@@ -4,6 +4,7 @@ false && internalDrag;
 
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import ExpandIcon from '@icon/system/regular/arrows-out-simple.svg';
@@ -116,19 +117,21 @@ export function ImagePreview(props: ImagePreviewProps) {
     return sfsImageUrl();
   };
 
+  const loadDssImage = async (id: string) => {
+    try {
+      const blob = await getDssImageBlob(id);
+      if (!blob) throw new Error('Failed to download DSS image');
+      setImageBlob(blob);
+      setObjectUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      props.onError?.(err);
+    }
+  };
+
   // Load DSS image blob
   createEffect(() => {
     if (!props.isDss) return;
-
-    getDssImageBlob(props.image.id)
-      .then((blob) => {
-        if (!blob) throw new Error('Failed to download DSS image');
-        setImageBlob(blob);
-        setObjectUrl(URL.createObjectURL(blob));
-      })
-      .catch((err) => {
-        props.onError?.(err);
-      });
+    fireAndForget(loadDssImage(props.image.id), 'image-preview');
   });
 
   onCleanup(() => {
@@ -137,9 +140,10 @@ export function ImagePreview(props: ImagePreviewProps) {
   });
 
   // Thumbnail menu actions
-  const getBlob = (): Promise<Blob | undefined> => {
-    if (props.isDss) return Promise.resolve(imageBlob());
-    return platformFetch(sfsImageUrl()).then((r) => r.blob());
+  const getBlob = async (): Promise<Blob | undefined> => {
+    if (props.isDss) return imageBlob();
+    const response = await platformFetch(sfsImageUrl());
+    return response.blob();
   };
 
   const copyToClipboard = () => copyImageToClipboard(getBlob, sfsImageUrl());

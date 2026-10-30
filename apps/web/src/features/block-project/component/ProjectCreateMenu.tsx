@@ -2,10 +2,16 @@ import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/use-spreadsheet-access';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
+import {
+  createCanvasFile,
+  createChat,
+  createMarkdownFile,
+  createTask,
+} from '@app/lib/queries/items/create';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { BlockAlias, BlockName } from '@core/block';
@@ -20,12 +26,6 @@ import {
 } from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import {
-  createCanvasFile,
-  createChat,
-  createMarkdownFile,
-  createTask,
-} from '@core/util/create';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ObjectLike } from '@core/util/result';
 import PlusIcon from '@icon/system/regular/plus.svg';

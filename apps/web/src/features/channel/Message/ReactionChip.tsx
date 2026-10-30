@@ -1,6 +1,6 @@
+import { tryMacroId } from '@app/lib/identity/macro-id';
 import { touchHandler } from '@core/directive/touchHandler';
 import { idToDisplayName } from '@core/user';
-import { tryMacroId } from '@core/user/macroId';
 import { Popover } from '@kobalte/core/popover';
 import { Button, cn, HoverCard } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';

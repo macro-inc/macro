@@ -1,7 +1,12 @@
 import { ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { refetchHistory } from '@queries/history/history';
-import { storageServiceClient } from '@service-storage/client';
+import {
+  deleteDocumentViewLocation,
+  savePdf,
+  upsertDocumentViewLocation,
+} from '@queries/storage/requests';
+
 import { createMemo } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { usePdfViewer } from '../context/pdf-viewer-context';
@@ -53,7 +58,7 @@ export function useSaveModificationData() {
     });
 
     const sha = await hashModificationData(modificationData);
-    const result = await storageServiceClient.pdfSave({
+    const result = await savePdf({
       documentId: pdf.documentId(),
       modificationData,
       sha,
@@ -83,12 +88,12 @@ export function usePdfSaveLocation() {
   const save = async () => {
     const location = viewer()?.getLocationHash();
     if (location == null) {
-      const result = await storageServiceClient.deleteDocumentViewLocation({
+      const result = await deleteDocumentViewLocation({
         documentId: pdf.documentId(),
       });
       if (result.isErr()) throw new Error('Could not save PDF view location');
     } else {
-      const result = await storageServiceClient.upsertDocumentViewLocation({
+      const result = await upsertDocumentViewLocation({
         documentId: pdf.documentId(),
         location,
       });

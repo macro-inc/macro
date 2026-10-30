@@ -82,18 +82,23 @@ export function PullToRefresh(props: {
    * without cancelling it, so the gesture can return to idle first. */
   let attempt: Promise<'ok' | 'failed'> | undefined;
 
+  const runRefresh = async (): Promise<'ok' | 'failed'> => {
+    try {
+      await props.onRefresh();
+      return 'ok';
+    } catch {
+      return 'failed';
+    }
+  };
+
   const startRefresh = () => {
-    const started = props.onRefresh().then(
-      () => 'ok' as const,
-      () => 'failed' as const
-    );
+    const started = runRefresh();
     attempt = started;
-    fireAndForget(
-      started.then(() => {
-        if (attempt === started) attempt = undefined;
-      }),
-      'pull-to-refresh'
-    );
+    const clearAttempt = async () => {
+      await started;
+      if (attempt === started) attempt = undefined;
+    };
+    fireAndForget(clearAttempt(), 'pull-to-refresh');
     return started;
   };
 
@@ -114,24 +119,23 @@ export function PullToRefresh(props: {
     // gesture's own target element out from under it.
     const pending = attempt ?? startRefresh();
 
-    fireAndForget(
-      Promise.all([Promise.race([pending, cap]), minSpin]).then(([outcome]) => {
-        // Report a failure only when nothing reached the wire. A refresh
-        // still running at the cap says nothing either way, so it stays
-        // quiet unless the native monitor is certain there is no path out
-        // — that case is indistinguishable from success otherwise.
-        if (outcome === 'failed') {
-          toast.failure('Failed to refresh');
-        } else if (
-          outcome === 'pending' &&
-          nativeNetworkStatus() === 'offline'
-        ) {
-          toast.failure("You're offline");
-        }
-        retract();
-      }),
-      'pull-to-refresh'
-    );
+    const reportOutcome = async () => {
+      const [outcome] = await Promise.all([
+        Promise.race([pending, cap]),
+        minSpin,
+      ]);
+      // Report a failure only when nothing reached the wire. A refresh
+      // still running at the cap says nothing either way, so it stays
+      // quiet unless the native monitor is certain there is no path out
+      // — that case is indistinguishable from success otherwise.
+      if (outcome === 'failed') {
+        toast.failure('Failed to refresh');
+      } else if (outcome === 'pending' && nativeNetworkStatus() === 'offline') {
+        toast.failure("You're offline");
+      }
+      retract();
+    };
+    fireAndForget(reportOutcome(), 'pull-to-refresh');
   };
 
   const onTouchStart = (e: TouchEvent) => {

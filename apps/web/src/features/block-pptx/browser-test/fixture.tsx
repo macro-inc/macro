@@ -13,6 +13,7 @@ import type {
   EditOp,
   EditResult,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import {
@@ -118,15 +119,19 @@ function Fixture() {
   }
 
   async function openCorpus(path: string) {
-    const response = await fetch(CORPUS + path);
-    await open(
-      await response.arrayBuffer(),
-      path.split('/').pop() ?? 'deck.pptx'
-    );
+    try {
+      const response = await fetch(CORPUS + path);
+      await open(
+        await response.arrayBuffer(),
+        path.split('/').pop() ?? 'deck.pptx'
+      );
+    } catch (e) {
+      showError(e);
+    }
   }
 
   const initial = params.get('deck') ?? DECKS['Kitchen sink (financial)'];
-  openCorpus(initial).catch(showError);
+  fireAndForget(openCorpus(initial), 'pptx-fixture');
 
   const context = (e: PresentationEngine): PptxEditorContext => ({
     engine: e,
@@ -164,7 +169,9 @@ function Fixture() {
         <select
           data-testid="fixture-deck"
           class="rounded border border-edge-muted bg-input px-1 py-0.5"
-          onChange={(e) => openCorpus(e.currentTarget.value).catch(showError)}
+          onChange={(e) =>
+            fireAndForget(openCorpus(e.currentTarget.value), 'pptx-fixture')
+          }
         >
           <For each={Object.entries(DECKS)}>
             {([label, path]) => (

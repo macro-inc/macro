@@ -91,7 +91,6 @@ import {
   createPeerIdValidator,
   type PeerIdValidator,
 } from '@macro-inc/lexical-core';
-import { Telemetry } from '@macro-inc/observability';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { isIOS } from '@solid-primitives/platform';
@@ -563,10 +562,7 @@ export function MarkdownEditor(props: {
   createEffect(() => {
     const source = documentSource();
     if (source.type !== 'dss') return;
-
-    readFileArrayBuffer(source.file).catch((error) =>
-      Telemetry.error(error, { surface: 'markdown-editor' })
-    );
+    fireAndForget(readFileArrayBuffer(source.file), 'markdown-editor');
   });
 
   createEffect(() => {

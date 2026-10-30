@@ -82,7 +82,8 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
 scope.addEventListener('message', (event: MessageEvent<FoldRequest>) => {
   const request = event.data;
 
-  queue = queue.then(async () => {
+  const serveAfterQueued = async () => {
+    await queue;
     let response: FoldResponse;
     try {
       response = await serve(request);
@@ -96,5 +97,6 @@ scope.addEventListener('message', (event: MessageEvent<FoldRequest>) => {
       };
     }
     scope.postMessage(response);
-  });
+  };
+  queue = serveAfterQueued();
 });

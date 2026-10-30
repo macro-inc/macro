@@ -5,9 +5,10 @@ import {
 } from '@core/util/fetchWithToken';
 import { registerClient } from '@core/util/mockClient';
 import type { ObjectLike, ResultError } from '@core/util/result';
-import { ThrownResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { Result } from 'neverthrow';
+import { readJsonBody } from '../read-json-body';
+import { TAG_NAME_CONFLICT_CODE } from './errors';
 import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
 import type { BulkEntityPropertiesRequest } from './generated/schemas/bulkEntityPropertiesRequest';
 import type { BulkUpdateEntityPropertyOptionsRequest } from './generated/schemas/bulkUpdateEntityPropertyOptionsRequest';
@@ -32,13 +33,6 @@ import type { UpdatePropertyOptionRequest } from './generated/schemas/updateProp
 
 type PropertiesEntityType = PropertyTargetEntityType;
 
-/**
- * A promote-tag call rejected because the team already owns a label with that
- * name. The colliding label rides along on the error so the caller can prompt
- * with it and then merge into it.
- */
-export const TAG_NAME_CONFLICT_CODE = 'TAG_NAME_CONFLICT' as const;
-
 type TagPromoteErrorCode = typeof TAG_NAME_CONFLICT_CODE;
 
 /** safeFetch's default mapping for statuses the custom handler doesn't claim. */
@@ -55,27 +49,6 @@ function defaultFetchError(response: Response) {
         code: 'HTTP_ERROR' as const,
         message: `HTTP error! status: ${response.status}`,
       };
-  }
-}
-
-/**
- * Recover the colliding team label from a thrown promote error, or `null` when
- * the failure was something else.
- */
-export function parseTagNameConflict(
-  error: unknown
-): TagPromotionConflictResponse | null {
-  if (!(error instanceof ThrownResultError)) return null;
-  const conflict = error.errors.find(
-    (candidate) => candidate.code === TAG_NAME_CONFLICT_CODE
-  );
-  if (!conflict) return null;
-
-  try {
-    const parsed = JSON.parse(conflict.message) as TagPromotionConflictResponse;
-    return parsed.conflicting_option ? parsed : null;
-  } catch {
-    return null;
   }
 }
 
@@ -332,9 +305,9 @@ export const propertiesServiceClient = {
         body: JSON.stringify(args.body),
         errorResponseHandler: async (response) => {
           if (response.status === 409) {
-            const body = (await response
-              .json()
-              .catch(() => null)) as TagPromotionConflictResponse | null;
+            const body = (await readJsonBody(
+              response
+            )) as TagPromotionConflictResponse | null;
             if (body?.conflicting_option) {
               return {
                 code: TAG_NAME_CONFLICT_CODE,
@@ -372,4 +345,5 @@ export const propertiesServiceClient = {
 
 registerClient('properties', propertiesServiceClient);
 
+export { parseTagNameConflict, TAG_NAME_CONFLICT_CODE } from './errors';
 export type { PropertiesEntityType };

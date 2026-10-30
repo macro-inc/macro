@@ -3,7 +3,8 @@ import type {
   ClipParagraph,
   ClipRun,
   ListKind,
-} from '@core/docx-engine/types';
+} from '@app/lib/docx/types';
+import { match as matchBranch } from 'ts-pattern';
 
 /**
  * The clipboard for DOCX documents. A copy goes out as plain text and as
@@ -155,36 +156,42 @@ const BLOCKS = new Set([
 /** Character formatting an element adds (or, through its style, removes). */
 function formatOf(element: HTMLElement, outer: Format): Format {
   const f = { ...outer };
-  switch (element.tagName) {
-    case 'B':
-    case 'STRONG':
+  matchBranch(element)
+    .with({ tagName: 'B' }, { tagName: 'STRONG' }, () => {
       f.bold = true;
-      break;
-    case 'I':
-    case 'EM':
-    case 'CITE':
-    case 'VAR':
-      f.italic = true;
-      break;
-    case 'U':
-    case 'INS':
+      return;
+    })
+    .with(
+      { tagName: 'I' },
+      { tagName: 'EM' },
+      { tagName: 'CITE' },
+      { tagName: 'VAR' },
+      () => {
+        f.italic = true;
+        return;
+      }
+    )
+    .with({ tagName: 'U' }, { tagName: 'INS' }, () => {
       f.underline = true;
-      break;
-    case 'S':
-    case 'STRIKE':
-    case 'DEL':
+      return;
+    })
+    .with({ tagName: 'S' }, { tagName: 'STRIKE' }, { tagName: 'DEL' }, () => {
       f.strike = true;
-      break;
-    case 'SUP':
+      return;
+    })
+    .with({ tagName: 'SUP' }, () => {
       f.superscript = true;
-      break;
-    case 'SUB':
+      return;
+    })
+    .with({ tagName: 'SUB' }, () => {
       f.subscript = true;
-      break;
-    case 'PRE':
+      return;
+    })
+    .with({ tagName: 'PRE' }, () => {
       f.pre = true;
-      break;
-  }
+      return;
+    })
+    .otherwise(() => {});
   const style = element.style;
   const weight = style.fontWeight;
   if (weight) {
@@ -310,30 +317,38 @@ export function htmlToParagraphs(root: ParentNode): ClipParagraph[] {
     }
     flush();
     let inner = list;
-    if (tag === 'UL' || tag === 'OL') {
-      inner = {
-        kind: tag === 'UL' ? 'bullet' : 'number',
-        depth: list ? list.depth + 1 : 0,
-      };
-    }
+    updateInner();
     if (/^H[1-6]$/.test(tag)) current.heading = Number(tag[1]);
     if (tag === 'LI' && list) {
       current.list = list.kind;
       current.level = list.depth;
     }
     const wordLevel = wordListLevel(element);
-    if (wordLevel !== undefined) {
-      const label = element.querySelector('[style*="mso-list"]');
-      const text = (label?.textContent ?? '').trim();
-      current.list = /^\(?[0-9a-zA-Z]{1,6}[.):]?$/.test(text)
-        ? 'number'
-        : 'bullet';
-      current.level = wordLevel;
-    }
+    updateList();
     const rowCells = { count: 0 };
     for (const child of element.childNodes)
       walk(child, format, inner, tag === 'TR' ? rowCells : cells);
     flush(false, true);
+
+    function updateList() {
+      if (wordLevel !== undefined) {
+        const label = element.querySelector('[style*="mso-list"]');
+        const text = (label?.textContent ?? '').trim();
+        current.list = /^\(?[0-9a-zA-Z]{1,6}[.):]?$/.test(text)
+          ? 'number'
+          : 'bullet';
+        current.level = wordLevel;
+      }
+    }
+
+    function updateInner() {
+      if (tag === 'UL' || tag === 'OL') {
+        inner = {
+          kind: tag === 'UL' ? 'bullet' : 'number',
+          depth: list ? list.depth + 1 : 0,
+        };
+      }
+    }
   };
 
   for (const child of root.childNodes)

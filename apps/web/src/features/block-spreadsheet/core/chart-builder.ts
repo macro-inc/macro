@@ -286,11 +286,15 @@ export function guessLayout(
   // Scatter and bubble charts read x values from the first column (or
   // row) even when they are numbers, as Excel does.
   const kind = type && definitionOf(type)?.kind;
-  if (kind && isXy(kind)) {
-    if (orientation === 'columns' && columns > 1) firstColumn = true;
-    if (orientation === 'rows' && rows > 1) firstRow = true;
-  }
+  useFirstLineForXValues();
   return { range, orientation, firstRow, firstColumn };
+
+  function useFirstLineForXValues() {
+    if (kind && isXy(kind)) {
+      if (orientation === 'columns' && columns > 1) firstColumn = true;
+      if (orientation === 'rows' && rows > 1) firstRow = true;
+    }
+  }
 }
 
 const quote = (sheet: string) => `'${sheet.replaceAll("'", "''")}'`;
@@ -359,59 +363,12 @@ export function chartFromLayout(
         };
   for (let index = 0; index < shown; index++) {
     const at = index * step;
-    const name =
-      orientation === 'columns'
-        ? firstRow && {
-            top: range.top,
-            bottom: range.top,
-            left: dataLeft + at,
-            right: dataLeft + at,
-          }
-        : firstColumn && {
-            top: dataTop + at,
-            bottom: dataTop + at,
-            left: range.left,
-            right: range.left,
-          };
-    const labels =
-      orientation === 'columns'
-        ? firstColumn && {
-            top: dataTop,
-            bottom: range.bottom,
-            left: range.left,
-            right: range.left,
-          }
-        : firstRow && {
-            top: range.top,
-            bottom: range.top,
-            left: dataLeft,
-            right: range.right,
-          };
+    const name = seriesNameRange(at);
+    const labels = categoryRange();
     const color = colors?.[index];
-    series.push({
-      ...(name && { nameRef: add(name) }),
-      ...(labels && { categories: add(labels) }),
-      values: add(line(at)),
-      ...(bubble && at + 1 < lines && { sizes: add(line(at + 1)) }),
-      ...(color && { color }),
-      // Prices are drawn by their high-low lines and bars, not series lines.
-      // A scatter chart plots markers; connecting them would invent an order.
-      ...((definition.kind === 'stock' || definition.kind === 'scatter') && {
-        noLine: true as const,
-      }),
-    });
+    series.push(seriesFor(name, labels, at, color, definition));
   }
-  const shell = {
-    ...(previous?.title && { title: previous.title }),
-    ...(previous
-      ? previous.legend && { legend: previous.legend }
-      : (series.length > 1 ||
-          isRound(definition.kind) ||
-          definition.kind === 'surface' ||
-          comboOf(definition)) && { legend: 'bottom' as const }),
-    references,
-    ...(previous?.colors && { colors: previous.colors }),
-  };
+  const shell = chartShell(definition);
   // The last series uses its own axis, as Excel's column-and-line chart does.
   if (comboOf(definition)) {
     const line = series.at(-1);
@@ -424,17 +381,109 @@ export function chartFromLayout(
       ],
     };
   }
-  const plot: ChartPlot = {
-    kind: definition.kind,
-    ...('grouping' in definition && { grouping: definition.grouping }),
-    ...(filledOf(definition) && { filled: true }),
-    ...(definition.kind === 'stock' && {
-      hiLow: true,
-      ...(series.length === 4 && { upDown: true }),
-    }),
-    series,
-  };
+  const plot: ChartPlot = plotFor(definition);
   return { ...shell, plots: [plot] };
+
+  function seriesFor(
+    name: false | { top: number; bottom: number; left: number; right: number },
+    labels:
+      | false
+      | { top: number; bottom: number; left: number; right: number },
+    at: number,
+    color: string | undefined,
+    definitionInput: Extract<
+      NonNullable<typeof definition>,
+      {
+        kind:
+          | 'column'
+          | 'bar'
+          | 'line'
+          | 'area'
+          | 'pie'
+          | 'doughnut'
+          | 'scatter'
+          | 'radar'
+          | 'bubble'
+          | 'stock'
+          | 'surface';
+      }
+    >
+  ): ChartSeries {
+    return {
+      ...(name && { nameRef: add(name) }),
+      ...(labels && { categories: add(labels) }),
+      values: add(line(at)),
+      ...(bubble && at + 1 < lines && { sizes: add(line(at + 1)) }),
+      ...(color && { color }),
+      // Prices are drawn by their high-low lines and bars, not series lines.
+      // A scatter chart plots markers; connecting them would invent an order.
+      ...((definitionInput.kind === 'stock' ||
+        definitionInput.kind === 'scatter') && {
+        noLine: true as const,
+      }),
+    };
+  }
+
+  function seriesNameRange(at: number) {
+    return orientation === 'columns'
+      ? firstRow && {
+          top: range.top,
+          bottom: range.top,
+          left: dataLeft + at,
+          right: dataLeft + at,
+        }
+      : firstColumn && {
+          top: dataTop + at,
+          bottom: dataTop + at,
+          left: range.left,
+          right: range.left,
+        };
+  }
+
+  function categoryRange() {
+    return orientation === 'columns'
+      ? firstColumn && {
+          top: dataTop,
+          bottom: range.bottom,
+          left: range.left,
+          right: range.left,
+        }
+      : firstRow && {
+          top: range.top,
+          bottom: range.top,
+          left: dataLeft,
+          right: range.right,
+        };
+  }
+
+  function plotFor(definitionValue: NonNullable<typeof definition>): ChartPlot {
+    return {
+      kind: definitionValue.kind,
+      ...('grouping' in definitionValue && {
+        grouping: definitionValue.grouping,
+      }),
+      ...(filledOf(definitionValue) && { filled: true }),
+      ...(definitionValue.kind === 'stock' && {
+        hiLow: true,
+        ...(series.length === 4 && { upDown: true }),
+      }),
+      series,
+    };
+  }
+
+  function chartShell(definitionValue: NonNullable<typeof definition>) {
+    return {
+      ...(previous?.title && { title: previous.title }),
+      ...(previous
+        ? previous.legend && { legend: previous.legend }
+        : (series.length > 1 ||
+            isRound(definitionValue.kind) ||
+            definitionValue.kind === 'surface' ||
+            comboOf(definitionValue)) && { legend: 'bottom' as const }),
+      references,
+      ...(previous?.colors && { colors: previous.colors }),
+    };
+  }
 }
 
 /** How many series a block of cells makes in a chart of a type. */

@@ -3,10 +3,10 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
-  MENU_ITEM_CLASS,
   MenuGroup,
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import External from '@icon/system/regular/arrow-square-out.svg';
 import ArrowsClockwise from '@icon/system/regular/arrows-clockwise.svg';
@@ -99,7 +99,20 @@ export function EventTypesPanel(props: {
       disabled?: boolean;
       class?: string;
     }) => (
-      <Show when={menu.drawer} fallback={<MenuItem {...item} />}>
+      <Show
+        when={menu.drawer}
+        fallback={
+          <MenuItem
+            {...item}
+            class={cn(
+              // Kobalte's bare context-menu item takes the shared menu row styling.
+              menu.context &&
+                `group rounded-lg w-full flex items-center gap-1.5 text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed ${isMobile() ? 'py-2 px-1.5 text-base' : 'p-1.5 px-2 text-sm'}`,
+              item.class
+            )}
+          />
+        }
+      >
         <MobileDrawer.Item
           disabled={item.disabled}
           class={item.class}
@@ -116,7 +129,6 @@ export function EventTypesPanel(props: {
       <>
         <Group>
           <Item
-            class={menu.context ? MENU_ITEM_CLASS : undefined}
             disabled={!menu.event.enabled}
             onSelect={() => props.onCopy(menu.event)}
           >
@@ -124,7 +136,6 @@ export function EventTypesPanel(props: {
             Copy link
           </Item>
           <Item
-            class={menu.context ? MENU_ITEM_CLASS : undefined}
             onSelect={() => {
               window.open(
                 props.link(menu.event),
@@ -140,7 +151,6 @@ export function EventTypesPanel(props: {
         <Show when={props.canEdit}>
           <Group>
             <Item
-              class={menu.context ? MENU_ITEM_CLASS : undefined}
               disabled={props.saving}
               onSelect={() => {
                 const edit = () => props.onEdit(menu.event, menu.opener);
@@ -152,7 +162,6 @@ export function EventTypesPanel(props: {
               Edit
             </Item>
             <Item
-              class={menu.context ? MENU_ITEM_CLASS : undefined}
               disabled={props.saving}
               onSelect={() => {
                 const duplicate = () =>
@@ -167,7 +176,7 @@ export function EventTypesPanel(props: {
           </Group>
           <Group>
             <Item
-              class={cn(menu.context && MENU_ITEM_CLASS, 'text-failure')}
+              class="text-failure"
               disabled={props.saving}
               onSelect={() => setRemoving(menu.event.id)}
             >

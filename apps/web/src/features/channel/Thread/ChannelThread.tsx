@@ -202,6 +202,8 @@ export function ChannelThread(props: ThreadProps) {
     !props.hideRail && (hasReplies() || hasInlineReplyInput());
   const shouldShowCollapsedIndicator = () =>
     !isReplyingToThread() && !props.isExpanded() && collapsedRepliesCount() > 0;
+  const parentChannelId = () =>
+    props.parent().type === 'channel' ? props.parent().id : undefined;
   const replyAction = () => props.getMessageActions?.(props.data())?.onReply;
   const shouldShowReplyButton = () =>
     hasReplies() &&
@@ -300,9 +302,7 @@ export function ChannelThread(props: ThreadProps) {
     <ThreadReadBoundary available={!projectUnavailable()}>
       <Thread.Row
         ref={setThreadRowElement}
-        channelId={
-          props.parent().type === 'channel' ? props.parent().id : undefined
-        }
+        channelId={parentChannelId()}
         message={props.data()}
         listMeta={props.listMeta}
         onDismissNewMessages={props.threadActions?.onDismissNewMessages}

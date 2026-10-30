@@ -159,14 +159,25 @@ async function steps(
   return err(step.error);
 }
 
+async function stepsThenFree(
+  query: DatabaseSqlQuery,
+  source: RowSource,
+  trace: DatabaseSqlRunTrace
+): Promise<Result<Outcome, DatabaseSqlFailure>> {
+  try {
+    return await steps(query, source, trace);
+  } finally {
+    query.free();
+  }
+}
+
 function drive(
   opened: () => Promise<DatabaseSqlQuery>,
   source: RowSource,
   trace: DatabaseSqlRunTrace
 ): ResultAsync<Outcome, DatabaseSqlFailure> {
   return ResultAsync.fromPromise(trace.open(opened), engineFailure).andThen(
-    (query) =>
-      new ResultAsync(steps(query, source, trace).finally(() => query.free()))
+    (query) => new ResultAsync(stepsThenFree(query, source, trace))
   );
 }
 

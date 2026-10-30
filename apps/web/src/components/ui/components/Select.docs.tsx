@@ -14,9 +14,6 @@ const OPTIONS: Option[] = [
   { value: 'guest', label: 'Guest', hint: 'View shared items only' },
 ];
 
-const ITEM_CLASS =
-  'flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm outline-none data-highlighted:bg-hover';
-
 // #region demo:basic
 function BasicDemo() {
   const [value, setValue] = createSignal<Option>(OPTIONS[2]!);
@@ -30,7 +27,12 @@ function BasicDemo() {
       optionTextValue="label"
       gutter={4}
       itemComponent={(props: { item: CollectionNode<Option> }) => (
-        <Select.Item item={props.item} class={ITEM_CLASS}>
+        <Select.Item
+          item={props.item}
+          class={
+            'flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm outline-none data-highlighted:bg-hover'
+          }
+        >
           <Select.ItemLabel>{props.item.rawValue.label}</Select.ItemLabel>
           <Select.ItemIndicator>
             <CheckIcon class="size-3" />
@@ -65,7 +67,12 @@ function RichItemsDemo() {
       optionTextValue="label"
       gutter={4}
       itemComponent={(props: { item: CollectionNode<Option> }) => (
-        <Select.Item item={props.item} class={ITEM_CLASS}>
+        <Select.Item
+          item={props.item}
+          class={
+            'flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm outline-none data-highlighted:bg-hover'
+          }
+        >
           <span class="flex flex-col gap-0.5">
             <Select.ItemLabel>{props.item.rawValue.label}</Select.ItemLabel>
             <span class="text-xs text-ink-subtle">
@@ -102,7 +109,12 @@ function DisabledDemo() {
       optionValue="value"
       optionTextValue="label"
       itemComponent={(props: { item: CollectionNode<Option> }) => (
-        <Select.Item item={props.item} class={ITEM_CLASS}>
+        <Select.Item
+          item={props.item}
+          class={
+            'flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm outline-none data-highlighted:bg-hover'
+          }
+        >
           <Select.ItemLabel>{props.item.rawValue.label}</Select.ItemLabel>
         </Select.Item>
       )}

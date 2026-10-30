@@ -284,9 +284,11 @@ it('keeps scheduled cancellation pending until authoritative confirmation', asyn
     row.metadata.requiresServerConfirmation = true;
     mocks.read.mockResolvedValue([row]);
     let completed = false;
-    const cancellation = cancelEmailSendAndConfirm(row).then(() => {
+    const confirmCancellation = async () => {
+      await cancelEmailSendAndConfirm(row);
       completed = true;
-    });
+    };
+    const cancellation = confirmCancellation();
     await vi.advanceTimersByTimeAsync(500);
     expect(completed).toBe(false);
     expect(mocks.claim).not.toHaveBeenCalled();

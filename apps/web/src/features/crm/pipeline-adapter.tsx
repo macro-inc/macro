@@ -6,7 +6,6 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { queryReadyGate } from '@queries/gate';
-import { storageServiceClient } from '@service-storage/client';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { useQueryClient } from '@tanstack/solid-query';
@@ -46,6 +45,7 @@ import { DatabaseRecords } from '../database/views/database-records';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
 import { CrmListSkeleton } from './components/list-state';
 import type { Pipeline } from './core/pipeline';
+import { createCrmRecordDependencies } from './queries/dependencies';
 import { createPipelineApi } from './queries/pipeline-data';
 import {
   createPipelineViews,
@@ -112,7 +112,7 @@ function PipelineRecords(props: {
   actions?: JSX.Element;
   onOpenRecord?(record: { type: 'company' | 'contact'; id: string }): void;
 }) {
-  const deps = { storage: storageServiceClient, client: useQueryClient() };
+  const deps = createCrmRecordDependencies(useQueryClient());
   const tableQuery = usePipelineTableQuery(deps, props.pipeline);
   const views = createPipelineViews(deps, props.pipeline);
   const storedViews = () =>
@@ -162,7 +162,7 @@ function PipelineRecords(props: {
   };
   const canEdit = () =>
     props.pipeline.grant === 'owner' || props.pipeline.grant === 'edit';
-  const api = createPipelineApi(storageServiceClient, props.pipeline);
+  const api = createPipelineApi(deps.storage, props.pipeline);
   const [composing, setComposing] =
     createSignal<Record<string, DatabaseCellValue>>();
   return (

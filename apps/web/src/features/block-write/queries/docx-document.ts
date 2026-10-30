@@ -5,8 +5,8 @@ import { downloadExportedDocument } from '@service-storage/util/downloadExported
 import { syncServiceClient } from '@service-sync/client';
 import { createSyncServiceSource } from '@service-sync/source';
 import type { DocumentSyncAuthorization } from '@service-sync/source/authorization';
-import { buildSeedSnapshot } from '../core/docx-seed';
 import { docxOriginalQueryOptions } from './docx-original';
+import { buildSeedSnapshot } from './docx-seed';
 import type { DocxConnection } from './docx-session';
 
 /**

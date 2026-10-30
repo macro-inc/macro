@@ -5,9 +5,10 @@ import {
   buildWhoMap,
   diffStates,
 } from '@macro-inc/lexical-core';
+import { fetchDocumentSnapshot } from '@queries/history/snapshot';
 import { useDocumentPeersQuery } from '@queries/sync/document-peers';
 import type { HistorySession, HistoryVersionId } from '@service-sync/client';
-import { syncServiceClient } from '@service-sync/client';
+
 import type { SerializedEditorState } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
 import {
@@ -110,7 +111,7 @@ export function HistoryProvider(props: {
   const [historyDoc] = createResource(
     () => (isOpen() || shouldLoad() ? props.documentId() : undefined),
     async (documentId) => {
-      const result = await syncServiceClient.getSnapshot({ documentId });
+      const result = await fetchDocumentSnapshot({ documentId });
       if (result.isErr()) throw new ThrownResultError(result.error);
       const doc = new LoroDoc();
       doc.import(result.value);

@@ -1,7 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createTaskWithInitialSnapshot } from '@app/lib/queries/items/create';
 import { toast } from '@core/component/Toast/Toast';
 import { enableProjects } from '@core/constant/featureFlags';
-import { createTaskWithInitialSnapshot } from '@core/util/create';
 import { filterMap } from '@core/util/list';
 import {
   propertyApiValuesToNormalized,
@@ -209,9 +209,12 @@ async function taskIsInProject(
   taskId: string,
   projectId: string
 ): Promise<boolean | undefined> {
-  const properties = await fetchEntityProperties('TASK', taskId).catch(
-    () => undefined
-  );
+  let properties: Awaited<ReturnType<typeof fetchEntityProperties>>;
+  try {
+    properties = await fetchEntityProperties('TASK', taskId);
+  } catch {
+    return undefined;
+  }
   if (!properties) return undefined;
   const project = properties.find(
     (property) => property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT

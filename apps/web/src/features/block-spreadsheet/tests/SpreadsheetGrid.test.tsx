@@ -15,13 +15,13 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
+import { SpreadsheetGrid } from '../components/SpreadsheetGrid';
+import { FormulaBar } from '../components/SpreadsheetToolbar';
 import type { SpreadsheetCells } from '../core/spreadsheet-document';
 import {
   createGridController,
   type GridController,
 } from '../primitives/create-grid-controller';
-import { SpreadsheetGrid } from './SpreadsheetGrid';
-import { FormulaBar } from './SpreadsheetToolbar';
 
 // The formula bar shares a module with toolbar buttons; their app hotkey
 // infrastructure is not mounted by this editor interaction fixture.

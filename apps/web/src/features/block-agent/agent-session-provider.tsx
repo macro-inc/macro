@@ -1,7 +1,7 @@
 /** App-facing composition for the agent session and its controllers. */
 
 import { createInteractionController } from '@app/features/agent-interactions/primitives/create-interaction-controller';
-import { AgentSession } from '@core/agent-session/AgentSession';
+import { AgentSession } from '@app/lib/queries/agent-session/agent-session';
 import { toast } from '@core/component/Toast/Toast';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';

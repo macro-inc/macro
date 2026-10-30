@@ -6,8 +6,10 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
+import type { CalendarAttendeeInputBody } from '@service-calendar/generated/schemas/calendarAttendeeInputBody';
 import type { CalendarEvent } from '@service-calendar/generated/schemas/calendarEvent';
 import type { CreateCalendarEventRequest } from '@service-calendar/generated/schemas/createCalendarEventRequest';
+import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import {
   type CalendarEventFieldsFragment,
   CalendarEventFieldsFragmentDoc,
@@ -17,6 +19,7 @@ import {
   CalendarsDocument,
   CreateCalendarEventDocument,
   type CreateCalendarEventMutation,
+  type CreateCalendarEventMutationVariables,
   DeleteCalendarEventDocument,
   type DeleteCalendarEventMutation,
   type GraphqlCalendarAttendeeResponseStatus,
@@ -34,6 +37,7 @@ import {
   type RespondToCalendarEventMutation,
   UpdateCalendarEventDocument,
   type UpdateCalendarEventMutation,
+  type UpdateCalendarEventMutationVariables,
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
@@ -190,8 +194,8 @@ async function settle<TData, TVariables extends AnyVariables>(
   }
   if (result.error) throw graphqlError(result);
   if (!payload) throw new Error('Calendar mutation returned no data');
-  await host
-    .calendarCommit({
+  try {
+    await host.calendarCommit({
       ...(payload.event
         ? {
             replacedEvents: [
@@ -209,10 +213,10 @@ async function settle<TData, TVariables extends AnyVariables>(
       ...(payload.deletedEventId
         ? { deletedEventKeys: [eventKey(payload.deletedEventId)] }
         : {}),
-    })
-    .catch((error) => {
-      console.warn('Calendar mutation commit failed', error);
     });
+  } catch (error) {
+    console.warn('Calendar mutation commit failed', error);
+  }
   return { kind: 'committed', payload };
 }
 
@@ -381,6 +385,82 @@ export async function executeGraphqlInviteGuests(
   );
 }
 
+function graphqlAttendeeInputs(attendees: CalendarAttendeeInputBody[]) {
+  return attendees.map((attendee) => ({
+    email: attendee.email,
+    isOptional: attendee.isOptional ?? false,
+  }));
+}
+
+function graphqlOutOfOffice(outOfOffice: OutOfOfficeProperties) {
+  return {
+    ...(outOfOffice.autoDeclineMode
+      ? {
+          autoDeclineMode:
+            graphqlEnum<GraphqlCalendarOutOfOfficeAutoDeclineMode>(
+              outOfOffice.autoDeclineMode
+            ),
+        }
+      : {}),
+    declineMessage: outOfOffice.declineMessage ?? null,
+  };
+}
+
+/** The wire input for an update, carrying only the fields the patch sets. */
+function updateEventInput(
+  args: UpdateCalendarEventArgs
+): UpdateCalendarEventMutationVariables['input'] {
+  const { patch } = args;
+  return {
+    eventId: args.eventId,
+    ...(args.calendarId ? { calendarId: args.calendarId } : {}),
+    ...(args.scope
+      ? { scope: graphqlEnum<GraphqlCalendarUpdateScope>(args.scope) }
+      : {}),
+    ...(args.recurrenceId ? { recurrenceId: args.recurrenceId } : {}),
+    ...(patch.title != null ? { title: patch.title } : {}),
+    ...(patch.description !== undefined
+      ? { description: patch.description }
+      : {}),
+    ...(patch.location !== undefined ? { location: patch.location } : {}),
+    ...(patch.time ? { time: graphqlTimeInput(patch.time) } : {}),
+    ...(patch.attendees
+      ? { attendees: graphqlAttendeeInputs(patch.attendees) }
+      : {}),
+    ...(patch.recurrenceLines != null
+      ? { recurrenceLines: patch.recurrenceLines }
+      : {}),
+    ...(patch.visibility
+      ? {
+          visibility: graphqlEnum<GraphqlCalendarEventVisibility>(
+            patch.visibility
+          ),
+        }
+      : {}),
+    ...(patch.transparency
+      ? {
+          transparency: graphqlEnum<GraphqlCalendarEventTransparency>(
+            patch.transparency
+          ),
+        }
+      : {}),
+    ...(patch.reminders
+      ? { reminders: graphqlReminders(patch.reminders) }
+      : {}),
+    ...(patch.guestPolicy ? { guestPolicy: patch.guestPolicy } : {}),
+    ...(patch.conference
+      ? {
+          conference: graphqlEnum<GraphqlCalendarConferenceChange>(
+            patch.conference
+          ),
+        }
+      : {}),
+    ...(patch.outOfOffice
+      ? { outOfOffice: graphqlOutOfOffice(patch.outOfOffice) }
+      : {}),
+  };
+}
+
 /** Patches an event, the series or one occurrence, through the durable queue. */
 export async function executeGraphqlUpdate(
   host: CalendarMutationHost,
@@ -425,73 +505,7 @@ export async function executeGraphqlUpdate(
   const result = await executeOptimisticMutation(
     client,
     UpdateCalendarEventDocument,
-    {
-      input: {
-        eventId: args.eventId,
-        ...(args.calendarId ? { calendarId: args.calendarId } : {}),
-        ...(args.scope
-          ? { scope: graphqlEnum<GraphqlCalendarUpdateScope>(args.scope) }
-          : {}),
-        ...(args.recurrenceId ? { recurrenceId: args.recurrenceId } : {}),
-        ...(patch.title != null ? { title: patch.title } : {}),
-        ...(patch.description !== undefined
-          ? { description: patch.description }
-          : {}),
-        ...(patch.location !== undefined ? { location: patch.location } : {}),
-        ...(patch.time ? { time: graphqlTimeInput(patch.time) } : {}),
-        ...(patch.attendees
-          ? {
-              attendees: patch.attendees.map((attendee) => ({
-                email: attendee.email,
-                isOptional: attendee.isOptional ?? false,
-              })),
-            }
-          : {}),
-        ...(patch.recurrenceLines != null
-          ? { recurrenceLines: patch.recurrenceLines }
-          : {}),
-        ...(patch.visibility
-          ? {
-              visibility: graphqlEnum<GraphqlCalendarEventVisibility>(
-                patch.visibility
-              ),
-            }
-          : {}),
-        ...(patch.transparency
-          ? {
-              transparency: graphqlEnum<GraphqlCalendarEventTransparency>(
-                patch.transparency
-              ),
-            }
-          : {}),
-        ...(patch.reminders
-          ? { reminders: graphqlReminders(patch.reminders) }
-          : {}),
-        ...(patch.guestPolicy ? { guestPolicy: patch.guestPolicy } : {}),
-        ...(patch.conference
-          ? {
-              conference: graphqlEnum<GraphqlCalendarConferenceChange>(
-                patch.conference
-              ),
-            }
-          : {}),
-        ...(patch.outOfOffice
-          ? {
-              outOfOffice: {
-                ...(patch.outOfOffice.autoDeclineMode
-                  ? {
-                      autoDeclineMode:
-                        graphqlEnum<GraphqlCalendarOutOfOfficeAutoDeclineMode>(
-                          patch.outOfOffice.autoDeclineMode
-                        ),
-                    }
-                  : {}),
-                declineMessage: patch.outOfOffice.declineMessage ?? null,
-              },
-            }
-          : {}),
-      },
-    },
+    { input: updateEventInput(args) },
     {
       updateCalendarEvent: payloadOf(optimisticEvent, optimisticOccurrences),
     } as OptimisticResponse<UpdateCalendarEventMutation>,
@@ -556,69 +570,68 @@ async function targetCalendar(client: Client, calendarId: string | undefined) {
     : calendars.find((calendar) => calendar.isPrimary && calendar.isWritable);
 }
 
-/**
- * Creates an event through the durable queue. The event shows at once under
- * a client id that is also the request's idempotency key, so a replay after
- * a lost response cannot create it twice.
- */
-export async function executeGraphqlCreate(
-  args: CreateCalendarEventRequest,
-  client: Client = getGraphqlSoupClient()
-): Promise<{ outcome: CalendarMutationOutcome; event: CalendarEvent }> {
-  const clientId = args.idempotencyKey ?? uuidv4();
-  const calendar = await targetCalendar(client, args.calendarId ?? undefined);
-  const now = new Date().toISOString();
-  const time = graphqlTimeRecord(args.time);
-  const reminders = args.reminders
-    ? graphqlReminders(args.reminders)
-    : { useDefault: true, overrides: [] };
-  const visibility = graphqlEnum<EventRecord['visibility']>(
-    args.visibility ?? 'default'
-  );
-  const transparency = graphqlEnum<EventRecord['transparency']>(
-    args.transparency ?? 'opaque'
-  );
+type TargetCalendar = Awaited<ReturnType<typeof targetCalendar>>;
+
+function createdEventSettings(args: CreateCalendarEventRequest) {
   const eventType: EventRecord['eventType'] = args.outOfOffice
     ? 'OUT_OF_OFFICE'
     : 'DEFAULT';
+  return {
+    eventType,
+    visibility: graphqlEnum<EventRecord['visibility']>(
+      args.visibility ?? 'default'
+    ),
+    transparency: graphqlEnum<EventRecord['transparency']>(
+      args.transparency ?? 'opaque'
+    ),
+    reminders: args.reminders
+      ? graphqlReminders(args.reminders)
+      : { useDefault: true, overrides: [] },
+  };
+}
+
+/** The event a create shows at once, under the client id. */
+function optimisticCreatedEvent(
+  args: CreateCalendarEventRequest,
+  clientId: string,
+  calendar: TargetCalendar
+): EventRecord {
+  const now = new Date().toISOString();
+  const settings = createdEventSettings(args);
   const calendarId = args.calendarId ?? calendar?.id ?? null;
-  const linkId = args.emailLinkId ?? calendar?.linkId ?? '';
-  const event: EventRecord = {
+  const creatorEmail = calendar?.emailAddress ?? null;
+  const content = {
+    title: args.title,
+    description: args.description ?? null,
+    location: args.location ?? null,
+  };
+  return {
     __typename: EVENT_TYPENAME,
     id: clientId,
     ownerId: '',
-    linkId,
+    linkId: args.emailLinkId ?? calendar?.linkId ?? '',
     icalUid: clientId,
     calendarId,
     sources: calendarId
       ? [
           {
             calendarId,
-            title: args.title,
-            description: args.description ?? null,
-            location: args.location ?? null,
-            eventType,
-            visibility,
-            transparency,
+            ...content,
+            ...settings,
             isReadOnly: false,
-            reminders,
-            creatorEmail: calendar?.emailAddress ?? null,
+            creatorEmail,
             creatorName: null,
           },
         ]
       : [],
-    title: args.title,
-    description: args.description ?? null,
-    location: args.location ?? null,
+    ...content,
+    ...settings,
     status: 'CONFIRMED',
-    visibility,
-    transparency,
-    eventType,
-    time,
+    time: graphqlTimeRecord(args.time),
     recurrenceLines: args.recurrenceLines ?? [],
-    organizerEmail: calendar?.emailAddress ?? null,
+    organizerEmail: creatorEmail,
     organizerName: null,
-    creatorEmail: calendar?.emailAddress ?? null,
+    creatorEmail,
     creatorName: null,
     conferenceUrl: null,
     conferenceProvider: null,
@@ -633,7 +646,6 @@ export async function executeGraphqlCreate(
       isSelf: false,
       comment: null,
     })),
-    reminders,
     guestPolicy: args.guestPolicy ?? {
       canModify: false,
       canInviteOthers: true,
@@ -653,16 +665,67 @@ export async function executeGraphqlCreate(
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/** The wire input for a create; the client id doubles as its idempotency key. */
+function createEventInput(
+  args: CreateCalendarEventRequest,
+  event: EventRecord
+): CreateCalendarEventMutationVariables['input'] {
+  return {
+    idempotencyKey: event.id,
+    title: args.title,
+    time: graphqlTimeInput(args.time),
+    ...(args.calendarId ? { calendarId: args.calendarId } : {}),
+    ...(args.emailLinkId ? { emailLinkId: args.emailLinkId } : {}),
+    ...(args.description != null ? { description: args.description } : {}),
+    ...(args.location != null ? { location: args.location } : {}),
+    ...(args.attendees?.length
+      ? { attendees: graphqlAttendeeInputs(args.attendees) }
+      : {}),
+    ...(args.recurrenceLines?.length
+      ? { recurrenceLines: args.recurrenceLines }
+      : {}),
+    ...(args.visibility ? { visibility: event.visibility } : {}),
+    ...(args.transparency ? { transparency: event.transparency } : {}),
+    ...(args.reminders ? { reminders: event.reminders } : {}),
+    ...(args.conference
+      ? {
+          conference: graphqlEnum<GraphqlCalendarConferenceChange>(
+            args.conference
+          ),
+        }
+      : {}),
+    ...(args.macroCall ? { macroCall: true } : {}),
+    ...(args.guestPolicy ? { guestPolicy: args.guestPolicy } : {}),
+    ...(args.outOfOffice
+      ? { outOfOffice: graphqlOutOfOffice(args.outOfOffice) }
+      : {}),
+  };
+}
+
+/**
+ * Creates an event through the durable queue. The event shows at once under
+ * a client id that is also the request's idempotency key, so a replay after
+ * a lost response cannot create it twice.
+ */
+export async function executeGraphqlCreate(
+  args: CreateCalendarEventRequest,
+  client: Client = getGraphqlSoupClient()
+): Promise<{ outcome: CalendarMutationOutcome; event: CalendarEvent }> {
+  const clientId = args.idempotencyKey ?? uuidv4();
+  const calendar = await targetCalendar(client, args.calendarId ?? undefined);
+  const event = optimisticCreatedEvent(args, clientId, calendar);
   const occurrenceKey = occurrenceKeyOf(args.time);
   const occurrence: OccurrenceRecord = {
     __typename: OCCURRENCE_TYPENAME,
     id: `${clientId}:${occurrenceKey}`,
     eventId: clientId,
-    linkId,
+    linkId: event.linkId,
     occurrenceKey,
     recurrenceId: null,
     isCancelled: false,
-    time,
+    time: event.time,
     overrideTitle: null,
     overrideDescription: null,
     overrideLocation: null,
@@ -673,55 +736,7 @@ export async function executeGraphqlCreate(
   const result = await executeOptimisticMutation(
     client,
     CreateCalendarEventDocument,
-    {
-      input: {
-        idempotencyKey: clientId,
-        title: args.title,
-        time: graphqlTimeInput(args.time),
-        ...(args.calendarId ? { calendarId: args.calendarId } : {}),
-        ...(args.emailLinkId ? { emailLinkId: args.emailLinkId } : {}),
-        ...(args.description != null ? { description: args.description } : {}),
-        ...(args.location != null ? { location: args.location } : {}),
-        ...(args.attendees?.length
-          ? {
-              attendees: args.attendees.map((attendee) => ({
-                email: attendee.email,
-                isOptional: attendee.isOptional ?? false,
-              })),
-            }
-          : {}),
-        ...(args.recurrenceLines?.length
-          ? { recurrenceLines: args.recurrenceLines }
-          : {}),
-        ...(args.visibility ? { visibility } : {}),
-        ...(args.transparency ? { transparency } : {}),
-        ...(args.reminders ? { reminders } : {}),
-        ...(args.conference
-          ? {
-              conference: graphqlEnum<GraphqlCalendarConferenceChange>(
-                args.conference
-              ),
-            }
-          : {}),
-        ...(args.macroCall ? { macroCall: true } : {}),
-        ...(args.guestPolicy ? { guestPolicy: args.guestPolicy } : {}),
-        ...(args.outOfOffice
-          ? {
-              outOfOffice: {
-                ...(args.outOfOffice.autoDeclineMode
-                  ? {
-                      autoDeclineMode:
-                        graphqlEnum<GraphqlCalendarOutOfOfficeAutoDeclineMode>(
-                          args.outOfOffice.autoDeclineMode
-                        ),
-                    }
-                  : {}),
-                declineMessage: args.outOfOffice.declineMessage ?? null,
-              },
-            }
-          : {}),
-      },
-    },
+    { input: createEventInput(args, event) },
     {
       createCalendarEvent: {
         __typename: PAYLOAD_TYPENAME,

@@ -45,17 +45,16 @@ export function useSaveDraftMutation(
         },
         onSuccess(data, vars) {
           try {
-            void queryClient
-              .invalidateQueries({
-                queryKey: emailKeys.previews._def,
-              })
-              .catch(Telemetry.error);
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.previews._def,
+            });
             const threadId = data.draft.thread_db_id;
             if (!threadId) return;
             markThreadDraftSaved(threadId);
             if (!vars.skipSoupRefetch) {
-              void refetchSoupEntity(threadId, 'emailThread').catch(
-                Telemetry.error
+              fireAndForget(
+                refetchSoupEntity(threadId, 'emailThread'),
+                'email-draft'
               );
             }
           } catch (error) {
@@ -105,18 +104,17 @@ export function useDeleteDraftMutation(
             if (vars.threadId) {
               await refreshEmailThreadCache(vars.threadId);
             }
-            void queryClient
-              .invalidateQueries({
-                queryKey: emailKeys.previews._def,
-              })
-              .catch(Telemetry.error);
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.previews._def,
+            });
             if (vars.skipSoupRefetch) return;
             // Refetch the thread (not the deleted draft) so its draft-derived
             // fields settle. No-op for compose drafts, whose thread is deleted
             // along with the draft, so the refetch finds nothing to update.
             if (vars.threadId) {
-              void refetchSoupEntity(vars.threadId, 'emailThread').catch(
-                Telemetry.error
+              fireAndForget(
+                refetchSoupEntity(vars.threadId, 'emailThread'),
+                'email-draft'
               );
             }
             // Discarding a draft changes view membership — the thread leaves

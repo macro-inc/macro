@@ -1,7 +1,7 @@
 import { useChannel } from '@core/context/channels';
 import { formatDate } from '@core/util/date';
 import ChannelIcon from '@icon/system/regular/hash-straight.svg';
-import { ChannelTypeEnum } from '@service-storage/client';
+import { ChannelTypeEnum } from '@service-storage/itemType';
 import { Avatar } from '@ui';
 import { Show } from 'solid-js';
 

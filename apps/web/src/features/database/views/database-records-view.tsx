@@ -210,6 +210,9 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
   });
   const visibleColumns = columnLayout.visibleColumns;
   const filtered = () => filterConditionCount(props.view.query.filter) > 0;
+  /** A stored view changes only for editors; an unsaved one for anyone. */
+  const viewChange = () =>
+    !props.stored || props.canEdit ? props.onViewChange : undefined;
   const records = createRecordActions({
     controller,
     draftRows,
@@ -249,6 +252,11 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
       [range.id]: toCellTimeRange({ allDay: true, start: today, end: today }),
     };
   };
+  // A grid just mounted for a record from elsewhere has no rows to find it in yet.
+  const revealWhenLoaded = async (rowId: string) => {
+    await until(() => props.source.snapshot());
+    return records.reveal(rowId);
+  };
   const actions: DatabaseRecordsActions = {
     createRecord: async () =>
       match(layoutKind())
@@ -265,12 +273,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
     createRow: records.createRow,
     focusFirstCell: records.focusFirstCell,
     focusColumn,
-    // A grid just mounted for a record from elsewhere has no rows to find it in yet.
-    openRecord: (rowId) =>
-      fireAndForget(
-        until(() => props.source.snapshot()).then(() => records.reveal(rowId)),
-        'database'
-      ),
+    openRecord: (rowId) => fireAndForget(revealWhenLoaded(rowId), 'database'),
     pending: controller.pending,
   };
   props.actionsRef?.(actions);
@@ -532,9 +535,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                 }
               }
               canEdit={props.canEdit}
-              onViewChange={
-                !props.stored || props.canEdit ? props.onViewChange : undefined
-              }
+              onViewChange={viewChange()}
               renderCell={renderCell}
               renderTextValue={props.renderTextValue}
               renderMentionValue={props.renderMentionValue}
@@ -557,9 +558,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
               columns={columns()}
               canEdit={props.canEdit}
               filtered={filtered()}
-              onViewChange={
-                !props.stored || props.canEdit ? props.onViewChange : undefined
-              }
+              onViewChange={viewChange()}
               rowPending={controller.rowPending}
               onOpen={records.open}
               onCreate={records.createRow}
@@ -655,32 +654,7 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
                       )
                   : undefined
               }
-              emptyState={
-                <Show
-                  when={
-                    rows().length === 0 &&
-                    (filtered() || columns().length === 0)
-                  }
-                >
-                  <div class="py-5 pr-4 pl-14">
-                    <p class="max-w-80 text-sm text-ink-muted">
-                      {filtered()
-                        ? 'No records match this view.'
-                        : 'Add a column to get started.'}
-                    </p>
-                    <Show when={filtered()}>
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        class="mt-2 text-accent"
-                        onClick={() => props.onClearConstraints?.()}
-                      >
-                        Clear filters
-                      </Button>
-                    </Show>
-                  </div>
-                </Show>
-              }
+              emptyState={getDatabaseRecordsViewEmptyState()}
             />
           </Match>
         </Switch>
@@ -743,4 +717,30 @@ export function DatabaseRecordsView(props: DatabaseRecordsViewProps) {
       </div>
     </>
   );
+
+  function getDatabaseRecordsViewEmptyState(): JSX.Element {
+    return (
+      <Show
+        when={rows().length === 0 && (filtered() || columns().length === 0)}
+      >
+        <div class="py-5 pr-4 pl-14">
+          <p class="max-w-80 text-sm text-ink-muted">
+            {filtered()
+              ? 'No records match this view.'
+              : 'Add a column to get started.'}
+          </p>
+          <Show when={filtered()}>
+            <Button
+              variant="ghost"
+              size="xs"
+              class="mt-2 text-accent"
+              onClick={() => props.onClearConstraints?.()}
+            >
+              Clear filters
+            </Button>
+          </Show>
+        </div>
+      </Show>
+    );
+  }
 }

@@ -78,6 +78,20 @@ type SelectionCache<PageData, PageParam, SelectedData> = {
   selection: ReactiveSelection<SelectedData>;
 };
 
+/** What the loaded pages' queries report together. */
+function summarizePages<PageData, Variables extends AnyVariables, PageParam>(
+  pages: readonly Page<PageData, Variables, PageParam>[]
+) {
+  const pageResults = pages.map((page) => page.observer.getCurrentResult());
+  return {
+    pageError: pageResults.find((page) => page.error)?.error ?? null,
+    fetching: pageResults.some((page) => page.fetching),
+    stale: pageResults.some((page) => page.stale),
+    pageIsFetching: pageResults.some((page) => page.isFetching),
+    pagesFetched: pageResults.some((page) => page.isFetched),
+  };
+}
+
 function sameReferences<T>(left: readonly T[], right: readonly T[]): boolean {
   return (
     left.length === right.length &&
@@ -193,16 +207,9 @@ export class InfiniteQueryObserver<
     const data = selection.data;
     let derivationError = selection.error;
 
-    const pageResults = this.pages.map((page) =>
-      page.observer.getCurrentResult()
-    );
-    const pageError = pageResults.find((page) => page.error)?.error ?? null;
-    const fetching = pageResults.some((page) => page.fetching);
-    const stale = pageResults.some((page) => page.stale);
-    const pageIsFetching = pageResults.some((page) => page.isFetching);
-    const fetched =
-      pageResults.some((page) => page.isFetched) ||
-      this.state.previousData !== undefined;
+    const { pageError, fetching, stale, pageIsFetching, pagesFetched } =
+      summarizePages(this.pages);
+    const fetched = pagesFetched || this.state.previousData !== undefined;
     let nextPageParam: PageParam | null | undefined;
 
     if (!derivationError) {
@@ -356,14 +363,18 @@ export class InfiniteQueryObserver<
 
     const signal = this.actionController.signal;
     const pendingRefetch = this.refetchPromise;
-    const action = pendingRefetch
-      ? pendingRefetch.then(() => this.runFetchNextPage(refetchOptions, signal))
-      : this.runFetchNextPage(refetchOptions, signal);
-    const trackedAction = action.finally(() => {
-      if (this.fetchNextPromise === trackedAction) {
-        this.fetchNextPromise = undefined;
+
+    const run = async () => {
+      try {
+        if (pendingRefetch) await pendingRefetch;
+        return await this.runFetchNextPage(refetchOptions, signal);
+      } finally {
+        if (this.fetchNextPromise === trackedAction) {
+          this.fetchNextPromise = undefined;
+        }
       }
-    });
+    };
+    const trackedAction = run();
 
     this.fetchNextPromise = trackedAction;
 
@@ -377,14 +388,18 @@ export class InfiniteQueryObserver<
 
     const signal = this.actionController.signal;
     const pendingFetchNext = this.fetchNextPromise;
-    const action = pendingFetchNext
-      ? pendingFetchNext.then(() => this.runRefetch(refetchOptions, signal))
-      : this.runRefetch(refetchOptions, signal);
-    const trackedAction = action.finally(() => {
-      if (this.refetchPromise === trackedAction) {
-        this.refetchPromise = undefined;
+
+    const run = async () => {
+      try {
+        if (pendingFetchNext) await pendingFetchNext;
+        return await this.runRefetch(refetchOptions, signal);
+      } finally {
+        if (this.refetchPromise === trackedAction) {
+          this.refetchPromise = undefined;
+        }
       }
-    });
+    };
+    const trackedAction = run();
 
     this.refetchPromise = trackedAction;
 
@@ -677,7 +692,11 @@ export class InfiniteQueryObserver<
     refetchOptions: UrqlQueryRefetchOptions,
     signal: AbortSignal
   ): Promise<InfiniteResult<PageData, Variables, PageParam, SelectedData>> {
-    if (signal.aborted || this.destroyed || !this.state.enabled) {
+    const hasAborted = () => {
+      return signal.aborted || this.destroyed || !this.state.enabled;
+    };
+
+    if (hasAborted()) {
       return this.actionResult();
     }
 

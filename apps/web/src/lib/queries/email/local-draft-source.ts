@@ -106,14 +106,19 @@ export function localDraftMatchesFilters(
     const range = filters.emailUpdatedAt;
     if (range) {
       const time = draft.updatedAt;
-      const match =
-        (!range.gt || time > Date.parse(range.gt)) &&
-        (!range.gte || time >= Date.parse(range.gte)) &&
-        (!range.lt || time < Date.parse(range.lt)) &&
-        (!range.lte || time <= Date.parse(range.lte));
+      const match = buildMatch(time, range);
       if (exclude ? match : !match) return false;
     }
     return true;
+
+    function buildMatch(time: number, rangeValue: NonNullable<typeof range>) {
+      return (
+        (!rangeValue.gt || time > Date.parse(rangeValue.gt)) &&
+        (!rangeValue.gte || time >= Date.parse(rangeValue.gte)) &&
+        (!rangeValue.lt || time < Date.parse(rangeValue.lt)) &&
+        (!rangeValue.lte || time <= Date.parse(rangeValue.lte))
+      );
+    }
   };
   return matches(query.include, false) && matches(query.exclude, true);
 }

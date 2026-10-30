@@ -9,6 +9,7 @@ import { isTauri } from '@core/util/platform';
 import { clearPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { clearRegisteredCaches } from '@graphql-cache/lifecycle';
 import { rotateCacheScope } from '@graphql-cache/scope';
+import { endAuthSession } from '@queries/auth/requests';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { clearTeamCalendarQueries } from '@queries/calendar/team-cache';
 import { queryClient, queryPersistence } from '@queries/client';
@@ -25,7 +26,6 @@ import {
 import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session';
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
-import { authServiceClient } from '@service-auth/client';
 import {
   recordGraphqlMutationQueueCleared,
   setGraphqlSoupSessionActive,
@@ -55,6 +55,23 @@ const unauthenticatedUserInfo: UserInfoData = {
   createdAt: undefined,
 };
 
+/** Clears composer storage as one more settled wipe, so a throw is a rejection. */
+async function clearComposerStorageSettled(): Promise<void> {
+  clearComposerStorage();
+}
+
+async function endProviderSessionInBackground(): Promise<void> {
+  try {
+    await fetch(SERVER_HOSTS['auth-logout'], {
+      credentials: 'include',
+      mode: 'no-cors',
+      redirect: 'manual',
+    });
+  } catch {
+    // The webview signs out locally either way.
+  }
+}
+
 export async function clearLocalAuthSession(
   cause: 'logout' | 'session-expired' = 'logout'
 ) {
@@ -71,7 +88,7 @@ export async function clearLocalAuthSession(
   const results = await Promise.allSettled([
     // Reads the queue before the cache wipe below deletes it.
     recordGraphqlMutationQueueCleared(cause),
-    Promise.resolve().then(clearComposerStorage),
+    clearComposerStorageSettled(),
     documentContextsCleared,
     clearRegisteredCaches(),
     queryPersistence.clear(),
@@ -146,7 +163,7 @@ export function useLogout() {
     // authenticated. Time-boxed so a hung request can't block logout.
     await raceTimeout(unregisterPushRegistrationsForLogout(), 3000);
     await clearLocalAuthSession();
-    await authServiceClient.logout();
+    await endAuthSession();
     analytics.track('sign_out');
     analytics.reset();
 
@@ -156,11 +173,7 @@ export function useLogout() {
     // sitting on the signed-in screen. End the provider session with a
     // background request instead and route the webview to /login in place.
     if (isTauri()) {
-      await fetch(SERVER_HOSTS['auth-logout'], {
-        credentials: 'include',
-        mode: 'no-cors',
-        redirect: 'manual',
-      }).catch(() => {});
+      await endProviderSessionInBackground();
       navigate('/login');
       // Native login reuses this WebView. End the document lifetime so queued
       // editor callbacks can never adopt the next account's draft session.

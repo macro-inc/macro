@@ -4,13 +4,20 @@ import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInpu
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
 import { createFigDocument } from '@app/features/block-fig/queries/create-fig';
 import { createPsdDocument } from '@app/features/block-psd/queries/create-psd';
-import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/use-spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import {
+  createCanvasFile,
+  createChat,
+  createCodeFileFromText,
+  createMarkdownFile,
+  createSnippet,
+} from '@app/lib/queries/items/create';
 import {
   endTrackedDocumentSpan,
   registerDocumentSpan,
@@ -44,13 +51,6 @@ import { pressedKeys } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
-import {
-  createCanvasFile,
-  createChat,
-  createCodeFileFromText,
-  createMarkdownFile,
-  createSnippet,
-} from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat.svg';
@@ -58,7 +58,7 @@ import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
-import { type Span, Telemetry } from '@macro-inc/observability';
+import type { Span } from '@macro-inc/observability';
 import { createDatabase } from '@queries/storage/databases';
 import { createForm } from '@queries/storage/forms';
 import { makePersisted } from '@solid-primitives/storage';
@@ -85,6 +85,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
 import {
   type PaneCreateContext,
   useCreateContext,
@@ -231,8 +232,6 @@ const createBlock = async (spec: {
   span?.event('doc.navigated');
 };
 
-const reportCreateBlockError = (error: unknown) =>
-  Telemetry.error(error, { surface: 'launcher' });
 const createComponent = (spec: {
   componentId: string;
   shouldInsert?: boolean;
@@ -283,36 +282,38 @@ export function runCreateAction(
   // projects.ts); `source` just attributes which surface initiated it.
   const source = options.source ?? 'create_menu';
 
-  switch (blockName) {
-    case 'md': {
+  match(blockName)
+    .with('md', () => {
       const span = startDocumentSpan('doc.create');
       span.setAttr('doc.type', 'md');
       span.setAttr('doc.source', source);
-      span
-        .run(() =>
-          createBlock({
-            blockName: 'md',
-            loading: true,
-            span,
-            createFn: () =>
-              createMarkdownFile({
-                title: '',
-                content: '',
-                projectId: options.projectId,
-                source,
-              }),
-            shouldInsert,
-            openCreated,
-          })
-        )
-        .catch((error) => {
+      const create = async () => {
+        try {
+          await span.run(() =>
+            createBlock({
+              blockName: 'md',
+              loading: true,
+              span,
+              createFn: () =>
+                createMarkdownFile({
+                  title: '',
+                  content: '',
+                  projectId: options.projectId,
+                  source,
+                }),
+              shouldInsert,
+              openCreated,
+            })
+          );
+        } catch (error) {
           span.error(error);
           endTrackedDocumentSpan(span);
-          reportCreateBlockError(error);
-        });
-      return;
-    }
-    case 'spreadsheet':
+          throw error;
+        }
+      };
+      fireAndForget(create(), 'launcher');
+    })
+    .with('spreadsheet', () => {
       if (!isSpreadsheetEnabledForCurrentUser()) return;
       fireAndForget(
         createBlock({
@@ -328,87 +329,102 @@ export function runCreateAction(
         }),
         'launcher'
       );
-      return;
-    case 'psd':
+    })
+    .with('psd', () => {
       if (!isFeatureEnabled(enablePsdEditor)) return;
-      createBlock({
-        blockName: 'psd',
-        loading: true,
-        createFn: () =>
-          createPsdDocument({ projectId: options.projectId, source }),
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'fig':
+      fireAndForget(
+        createBlock({
+          blockName: 'psd',
+          loading: true,
+          createFn: () =>
+            createPsdDocument({ projectId: options.projectId, source }),
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('fig', () => {
       if (!isFeatureEnabled(enableFigViewer)) return;
-      createBlock({
-        blockName: 'fig',
-        loading: true,
-        createFn: () =>
-          createFigDocument({ projectId: options.projectId, source }),
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'ai':
+      fireAndForget(
+        createBlock({
+          blockName: 'fig',
+          loading: true,
+          createFn: () =>
+            createFigDocument({ projectId: options.projectId, source }),
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('ai', () => {
       if (!isFeatureEnabled(enableAiEditor)) return;
-      createBlock({
-        blockName: 'ai',
-        loading: true,
-        createFn: () =>
-          createAiDocument({ projectId: options.projectId, source }),
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'canvas':
-      createBlock({
-        blockName: 'canvas',
-        loading: true,
-        createFn: async () => {
-          const result = await createCanvasFile({
-            title: 'New Canvas',
-            projectId: options.projectId,
-            source,
-          });
-          if ('error' in result) return;
-          return result.documentId ?? undefined;
-        },
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'task':
+      fireAndForget(
+        createBlock({
+          blockName: 'ai',
+          loading: true,
+          createFn: () =>
+            createAiDocument({ projectId: options.projectId, source }),
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('canvas', () => {
+      fireAndForget(
+        createBlock({
+          blockName: 'canvas',
+          loading: true,
+          createFn: async () => {
+            const result = await createCanvasFile({
+              title: 'New Canvas',
+              projectId: options.projectId,
+              source,
+            });
+            if ('error' in result) return;
+            return result.documentId ?? undefined;
+          },
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('task', () => {
       createComponent({
         componentId: 'task-compose',
         asPopover: true,
         params: { composerContext: options.context?.task ?? undefined },
       });
-      return;
-    case 'initiative':
+    })
+    .with('initiative', () => {
       if (!isFeatureEnabled(enableProjects)) return;
       createComponent({
         componentId: 'project-compose',
         asPopover: true,
       });
-      return;
-    case 'snippet':
-      createBlock({
-        blockName: 'snippet',
-        loading: true,
-        createFn: () =>
-          createSnippet({
-            projectId: options.projectId,
-            title: '',
-            content: '',
-            source,
-          }),
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'email':
+    })
+    .with('snippet', () => {
+      fireAndForget(
+        createBlock({
+          blockName: 'snippet',
+          loading: true,
+          createFn: () =>
+            createSnippet({
+              projectId: options.projectId,
+              title: '',
+              content: '',
+              source,
+            }),
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('email', () => {
       // Focus the "To" field within this gesture so the iOS keyboard opens;
       // the compose mounts asynchronously, so this waits for the input.
       triggerFocusInput(() =>
@@ -418,14 +434,14 @@ export function runCreateAction(
         componentId: 'email-compose',
         shouldInsert,
       });
-      return;
-    case 'channel':
+    })
+    .with('channel', () => {
       createComponent({
         componentId: 'channel-compose',
         shouldInsert,
       });
-      return;
-    case 'chat':
+    })
+    .with('chat', () => {
       if (isFeatureEnabled(enableChatV3Agents)) {
         setCreateMenuOpen(false, false);
         openAgentComposer(useSplitLayout(), shouldInsert);
@@ -441,20 +457,23 @@ export function runCreateAction(
             ?.querySelector<HTMLElement>('[contenteditable="true"]')
         );
       }
-      createBlock({
-        blockName: 'chat',
-        createFn: async () => {
-          const result = await createChat(undefined, { source });
-          if ('error' in result) {
-            return;
-          }
-          return result.chatId;
-        },
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'project':
+      fireAndForget(
+        createBlock({
+          blockName: 'chat',
+          createFn: async () => {
+            const result = await createChat(undefined, { source });
+            if ('error' in result) {
+              return;
+            }
+            return result.chatId;
+          },
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('project', () => {
       createComponent({
         componentId: 'folder-compose',
         asPopover: true,
@@ -464,76 +483,85 @@ export function runCreateAction(
           source,
         },
       });
-      return;
-    case 'database':
+    })
+    .with('database', () => {
       if (!isFeatureEnabled(enableDatabases)) return;
-      createBlock({
-        blockName: 'database',
-        loading: true,
-        createFn: async () => {
-          const created = await createDatabase({
-            name: 'Untitled database',
-            source,
-          });
-          if (created.isErr()) {
-            toast.failure(t('create.couldNotCreateDatabase'));
-            return;
-          }
-          return created.value;
-        },
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'form':
+      fireAndForget(
+        createBlock({
+          blockName: 'database',
+          loading: true,
+          createFn: async () => {
+            const created = await createDatabase({
+              name: 'Untitled database',
+              source,
+            });
+            if (created.isErr()) {
+              toast.failure(t('create.couldNotCreateDatabase'));
+              return;
+            }
+            return created.value;
+          },
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('form', () => {
       if (!isFeatureEnabled(enableForms)) return;
-      createBlock({
-        blockName: 'form',
-        loading: true,
-        createFn: async () => {
-          const created = await createForm(
-            { name: 'Untitled form', source: { kind: 'new' } },
-            source
-          );
-          if (created.isErr()) {
-            toast.failure(t('create.couldNotCreateForm'));
-            return;
-          }
-          return created.value.form.id;
-        },
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'code':
-      createBlock({
-        blockName: 'code',
-        loading: true,
-        createFn: async () => {
-          const result = await createCodeFileFromText({
-            code: 'print("Hello, World!")',
-            extension: 'py',
-            title: 'New Code File',
-            projectId: options.projectId,
-            source,
-          });
-          if (result.isErr()) return;
-          return result.value.documentId ?? undefined;
-        },
-        shouldInsert,
-        openCreated,
-      }).catch(reportCreateBlockError);
-      return;
-    case 'routine':
+      fireAndForget(
+        createBlock({
+          blockName: 'form',
+          loading: true,
+          createFn: async () => {
+            const created = await createForm(
+              { name: 'Untitled form', source: { kind: 'new' } },
+              source
+            );
+            if (created.isErr()) {
+              toast.failure(t('create.couldNotCreateForm'));
+              return;
+            }
+            return created.value.form.id;
+          },
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('code', () => {
+      fireAndForget(
+        createBlock({
+          blockName: 'code',
+          loading: true,
+          createFn: async () => {
+            const result = await createCodeFileFromText({
+              code: 'print("Hello, World!")',
+              extension: 'py',
+              title: 'New Code File',
+              projectId: options.projectId,
+              source,
+            });
+            if (result.isErr()) return;
+            return result.value.documentId ?? undefined;
+          },
+          shouldInsert,
+          openCreated,
+        }),
+        'launcher'
+      );
+    })
+    .with('routine', () => {
       createComponent({ componentId: 'routine-compose', asPopover: true });
-      return;
-    case 'skill':
+    })
+    .with('skill', () => {
       createComponent({
         componentId: 'skill-compose',
         asPopover: true,
       });
-      return;
-    case 'agent': {
+    })
+    .with('agent', () => {
       if (isFeatureEnabled(enableChatV3Agents)) {
         setCreateMenuOpen(false, false);
         openAgentComposer(useSplitLayout(), shouldInsert);
@@ -564,9 +592,8 @@ export function runCreateAction(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }
       );
-      return;
-    }
-  }
+    })
+    .otherwise(() => undefined);
 }
 
 /** Capture the provider during setup; snapshot only when the action runs. */

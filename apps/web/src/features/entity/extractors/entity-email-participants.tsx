@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { UserTooltip } from '@core/component/UserTooltip';
 import { useEmail } from '@core/context/user';
 import { emailToMacroId, getDisplayName } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   highlightTermsInText,
   mergeAdjacentMacroEmTags,
@@ -149,16 +150,18 @@ function abbreviateParticipants(
 }
 
 async function writeEmailToClipboard(email: string) {
-  await navigator.clipboard.writeText(email);
-  toast.success('Email copied');
+  try {
+    await navigator.clipboard.writeText(email);
+    toast.success('Email copied');
+  } catch (error) {
+    Telemetry.error(error, { surface: 'email-participants' });
+    toast.failure('Failed to copy email');
+  }
 }
 
 function copyEmail(email: string, e: MouseEvent) {
   e.stopPropagation();
-  writeEmailToClipboard(email).catch((error) => {
-    Telemetry.error(error, { surface: 'email-participants' });
-    toast.failure('Failed to copy email');
-  });
+  fireAndForget(writeEmailToClipboard(email), 'email-participants');
 }
 
 function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {

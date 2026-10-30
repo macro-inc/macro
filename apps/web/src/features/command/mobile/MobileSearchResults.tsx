@@ -48,6 +48,7 @@ function MobileNameResults(props: {
   const category = useMobileSearchCategory(state.category);
   const source = useEntitySearch(state.query, category, {
     enabled: () => true,
+    viewerId: useUserId(),
     contactDiscovery: useCrmContactDiscovery,
   });
   useDatabaseDiscoverySync(() => true);

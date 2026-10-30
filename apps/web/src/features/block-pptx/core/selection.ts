@@ -4,6 +4,7 @@
  */
 
 import type { EditOp, ShapeOutline } from '@core/pptx-engine/types';
+import { match as matchBranch } from 'ts-pattern';
 import { type Box, boxOf, corners, type Point } from './geometry';
 
 /** An axis-aligned rectangle. */
@@ -130,26 +131,32 @@ export function alignOps(
     }
   } else {
     for (const { s, b } of items) {
-      switch (mode) {
-        case 'left':
+      matchBranch(mode)
+        .with('left', () => {
           move(s.id, frame.x - b.x, 0);
-          break;
-        case 'center':
+          return;
+        })
+        .with('center', () => {
           move(s.id, frame.x + frame.w / 2 - (b.x + b.w / 2), 0);
-          break;
-        case 'right':
+          return;
+        })
+        .with('right', () => {
           move(s.id, frame.x + frame.w - (b.x + b.w), 0);
-          break;
-        case 'top':
+          return;
+        })
+        .with('top', () => {
           move(s.id, 0, frame.y - b.y);
-          break;
-        case 'middle':
+          return;
+        })
+        .with('middle', () => {
           move(s.id, 0, frame.y + frame.h / 2 - (b.y + b.h / 2));
-          break;
-        case 'bottom':
+          return;
+        })
+        .with('bottom', () => {
           move(s.id, 0, frame.y + frame.h - (b.y + b.h));
-          break;
-      }
+          return;
+        })
+        .otherwise(() => {});
     }
   }
   return shapes

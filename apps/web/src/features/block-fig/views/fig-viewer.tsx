@@ -177,6 +177,14 @@ export function FigViewer() {
 
   // The design panel follows a single selection (and edits to it).
   let infoRequest = 0;
+  const loadInfo = async (id: string, request: number) => {
+    try {
+      const i = await engine.nodeInfo(viewer.page(), id);
+      if (request === infoRequest) setInfo(i);
+    } catch {
+      if (request === infoRequest) setInfo(undefined);
+    }
+  };
   createEffect(
     on([viewer.selected, viewer.editVersion], ([selected]) => {
       const request = ++infoRequest;
@@ -184,14 +192,7 @@ export function FigViewer() {
         setInfo(undefined);
         return;
       }
-      engine
-        .nodeInfo(viewer.page(), selected[0].id)
-        .then((i) => {
-          if (request === infoRequest) setInfo(i);
-        })
-        .catch(() => {
-          if (request === infoRequest) setInfo(undefined);
-        });
+      fireAndForget(loadInfo(selected[0].id, request), 'fig-viewer');
     })
   );
 
@@ -450,6 +451,12 @@ export function FigViewer() {
     );
   };
 
+  /** Imports images into the frame under `at`, or the page when none is. */
+  const importImagesAt = async (files: File[], at: Point) => {
+    const parent = await viewer.containerAt(at);
+    await editor.importImages(files, at, parent);
+  };
+
   /** Figma's place image (⇧⌘K): picked images go in the middle of the view. */
   const placeImage = () => {
     const input = document.createElement('input');
@@ -462,14 +469,7 @@ export function FigViewer() {
       const c = viewer.camera();
       const v = viewer.viewport();
       const at = { x: c.x + v.w / 2 / c.zoom, y: c.y + v.h / 2 / c.zoom };
-      fireAndForget(
-        runEdit(
-          viewer
-            .containerAt(at)
-            .then((parent) => editor.importImages(files, at, parent))
-        ),
-        'fig-viewer'
-      );
+      fireAndForget(runEdit(importImagesAt(files, at)), 'fig-viewer');
     };
     input.click();
   };
@@ -816,16 +816,16 @@ export function FigViewer() {
     const target = e.target as HTMLElement;
     // Presenting takes its own keys.
     if (review.presenting()) return;
-    const mod = IS_MAC ? e.metaKey : e.ctrlKey;
+    const mod = commandKeyHeld();
     // ⌘P is the actions menu anywhere in the design, never the browser's
     // print (Figma's quick actions; Figma's ⌘K is the app's command menu).
-    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyP') {
+    if (isActionsMenuKey()) {
       e.preventDefault();
       e.stopPropagation();
       run('open-actions');
       return;
     }
-    if (mod && !e.altKey && !e.shiftKey && e.code === 'KeyK') {
+    if (isCommandMenuKey()) {
       context.suggestActions?.(() => setShowActions(true));
       return;
     }
@@ -833,21 +833,7 @@ export function FigViewer() {
     // Menus (portaled, so their events bubble here) handle their own keys.
     if (target.closest('[role="menu"]')) return;
     // Menus, tabs, and panel dividers use arrows without moving the selection.
-    if (
-      !mod &&
-      target.closest(
-        '[aria-haspopup="menu"], [aria-haspopup="true"], [role="tab"], [role="separator"]'
-      ) &&
-      [
-        'ArrowUp',
-        'ArrowDown',
-        'ArrowLeft',
-        'ArrowRight',
-        'Home',
-        'End',
-      ].includes(e.key)
-    )
-      return;
+    if (isControlNavigationKey()) return;
     // A focused select or button keeps the keys it uses itself.
     const control = target.closest('select, button, a[href]');
     if (control && controlOwnsKey(control.tagName, e)) return;
@@ -859,7 +845,7 @@ export function FigViewer() {
       return;
     }
     if (e.key === 'Alt') setAltHeld(true);
-    if (e.key === 'Meta' || e.key === 'Control') setDeepHeld(true);
+    trackDeepSelectKey();
     if (shapeKey(e)) {
       e.preventDefault();
       e.stopPropagation();
@@ -867,21 +853,66 @@ export function FigViewer() {
     }
     const action = shortcutAction(e, IS_MAC);
     if (!action) return;
-    if (EDIT_ACTIONS.has(action) && !editor.enabled()) return;
-    // ⌘V goes through the paste event, which carries pasted image files.
-    if (action === 'paste') return;
-    // With nothing to act on, the key is the app's (⇧← focuses the split
-    // to the left, Escape leaves a spotlighted split, ⇧⌘C copies the link).
-    if (SELECTION_ACTIONS.has(action) && viewer.selected().length === 0) return;
-    if (action === 'escape' && escapeIdle()) return;
+    if (!canHandleAction(action)) return;
     e.preventDefault();
     e.stopPropagation();
     const resolved = enterAction(action);
-    if (resolved === 'edit-text') setTextEditing(info()?.id);
-    else if (resolved === 'edit-vector') {
-      const id = info()?.id;
-      if (id) fireAndForget(runEdit(editor.editVector(id)), 'fig-viewer');
-    } else run(resolved);
+    runResolvedAction();
+
+    function canHandleAction(
+      action: NonNullable<ReturnType<typeof shortcutAction>>
+    ): boolean {
+      if (EDIT_ACTIONS.has(action) && !editor.enabled()) return false;
+      // ⌘V goes through the paste event, which carries pasted image files.
+      if (action === 'paste') return false;
+      // With nothing to act on, the key is the app's (⇧← focuses the split
+      // to the left, Escape leaves a spotlighted split, ⇧⌘C copies the link).
+      if (SELECTION_ACTIONS.has(action) && viewer.selected().length === 0)
+        return false;
+      if (action === 'escape' && escapeIdle()) return false;
+      return true;
+    }
+
+    function commandKeyHeld() {
+      return IS_MAC ? e.metaKey : e.ctrlKey;
+    }
+
+    function isControlNavigationKey() {
+      return (
+        !mod &&
+        target.closest(
+          '[aria-haspopup="menu"], [aria-haspopup="true"], [role="tab"], [role="separator"]'
+        ) &&
+        [
+          'ArrowUp',
+          'ArrowDown',
+          'ArrowLeft',
+          'ArrowRight',
+          'Home',
+          'End',
+        ].includes(e.key)
+      );
+    }
+
+    function trackDeepSelectKey() {
+      if (e.key === 'Meta' || e.key === 'Control') setDeepHeld(true);
+    }
+
+    function isCommandMenuKey() {
+      return mod && !e.altKey && !e.shiftKey && e.code === 'KeyK';
+    }
+
+    function isActionsMenuKey() {
+      return mod && !e.altKey && !e.shiftKey && e.code === 'KeyP';
+    }
+
+    function runResolvedAction() {
+      if (resolved === 'edit-text') setTextEditing(info()?.id);
+      else if (resolved === 'edit-vector') {
+        const id = info()?.id;
+        if (id) fireAndForget(runEdit(editor.editVector(id)), 'fig-viewer');
+      } else run(resolved);
+    }
   };
 
   /**
@@ -935,14 +966,7 @@ export function FigViewer() {
     const c = viewer.camera();
     const v = viewer.viewport();
     const at = { x: c.x + v.w / 2 / c.zoom, y: c.y + v.h / 2 / c.zoom };
-    fireAndForget(
-      runEdit(
-        viewer
-          .containerAt(at)
-          .then((parent) => editor.importImages(files, at, parent))
-      ),
-      'fig-viewer'
-    );
+    fireAndForget(runEdit(importImagesAt(files, at)), 'fig-viewer');
   };
 
   const releaseModifiers = () => {
@@ -1021,294 +1045,327 @@ export function FigViewer() {
   const showLayers = () => !viewer.uiHidden() && viewer.layersOpen();
   const showDesign = () => !viewer.uiHidden() && viewer.designOpen();
 
-  return (
-    <div
-      ref={root}
-      tabIndex={0}
-      class="fig-editor-theme relative flex size-full min-h-0 min-w-0 bg-page outline-none"
-      data-testid="fig-viewer"
-      onKeyDown={onPortaledKeyDown}
-      onKeyUp={onKeyUp}
-      onPaste={onPaste}
-    >
-      <Show when={showLayers()}>
-        <ResizablePanel
-          side="left"
-          label="Pages and layers"
-          width={leftWidth()}
-          onResize={setLeftWidth}
-          onContextMenu={contextMenu.onLayers}
-        >
-          <Tabs
-            class="flex min-h-0 flex-1 flex-col"
-            value={leftTab()}
-            onChange={(value) => setLeftTab(value as 'layers' | 'assets')}
+  return renderViewer();
+
+  function renderViewer() {
+    return (
+      <div
+        ref={root}
+        tabIndex={0}
+        class="fig-editor-theme relative flex size-full min-h-0 min-w-0 bg-page outline-none"
+        data-testid="fig-viewer"
+        onKeyDown={onPortaledKeyDown}
+        onKeyUp={onKeyUp}
+        onPaste={onPaste}
+      >
+        <Show when={showLayers()}>
+          <ResizablePanel
+            side="left"
+            label="Pages and layers"
+            width={leftWidth()}
+            onResize={setLeftWidth}
+            onContextMenu={contextMenu.onLayers}
           >
-            <div class="flex h-12 shrink-0 items-center gap-1 px-3 text-xs">
-              <MainMenu
-                canEdit={editor.enabled()}
-                hasSelection={viewer.selected().length > 0}
-                canUndo={editor.canUndo()}
-                canRedo={editor.canRedo()}
-                zoomItems={zoomItems()}
-                onRun={run}
-                onExportFramesPdf={() =>
-                  fireAndForget(handoff.exportFramesPdf(), 'fig-viewer')
+            <Tabs
+              class="flex min-h-0 flex-1 flex-col"
+              value={leftTab()}
+              onChange={(value) => setLeftTab(value as 'layers' | 'assets')}
+            >
+              <div class="flex h-12 shrink-0 items-center gap-1 px-3 text-xs">
+                <MainMenu
+                  canEdit={editor.enabled()}
+                  hasSelection={viewer.selected().length > 0}
+                  canUndo={editor.canUndo()}
+                  canRedo={editor.canRedo()}
+                  zoomItems={zoomItems()}
+                  onRun={run}
+                  onExportFramesPdf={() =>
+                    fireAndForget(handoff.exportFramesPdf(), 'fig-viewer')
+                  }
+                />
+                <span
+                  class="min-w-0 flex-1 truncate font-semibold"
+                  title={context.fileName()}
+                >
+                  {context.fileName()}
+                </span>
+                <Show when={editor.enabled()}>
+                  <SaveIndicator state={editor.saveState()} />
+                </Show>
+                <PanelToggle
+                  side="left"
+                  open
+                  onClick={() => viewer.setLayersOpen(false)}
+                />
+              </div>
+              <Tabs.List
+                class="flex h-10 shrink-0 items-center gap-1 border-edge-frame border-b px-3 text-xs"
+                aria-label="File navigation"
+              >
+                <For each={['layers', 'assets'] as const}>
+                  {(t) => (
+                    <Tabs.Trigger
+                      value={t}
+                      class="rounded-md px-2 py-1 font-medium"
+                      classList={{
+                        'bg-hover text-ink': leftTab() === t,
+                        'text-ink-muted': leftTab() !== t,
+                      }}
+                      data-testid={`fig-tab-${t}`}
+                    >
+                      {t === 'layers' ? 'File' : 'Assets'}
+                    </Tabs.Trigger>
+                  )}
+                </For>
+              </Tabs.List>
+              <Tabs.Content
+                value="assets"
+                class="flex min-h-0 flex-1 flex-col outline-none"
+              >
+                <AssetsPanel
+                  viewer={viewer}
+                  engine={engine}
+                  editor={editor}
+                  libraries={libraries}
+                  fileName={context.fileName()}
+                />
+              </Tabs.Content>
+              <Tabs.Content
+                value="layers"
+                class="flex min-h-0 flex-1 flex-col outline-none"
+              >
+                <LayersPanel
+                  viewer={viewer}
+                  engine={engine}
+                  editor={editor}
+                  focusSearchRef={(focus) => {
+                    focusSearch = focus;
+                  }}
+                />
+              </Tabs.Content>
+            </Tabs>
+          </ResizablePanel>
+        </Show>
+        <div
+          class="relative min-w-0 flex-1"
+          onPointerDown={stopFollowing}
+          onWheel={stopFollowing}
+          onContextMenu={contextMenu.onCanvas}
+        >
+          <ViewerCanvas
+            viewer={viewer}
+            engine={engine}
+            spaceHeld={spaceHeld}
+            altHeld={altHeld}
+            deepHeld={deepHeld}
+            editor={editor}
+            info={info}
+            onEditText={(id) => setTextEditing(id)}
+            onInvalidator={(fn) => {
+              invalidate = fn;
+            }}
+            peers={peerOverlays}
+            onPointer={collab ? setPointer : undefined}
+            onMove={onMove}
+            aids={aids}
+            devMode={devMode}
+            drop={
+              libraries && {
+                type: LIBRARY_ASSET_MIME,
+                onDrop: (data, at, parent) =>
+                  fireAndForget(
+                    libraries.dropAsset(data, at, parent),
+                    'fig-viewer'
+                  ),
+              }
+            }
+          >
+            <Show when={textEditing()}>
+              {(id) => (
+                <TextEditor
+                  id={id()}
+                  viewer={viewer}
+                  editor={editor}
+                  engine={engine}
+                  fonts={fonts}
+                  onDone={() => {
+                    setTextEditing(undefined);
+                    root.focus({ preventScroll: true });
+                  }}
+                />
+              )}
+            </Show>
+            <Show when={shownPrototype()}>
+              {(info) => (
+                <PrototypeNoodles
+                  info={info()}
+                  camera={viewer.camera()}
+                  selected={viewer.selected().map((s) => s.id)}
+                />
+              )}
+            </Show>
+            <Show when={activeComments()}>
+              {(c) => (
+                <CommentPins
+                  comments={c()}
+                  camera={viewer.camera()}
+                  viewport={viewer.viewport()}
+                  onDismiss={() => root.focus({ preventScroll: true })}
+                />
+              )}
+            </Show>
+            <Show when={libraries}>
+              {(l) => <LibraryUpdates libraries={l()} />}
+            </Show>
+            <Show when={editor.enabled() && fonts.missing().length > 0}>
+              <MissingFonts
+                fonts={fonts.missing()}
+                canUseLocal={fonts.canUseLocalFonts()}
+                onUseLocal={() =>
+                  fireAndForget(fonts.useLocalFonts(), 'fig-viewer')
                 }
               />
-              <span
-                class="min-w-0 flex-1 truncate font-semibold"
-                title={context.fileName()}
-              >
-                {context.fileName()}
-              </span>
-              <Show when={editor.enabled()}>
-                <SaveIndicator state={editor.saveState()} />
-              </Show>
-              <PanelToggle
-                side="left"
-                open
-                onClick={() => viewer.setLayersOpen(false)}
-              />
-            </div>
-            <Tabs.List
-              class="flex h-10 shrink-0 items-center gap-1 border-edge-frame border-b px-3 text-xs"
-              aria-label="File navigation"
-            >
-              <For each={['layers', 'assets'] as const}>
-                {(t) => (
-                  <Tabs.Trigger
-                    value={t}
-                    class="rounded-md px-2 py-1 font-medium"
-                    classList={{
-                      'bg-hover text-ink': leftTab() === t,
-                      'text-ink-muted': leftTab() !== t,
-                    }}
-                    data-testid={`fig-tab-${t}`}
-                  >
-                    {t === 'layers' ? 'File' : 'Assets'}
-                  </Tabs.Trigger>
-                )}
-              </For>
-            </Tabs.List>
-            <Tabs.Content
-              value="assets"
-              class="flex min-h-0 flex-1 flex-col outline-none"
-            >
-              <AssetsPanel
-                viewer={viewer}
-                engine={engine}
-                editor={editor}
-                libraries={libraries}
-                fileName={context.fileName()}
-              />
-            </Tabs.Content>
-            <Tabs.Content
-              value="layers"
-              class="flex min-h-0 flex-1 flex-col outline-none"
-            >
-              <LayersPanel
-                viewer={viewer}
-                engine={engine}
-                editor={editor}
-                focusSearchRef={(focus) => {
-                  focusSearch = focus;
-                }}
-              />
-            </Tabs.Content>
-          </Tabs>
-        </ResizablePanel>
-      </Show>
-      <div
-        class="relative min-w-0 flex-1"
-        onPointerDown={stopFollowing}
-        onWheel={stopFollowing}
-        onContextMenu={contextMenu.onCanvas}
-      >
-        <ViewerCanvas
-          viewer={viewer}
-          engine={engine}
-          spaceHeld={spaceHeld}
-          altHeld={altHeld}
-          deepHeld={deepHeld}
-          editor={editor}
-          info={info}
-          onEditText={(id) => setTextEditing(id)}
-          onInvalidator={(fn) => {
-            invalidate = fn;
-          }}
-          peers={peerOverlays}
-          onPointer={collab ? setPointer : undefined}
-          onMove={onMove}
-          aids={aids}
-          devMode={devMode}
-          drop={
-            libraries && {
-              type: LIBRARY_ASSET_MIME,
-              onDrop: (data, at, parent) =>
-                fireAndForget(
-                  libraries.dropAsset(data, at, parent),
-                  'fig-viewer'
-                ),
-            }
-          }
-        >
-          <Show when={textEditing()}>
-            {(id) => (
-              <TextEditor
-                id={id()}
-                viewer={viewer}
-                editor={editor}
-                engine={engine}
-                fonts={fonts}
-                onDone={() => {
-                  setTextEditing(undefined);
-                  root.focus({ preventScroll: true });
-                }}
-              />
-            )}
-          </Show>
-          <Show
-            when={
-              showDesign() &&
-              review.panelTab() === 'prototype' &&
-              !review.comments?.active() &&
-              review.prototype()
-            }
-          >
-            {(info) => (
-              <PrototypeNoodles
-                info={info()}
-                camera={viewer.camera()}
-                selected={viewer.selected().map((s) => s.id)}
-              />
-            )}
-          </Show>
-          <Show when={review.comments?.active() && review.comments}>
-            {(c) => (
-              <CommentPins
-                comments={c()}
-                camera={viewer.camera()}
-                viewport={viewer.viewport()}
-                onDismiss={() => root.focus({ preventScroll: true })}
-              />
-            )}
-          </Show>
-          <Show when={libraries}>
-            {(l) => <LibraryUpdates libraries={l()} />}
-          </Show>
-          <Show when={editor.enabled() && fonts.missing().length > 0}>
-            <MissingFonts
-              fonts={fonts.missing()}
-              canUseLocal={fonts.canUseLocalFonts()}
-              onUseLocal={() =>
-                fireAndForget(fonts.useLocalFonts(), 'fig-viewer')
-              }
-            />
-          </Show>
-          <Show when={viewer.loadingPage()}>
-            <div class="pointer-events-none absolute inset-0 flex items-center justify-center text-ink-muted text-sm">
-              Loading page…
-            </div>
-          </Show>
-          <Show when={!viewer.uiHidden() && !showLayers()}>
-            <div class="absolute top-2 left-3 z-10 rounded-lg border border-edge-muted bg-panel p-1">
-              <PanelToggle
-                side="left"
-                open={false}
-                onClick={() => viewer.setLayersOpen(true)}
-              />
-            </div>
-          </Show>
-          <Show when={!viewer.uiHidden() && !showDesign()}>
-            <div
-              class="absolute top-2 right-3 z-10 flex items-center gap-1 rounded-lg border border-edge-muted bg-panel px-1"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <PresentButton
-                mac={IS_MAC}
-                onPresent={() => fireAndForget(review.present(), 'fig-viewer')}
-              />
-              <ViewerZoom
-                label={zoomLabel(viewer.camera().zoom)}
-                items={zoomItems()}
-              />
-              <Show when={!showDesign()}>
+            </Show>
+            <Show when={viewer.loadingPage()}>
+              <div class="pointer-events-none absolute inset-0 flex items-center justify-center text-ink-muted text-sm">
+                Loading page…
+              </div>
+            </Show>
+            <Show when={!viewer.uiHidden() && !showLayers()}>
+              <div class="absolute top-2 left-3 z-10 rounded-lg border border-edge-muted bg-panel p-1">
                 <PanelToggle
-                  side="right"
+                  side="left"
                   open={false}
-                  onClick={() => viewer.setDesignOpen(true)}
-                />
-              </Show>
-            </div>
-          </Show>
-          <Show when={collab}>
-            {(c) => (
-              <div
-                data-follow-control
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                <PeerAvatars
-                  peers={c().peers()}
-                  following={following()}
-                  onFollow={setFollowing}
-                  status={c().status()}
+                  onClick={() => viewer.setLayersOpen(true)}
                 />
               </div>
-            )}
-          </Show>
-          <Show when={followed()}>
-            {(peer) => (
+            </Show>
+            <Show when={!viewer.uiHidden() && !showDesign()}>
               <div
-                data-follow-control
+                class="absolute top-2 right-3 z-10 flex items-center gap-1 rounded-lg border border-edge-muted bg-panel px-1"
                 onPointerDown={(e) => e.stopPropagation()}
               >
-                <FollowFrame
-                  peer={peer()}
-                  onStop={() => setFollowing(undefined)}
+                <PresentButton
+                  mac={IS_MAC}
+                  onPresent={() =>
+                    fireAndForget(review.present(), 'fig-viewer')
+                  }
                 />
+                <ViewerZoom
+                  label={zoomLabel(viewer.camera().zoom)}
+                  items={zoomItems()}
+                />
+                <Show when={!showDesign()}>
+                  <PanelToggle
+                    side="right"
+                    open={false}
+                    onClick={() => viewer.setDesignOpen(true)}
+                  />
+                </Show>
               </div>
-            )}
-          </Show>
-          <Show when={showShortcuts()}>
-            <ShortcutsDialog
+            </Show>
+            <Show when={collab}>
+              {(c) => (
+                <div
+                  data-follow-control
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <PeerAvatars
+                    peers={c().peers()}
+                    following={following()}
+                    onFollow={setFollowing}
+                    status={c().status()}
+                  />
+                </div>
+              )}
+            </Show>
+            <Show when={followed()}>
+              {(peer) => (
+                <div
+                  data-follow-control
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <FollowFrame
+                    peer={peer()}
+                    onStop={() => setFollowing(undefined)}
+                  />
+                </div>
+              )}
+            </Show>
+            <Show when={showShortcuts()}>
+              <ShortcutsDialog
+                mac={IS_MAC}
+                onClose={() => setShowShortcuts(false)}
+              />
+            </Show>
+            <Show when={showActions()}>
+              <ActionsPalette
+                mac={IS_MAC}
+                available={(action) =>
+                  !EDIT_ACTIONS.has(action) || editor.enabled()
+                }
+                onRun={run}
+                onClose={(refocus) => {
+                  setShowActions(false);
+                  // Back to the canvas, so its shortcuts work again.
+                  if (refocus) root.focus({ preventScroll: true });
+                }}
+              />
+            </Show>
+            <FigContextMenu
+              at={contextMenu.menu()?.at}
+              entries={contextMenuEntries()}
               mac={IS_MAC}
-              onClose={() => setShowShortcuts(false)}
+              onSelect={contextMenu.choose}
+              onClose={contextMenu.close}
             />
-          </Show>
-          <Show when={showActions()}>
-            <ActionsPalette
-              mac={IS_MAC}
-              available={(action) =>
-                !EDIT_ACTIONS.has(action) || editor.enabled()
-              }
-              onRun={run}
-              onClose={(refocus) => {
-                setShowActions(false);
-                // Back to the canvas, so its shortcuts work again.
-                if (refocus) root.focus({ preventScroll: true });
-              }}
-            />
-          </Show>
-          <FigContextMenu
-            at={contextMenu.menu()?.at}
-            entries={contextMenu.menu()?.entries ?? []}
-            mac={IS_MAC}
-            onSelect={contextMenu.choose}
-            onClose={contextMenu.close}
-          />
-        </ViewerCanvas>
-      </div>
-      <Show when={showDesign() && review.comments?.active() && review.comments}>
-        {(c) => (
+          </ViewerCanvas>
+        </div>
+        <Show when={commentsInPanel()}>
+          {(c) => (
+            <ResizablePanel
+              side="right"
+              label="Comments"
+              width={rightWidth()}
+              onResize={setRightWidth}
+            >
+              <CommentsPanel
+                comments={c()}
+                headerActions={
+                  <>
+                    <PresentButton
+                      mac={IS_MAC}
+                      onPresent={() =>
+                        fireAndForget(review.present(), 'fig-viewer')
+                      }
+                    />
+                    <PanelToggle
+                      side="right"
+                      open
+                      onClick={() => viewer.setDesignOpen(false)}
+                    />
+                  </>
+                }
+                zoom={
+                  <ViewerZoom
+                    label={zoomLabel(viewer.camera().zoom)}
+                    items={zoomItems()}
+                  />
+                }
+                pageName={(id) => viewer.pages.find((p) => p.id === id)?.name}
+              />
+            </ResizablePanel>
+          )}
+        </Show>
+        <Show when={showsPropertiesPanel()}>
           <ResizablePanel
             side="right"
-            label="Comments"
+            label="Properties"
             width={rightWidth()}
             onResize={setRightWidth}
           >
-            <CommentsPanel
-              comments={c()}
+            <DesignPanel
+              tab={review.panelTab()}
               headerActions={
                 <>
                   <PresentButton
@@ -1330,248 +1387,260 @@ export function FigViewer() {
                   items={zoomItems()}
                 />
               }
-              pageName={(id) => viewer.pages.find((p) => p.id === id)?.name}
-            />
-          </ResizablePanel>
-        )}
-      </Show>
-      <Show when={showDesign() && !review.comments?.active()}>
-        <ResizablePanel
-          side="right"
-          label="Properties"
-          width={rightWidth()}
-          onResize={setRightWidth}
-        >
-          <DesignPanel
-            tab={review.panelTab()}
-            headerActions={
-              <>
-                <PresentButton
-                  mac={IS_MAC}
-                  onPresent={() =>
-                    fireAndForget(review.present(), 'fig-viewer')
-                  }
-                />
-                <PanelToggle
-                  side="right"
-                  open
-                  onClick={() => viewer.setDesignOpen(false)}
-                />
-              </>
-            }
-            zoom={
-              <ViewerZoom
-                label={zoomLabel(viewer.camera().zoom)}
-                items={zoomItems()}
-              />
-            }
-            info={panel().info}
-            fontFamilies={[
-              ...new Set([
-                'Inter',
-                ...fonts.documentFonts().map((f) => f.family),
-              ]),
-            ]}
-            type={{
-              mixed: panel().mixed,
-              googleFamilies: fonts.families().map((f) => f.family),
-              weights: shownFamily()
-                ? fonts.weightsOf(shownFamily() ?? '')
-                : undefined,
-              preview: fonts.preview,
-              onFontsOpen: () =>
-                fireAndForget(fonts.loadCatalog(), 'fig-viewer'),
-            }}
-            onAlign={
-              editor.enabled()
-                ? (how) =>
-                    fireAndForget(runEdit(editor.align(how)), 'fig-viewer')
-                : undefined
-            }
-            onFlip={
-              editor.enabled()
-                ? (axis) =>
-                    run(
-                      axis === 'horizontal'
-                        ? 'flip-horizontal'
-                        : 'flip-vertical'
-                    )
-                : undefined
-            }
-            onPatch={editor.enabled() ? patchSelection : undefined}
-            onPageColor={editor.enabled() ? setPageColor : undefined}
-            swatches={swatches()}
-            mixed={mixed()}
-            onPickerOpen={() => fireAndForget(loadSwatches(), 'fig-viewer')}
-            onAddImage={editor.enabled() ? addImage : undefined}
-            onAddAutoLayout={
-              editor.enabled()
-                ? () => fireAndForget(editor.addAutoLayout(), 'fig-viewer')
-                : undefined
-            }
-            selectionCount={viewer.selected().length}
-            page={viewer.pages[viewer.page()]}
-            exportSection={
-              <Show when={info()?.id} keyed>
-                {(id) => (
-                  <ExportSection
-                    name={info()?.name ?? ''}
-                    count={1}
-                    settings={info()?.exportSettings ?? []}
-                    onChange={
-                      editor.enabled() && !id.startsWith('I')
-                        ? handoff.setExports
-                        : undefined
-                    }
-                    onExport={(settings) =>
-                      fireAndForget(
-                        handoff.exportSelection(settings),
-                        'fig-viewer'
+              info={panel().info}
+              fontFamilies={[
+                ...new Set([
+                  'Inter',
+                  ...fonts.documentFonts().map((f) => f.family),
+                ]),
+              ]}
+              type={{
+                mixed: panel().mixed,
+                googleFamilies: fonts.families().map((f) => f.family),
+                weights: shownFamilyWeights(),
+                preview: fonts.preview,
+                onFontsOpen: () =>
+                  fireAndForget(fonts.loadCatalog(), 'fig-viewer'),
+              }}
+              onAlign={
+                editor.enabled()
+                  ? (how) =>
+                      fireAndForget(runEdit(editor.align(how)), 'fig-viewer')
+                  : undefined
+              }
+              onFlip={
+                editor.enabled()
+                  ? (axis) =>
+                      run(
+                        axis === 'horizontal'
+                          ? 'flip-horizontal'
+                          : 'flip-vertical'
                       )
-                    }
-                    preview={handoff.preview}
-                    onCopyPng={() => fireAndForget(copyPng(), 'fig-viewer')}
-                    onCopySvg={() => fireAndForget(copySvg(), 'fig-viewer')}
-                  />
-                )}
-              </Show>
-            }
-            layoutGrids={
-              <Show
-                when={
-                  info() &&
-                  ['FRAME', 'SYMBOL', 'INSTANCE'].includes(
-                    info()?.type ?? ''
-                  ) &&
-                  (editor.enabled() || (info()?.layoutGrids.length ?? 0) > 0)
-                }
-              >
-                <LayoutGridSection
-                  grids={info()?.layoutGrids ?? []}
-                  onChange={
-                    editor.enabled() && !info()?.id.startsWith('I')
-                      ? handoff.setGrids
-                      : undefined
-                  }
-                  swatches={swatches()}
-                  onPickerOpen={() =>
-                    fireAndForget(loadSwatches(), 'fig-viewer')
-                  }
-                />
-              </Show>
-            }
-            code={
-              <Show when={panel().info}>
-                {(i) => (
-                  <DevInspect
-                    info={i()}
-                    design={designSystem.info()}
-                    assets={handoff.assets()}
-                    onCopy={(text) =>
-                      fireAndForget(copyText(text), 'fig-viewer')
-                    }
-                    onDownload={(id, s) =>
-                      fireAndForget(handoff.downloadAsset(id, s), 'fig-viewer')
-                    }
-                  />
-                )}
-              </Show>
-            }
-            onBoolean={
-              editor.enabled()
-                ? (op) => fireAndForget(editor.booleanOp(op), 'fig-viewer')
-                : undefined
-            }
-            onFlatten={() => fireAndForget(editor.flatten(), 'fig-viewer')}
-            onCreateComponent={
-              editor.enabled() &&
-              !viewer.selected().some((node) => node.id.startsWith('I'))
-                ? () => fireAndForget(editor.createComponent(), 'fig-viewer')
-                : undefined
-            }
-            onCopyText={(text) => fireAndForget(copyText(text), 'fig-viewer')}
-            onTabChange={review.setPanelTab}
-            prototype={
-              <PrototypePanel
-                info={review.prototype()}
-                selected={
-                  viewer.selected().length === 1 && info()
-                    ? { id: info()?.id ?? '', name: info()?.name ?? '' }
-                    : undefined
-                }
-                onInteractions={
-                  editor.enabled()
-                    ? (id, index, edited) =>
+                  : undefined
+              }
+              onPatch={editor.enabled() ? patchSelection : undefined}
+              onPageColor={editor.enabled() ? setPageColor : undefined}
+              swatches={swatches()}
+              mixed={mixed()}
+              onPickerOpen={() => fireAndForget(loadSwatches(), 'fig-viewer')}
+              onAddImage={editor.enabled() ? addImage : undefined}
+              onAddAutoLayout={
+                editor.enabled()
+                  ? () => fireAndForget(editor.addAutoLayout(), 'fig-viewer')
+                  : undefined
+              }
+              selectionCount={viewer.selected().length}
+              page={viewer.pages[viewer.page()]}
+              exportSection={
+                <Show when={info()?.id} keyed>
+                  {(id) => (
+                    <ExportSection
+                      name={info()?.name ?? ''}
+                      count={1}
+                      settings={info()?.exportSettings ?? []}
+                      onChange={
+                        editor.enabled() && !id.startsWith('I')
+                          ? handoff.setExports
+                          : undefined
+                      }
+                      onExport={(settings) =>
                         fireAndForget(
-                          review.setInteraction(id, index, edited),
+                          handoff.exportSelection(settings),
                           'fig-viewer'
                         )
-                    : undefined
-                }
-                onFlowStart={editor.enabled() ? review.setFlowStart : undefined}
-                onPresent={(frame) =>
-                  fireAndForget(review.present(frame), 'fig-viewer')
-                }
-              />
-            }
-            designSections={
-              <DesignSystemSections
-                ds={designSystem}
-                selected={viewer.selected()[0]?.id}
-              />
-            }
-            styleControl={styleControl}
-            pageExtra={
-              <LocalStylesView ds={designSystem} swatches={swatches()} />
-            }
-          />
-        </ResizablePanel>
-      </Show>
-      <Show when={!viewer.uiHidden()}>
-        <ViewerToolbar
-          tool={review.comments?.active() ? undefined : viewer.tool()}
-          onTool={(tool) => {
-            review.comments?.setActive(false);
-            if (editor.penPath())
-              fireAndForget(runEdit(editor.penFinish()), 'fig-viewer');
-            viewer.setTool(tool);
-          }}
-          editable={editor.enabled()}
-          onActions={() => setShowActions(true)}
-          devMode={review.panelTab() === 'code'}
-          onDevMode={() => {
-            viewer.setDesignOpen(true);
-            review.comments?.setActive(false);
-            review.setPanelTab((tab) => (tab === 'code' ? 'design' : 'code'));
-          }}
-          review={
-            <CommentButton
-              comments={
-                review.comments && {
-                  active: review.comments.active(),
-                  unread: review.comments.unreadCount(),
-                  onToggle: review.toggleComments,
-                }
+                      }
+                      preview={handoff.preview}
+                      onCopyPng={() => fireAndForget(copyPng(), 'fig-viewer')}
+                      onCopySvg={() => fireAndForget(copySvg(), 'fig-viewer')}
+                    />
+                  )}
+                </Show>
+              }
+              layoutGrids={layoutGridSection()}
+              code={
+                <Show when={panel().info}>
+                  {(i) => (
+                    <DevInspect
+                      info={i()}
+                      design={designSystem.info()}
+                      assets={handoff.assets()}
+                      onCopy={(text) =>
+                        fireAndForget(copyText(text), 'fig-viewer')
+                      }
+                      onDownload={(id, s) =>
+                        fireAndForget(
+                          handoff.downloadAsset(id, s),
+                          'fig-viewer'
+                        )
+                      }
+                    />
+                  )}
+                </Show>
+              }
+              onBoolean={
+                editor.enabled()
+                  ? (op) => fireAndForget(editor.booleanOp(op), 'fig-viewer')
+                  : undefined
+              }
+              onFlatten={() => fireAndForget(editor.flatten(), 'fig-viewer')}
+              onCreateComponent={createComponentAction()}
+              onCopyText={(text) => fireAndForget(copyText(text), 'fig-viewer')}
+              onTabChange={review.setPanelTab}
+              prototype={prototypePanel()}
+              designSections={
+                <DesignSystemSections
+                  ds={designSystem}
+                  selected={viewer.selected()[0]?.id}
+                />
+              }
+              styleControl={styleControl}
+              pageExtra={
+                <LocalStylesView ds={designSystem} swatches={swatches()} />
               }
             />
+          </ResizablePanel>
+        </Show>
+        <Show when={!viewer.uiHidden()}>
+          <ViewerToolbar
+            tool={activeTool()}
+            onTool={(tool) => {
+              review.comments?.setActive(false);
+              if (editor.penPath())
+                fireAndForget(runEdit(editor.penFinish()), 'fig-viewer');
+              viewer.setTool(tool);
+            }}
+            editable={editor.enabled()}
+            onActions={() => setShowActions(true)}
+            devMode={review.panelTab() === 'code'}
+            onDevMode={() => {
+              viewer.setDesignOpen(true);
+              review.comments?.setActive(false);
+              review.setPanelTab((tab) => (tab === 'code' ? 'design' : 'code'));
+            }}
+            review={
+              <CommentButton
+                comments={
+                  review.comments && {
+                    active: review.comments.active(),
+                    unread: review.comments.unreadCount(),
+                    onToggle: review.toggleComments,
+                  }
+                }
+              />
+            }
+          />
+        </Show>
+        <Show when={review.presenting()}>
+          {(p) => (
+            <PresentMode
+              engine={engine}
+              page={p().page}
+              info={p().info}
+              start={p().start}
+              onExit={() => {
+                review.stopPresenting();
+                root.focus({ preventScroll: true });
+              }}
+              onCopyLink={review.copyFrameLink}
+            />
+          )}
+        </Show>
+      </div>
+    );
+  }
+
+  function createComponentAction(): (() => void) | undefined {
+    return editor.enabled() &&
+      !viewer.selected().some((node) => node.id.startsWith('I'))
+      ? () => fireAndForget(editor.createComponent(), 'fig-viewer')
+      : undefined;
+  }
+
+  function shownFamilyWeights(): readonly number[] | undefined {
+    return shownFamily() ? fonts.weightsOf(shownFamily() ?? '') : undefined;
+  }
+
+  function activeTool():
+    | import('../primitives/create-fig-viewer').Tool
+    | undefined {
+    return review.comments?.active() ? undefined : viewer.tool();
+  }
+
+  function activeComments() {
+    return review.comments?.active() && review.comments;
+  }
+
+  function showsPropertiesPanel(): boolean | null | undefined {
+    return showDesign() && !review.comments?.active();
+  }
+
+  function contextMenuEntries(): import('../core/context-menu').MenuEntry[] {
+    return contextMenu.menu()?.entries ?? [];
+  }
+
+  function commentsInPanel() {
+    return showDesign() && review.comments?.active() && review.comments;
+  }
+
+  function shownPrototype():
+    | false
+    | import('../../../lib/core/fig-engine/prototype-types').PrototypeInfo
+    | null
+    | undefined {
+    return (
+      showDesign() &&
+      review.panelTab() === 'prototype' &&
+      !review.comments?.active() &&
+      review.prototype()
+    );
+  }
+
+  function prototypePanel() {
+    return (
+      <PrototypePanel
+        info={review.prototype()}
+        selected={
+          viewer.selected().length === 1 && info()
+            ? { id: info()?.id ?? '', name: info()?.name ?? '' }
+            : undefined
+        }
+        onInteractions={
+          editor.enabled()
+            ? (id, index, edited) =>
+                fireAndForget(
+                  review.setInteraction(id, index, edited),
+                  'fig-viewer'
+                )
+            : undefined
+        }
+        onFlowStart={editor.enabled() ? review.setFlowStart : undefined}
+        onPresent={(frame) =>
+          fireAndForget(review.present(frame), 'fig-viewer')
+        }
+      />
+    );
+  }
+
+  function layoutGridSection() {
+    return (
+      <Show
+        when={
+          info() &&
+          ['FRAME', 'SYMBOL', 'INSTANCE'].includes(info()?.type ?? '') &&
+          (editor.enabled() || (info()?.layoutGrids.length ?? 0) > 0)
+        }
+      >
+        <LayoutGridSection
+          grids={info()?.layoutGrids ?? []}
+          onChange={
+            editor.enabled() && !info()?.id.startsWith('I')
+              ? handoff.setGrids
+              : undefined
           }
+          swatches={swatches()}
+          onPickerOpen={() => fireAndForget(loadSwatches(), 'fig-viewer')}
         />
       </Show>
-      <Show when={review.presenting()}>
-        {(p) => (
-          <PresentMode
-            engine={engine}
-            page={p().page}
-            info={p().info}
-            start={p().start}
-            onExit={() => {
-              review.stopPresenting();
-              root.focus({ preventScroll: true });
-            }}
-            onCopyLink={review.copyFrameLink}
-          />
-        )}
-      </Show>
-    </div>
-  );
+    );
+  }
 }

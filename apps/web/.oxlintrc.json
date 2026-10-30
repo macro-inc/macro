@@ -1,6 +1,7 @@
 {
   // oxlint runs ALONGSIDE Biome, scoped to rules Biome cannot express.
-  // Enforces FE-12 and FE-13 from docs/development/style-guide.md.
+  // Enforces FE-12 and FE-13 from docs/development/style-guide.md. Every rule
+  // is an error, and lint:oxlint also denies warnings.
   //
   // Run: bun run lint:oxlint (from the repository root).
   //
@@ -14,10 +15,10 @@
     "correctness": "off"
   },
   "rules": {
-    "promise/prefer-await-to-then": "warn",
+    "promise/prefer-await-to-then": "error",
     // eslint/complexity — McCabe cyclomatic complexity, default max 20.
     // https://oxc.rs/docs/guide/usage/linter/rules/eslint/complexity
-    "complexity": "warn",
+    "complexity": "error",
     // ignoreVoid is off: `void` doesn't mark a promise as handled (FE-13).
     // Calls listed under allowForKnownSafeCalls never reject (TanStack
     // QueryClient swallows errors unless throwOnError is set). Write them
@@ -27,6 +28,11 @@
       {
         "ignoreVoid": false,
         "allowForKnownSafeCalls": [
+          {
+            "from": "file",
+            "path": "src/lib/core/util/startDetached.ts",
+            "name": "settle"
+          },
           {
             "from": "package",
             "package": "@tanstack/query-core",

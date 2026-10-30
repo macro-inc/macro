@@ -17,7 +17,7 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|me@example.com',
 }));
 vi.mock('@core/user', async () => ({
-  ...(await import('@core/user/macroId')),
+  ...(await import('@app/lib/identity/macro-id')),
   getDisplayName: (id: string | undefined) =>
     (id && mocks.displayNames.get(id)) ?? '',
   getDisplayNameParts: () => ({ firstName: '', lastName: '' }),
@@ -50,7 +50,7 @@ vi.mock('@queries/channel/get-or-create-dm', () => ({
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: vi.fn() }),
 }));
-vi.mock('@core/signal/profilePicture', () => ({
+vi.mock('@app/lib/queries/auth/profile-pictures', () => ({
   useProfilePictureUrl: () => [() => undefined],
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));

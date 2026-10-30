@@ -2,10 +2,10 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
-  MENU_ITEM_CLASS,
   MenuGroup,
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import External from '@icon/system/regular/arrow-square-out.svg';
 import Calendar from '@icon/system/regular/calendar-blank.svg';
@@ -131,7 +131,12 @@ export function BookingCard(props: {
         when={menu.drawer}
         fallback={
           <MenuItem
-            class={item.class}
+            class={cn(
+              // Kobalte's bare context-menu item takes the shared menu row styling.
+              menu.context &&
+                `group rounded-lg w-full flex items-center gap-1.5 text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed ${isMobile() ? 'py-2 px-1.5 text-base' : 'p-1.5 px-2 text-sm'}`,
+              item.class
+            )}
             disabled={item.disabled}
             onSelect={item.onSelect}
           >
@@ -160,16 +165,12 @@ export function BookingCard(props: {
     return (
       <>
         <Group>
-          <Item
-            class={menu.context ? MENU_ITEM_CLASS : undefined}
-            onSelect={() => showDetails(false)}
-          >
+          <Item onSelect={() => showDetails(false)}>
             <Info class="size-4" /> Details
           </Item>
           <Show when={join()}>
             {(url) => (
               <Item
-                class={menu.context ? MENU_ITEM_CLASS : undefined}
                 immediate
                 onSelect={() => {
                   window.open(url(), '_blank', 'noopener,noreferrer');
@@ -185,7 +186,6 @@ export function BookingCard(props: {
             <Show when={!past()}>
               <Show when={props.booking.status === 'pending'}>
                 <Item
-                  class={menu.context ? MENU_ITEM_CLASS : undefined}
                   disabled={!!props.busyId}
                   onSelect={() => {
                     if (!props.busyId && manageable())
@@ -196,7 +196,6 @@ export function BookingCard(props: {
                 </Item>
               </Show>
               <Item
-                class={menu.context ? MENU_ITEM_CLASS : undefined}
                 disabled={!!props.busyId}
                 onSelect={() => {
                   if (!props.busyId && manageable())
@@ -207,7 +206,7 @@ export function BookingCard(props: {
               </Item>
             </Show>
             <Item
-              class={cn(menu.context && MENU_ITEM_CLASS, 'text-failure')}
+              class="text-failure"
               disabled={!!props.busyId}
               onSelect={() => showDetails(true)}
             >

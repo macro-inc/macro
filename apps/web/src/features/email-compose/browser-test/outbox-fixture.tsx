@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEmailSendDispatcher } from '@queries/email/email-send-dispatcher';
 import { createLocalDraftStore } from '@queries/email/local-draft-store';
 import type { EmailSendIntent } from '@queries/email/send-intent';
@@ -103,21 +104,29 @@ function OutboxFixture() {
       setError(String(failure));
     }
   };
+  const showFailure = async (work: Promise<unknown>) => {
+    try {
+      await work;
+    } catch (failure) {
+      setError(String(failure));
+    }
+  };
+  const activate = async () => {
+    session = await journal.activate('owner');
+    await refresh();
+    start();
+    setReady(true);
+  };
   onMount(() => {
-    (async () => {
-      session = await journal.activate('owner');
-      await refresh();
-      start();
-      setReady(true);
-    })().catch((failure) => setError(String(failure)));
+    fireAndForget(showFailure(activate()), 'email-compose');
   });
   const unsubscribe = journal.subscribe(() => {
-    if (session) refresh().catch((failure) => setError(String(failure)));
+    if (session) fireAndForget(showFailure(refresh()), 'email-compose');
   });
   onCleanup(() => {
     dispatcher?.dispose();
     unsubscribe();
-    journal.close().catch((failure) => setError(String(failure)));
+    fireAndForget(showFailure(journal.close()), 'email-compose');
   });
   return (
     <main>

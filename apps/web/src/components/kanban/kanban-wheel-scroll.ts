@@ -32,24 +32,10 @@ export function createKanbanWheelScroll(options: {
 
     const now = options.now?.() ?? performance.now();
 
-    if (now - lastEvent > GESTURE_IDLE_MS || !owner?.element.isConnected) {
-      const vertical =
-        event.target instanceof Element
-          ? options.verticalViewport(event.target)
-          : null;
-      const useVertical =
-        vertical &&
-        viewport.contains(vertical) &&
-        vertical.scrollHeight > vertical.clientHeight &&
-        !event.shiftKey &&
-        Math.abs(event.deltaY) > Math.abs(event.deltaX);
-      owner = useVertical
-        ? { element: vertical, horizontal: false }
-        : { element: viewport, horizontal: true };
-    }
+    const activeOwner = updateOwner(viewport);
 
     lastEvent = now;
-    const { element, horizontal } = owner;
+    const { element, horizontal } = activeOwner;
     const length = horizontal ? element.clientWidth : element.clientHeight;
     const unit =
       event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? length : 1;
@@ -74,6 +60,25 @@ export function createKanbanWheelScroll(options: {
 
     // Consume boundary events too: momentum must not leak into the element now under the pointer.
     event.preventDefault();
+
+    function updateOwner(viewportValue: NonNullable<typeof viewport>) {
+      if (now - lastEvent > GESTURE_IDLE_MS || !owner?.element.isConnected) {
+        const vertical =
+          event.target instanceof Element
+            ? options.verticalViewport(event.target)
+            : null;
+        const useVertical =
+          vertical &&
+          viewportValue.contains(vertical) &&
+          vertical.scrollHeight > vertical.clientHeight &&
+          !event.shiftKey &&
+          Math.abs(event.deltaY) > Math.abs(event.deltaX);
+        owner = useVertical
+          ? { element: vertical, horizontal: false }
+          : { element: viewportValue, horizontal: true };
+      }
+      return owner!;
+    }
   }
 
   return { onWheel, reset };

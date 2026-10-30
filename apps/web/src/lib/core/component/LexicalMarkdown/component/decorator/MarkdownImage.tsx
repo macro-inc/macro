@@ -100,6 +100,42 @@ export function MarkdownImage(props: ImageDecoratorProps) {
     return [dims.width, dims.height] as [number, number];
   });
 
+  const loadImageUrl = async () => {
+    const maybeUrl = await getMediaUrl({
+      type: props.srcType,
+      id: props.id,
+      url: props.url,
+    });
+
+    if (maybeUrl.isErr()) {
+      setState('error');
+      if (
+        maybeUrl.isErr() &&
+        maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
+      )
+        setImageError('UNAUTHORIZED');
+      else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
+        setImageError('MISSING');
+      else if (
+        maybeUrl.isErr() &&
+        maybeUrl.error.some((error) => error.code === 'GONE')
+      )
+        setImageError('GONE');
+      else setImageError('FALLBACK');
+      return;
+    }
+    const url = maybeUrl.value;
+    setImageUrl(url);
+    if (props.srcType === 'dss') {
+      editor()?.update(
+        () => {
+          $upgradeDSSMediaUrl(props.key, url, 'image');
+        },
+        { discrete: true, tag: 'historic' }
+      );
+    }
+  };
+
   createEffect(() => {
     if (props.srcType === 'local') {
       setImageUrl(props.url);
@@ -112,42 +148,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       setImageUrl(displayImageUrl(props.url));
       return;
     }
-    fireAndForget(
-      getMediaUrl({
-        type: props.srcType,
-        id: props.id,
-        url: props.url,
-      }).then((maybeUrl) => {
-        if (maybeUrl.isErr()) {
-          setState('error');
-          if (
-            maybeUrl.isErr() &&
-            maybeUrl.error.some((error) => error.code === 'UNAUTHORIZED')
-          )
-            setImageError('UNAUTHORIZED');
-          else if (maybeUrl.error.some((error) => error.code === 'NOT_FOUND'))
-            setImageError('MISSING');
-          else if (
-            maybeUrl.isErr() &&
-            maybeUrl.error.some((error) => error.code === 'GONE')
-          )
-            setImageError('GONE');
-          else setImageError('FALLBACK');
-          return;
-        }
-        const url = maybeUrl.value;
-        setImageUrl(url);
-        if (props.srcType === 'dss') {
-          editor()?.update(
-            () => {
-              $upgradeDSSMediaUrl(props.key, url, 'image');
-            },
-            { discrete: true, tag: 'historic' }
-          );
-        }
-      }),
-      'markdown-media'
-    );
+    fireAndForget(loadImageUrl(), 'markdown-media');
   });
 
   const isSelectedAsNode = () => {
@@ -282,14 +283,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
     <Dialog open={viewerOpen()} onOpenChange={setViewerOpen}>
       <div
         ref={containerRef}
-        class={cn(
-          'relative max-w-full my-4 grid place-items-center',
-          isSelectedAsNode() && 'ring-3 ring-edge-muted',
-          state() === 'error' && 'pattern-edge-muted pattern-diagonal-8',
-          state() === 'error' && !effectiveDims()[0] && 'min-h-44',
-          // If there are no constrained dimensions, center the image
-          !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
-        )}
+        class={getMarkdownImageClass()}
         style={{
           width: effectiveDims()[0] ? '100%' : undefined,
           'max-width': `${effectiveDims()[0] ? effectiveDims()[0] * scale() : 640}px`,
@@ -336,14 +330,7 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         </Show>
         <img
           crossorigin="anonymous"
-          class={cn(
-            'h-full object-contain',
-            effectiveDims()[0] > 0 && 'absolute inset-0 size-full',
-            (state() === 'loading' || state() === 'error') && 'invisible',
-            state() === 'loading' &&
-              !effectiveDims()[0] &&
-              'absolute inset-0 size-0'
-          )}
+          class={getMarkdownImageClass2()}
           draggable={true}
           use:internalDrag={true}
           onDragStart={(e) => {
@@ -416,4 +403,24 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       </Dialog.Portal>
     </Dialog>
   );
+
+  function getMarkdownImageClass2(): string | undefined {
+    return cn(
+      'h-full object-contain',
+      effectiveDims()[0] > 0 && 'absolute inset-0 size-full',
+      (state() === 'loading' || state() === 'error') && 'invisible',
+      state() === 'loading' && !effectiveDims()[0] && 'absolute inset-0 size-0'
+    );
+  }
+
+  function getMarkdownImageClass(): string | undefined {
+    return cn(
+      'relative max-w-full my-4 grid place-items-center',
+      isSelectedAsNode() && 'ring-3 ring-edge-muted',
+      state() === 'error' && 'pattern-edge-muted pattern-diagonal-8',
+      state() === 'error' && !effectiveDims()[0] && 'min-h-44',
+      // If there are no constrained dimensions, center the image
+      !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
+    );
+  }
 }

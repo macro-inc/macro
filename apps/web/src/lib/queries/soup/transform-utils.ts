@@ -336,322 +336,378 @@ export const createSearchResponseItemMapper = (
     result: UnifiedSearchResponseItem,
     searchQuery: string
   ): (WithSearch<EntityData> | undefined)[] => {
-    switch (result.type) {
-      case 'agentSession':
-        return [mapAgentSessionSearchResult(result)];
-      case 'company': {
-        const primaryDomain = result.domains[0]?.domain;
-        const nameHighlight = result.nameHighlighted
-          ? mergeAdjacentMacroEmTags(result.nameHighlighted)
-          : null;
-        return [
-          {
-            type: 'crm_company',
-            id: result.id,
-            teamId: result.teamId,
-            name: result.name || primaryDomain || 'Unknown Company',
-            ownerId: result.teamId,
-            description: result.description ?? undefined,
-            // Not returned by search — left undefined ("not loaded") so
-            // consumers don't mistake it for a real `false`.
-            emailSync: undefined,
-            hidden: result.hidden,
-            createdAt: result.createdAt,
-            updatedAt: result.updatedAt,
-            sortTs: result.updatedAt,
-            domains: result.domains.map((d) => ({
-              id: d.id,
-              companyId: d.companyId,
-              domain: d.domain,
-              createdAt: d.createdAt,
-            })),
-            search: {
-              nameHighlight,
-              senderHighlightTerms: null,
-              contentHitData: null,
-              source: 'service',
-            },
-          },
-        ];
-      }
-      case 'document': {
-        if (
-          !result.metadata ||
-          result.metadata.deleted_at ||
-          result.sub_type === 'initiative_description'
+    return (
+      match(result)
+        .with(
+          { type: 'agentSession' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            return [mapAgentSessionSearchResult(result)];
+          }
         )
-          return [];
-        const searchFileType =
-          result.file_type === 'docx' ? 'pdf' : result.file_type;
-        let search: SearchData;
-        if (searchFileType === 'md') {
-          search = getSearchData({
-            results: result.document_search_results,
-            type: 'md',
-          });
-        } else if (searchFileType === 'pdf') {
-          search = getSearchData({
-            results: result.document_search_results,
-            type: 'pdf',
-            searchQuery,
-          });
-        } else {
-          search = getSearchData({
-            results: result.document_search_results,
-          });
-        }
-        // The index stores unformatted document names, so server name
-        // highlights lack the extension suffix the display name carries.
-        if (search.nameHighlight) {
-          search = {
-            ...search,
-            nameHighlight: formatDisplayName(
-              search.nameHighlight,
-              result.file_type
-            ),
-          };
-        }
-        const properties = soupProperties(result.properties);
-        return [
-          {
-            type: 'document',
-            subType:
-              result.sub_type === 'task'
-                ? { type: 'task' }
-                : result.sub_type === 'snippet'
-                  ? { type: 'snippet' }
-                  : result.sub_type === 'skill'
-                    ? { type: 'skill' }
-                    : null,
-            id: result.document_id,
-            name: formatDisplayName(
-              result.name || blockNameToDefaultFile(result.file_type),
-              result.file_type
-            ),
-            ownerId: result.owner_id,
-            createdAt: result.metadata?.created_at,
-            updatedAt: result.metadata?.updated_at,
-            fileType: result.file_type || undefined,
-            projectId: result.metadata?.project_id ?? undefined,
-            properties,
-            search,
-          },
-        ];
-      }
-      case 'email': {
-        const search = getSearchData({
-          results: result.email_message_search_results,
-          type: 'email',
-          searchQuery,
-        });
+        .with(
+          { type: 'company' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              const primaryDomain = result.domains[0]?.domain;
+              const nameHighlight = result.nameHighlighted
+                ? mergeAdjacentMacroEmTags(result.nameHighlighted)
+                : null;
+              return [
+                {
+                  type: 'crm_company',
+                  id: result.id,
+                  teamId: result.teamId,
+                  name: result.name || primaryDomain || 'Unknown Company',
+                  ownerId: result.teamId,
+                  description: result.description ?? undefined,
+                  // Not returned by search — left undefined ("not loaded") so
+                  // consumers don't mistake it for a real `false`.
+                  emailSync: undefined,
+                  hidden: result.hidden,
+                  createdAt: result.createdAt,
+                  updatedAt: result.updatedAt,
+                  sortTs: result.updatedAt,
+                  domains: result.domains.map((d) => ({
+                    id: d.id,
+                    companyId: d.companyId,
+                    domain: d.domain,
+                    createdAt: d.createdAt,
+                  })),
+                  search: {
+                    nameHighlight,
+                    senderHighlightTerms: null,
+                    contentHitData: null,
+                    source: 'service',
+                  },
+                },
+              ];
+            }
+          }
+        )
+        .with(
+          { type: 'document' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              if (
+                !result.metadata ||
+                result.metadata.deleted_at ||
+                result.sub_type === 'initiative_description'
+              )
+                return [];
+              const searchFileType =
+                result.file_type === 'docx' ? 'pdf' : result.file_type;
+              let search: SearchData;
+              if (searchFileType === 'md') {
+                search = getSearchData({
+                  results: result.document_search_results,
+                  type: 'md',
+                });
+              } else if (searchFileType === 'pdf') {
+                search = getSearchData({
+                  results: result.document_search_results,
+                  type: 'pdf',
+                  searchQuery,
+                });
+              } else {
+                search = getSearchData({
+                  results: result.document_search_results,
+                });
+              }
+              // The index stores unformatted document names, so server name
+              // highlights lack the extension suffix the display name carries.
+              if (search.nameHighlight) {
+                search = {
+                  ...search,
+                  nameHighlight: formatDisplayName(
+                    search.nameHighlight,
+                    result.file_type
+                  ),
+                };
+              }
+              const properties = soupProperties(result.properties);
+              return [
+                {
+                  type: 'document',
+                  subType:
+                    result.sub_type === 'task'
+                      ? { type: 'task' }
+                      : result.sub_type === 'snippet'
+                        ? { type: 'snippet' }
+                        : result.sub_type === 'skill'
+                          ? { type: 'skill' }
+                          : null,
+                  id: result.document_id,
+                  name: formatDisplayName(
+                    result.name || blockNameToDefaultFile(result.file_type),
+                    result.file_type
+                  ),
+                  ownerId: result.owner_id,
+                  createdAt: result.metadata?.created_at,
+                  updatedAt: result.metadata?.updated_at,
+                  fileType: result.file_type || undefined,
+                  projectId: result.metadata?.project_id ?? undefined,
+                  properties,
+                  search,
+                },
+              ];
+            }
+          }
+        )
+        .with(
+          { type: 'email' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              const search = getSearchData({
+                results: result.email_message_search_results,
+                type: 'email',
+                searchQuery,
+              });
 
-        const name = result.name ?? blockNameToDefaultFile('email');
+              const name = result.name ?? blockNameToDefaultFile('email');
 
-        const participants = result.participants?.map((p) => ({
-          email: p.email,
-          name: p.name ?? undefined,
-        }));
+              const participants = result.participants?.map((p) => ({
+                email: p.email,
+                name: p.name ?? undefined,
+              }));
 
-        return [
-          {
-            type: 'email',
-            id: result.thread_id,
-            name,
-            ownerId: result.owner_id,
-            linkId: result.link_id,
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            viewedAt: result.viewed_at,
-            isRead: result.is_read,
-            isImportant: result.is_important,
-            isDraft: result.is_draft,
-            done: !result.inbox_visible,
-            participants,
-            search,
-            snippet: result.snippet ?? undefined,
-            properties: soupProperties(result.properties),
-          },
-        ];
-      }
-      case 'chat': {
-        if (!result.metadata || result.metadata.deleted_at) return [];
-        const search = getSearchData({
-          results: result.chat_search_results,
-        });
-        return [
-          {
-            type: 'chat',
-            id: result.chat_id,
-            name: result.name,
-            ownerId: result.user_id,
-            createdAt: result.metadata?.created_at,
-            updatedAt: result.metadata?.updated_at,
-            projectId: result.metadata?.project_id ?? undefined,
-            properties: soupProperties(result.properties),
-            search,
-          },
-        ];
-      }
-      case 'channel': {
-        if (!result.metadata) return [];
-        const nameHighlight = result.highlight.name
-          ? mergeAdjacentMacroEmTags(result.highlight.name)
-          : null;
-        const search: SearchData = {
-          nameHighlight,
-          senderHighlightTerms: null,
-          contentHitData: null,
-          source: 'service',
-        };
-        const channelName =
-          channels.find((channel) => channel.id === result.channel_id)?.name ??
-          (search.nameHighlight
-            ? extractSearchSnippet(search.nameHighlight)
-            : blockNameToDefaultFile('channel'));
-        return [
-          {
-            type: 'channel',
-            id: result.channel_id,
-            name: channelName,
-            ownerId: result.owner_id ?? '',
-            channelType: result.channel_type as ChannelType,
-            createdAt: result.metadata.created_at,
-            updatedAt: result.metadata.updated_at,
-            viewedAt: result.metadata.viewed_at,
-            interactedAt: result.metadata.interacted_at,
-            search,
-          },
-        ];
-      }
-      case 'channelMessage': {
-        const channelName =
-          channels.find((c) => c.id === result.channel_id)?.name ??
-          blockNameToDefaultFile('channel');
-        const search = getSearchData({ type: 'channel', results: [result] });
-        const content = search.contentHitData?.[0]?.content ?? '';
-        return [
-          {
-            type: 'channel_message',
-            id: `${result.channel_id}:${result.message_id}`,
-            channelId: result.channel_id,
-            channelName,
-            channelType: result.channel_type as ChannelType,
-            messageId: result.message_id,
-            threadId: result.thread_id ?? undefined,
-            target: {
-              messageId: result.message_id,
-              threadId: result.thread_id ?? undefined,
-            },
-            senderId: result.sender_id,
-            content,
-            name: channelName,
-            ownerId: result.owner_id ?? '',
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            search,
-          },
-        ];
-      }
+              return [
+                {
+                  type: 'email',
+                  id: result.thread_id,
+                  name,
+                  ownerId: result.owner_id,
+                  linkId: result.link_id,
+                  createdAt: result.created_at,
+                  updatedAt: result.updated_at,
+                  viewedAt: result.viewed_at,
+                  isRead: result.is_read,
+                  isImportant: result.is_important,
+                  isDraft: result.is_draft,
+                  done: !result.inbox_visible,
+                  participants,
+                  search,
+                  snippet: result.snippet ?? undefined,
+                  properties: soupProperties(result.properties),
+                },
+              ];
+            }
+          }
+        )
+        .with(
+          { type: 'chat' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              if (!result.metadata || result.metadata.deleted_at) return [];
+              const search = getSearchData({
+                results: result.chat_search_results,
+              });
+              return [
+                {
+                  type: 'chat',
+                  id: result.chat_id,
+                  name: result.name,
+                  ownerId: result.user_id,
+                  createdAt: result.metadata?.created_at,
+                  updatedAt: result.metadata?.updated_at,
+                  projectId: result.metadata?.project_id ?? undefined,
+                  properties: soupProperties(result.properties),
+                  search,
+                },
+              ];
+            }
+          }
+        )
+        .with(
+          { type: 'channel' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              if (!result.metadata) return [];
+              const nameHighlight = result.highlight.name
+                ? mergeAdjacentMacroEmTags(result.highlight.name)
+                : null;
+              const search: SearchData = {
+                nameHighlight,
+                senderHighlightTerms: null,
+                contentHitData: null,
+                source: 'service',
+              };
+              const channelName =
+                channels.find((channel) => channel.id === result.channel_id)
+                  ?.name ??
+                (search.nameHighlight
+                  ? extractSearchSnippet(search.nameHighlight)
+                  : blockNameToDefaultFile('channel'));
+              return [
+                {
+                  type: 'channel',
+                  id: result.channel_id,
+                  name: channelName,
+                  ownerId: result.owner_id ?? '',
+                  channelType: result.channel_type as ChannelType,
+                  createdAt: result.metadata.created_at,
+                  updatedAt: result.metadata.updated_at,
+                  viewedAt: result.metadata.viewed_at,
+                  interactedAt: result.metadata.interacted_at,
+                  search,
+                },
+              ];
+            }
+          }
+        )
+        .with(
+          { type: 'channelMessage' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              const channelName =
+                channels.find((c) => c.id === result.channel_id)?.name ??
+                blockNameToDefaultFile('channel');
+              const search = getSearchData({
+                type: 'channel',
+                results: [result],
+              });
+              const content = search.contentHitData?.[0]?.content ?? '';
+              return [
+                {
+                  type: 'channel_message',
+                  id: `${result.channel_id}:${result.message_id}`,
+                  channelId: result.channel_id,
+                  channelName,
+                  channelType: result.channel_type as ChannelType,
+                  messageId: result.message_id,
+                  threadId: result.thread_id ?? undefined,
+                  target: {
+                    messageId: result.message_id,
+                    threadId: result.thread_id ?? undefined,
+                  },
+                  senderId: result.sender_id,
+                  content,
+                  name: channelName,
+                  ownerId: result.owner_id ?? '',
+                  createdAt: result.created_at,
+                  updatedAt: result.updated_at,
+                  search,
+                },
+              ];
+            }
+          }
+        )
+        .with(
+          { type: 'project' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              if (!result.metadata || result.metadata.deleted_at) return [];
+              const search = getSearchData({
+                results: result.project_search_results,
+              });
 
-      case 'project': {
-        if (!result.metadata || result.metadata.deleted_at) return [];
-        const search = getSearchData({
-          results: result.project_search_results,
-        });
+              return [
+                {
+                  type: 'project',
+                  id: result.id,
+                  name: result.name,
+                  ownerId: result.owner_id,
+                  createdAt: result.created_at,
+                  updatedAt: result.updated_at,
+                  projectId: result.metadata?.parent_project_id ?? undefined,
+                  properties: soupProperties(result.properties),
+                  search,
+                },
+              ];
+            }
+          }
+        )
+        .with(
+          { type: 'calendarEvent' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              if (!result.metadata) return [];
+              const search = getSearchData({
+                results: result.calendar_event_search_results,
+              });
 
-        return [
-          {
-            type: 'project',
-            id: result.id,
-            name: result.name,
-            ownerId: result.owner_id,
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            projectId: result.metadata?.parent_project_id ?? undefined,
-            properties: soupProperties(result.properties),
-            search,
-          },
-        ];
-      }
+              // A recurring series is indexed once, as its master. The service
+              // resolves which instance this row means — next upcoming, else most
+              // recent past — so prefer that span over the master's, which for a
+              // long-running series is its original (stale) start.
+              const metadata = result.metadata;
+              const time = toCalendarEventTime(
+                metadata.occurrence?.time ?? metadata.time
+              );
 
-      case 'calendarEvent': {
-        if (!result.metadata) return [];
-        const search = getSearchData({
-          results: result.calendar_event_search_results,
-        });
+              return [
+                {
+                  type: 'calendar_event',
+                  id: result.id,
+                  name: result.name,
+                  ownerId: result.owner_id,
+                  status: metadata.status,
+                  time,
+                  occurrenceKey: metadata.occurrence?.occurrenceKey,
+                  isRecurring: metadata.isRecurring,
+                  organizer: metadata.organizer
+                    ? {
+                        name: metadata.organizer.name ?? undefined,
+                        email: metadata.organizer.email ?? undefined,
+                      }
+                    : undefined,
+                  description: metadata.description ?? undefined,
+                  conferenceUrl: metadata.conferenceUrl ?? undefined,
+                  isReadOnly: metadata.isReadOnly,
+                  createdAt: metadata.createdAt,
+                  updatedAt: metadata.updatedAt,
+                  properties: soupProperties(result.properties),
+                  search,
+                },
+              ];
+            }
+          }
+        )
+        .with(
+          { type: 'call' },
+          (result): (WithSearch<EntityData> | undefined)[] => {
+            {
+              if (!result.metadata) return [];
+              const search = getSearchData({
+                type: 'call_record',
+                results: result.call_search_results,
+                callId: result.call_id,
+                callStartedAt: result.metadata.started_at,
+              });
 
-        // A recurring series is indexed once, as its master. The service
-        // resolves which instance this row means — next upcoming, else most
-        // recent past — so prefer that span over the master's, which for a
-        // long-running series is its original (stale) start.
-        const metadata = result.metadata;
-        const time = toCalendarEventTime(
-          metadata.occurrence?.time ?? metadata.time
-        );
+              const channelName: string | undefined =
+                result.metadata.channel_name ??
+                channels.find((c) => c.id === result.channel_id)?.name ??
+                undefined;
+              const status = result.metadata.status;
 
-        return [
-          {
-            type: 'calendar_event',
-            id: result.id,
-            name: result.name,
-            ownerId: result.owner_id,
-            status: metadata.status,
-            time,
-            occurrenceKey: metadata.occurrence?.occurrenceKey,
-            isRecurring: metadata.isRecurring,
-            organizer: metadata.organizer
-              ? {
-                  name: metadata.organizer.name ?? undefined,
-                  email: metadata.organizer.email ?? undefined,
-                }
-              : undefined,
-            description: metadata.description ?? undefined,
-            conferenceUrl: metadata.conferenceUrl ?? undefined,
-            isReadOnly: metadata.isReadOnly,
-            createdAt: metadata.createdAt,
-            updatedAt: metadata.updatedAt,
-            properties: soupProperties(result.properties),
-            search,
-          },
-        ];
-      }
-
-      case 'call': {
-        if (!result.metadata) return [];
-        const search = getSearchData({
-          type: 'call_record',
-          results: result.call_search_results,
-          callId: result.call_id,
-          callStartedAt: result.metadata.started_at,
-        });
-
-        const channelName: string | undefined =
-          result.metadata.channel_name ??
-          channels.find((c) => c.id === result.channel_id)?.name ??
-          undefined;
-        const status = result.metadata.status;
-
-        return [
-          {
-            type: 'call',
-            id: result.call_id,
-            name: result.name ?? channelName ?? blockNameToDefaultFile('call'),
-            channelId: result.channel_id,
-            channelName,
-            ownerId: result.owner_id,
-            createdAt: result.metadata.started_at,
-            updatedAt: result.metadata.updated_at,
-            isActive: false,
-            status,
-            attended: status === 'ATTENDED',
-            durationMs: result.metadata.duration_ms,
-            participantIds: result.participant_ids,
-            properties: soupProperties(result.properties),
-            search,
-          },
-        ];
-      }
-    }
+              return [
+                {
+                  type: 'call',
+                  id: result.call_id,
+                  name:
+                    result.name ??
+                    channelName ??
+                    blockNameToDefaultFile('call'),
+                  channelId: result.channel_id,
+                  channelName,
+                  ownerId: result.owner_id,
+                  createdAt: result.metadata.started_at,
+                  updatedAt: result.metadata.updated_at,
+                  isActive: false,
+                  status,
+                  attended: status === 'ATTENDED',
+                  durationMs: result.metadata.duration_ms,
+                  participantIds: result.participant_ids,
+                  properties: soupProperties(result.properties),
+                  search,
+                },
+              ];
+            }
+          }
+        )
+        // A result type this build doesn't know yields no rows.
+        .exhaustive(() => [])
+    );
   };
 };
 

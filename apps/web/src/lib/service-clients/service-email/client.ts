@@ -25,6 +25,13 @@ import type { AvailabilityCalendarsResponse } from '@service-calendar/generated/
 import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/calendarMutationErrorCode';
 import type { TeamCalendarSharingBody } from '@service-calendar/generated/schemas/teamCalendarSharingBody';
 import type { Result } from 'neverthrow';
+import { readJsonBody } from '../read-json-body';
+import {
+  ALREADY_INITIALIZED_CODE,
+  NO_GMAIL_GRANT_CODE,
+  SHARED_INBOX_CONFLICT_CODE,
+  SIGNATURE_IMAGES_UNRESOLVED_CODE,
+} from './errors';
 import type {
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
@@ -100,7 +107,7 @@ function emailLinkHeaders(linkId?: string): Record<string, string> | undefined {
  * body; surface it so callers can branch on the code and show the message.
  */
 async function calendarMutationErrorHandler(response: Response) {
-  const body = (await response.json().catch(() => null)) as {
+  const body = (await readJsonBody(response)) as {
     code?: string;
     message?: string;
   } | null;
@@ -118,7 +125,7 @@ async function calendarMutationErrorHandler(response: Response) {
 }
 
 async function forwardCalendarEventErrorHandler(response: Response) {
-  const body = (await response.json().catch(() => null)) as {
+  const body = (await readJsonBody(response)) as {
     code?: string;
     message?: string;
   } | null;
@@ -152,36 +159,11 @@ function emailFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${emailHost}${url}`, init);
 }
 
-/**
- * Error code `init` returns when the target mailbox is already connected by another
- * macro user. The caller confirms with the user, then retries with `forceShare`.
- */
-export const SHARED_INBOX_CONFLICT_CODE = 'SHARED_INBOX_CONFLICT' as const;
-
-/** Error code `init` returns (HTTP 400) when the inbox is already provisioned. */
-export const ALREADY_INITIALIZED_CODE = 'ALREADY_INITIALIZED' as const;
-
-/**
- * Error code `init` returns (HTTP 400) when the user holds no Gmail grant to
- * provision from — the Gmail scope was declined at consent or the grant was
- * removed. The add-inbox flow re-runs consent and clears it.
- */
-export const NO_GMAIL_GRANT_CODE = 'NO_GMAIL_GRANT' as const;
-
 type InitErrorCode =
   | 'PAYMENT_REQUIRED'
   | typeof SHARED_INBOX_CONFLICT_CODE
   | typeof ALREADY_INITIALIZED_CODE
   | typeof NO_GMAIL_GRANT_CODE;
-
-/**
- * Error code `patchSettings` returns (HTTP 422) when a signature has images that
- * couldn't be fetched/rehosted and would render broken for recipients. The whole
- * patch is rejected; the error message carries the count so the UI can prompt a
- * re-add.
- */
-export const SIGNATURE_IMAGES_UNRESOLVED_CODE =
-  'SIGNATURE_IMAGES_UNRESOLVED' as const;
 
 export const emailClient = {
   settingsOperations: (linkId: string) =>
@@ -246,9 +228,9 @@ export const emailClient = {
               'A professional subscription is required to add another inbox',
           };
         if (response.status === 409) {
-          const body = (await response
-            .json()
-            .catch(() => null)) as SharedInboxConflictResponse | null;
+          const body = (await readJsonBody(
+            response
+          )) as SharedInboxConflictResponse | null;
           return {
             code: SHARED_INBOX_CONFLICT_CODE,
             // The caller formats the prompt; the fields it needs ride along as JSON.
@@ -259,7 +241,7 @@ export const emailClient = {
           };
         }
         if (response.status === 400) {
-          const body = (await response.json().catch(() => null)) as {
+          const body = (await readJsonBody(response)) as {
             code?: string;
             message?: string;
           } | null;
@@ -531,7 +513,7 @@ export const emailClient = {
       // Other statuses fall back to the default HTTP_ERROR shape.
       errorResponseHandler: async (response) => {
         if (response.status === 422) {
-          const body = (await response.json().catch(() => null)) as {
+          const body = (await readJsonBody(response)) as {
             unresolved_image_count?: number;
           } | null;
           return {
@@ -1002,3 +984,10 @@ export const emailClient = {
     });
   },
 };
+
+export {
+  ALREADY_INITIALIZED_CODE,
+  NO_GMAIL_GRANT_CODE,
+  SHARED_INBOX_CONFLICT_CODE,
+  SIGNATURE_IMAGES_UNRESOLVED_CODE,
+} from './errors';

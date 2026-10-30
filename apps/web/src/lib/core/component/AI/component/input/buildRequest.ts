@@ -4,7 +4,8 @@ import { DEFAULT_MODEL } from '@core/component/AI/constant';
 import { useAdditionalInstructions } from '@core/component/AI/constant/prompts';
 import type { Attachment, Model, ToolSet } from '@core/component/AI/types';
 import { isPaymentError } from '@core/util/handlePaymentError';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+import { sendChatMessage as sendStreamChatMessage } from '@queries/cognition/requests';
+
 import type { ChatMessageStream } from '@service-connection/stream';
 import { subscribe } from '@service-connection/stream';
 import type { ModelSpeed } from '../../constant/speed';
@@ -38,7 +39,7 @@ export function useSendChatMessage() {
     attachments,
     toolset,
   }: ChatSendInput & { chatId?: string }): Promise<SendChatMessageResult> {
-    const response = await cognitionApiServiceClient.sendStreamChatMessage({
+    const response = await sendStreamChatMessage({
       content,
       model: model ?? DEFAULT_MODEL,
       speed: speed ?? 'standard',

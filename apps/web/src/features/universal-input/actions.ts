@@ -13,6 +13,7 @@ import { plainTextToHtml } from '@app/features/email-compose/core/plain-text-to-
 import { prepareEmailBody } from '@app/features/email-compose/primitives/prepare-email-body';
 import { parsePropertyDraft } from '@app/features/property/utils/parse-property-draft';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { encodeBase64UrlUtf8 } from '@app/lib/utils/base64';
 import type {
   ReferredFrom,
   SplitContent,
@@ -34,7 +35,6 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useAddInboxFlow } from '@core/email-link';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useCreateCalendarEventMutation } from '@queries/calendar/mutations';
 import {

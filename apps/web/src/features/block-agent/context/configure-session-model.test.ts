@@ -1,4 +1,4 @@
-import type { AgentSession } from '@core/agent-session/AgentSession';
+import type { AgentSession } from '@app/lib/queries/agent-session/agent-session';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
@@ -129,12 +129,14 @@ it('confirms speed independently of reasoning effort before the caller sends a p
     options: [{ value: 'standard' }, { value: 'ultrafast' }],
   });
   let finished = false;
-  const result = configureSessionModel(f.session, undefined, {
-    configId: 'speed',
-    value: 'ultrafast',
-  }).then(() => {
+  const configure = async () => {
+    await configureSessionModel(f.session, undefined, {
+      configId: 'speed',
+      value: 'ultrafast',
+    });
     finished = true;
-  });
+  };
+  const result = configure();
   await flush();
   expect(f.issue.mock.calls).toEqual([
     [{ type: 'setConfigOption', configId: 'speed', value: 'ultrafast' }],

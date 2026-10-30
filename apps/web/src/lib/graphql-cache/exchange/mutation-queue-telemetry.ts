@@ -281,6 +281,41 @@ function detailAttributes(
   return attributes;
 }
 
+type GraphQLErrorLike = NonNullable<CombinedError['graphQLErrors'][number]>;
+
+function classifyGraphQLError(
+  graphQLError: GraphQLErrorLike,
+  code: unknown
+): MutationFailureClass {
+  const upper = typeof code === 'string' ? code.toUpperCase() : '';
+  if (upper.startsWith('LOCAL_')) return 'local';
+  if (
+    ['UNAUTHENTICATED', 'UNAUTHORIZED', 'FORBIDDEN'].includes(upper) ||
+    graphQLError.message === 'authentication required'
+  )
+    return 'auth';
+  if (upper.includes('CONFLICT') || upper.endsWith('ALREADY_SENT'))
+    return 'conflict';
+  if (upper.startsWith('INTERNAL')) return 'server';
+  if (
+    upper === 'BAD_USER_INPUT' ||
+    upper.startsWith('INVALID') ||
+    upper.startsWith('GRAPHQL_') ||
+    // Parse and validation errors have neither a code nor a field path.
+    (!upper && !graphQLError.path?.length)
+  )
+    return 'validation';
+  return 'graphql';
+}
+
+function classifyNetworkError(networkError: Error): MutationFailureClass {
+  return networkError.name === 'TimeoutError' ||
+    networkError.name === 'AbortError' ||
+    /timed? ?out/i.test(networkError.message)
+    ? 'timeout'
+    : 'network';
+}
+
 /** Classifies a failed attempt without retaining its message. */
 export function classifyMutationFailure(
   error: CombinedError | undefined,
@@ -291,37 +326,11 @@ export function classifyMutationFailure(
   if (httpStatus !== undefined && httpStatus >= 500) return 'server';
   const graphQLError = error?.graphQLErrors[0];
   if (graphQLError) {
-    const code = graphQLErrorCode(error);
-    const upper = typeof code === 'string' ? code.toUpperCase() : '';
-    if (upper.startsWith('LOCAL_')) return 'local';
-    if (
-      ['UNAUTHENTICATED', 'UNAUTHORIZED', 'FORBIDDEN'].includes(upper) ||
-      graphQLError.message === 'authentication required'
-    )
-      return 'auth';
-    if (upper.includes('CONFLICT') || upper.endsWith('ALREADY_SENT'))
-      return 'conflict';
-    if (upper.startsWith('INTERNAL')) return 'server';
-    if (
-      upper === 'BAD_USER_INPUT' ||
-      upper.startsWith('INVALID') ||
-      upper.startsWith('GRAPHQL_') ||
-      // Parse and validation errors have neither a code nor a field path.
-      (!upper && !graphQLError.path?.length)
-    )
-      return 'validation';
-    return 'graphql';
+    return classifyGraphQLError(graphQLError, graphQLErrorCode(error));
   }
   if (httpStatus !== undefined && httpStatus >= 400) return 'validation';
   const networkError = error?.networkError;
-  if (networkError) {
-    return networkError.name === 'TimeoutError' ||
-      networkError.name === 'AbortError' ||
-      /timed? ?out/i.test(networkError.message)
-      ? 'timeout'
-      : 'network';
-  }
-  return 'no-data';
+  return networkError ? classifyNetworkError(networkError) : 'no-data';
 }
 
 /** Failure attributes for an attempt that did not return usable data. */

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Page, type Route, test } from '@playwright/test';
 import type {
   ExternalChatAdd,
   ExternalChatAdded,
@@ -155,6 +155,367 @@ const incomingMessage = {
   deliveryState: null,
 };
 
+type Handled = Promise<void> | undefined;
+
+function fulfillAccount(route: Route, pathname: string): Handled {
+  if (pathname === '/auth/user/legacy_user_permissions')
+    return route.fulfill({
+      json: {
+        userId: USER_ID,
+        email: 'wa-tester@example.test',
+        permissions: [],
+        tutorialComplete: true,
+      },
+    });
+  if (pathname.startsWith('/auth/user/get_names'))
+    return route.fulfill({
+      json: {
+        names: [
+          {
+            id: 'macro|owner@example.test',
+            first_name: 'Group',
+            last_name: 'Owner',
+          },
+          { id: USER_ID, first_name: 'Me' },
+        ],
+      },
+    });
+  if (pathname === '/auth/user/profile_pictures')
+    return route.fulfill({ json: { pictures: [] } });
+  if (pathname === '/auth/team/user')
+    return route.fulfill({
+      json: [
+        {
+          id: 'team-acme',
+          name: 'Acme Inc',
+          slug: 'acme',
+          owner_id: USER_ID,
+          allow_non_admin_invites: true,
+          crm_enabled: false,
+          enterprise: false,
+        },
+      ],
+    });
+  if (pathname.endsWith('/email/links'))
+    return route.fulfill({ json: { links: [] } });
+  if (pathname === '/auth/team')
+    return route.fulfill({
+      json: {
+        team: { id: 'team-acme', name: 'Acme Inc', owner_id: USER_ID },
+        members: [],
+      },
+    });
+  return undefined;
+}
+
+function fulfillChatAccess(
+  route: Route,
+  url: URL,
+  state: LinkedServer
+): Handled {
+  if (!url.pathname.startsWith(`/dss/entities/external_chat/${CHAT_ID}`))
+    return undefined;
+  if (url.pathname.includes('/direct-access/')) {
+    state.grants.push({
+      userId: decodeURIComponent(url.pathname.split('/').at(-1) ?? ''),
+      accessLevel: route.request().postDataJSON().accessLevel,
+    });
+    return route.fulfill({ status: 204 });
+  }
+  if (url.pathname.endsWith('/direct-access'))
+    return route.fulfill({ json: state.grants });
+  return route.fulfill({
+    json: {
+      owner: state.sharedViewer ? 'macro|owner@example.test' : USER_ID,
+      canReview: !state.sharedViewer,
+      accessLevel: state.sharedViewer ? 'view' : 'owner',
+      supportedLevels: ['view'],
+      requests: [],
+      pendingCount: 0,
+      mine: null,
+      nextOffset: null,
+    },
+  });
+}
+
+function chatDetail(state: LinkedServer) {
+  return {
+    id: CHAT_ID,
+    provider: 'whatsapp',
+    kind: 'group',
+    name: 'Design Crit',
+    userId: state.sharedViewer ? 'macro|owner@example.test' : USER_ID,
+    accessLevel: state.sharedViewer ? 'view' : 'owner',
+    canSend: state.canSend,
+    sendReason: state.canSend ? null : 'no_account',
+    sendingIdentity: state.canSend ? '14155550142@s.whatsapp.net' : null,
+    unreadCount: 1,
+    backfill: state.backfill,
+    members: {
+      name: 'Design Crit',
+      announce: false,
+      observedAt: '2026-10-21T10:00:00Z',
+      participants: [
+        {
+          jid: '14155550199@s.whatsapp.net',
+          alternateJid: null,
+          displayName: 'Ana Ruiz',
+          admin: true,
+        },
+      ],
+    },
+    limits: {
+      textLimitBytes: 65536,
+      attachmentLimitBytes: 33554432,
+      mutationWindowSeconds: 900,
+      maxAttachments: 1,
+      mutations: ['reaction', 'edit', 'delete'],
+      attachmentTypes: ['image/png', 'application/pdf', 'audio/ogg'],
+    },
+  };
+}
+
+function chatMessages(url: URL, state: LinkedServer) {
+  if (url.searchParams.has('before'))
+    return {
+      nextCursor: null,
+      messages: [
+        {
+          ...incomingMessage,
+          id: 'message-0',
+          body: 'Previous day discussion',
+          sentAt: '2026-10-20T10:00:00Z',
+          attachments: [],
+        },
+      ],
+    };
+  return {
+    nextCursor: 'older-cursor',
+    messages: [
+      ...state.imported,
+      incomingMessage,
+      {
+        ...incomingMessage,
+        id: 'message-2',
+        body: 'Looking now. Thanks, Ana!',
+        sender: { name: 'Me', userId: USER_ID },
+        sentAt: new Date().toISOString(),
+        replyTo: 'message-1',
+        reactions: [],
+        attachments: [],
+        deliveryState: 'accepted',
+      },
+    ],
+  };
+}
+
+function fulfillSend(route: Route, state: LinkedServer) {
+  const body: ExternalChatSendReply = route.request().postDataJSON();
+  state.outgoing.push(body);
+  const reply = state.sendReplies.shift();
+  if (reply) return route.fulfill({ status: reply.status, json: reply.json });
+  const id = `send-${body.idempotencyKey}`;
+  state.delivery[id] ??= { state: 'pending', messageId: null };
+  return route.fulfill({
+    json: {
+      id,
+      chatId: CHAT_ID,
+      userId: USER_ID,
+      createdAt: new Date().toISOString(),
+      payload: body,
+      ...state.delivery[id],
+    } satisfies ExternalChatSendProgress,
+  });
+}
+
+function fulfillChat(
+  route: Route,
+  url: URL,
+  state: LinkedServer,
+  path: string,
+  method: string
+): Handled {
+  if (!path.startsWith(`external-chats/${CHAT_ID}`)) return undefined;
+  const suffix = path.slice(`external-chats/${CHAT_ID}`.length);
+  if (!suffix) return route.fulfill({ json: chatDetail(state) });
+  if (suffix === '/messages')
+    return route.fulfill({ json: chatMessages(url, state) });
+  if (suffix === '/sends' && method === 'POST')
+    return fulfillSend(route, state);
+  if (suffix === '/delivery')
+    return route.fulfill({
+      json: (route.request().postDataJSON() as string[])
+        .filter((id) => state.delivery[id])
+        .map((id) => ({
+          id,
+          chatId: CHAT_ID,
+          userId: USER_ID,
+          createdAt: new Date().toISOString(),
+          payload: {},
+          ...state.delivery[id],
+        })),
+    });
+  if (suffix === '/read') {
+    const body: MarkRead = route.request().postDataJSON();
+    state.readMessages.push(body.messageId);
+    return route.fulfill({ json: {} });
+  }
+  if (suffix === '/attachments')
+    return route.fulfill({
+      json: {
+        uploadId: 'upload-1',
+        ...state.upload,
+      } satisfies ExternalChatUploadedAttachment,
+    });
+  if (suffix === '/permissions' && method === 'PATCH') {
+    state.permissionUpdates.push(route.request().postDataJSON());
+    return route.fulfill({ status: 204 });
+  }
+  if (suffix === '/permissions')
+    return route.fulfill({
+      json: {
+        id: 'permissions-1',
+        channelSharePermissions: [],
+        linkShare: null,
+        linkShareAccessLevel: null,
+        teamShareAccessLevel: null,
+      },
+    });
+  return undefined;
+}
+
+function addedChats(state: LinkedServer) {
+  return state.chats
+    .filter((item) => item.added)
+    .map((item) => ({
+      id: item.added?.id,
+      provider: 'whatsapp',
+      kind: item.kind,
+      name: item.added?.name,
+      userId: USER_ID,
+      unreadCount: item.added?.id === CHAT_ID ? 2 : 0,
+      canSend: item.added?.id === CHAT_ID,
+      sendReason: item.added?.id === CHAT_ID ? null : 'not_added',
+      community: item.community ?? null,
+    }));
+}
+
+function listedChats(state: LinkedServer) {
+  return state.chats.map((chat) => ({
+    ...chat,
+    archived: false,
+    pinned: false,
+    shared: chat.added ? null : (chat.shared ?? null),
+    community: chat.community ?? null,
+    canAdd: !chat.self && !chat.added && !chat.shared,
+    cannotAddReason: chat.self ? 'own_chat' : null,
+  }));
+}
+
+function fulfillPairing(
+  route: Route,
+  state: LinkedServer,
+  path: string,
+  method: string
+): Handled {
+  const pairing = /^whatsapp\/pairing\/(pairing-\d+)(\/passkey)?$/.exec(path);
+  if (pairing && method === 'DELETE') return route.fulfill({ status: 204 });
+  if (pairing?.[2]) {
+    state.passkeyAnswers.push(route.request().postDataJSON());
+    return route.fulfill({ status: 204 });
+  }
+  if (!pairing) return undefined;
+  const id = pairing[1] ?? '';
+  const pairingState = state.pairingStates[id] ?? state.pairingState;
+  if (pairingState === 'success')
+    state.account = {
+      id: 'account-1',
+      userId: USER_ID,
+      authorizationGeneration: 4,
+      identityJid: '14155550142:3@s.whatsapp.net',
+      state: 'connected',
+    };
+  return route.fulfill({
+    headers: { 'Cache-Control': 'no-store' },
+    json: {
+      state: pairingState,
+      qr: pairingState === 'qr' ? `2@ref-${id},noise,identity,adv` : null,
+      challenge:
+        pairingState === 'passkey'
+          ? { challenge: 'Y2hhbGxlbmdl', rpId: 'whatsapp.com' }
+          : null,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    },
+  });
+}
+
+function fulfillWhatsApp(
+  route: Route,
+  url: URL,
+  state: LinkedServer,
+  path: string,
+  method: string
+): Handled {
+  if (url.pathname.startsWith(`/dss/entities/external_chat/${CHAT_ID}`))
+    return route.fulfill({ json: {} });
+  if (path === 'whatsapp/configuration')
+    return route.fulfill({
+      json: { pairing: true, adoption: true, sending: true },
+    });
+  if (path === 'external-chats' && method === 'GET')
+    return route.fulfill({ json: addedChats(state) });
+  if (path === 'external-chats' && method === 'POST') {
+    const body: ExternalChatAdd = route.request().postDataJSON();
+    state.additions.push(body);
+    const chat = state.chats.find(({ jid }) => jid === body.remoteId);
+    if (chat) chat.added = { id: 'chat-new', name: chat.name };
+    return route.fulfill({
+      json: { chatId: 'chat-new' } satisfies ExternalChatAdded,
+    });
+  }
+  if (path === 'whatsapp/account')
+    return route.fulfill({
+      json: { account: state.account } satisfies WhatsAppAccountView,
+    });
+  if (path === 'whatsapp/connect')
+    return route.fulfill({
+      json: {
+        id: `pairing-${++state.connects}`,
+        accountId: 'account-1',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        state: 'waiting',
+      } satisfies WhatsAppPairing,
+    });
+  const pairing = fulfillPairing(route, state, path, method);
+  if (pairing) return pairing;
+  if (path === 'whatsapp/chats' && method === 'GET')
+    return route.fulfill({ json: { chats: listedChats(state) } });
+  if (path === 'whatsapp/disconnect') {
+    state.account = null;
+    return route.fulfill({
+      json: { remoteUnlinkRequested: true } satisfies WhatsAppDisconnect,
+    });
+  }
+  return undefined;
+}
+
+function fulfillLinkedChats(
+  route: Route,
+  url: URL,
+  state: LinkedServer
+): Handled {
+  if (!/^\/dss\/(external-chats|whatsapp)(\/|$)/.test(url.pathname))
+    return undefined;
+  const path = url.pathname.slice('/dss/'.length);
+  const method = route.request().method();
+  state.requests.push(`${method} ${path}`);
+  return (
+    fulfillChat(route, url, state, path, method) ??
+    fulfillWhatsApp(route, url, state, path, method) ??
+    route.fulfill({ status: 404, json: {} })
+  );
+}
+
 /** Real client, queries and production adapter; the network is mocked here. */
 async function mount(page: Page, state: LinkedServer, query = '') {
   const origin = test.info().project.use.baseURL;
@@ -165,311 +526,11 @@ async function mount(page: Page, state: LinkedServer, query = '') {
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) return route.abort();
-    if (url.pathname === '/auth/user/legacy_user_permissions')
-      return route.fulfill({
-        json: {
-          userId: USER_ID,
-          email: 'wa-tester@example.test',
-          permissions: [],
-          tutorialComplete: true,
-        },
-      });
-    if (url.pathname.startsWith('/auth/user/get_names'))
-      return route.fulfill({
-        json: {
-          names: [
-            {
-              id: 'macro|owner@example.test',
-              first_name: 'Group',
-              last_name: 'Owner',
-            },
-            { id: USER_ID, first_name: 'Me' },
-          ],
-        },
-      });
-    if (url.pathname === '/auth/user/profile_pictures')
-      return route.fulfill({ json: { pictures: [] } });
-    if (url.pathname === '/auth/team/user')
-      return route.fulfill({
-        json: [
-          {
-            id: 'team-acme',
-            name: 'Acme Inc',
-            slug: 'acme',
-            owner_id: USER_ID,
-            allow_non_admin_invites: true,
-            crm_enabled: false,
-            enterprise: false,
-          },
-        ],
-      });
-    if (url.pathname.endsWith('/email/links'))
-      return route.fulfill({ json: { links: [] } });
-    if (url.pathname === '/auth/team')
-      return route.fulfill({
-        json: {
-          team: { id: 'team-acme', name: 'Acme Inc', owner_id: USER_ID },
-          members: [],
-        },
-      });
-    if (url.pathname.startsWith(`/dss/entities/external_chat/${CHAT_ID}`)) {
-      if (url.pathname.includes('/direct-access/')) {
-        state.grants.push({
-          userId: decodeURIComponent(url.pathname.split('/').at(-1) ?? ''),
-          accessLevel: route.request().postDataJSON().accessLevel,
-        });
-        return route.fulfill({ status: 204 });
-      }
-      if (url.pathname.endsWith('/direct-access'))
-        return route.fulfill({ json: state.grants });
-      return route.fulfill({
-        json: {
-          owner: state.sharedViewer ? 'macro|owner@example.test' : USER_ID,
-          canReview: !state.sharedViewer,
-          accessLevel: state.sharedViewer ? 'view' : 'owner',
-          supportedLevels: ['view'],
-          requests: [],
-          pendingCount: 0,
-          mine: null,
-          nextOffset: null,
-        },
-      });
-    }
-    if (/^\/dss\/(external-chats|whatsapp)(\/|$)/.test(url.pathname)) {
-      const path = url.pathname.slice('/dss/'.length);
-      const method = route.request().method();
-      state.requests.push(`${method} ${path}`);
-      if (path.startsWith(`external-chats/${CHAT_ID}`)) {
-        const suffix = path.slice(`external-chats/${CHAT_ID}`.length);
-        if (!suffix)
-          return route.fulfill({
-            json: {
-              id: CHAT_ID,
-              provider: 'whatsapp',
-              kind: 'group',
-              name: 'Design Crit',
-              userId: state.sharedViewer ? 'macro|owner@example.test' : USER_ID,
-              accessLevel: state.sharedViewer ? 'view' : 'owner',
-              canSend: state.canSend,
-              sendReason: state.canSend ? null : 'no_account',
-              sendingIdentity: state.canSend
-                ? '14155550142@s.whatsapp.net'
-                : null,
-              unreadCount: 1,
-              backfill: state.backfill,
-              members: {
-                name: 'Design Crit',
-                announce: false,
-                observedAt: '2026-10-21T10:00:00Z',
-                participants: [
-                  {
-                    jid: '14155550199@s.whatsapp.net',
-                    alternateJid: null,
-                    displayName: 'Ana Ruiz',
-                    admin: true,
-                  },
-                ],
-              },
-              limits: {
-                textLimitBytes: 65536,
-                attachmentLimitBytes: 33554432,
-                mutationWindowSeconds: 900,
-                maxAttachments: 1,
-                mutations: ['reaction', 'edit', 'delete'],
-                attachmentTypes: ['image/png', 'application/pdf', 'audio/ogg'],
-              },
-            },
-          });
-        if (suffix === '/messages')
-          return route.fulfill({
-            json: {
-              nextCursor: url.searchParams.has('before')
-                ? null
-                : 'older-cursor',
-              messages: url.searchParams.has('before')
-                ? [
-                    {
-                      ...incomingMessage,
-                      id: 'message-0',
-                      body: 'Previous day discussion',
-                      sentAt: '2026-10-20T10:00:00Z',
-                      attachments: [],
-                    },
-                  ]
-                : [
-                    ...state.imported,
-                    incomingMessage,
-                    {
-                      ...incomingMessage,
-                      id: 'message-2',
-                      body: 'Looking now. Thanks, Ana!',
-                      sender: { name: 'Me', userId: USER_ID },
-                      sentAt: new Date().toISOString(),
-                      replyTo: 'message-1',
-                      reactions: [],
-                      attachments: [],
-                      deliveryState: 'accepted',
-                    },
-                  ],
-            },
-          });
-        if (suffix === '/sends' && method === 'POST') {
-          const body: ExternalChatSendReply = route.request().postDataJSON();
-          state.outgoing.push(body);
-          const reply = state.sendReplies.shift();
-          if (reply)
-            return route.fulfill({ status: reply.status, json: reply.json });
-          const id = `send-${body.idempotencyKey}`;
-          state.delivery[id] ??= { state: 'pending', messageId: null };
-          return route.fulfill({
-            json: {
-              id,
-              chatId: CHAT_ID,
-              userId: USER_ID,
-              createdAt: new Date().toISOString(),
-              payload: body,
-              ...state.delivery[id],
-            } satisfies ExternalChatSendProgress,
-          });
-        }
-        if (suffix === '/delivery')
-          return route.fulfill({
-            json: (route.request().postDataJSON() as string[])
-              .filter((id) => state.delivery[id])
-              .map((id) => ({
-                id,
-                chatId: CHAT_ID,
-                userId: USER_ID,
-                createdAt: new Date().toISOString(),
-                payload: {},
-                ...state.delivery[id],
-              })),
-          });
-        if (suffix === '/read') {
-          const body: MarkRead = route.request().postDataJSON();
-          state.readMessages.push(body.messageId);
-          return route.fulfill({ json: {} });
-        }
-        if (suffix === '/attachments')
-          return route.fulfill({
-            json: {
-              uploadId: 'upload-1',
-              ...state.upload,
-            } satisfies ExternalChatUploadedAttachment,
-          });
-        if (suffix === '/permissions' && method === 'PATCH') {
-          state.permissionUpdates.push(route.request().postDataJSON());
-          return route.fulfill({ status: 204 });
-        }
-        if (suffix === '/permissions')
-          return route.fulfill({
-            json: {
-              id: 'permissions-1',
-              channelSharePermissions: [],
-              linkShare: null,
-              linkShareAccessLevel: null,
-              teamShareAccessLevel: null,
-            },
-          });
-      }
-      if (url.pathname.startsWith(`/dss/entities/external_chat/${CHAT_ID}`))
-        return route.fulfill({ json: {} });
-      if (path === 'whatsapp/configuration')
-        return route.fulfill({
-          json: { pairing: true, adoption: true, sending: true },
-        });
-      if (path === 'external-chats' && method === 'GET')
-        return route.fulfill({
-          json: state.chats
-            .filter((item) => item.added)
-            .map((item) => ({
-              id: item.added?.id,
-              provider: 'whatsapp',
-              kind: item.kind,
-              name: item.added?.name,
-              userId: USER_ID,
-              unreadCount: item.added?.id === CHAT_ID ? 2 : 0,
-              canSend: item.added?.id === CHAT_ID,
-              sendReason: item.added?.id === CHAT_ID ? null : 'not_added',
-              community: item.community ?? null,
-            })),
-        });
-      if (path === 'external-chats' && method === 'POST') {
-        const body: ExternalChatAdd = route.request().postDataJSON();
-        state.additions.push(body);
-        const chat = state.chats.find(({ jid }) => jid === body.remoteId);
-        if (chat) chat.added = { id: 'chat-new', name: chat.name };
-        return route.fulfill({
-          json: { chatId: 'chat-new' } satisfies ExternalChatAdded,
-        });
-      }
-      if (path === 'whatsapp/account')
-        return route.fulfill({
-          json: { account: state.account } satisfies WhatsAppAccountView,
-        });
-      if (path === 'whatsapp/connect')
-        return route.fulfill({
-          json: {
-            id: `pairing-${++state.connects}`,
-            accountId: 'account-1',
-            expiresAt: new Date(Date.now() + 60_000).toISOString(),
-            state: 'waiting',
-          } satisfies WhatsAppPairing,
-        });
-      const pairing = /^whatsapp\/pairing\/(pairing-\d+)(\/passkey)?$/.exec(
-        path
-      );
-      if (pairing && method === 'DELETE') return route.fulfill({ status: 204 });
-      if (pairing?.[2]) {
-        state.passkeyAnswers.push(route.request().postDataJSON());
-        return route.fulfill({ status: 204 });
-      }
-      if (pairing) {
-        const id = pairing[1] ?? '';
-        const pairingState = state.pairingStates[id] ?? state.pairingState;
-        if (pairingState === 'success')
-          state.account = {
-            id: 'account-1',
-            userId: USER_ID,
-            authorizationGeneration: 4,
-            identityJid: '14155550142:3@s.whatsapp.net',
-            state: 'connected',
-          };
-        return route.fulfill({
-          headers: { 'Cache-Control': 'no-store' },
-          json: {
-            state: pairingState,
-            qr: pairingState === 'qr' ? `2@ref-${id},noise,identity,adv` : null,
-            challenge:
-              pairingState === 'passkey'
-                ? { challenge: 'Y2hhbGxlbmdl', rpId: 'whatsapp.com' }
-                : null,
-            expiresAt: new Date(Date.now() + 60_000).toISOString(),
-          },
-        });
-      }
-      if (path === 'whatsapp/chats' && method === 'GET')
-        return route.fulfill({
-          json: {
-            chats: state.chats.map((chat) => ({
-              ...chat,
-              archived: false,
-              pinned: false,
-              shared: chat.added ? null : (chat.shared ?? null),
-              community: chat.community ?? null,
-              canAdd: !chat.self && !chat.added && !chat.shared,
-              cannotAddReason: chat.self ? 'own_chat' : null,
-            })),
-          },
-        });
-      if (path === 'whatsapp/disconnect') {
-        state.account = null;
-        return route.fulfill({
-          json: { remoteUnlinkRequested: true } satisfies WhatsAppDisconnect,
-        });
-      }
-      return route.fulfill({ status: 404, json: {} });
-    }
+    const mocked =
+      fulfillAccount(route, url.pathname) ??
+      fulfillChatAccess(route, url, state) ??
+      fulfillLinkedChats(route, url, state);
+    if (mocked) return mocked;
     // Chat's channel list feeds the composer's `@` menu; this account has none.
     if (url.pathname === '/dss/channels/activity')
       return route.fulfill({ json: [] });

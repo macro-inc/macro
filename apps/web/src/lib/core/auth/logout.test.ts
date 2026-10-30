@@ -79,6 +79,15 @@ import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { confirmDialog } from '@ui';
 import { clearLocalAuthSession, useLogout } from './logout';
 
+/** What a promise settles with: its value, or its rejection reason. */
+async function settledValue(promise: Promise<unknown>): Promise<unknown> {
+  try {
+    return await promise;
+  } catch (reason) {
+    return reason;
+  }
+}
+
 describe('logout GraphQL session teardown', () => {
   it('ends the GraphQL session only after the cache wipe', async () => {
     client.current = new QueryClient();
@@ -129,9 +138,14 @@ describe('logout notification cache isolation', () => {
     const transport = new Promise<{ owner: string }>((resolve) => {
       resolveTransport = resolve;
     });
-    const request = queryClient
-      .fetchQuery({ queryKey, queryFn: () => transport, retry: false })
-      .catch((error: unknown) => error);
+
+    const request = settledValue(
+      queryClient.fetchQuery({
+        queryKey,
+        queryFn: () => transport,
+        retry: false,
+      })
+    );
     expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('fetching');
 
     await clearLocalAuthSession();

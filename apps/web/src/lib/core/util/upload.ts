@@ -546,11 +546,10 @@ export async function handleFolderSelect(
   const groups = groupPickedFolderFiles(files);
 
   const zipEntryPromises = Array.from(groups.entries()).map(
-    ([folderName, group]) =>
-      zipFiles(folderName, group.files, group.details).then((zip) => ({
-        file: zip,
-        isFolder: true,
-      }))
+    async ([folderName, group]) => ({
+      file: await zipFiles(folderName, group.files, group.details),
+      isFolder: true,
+    })
   );
 
   const resultPromise = Promise.allSettled(zipEntryPromises);

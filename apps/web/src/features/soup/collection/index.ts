@@ -1,4 +1,4 @@
-export { type DateBucket, dateBucket } from './date-buckets';
+export { type DateBucket, dateBucket } from '../../../lib/utils/date-buckets';
 export { createSoupRowStore } from './row-store';
 export {
   assertUniqueSoupRowIds,

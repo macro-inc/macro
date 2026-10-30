@@ -1,6 +1,7 @@
 import { createSoupEntityRow } from '@app/features/soup/collection/rows';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { Client } from '@urql/core';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
@@ -24,9 +25,6 @@ vi.mock('@queries/properties/definitions', () => ({
 vi.mock('@queries/properties/entity', () => ({
   useBulkSaveEntityPropertiesMutation: () => ({ mutateAsync: fixture.save }),
 }));
-vi.mock('@service-storage/graphql-soup', () => ({
-  getGraphqlSoupClient: () => ({}),
-}));
 vi.mock('@app/features/projects/queries/project-identity', () => ({
   createProjectIdentityQuery: (
     _client: unknown,
@@ -49,7 +47,12 @@ function setup(
 ) {
   return createRoot((dispose) => {
     disposers.push(dispose);
+    const client = new Client({
+      url: 'http://localhost/graphql',
+      exchanges: [],
+    });
     return createTaskBoardQueries({
+      client: () => client,
       rows: () => [createSoupEntityRow(boardEntity('one'))],
       grouping: () => 'status',
       searching: () => false,

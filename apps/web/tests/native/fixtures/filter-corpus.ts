@@ -167,44 +167,47 @@ export function filterCorpus(
     });
   }
   for (let n = 0; n < FILE_TYPES.length * PEOPLE.length; n++) {
-    const index = 101 + n;
-    const category = n % FILE_TYPES.length;
-    const owner = PEOPLE[Math.floor(n / FILE_TYPES.length)];
-    const tags = tagsFor(n);
-    const attachment = n % 3 === 0;
-    result.push({
-      kind: 'file',
-      id: id(index),
-      owner,
-      tags,
-      category: FILE_TYPES[category],
-      fileType: fileTypes[category],
-      attachment,
-      api: {
-        __typename: 'GraphqlSoupDocument',
+    const processEntry = () => {
+      const index = 101 + n;
+      const category = n % FILE_TYPES.length;
+      const owner = PEOPLE[Math.floor(n / FILE_TYPES.length)];
+      const tags = tagsFor(n);
+      const attachment = n % 3 === 0;
+      result.push({
+        kind: 'file',
         id: id(index),
-        entityType: 'DOCUMENT',
-        name: `File ${index}`,
-        displayName: `File ${index}`,
-        cacheProjection: capsules[id(index)],
-        ownerId: owner,
+        owner,
+        tags,
+        category: FILE_TYPES[category],
         fileType: fileTypes[category],
-        projectId: null,
-        createdAt: TIMESTAMP,
-        updatedAt: TIMESTAMP,
-        viewedAt: null,
-        deletedAt: null,
-        subType:
-          FILE_TYPES[category] === 'doc-snippet'
-            ? { __typename: 'GraphqlSnippetSubType' }
-            : FILE_TYPES[category] === 'doc-skill'
-              ? { __typename: 'GraphqlSkillSubType' }
-              : null,
-        notifications: [],
-        isFavorited: false,
-        properties: [property(index * 10 + 3, TAG_DEFINITION, tags)],
-      },
-    });
+        attachment,
+        api: {
+          __typename: 'GraphqlSoupDocument',
+          id: id(index),
+          entityType: 'DOCUMENT',
+          name: `File ${index}`,
+          displayName: `File ${index}`,
+          cacheProjection: capsules[id(index)],
+          ownerId: owner,
+          fileType: fileTypes[category],
+          projectId: null,
+          createdAt: TIMESTAMP,
+          updatedAt: TIMESTAMP,
+          viewedAt: null,
+          deletedAt: null,
+          subType:
+            FILE_TYPES[category] === 'doc-snippet'
+              ? { __typename: 'GraphqlSnippetSubType' }
+              : FILE_TYPES[category] === 'doc-skill'
+                ? { __typename: 'GraphqlSkillSubType' }
+                : null,
+          notifications: [],
+          isFavorited: false,
+          properties: [property(index * 10 + 3, TAG_DEFINITION, tags)],
+        },
+      });
+    };
+    processEntry();
   }
   for (let n = 0; n < 2; n++) {
     const index = 401 + n;

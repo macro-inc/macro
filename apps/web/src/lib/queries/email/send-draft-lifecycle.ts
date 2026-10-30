@@ -121,6 +121,70 @@ function restoredAttachments(
   ];
 }
 
+/** Saves the sent draft again as a working copy when none survived the send. */
+async function recreateWorkingCopy(
+  draft: GraphqlSaveEmailDraftArgs,
+  copy: SendWorkingCopy | undefined
+): Promise<LocalDraft> {
+  const draftId = copy?.key ?? String(draft.draftId);
+  await reviveLocalDraft(draftId);
+  return await saveLocalDraft({
+    clientHandles: { draftId, threadId: draft.threadDbId },
+    inboxId: draft.senderLinkId,
+    senderEmail: draft.senderEmail,
+    draft: {
+      draft_generation: draft.draftGeneration ?? 0,
+      sender_email: draft.senderEmail,
+      subject: draft.subject,
+      to: draft.to,
+      cc: draft.cc,
+      bcc: draft.bcc,
+      body_html: draft.bodyHtml,
+      body_text: draft.bodyText,
+      body_macro: draft.bodyMacro,
+      replying_to_id:
+        draft.replyingToId == null
+          ? draft.replyingToId
+          : String(draft.replyingToId),
+      provider_id: draft.providerId,
+      provider_thread_id: draft.providerThreadId,
+      thread_db_id: draft.threadDbId,
+    },
+    attachments: restoredAttachments(draft, copy),
+  });
+}
+
+/** The save arguments for a restored working copy, preferring its newer edits. */
+function restoredDraftArgs(
+  draft: GraphqlSaveEmailDraftArgs,
+  local: LocalDraft
+): GraphqlSaveEmailDraftArgs {
+  return {
+    ...draft,
+    draftId: local.draftId,
+    draftGeneration: local.content.draft_generation ?? 0,
+    threadDbId: local.serverThreadId ?? local.threadId ?? draft.threadDbId,
+    localRevision: local.revision,
+    senderLinkId: local.inboxId ?? draft.senderLinkId,
+    linkId: local.inboxId ?? draft.linkId,
+    senderEmail:
+      local.content.sender_email ?? local.senderEmail ?? draft.senderEmail,
+    subject: local.content.subject,
+    to: local.content.to?.map(draftContactInput),
+    cc: local.content.cc?.map(draftContactInput),
+    bcc: local.content.bcc?.map(draftContactInput),
+    replyingToId: local.content.replying_to_id,
+    providerId: local.content.provider_id,
+    providerThreadId: local.content.provider_thread_id,
+    bodyHtml: local.content.body_html,
+    bodyText: local.content.body_text,
+    bodyMacro: local.content.body_macro,
+    optimisticBodyHtml: local.content.body_html
+      ? decodeBase64Utf8(local.content.body_html)
+      : null,
+  };
+}
+
 /** Explicit cancellation restores local durability before another save can replay. */
 export async function restoreSendWorkingCopy(
   draft: GraphqlSaveEmailDraftArgs,
@@ -134,32 +198,7 @@ export async function restoreSendWorkingCopy(
     await resumeLocalDraft(local.key, copy?.generation ?? local.generation);
     local = (await readLocalDraft(local.key)) ?? local;
   } else {
-    const draftId = copy?.key ?? String(draft.draftId);
-    await reviveLocalDraft(draftId);
-    local = await saveLocalDraft({
-      clientHandles: { draftId, threadId: draft.threadDbId },
-      inboxId: draft.senderLinkId,
-      senderEmail: draft.senderEmail,
-      draft: {
-        draft_generation: draft.draftGeneration ?? 0,
-        sender_email: draft.senderEmail,
-        subject: draft.subject,
-        to: draft.to,
-        cc: draft.cc,
-        bcc: draft.bcc,
-        body_html: draft.bodyHtml,
-        body_text: draft.bodyText,
-        body_macro: draft.bodyMacro,
-        replying_to_id:
-          draft.replyingToId == null
-            ? draft.replyingToId
-            : String(draft.replyingToId),
-        provider_id: draft.providerId,
-        provider_thread_id: draft.providerThreadId,
-        thread_db_id: draft.threadDbId,
-      },
-      attachments: restoredAttachments(draft, copy),
-    });
+    local = await recreateWorkingCopy(draft, copy);
   }
   const restoredGeneration = local.generation;
   const bound = await localDraftStore.update(
@@ -187,29 +226,5 @@ export async function restoreSendWorkingCopy(
   );
   if (!bound || bound.generation !== restoredGeneration)
     throw new Error('This restored draft changed in another tab');
-  local = bound;
-  return {
-    ...draft,
-    draftId: local.draftId,
-    draftGeneration: local.content.draft_generation ?? 0,
-    threadDbId: local.serverThreadId ?? local.threadId ?? draft.threadDbId,
-    localRevision: local.revision,
-    senderLinkId: local.inboxId ?? draft.senderLinkId,
-    linkId: local.inboxId ?? draft.linkId,
-    senderEmail:
-      local.content.sender_email ?? local.senderEmail ?? draft.senderEmail,
-    subject: local.content.subject,
-    to: local.content.to?.map(draftContactInput),
-    cc: local.content.cc?.map(draftContactInput),
-    bcc: local.content.bcc?.map(draftContactInput),
-    replyingToId: local.content.replying_to_id,
-    providerId: local.content.provider_id,
-    providerThreadId: local.content.provider_thread_id,
-    bodyHtml: local.content.body_html,
-    bodyText: local.content.body_text,
-    bodyMacro: local.content.body_macro,
-    optimisticBodyHtml: local.content.body_html
-      ? decodeBase64Utf8(local.content.body_html)
-      : null,
-  };
+  return restoredDraftArgs(draft, bound);
 }

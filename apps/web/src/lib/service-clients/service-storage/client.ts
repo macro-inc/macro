@@ -28,6 +28,7 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
+import { readJsonBody } from '../read-json-body';
 import type { ApiChannelListPage } from './channel-list-types';
 import { fetchDatabaseOps } from './databases';
 import type { AccessiblePipeline as PipelineResponse } from './generated/schemas/accessiblePipeline';
@@ -55,11 +56,6 @@ import type { ChannelJoinCodeResponse } from './generated/schemas/channelJoinCod
 import type { ChannelLabel } from './generated/schemas/channelLabel';
 import type { ChannelLabelRule } from './generated/schemas/channelLabelRule';
 import type { ChannelLabelsList } from './generated/schemas/channelLabelsList';
-import { ChannelType } from './generated/schemas/channelType';
-import {
-  type CloudStorageItemType,
-  CloudStorageItemType as CloudStorageItemTypeMap,
-} from './generated/schemas/cloudStorageItemType';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
 import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
@@ -189,7 +185,9 @@ import type { ItemType } from './itemType';
 export type { HistoryItemType, ItemType } from './itemType';
 export {
   blockNameToItemType,
+  ChannelTypeEnum,
   DEFAULT_ITEM_TYPE,
+  isCloudStorageItem,
   itemTypeToReferenceEntityType,
   stringToItemType,
 } from './itemType';
@@ -246,7 +244,7 @@ export function dssFetch<T extends Record<string, any> = never>(
  * surface it so callers can explain a refusal.
  */
 async function calendarJoinRequestErrorHandler(response: Response) {
-  const body = (await response.json().catch(() => null)) as {
+  const body = (await readJsonBody(response)) as {
     code?: string;
     message?: string;
   } | null;
@@ -390,19 +388,6 @@ type CreateBotTokenResponse = {
 type WithMentionId = { mention_id: string };
 type WithEntity = { entity_type: string; entity_id: string };
 export type ChannelAttachmentType = 'static' | 'dss';
-
-export const ChannelTypeEnum = {
-  Public: ChannelType.public,
-  Private: ChannelType.private,
-  DirectMessage: ChannelType.direct_message,
-  Team: ChannelType.team,
-} as const satisfies Record<string, ChannelType>;
-
-export function isCloudStorageItem(
-  item: ItemType
-): item is CloudStorageItemType {
-  return Object.values(CloudStorageItemTypeMap).includes(item as any);
-}
 
 export type ProcessingResultResponseType<T extends ProcessingResultType> =
   T extends 'PREPROCESS'
@@ -1418,7 +1403,7 @@ export const storageServiceClient = {
       // hardcoding the number. 403 is preserved explicitly; other statuses keep
       // the HTTP_ERROR shape callers branch on.
       errorResponseHandler: async (response) => {
-        const body = (await response.json().catch(() => null)) as {
+        const body = (await readJsonBody(response)) as {
           code?: string;
           maxLength?: number;
         } | null;
@@ -1629,7 +1614,7 @@ export const storageServiceClient = {
     if (!response.ok) {
       try {
         console.error('Failed to fetch raw snippet', await response.text());
-      } catch (_e) {
+      } catch {
         console.error('Failed to fetch raw snippet');
       }
       throw new Error('Failed to fetch raw snippet');

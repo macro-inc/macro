@@ -19,7 +19,7 @@ class RecordedSpan implements Span {
   ): Span | Promise<T> {
     const child = new RecordedSpan(name, this.children);
     this.children.push(child);
-    return operation ? operation(child).finally(() => child.end()) : child;
+    return operation ? runThenEnd(child, operation) : child;
   }
   run<T>(operation: () => T): T {
     return operation();
@@ -41,6 +41,17 @@ class RecordedSpan implements Span {
     this.ended = true;
   }
 }
+async function runThenEnd<T>(
+  span: RecordedSpan,
+  operation: (span: Span) => Promise<T>
+): Promise<T> {
+  try {
+    return await operation(span);
+  } finally {
+    span.end();
+  }
+}
+
 function setup() {
   const root = new RecordedSpan('universal_input.draft');
   vi.spyOn(Telemetry, 'span').mockReturnValue(root);

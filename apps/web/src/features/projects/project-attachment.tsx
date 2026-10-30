@@ -2,6 +2,7 @@ import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { Show } from 'solid-js';
 import { ProjectChip } from './components/project-chip';
 import { openProject } from './open-project';
@@ -19,7 +20,11 @@ export function ProjectAttachment(props: { id: string }) {
 function ProjectAttachmentContent(props: { id: string }) {
   const layout = useSplitLayout();
   const userId = useUserId();
-  const query = useProjectIdentityQuery(() => props.id, userId);
+  const query = useProjectIdentityQuery(
+    getGraphqlSoupClient,
+    () => props.id,
+    userId
+  );
   return (
     <Show
       when={!query.isPending}

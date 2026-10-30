@@ -32,8 +32,9 @@ The root adapters construct production dependencies. `context` defines the
 capabilities; it does not import their implementations. Views consume these
 capabilities, primitives receive narrow inputs, and components render props.
 Core modules remain independent of Solid, service clients, and app state.
-UI rollout gates read `useFeatureFlag` directly where used; do not pass rollout
-booleans through component props or the CRM source contract.
+Only the root adapters read `useFeatureFlag`. Views read rollouts through the
+CRM context (`listsEnabled`, `pipelinesEnabled`, `activityRollout`,
+`databasesRollout`) and pass components plain booleans.
 
 Shared entity representations, transport clients, property editors, and
 collection mechanics remain shared. CRM owns its record queries and cache updates.

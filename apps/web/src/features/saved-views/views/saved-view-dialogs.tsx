@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Dialog, type ManagedDialogProps } from '@ui';
+import type { Client } from '@urql/core';
 import { type Accessor, createEffect, type JSX, on, onCleanup } from 'solid-js';
 import {
   DeleteSavedViewConfirmation,
@@ -15,6 +16,7 @@ import {
 import { toSavedView } from '../queries/saved-views';
 
 type Scope = ManagedDialogProps & {
+  client: () => Client;
   refresh: () => Promise<unknown>;
   viewerId: Accessor<string | undefined>;
   isCurrent: () => boolean;
@@ -57,8 +59,14 @@ export function SavedViewDialog(
     props,
     props.mode === 'edit' ? props.record.ownerId : undefined
   );
-  const create = useCreateSavedView({ refresh: props.refresh });
-  const update = useUpdateSavedView({ refresh: props.refresh });
+  const create = useCreateSavedView({
+    client: props.client,
+    refresh: props.refresh,
+  });
+  const update = useUpdateSavedView({
+    client: props.client,
+    refresh: props.refresh,
+  });
   const mutation = () => (props.mode === 'edit' ? update : create);
   const save = async (name: string, sharedTeamId: string | null) => {
     if (!lifetime.current() || mutation().isPending) return;
@@ -125,7 +133,10 @@ export function DeleteSavedViewDialog(
   }
 ) {
   const lifetime = createDialogLifetime(props, props.record.ownerId);
-  const mutation = useDeleteSavedView({ refresh: props.refresh });
+  const mutation = useDeleteSavedView({
+    client: props.client,
+    refresh: props.refresh,
+  });
   const remove = async () => {
     if (!lifetime.current() || mutation.isPending) return;
     const result = await mutation.mutateAsync({

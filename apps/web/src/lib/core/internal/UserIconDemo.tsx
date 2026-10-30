@@ -1,6 +1,6 @@
+import { seedMockDisplayNames } from '@app/lib/queries/auth/display-name';
 import { UserGroup } from '@core/component/UserGroup';
 import { UserIcon } from '@core/component/UserIcon';
-import { seedMockDisplayNames } from '@core/user/displayName';
 import User from '@icon/system/regular/user.svg?component-solid';
 import { Avatar } from '@ui';
 import { For } from 'solid-js';

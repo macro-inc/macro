@@ -6,6 +6,7 @@
  * the shared document to tests.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { noopChatter } from '@macro-inc/collaboration/collab/chatter';
 import type { SnapshotStore } from '@macro-inc/collaboration/collab/snapshot-store';
 import { InMemoryWALStore } from '@macro-inc/collaboration/collab/wal';
@@ -61,7 +62,12 @@ export function CollabFixture(props: {
   const readonly = props.params.has('readonly');
   const [engine, setEngine] = createSignal<PresentationEngine>();
   const [errors, setErrors] = createSignal<string[]>([]);
-  const deckBytes = fetch(props.deckUrl).then((r) => r.arrayBuffer());
+
+  const fetchDeck = async () => {
+    const response = await fetch(props.deckUrl);
+    return response.arrayBuffer();
+  };
+  const deckBytes = fetchDeck();
 
   const session = createPresentationCollabSession({
     documentId,
@@ -147,12 +153,20 @@ export function CollabFixture(props: {
           <Match when={doc()} keyed>
             {(ready) => {
               let closed = false;
-              void openCollaborativePresentation(ready, {
-                storedFile: new ArrayBuffer(0),
-              }).then(
-                (e) => (closed ? e.close() : setEngine(e)),
-                (e: unknown) => setErrors((list) => [...list, String(e)])
-              );
+              const openEngine = async () => {
+                let e: PresentationEngine;
+                try {
+                  e = await openCollaborativePresentation(ready, {
+                    storedFile: new ArrayBuffer(0),
+                  });
+                } catch (error) {
+                  setErrors((list) => [...list, String(error)]);
+                  return;
+                }
+                if (closed) e.close();
+                else setEngine(e);
+              };
+              fireAndForget(openEngine(), 'pptx-fixture');
               onCleanup(() => {
                 closed = true;
                 engine()?.close();

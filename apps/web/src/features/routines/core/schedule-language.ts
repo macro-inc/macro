@@ -1,4 +1,4 @@
-import { parseTime } from '@core/util/dateSearch/parseTime';
+import { parseTime } from '@app/lib/utils/parse-time';
 import type { ScheduleTriggerDraft } from './routine-triggers';
 
 type ScheduleParts = Pick<

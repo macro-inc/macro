@@ -38,8 +38,6 @@ export interface EmptyStatePanelProps {
   class?: string;
 }
 
-const DEFAULT_GRAPHIC_CLASS = 'h-48 w-48 text-ink-muted';
-
 export function EmptyStatePanel(props: EmptyStatePanelProps) {
   return (
     <div
@@ -82,7 +80,7 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
             <div
               aria-hidden="true"
               class={cn(
-                DEFAULT_GRAPHIC_CLASS,
+                'h-48 w-48 text-ink-muted',
                 'empty-state-graphic mb-2 opacity-70',
                 props.graphicClass
               )}

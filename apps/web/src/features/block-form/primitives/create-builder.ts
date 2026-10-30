@@ -363,7 +363,7 @@ export function createBuilder(options: BuilderOptions) {
         .filter((write) => write.written)
         .map((write) => write.sequence)
     );
-    reading = (async () => {
+    const read = async () => {
       try {
         await options.refetch();
         setPendingWrites((current) =>
@@ -377,7 +377,15 @@ export function createBuilder(options: BuilderOptions) {
       }
       // Writes that landed during the read need a read of their own.
       if (pendingWrites().some((write) => write.written)) reconcile();
-    })().finally(settleIdle);
+    };
+    const readThenSettle = async () => {
+      try {
+        await read();
+      } finally {
+        settleIdle();
+      }
+    };
+    reading = readThenSettle();
   }
 
   /**

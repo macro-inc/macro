@@ -212,125 +212,7 @@ export function buildMenus(args: {
     },
   ];
 
-  const layer: MenuEntry[] = [
-    {
-      label: 'New Layer',
-      shortcut: shiftMod('N'),
-      disabled: !edit,
-      onSelect: r.newLayer,
-      testId: 'psd-menu-new-layer',
-    },
-    { label: 'New Group', disabled: !edit, onSelect: r.newGroup },
-    {
-      label: 'New Fill Layer',
-      disabled: !edit,
-      items: [
-        {
-          label: 'Solid Color',
-          onSelect: () => fireAndForget(r.newFill('solid'), 'psd-editor'),
-        },
-        {
-          label: 'Gradient',
-          onSelect: () => fireAndForget(r.newFill('gradient'), 'psd-editor'),
-        },
-      ],
-    },
-    {
-      label: 'New Adjustment Layer',
-      disabled: !edit,
-      items: ADJUSTMENT_TYPES.map((type) => ({
-        label: ADJUSTMENT_LABELS[type],
-        onSelect: () => fireAndForget(r.newAdjustment(type), 'psd-editor'),
-      })),
-    },
-    'divider',
-    {
-      label: 'Duplicate Layer',
-      disabled: !edit || !can.layer(),
-      onSelect: r.duplicate,
-    },
-    {
-      label: 'Delete Layer',
-      disabled: !edit || !can.layer(),
-      onSelect: r.deleteLayers,
-    },
-    {
-      label: 'Layer via Copy',
-      shortcut: mod('J'),
-      disabled: !edit || !can.pixels(),
-      onSelect: r.layerViaCopy,
-    },
-    {
-      label: 'Layer via Cut',
-      shortcut: shiftMod('J'),
-      disabled: !edit || !can.pixels(),
-      onSelect: r.layerViaCut,
-    },
-    'divider',
-    {
-      label: 'Layer Mask',
-      disabled: !edit || !can.layer(),
-      items: can.mask()
-        ? [
-            { label: 'Disable / Enable', onSelect: r.toggleMask },
-            { label: 'Apply', onSelect: () => r.deleteMask(true) },
-            { label: 'Delete', onSelect: () => r.deleteMask(false) },
-          ]
-        : [
-            {
-              label: 'Reveal All',
-              onSelect: () => r.addMask('revealAll'),
-              testId: 'psd-menu-mask-reveal-all',
-            },
-            { label: 'Hide All', onSelect: () => r.addMask('hideAll') },
-            {
-              label: 'Reveal Selection',
-              disabled: !can.selection(),
-              onSelect: () => r.addMask('revealSelection'),
-            },
-            {
-              label: 'Hide Selection',
-              disabled: !can.selection(),
-              onSelect: () => r.addMask('hideSelection'),
-            },
-          ],
-    },
-    {
-      label: 'Create / Release Clipping Mask',
-      shortcut: k('⌥⌘G', 'Ctrl+Alt+G'),
-      disabled: !edit || !can.layer(),
-      onSelect: r.clippingMask,
-    },
-    'divider',
-    {
-      label: 'Group Layers',
-      shortcut: mod('G'),
-      disabled: !edit || !can.layer(),
-      onSelect: r.group,
-      testId: 'psd-menu-group',
-    },
-    {
-      label: 'Ungroup Layers',
-      shortcut: shiftMod('G'),
-      disabled: !edit || !can.group(),
-      onSelect: r.ungroup,
-    },
-    {
-      label: 'Rasterize',
-      disabled: !edit || !can.layer(),
-      onSelect: r.rasterize,
-    },
-    'divider',
-    {
-      label: 'Merge Down',
-      shortcut: mod('E'),
-      disabled: !edit || !can.mergeDown(),
-      onSelect: r.mergeDown,
-      testId: 'psd-menu-merge-down',
-    },
-    { label: 'Merge Visible', disabled: !edit, onSelect: r.mergeVisible },
-    { label: 'Flatten Image', disabled: !edit, onSelect: r.flatten },
-  ];
+  const layer: MenuEntry[] = buildLayer();
 
   const select: MenuEntry[] = [
     {
@@ -413,4 +295,126 @@ export function buildMenus(args: {
     { title: 'Filter', testId: 'psd-menu-filter', items: filter },
     { title: 'View', testId: 'psd-menu-view', items: viewMenu },
   ];
+
+  function buildLayer(): MenuEntry[] {
+    return [
+      {
+        label: 'New Layer',
+        shortcut: shiftMod('N'),
+        disabled: !edit,
+        onSelect: r.newLayer,
+        testId: 'psd-menu-new-layer',
+      },
+      { label: 'New Group', disabled: !edit, onSelect: r.newGroup },
+      {
+        label: 'New Fill Layer',
+        disabled: !edit,
+        items: [
+          {
+            label: 'Solid Color',
+            onSelect: () => fireAndForget(r.newFill('solid'), 'psd-editor'),
+          },
+          {
+            label: 'Gradient',
+            onSelect: () => fireAndForget(r.newFill('gradient'), 'psd-editor'),
+          },
+        ],
+      },
+      {
+        label: 'New Adjustment Layer',
+        disabled: !edit,
+        items: ADJUSTMENT_TYPES.map((type) => ({
+          label: ADJUSTMENT_LABELS[type],
+          onSelect: () => fireAndForget(r.newAdjustment(type), 'psd-editor'),
+        })),
+      },
+      'divider',
+      {
+        label: 'Duplicate Layer',
+        disabled: !edit || !can.layer(),
+        onSelect: r.duplicate,
+      },
+      {
+        label: 'Delete Layer',
+        disabled: !edit || !can.layer(),
+        onSelect: r.deleteLayers,
+      },
+      {
+        label: 'Layer via Copy',
+        shortcut: mod('J'),
+        disabled: !edit || !can.pixels(),
+        onSelect: r.layerViaCopy,
+      },
+      {
+        label: 'Layer via Cut',
+        shortcut: shiftMod('J'),
+        disabled: !edit || !can.pixels(),
+        onSelect: r.layerViaCut,
+      },
+      'divider',
+      {
+        label: 'Layer Mask',
+        disabled: !edit || !can.layer(),
+        items: can.mask()
+          ? [
+              { label: 'Disable / Enable', onSelect: r.toggleMask },
+              { label: 'Apply', onSelect: () => r.deleteMask(true) },
+              { label: 'Delete', onSelect: () => r.deleteMask(false) },
+            ]
+          : [
+              {
+                label: 'Reveal All',
+                onSelect: () => r.addMask('revealAll'),
+                testId: 'psd-menu-mask-reveal-all',
+              },
+              { label: 'Hide All', onSelect: () => r.addMask('hideAll') },
+              {
+                label: 'Reveal Selection',
+                disabled: !can.selection(),
+                onSelect: () => r.addMask('revealSelection'),
+              },
+              {
+                label: 'Hide Selection',
+                disabled: !can.selection(),
+                onSelect: () => r.addMask('hideSelection'),
+              },
+            ],
+      },
+      {
+        label: 'Create / Release Clipping Mask',
+        shortcut: k('⌥⌘G', 'Ctrl+Alt+G'),
+        disabled: !edit || !can.layer(),
+        onSelect: r.clippingMask,
+      },
+      'divider',
+      {
+        label: 'Group Layers',
+        shortcut: mod('G'),
+        disabled: !edit || !can.layer(),
+        onSelect: r.group,
+        testId: 'psd-menu-group',
+      },
+      {
+        label: 'Ungroup Layers',
+        shortcut: shiftMod('G'),
+        disabled: !edit || !can.group(),
+        onSelect: r.ungroup,
+      },
+      {
+        label: 'Rasterize',
+        disabled: !edit || !can.layer(),
+        onSelect: r.rasterize,
+      },
+      'divider',
+      {
+        label: 'Merge Down',
+        shortcut: mod('E'),
+        disabled: !edit || !can.mergeDown(),
+        onSelect: r.mergeDown,
+        testId: 'psd-menu-merge-down',
+      },
+      { label: 'Merge Visible', disabled: !edit, onSelect: r.mergeVisible },
+      { label: 'Flatten Image', disabled: !edit, onSelect: r.flatten },
+    ];
+  }
 }

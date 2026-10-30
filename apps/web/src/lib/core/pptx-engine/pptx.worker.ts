@@ -448,14 +448,20 @@ async function serve(
 
 scope.addEventListener('message', (event: MessageEvent<PptxRequest>) => {
   const request = event.data;
-  queue = queue.then(async () => {
+
+  const serveAfterQueued = async () => {
+    await queue;
     try {
       const [response, transfer] = await serve(request);
       scope.postMessage(response, transfer);
     } catch (error) {
       let message = error instanceof Error ? error.message : String(error);
       if (isWasmTrap(error)) {
-        await recover().catch(() => {});
+        try {
+          await recover();
+        } catch {
+          // The message below still tells the caller what happened.
+        }
         message =
           'The presentation engine hit a problem with this request and was restarted. Your changes are kept.';
       }
@@ -466,5 +472,6 @@ scope.addEventListener('message', (event: MessageEvent<PptxRequest>) => {
       };
       scope.postMessage(response);
     }
-  });
+  };
+  queue = serveAfterQueued();
 });

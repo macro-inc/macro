@@ -80,6 +80,10 @@ vi.mock('@service-storage/graphql-soup', () => ({
   mapGraphqlProperties: () => [],
 }));
 
+vi.mock('@service-storage/graphql-properties', () => ({
+  mapGraphqlProperties: () => [],
+}));
+
 import { queryClient } from '@queries/client';
 import {
   type ProjectsContext,

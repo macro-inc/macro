@@ -13,6 +13,7 @@ import type {
   ShapeOutline,
   SlideOutline,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import type { Point } from '../core/geometry';
 import {
@@ -110,6 +111,19 @@ const placeOf = (r: Rect): Place => ({
  * pixels, or `null` when the engine cannot draw layers (or there is too
  * much to animate) and a fade should play instead.
  */
+/** A shape's text layout, or `null` when the engine can't read it. */
+async function textLayoutOrNull(
+  engine: PresentationEngine,
+  index: number,
+  shape: number
+) {
+  try {
+    return await engine.textLayout(index, shape);
+  } catch {
+    return null;
+  }
+}
+
 export async function prepareMorph(
   engine: PresentationEngine,
   deck: DeckOutline,
@@ -200,8 +214,8 @@ export async function prepareMorph(
     )
       return undefined;
     const [la, lb] = await Promise.all([
-      engine.textLayout(from, pair.from.id).catch(() => null),
-      engine.textLayout(to, pair.to.id).catch(() => null),
+      textLayoutOrNull(engine, from, pair.from.id),
+      textLayoutOrNull(engine, to, pair.to.id),
     ]);
     if (!la || !lb) return undefined;
     const ua = textUnits(la, by);
@@ -416,8 +430,16 @@ export function playMorph(
     if (done) onDone?.();
     overlay.remove();
   };
-  void Promise.all(running.map((a) => a.finished))
-    .then(() => end(true))
-    .catch(() => {});
+
+  const endWhenFinished = async () => {
+    try {
+      await Promise.all(running.map((a) => a.finished));
+    } catch {
+      // Cancelled by `end`.
+      return;
+    }
+    end(true);
+  };
+  fireAndForget(endWhenFinished(), 'pptx-slideshow');
   return { finish: () => end(true), cancel: () => end(false) };
 }

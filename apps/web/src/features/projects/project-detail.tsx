@@ -4,7 +4,7 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
-import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import type { ComposeTaskProps } from '@app/features/task-composer/context/composer';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,

@@ -1,5 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { startDetached } from '@core/util/startDetached';
 import * as Effect from 'effect/Effect';
+import { match } from 'ts-pattern';
 import { APP_BUILD_TIME } from '../app-build';
 import type { CacheRequest, WorkerMessage } from '../protocol';
 import {
@@ -111,6 +113,11 @@ const withVersion = <
     coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
     ...value,
   }) as unknown as T;
+
+type CoordinatorMessage<K extends CoordinatorToTabEnvelope['kind']> = Extract<
+  CoordinatorToTabEnvelope,
+  { kind: K }
+>;
 
 const defaultSharedWorkerFactory = (
   scope: string,
@@ -228,14 +235,7 @@ export class CacheCoordinatorPageAdapter {
       this.resolveRegistration = resolve;
       this.rejectRegistration = reject;
     });
-    void this.connect().catch((error: unknown) => {
-      // Explicit disposal can settle start while lock acquisition is pending.
-      // A later lock-manager rejection belongs to that closed attempt.
-      if (this.closed) return;
-      this.failTerminal(
-        error instanceof Error ? error : new Error(String(error))
-      );
-    });
+    fireAndForget(this.connectOrFail(), 'graphql-cache-coordinator');
     return this.startPromise;
   }
 
@@ -262,7 +262,8 @@ export class CacheCoordinatorPageAdapter {
     }
     if (!this.registered) {
       this.queuedRequests.push(request);
-      void this.start().catch(() => undefined);
+      // A failed start reaches callers through failTerminal.
+      startDetached(this.start(), () => {});
       return;
     }
     this.postCoordinator(
@@ -394,6 +395,19 @@ export class CacheCoordinatorPageAdapter {
     this.finishDispose();
   }
 
+  private async connectOrFail(): Promise<void> {
+    try {
+      await this.connect();
+    } catch (error) {
+      // Explicit disposal can settle start while lock acquisition is pending.
+      // A later lock-manager rejection belongs to that closed attempt.
+      if (this.closed) return;
+      this.failTerminal(
+        error instanceof Error ? error : new Error(String(error))
+      );
+    }
+  }
+
   private async connect(): Promise<void> {
     const lockManager = this.lockManager ?? navigator.locks;
     if (
@@ -427,20 +441,29 @@ export class CacheCoordinatorPageAdapter {
     const heldUntilReleased = new Promise<void>((resolve) => {
       this.releaseLivenessLock = resolve;
     });
-    void lockManager
-      .request(livenessLockName, { mode: 'exclusive' }, async (lock) => {
-        if (!lock) {
-          acquisitionFailed?.(new Error('tab liveness lock was not acquired'));
-          return;
-        }
-        acquired?.();
-        await heldUntilReleased;
-      })
-      .catch((error: unknown) => {
+    const holdLivenessLock = async () => {
+      try {
+        await lockManager.request(
+          livenessLockName,
+          { mode: 'exclusive' },
+          async (lock) => {
+            if (!lock) {
+              acquisitionFailed?.(
+                new Error('tab liveness lock was not acquired')
+              );
+              return;
+            }
+            acquired?.();
+            await heldUntilReleased;
+          }
+        );
+      } catch (error) {
         acquisitionFailed?.(
           error instanceof Error ? error : new Error(String(error))
         );
-      });
+      }
+    };
+    fireAndForget(holdLivenessLock(), 'graphql-cache-coordinator');
     try {
       await acquiredPromise;
     } catch (error) {
@@ -514,11 +537,12 @@ export class CacheCoordinatorPageAdapter {
       } catch {
         // The transport still owns endpoint closure below.
       }
-      void Effect.runPromise(transport.close()).catch(() => undefined);
+      startDetached(Effect.runPromise(transport.close()), () => {});
       return;
     }
     this.coordinatorConnection = { worker, transport };
-    void transport.ready.catch(() => undefined);
+    // Transport failures arrive through its onError.
+    startDetached(transport.ready, () => {});
     this.lastVisibility = this.visibility?.visibilityState !== 'hidden';
     this.postCoordinator(
       withVersion<TabToCoordinatorEnvelope>({
@@ -539,159 +563,44 @@ export class CacheCoordinatorPageAdapter {
       this.failTerminal(new Error(parsed.error));
       return;
     }
-    const message = parsed.value;
-    if (message.kind === 'cache-read-availability') {
-      if (!this.registered) {
-        this.failTerminal(new Error('owner handoff preceded registration'));
-      } else if (
-        message.ownerEpoch >=
-        Math.max(this.latestEngineReplacedEpoch, this.latestReadStateEpoch)
-      ) {
-        this.latestReadStateEpoch = message.ownerEpoch;
-        this.options.onCacheReadAvailabilityChanged?.(message.state);
-      }
-      return;
-    }
-    switch (message.kind) {
-      case 'registered':
-        if (message.tabId !== this.tabId || this.registered) {
-          this.failTerminal(
-            new Error('invalid coordinator registration acknowledgement')
-          );
-          return;
-        }
-        this.registered = true;
-        this.resolveRegistration?.();
-        this.resolveRegistration = undefined;
-        this.rejectRegistration = undefined;
-        this.registerPagehide();
-        this.visibility?.addEventListener(
-          'visibilitychange',
-          this.onVisibilityChange
-        );
-        this.onVisibilityChange();
-        for (const request of this.queuedRequests.splice(0)) {
-          this.postMessage(request);
-        }
-        break;
-      case 'become-owner':
-        if (
-          message.tabId !== this.tabId ||
-          message.scope !== this.options.scope
-        ) {
-          this.failTerminal(
-            new Error('coordinator elected the wrong page or scope')
-          );
-          return;
-        }
-        if (
-          message.ownerEpoch <= this.highestOwnerEpochSeen ||
-          this.terminatedOwnerEpochs.has(message.ownerEpoch)
-        ) {
-          this.failTerminal(
-            new Error(
-              `coordinator elected stale or duplicate owner epoch ${message.ownerEpoch}`
-            )
-          );
-          return;
-        }
-        this.highestOwnerEpochSeen = message.ownerEpoch;
-        this.spawnEngine(message);
-        break;
-      case 'cache-message':
-        this.emit(message.message);
-        break;
-      case 'terminate-engine':
-        if (message.tabId !== this.tabId) {
-          this.failTerminal(new Error('coordinator terminated the wrong page'));
-          return;
-        }
-        if (
-          !this.terminateEngine(message.ownerEpoch, message.reason, false) &&
-          !this.terminatedOwnerEpochs.has(message.ownerEpoch)
-        ) {
-          this.failTerminal(
-            new Error('coordinator terminated an unknown owner epoch')
-          );
-        }
-        break;
-      case 'retire-complete':
-        if (
-          message.tabId !== this.tabId ||
-          !this.terminateEngine(
-            message.ownerEpoch,
-            'graceful engine retirement completed',
-            false
-          )
-        ) {
-          this.failTerminal(
-            new Error('coordinator retired the wrong page or owner epoch')
-          );
-          return;
-        }
-        this.finishDispose();
-        break;
-      case 'engine-startup': {
-        if (!this.registered) {
-          this.failTerminal(new Error('engine startup preceded registration'));
-          return;
-        }
-        const previous = this.startupProgress;
-        if (
-          previous &&
-          (message.ownerEpoch < previous.ownerEpoch ||
-            (message.ownerEpoch === previous.ownerEpoch &&
-              message.phase === previous.phase))
-        )
-          return;
-        if (
-          previous?.ownerEpoch === message.ownerEpoch &&
-          ENGINE_STARTUP_PHASES.indexOf(message.phase) <
-            ENGINE_STARTUP_PHASES.indexOf(previous.phase)
-        ) {
-          this.failTerminal(new Error('engine startup phase moved backwards'));
-          return;
-        }
-        this.startupProgress = message;
-        this.options.onStartupProgress?.(message);
-        break;
-      }
-      case 'engine-replaced':
-        if (
-          message.ownerEpoch <= this.latestEngineReplacedEpoch ||
-          message.ownerEpoch < this.latestReadStateEpoch
-        )
-          return;
-        this.latestEngineReplacedEpoch = message.ownerEpoch;
-        this.highestOwnerEpochSeen = Math.max(
-          this.highestOwnerEpochSeen,
-          message.ownerEpoch
-        );
-        this.options.onEngineReplaced?.(
-          message.ownerEpoch,
-          message.openOutcome
-        );
-        break;
-      case 'protocol-error': {
+    match(parsed.value)
+      .with({ kind: 'cache-read-availability' }, (message) =>
+        this.onCacheReadAvailability(message)
+      )
+      .with({ kind: 'registered' }, (message) => this.onRegistered(message))
+      .with({ kind: 'become-owner' }, (message) => this.onBecomeOwner(message))
+      .with({ kind: 'cache-message' }, (message) => this.emit(message.message))
+      .with({ kind: 'terminate-engine' }, (message) =>
+        this.onTerminateEngine(message)
+      )
+      .with({ kind: 'retire-complete' }, (message) =>
+        this.onRetireComplete(message)
+      )
+      .with({ kind: 'engine-startup' }, (message) =>
+        this.onEngineStartup(message)
+      )
+      .with({ kind: 'engine-replaced' }, (message) =>
+        this.onEngineReplaced(message)
+      )
+      .with({ kind: 'protocol-error' }, (message) => {
         const error = new Error(message.error);
         if (!this.registered) this.failTerminal(error);
         else this.options.onProtocolError?.(error);
-        break;
-      }
-      case 'terminal-error':
+      })
+      .with({ kind: 'terminal-error' }, (message) =>
         this.failTerminal(
           message.storageUntouched
             ? new CacheBootstrapExhaustedError(message.error)
             : new Error(message.error)
-        );
-        break;
-      case 'cache-unavailable':
-        this.options.onCacheUnavailable?.(message.reason);
-        break;
-      case 'cache-superseded':
-        this.options.onCacheSuperseded?.(message.reason);
-        break;
-      case 'remove-stale-databases':
+        )
+      )
+      .with({ kind: 'cache-unavailable' }, (message) =>
+        this.options.onCacheUnavailable?.(message.reason)
+      )
+      .with({ kind: 'cache-superseded' }, (message) =>
+        this.options.onCacheSuperseded?.(message.reason)
+      )
+      .with({ kind: 'remove-stale-databases' }, (message) => {
         // Only the engine's current owner cleans up, once per page.
         if (
           message.tabId === this.tabId &&
@@ -702,8 +611,143 @@ export class CacheCoordinatorPageAdapter {
             'graphql-cache-coordinator'
           );
         }
-        break;
+      })
+      .exhaustive(() => undefined);
+  }
+
+  private onCacheReadAvailability(
+    message: CoordinatorMessage<'cache-read-availability'>
+  ): void {
+    if (!this.registered) {
+      this.failTerminal(new Error('owner handoff preceded registration'));
+    } else if (
+      message.ownerEpoch >=
+      Math.max(this.latestEngineReplacedEpoch, this.latestReadStateEpoch)
+    ) {
+      this.latestReadStateEpoch = message.ownerEpoch;
+      this.options.onCacheReadAvailabilityChanged?.(message.state);
     }
+  }
+
+  private onRegistered(message: CoordinatorMessage<'registered'>): void {
+    if (message.tabId !== this.tabId || this.registered) {
+      this.failTerminal(
+        new Error('invalid coordinator registration acknowledgement')
+      );
+      return;
+    }
+    this.registered = true;
+    this.resolveRegistration?.();
+    this.resolveRegistration = undefined;
+    this.rejectRegistration = undefined;
+    this.registerPagehide();
+    this.visibility?.addEventListener(
+      'visibilitychange',
+      this.onVisibilityChange
+    );
+    this.onVisibilityChange();
+    for (const request of this.queuedRequests.splice(0)) {
+      this.postMessage(request);
+    }
+  }
+
+  private onBecomeOwner(message: CoordinatorMessage<'become-owner'>): void {
+    if (message.tabId !== this.tabId || message.scope !== this.options.scope) {
+      this.failTerminal(
+        new Error('coordinator elected the wrong page or scope')
+      );
+      return;
+    }
+    if (
+      message.ownerEpoch <= this.highestOwnerEpochSeen ||
+      this.terminatedOwnerEpochs.has(message.ownerEpoch)
+    ) {
+      this.failTerminal(
+        new Error(
+          `coordinator elected stale or duplicate owner epoch ${message.ownerEpoch}`
+        )
+      );
+      return;
+    }
+    this.highestOwnerEpochSeen = message.ownerEpoch;
+    this.spawnEngine(message);
+  }
+
+  private onTerminateEngine(
+    message: CoordinatorMessage<'terminate-engine'>
+  ): void {
+    if (message.tabId !== this.tabId) {
+      this.failTerminal(new Error('coordinator terminated the wrong page'));
+      return;
+    }
+    if (
+      !this.terminateEngine(message.ownerEpoch, message.reason, false) &&
+      !this.terminatedOwnerEpochs.has(message.ownerEpoch)
+    ) {
+      this.failTerminal(
+        new Error('coordinator terminated an unknown owner epoch')
+      );
+    }
+  }
+
+  private onRetireComplete(
+    message: CoordinatorMessage<'retire-complete'>
+  ): void {
+    if (
+      message.tabId !== this.tabId ||
+      !this.terminateEngine(
+        message.ownerEpoch,
+        'graceful engine retirement completed',
+        false
+      )
+    ) {
+      this.failTerminal(
+        new Error('coordinator retired the wrong page or owner epoch')
+      );
+      return;
+    }
+    this.finishDispose();
+  }
+
+  private onEngineStartup(message: CoordinatorMessage<'engine-startup'>): void {
+    if (!this.registered) {
+      this.failTerminal(new Error('engine startup preceded registration'));
+      return;
+    }
+    const previous = this.startupProgress;
+    if (
+      previous &&
+      (message.ownerEpoch < previous.ownerEpoch ||
+        (message.ownerEpoch === previous.ownerEpoch &&
+          message.phase === previous.phase))
+    )
+      return;
+    if (
+      previous?.ownerEpoch === message.ownerEpoch &&
+      ENGINE_STARTUP_PHASES.indexOf(message.phase) <
+        ENGINE_STARTUP_PHASES.indexOf(previous.phase)
+    ) {
+      this.failTerminal(new Error('engine startup phase moved backwards'));
+      return;
+    }
+    this.startupProgress = message;
+    this.options.onStartupProgress?.(message);
+  }
+
+  private onEngineReplaced(
+    message: CoordinatorMessage<'engine-replaced'>
+  ): void {
+    if (
+      message.ownerEpoch <= this.latestEngineReplacedEpoch ||
+      message.ownerEpoch < this.latestReadStateEpoch
+    )
+      return;
+    this.latestEngineReplacedEpoch = message.ownerEpoch;
+    this.highestOwnerEpochSeen = Math.max(
+      this.highestOwnerEpochSeen,
+      message.ownerEpoch
+    );
+    this.options.onEngineReplaced?.(message.ownerEpoch, message.openOutcome);
   }
 
   /** Lists OPFS first so the second WASM instance starts only when needed. */
@@ -1041,7 +1085,7 @@ export class CacheCoordinatorPageAdapter {
     } catch {
       // Continue closing even if a test double rejects detachment.
     }
-    void Effect.runPromise(connection.transport.close()).catch(() => undefined);
+    startDetached(Effect.runPromise(connection.transport.close()), () => {});
   }
 
   private closePort(port: Pick<MessagePort, 'close'>): void {

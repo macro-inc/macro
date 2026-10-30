@@ -1,3 +1,4 @@
+import { startDetached } from '@core/util/startDetached';
 import { databaseOwnerLockName } from '../coordinator-protocol';
 import type {
   BrowserHarnessCommand,
@@ -245,10 +246,17 @@ const run = async (): Promise<Record<string, unknown>> => {
     (tabId) => tabId !== first.tabId && tabId !== second.tabId
   );
   assert(requester, 'missing abrupt-loss requester');
-  const slow = command(requester, { kind: 'slow-read' }).then(
-    () => '',
-    (error: unknown) => (error instanceof Error ? error.message : String(error))
-  );
+
+  /** The slow read's failure message, or '' when it succeeded. */
+  const slowReadFailure = async (): Promise<string> => {
+    try {
+      await command(requester, { kind: 'slow-read' });
+      return '';
+    } catch (error) {
+      return error instanceof Error ? error.message : String(error);
+    }
+  };
+  const slow = slowReadFailure();
   await waitUntil('slow route start', () =>
     telemetry.some(
       (event) =>
@@ -401,14 +409,13 @@ function expectMiss(value: unknown): void {
   );
 }
 
-void run().then(
-  (result) => {
-    resultElement.dataset.status = 'passed';
-    resultElement.textContent = JSON.stringify(result, null, 2);
-  },
-  (error: unknown) => {
-    resultElement.dataset.status = 'failed';
-    resultElement.textContent =
-      error instanceof Error ? (error.stack ?? error.message) : String(error);
-  }
-);
+const showResult = async () => {
+  const result = await run();
+  resultElement.dataset.status = 'passed';
+  resultElement.textContent = JSON.stringify(result, null, 2);
+};
+startDetached(showResult(), (error) => {
+  resultElement.dataset.status = 'failed';
+  resultElement.textContent =
+    error instanceof Error ? (error.stack ?? error.message) : String(error);
+});

@@ -6,6 +6,7 @@
  * arming it.
  */
 
+import type { TextLayoutInfo } from '@core/pptx-engine/types';
 import { createSignal } from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';
 import {
@@ -60,9 +61,14 @@ export function createFormatPainter(options: {
     const shape = editor.selectedShape();
     if (!shape || shape.kind === 'table' || shape.kind === 'chart')
       return false;
-    const layout = shape.textEditable
-      ? await engine.textLayout(slide.index, shape.id).catch(() => null)
-      : null;
+    let layout: TextLayoutInfo | null = null;
+    if (shape.textEditable) {
+      try {
+        layout = await engine.textLayout(slide.index, shape.id);
+      } catch {
+        // Without a layout, only the shape's look is copied.
+      }
+    }
     const paragraph = layout?.styles[0];
     setSource({
       slide: slide.id,

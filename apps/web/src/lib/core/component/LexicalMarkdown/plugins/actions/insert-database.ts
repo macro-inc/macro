@@ -1,5 +1,8 @@
+import {
+  trackMention,
+  untrackMention,
+} from '@app/lib/queries/storage/mentions';
 import { toast } from '@core/component/Toast/Toast';
-import { trackMention, untrackMention } from '@core/signal/mention';
 import {
   $convertMentionToCard,
   $createAwaitNode,

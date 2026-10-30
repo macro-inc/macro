@@ -14,6 +14,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { makePersisted } from '@solid-primitives/storage';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
+import { readJsonBody } from '../read-json-body';
 import type {
   AiPlanCatalog,
   AiUsageSnapshot,
@@ -215,14 +216,7 @@ const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERR
   async function handleCursorApiKeyErrorResponse(response) {
     // Falls back to the status when the body is not the shape we expect: a
     // failure to parse an error must not replace the error.
-    const message = await response
-      .json()
-      .then((body: unknown) =>
-        typeof body === 'object' && body !== null && 'message' in body
-          ? String((body as { message: unknown }).message)
-          : undefined
-      )
-      .catch(() => undefined);
+    const message = await readErrorMessage(response);
 
     return {
       code: 'CURSOR_API_KEY_ERROR',
@@ -805,7 +799,7 @@ export const authServiceClient = {
         }),
         errorResponseHandler: async (response) => {
           if (response.status === 409) {
-            const body: unknown = await response.json().catch(() => null);
+            const body = await readJsonBody(response);
             return {
               code: 'CONFLICT',
               message:
@@ -1338,10 +1332,10 @@ export const authServiceClient = {
         // verbatim.
         errorResponseHandler: async (response) => {
           if (response.status === 400) {
-            const message = await response
-              .json()
-              .then((body) => body?.message)
-              .catch(() => undefined);
+            const body = (await readJsonBody(response)) as {
+              message?: unknown;
+            } | null;
+            const message = body?.message;
             return {
               code: 'GENERIC_DOMAIN_NOT_ALLOWED',
               message:

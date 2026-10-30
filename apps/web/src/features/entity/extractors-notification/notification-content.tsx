@@ -5,6 +5,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CheckIcon from '@icon/system/regular/check.svg';
 import {
   type NotificationStack,
@@ -15,10 +16,7 @@ import { Button } from '@ui';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Notification } from '../types/notification';
 import { extractMessageContent } from '../utils/notification';
-import {
-  reportNotificationActionError,
-  useNotificationActions,
-} from './notification-actions';
+import { useNotificationActions } from './notification-actions';
 
 interface NotificationContentProps {
   notification?: Notification;
@@ -77,7 +75,7 @@ export function DocumentMentionPill(props: {
         tooltip="Mark as done"
         onClick={(e) => {
           e.stopPropagation();
-          markAsDone().catch(reportNotificationActionError);
+          fireAndForget(markAsDone(), 'notifications');
         }}
       >
         <CheckIcon class="size-2.5" />

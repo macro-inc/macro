@@ -27,7 +27,5 @@ ignores:
   - '**/test/**'
   - '**/tests/**'
   - '**/browser-test/**'
-  # Being rewritten by the Tauri IPC teardown fix (#8207); drop once it lands.
-  - packages/collaboration/src/websocket/platform/tauri-websocket.ts
 rule:
   pattern: $MATCH.exhaustive()

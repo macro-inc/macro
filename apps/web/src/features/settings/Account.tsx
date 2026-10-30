@@ -1,6 +1,11 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { AccountDeletionReason } from '@app/lib/analytics/app-events';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import {
+  type ProfilePictureItem,
+  useProfilePictureUrl,
+} from '@app/lib/queries/auth/profile-pictures';
+import { createStaticFile } from '@app/lib/queries/items/create';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { toast } from '@core/component/Toast/Toast';
@@ -19,11 +24,6 @@ import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import {
-  type ProfilePictureItem,
-  useProfilePictureUrl,
-} from '@core/signal/profilePicture';
-import { createStaticFile } from '@core/util/create';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openFilePicker } from '@core/util/upload';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -41,10 +41,12 @@ import {
 } from '@macro/tauri';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import {
-  invalidateOwnUserName,
-  useOwnUserName,
-} from '@queries/auth/user-name-self';
-import { authServiceClient } from '@service-auth/client';
+  deleteAccount,
+  updateProfilePicture,
+  updateUserName,
+} from '@queries/auth/requests';
+import { useOwnUserName } from '@queries/auth/user-name-self';
+
 import { invoke } from '@tauri-apps/api/core';
 import { Button, Dialog, Dropdown, HoldButton, Panel, Tooltip } from '@ui';
 import {
@@ -91,7 +93,7 @@ async function uploadProfilePicture(
   try {
     const id = await createStaticFile(file);
     const url = staticFileIdEndpoint(id);
-    const response = await authServiceClient.putProfilePicture({ url });
+    const response = await updateProfilePicture({ url });
     if (response.isErr()) {
       return toast.failure('Failed to upload profile picture');
     }
@@ -103,7 +105,7 @@ async function uploadProfilePicture(
 
 async function removeProfilePicture(): Promise<boolean> {
   try {
-    const response = await authServiceClient.putProfilePicture({ url: '' });
+    const response = await updateProfilePicture({ url: '' });
     if (response.isErr()) {
       toast.failure('Failed to remove profile picture');
       return false;
@@ -156,14 +158,13 @@ async function saveUserName(
 ): Promise<boolean> {
   setValue(value); // optimistic
   try {
-    const res = await authServiceClient.putUserName(
+    const res = await updateUserName(
       field === 'first_name' ? { first_name: value } : { last_name: value }
     );
     if (res.isErr()) {
       setValue(prev); // rollback on a returned error
       return false;
     }
-    fireAndForget(invalidateOwnUserName(), 'account-settings');
     return true;
   } catch {
     setValue(prev); // rollback if the call throws before returning a Result
@@ -416,7 +417,7 @@ export function Account() {
           );
           setDeleteFeedbackCaptured(true);
         },
-        deleteUser: () => authServiceClient.deleteUser(),
+        deleteUser: () => deleteAccount(),
         logout,
       });
 
@@ -817,9 +818,14 @@ function bundleUpdateAction(
   status: BundleUpdateStatus
 ): { label: string; action: () => void } | null {
   const grantBundleUpdate = () =>
-    invoke('grant_bundle_update', { approved: true }).catch(console.error);
-  const checkForUpdate = () => invoke('check_for_update').catch(console.error);
-  const performUpdate = () => invoke('perform_update').catch(console.error);
+    fireAndForget(
+      invoke('grant_bundle_update', { approved: true }),
+      'native-updates'
+    );
+  const checkForUpdate = () =>
+    fireAndForget(invoke('check_for_update'), 'native-updates');
+  const performUpdate = () =>
+    fireAndForget(invoke('perform_update'), 'native-updates');
 
   switch (status.status) {
     case 'Idle':

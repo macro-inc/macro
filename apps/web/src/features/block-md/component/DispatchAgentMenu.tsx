@@ -16,7 +16,11 @@ import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ZedIcon from '@icon/wide-zed-ide.svg';
 import { fetchDocumentThreads } from '@queries/messages/document-messages';
-import { storageServiceClient } from '@service-storage/client';
+import {
+  fetchDocumentBranchName,
+  fetchDocumentShortId,
+} from '@queries/storage/requests';
+
 import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
@@ -80,7 +84,7 @@ function promptThreadLines(threads: PromptThread[]): string[] {
 }
 
 async function fetchBranchName(documentId: string) {
-  const result = await storageServiceClient.getDocumentBranchName({
+  const result = await fetchDocumentBranchName({
     documentId,
   });
   if (!result.isOk()) {
@@ -99,7 +103,7 @@ async function generateDocumentPrompt(
   content: string,
   threads: PromptThread[]
 ): Promise<string> {
-  const result = await storageServiceClient.getDocumentShortId({ documentId });
+  const result = await fetchDocumentShortId({ documentId });
   if (!result.isOk()) {
     throw new Error('Failed to fetch short id');
   }

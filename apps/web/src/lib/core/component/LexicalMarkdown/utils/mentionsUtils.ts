@@ -1,7 +1,7 @@
+import { trackMention } from '@app/lib/queries/storage/mentions';
 import type { BlockAlias, BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { EntityItem, QuickAccessItem } from '@core/context/quickAccess';
-import { trackMention } from '@core/signal/mention';
 import type { ChannelWithParticipants, IUser } from '@core/user';
 import type { ParsedDate } from '@core/util/dateParser';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';

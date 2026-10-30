@@ -13,9 +13,10 @@ import {
   AgentSessionAccessDenied,
   type AgentSessionRecord,
   type IssueResult,
-} from '@core/agent-session/AgentSession';
+} from '@app/lib/queries/agent-session/agent-session';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
+import { fetchAgentSession } from '@queries/agent-session/requests';
 import {
   subscribeAgentSessionRenamed,
   subscribeAgentSessionUpdated,
@@ -26,7 +27,6 @@ import type {
   SessionMetadata,
   TurnState,
 } from '@service-agent-fold/generated/types';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentAction,
   AgentSessionResponse,
@@ -303,24 +303,23 @@ export function createAgentSession(
     subscribeAgentSessionRenamed((event) => {
       if (event.agentSessionId !== sessionId()) return;
       const run = ++renameRefresh;
-      fireAndForget(
-        agentHarnessServiceClient.get(event.agentSessionId).then((session) => {
-          if (
-            session.isErr() ||
-            run !== renameRefresh ||
-            event.agentSessionId !== sessionId()
-          )
-            return;
-          latestRename = {
-            agentSessionId: event.agentSessionId,
-            name: session.value.name,
-          };
-          mutate((current) =>
-            current ? { ...current, name: session.value.name } : current
-          );
-        }),
-        'agent-session'
-      );
+      const refreshName = async () => {
+        const session = await fetchAgentSession(event.agentSessionId);
+        if (
+          session.isErr() ||
+          run !== renameRefresh ||
+          event.agentSessionId !== sessionId()
+        )
+          return;
+        latestRename = {
+          agentSessionId: event.agentSessionId,
+          name: session.value.name,
+        };
+        mutate((current) =>
+          current ? { ...current, name: session.value.name } : current
+        );
+      };
+      fireAndForget(refreshName(), 'agent-session');
     })
   );
 
@@ -329,22 +328,18 @@ export function createAgentSession(
     subscribeAgentSessionUpdated((event) => {
       if (event.agentSessionId !== sessionId()) return;
       const run = ++updateRefresh;
-      fireAndForget(
-        (async () => {
-          const session = await agentHarnessServiceClient.get(
-            event.agentSessionId
-          );
-          if (
-            session.isErr() ||
-            run !== updateRefresh ||
-            event.agentSessionId !== sessionId()
-          ) {
-            return;
-          }
-          mutate((current) => (current ? session.value : current));
-        })(),
-        'agent-session'
-      );
+      const refreshSession = async () => {
+        const session = await fetchAgentSession(event.agentSessionId);
+        if (
+          session.isErr() ||
+          run !== updateRefresh ||
+          event.agentSessionId !== sessionId()
+        ) {
+          return;
+        }
+        mutate((current) => (current ? session.value : current));
+      };
+      fireAndForget(refreshSession(), 'agent-session');
     })
   );
 

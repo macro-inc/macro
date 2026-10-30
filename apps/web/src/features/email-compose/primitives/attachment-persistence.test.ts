@@ -48,9 +48,12 @@ describe('draft attachment persistence', () => {
     state.form.attachments.add({ type: 'local', file });
     const first = state.persistence.upload('draft');
     let secondDone = false;
-    const second = state.persistence.upload('draft').then(() => {
+
+    const uploadSecond = async () => {
+      await state.persistence.upload('draft');
       secondDone = true;
-    });
+    };
+    const second = uploadSecond();
     await Promise.resolve();
     expect(secondDone).toBe(false);
     expect(state.persistence.uploading()).toBe(true);

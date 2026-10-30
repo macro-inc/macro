@@ -13,7 +13,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
-import { ChannelTypeEnum } from '@service-storage/client';
+import { ChannelTypeEnum } from '@service-storage/itemType';
 import { createSignal, onCleanup } from 'solid-js';
 
 type UseChannelBotManagementOptions = {

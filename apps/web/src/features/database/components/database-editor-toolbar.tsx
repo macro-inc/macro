@@ -37,7 +37,7 @@ export function DatabaseEditorToolbar(props: {
   const groupColumns = () => boardGroupColumns(props.columns);
   return (
     <div
-      class="@container/view-toolbar shrink-0 bg-canvas-base [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
+      class="@container/view-toolbar shrink-0 bg-canvas-base"
       data-database-toolbar
     >
       <div class="flex items-center gap-2 px-4 py-1.5 @max-[520px]/view-toolbar:flex-wrap">

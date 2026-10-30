@@ -185,18 +185,8 @@ export function invitationSchedule(
     hour12,
     timeZone: zone,
   });
-  const end =
-    invite.end && invite.end.kind === start.kind
-      ? new Date(
-          invite.end.kind === 'zoned'
-            ? invite.end.value
-            : `${invite.end.value}Z`
-        )
-      : undefined;
-  const endLabel =
-    end && Number.isFinite(end.getTime())
-      ? `${dateFormat.format(end) === dateFormat.format(date) ? '' : `${dateFormat.format(end)} · `}${clock.format(end)}`
-      : undefined;
+  const end = buildEnd(start);
+  const endLabel = buildEndLabel();
   const timeZoneName =
     start.kind === 'zoned'
       ? new Intl.DateTimeFormat(undefined, {
@@ -214,4 +204,20 @@ export function invitationSchedule(
       ? `Timezone unresolved: ${start.time_zone}. Check the original invitation.`
       : 'Floating time — no timezone supplied.',
   };
+
+  function buildEnd(start: NonNullable<typeof invite.start>) {
+    return invite.end && invite.end.kind === start.kind
+      ? new Date(
+          invite.end.kind === 'zoned'
+            ? invite.end.value
+            : `${invite.end.value}Z`
+        )
+      : undefined;
+  }
+
+  function buildEndLabel() {
+    return end && Number.isFinite(end.getTime())
+      ? `${dateFormat.format(end) === dateFormat.format(date) ? '' : `${dateFormat.format(end)} · `}${clock.format(end)}`
+      : undefined;
+  }
 }

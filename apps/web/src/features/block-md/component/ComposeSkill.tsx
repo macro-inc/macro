@@ -1,3 +1,4 @@
+import { createSkill } from '@app/lib/queries/items/create';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -17,7 +18,7 @@ import {
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { createSkill } from '@core/util/create';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
@@ -25,7 +26,6 @@ import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
 import SplitIcon from '@icon/system/regular/square-half.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { mergeRegister } from '@lexical/utils';
-import { Telemetry } from '@macro-inc/observability';
 import { Button, Hotkey, Scroll } from '@ui';
 import {
   $getRoot,
@@ -335,9 +335,7 @@ export function ComposeSkill(props: ComposeSkillProps) {
     scopeId: composeHotkeyScope,
     description: 'Create skill',
     keyDownHandler: () => {
-      handleCreateSkill().catch((error) =>
-        Telemetry.error(error, { surface: 'compose-skill' })
-      );
+      fireAndForget(handleCreateSkill(), 'compose-skill');
       return true;
     },
     runWithInputFocused: true,

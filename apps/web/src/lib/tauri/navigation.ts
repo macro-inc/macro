@@ -6,7 +6,7 @@ import { Telemetry } from '@macro-inc/observability';
 import { triggerNotificationNavigation } from '@notifications/notification-navigation-intent';
 import { useNavigate } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { createEffect, onCleanup } from 'solid-js';
 import { registerMacroLinkInterceptor } from './macroLinkInterceptor';
 
@@ -14,6 +14,31 @@ type NavigateEvent = {
   path: string;
   query: string;
 };
+
+async function flushLaunchDeepLink(listening: Promise<UnlistenFn>) {
+  // fireAndForget reports a failed listen().
+  await listening;
+  // On a cold open, the deep-link handler emits `navigate` during startup,
+  // before this listener exists, and the event is lost — pull the launch deep
+  // link now that we can receive it.
+  try {
+    await invoke('flush_launch_deep_link');
+  } catch (e) {
+    console.error('failed to flush launch deep link', e);
+  }
+}
+
+async function stopListening(listening: Promise<UnlistenFn>) {
+  let unlisten: UnlistenFn;
+  try {
+    unlisten = await listening;
+  } catch {
+    // A failed listen() was already reported by flushLaunchDeepLink.
+    return;
+  }
+  // UnlistenFn returns the unlisten IPC promise despite its void type.
+  return unlisten();
+}
 
 /// this must be used as a child of router
 export function useTauriNavigationEffect() {
@@ -61,28 +86,11 @@ export function useTauriNavigationEffect() {
         navigate(path);
       }
     });
-    unlisten.then(
-      () => {
-        // On a cold open, the deep-link handler emits `navigate` during
-        // startup, before this listener exists, and the event is lost — pull
-        // the launch deep link now that we can receive it.
-        invoke('flush_launch_deep_link').catch((e) => {
-          console.error('failed to flush launch deep link', e);
-        });
-      },
-      (error) => Telemetry.error(error, { surface: 'tauri-navigation' })
-    );
+    fireAndForget(flushLaunchDeepLink(unlisten), 'tauri-navigation');
 
     return onCleanup(() => {
       unregisterInterceptor();
-      // A failed listen() was already reported above.
-      fireAndForget(
-        unlisten.then(
-          (fn) => fn(),
-          () => {}
-        ),
-        'tauri-navigation'
-      );
+      fireAndForget(stopListening(unlisten), 'tauri-navigation');
     });
   });
 }

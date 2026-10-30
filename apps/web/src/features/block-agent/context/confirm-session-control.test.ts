@@ -1,4 +1,4 @@
-import type { AgentSession } from '@core/agent-session/AgentSession';
+import type { AgentSession } from '@app/lib/queries/agent-session/agent-session';
 import { err, ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { confirmSessionControl } from './confirm-session-control';
@@ -53,7 +53,10 @@ describe('confirmed session controls', () => {
   it('waits past HTTP acceptance and unrelated actions for the correlated runtime outcome', async () => {
     const test = session();
     const done = vi.fn();
-    const result = confirmSessionControl(test.value, action).then(done);
+    const confirm = async () => {
+      done(await confirmSessionControl(test.value, action));
+    };
+    const result = confirm();
     await flush();
     expect(done).not.toHaveBeenCalled();
     test.outcome('accepted', 'another-action');

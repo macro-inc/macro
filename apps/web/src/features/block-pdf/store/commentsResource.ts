@@ -3,10 +3,15 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { onThreadStateUpdated } from '@queries/messages/sync';
 import {
+  createDocumentAnchor,
+  deleteDocumentAnchor,
+  editDocumentAnchor,
+} from '@queries/storage/requests';
+import {
   createConnectionWebsocketEffect,
   parseWebsocketPayload,
 } from '@service-connection/websocket';
-import { storageServiceClient } from '@service-storage/client';
+
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
 import type { CreateUnthreadedAnchorRequest } from '@service-storage/generated/schemas/createUnthreadedAnchorRequest';
 import type { DeleteUnthreadedAnchorRequest } from '@service-storage/generated/schemas/deleteUnthreadedAnchorRequest';
@@ -19,7 +24,7 @@ function useCreateUnthreadedAnchor() {
   const { annotations, documentId } = usePdfDocument();
 
   return async (body: CreateUnthreadedAnchorRequest) => {
-    const result = await storageServiceClient.annotations.createAnchor({
+    const result = await createDocumentAnchor({
       documentId: documentId(),
       body,
     });
@@ -40,7 +45,7 @@ function useDeleteUnthreadedAnchor() {
   const annotations = usePdfDocument().annotations;
 
   return async (body: DeleteUnthreadedAnchorRequest) => {
-    const result = await storageServiceClient.annotations.deleteAnchor({
+    const result = await deleteDocumentAnchor({
       body,
     });
 
@@ -60,7 +65,7 @@ function useEditAnchor() {
   const annotations = usePdfDocument().annotations;
 
   return async (body: EditAnchorRequest) => {
-    const result = await storageServiceClient.annotations.editAnchor({
+    const result = await editDocumentAnchor({
       body,
     });
 

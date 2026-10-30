@@ -49,18 +49,20 @@ let loading: Promise<Speller> | undefined;
 /** The en-US speller, loaded once per page. */
 export function loadSpeller(): Promise<Speller> {
   loading ??= (async () => {
-    const [aff, dic] = await Promise.all([
-      import('../core/dictionary/en_US.aff?raw'),
-      import('../core/dictionary/en_US.dic?raw'),
-    ]);
-    return createSpeller(
-      expandDictionary(dic.default, parseAffixes(aff.default))
-    );
+    try {
+      const [aff, dic] = await Promise.all([
+        import('../core/dictionary/en_US.aff?raw'),
+        import('../core/dictionary/en_US.dic?raw'),
+      ]);
+      return createSpeller(
+        expandDictionary(dic.default, parseAffixes(aff.default))
+      );
+    } catch (error) {
+      // A failed load (offline) may be retried.
+      loading = undefined;
+      throw error;
+    }
   })();
-  // A failed load (offline) may be retried.
-  loading.catch(() => {
-    loading = undefined;
-  });
   return loading;
 }
 
@@ -133,11 +135,17 @@ export function createSpellCheck(options: SpellCheckOptions) {
   }
 
   onMount(() => {
-    const timer = setTimeout(() => {
-      ready().catch((error: unknown) =>
-        console.error('[pptx] the spelling dictionary did not load', error)
-      );
-    }, LOAD_DELAY_MS);
+    const preload = async () => {
+      try {
+        await ready();
+      } catch (error) {
+        console.error('[pptx] the spelling dictionary did not load', error);
+      }
+    };
+    const timer = setTimeout(
+      () => fireAndForget(preload(), 'pptx-spelling'),
+      LOAD_DELAY_MS
+    );
     onCleanup(() => clearTimeout(timer));
   });
 
@@ -171,9 +179,12 @@ export function createSpellCheck(options: SpellCheckOptions) {
     const version = session.slideVersion(slideId);
     const cached = layouts.get(key);
     if (cached && cached.version === version) return cached.layout;
-    const layout = await engine
-      .textLayout(index, source.shape, source.cell)
-      .catch(() => null);
+    let layout: TextLayoutInfo | null = null;
+    try {
+      layout = await engine.textLayout(index, source.shape, source.cell);
+    } catch {
+      // Cached as no layout until the slide changes.
+    }
     layouts.set(key, { version, layout });
     return layout;
   }

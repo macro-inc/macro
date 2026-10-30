@@ -14,19 +14,26 @@ type ThreadReplyRailProps = {
  * short of the reply avatar.
  */
 export function ThreadReplyRail(props: ThreadReplyRailProps) {
-  const railClass =
-    'pointer-events-none absolute -z-1 channel-rail-left border-thread-rail';
   const railLeft =
     'calc(var(--user-icon-width) / 2 + var(--message-padding-x) - var(--thread-shift) - var(--channel-rail-width) / 2)';
 
   return (
     <>
       <Show when={!props.terminal}>
-        <div class={cn(railClass, 'inset-y-0')} style={{ left: railLeft }} />
+        <div
+          class={cn(
+            'pointer-events-none absolute -z-1 channel-rail-left border-thread-rail',
+            'inset-y-0'
+          )}
+          style={{ left: railLeft }}
+        />
       </Show>
       <Show when={!props.grouped}>
         <div
-          class={cn(railClass, 'top-0 channel-rail-bottom rounded-bl-[14px]')}
+          class={cn(
+            'pointer-events-none absolute -z-1 channel-rail-left border-thread-rail',
+            'top-0 channel-rail-bottom rounded-bl-[14px]'
+          )}
           style={{
             left: railLeft,
             width:

@@ -17,10 +17,10 @@ import { AgentSessionProvider } from '../../agent-session-provider';
 import { AgentComposer } from '../../component/AgentComposer';
 import { Transcript } from '../../component/Transcript';
 import { useAgentSession } from '../../context/AgentSessionContext';
+import { registerReplaySession } from '../../queries/replay-backend';
 import { sessionStatus } from '../../state/session-status';
 import { SessionStatusPill } from '../../ui';
 import { createReplayDriver, type ReplayDriver } from './driver';
-import { registerReplaySession } from './interceptor';
 import { parseRecording } from './recording';
 
 type MountedSession = {

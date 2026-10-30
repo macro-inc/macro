@@ -1,7 +1,7 @@
 import { PROPERTY_OPTION_IDS } from '@property/identifiers';
 import type { PropertyApiValues } from '@property/types';
 import { match } from 'ts-pattern';
-import type { TaskComposerContext } from '../task-composer/core/context';
+import type { TaskComposerContext } from '../task-composer/context/composer';
 import type { TaskBoardGrouping } from './core/task-board';
 import { taskBoardPropertyId } from './queries/task-board';
 

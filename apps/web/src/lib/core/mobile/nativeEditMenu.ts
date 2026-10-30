@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { invoke } from '@tauri-apps/api/core';
 
@@ -9,17 +10,22 @@ export function hasNativeEditMenu(): boolean {
   return isPlatform('ios');
 }
 
+async function setSuppressed(suppressed: boolean): Promise<void> {
+  try {
+    await invoke('plugin:edit-menu|set_native_menu_suppressed', { suppressed });
+  } catch (error) {
+    console.error('failed to toggle native edit menu suppression', error);
+  }
+}
+
 /**
  * Toggles suppression of the native iOS text-selection menu so it doesn't
  * stack on top of the in-app selection popup. No-op outside the iOS app.
  */
 export function setNativeEditMenuSuppressed(suppressed: boolean): void {
   if (!hasNativeEditMenu()) return;
-  void invoke('plugin:edit-menu|set_native_menu_suppressed', {
-    suppressed,
-  }).catch((error) => {
-    console.error('failed to toggle native edit menu suppression', error);
-  });
+
+  fireAndForget(setSuppressed(suppressed), 'native-edit-menu');
 }
 
 /**

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
 import type { UserName } from '@service-auth/generated/schemas/userName';
@@ -66,25 +67,29 @@ function flushPendingUserNameRequests() {
   pendingUserNameRequests = new Map();
   pendingUserNameFlush = undefined;
 
-  const userIds = Array.from(requestsById.keys());
-  fetchUserNames(userIds)
-    .then((names) => {
-      const namesById = new Map<string, UserName>();
-      for (const name of names) {
-        const normalizedId = normalizeUserNameQueryId(name.id);
-        if (normalizedId) namesById.set(normalizedId, name);
-      }
+  fireAndForget(resolveUserNameRequests(requestsById), 'user-names');
+}
 
-      for (const [userId, requests] of requestsById) {
-        const userName = namesById.get(userId) ?? null;
-        for (const request of requests) request.resolve(userName);
-      }
-    })
-    .catch((error) => {
-      for (const requests of requestsById.values()) {
-        for (const request of requests) request.reject(error);
-      }
-    });
+async function resolveUserNameRequests(
+  requestsById: Map<string, PendingUserNameRequest[]>
+): Promise<void> {
+  try {
+    const names = await fetchUserNames(Array.from(requestsById.keys()));
+    const namesById = new Map<string, UserName>();
+    for (const name of names) {
+      const normalizedId = normalizeUserNameQueryId(name.id);
+      if (normalizedId) namesById.set(normalizedId, name);
+    }
+
+    for (const [userId, requests] of requestsById) {
+      const userName = namesById.get(userId) ?? null;
+      for (const request of requests) request.resolve(userName);
+    }
+  } catch (error) {
+    for (const requests of requestsById.values()) {
+      for (const request of requests) request.reject(error);
+    }
+  }
 }
 
 async function fetchUserName(userId: string): Promise<UserName | null> {

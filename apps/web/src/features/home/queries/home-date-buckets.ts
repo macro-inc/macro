@@ -1,4 +1,4 @@
-import { dateBucket } from '@app/features/soup/collection/date-buckets';
+import { dateBucket } from '@app/lib/utils/date-buckets';
 
 /** Section order is independent of which source/page supplied the first row. */
 const HOME_DATE_BUCKETS = [

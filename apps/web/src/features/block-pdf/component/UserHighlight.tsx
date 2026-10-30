@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import {
@@ -138,9 +139,14 @@ export function UserHighlight(props: VoidProps<IHighlightObj>) {
     }
 
     if (copiedText) {
-      navigator.clipboard.writeText(copiedText).catch((err) => {
-        console.error('Failed to copy text: ', err);
-      });
+      const copyText = async () => {
+        try {
+          await navigator.clipboard.writeText(copiedText);
+        } catch (err) {
+          console.error('Failed to copy text: ', err);
+        }
+      };
+      fireAndForget(copyText(), 'pdf-highlight');
     }
   };
 

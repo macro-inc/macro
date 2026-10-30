@@ -1,3 +1,4 @@
+import { fileFromDraggedHtml } from '@app/lib/utils/dragged-image';
 import { toast } from '@core/component/Toast/Toast';
 import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { fileExtension } from '@service-storage/util/filename';
@@ -53,7 +54,7 @@ export function fileDrop(
         items && Array.from(items).some((item) => item.kind === 'file');
 
       if (!hasFiles) {
-        const types = e.dataTransfer?.types || [];
+        const types = buildTypes();
         // If we have HTML data, it might be an image element
         if (types.includes('text/html')) {
           // Assume valid for now - we'll validate on drop
@@ -67,7 +68,7 @@ export function fileDrop(
 
       // NOTE: mime type alone is not enough to determine if a file is valid iff there are no extensions specified
       // this is because file name is not available on drag enter event, only on drop
-      if (!hasExtensions && items && items.length > 0) {
+      if (isHandleDragEnterAllowed(hasExtensions, items)) {
         const invalidItems = Array.from(items).filter((item) => {
           if (item.kind === 'file') {
             const type = item.type;
@@ -85,6 +86,17 @@ export function fileDrop(
       }
 
       options?.onDragStart?.(true);
+    }
+
+    function isHandleDragEnterAllowed(
+      hasExtensions: boolean | undefined,
+      items: DataTransferItemList
+    ) {
+      return !hasExtensions && items && items.length > 0;
+    }
+
+    function buildTypes() {
+      return e.dataTransfer?.types || [];
     }
   };
 
@@ -168,7 +180,7 @@ export function fileDrop(
       return;
     }
 
-    const files = e.dataTransfer?.files;
+    const files = buildFiles();
     if (files && files.length > 0) {
       const validFiles = Array.from(files).filter(isFileValid);
       const valid = validFiles.length === files.length;
@@ -183,46 +195,22 @@ export function fileDrop(
     // If no files but we have HTML data, try to extract image URLs
     const html = e.dataTransfer?.getData('text/html');
     if (html) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const img = doc.querySelector('img');
-      if (img?.src) {
-        try {
-          // Fetch the image and convert to File
-          const response = await fetch(img.src);
-          const blob = await response.blob();
-
-          // Extract filename from URL or use default
-          let filename = 'image';
-          try {
-            const url = new URL(img.src);
-            const pathname = url.pathname;
-            const parts = pathname.split('/');
-            const lastPart = parts[parts.length - 1];
-            if (lastPart) {
-              filename = lastPart;
-            }
-          } catch {}
-
-          // Determine extension from blob type
-          const extension = blob.type.split('/')[1] || 'png';
-          if (!filename.includes('.')) {
-            filename = `${filename}.${extension}`;
-          }
-
-          const file = new File([blob], filename, { type: blob.type });
-
-          if (isFileValid(file)) {
-            options?.onDrop?.([file], e);
-            return;
-          }
-        } catch (error) {
-          console.error('Failed to fetch dragged image:', error);
+      try {
+        const file = await fileFromDraggedHtml(html);
+        if (file && isFileValid(file)) {
+          options?.onDrop?.([file], e);
+          return;
         }
+      } catch (error) {
+        console.error('Failed to fetch dragged image:', error);
       }
     }
 
     toast.failure('Invalid attachment file(s)');
+
+    function buildFiles() {
+      return e.dataTransfer?.files;
+    }
   };
 
   let input = document.createElement('input');

@@ -17,13 +17,12 @@ import './list-property-value.css';
 
 // Property icons stay at the sm Badge icon size in both labeled and collapsed
 // modes, so the narrow header matches each row's 24px property button.
-const HEADER_ICON_CLASS = 'size-3 text-ink-muted';
 
 /** Map column IDs to their icons for narrow mode */
 const COLUMN_ICONS: Record<string, () => JSX.Element> = {
-  status: () => <StatusInProgress class={HEADER_ICON_CLASS} />,
-  priority: () => <PriorityHigh class={HEADER_ICON_CLASS} />,
-  assignees: () => <UsersIcon class={HEADER_ICON_CLASS} />,
+  status: () => <StatusInProgress class={'size-3 text-ink-muted'} />,
+  priority: () => <PriorityHigh class={'size-3 text-ink-muted'} />,
+  assignees: () => <UsersIcon class={'size-3 text-ink-muted'} />,
 };
 
 /** Which `TASK_GRID_COLUMNS.id` values map to a sort key (others are read-only). */

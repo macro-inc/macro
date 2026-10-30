@@ -3484,36 +3484,31 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       ],
     });
 
-    await new Promise<void>((resolve, reject) => {
-      createRoot((dispose) => {
-        const query = createGraphqlSoupAstItemsQuery(
-          () => ({ params: {}, body: {} }) as never,
-          () => ({ enabled: true })
-        );
-
-        expect(fake.executions).toHaveLength(1);
-        vi.waitFor(() => {
-          expect(query.isPlaceholderData()).toBe(false);
-          expect(query.isLoading()).toBe(false);
-          expect(query.data()?.entities[0]?.name).toBe('Local task');
-        })
-          .then(() => {
-            fake.executions[0]?.next(
-              graphqlSoupPage({
-                items: [
-                  { id: 'task-1', type: 'document', name: 'Network task' },
-                ],
-                next_cursor: null,
-              })
-            );
-            expect(query.isPlaceholderData()).toBe(false);
-            expect(query.data()?.entities[0]?.name).toBe('Network task');
-            dispose();
-            resolve();
-          })
-          .catch(reject);
+    const { dispose, query } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      expect(fake.executions).toHaveLength(1);
+      await vi.waitFor(() => {
+        expect(query.isPlaceholderData()).toBe(false);
+        expect(query.isLoading()).toBe(false);
+        expect(query.data()?.entities[0]?.name).toBe('Local task');
       });
-    });
+      fake.executions[0]?.next(
+        graphqlSoupPage({
+          items: [{ id: 'task-1', type: 'document', name: 'Network task' }],
+          next_cursor: null,
+        })
+      );
+      expect(query.isPlaceholderData()).toBe(false);
+      expect(query.data()?.entities[0]?.name).toBe('Network task');
+    } finally {
+      dispose();
+    }
     expect(entityFilterMock).toHaveBeenCalled();
   });
 
@@ -3566,41 +3561,36 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         ],
       });
 
-    await new Promise<void>((resolve, reject) => {
-      createRoot((dispose) => {
-        const query = createGraphqlSoupAstItemsQuery(
-          () => ({ params: {}, body: {} }) as never,
-          () => ({ enabled: true })
-        );
-
-        vi.waitFor(() => {
-          expect(query.data()?.entities[0]?.name).toBe('Optimistic task');
-          expect(query.isPlaceholderData()).toBe(false);
-        })
-          .then(async () => {
-            fake.executions[0]?.next(
-              graphqlSoupPage({
-                items: [
-                  { id: 'task-1', type: 'document', name: 'Network task' },
-                ],
-                next_cursor: null,
-              })
-            );
-            expect(query.data()?.entities[0]?.name).toBe('Network task');
-
-            currentRevision = REVISION_2;
-            notifyCacheChanged(REVISION_2);
-            await vi.waitFor(() => {
-              expect(entityFilterMock).toHaveBeenCalledTimes(2);
-              expect(query.data()?.entities[0]?.name).toBe('Network task');
-              expect(query.isPlaceholderData()).toBe(false);
-            });
-            dispose();
-            resolve();
-          })
-          .catch(reject);
+    const { dispose, query } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }) as never,
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      await vi.waitFor(() => {
+        expect(query.data()?.entities[0]?.name).toBe('Optimistic task');
+        expect(query.isPlaceholderData()).toBe(false);
       });
-    });
+      fake.executions[0]?.next(
+        graphqlSoupPage({
+          items: [{ id: 'task-1', type: 'document', name: 'Network task' }],
+          next_cursor: null,
+        })
+      );
+      expect(query.data()?.entities[0]?.name).toBe('Network task');
+
+      currentRevision = REVISION_2;
+      notifyCacheChanged(REVISION_2);
+      await vi.waitFor(() => {
+        expect(entityFilterMock).toHaveBeenCalledTimes(2);
+        expect(query.data()?.entities[0]?.name).toBe('Network task');
+        expect(query.isPlaceholderData()).toBe(false);
+      });
+    } finally {
+      dispose();
+    }
   });
 
   describe('network publication before persistence', () => {

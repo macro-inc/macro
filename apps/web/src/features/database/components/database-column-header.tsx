@@ -337,7 +337,7 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
           aria-keyshortcuts={canRename() ? 'F2 Shift+F10' : 'Shift+F10'}
           tabIndex={columnRename.target() ? -1 : 0}
           disabled={!!columnRename.target()}
-          class="relative min-w-0 border-r border-edge-muted/50 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/50 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
+          class="relative min-w-0 border-r border-edge-muted/50 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/50"
           onDblClick={(
             event: MouseEvent & { currentTarget: HTMLDivElement }
           ) => {

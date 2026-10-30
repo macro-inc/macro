@@ -1,7 +1,7 @@
 /** Feature-owned session state and its provider/consumer boundary. */
 
 import type { InteractionController } from '@app/features/agent-interactions/context/interaction';
-import type { IssueResult } from '@core/agent-session/AgentSession';
+import type { IssueResult } from '@app/lib/queries/agent-session/agent-session';
 import type {
   FoldedMessage,
   SessionMetadata,

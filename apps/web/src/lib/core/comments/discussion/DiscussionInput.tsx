@@ -28,7 +28,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
-import { Telemetry } from '@macro-inc/observability';
 import { isIOS } from '@solid-primitives/platform';
 import { CollapsedInput, ComposerSurface } from '@ui';
 import {
@@ -120,9 +119,6 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const [isSending, setIsSending] = createSignal(false);
   let isInternalRefocus = false;
 
-  const reportCallbackError = (error: unknown) =>
-    Telemetry.error(error, { surface: 'discussion-input' });
-
   const inputView = () => ({
     ...props.input,
     value: value(),
@@ -157,9 +153,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
     },
     onChange: (markdown) => {
       setValue(markdown);
-      Promise.resolve(props.onChange?.(createSnapshot())).catch(
-        reportCallbackError
-      );
+      fireAndForget(props.onChange?.(createSnapshot()), 'discussion-input');
     },
     onEnter: () => {
       if (isMobile()) return false;
@@ -203,14 +197,13 @@ export function DiscussionInput(props: DiscussionInputProps) {
       }
     },
     close: () => {
-      Promise.resolve(props.onClose?.(createSnapshot())).catch(
-        reportCallbackError
-      );
+      fireAndForget(props.onClose?.(createSnapshot()), 'discussion-input');
     },
     toggleFormatRibbon: () => {
       setShowFormatRibbon(!showFormatRibbon());
-      Promise.resolve(props.onToggleFormatRibbon?.(!showFormatRibbon())).catch(
-        reportCallbackError
+      fireAndForget(
+        props.onToggleFormatRibbon?.(!showFormatRibbon()),
+        'discussion-input'
       );
     },
     attachFiles: async (files: File[]) => {

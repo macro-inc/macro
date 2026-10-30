@@ -4,7 +4,7 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show } from 'solid-js';
-import type { ComposeTaskProps } from './core/types';
+import type { ComposeTaskProps } from './context/composer';
 import {
   createTaskComposer,
   type TaskComposerHost,

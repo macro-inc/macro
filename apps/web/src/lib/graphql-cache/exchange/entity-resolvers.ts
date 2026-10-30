@@ -150,16 +150,7 @@ export function compileEntityResolvers(
         throw configError(`${parentType}.${fieldName} must be a descriptor`);
       }
       const descriptorKeys = Object.keys(descriptor).sort();
-      if (
-        descriptorKeys.length !== 3 ||
-        descriptorKeys[0] !== 'argumentPath' ||
-        descriptorKeys[1] !== 'kind' ||
-        descriptorKeys[2] !== 'targetType'
-      ) {
-        throw configError(
-          `${parentType}.${fieldName} must contain only kind, targetType, and argumentPath`
-        );
-      }
+      assertResolverDescriptorKeys(descriptorKeys, parentType, fieldName);
       if (descriptor.kind !== 'entity-from-argument') {
         throw configError(
           `${parentType}.${fieldName} has unsupported resolver kind`
@@ -209,4 +200,21 @@ export function compileEntityResolvers(
     }
   }
   return Object.freeze(compiled);
+
+  function assertResolverDescriptorKeys(
+    descriptorKeys: string[],
+    parentType: string,
+    fieldName: string
+  ) {
+    if (
+      descriptorKeys.length !== 3 ||
+      descriptorKeys[0] !== 'argumentPath' ||
+      descriptorKeys[1] !== 'kind' ||
+      descriptorKeys[2] !== 'targetType'
+    ) {
+      throw configError(
+        `${parentType}.${fieldName} must contain only kind, targetType, and argumentPath`
+      );
+    }
+  }
 }

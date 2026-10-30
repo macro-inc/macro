@@ -276,11 +276,19 @@ function createBlockHandle<S>(
   };
   const isMethodAvailable = (methodName: keyof S) =>
     !!registry[methodName]?.method;
-  const awaitMethodAvailable = (methodName: keyof S, timeout?: number) =>
-    awaitCondition(
-      () => registry[methodName]?.method !== undefined,
-      timeout
-    ).catch((e) => console.error('awaitBlockMethodAvailable error', e));
+  const awaitMethodAvailable = async (
+    methodName: keyof S,
+    timeout?: number
+  ) => {
+    try {
+      return await awaitCondition(
+        () => registry[methodName]?.method !== undefined,
+        timeout
+      );
+    } catch (e) {
+      console.error('awaitBlockMethodAvailable error', e);
+    }
+  };
   return new Proxy(
     { block, isMethodAvailable, awaitMethodAvailable },
     handler
@@ -597,19 +605,32 @@ export function awaitCondition(
   });
 }
 
-const awaitBlockRegistered = (blocks: BlockMap, id: string, timeout?: number) =>
-  awaitCondition(() => blocks[id] !== undefined, timeout).catch((e) =>
-    console.error('awaitBlockRegistered', e)
-  );
+const awaitBlockRegistered = async (
+  blocks: BlockMap,
+  id: string,
+  timeout?: number
+) => {
+  try {
+    return await awaitCondition(() => blocks[id] !== undefined, timeout);
+  } catch (e) {
+    console.error('awaitBlockRegistered', e);
+  }
+};
 
-const awaitBlockMethodAvailable = (
+const awaitBlockMethodAvailable = async (
   registry: MethodRegistry<any>,
   method: string,
   timeout?: number
-) =>
-  awaitCondition(() => registry[method]?.method !== undefined, timeout).catch(
-    (e) => console.error('awaitMethod', e)
-  );
+) => {
+  try {
+    return await awaitCondition(
+      () => registry[method]?.method !== undefined,
+      timeout
+    );
+  } catch (e) {
+    console.error('awaitMethod', e);
+  }
+};
 
 export const canNestBlock = (
   name: BlockName,

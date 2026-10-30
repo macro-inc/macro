@@ -28,8 +28,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import type { EmailMessage } from '../../email-message/core/email-message';
 import { MessageOperationRecovery } from '../../email-message/views/message-operation-recovery';
-import { createAttachmentViewer } from '../components/attachment-viewer';
 import { DraftBackMenu } from '../components/draft-back-menu';
 import { DraftSyncStatus } from '../components/draft-sync-status';
 import { EmailDateSelector } from '../components/email-date-selector';
@@ -44,11 +44,13 @@ import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { plainTextToHtml } from '../core/plain-text-to-html';
+import { settle, startReported } from '../primitives/background-work';
 import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
 import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
 import { createDraftSyncStatus } from '../primitives/draft-sync-status';
 import { EMAIL_FORMAT_SHORTCUTS } from '../primitives/format-shortcuts';
 import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
+import { createAttachmentViewer } from './attachment-viewer';
 import { ReplyEnvelope } from './reply-envelope';
 
 false && fileFolderDrop;
@@ -216,8 +218,6 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     state.replyType() !== 'forward';
   const quotedContent = () =>
     state.replyType() === 'forward' ? 'forwarded message' : 'quoted text';
-  const quoteToggleLabel = () =>
-    `${form.replyAppended() ? 'Hide' : 'Show'} ${quotedContent()}`;
   const signatureHtml = () =>
     composeContext.presentation.signaturesEnabled()
       ? state.signatureHtml()
@@ -253,6 +253,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
   };
   onMount(() => props.mobileCompose?.registerClose(requestClose));
   const isMobileCompose = () => props.mobileCompose !== undefined;
+  const editorPlaceholder = () =>
+    isMobileCompose()
+      ? 'Use `@` to reference files'
+      : `${state.replyType() === 'forward' ? 'Forward' : 'Reply'} — @mention to share or cc people`;
   const composePortalScope = () =>
     isMobileCompose() ? ('local' as const) : undefined;
   // File sharing and editor plugin wiring belong to this view. The controller only
@@ -316,7 +320,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
-          sendEmail().catch(composeContext.notices.reportError);
+          startReported(sendEmail(), composeContext.notices.reportError);
           return true;
         },
         runWithInputFocused: true,
@@ -329,7 +333,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
-          sendEmail(true).catch(composeContext.notices.reportError);
+          startReported(sendEmail(true), composeContext.notices.reportError);
           return true;
         },
         runWithInputFocused: true,
@@ -398,8 +402,8 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           const isEmpty = draft === null;
 
           if (isEmpty) {
-            // Delete draft and close reply
-            deleteDraftAndReset().catch(() => {});
+            // Delete draft and close reply; discard reports its own failure.
+            fireAndForget(settle(deleteDraftAndReset()), 'email-compose');
           } else {
             // Move focus back to the message
             ctx.exitToThread('selected');
@@ -494,6 +498,22 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     </Button>
   );
 
+  // The full-screen phone composer scrolls as one surface; desktop replies are
+  // framed cards unless the host frames them.
+  const surfaceClass = () =>
+    cn(
+      'relative flex flex-col flex-1 max-w-full min-h-0',
+      isMobileCompose() &&
+        'h-full overflow-y-auto overscroll-y-none pb-[max(16px,var(--safe-bottom,0px))]',
+      isMobileCompose()
+        ? 'rounded-none'
+        : props.unframed
+          ? 'rounded-lg'
+          : 'rounded-xl bg-menu-glass glass-input'
+    );
+  const surfaceStyle = () =>
+    props.unframed ? { 'background-color': 'transparent' } : undefined;
+
   const SyncStatus = () => (
     <DraftSyncStatus
       state={sync.state()}
@@ -508,19 +528,8 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
   return (
     <>
       <Surface
-        class={cn(
-          'relative flex flex-col flex-1 max-w-full min-h-0',
-          isMobileCompose() &&
-            'h-full overflow-y-auto overscroll-y-none pb-[max(16px,var(--safe-bottom,0px))]',
-          isMobileCompose()
-            ? 'rounded-none'
-            : props.unframed
-              ? 'rounded-lg'
-              : 'rounded-xl bg-menu-glass glass-input'
-        )}
-        style={
-          props.unframed ? { 'background-color': 'transparent' } : undefined
-        }
+        class={surfaceClass()}
+        style={surfaceStyle()}
         hideBorder={props.unframed}
         ref={(el) => {
           composeContainerRef = el;
@@ -537,32 +546,8 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             />
           )}
         </Show>
-        <Show
-          when={
-            state.replyType() === 'forward' &&
-            props
-              .replyingTo()
-              ?.attachments.some((attachment) => attachment.reference_url)
-          }
-        >
-          <p class="px-3 py-2 text-sm text-ink-muted" role="status">
-            Linked cloud attachments are available in the original Outlook
-            message. Share their links from Outlook to include them in this
-            forward.{' '}
-            <a
-              href={
-                props
-                  .replyingTo()
-                  ?.attachments.find((attachment) => attachment.reference_url)
-                  ?.reference_url ?? undefined
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              class="underline"
-            >
-              Open in Outlook
-            </a>
-          </p>
+        <Show when={state.replyType() === 'forward'}>
+          <CloudAttachmentsNotice message={props.replyingTo()} />
         </Show>
         <Show when={isMobileCompose()}>
           <MobileReplyToolbar
@@ -701,11 +686,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                 isDragging() && 'blur'
               )}
               disabled={editingDisabled()}
-              placeholder={
-                isMobileCompose()
-                  ? 'Use `@` to reference files'
-                  : `${state.replyType() === 'forward' ? 'Forward' : 'Reply'} — @mention to share or cc people`
-              }
+              placeholder={editorPlaceholder()}
               portalScope={isMobileCompose() ? 'local' : 'split'}
               refFn={(el) => props.markdownDomRef?.(el)}
               onConnect={handleEditorConnect}
@@ -734,51 +715,18 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           {/* Quoted-text controls live below the scroll area so they stay
             anchored to the composer bottom instead of scrolling with (and
             floating over) tall content. */}
-          <Show when={form.replyAppended() && quoteCollapsed()}>
-            <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
-              <Button
-                variant="ghost"
-                size="xs"
-                class="text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-                onClick={(e: MouseEvent) => {
-                  e.stopPropagation();
-                  setQuoteCollapsed(false);
-                  setComposerExpanded(true);
-                }}
-              >
-                <DotsThree class="size-3.5 shrink-0 pointer-events-none" />
-                Show {quotedContent()}
-              </Button>
-            </div>
-          </Show>
-          <Show
-            when={
-              props.replyingTo() &&
-              // The collapse pill above already covers this state
-              !(form.replyAppended() && quoteCollapsed())
-            }
-          >
-            <div
-              class="shrink-0 pt-1"
-              data-corvu-no-drag=""
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Tooltip label={quoteToggleLabel()}>
-                <KToggleButton
-                  as={Button}
-                  aria-label={quotedContent()}
-                  variant="ghost"
-                  size="icon-sm"
-                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"
-                  pressed={form.replyAppended()}
-                  disabled={editingDisabled()}
-                  onChange={toggleQuotedText}
-                >
-                  <DotsThree class="size-5 shrink-0" />
-                </KToggleButton>
-              </Tooltip>
-            </div>
-          </Show>
+          <QuotedTextControls
+            replying={!!props.replyingTo()}
+            content={quotedContent()}
+            appended={form.replyAppended()}
+            collapsed={quoteCollapsed()}
+            disabled={editingDisabled()}
+            onExpand={() => {
+              setQuoteCollapsed(false);
+              setComposerExpanded(true);
+            }}
+            onToggle={toggleQuotedText}
+          />
           <Show when={!isMobileCompose()}>
             {/* Below the scroll area so quoted email content can never overlap it */}
             <AttachmentsRow class="px-4" />
@@ -861,6 +809,94 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
           onCheckStatus={checkScheduleStatus}
           class="-mx-4 -mb-4 mt-3 rounded-b-[26.25px] border-t border-edge-muted px-4 py-2 touch:rounded-b-lg mobile:rounded-none"
         />
+      </Show>
+    </>
+  );
+}
+
+/** Outlook keeps linked cloud attachments with the original message, out of a forward. */
+function CloudAttachmentsNotice(props: { message: EmailMessage | undefined }) {
+  const linked = () =>
+    props.message?.attachments.find((attachment) => attachment.reference_url);
+  return (
+    <Show when={linked()}>
+      {(attachment) => (
+        <p class="px-3 py-2 text-sm text-ink-muted" role="status">
+          Linked cloud attachments are available in the original Outlook
+          message. Share their links from Outlook to include them in this
+          forward.{' '}
+          <a
+            href={attachment().reference_url ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline"
+          >
+            Open in Outlook
+          </a>
+        </p>
+      )}
+    </Show>
+  );
+}
+
+/** The "⋯" pill that reveals collapsed quoted text, or the toggle that appends it. */
+function QuotedTextControls(props: {
+  replying: boolean;
+  /** What the quote holds: "quoted text" or "forwarded message". */
+  content: string;
+  appended: boolean;
+  collapsed: boolean;
+  disabled: boolean;
+  onExpand: () => void;
+  onToggle: () => void;
+}) {
+  return (
+    <>
+      <Show when={props.appended && props.collapsed}>
+        <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
+          <Button
+            variant="ghost"
+            size="xs"
+            class="text-ink-extra-muted hover:text-ink-muted hover:bg-active"
+            onClick={(e: MouseEvent) => {
+              e.stopPropagation();
+              props.onExpand();
+            }}
+          >
+            <DotsThree class="size-3.5 shrink-0 pointer-events-none" />
+            Show {props.content}
+          </Button>
+        </div>
+      </Show>
+      <Show
+        when={
+          props.replying &&
+          // The collapse pill above already covers this state
+          !(props.appended && props.collapsed)
+        }
+      >
+        <div
+          class="shrink-0 pt-1"
+          data-corvu-no-drag=""
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Tooltip
+            label={`${props.appended ? 'Hide' : 'Show'} ${props.content}`}
+          >
+            <KToggleButton
+              as={Button}
+              aria-label={props.content}
+              variant="ghost"
+              size="icon-sm"
+              class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"
+              pressed={props.appended}
+              disabled={props.disabled}
+              onChange={() => props.onToggle()}
+            >
+              <DotsThree class="size-5 shrink-0" />
+            </KToggleButton>
+          </Tooltip>
+        </div>
       </Show>
     </>
   );

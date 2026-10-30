@@ -9,9 +9,9 @@ import {
   resolveGroupMetaForKey,
 } from '../grouped/api';
 import type { GroupByField, GroupMeta } from '../grouped/types';
-import type { SoupAstItemsGroupedPage } from '../items';
+import type { SoupApiItemFilter, SoupAstItemsGroupedPage } from '../items';
 import { soupKeys } from '../keys';
-import { getSoupQueryMeta } from './utils';
+import { getSoupQueryMeta, type SoupQueryMeta } from './utils';
 
 type GroupedGroupPage = {
   items: Record<string, SoupApiItem>;
@@ -179,7 +179,7 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
 
   for (const query of queries) {
     const prev = query.state.data as GroupedGroupInfiniteData | undefined;
-    if (!prev?.pages?.length) continue;
+    if (!hasGroupPages(prev)) continue;
 
     const meta = getSoupQueryMeta(query.meta);
     if (!meta.groupBy || meta.groupKey == null) continue;
@@ -195,10 +195,7 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
     }
 
     const filter = meta.itemFilter;
-    const nextGroupKeys =
-      filter && !filter(entity)
-        ? []
-        : computeGroupKeysForItem(entity, meta.groupBy);
+    const nextGroupKeys = buildNextGroupKeys(filter, meta);
     if (nextGroupKeys === undefined) {
       queryClient.invalidateQueries({ queryKey: query.queryKey });
       continue;
@@ -258,6 +255,15 @@ export function syncGroupQueries(entityId: string, entity: SoupApiItem) {
       bumpGroupedCacheVersion();
     }
   }
+
+  function buildNextGroupKeys(
+    filter: SoupApiItemFilter | undefined,
+    meta: SoupQueryMeta
+  ) {
+    return filter && !filter(entity)
+      ? []
+      : computeGroupKeysForItem(entity, meta.groupBy);
+  }
 }
 
 /**
@@ -310,7 +316,7 @@ export function insertGroupQueries(
   for (const query of queries) {
     if (keyFilter && !keyFilter(query.queryKey)) continue;
     const prev = query.state.data as GroupedGroupInfiniteData | undefined;
-    if (!prev?.pages?.length) continue;
+    if (!hasGroupPages(prev)) continue;
 
     const meta = getSoupQueryMeta(query.meta);
     const filter = meta.itemFilter;
@@ -401,7 +407,7 @@ export function removeGroupQueries(
   for (const query of queries) {
     if (keyFilter && !keyFilter(query.queryKey)) continue;
     const prev = query.state.data as GroupedGroupInfiniteData | undefined;
-    if (!prev?.pages?.length) continue;
+    if (!hasGroupPages(prev)) continue;
 
     let changed = false;
 
@@ -511,4 +517,10 @@ function syncMembership(
   }
 
   return { ...page, items: nextItems, groups };
+}
+
+function hasGroupPages(
+  data: GroupedGroupInfiniteData | undefined
+): data is GroupedGroupInfiniteData {
+  return !!data?.pages?.length;
 }

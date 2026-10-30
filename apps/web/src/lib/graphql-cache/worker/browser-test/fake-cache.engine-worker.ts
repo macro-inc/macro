@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 
+import { startDetached } from '@core/util/startDetached';
 import type {
   CacheRequest,
   CacheResponse,
@@ -153,6 +154,14 @@ const execute = async (
   }
 };
 
+async function runAfter(
+  previous: Promise<void>,
+  work: () => Promise<void>
+): Promise<void> {
+  await previous;
+  await work();
+}
+
 async function activate(
   activation: PageToEngineEnvelope,
   port: MessagePort
@@ -260,8 +269,8 @@ async function activate(
                 if (draining) return;
                 draining = true;
                 // activate awaits the same queue and reports its failure.
-                queue.then(
-                  () => requestShutdown?.(),
+                startDetached(
+                  runAfter(queue, async () => requestShutdown?.()),
                   () => requestShutdown?.()
                 );
                 break;
@@ -278,7 +287,7 @@ async function activate(
                     message.request.kind === 'read' &&
                     message.request.query.includes('Slow'),
                 });
-                queue = queue.then(async () => {
+                queue = runAfter(queue, async () => {
                   let response: CacheResponse;
                   try {
                     response = await execute(
@@ -435,5 +444,5 @@ self.onmessage = (event: MessageEvent<unknown>) => {
     port?.close();
     return;
   }
-  activate(parsed.value, port).catch(failWorker);
+  startDetached(activate(parsed.value, port), failWorker);
 };

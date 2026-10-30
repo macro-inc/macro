@@ -11,7 +11,6 @@ import {
   createCallback,
   createSingletonRoot,
 } from '@solid-primitives/rootless';
-import { ToastType, toast } from '../Toast/Toast';
 import {
   bulkCopy as bulkCopyOp,
   bulkDelete as bulkDeleteOp,
@@ -24,7 +23,8 @@ import {
   moveToFolder as moveToFolderOp,
   permanentlyDelete as permanentlyDeleteOp,
   revertDelete as revertDeleteOp,
-} from './itemOperations';
+} from '../../../queries/items/operations';
+import { ToastType, toast } from '../Toast/Toast';
 
 export const useItemOperations = createSingletonRoot(() => {
   const getItemAccessLevel = createCallback(

@@ -3,6 +3,7 @@ import { useQuickAccessCrmCompaniesQuery } from '@app/features/crm/crm-search';
 import { composeEmail } from '@app/features/email-view/compose-email';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useProfilePictureUrl } from '@app/lib/queries/auth/profile-pictures';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
@@ -14,7 +15,6 @@ import {
   enableDatabases,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { emailToMacroId, getInitialsFromName } from '@core/user';
 import { idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -40,7 +40,6 @@ import {
   useIsTeamAdmin,
 } from '@queries/team/teams';
 import { patchTeamCrmSettings } from '@service-auth/crm';
-import { storageServiceClient } from '@service-storage/client';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { useNavigate } from '@solidjs/router';
 import { useQueryClient } from '@tanstack/solid-query';
@@ -84,6 +83,7 @@ import {
   useSetContactNameMutation,
 } from './queries/contacts';
 import { createCrmDatabasesSource } from './queries/databases';
+import { createCrmQueryDependencies } from './queries/dependencies';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
 import { createPipelineTransfer } from './queries/pipeline-transfer';
@@ -192,11 +192,7 @@ function withReadyGate<T>(query: CrmQuery<T>): CrmQuery<T> {
 
 /** Only this app-facing adapter constructs production capabilities. */
 export function createAppCrmContext(): CrmContext {
-  const deps = {
-    client: useQueryClient(),
-    storage: storageServiceClient,
-    feedback: toast,
-  };
+  const deps = createCrmQueryDependencies(useQueryClient(), toast);
   const userId = useUserId();
   const layout = useSplitLayout();
   const panel = useSplitPanel();
@@ -243,6 +239,8 @@ export function createAppCrmContext(): CrmContext {
     copyRecordLink: copyCrmRecordLink,
     copyViewLink: copyCrmViewLink,
     copyPipelineLink: copyCrmPipelineLink,
+    activityRollout: () => activityFlag,
+    databasesRollout: () => databasesFlag,
     listsEnabled() {
       const flag = useFeatureFlag(enableCrmLists);
       return () => flag().enabled;

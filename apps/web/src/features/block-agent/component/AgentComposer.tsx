@@ -128,6 +128,13 @@ export function AgentComposer(props: {
     const option = effort();
     return option ? changingConfig(messages(), option.id) : undefined;
   };
+  // Model and effort both wait for any change already on its way.
+  const modelControlsDisabled = () =>
+    loadFailed() ||
+    readOnly() ||
+    pending() ||
+    configuring() ||
+    changingEffort() !== undefined;
 
   // A turn is open in some form: the send button becomes a stop square and
   // prompts sent now wait in the server queue behind it. A stop the fold has
@@ -374,75 +381,68 @@ export function AgentComposer(props: {
           focusInput = focus;
         }}
         registerQuoteInsert={registerQuoteInsert}
-        modelControl={
-          <div class="flex min-w-0 items-center gap-1">
-            <ModelSelector
-              onCloseAutoFocus={restoreInputFocus}
-              model={metadata()?.model ?? null}
-              changingTo={changingModel(messages(), metadata()?.model ?? null)}
-              options={metadata()?.supportedModels ?? []}
-              effortLabel={effortLabel(effort(), changingEffort())}
-              disabled={
-                loadFailed() ||
-                readOnly() ||
-                pending() ||
-                configuring() ||
-                changingEffort() !== undefined
-              }
-              onSelect={(model) =>
-                fireAndForget(chooseModel(model), 'agent-composer')
-              }
-              modelRow={(row) => (
-                <AgentModelMenuItem
-                  {...row}
-                  harness={session()?.harness}
-                  effort={
-                    row.option.id === metadata()?.model ? effort() : undefined
-                  }
-                  effortValue={
-                    row.option.id === metadata()?.model
-                      ? changingEffort()
-                      : undefined
-                  }
-                  onSelectEffort={(selection) =>
-                    fireAndForget(
-                      chooseModel(row.option.id, selection),
-                      'agent-composer'
-                    )
-                  }
-                />
-              )}
-            />
-            <EffortSelector
-              onCloseAutoFocus={restoreInputFocus}
-              config={effort()}
-              value={changingEffort()}
-              disabled={
-                loadFailed() ||
-                readOnly() ||
-                pending() ||
-                configuring() ||
-                changingEffort() !== undefined ||
-                changingModel(messages(), metadata()?.model ?? null) !==
-                  undefined
-              }
-              onChange={(choice) => {
-                const model = metadata()?.model;
-                if (model)
-                  fireAndForget(chooseModel(model, choice), 'agent-composer');
-              }}
-            />
-
-            <Show
-              when={metadata()?.configOptions.some(
-                (option) => option.id === 'speed'
-              )}
-            >
-              <SpeedToggle model={metadata()?.model ?? ''} />
-            </Show>
-          </div>
-        }
+        modelControl={getAgentComposerModelControl()}
       />
     </>
   );
+
+  function getAgentComposerModelControl() {
+    return (
+      <div class="flex min-w-0 items-center gap-1">
+        <ModelSelector
+          onCloseAutoFocus={restoreInputFocus}
+          model={metadata()?.model ?? null}
+          changingTo={changingModel(messages(), metadata()?.model ?? null)}
+          options={metadata()?.supportedModels ?? []}
+          effortLabel={effortLabel(effort(), changingEffort())}
+          disabled={modelControlsDisabled()}
+          onSelect={(model) =>
+            fireAndForget(chooseModel(model), 'agent-composer')
+          }
+          modelRow={(row) => (
+            <AgentModelMenuItem
+              {...row}
+              harness={session()?.harness}
+              effort={
+                row.option.id === metadata()?.model ? effort() : undefined
+              }
+              effortValue={
+                row.option.id === metadata()?.model
+                  ? changingEffort()
+                  : undefined
+              }
+              onSelectEffort={(selection) =>
+                fireAndForget(
+                  chooseModel(row.option.id, selection),
+                  'agent-composer'
+                )
+              }
+            />
+          )}
+        />
+        <EffortSelector
+          onCloseAutoFocus={restoreInputFocus}
+          config={effort()}
+          value={changingEffort()}
+          disabled={
+            modelControlsDisabled() ||
+            changingModel(messages(), metadata()?.model ?? null) !== undefined
+          }
+          onChange={(choice) => {
+            const model = metadata()?.model;
+            if (model)
+              fireAndForget(chooseModel(model, choice), 'agent-composer');
+          }}
+        />
+
+        <Show
+          when={metadata()?.configOptions.some(
+            (option) => option.id === 'speed'
+          )}
+        >
+          <SpeedToggle model={metadata()?.model ?? ''} />
+        </Show>
+      </div>
+    );
+  }
 }

@@ -13,7 +13,7 @@ vi.mock('@service-storage/util/downloadExportedDocument', () => ({
 }));
 vi.mock('@service-sync/client', () => ({ syncServiceClient: {} }));
 vi.mock('@service-sync/source', () => ({ createSyncServiceSource: vi.fn() }));
-vi.mock('../core/docx-seed', () => ({ buildSeedSnapshot: vi.fn() }));
+vi.mock('./docx-seed', () => ({ buildSeedSnapshot: vi.fn() }));
 
 const download = vi.mocked(downloadExportedDocument);
 beforeEach(() => {
@@ -33,7 +33,8 @@ it('keeps an early open pending until extraction finishes and shares the downloa
     )
     .mockResolvedValueOnce(bytes);
   const completed = vi.fn();
-  const first = fetchOriginalDocx('upload').then(completed);
+  const open = async () => completed(await fetchOriginalDocx('upload'));
+  const first = open();
   const second = fetchOriginalDocx('upload');
   await vi.advanceTimersByTimeAsync(999);
   expect(completed).not.toHaveBeenCalled();

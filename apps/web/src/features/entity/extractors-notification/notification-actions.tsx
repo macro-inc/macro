@@ -4,7 +4,6 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
-import { Telemetry } from '@macro-inc/observability';
 import type { NotificationStack, UnifiedNotification } from '@notifications';
 import {
   executeMarkNotificationsDone,
@@ -27,9 +26,6 @@ interface SingleNotificationActionsProps {
 }
 
 type MarkStackDoneVariables = { notificationIds: string[] };
-
-export const reportNotificationActionError = (error: unknown) =>
-  Telemetry.error(error, { surface: 'notifications' });
 
 export function useNotificationStackActions(props: NotificationActionsProps) {
   const notificationSource = useGlobalNotificationSource();

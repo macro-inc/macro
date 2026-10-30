@@ -14,6 +14,7 @@
 
 import type { DeckOutline, SlideOutline } from '@core/pptx-engine/types';
 import { createSignal, onCleanup } from 'solid-js';
+import { match as matchBranch } from 'ts-pattern';
 import { buildTimeline, clickSteps } from '../core/animation-timeline';
 import { linkAction } from '../core/links';
 
@@ -137,47 +138,55 @@ export function createShow(options: {
       return true;
     }
     typed = '';
-    switch (key) {
-      case 'Escape':
-      case '-':
+    return matchBranch(key)
+      .with('Escape', '-', (): boolean => {
         exit();
         return true;
-      case ' ':
-      case 'ArrowRight':
-      case 'ArrowDown':
-      case 'PageDown':
-      case 'Enter':
-      case 'n':
-      case 'N':
-        go(1);
-        return true;
-      case 'ArrowLeft':
-      case 'ArrowUp':
-      case 'PageUp':
-      case 'Backspace':
-      case 'p':
-      case 'P':
-        go(-1);
-        return true;
-      case 'Home':
+      })
+      .with(
+        ' ',
+        'ArrowRight',
+        'ArrowDown',
+        'PageDown',
+        'Enter',
+        'n',
+        'N',
+        (): boolean => {
+          go(1);
+          return true;
+        }
+      )
+      .with(
+        'ArrowLeft',
+        'ArrowUp',
+        'PageUp',
+        'Backspace',
+        'p',
+        'P',
+        (): boolean => {
+          go(-1);
+          return true;
+        }
+      )
+      .with('Home', (): boolean => {
         jump(0);
         return true;
-      case 'End':
+      })
+      .with('End', (): boolean => {
         jump(slides().length - 1);
         return true;
-      case 'b':
-      case 'B':
-      case '.':
+      })
+      .with('b', 'B', '.', (): boolean => {
         toggleScreen('black');
         return true;
-      case 'w':
-      case 'W':
-      case ',':
+      })
+      .with('w', 'W', ',', (): boolean => {
         toggleScreen('white');
         return true;
-      default:
+      })
+      .otherwise((): boolean => {
         return false;
-    }
+      });
   };
 
   return {

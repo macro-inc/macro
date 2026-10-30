@@ -7,6 +7,7 @@ import {
   lineForSectionIndex,
   type MeasuredSection,
   placementOf,
+  type QuestionDrop,
   questionDropAt,
   samePlacement,
   sectionDropAt,
@@ -179,28 +180,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     if (!active || active.mode !== 'pointer') return;
     const { x, y } = pointer();
     if (active.target.kind === 'new-question') {
-      const canvas = options.canvas()?.getBoundingClientRect();
-      const viewport = options.viewport()?.getBoundingClientRect();
-      const inside =
-        !!canvas &&
-        !!viewport &&
-        x >= canvas.left &&
-        x <= canvas.right &&
-        y >= Math.max(canvas.top, viewport.top) &&
-        y <= viewport.bottom;
-      const drop = inside
-        ? questionDropAt(y, options.measureQuestions(), '')
-        : undefined;
-      setSession({
-        target: active.target,
-        mode: 'pointer',
-        placement: drop && { sectionId: drop.sectionId, index: drop.index },
-        sectionIndex: undefined,
-        lineY: inside ? (drop?.lineY ?? canvas.top + 8) : undefined,
-        refusal: undefined,
-        unchanged: !inside,
-      });
-      return;
+      return placeNewQuestion(active.target);
     }
     if (active.target.kind === 'question') {
       const drop = questionDropAt(
@@ -219,9 +199,9 @@ export function createBuilderDrag(options: BuilderDragOptions) {
       return;
     }
     const sections = options.measureSections();
-    const canvas = options.canvas()?.getBoundingClientRect();
+    const canvas = canvasBounds();
     if (active.target.kind === 'new-section') {
-      const viewport = options.viewport()?.getBoundingClientRect();
+      const viewport = viewportBounds();
       if (
         !canvas ||
         !viewport ||
@@ -236,10 +216,7 @@ export function createBuilderDrag(options: BuilderDragOptions) {
         return;
       }
     }
-    const drop =
-      sections.length === 0 && active.target.kind === 'new-section' && canvas
-        ? { index: 0, lineY: canvas.top + 8 }
-        : sectionDropAt(y, sections, active.target.id);
+    const drop = sectionDropUnderPointer(active);
     const layout = options.layout();
     if (active.target.kind === 'new-section' && drop && layout) {
       // Show and announce where it lands: before the booking step.
@@ -259,6 +236,78 @@ export function createBuilderDrag(options: BuilderDragOptions) {
     setSession(
       sectionSession(active.target, 'pointer', drop?.index, drop?.lineY)
     );
+
+    function questionDropUnderPointer(inside: boolean) {
+      return inside
+        ? questionDropAt(y, options.measureQuestions(), '')
+        : undefined;
+    }
+
+    function dropPlacement(
+      drop: QuestionDrop | undefined
+    ): { sectionId: string; index: number } | undefined {
+      return drop && { sectionId: drop.sectionId, index: drop.index };
+    }
+
+    function viewportBounds() {
+      return options.viewport()?.getBoundingClientRect();
+    }
+
+    function canvasBounds() {
+      return options.canvas()?.getBoundingClientRect();
+    }
+
+    function sectionDropUnderPointer(activeInput: NonNullable<typeof active>) {
+      return sections.length === 0 &&
+        activeInput.target.kind === 'new-section' &&
+        canvas
+        ? { index: 0, lineY: canvas.top + 8 }
+        : sectionDropAt(y, sections, activeInput.target.id);
+    }
+
+    function insertionLineY(
+      inside: boolean,
+      drop: QuestionDrop | undefined,
+      canvas: DOMRect | undefined
+    ): number | undefined {
+      return inside && canvas ? (drop?.lineY ?? canvas.top + 8) : undefined;
+    }
+
+    function pointerOverCanvas(
+      canvas: DOMRect | undefined,
+      viewport: DOMRect | undefined
+    ) {
+      return (
+        !!canvas &&
+        !!viewport &&
+        x >= canvas.left &&
+        x <= canvas.right &&
+        y >= Math.max(canvas.top, viewport.top) &&
+        y <= viewport.bottom
+      );
+    }
+
+    function placeNewQuestion(
+      target: Extract<
+        NonNullable<ReturnType<typeof session>>['target'],
+        { kind: 'new-question' }
+      >
+    ) {
+      const canvas = canvasBounds();
+      const viewport = viewportBounds();
+      const inside = pointerOverCanvas(canvas, viewport);
+      const drop = questionDropUnderPointer(inside);
+      setSession({
+        target: target,
+        mode: 'pointer',
+        placement: dropPlacement(drop),
+        sectionIndex: undefined,
+        lineY: insertionLineY(inside, drop, canvas),
+        refusal: undefined,
+        unchanged: !inside,
+      });
+      return;
+    }
   }
 
   function movePreview() {

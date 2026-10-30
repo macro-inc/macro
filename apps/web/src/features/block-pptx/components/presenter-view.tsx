@@ -7,6 +7,7 @@
  */
 
 import type { DeckOutline, ShapeOutline } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
@@ -27,7 +28,7 @@ import type { PresentationEngine } from '../context/pptx-editor-context';
 import { mediaShapes } from '../core/media';
 import { createMediaUrls } from '../primitives/create-media-urls';
 import { createShow } from '../primitives/create-show';
-import { AudienceClip, ConsoleClip } from './presenter-media';
+import { AudienceClip, ConsoleClip, playIfAllowed } from './presenter-media';
 import { ShowCanvas } from './show-canvas';
 
 /** `h:mm:ss`, or `mm:ss` under an hour. */
@@ -159,7 +160,7 @@ export function PresenterView(props: {
   const toggleClip = (id: number) => {
     const el = audienceClip();
     if (!isPlaying(id)) setPlaying(id);
-    else if (el?.paused) void el.play().catch(() => {});
+    else if (el?.paused) fireAndForget(playIfAllowed(el), 'pptx-slideshow');
     else el?.pause();
   };
   const boxIn = (shape: ShapeOutline, s: number) => ({
@@ -202,8 +203,12 @@ export function PresenterView(props: {
       e.preventDefault();
       show.go(-1);
     };
-    const onFull = () => {
-      win.document.documentElement.requestFullscreen?.().catch(() => {});
+    const onFull = async () => {
+      try {
+        await win.document.documentElement.requestFullscreen?.();
+      } catch {
+        // The presentation remains available in its window.
+      }
     };
     const onResize = () =>
       setAudienceSize({ w: win.innerWidth, h: win.innerHeight });

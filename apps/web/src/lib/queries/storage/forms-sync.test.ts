@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
   invalidateDatabase: vi.fn(),
   invalidatePreview: vi.fn(),
 }));
-vi.mock('@service-connection/client', () => ({
+vi.mock('@queries/connection/tracked-entities', () => ({
   useEntitySubscription: vi.fn(),
 }));
 vi.mock('@service-connection/websocket', () => ({

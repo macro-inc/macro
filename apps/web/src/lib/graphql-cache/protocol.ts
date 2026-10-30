@@ -1,3 +1,4 @@
+import { match as matchBranch } from 'ts-pattern';
 /** Explicit local entities resolved atomically from a committed mutation response. */
 export type IdentityBindingWire = {
   deleteRecord?: boolean;
@@ -1078,8 +1079,8 @@ export function isRecordFieldChanges(
 /** Strictly validates a pushed cache notification. */
 export function isCachePush(value: unknown): value is CachePush {
   if (!isWireRecord(value)) return false;
-  switch (value.kind) {
-    case 'ops-affected':
+  return matchBranch(value)
+    .with({ kind: 'ops-affected' }, (value): boolean => {
       return (
         hasOnlyWireKeys(value, ['kind', 'opIds', 'keys', 'fieldChanges']) &&
         isWireStringArray(value.opIds) &&
@@ -1087,7 +1088,8 @@ export function isCachePush(value: unknown): value is CachePush {
         (value.fieldChanges === undefined ||
           isRecordFieldChanges(value.fieldChanges))
       );
-    case 'cache-changed':
+    })
+    .with({ kind: 'cache-changed' }, (value): boolean => {
       return (
         hasOnlyWireKeys(value, [
           'kind',
@@ -1100,58 +1102,62 @@ export function isCachePush(value: unknown): value is CachePush {
         (value.searchChangedBuckets === undefined ||
           isWireStringArray(value.searchChangedBuckets))
       );
-    case 'cache-hydrated':
+    })
+    .with({ kind: 'cache-hydrated' }, (value): boolean => {
       return (
         hasOnlyWireKeys(value, ['kind', 'revision', 'searchChangedBuckets']) &&
         isCacheRevision(value.revision) &&
         (value.searchChangedBuckets === undefined ||
           isWireStringArray(value.searchChangedBuckets))
       );
-    case 'mutation-settled': {
-      const settlement = value.settlement;
-      if (
-        !hasOnlyWireKeys(value, ['kind', 'settlement']) ||
-        !isWireRecord(settlement) ||
-        typeof settlement.transactionId !== 'string' ||
-        (settlement.mutationUuid !== undefined &&
-          typeof settlement.mutationUuid !== 'string')
-      ) {
-        return false;
-      }
-      if (settlement.status === 'committed') {
-        return hasOnlyWireKeys(settlement, [
-          'transactionId',
-          'status',
-          'mutationUuid',
-        ]);
-      }
-      if (settlement.status === 'superseded') {
+    })
+    .with({ kind: 'mutation-settled' }, (value): boolean => {
+      {
+        const settlement = value.settlement;
+        if (
+          !hasOnlyWireKeys(value, ['kind', 'settlement']) ||
+          !isWireRecord(settlement) ||
+          typeof settlement.transactionId !== 'string' ||
+          (settlement.mutationUuid !== undefined &&
+            typeof settlement.mutationUuid !== 'string')
+        ) {
+          return false;
+        }
+        if (settlement.status === 'committed') {
+          return hasOnlyWireKeys(settlement, [
+            'transactionId',
+            'status',
+            'mutationUuid',
+          ]);
+        }
+        if (settlement.status === 'superseded') {
+          return (
+            hasOnlyWireKeys(settlement, [
+              'transactionId',
+              'mutationUuid',
+              'status',
+              'replacementTransactionId',
+            ]) && typeof settlement.replacementTransactionId === 'string'
+          );
+        }
         return (
+          settlement.status === 'permanently-failed' &&
           hasOnlyWireKeys(settlement, [
             'transactionId',
             'mutationUuid',
             'status',
-            'replacementTransactionId',
-          ]) && typeof settlement.replacementTransactionId === 'string'
+            'error',
+            'errorCode',
+          ]) &&
+          typeof settlement.error === 'string' &&
+          (settlement.errorCode === undefined ||
+            typeof settlement.errorCode === 'string')
         );
       }
-      return (
-        settlement.status === 'permanently-failed' &&
-        hasOnlyWireKeys(settlement, [
-          'transactionId',
-          'mutationUuid',
-          'status',
-          'error',
-          'errorCode',
-        ]) &&
-        typeof settlement.error === 'string' &&
-        (settlement.errorCode === undefined ||
-          typeof settlement.errorCode === 'string')
-      );
-    }
-    default:
+    })
+    .otherwise((): boolean => {
       return false;
-  }
+    });
 }
 
 /** Strictly validates any response or push delivered to a cache host. */

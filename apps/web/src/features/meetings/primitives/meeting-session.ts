@@ -80,6 +80,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
     activeAttempt?.abort();
     const controller = new AbortController();
     activeAttempt = controller;
+    const isStale = () => disposed || attempt !== generation;
     // Wait across route owners: late token cleanup must finish before reusing
     // the same RTC identity.
     const attemptLifecycle = capabilities.lifecycle.begin();
@@ -112,7 +113,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         await attemptLifecycle.previous;
         if (previousSession) await release(previousSession);
       });
-      if (disposed || attempt !== generation) return;
+      if (isStale()) return;
       // A previous owner may still have been disconnecting when Join was
       // clicked. Check the shared call state after its cleanup has finished.
       if (capabilities.isInCall()) {
@@ -125,7 +126,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         await joinTrace.span('meeting.join.create', () =>
           prepare(controller.signal)
         );
-        if (disposed || attempt !== generation) return;
+        if (isStale()) return;
       }
       const shareToken = capabilities.shareToken();
       issued = {
@@ -134,7 +135,7 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
         ),
         shareToken,
       };
-      if (disposed || attempt !== generation) {
+      if (isStale()) {
         await release(issued);
         return;
       }
@@ -157,15 +158,49 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
           localTracks ? { ...preferences, localTracks } : preferences
         )
       );
-      if (disposed || attempt !== generation) return;
+      if (isStale()) return;
       setJoinedCallId(issued.credentials.callId);
       joinTrace.setAttr('meeting.join.outcome', 'connected');
     } catch (cause) {
       // Provider errors may include credentials or a capability URL.
+      markJoinFailed();
+      await cleanUpIssuedSession();
+      if (isStale()) return;
+      issuedSession = undefined;
+      setError('Could not join the call. Check your connection and try again.');
+      setCredentials(undefined);
+      console.error('Failed to join meeting', cause);
+    } finally {
+      joinTrace.end();
+      // Keep the signal abortable for connected actions such as retrying invites.
+      // A failed attempt has no session left that can own those actions.
+      abortUnownedAttempt();
+      attemptLifecycle.complete();
+      finishJoining();
+    }
+
+    function markJoinFailed() {
       if (!disposed && attempt === generation) {
         joinTrace.error('Meeting join failed');
         joinTrace.setAttr('meeting.join.outcome', 'failed');
       }
+    }
+
+    function finishJoining() {
+      if (!disposed && attempt === generation) setJoining(false);
+    }
+
+    function abortUnownedAttempt() {
+      if (
+        activeAttempt === controller &&
+        (!issued || issuedSession !== issued)
+      ) {
+        controller.abort();
+        activeAttempt = undefined;
+      }
+    }
+
+    async function cleanUpIssuedSession() {
       if (issued && issuedSession === issued) {
         issuedSession = undefined;
         try {
@@ -181,24 +216,6 @@ export function createMeetingSession(capabilities: MeetingSessionCapabilities) {
           await release(issued);
         }
       }
-      if (disposed || attempt !== generation) return;
-      issuedSession = undefined;
-      setError('Could not join the call. Check your connection and try again.');
-      setCredentials(undefined);
-      console.error('Failed to join meeting', cause);
-    } finally {
-      joinTrace.end();
-      // Keep the signal abortable for connected actions such as retrying invites.
-      // A failed attempt has no session left that can own those actions.
-      if (
-        activeAttempt === controller &&
-        (!issued || issuedSession !== issued)
-      ) {
-        controller.abort();
-        activeAttempt = undefined;
-      }
-      attemptLifecycle.complete();
-      if (!disposed && attempt === generation) setJoining(false);
     }
   }
 

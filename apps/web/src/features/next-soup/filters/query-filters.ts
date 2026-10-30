@@ -75,6 +75,8 @@ function isCallAttendanceFilteredOut(
   return isAttendedFilteredOut(attendedFilter, itemAttended);
 }
 
+const isSet = (value: unknown) => value !== undefined && value !== null;
+
 // TODO: this only supports the subset of soup filters needed for cache matching.
 export function filterSoupItemByRequestBody(
   item: SoupApiItem,
@@ -167,19 +169,24 @@ export function filterSoupItemByRequestBody(
       const filters = body.initiative_filters;
       // Match the server's opt-in rule; cached projects never leak into tasks
       // or folders when an older Soup caller has no initiative filter.
-      const optedIn =
-        filters?.include === true ||
-        Boolean(filters?.initiative_ids?.length) ||
-        Boolean(filters?.owners?.length) ||
-        (filters?.name !== undefined && filters.name !== null) ||
-        (filters?.due_after !== undefined && filters.due_after !== null) ||
-        (filters?.due_before !== undefined && filters.due_before !== null) ||
-        Boolean(filters?.notification_filters?.states?.length);
+      const optedIn = buildOptedIn();
       return (
         optedIn &&
         !isIdFilteredOut(filters?.initiative_ids, data.id) &&
         !isValueFilteredOut(filters?.owners, data.ownerId)
       );
+
+      function buildOptedIn() {
+        return (
+          filters?.include === true ||
+          Boolean(filters?.initiative_ids?.length) ||
+          Boolean(filters?.owners?.length) ||
+          isSet(filters?.name) ||
+          isSet(filters?.due_after) ||
+          isSet(filters?.due_before) ||
+          Boolean(filters?.notification_filters?.states?.length)
+        );
+      }
     })
     .with({ tag: 'agentSession' }, ({ data }) => {
       const filters = body.agent_session_filters;

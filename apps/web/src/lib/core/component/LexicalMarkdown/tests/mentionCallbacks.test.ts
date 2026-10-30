@@ -29,7 +29,7 @@ vi.mock('@core/constant/allBlocks', () => ({
   verifyBlockName: (name: string) => name,
 }));
 const { untrackMention } = vi.hoisted(() => ({ untrackMention: vi.fn() }));
-vi.mock('@core/signal/mention', () => ({ untrackMention }));
+vi.mock('@app/lib/queries/storage/mentions', () => ({ untrackMention }));
 vi.mock('@service-storage/client', () => ({
   blockNameToItemType: (name: string) => {
     const map: Record<string, string> = {

@@ -1,8 +1,11 @@
-import type { CellWrite } from '@core/database-sql/generated/types';
-import { emailToMacroId, isMacroId, macroIdToEmail } from '@core/user/macroId';
+import {
+  emailToMacroId,
+  isMacroId,
+  macroIdToEmail,
+} from '@app/lib/identity/macro-id';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
-import { cellValue } from '../../database/core/cell-ops';
+import { type CellWrite, cellValue } from '../../database/core/cell-ops';
 import {
   type DatabaseCsv,
   encodeDatabaseCsv,

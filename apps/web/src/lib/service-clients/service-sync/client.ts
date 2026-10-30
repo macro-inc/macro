@@ -1,5 +1,5 @@
+import { getPermissionToken } from '@app/lib/queries/storage/permission-token';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
-import { getPermissionToken } from '@core/signal/token';
 import {
   type FetchWithTokenErrorCode,
   fetchWithToken,

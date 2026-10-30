@@ -118,12 +118,7 @@ export type {
   InputVariant,
   InputVariantProps,
 } from './components/Input';
-export {
-  Input,
-  inputClasses,
-  inputOutlineFocusClasses,
-  inputVariants,
-} from './components/Input';
+export { Input, inputClasses, inputVariants } from './components/Input';
 export type {
   InputGroupAddonAlign,
   InputGroupAddonProps,

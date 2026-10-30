@@ -1,12 +1,10 @@
-import { useUserId } from '@core/context/user';
 import { useAgentPreview } from '@queries/agent-session/preview';
 import { createSignal, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 
 /** Persistent session preview state, independent of transcript/tool-call rendering. */
 export function AgentPreviewBanner() {
-  const { sessionId, session } = useAgentSession();
-  const userId = useUserId();
+  const { sessionId, session, userId } = useAgentSession();
   const preview = useAgentPreview(sessionId);
   const state = () =>
     preview.query.isSuccess ? preview.query.data.preview : undefined;

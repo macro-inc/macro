@@ -1,16 +1,19 @@
+import { createCodeFileFromText } from '@app/lib/queries/items/create';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { asFileType } from '@core/component/AI/util/attachment';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TruncatedText } from '@core/component/FileList/TruncatedText';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { createCodeFileFromText } from '@core/util/create';
 import {
   allSupportedExtensionSet,
   isCodeEditorExtensionSupported,
 } from '@core/util/languageQuery';
 import Terminal from '@icon/system/regular/terminal.svg';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+import {
+  createChatIdMapping,
+  fetchChatIdMapping,
+} from '@queries/cognition/requests';
 import type {
   TextEditorCodeExecutionContent,
   TextEditorCodeExecutionResult,
@@ -63,7 +66,7 @@ function CreateResult(props: {
   onMount(async () => {
     if (createdFile()) return;
 
-    const result = await cognitionApiServiceClient.getIdMapping({
+    const result = await fetchChatIdMapping({
       source_id: props.toolId,
     });
 
@@ -200,7 +203,7 @@ const handler = createToolRenderer({
       };
 
       // Persist the mapping to the backend for retrieval on chat refresh
-      await cognitionApiServiceClient.createIdMapping({
+      await createChatIdMapping({
         source_id: ctx.tool.id,
         target_id: JSON.stringify({ documentId, fileName, extension }),
       });

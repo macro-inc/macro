@@ -20,7 +20,7 @@ import DiamondsFour from '@icon/system/regular/diamonds-four.svg';
 import Eye from '@icon/system/regular/eye.svg';
 import EyeSlash from '@icon/system/regular/eye-slash.svg';
 import { Tabs } from '@kobalte/core/tabs';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { type Accessor, createSignal, For, type JSX, Show } from 'solid-js';
 import type { Alignment } from '../core/align';
 import type { BooleanOperation } from '../core/boolean';
 import { cssFor } from '../core/css';
@@ -554,7 +554,7 @@ export function DesignPanel(props: {
                       <NumberField
                         label={<CornersOut class="size-3.5" />}
                         ariaLabel="Corner radius"
-                        value={info().cornerRadius?.top_left ?? 0}
+                        value={topLeftRadius(info)}
                         min={0}
                         mixed={
                           !!info().cornerRadius &&
@@ -826,6 +826,10 @@ export function DesignPanel(props: {
       </Tabs.Content>
     </Tabs>
   );
+
+  function topLeftRadius(info: Accessor<NodeInfo>): number {
+    return info().cornerRadius?.top_left ?? 0;
+  }
 }
 
 function CodeTab(props: { info: NodeInfo; onCopy: (text: string) => void }) {

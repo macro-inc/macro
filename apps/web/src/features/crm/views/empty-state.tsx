@@ -28,7 +28,7 @@ export function CrmEmptyState(
     stageFilter,
     ownerFilter,
   } = useCrmWorkspace();
-  const { openCreateCompany, openCreateContact } = useCrmContext();
+  const { openCreateContact } = useCrmContext();
   const peopleSearch = () => queryFilters.state.include.crmContactSearch;
   const teamQuery = useCurrentTeamQuery();
   const isTeamAdmin = useIsTeamAdmin();
@@ -131,30 +131,41 @@ export function CrmEmptyState(
         />
       </Match>
       <Match when={true}>
-        <CrmListEmpty
-          title={
-            !activeTab() || activeTab() === 'active'
-              ? 'No customers yet'
-              : activeTab()?.startsWith('list:')
-                ? 'No companies in this list'
-                : 'No companies in this view'
-          }
-          description={
-            !activeTab() || activeTab() === 'active'
-              ? 'Customers your team emails will appear here.'
-              : activeTab()?.startsWith('list:')
-                ? 'Use Edit list to add companies to this collection.'
-                : 'Companies that match this view will appear here.'
-          }
-          action={
-            !activeTab() || activeTab() === 'active'
-              ? { label: 'Add company', onClick: openCreateCompany }
-              : props.onEditList
-                ? { label: 'Edit list', onClick: props.onEditList }
-                : undefined
-          }
-        />
+        <CompaniesEmpty onEditList={props.onEditList} />
       </Match>
     </Switch>
+  );
+}
+
+/** An empty company tab: the customers, a list, or a saved view. */
+function CompaniesEmpty(props: { onEditList?: () => void }) {
+  const { activeTab } = useCrmWorkspace();
+  const { openCreateCompany } = useCrmContext();
+  const customers = () => !activeTab() || activeTab() === 'active';
+  const list = () => activeTab()?.startsWith('list:');
+  return (
+    <CrmListEmpty
+      title={
+        customers()
+          ? 'No customers yet'
+          : list()
+            ? 'No companies in this list'
+            : 'No companies in this view'
+      }
+      description={
+        customers()
+          ? 'Customers your team emails will appear here.'
+          : list()
+            ? 'Use Edit list to add companies to this collection.'
+            : 'Companies that match this view will appear here.'
+      }
+      action={
+        customers()
+          ? { label: 'Add company', onClick: openCreateCompany }
+          : props.onEditList
+            ? { label: 'Edit list', onClick: props.onEditList }
+            : undefined
+      }
+    />
   );
 }

@@ -106,8 +106,7 @@ export function expandDictionary(dic: string, rules: AffixRules): Lexicon {
     const stem = slash < 0 ? line : line.slice(0, slash);
     if (/\d/.test(stem)) continue;
     const flags = slash < 0 ? '' : line.slice(slash + 1).split(/\s/)[0];
-    const target =
-      rules.noSuggest && flags.includes(rules.noSuggest) ? hidden : words;
+    const target = buildTarget(flags);
     target.add(stem);
     const suffixed: string[] = [];
     for (const flag of flags) {
@@ -131,6 +130,10 @@ export function expandDictionary(dic: string, rules: AffixRules): Lexicon {
   }
   for (const w of hidden) words.delete(w);
   return { words, hidden, replacements: rules.replacements };
+
+  function buildTarget(flags: string) {
+    return rules.noSuggest && flags.includes(rules.noSuggest) ? hidden : words;
+  }
 }
 
 // ---- tokens -----------------------------------------------------------------

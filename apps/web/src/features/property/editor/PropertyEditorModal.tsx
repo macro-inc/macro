@@ -223,14 +223,11 @@ export function PropertyEditorModal() {
         : count + ' entities'
     }`;
 
-    fireAndForget(
-      saveProperties(selectedEntities, targetProperty, value).then(
-        (success) => {
-          if (success) toast.success(message);
-        }
-      ),
-      'property-editor'
-    );
+    const save = async () => {
+      if (await saveProperties(selectedEntities, targetProperty, value))
+        toast.success(message);
+    };
+    fireAndForget(save(), 'property-editor');
   };
 
   return (

@@ -1,10 +1,10 @@
+import { useProfilePictureUrl } from '@app/lib/queries/auth/profile-pictures';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { ENABLE_PROFILE_PICTURES } from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { staticFileSizedUrl } from '@core/constant/servers';
 import { internalDrag } from '@core/directive/internalDragState';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import {
   getDisplayName,
   getDisplayNameParts,

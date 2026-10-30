@@ -72,8 +72,6 @@ const MAX_LIST_HEIGHT = 192;
 // flipping cannot see it: a picker opened low on a phone hides behind it.
 const pickerPlacement = () =>
   virtualKeyboardVisible() ? 'top-start' : 'bottom-start';
-const tagActionButtonClass =
-  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100';
 
 export type TagPickerSourceProps =
   | { docTags: DocTags; createDocTags?: never }
@@ -937,7 +935,7 @@ function TagPickerRow(props: {
               size="icon-sm"
               tooltip="View tagged items"
               aria-label={`View all items with tag ${label()}`}
-              class={tagActionButtonClass}
+              class="size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               onMouseDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -956,7 +954,7 @@ function TagPickerRow(props: {
               size="icon-sm"
               tooltip="Edit tag"
               aria-label={`Edit ${label()}`}
-              class={tagActionButtonClass}
+              class="size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
               onMouseDown={(event) => {
                 event.preventDefault();
                 event.stopPropagation();

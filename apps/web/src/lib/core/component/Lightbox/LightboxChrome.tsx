@@ -13,9 +13,6 @@ type LightboxChromeProps = {
   indexLabel?: Accessor<string>;
 };
 
-const navButtonClass =
-  'absolute top-1/2 -translate-y-1/2 bg-surface backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-surface transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50';
-
 /** Desktop navigation arrows and the image-position indicator. */
 export function LightboxChrome(props: LightboxChromeProps) {
   return (
@@ -24,7 +21,10 @@ export function LightboxChrome(props: LightboxChromeProps) {
       <Show when={!isTouchDevice()}>
         <Show when={!props.navigationHidden}>
           <button
-            class={cn(navButtonClass, 'left-4')}
+            class={cn(
+              'absolute top-1/2 -translate-y-1/2 bg-surface backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-surface transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50',
+              'left-4'
+            )}
             style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
             onClick={props.onPrevious}
             disabled={!props.onPrevious}
@@ -34,7 +34,10 @@ export function LightboxChrome(props: LightboxChromeProps) {
           </button>
 
           <button
-            class={cn(navButtonClass, 'right-4')}
+            class={cn(
+              'absolute top-1/2 -translate-y-1/2 bg-surface backdrop-blur-sm rounded-lg border border-edge p-2 shadow-md hover:bg-surface transition-opacity duration-300 disabled:cursor-not-allowed disabled:opacity-50',
+              'right-4'
+            )}
             style={{ 'z-index': 'calc(var(--z-index-modal) + 1)' }}
             onClick={props.onNext}
             disabled={!props.onNext}

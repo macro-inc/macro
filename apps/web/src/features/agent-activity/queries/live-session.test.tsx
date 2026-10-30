@@ -6,7 +6,7 @@ import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({ acquire: vi.fn() }));
-vi.mock('@core/agent-session/AgentSession', () => ({
+vi.mock('@app/lib/queries/agent-session/agent-session', () => ({
   AgentSession: { acquire: fake.acquire },
 }));
 

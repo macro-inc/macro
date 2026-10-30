@@ -464,11 +464,7 @@ export function ChatComposer(props: {
                       </div>
                     </div>
                     <Show
-                      when={
-                        (props.session?.busy || canSendNext()) &&
-                        props.session?.onStop &&
-                        !hasContent()
-                      }
+                      when={getChatComposerWhen()}
                       fallback={
                         <SendButton
                           appearance="composer"
@@ -526,6 +522,14 @@ export function ChatComposer(props: {
       </div>
     </InputProvider>
   );
+
+  function getChatComposerWhen(): boolean | null | undefined {
+    return (
+      (props.session?.busy || canSendNext()) &&
+      props.session?.onStop &&
+      !hasContent()
+    );
+  }
 }
 
 /** Adapt the session's controls to the same input used for a new Chat. */

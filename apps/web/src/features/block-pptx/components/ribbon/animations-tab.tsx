@@ -149,6 +149,11 @@ export function AnimationsTab() {
   const c = env.commands;
   const ro = () => env.readonly();
   const anim = env.animation;
+  /** Moves animation `i` one place, keeping it picked. */
+  const moveAnimation = async (i: number, delta: -1 | 1) => {
+    await c.moveAnimation(i, delta);
+    anim.pick(i + delta);
+  };
   const hasTarget = () => env.selection().length > 0;
   const current = () => {
     const i = anim.current();
@@ -208,7 +213,7 @@ export function AnimationsTab() {
           label="Effect options"
           text="Effect Options"
           icon={<Sliders />}
-          disabled={ro() || !current() || (!info()?.options && !textShape())}
+          disabled={getAnimationsTabDisabled2()}
           testId="pptx-animation-options"
         >
           {(close) => (
@@ -386,10 +391,7 @@ export function AnimationsTab() {
           onClick={() => {
             const i = anim.current();
             if (i === undefined) return;
-            fireAndForget(
-              c.moveAnimation(i, -1).then(() => anim.pick(i - 1)),
-              'pptx-editor'
-            );
+            fireAndForget(moveAnimation(i, -1), 'pptx-editor');
           }}
         >
           <ArrowUp />
@@ -398,18 +400,11 @@ export function AnimationsTab() {
           aria-label="Move later"
           tooltip="Move Later"
           data-testid="pptx-animation-later"
-          disabled={
-            ro() ||
-            anim.current() === undefined ||
-            anim.current()! >= (env.slide()?.animations?.length ?? 0) - 1
-          }
+          disabled={getAnimationsTabDisabled()}
           onClick={() => {
             const i = anim.current();
             if (i === undefined) return;
-            fireAndForget(
-              c.moveAnimation(i, 1).then(() => anim.pick(i + 1)),
-              'pptx-editor'
-            );
+            fireAndForget(moveAnimation(i, 1), 'pptx-editor');
           }}
         >
           <ArrowDown />
@@ -417,4 +412,16 @@ export function AnimationsTab() {
       </RibbonGroup>
     </>
   );
+
+  function getAnimationsTabDisabled2(): boolean | undefined {
+    return ro() || !current() || (!info()?.options && !textShape());
+  }
+
+  function getAnimationsTabDisabled(): boolean | undefined {
+    return (
+      ro() ||
+      anim.current() === undefined ||
+      anim.current()! >= (env.slide()?.animations?.length ?? 0) - 1
+    );
+  }
 }

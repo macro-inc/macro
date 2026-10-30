@@ -2,7 +2,7 @@ id: ts-feature-data-no-ui
 language: typescript
 # Twin of tsx-feature-data-no-ui — ast-grep rules are single-language, and
 # `tsx` only scans .tsx files.
-severity: warning
+severity: error
 message: Feature queries/ and primitives/ never import components, views, or UI primitives. They produce data and view-state; views render it.
 note: |-
   Rule FE-33 in docs/development/style-guide.md. `queries/` adapts wire types and

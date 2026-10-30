@@ -24,6 +24,15 @@ import {
 } from '../mutations';
 import type { CalendarOccurrencesData } from '../occurrences';
 
+/** Settles with `mutation`, ignoring a rejection the test does not assert on. */
+async function settled(mutation: Promise<unknown>): Promise<void> {
+  try {
+    await mutation;
+  } catch {
+    /* These tests assert the cache, not the earlier mutation's outcome. */
+  }
+}
+
 const rsvpCalendarEventMock = vi.hoisted(() => vi.fn());
 const deleteCalendarEventMock = vi.hoisted(() => vi.fn());
 const updateCalendarEventMock = vi.hoisted(() => vi.fn());
@@ -425,9 +434,12 @@ describe('useRsvpCalendarEventMutation', () => {
       .mockReturnValueOnce(second.promise);
     const rsvp = renderHook(() => useRsvpCalendarEventMutation());
 
-    const firstMutation = rsvp
-      .mutateAsync({ eventId: 'event-1', response: 'accepted' })
-      .catch(() => {});
+    const firstMutation = settled(
+      rsvp.mutateAsync({
+        eventId: 'event-1',
+        response: 'accepted',
+      })
+    );
     await vi.waitFor(() => expect(selfStatus()).toBe('accepted'));
 
     const secondMutation = rsvp.mutateAsync({
@@ -453,9 +465,12 @@ describe('useRsvpCalendarEventMutation', () => {
       .mockReturnValueOnce(second.promise);
     const rsvp = renderHook(() => useRsvpCalendarEventMutation());
 
-    const firstMutation = rsvp
-      .mutateAsync({ eventId: 'event-1', response: 'accepted' })
-      .catch(() => {});
+    const firstMutation = settled(
+      rsvp.mutateAsync({
+        eventId: 'event-1',
+        response: 'accepted',
+      })
+    );
     await vi.waitFor(() => expect(selfStatus()).toBe('accepted'));
 
     // The second answer picks the same response, so equal cache values
@@ -487,9 +502,13 @@ describe('useRsvpCalendarEventMutation', () => {
       .mockReturnValueOnce(second.promise);
     const rsvp = renderHook(() => useRsvpCalendarEventMutation());
 
-    const firstMutation = rsvp
-      .mutateAsync({ eventId: 'event-3', response: 'tentative', scope: 'all' })
-      .catch(() => {});
+    const firstMutation = settled(
+      rsvp.mutateAsync({
+        eventId: 'event-3',
+        response: 'tentative',
+        scope: 'all',
+      })
+    );
     await vi.waitFor(() => expect(responseAt(seriesKeys[0])).toBe('tentative'));
 
     const secondMutation = rsvp.mutateAsync({
@@ -1007,9 +1026,13 @@ it('updates and rolls back invitation projections with no calendar viewport load
     .mockReturnValueOnce(first.promise)
     .mockReturnValueOnce(second.promise);
   const rsvp = renderHook(() => useRsvpCalendarEventMutation());
-  const earlier = rsvp
-    .mutateAsync({ eventId: 'event-1', response: 'accepted' })
-    .catch(() => {});
+
+  const earlier = settled(
+    rsvp.mutateAsync({
+      eventId: 'event-1',
+      response: 'accepted',
+    })
+  );
   await vi.waitFor(() => expect(response()).toBe('accepted'));
   const later = rsvp.mutateAsync({ eventId: 'event-1', response: 'tentative' });
   await vi.waitFor(() => expect(response()).toBe('tentative'));
@@ -1056,13 +1079,14 @@ it('binds provider writes and optimistic rollback to one address across both hos
       .getQueryData<typeof initial>(inviteKey)
       ?.invite.event.attendees.find((attendee) => attendee.email === email)
       ?.responseStatus;
-  const firstCall = mutation
-    .mutateAsync({
+
+  const firstCall = settled(
+    mutation.mutateAsync({
       eventId: 'event-1',
       respondingEmail: 'other@example.com',
       response: 'accepted',
     })
-    .catch(() => {});
+  );
   await vi.waitFor(() =>
     expect(response('other@example.com')).toBe('accepted')
   );

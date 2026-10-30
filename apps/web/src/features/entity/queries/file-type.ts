@@ -1,5 +1,5 @@
 /** File-type mutations used by document entities. */
-import { setFileType } from '@core/component/FileList/itemOperations';
+import { setFileType } from '@app/lib/queries/items/operations';
 import { toast } from '@core/component/Toast/Toast';
 import { setHistoryItemFileType } from '@queries/history/history';
 import { setPreviewFileType } from '@queries/preview';

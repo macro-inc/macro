@@ -2,7 +2,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import type { Link } from '@service-email/generated/schemas';
 import { type Accessor, createMemo } from 'solid-js';
-import { macroIdToEmail, tryMacroId } from '../user/macroId';
+import { macroIdToEmail, tryMacroId } from '../../identity/macro-id';
 import { createAssertedContextProvider } from './createContext';
 import { useIsAuthenticated } from './user';
 

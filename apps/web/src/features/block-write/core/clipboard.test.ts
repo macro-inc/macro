@@ -1,4 +1,4 @@
-import type { Clip } from '@core/docx-engine/types';
+import type { Clip } from '@app/lib/docx/types';
 import { describe, expect, it } from 'vitest';
 import {
   clipboardHtml,

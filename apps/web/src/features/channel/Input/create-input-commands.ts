@@ -28,9 +28,6 @@ type CreateInputCommandsDeps = {
 export function createInputCommands(
   deps: CreateInputCommandsDeps
 ): InputCommands {
-  const reportCallbackError = (error: unknown) =>
-    Telemetry.error(error, { surface: 'channel-input' });
-
   const removeAttachment = (attachment: InputAttachmentData) => {
     deps.removeTrackedAttachment(attachment.id);
     const current = deps.snapshot();
@@ -87,8 +84,9 @@ export function createInputCommands(
     toggleFormatRibbon: () => {
       deps.setShowFormatRibbon((open) => {
         const next = !open;
-        Promise.resolve(deps.callbacks?.onToggleFormatRibbon?.(next)).catch(
-          reportCallbackError
+        fireAndForget(
+          deps.callbacks?.onToggleFormatRibbon?.(next),
+          'channel-input'
         );
         return next;
       });
@@ -97,9 +95,7 @@ export function createInputCommands(
       const current = deps.snapshot();
       deps.reset();
       deps.clearComposer?.();
-      Promise.resolve(deps.callbacks?.onClose?.(current)).catch(
-        reportCallbackError
-      );
+      fireAndForget(deps.callbacks?.onClose?.(current), 'channel-input');
     },
     removeAttachment,
   };

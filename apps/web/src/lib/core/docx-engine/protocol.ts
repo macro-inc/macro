@@ -18,7 +18,7 @@ import type {
   ParagraphText,
   Pos,
   StyleInfo,
-} from './types';
+} from '../../docx/types';
 
 interface Base {
   id: number;

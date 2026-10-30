@@ -7,6 +7,7 @@ import type {
   QuickAccessItem,
   UserItem,
 } from '@core/context/quickAccess';
+import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import {
   type CommandWithInfo,
@@ -382,6 +383,7 @@ export function useCommandItems(
     !CommandState.isEntityActionMode();
   const entities = useEntitySearch(query, categoryFilter, {
     enabled: entityEnabled,
+    viewerId: useUserId(),
     excludeEmails: true,
     contactDiscovery: options?.contactDiscovery,
   });

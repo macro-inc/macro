@@ -1,6 +1,6 @@
+import { createTask } from '@app/lib/queries/items/create';
 import { toast } from '@core/component/Toast/Toast';
 import { useContacts } from '@core/user';
-import { createTask } from '@core/util/create';
 import { parseCsv } from '@core/util/csv';
 import { linearCsvRecordToMacroTaskDraft } from '@core/util/linearImport';
 import { buildSimpleEntityUrl } from '@core/util/url';

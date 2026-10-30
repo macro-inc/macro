@@ -4,10 +4,10 @@
  * mention at the drop point.
  */
 
+import { trackMention } from '@app/lib/queries/storage/mentions';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import type { BlockName } from '@core/block';
 import { itemToBlockName } from '@core/constant/allBlocks';
-import { trackMention } from '@core/signal/mention';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import { throttle } from '@solid-primitives/scheduled';

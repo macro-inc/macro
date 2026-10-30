@@ -247,16 +247,14 @@ async function finishLocalWrite(write: Promise<LocalDraft>): Promise<void> {
   }
 }
 
-async function persistLocalDraft(input: LocalDraftInput): Promise<LocalDraft> {
-  const owner = await emailStorageSession();
-  const id = input.clientHandles?.draftId ?? input.draft.db_id;
-  if (!id)
-    throw new Error('Draft identity must be minted before local persistence');
-  const previous = await localDraftStore.read(owner, id);
-  const key = previous?.key ?? id;
+/** Copies local files for a durable snapshot, keeping upload receipts the previous snapshot recorded. */
+async function stageLocalAttachments(
+  inputAttachments: LocalDraftInput['attachments'],
+  previous: LocalDraft | undefined
+) {
   const files = new Map<string, Blob>();
   const attachments: LocalDraftAttachment[] = [];
-  for (const attachment of input.attachments) {
+  for (const attachment of inputAttachments) {
     // Document attachments exist only in the AI draft composer, which keeps no
     // local draft.
     if (attachment.type === 'document') continue;
@@ -290,6 +288,54 @@ async function persistLocalDraft(input: LocalDraftInput): Promise<LocalDraft> {
             old.uploaded)),
     });
   }
+  return { files, attachments };
+}
+
+/** Handles a working copy already learned outlive the editor's snapshot. */
+function localDraftHandles(
+  input: LocalDraftInput,
+  previous: LocalDraft | undefined,
+  id: string
+) {
+  return {
+    draftId: previous?.draftId ?? id,
+    threadId:
+      previous?.threadId ??
+      input.clientHandles?.threadId ??
+      input.draft.thread_db_id ??
+      undefined,
+    serverDraftId:
+      previous?.serverDraftId ??
+      (input.clientHandles ? undefined : (input.draft.db_id ?? undefined)),
+    serverThreadId: previous?.serverThreadId,
+  };
+}
+
+function localDraftContent(
+  draft: LocalDraftInput['draft'],
+  previous: LocalDraft | undefined
+) {
+  return structuredClone({
+    ...draft,
+    replying_to_id: draft.replying_to_id ?? previous?.content.replying_to_id,
+    provider_id: draft.provider_id ?? previous?.content.provider_id,
+    provider_thread_id:
+      draft.provider_thread_id ?? previous?.content.provider_thread_id,
+    thread_db_id: draft.thread_db_id ?? previous?.content.thread_db_id,
+  });
+}
+
+async function persistLocalDraft(input: LocalDraftInput): Promise<LocalDraft> {
+  const owner = await emailStorageSession();
+  const id = input.clientHandles?.draftId ?? input.draft.db_id;
+  if (!id)
+    throw new Error('Draft identity must be minted before local persistence');
+  const previous = await localDraftStore.read(owner, id);
+  const key = previous?.key ?? id;
+  const { files, attachments } = await stageLocalAttachments(
+    input.attachments,
+    previous
+  );
   return await localDraftStore.save(
     owner,
     {
@@ -300,29 +346,10 @@ async function persistLocalDraft(input: LocalDraftInput): Promise<LocalDraft> {
         input.expectedGeneration ??
         previous?.generation ??
         (await localDraftStore.generation(owner, key)),
-      draftId: previous?.draftId ?? id,
-      threadId:
-        previous?.threadId ??
-        input.clientHandles?.threadId ??
-        input.draft.thread_db_id ??
-        undefined,
-      serverDraftId:
-        previous?.serverDraftId ??
-        (input.clientHandles ? undefined : (input.draft.db_id ?? undefined)),
-      serverThreadId: previous?.serverThreadId,
+      ...localDraftHandles(input, previous, id),
       inboxId: input.inboxId,
       senderEmail: input.draft.sender_email ?? input.senderEmail,
-      content: structuredClone({
-        ...input.draft,
-        replying_to_id:
-          input.draft.replying_to_id ?? previous?.content.replying_to_id,
-        provider_id: input.draft.provider_id ?? previous?.content.provider_id,
-        provider_thread_id:
-          input.draft.provider_thread_id ??
-          previous?.content.provider_thread_id,
-        thread_db_id:
-          input.draft.thread_db_id ?? previous?.content.thread_db_id,
-      }),
+      content: localDraftContent(input.draft, previous),
       attachments,
       status: 'dirty',
     },
@@ -576,6 +603,77 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function legacyDraftAttachments(
+  message: Record<string, unknown>
+): LocalDraftAttachment[] {
+  return [
+    ...objects(message.attachmentsDraft).map(
+      (attachment): LocalDraftAttachment => ({
+        type: 'remote',
+        attachmentId: String(attachment.id),
+        fileName: String(attachment.fileName ?? ''),
+        contentType: String(attachment.contentType ?? ''),
+        fileSize: Number(attachment.size ?? 0),
+        url: String(attachment.s3Key ?? ''),
+      })
+    ),
+    ...objects(message.attachmentsForwarded).map(
+      (attachment): LocalDraftAttachment => ({
+        type: 'forwarded',
+        attachmentId: String(attachment.attachmentId),
+        fileName: String(attachment.filename ?? ''),
+        mimeType: String(attachment.mimeType ?? ''),
+        fileSize: Number(attachment.sizeBytes ?? 0),
+      })
+    ),
+  ];
+}
+
+function legacyDraftContacts(value: unknown) {
+  return objects(value).map((entry) => ({
+    email: String(entry.email ?? ''),
+    name: text(entry.name),
+    photo_url: text(entry.photoUrl),
+  }));
+}
+
+/** The working copy described by a queued save that an older app version wrote. */
+function legacyQueuedDraft(
+  mutation: MutationInspection,
+  id: string,
+  draft: LocalDraft | undefined,
+  accountId: string
+): Parameters<typeof localDraftStore.save>[1] {
+  const input = object(mutation.variables.input);
+  const optimistic = object(object(mutation.optimisticData).saveEmailDraft);
+  const message = object(optimistic.draft);
+  return {
+    expectedRevision: draft?.revision ?? 0,
+    key: draft?.key ?? id,
+    accountId,
+    generation: draft?.generation ?? crypto.randomUUID(),
+    draftId: draft?.draftId ?? id,
+    threadId: text(input.threadDbId),
+    inboxId: text(input.linkId) ?? text(message.linkId),
+    senderEmail: text(object(message.from).email),
+    content: {
+      subject: String(input.subject ?? ''),
+      sender_email: text(input.senderEmail) ?? text(object(message.from).email),
+      body_html: text(input.bodyHtml),
+      body_text: text(input.bodyText),
+      body_macro: text(input.bodyMacro),
+      replying_to_id: text(input.replyingToId),
+      provider_id: text(input.providerId),
+      provider_thread_id: text(input.providerThreadId),
+      to: legacyDraftContacts(input.to),
+      cc: legacyDraftContacts(input.cc),
+      bcc: legacyDraftContacts(input.bcc),
+    },
+    attachments: legacyDraftAttachments(message),
+    status: 'queued',
+  };
+}
+
 /** Replay bookkeeping runs even when no composer is mounted. */
 export function localDraftQueueLifecycle(
   host: CacheHost
@@ -644,8 +742,7 @@ export function localDraftQueueLifecycle(
       legacy.set(mutation.transactionId, saved);
       return saved;
     }
-    const input = object(mutation.variables.input);
-    const id = text(input.draftId);
+    const id = text(object(mutation.variables.input).draftId);
     if (!id) throw new Error('Queued email draft has no recoverable identity');
     let draft = await localDraftStore.read(owner, id);
     let revision = 0;
@@ -653,61 +750,10 @@ export function localDraftQueueLifecycle(
       mutation.operationName === 'SaveEmailDraft' &&
       (!draft || migrated.get(id) === draft.revision)
     ) {
-      const optimistic = object(object(mutation.optimisticData).saveEmailDraft);
-      const message = object(optimistic.draft);
-      const attachments: LocalDraftAttachment[] = [
-        ...objects(message.attachmentsDraft).map(
-          (attachment): LocalDraftAttachment => ({
-            type: 'remote',
-            attachmentId: String(attachment.id),
-            fileName: String(attachment.fileName ?? ''),
-            contentType: String(attachment.contentType ?? ''),
-            fileSize: Number(attachment.size ?? 0),
-            url: String(attachment.s3Key ?? ''),
-          })
-        ),
-        ...objects(message.attachmentsForwarded).map(
-          (attachment): LocalDraftAttachment => ({
-            type: 'forwarded',
-            attachmentId: String(attachment.attachmentId),
-            fileName: String(attachment.filename ?? ''),
-            mimeType: String(attachment.mimeType ?? ''),
-            fileSize: Number(attachment.sizeBytes ?? 0),
-          })
-        ),
-      ];
-      const contacts = (value: unknown) =>
-        objects(value).map((entry) => ({
-          email: String(entry.email ?? ''),
-          name: text(entry.name),
-          photo_url: text(entry.photoUrl),
-        }));
-      draft = await localDraftStore.save(owner, {
-        expectedRevision: draft?.revision ?? 0,
-        key: draft?.key ?? id,
-        accountId: owner.accountId,
-        generation: draft?.generation ?? crypto.randomUUID(),
-        draftId: draft?.draftId ?? id,
-        threadId: text(input.threadDbId),
-        inboxId: text(input.linkId) ?? text(message.linkId),
-        senderEmail: text(object(message.from).email),
-        content: {
-          subject: String(input.subject ?? ''),
-          sender_email:
-            text(input.senderEmail) ?? text(object(message.from).email),
-          body_html: text(input.bodyHtml),
-          body_text: text(input.bodyText),
-          body_macro: text(input.bodyMacro),
-          replying_to_id: text(input.replyingToId),
-          provider_id: text(input.providerId),
-          provider_thread_id: text(input.providerThreadId),
-          to: contacts(input.to),
-          cc: contacts(input.cc),
-          bcc: contacts(input.bcc),
-        },
-        attachments,
-        status: 'queued',
-      });
+      draft = await localDraftStore.save(
+        owner,
+        legacyQueuedDraft(mutation, id, draft, owner.accountId)
+      );
       migrated.set(id, draft.revision);
       revision = draft.revision;
     }
@@ -911,18 +957,24 @@ async function settleDraftAttempt(
       acknowledgedRevision,
       serverDraftId: payload?.draftId ?? draft.serverDraftId,
       serverThreadId: payload?.thread?.id ?? draft.serverThreadId,
-      status:
-        latest && !draftSyncPaused(draft) && draft.status !== 'deleting'
-          ? draft.revision !== attempt.revision ||
-            draft.attachments.some(
-              (attachment) =>
-                attachment.type === 'local' && !attachment.uploaded
-            )
-            ? 'dirty'
-            : 'synced'
-          : draft.status,
+      status: latest ? acknowledgedStatus(draft, attempt) : draft.status,
     };
   });
+}
+
+/** An accepted save leaves the copy dirty while newer edits or file uploads are outstanding. */
+function acknowledgedStatus(
+  draft: LocalDraft,
+  attempt: DraftAttempt
+): LocalDraft['status'] {
+  if (draftSyncPaused(draft) || draft.status === 'deleting')
+    return draft.status;
+  return draft.revision !== attempt.revision ||
+    draft.attachments.some(
+      (attachment) => attachment.type === 'local' && !attachment.uploaded
+    )
+    ? 'dirty'
+    : 'synced';
 }
 
 export async function readLocalEmailSends(): Promise<EmailSendIntent[]> {
@@ -943,6 +995,18 @@ export async function removeLocalEmailSend(uuid: string): Promise<void> {
 }
 export function watchLocalEmailSends(changed: () => void): () => void {
   return localDraftStore.subscribe(changed);
+}
+
+async function runAfterSettled(
+  previous: Promise<void> | undefined,
+  run: () => Promise<void>
+): Promise<void> {
+  try {
+    await previous;
+  } catch {
+    /* The earlier upload reports its own failure. */
+  }
+  await run();
 }
 
 /** Web Locks serialize one durable file's upload across composers and tabs. */
@@ -977,8 +1041,7 @@ export async function withLocalAttachmentUpload(
   if (!isTauri())
     throw new Error('This browser cannot safely upload queued attachments');
   // The native app has one main webview; serialize its composers even on older WebKit.
-  const previous = nativeUploadLocks.get(name) ?? Promise.resolve();
-  const next = previous.catch(() => {}).then(run);
+  const next = runAfterSettled(nativeUploadLocks.get(name), run);
   nativeUploadLocks.set(name, next);
   try {
     await next;

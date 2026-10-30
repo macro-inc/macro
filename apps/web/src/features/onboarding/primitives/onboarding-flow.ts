@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -127,9 +128,14 @@ export function createOnboardingFlow(
     )
       return;
     repairing = true;
-    context.repairTutorial().catch(() => {
-      repairing = false;
-    });
+    const repair = async () => {
+      try {
+        await context.repairTutorial();
+      } catch {
+        repairing = false;
+      }
+    };
+    fireAndForget(repair(), 'onboarding');
   });
 
   const status = (): FlowStatus => {

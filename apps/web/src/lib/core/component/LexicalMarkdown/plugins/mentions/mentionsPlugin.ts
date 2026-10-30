@@ -1,5 +1,5 @@
+import { untrackMention } from '@app/lib/queries/storage/mentions';
 import { verifyBlockName } from '@core/constant/allBlocks';
-import { untrackMention } from '@core/signal/mention';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $wrapNodeInElement, mergeRegister } from '@lexical/utils';
 import type { PeerIdValidator } from '@macro-inc/lexical-core';
@@ -54,7 +54,7 @@ import {
 } from '@macro-inc/lexical-core';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import type { MentionNode } from '@macro-inc/lexical-core/utils/mentions';
-import { blockNameToItemType, type ItemType } from '@service-storage/client';
+import { blockNameToItemType, type ItemType } from '@service-storage/itemType';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -199,82 +199,70 @@ function $isUntrackedPullRequestMention(node: LexicalNode): boolean {
   return $isPullRequestMentionNode(node) && !node.getId();
 }
 
+type DocumentMentionTypes = {
+  fileType: string;
+  itemType?: ItemMention['itemType'];
+};
+
+/** A document mention's attachment types, by block name; `document` unless set. */
+const DOCUMENT_MENTION_TYPES = new Map<string, DocumentMentionTypes>([
+  ['pdf', { fileType: 'pdf' }],
+  ['write', { fileType: 'docx' }],
+  ['md', { fileType: 'md' }],
+  // task/snippet aliases are markdown documents
+  ['task', { fileType: 'md' }],
+  ['snippet', { fileType: 'md' }],
+  // skills are their own attachment type: either a markdown skill
+  // document or a built-in system skill
+  ['skill', { fileType: 'md', itemType: 'skill' }],
+  ['csv', { fileType: 'csv' }],
+  ['canvas', { fileType: 'canvas' }],
+  ['image', { fileType: 'png' }], // Default to png
+  ['channel', { fileType: 'channel', itemType: 'channel' }],
+  ['project', { fileType: 'project', itemType: 'project' }],
+  // A form reference: posting it grants the channel View on the form.
+  ['form', { fileType: 'form', itemType: 'form' }],
+  ['database', { fileType: 'database', itemType: 'database' }],
+  // A task project, never a document id.
+  ['initiative', { fileType: 'initiative', itemType: 'initiative' }],
+  ['chat', { fileType: 'chat', itemType: 'chat' }],
+  ['rss', { fileType: 'rss' }],
+  ['email', { fileType: 'email', itemType: 'thread' }],
+  ['call', { fileType: 'call', itemType: 'call' }],
+  ['calendar', { fileType: 'calendar_event', itemType: 'calendar_event' }],
+  ['company', { fileType: 'company', itemType: 'crm_company' }],
+  ['contact', { fileType: 'contact', itemType: 'crm_contact' }],
+  ['pipeline', { fileType: 'pipeline', itemType: 'crm_pipeline' }],
+  // Posting it shares the group with the channel's members.
+  ['external_chat', { fileType: 'external_chat', itemType: 'external_chat' }],
+  ['unknown', { fileType: 'unknown' }],
+]);
+
+function documentMentionTypes(
+  node: DocumentMentionNode
+): Required<DocumentMentionTypes> {
+  const blockName = node.getBlockName();
+  if (blockName === 'code') {
+    return {
+      fileType: node.getBlockParams()?.fileType || 'txt',
+      itemType: 'document',
+    };
+  }
+  const types = DOCUMENT_MENTION_TYPES.get(blockName);
+  return {
+    fileType: types?.fileType ?? '',
+    itemType: types?.itemType ?? 'document',
+  };
+}
+
 function $mentionItemFromNode(node: MentionNode): ItemMention {
   if ($isDocumentMentionNode(node)) {
-    let fileType = '';
-    let itemType: ItemMention['itemType'] = 'document';
-    const documentName = node.getDocumentName();
-    const blockName = node.getBlockName();
-    if (blockName === 'pdf') fileType = 'pdf';
-    else if (blockName === 'write') fileType = 'docx';
-    else if (blockName === 'md') fileType = 'md';
-    // task/snippet aliases are markdown documents
-    else if (blockName === 'task') fileType = 'md';
-    else if (blockName === 'snippet') fileType = 'md';
-    // skills are their own attachment type: either a markdown skill
-    // document or a built-in system skill
-    else if (blockName === 'skill') {
-      fileType = 'md';
-      itemType = 'skill';
-    } else if (blockName === 'csv') fileType = 'csv';
-    else if (blockName === 'canvas') fileType = 'canvas';
-    else if (blockName === 'code') {
-      const blockParams = node.getBlockParams();
-      fileType = blockParams?.fileType || 'txt';
-    } else if (blockName === 'image') {
-      fileType = 'png'; // Default to png
-    } else if (blockName === 'channel') {
-      fileType = 'channel';
-      itemType = 'channel';
-    } else if (blockName === 'project') {
-      fileType = 'project';
-      itemType = 'project';
-    } else if (blockName === 'form') {
-      // A form reference: posting it grants the channel View on the form.
-      fileType = 'form';
-      itemType = 'form';
-    } else if (blockName === 'database') {
-      fileType = 'database';
-      itemType = 'database';
-    } else if (blockName === 'initiative') {
-      // A task project, never a document id.
-      fileType = 'initiative';
-      itemType = 'initiative';
-    } else if (blockName === 'chat') {
-      fileType = 'chat';
-      itemType = 'chat';
-    } else if (blockName === 'rss') {
-      fileType = 'rss';
-    } else if (blockName === 'email') {
-      fileType = 'email';
-      itemType = 'thread';
-    } else if (blockName === 'call') {
-      fileType = 'call';
-      itemType = 'call';
-    } else if (blockName === 'calendar') {
-      fileType = 'calendar_event';
-      itemType = 'calendar_event';
-    } else if (blockName === 'company') {
-      fileType = 'company';
-      itemType = 'crm_company';
-    } else if (blockName === 'contact') {
-      fileType = 'contact';
-      itemType = 'crm_contact';
-    } else if (blockName === 'pipeline') {
-      fileType = 'pipeline';
-      itemType = 'crm_pipeline';
-    } else if (blockName === 'external_chat') {
-      // Posting it shares the group with the channel's members.
-      fileType = 'external_chat';
-      itemType = 'external_chat';
-    } else if (blockName === 'unknown') {
-      fileType = 'unknown';
-    }
+    const { fileType, itemType } = documentMentionTypes(node);
     return {
-      itemType: itemType,
+      itemType,
       itemId: node.getDocumentId(),
       fileType,
-      documentName,
+      documentName: node.getDocumentName(),
       channelType: node.getChannelType(),
     };
   } else if ($isUserMentionNode(node)) {

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { parseInternalAppLink } from '@core/util/macroAppUrl';
 import { isTauri } from '@core/util/platform';
 import { registerExternalUrlInterceptor } from '@core/util/url';
@@ -16,13 +17,19 @@ export function openMacroLinkInApp(url: string): boolean {
   if (!isTauri()) return false;
   const parsed = parseInternalAppLink(url);
   if (!parsed) return false;
-  emit('navigate', parsed).catch((e) => {
-    console.error('failed to emit navigate event for macro link', e);
-    // The navigate event never dispatched, so nothing routed in-app. Fall back
-    // to the system browser rather than leaving the link silently unhandled
-    // (openExternalUrl has already returned by the time this rejects).
-    window.open(url, '_blank', 'noopener,noreferrer')?.focus();
-  });
+  const navigateInApp = async () => {
+    try {
+      await emit('navigate', parsed);
+    } catch (e) {
+      console.error('failed to emit navigate event for macro link', e);
+      // The navigate event never dispatched, so nothing routed in-app. Fall
+      // back to the system browser rather than leaving the link silently
+      // unhandled (openExternalUrl has already returned by the time this
+      // rejects).
+      window.open(url, '_blank', 'noopener,noreferrer')?.focus();
+    }
+  };
+  fireAndForget(navigateInApp(), 'macro-link-interceptor');
   return true;
 }
 

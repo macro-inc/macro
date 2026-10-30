@@ -4,7 +4,6 @@ import {
   useQuickAccess,
 } from '@core/context/quickAccess';
 import { exclude } from '@core/context/quickAccess/types';
-import { useUserId } from '@core/context/user';
 import { isTransientRequestError } from '@core/util/request-error';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactCommandItems, mergeCommandPeople } from '../contact-items';
@@ -44,6 +43,8 @@ export function useEntitySearch(
   categoryFilter: Accessor<EntitySearchCategory | 'commands'>,
   options: {
     enabled: Accessor<boolean>;
+    /** The signed-in user, never offered as a person to message. */
+    viewerId: Accessor<string | undefined>;
     excludeEmails?: boolean;
     contactDiscovery?: (
       search: Accessor<string>,
@@ -88,7 +89,7 @@ export function useEntitySearch(
   const people = {
     users: quickAccess.useList('person').items,
     directMessages: quickAccess.useList('dm').items,
-    viewerId: useUserId(),
+    viewerId: options.viewerId,
   };
   const contactItems = createMemo((): QuickAccessItem[] =>
     contacts && contactsActive()

@@ -199,10 +199,7 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
     const action = direction === 'undo' ? 'Undo' : 'Redo';
     if (item?.kind === 'unavailable')
       return `${action} is unavailable because this sheet change could not be checked safely.`;
-    if (
-      item?.axisWorkbook &&
-      item.axisWorkbook !== JSON.stringify(readSpreadsheetWorkbook(doc))
-    )
+    if (workbookChangedSince(item))
       return `${action} is blocked because the workbook changed after moving rows or columns. Newer changes have been kept.`;
     if (
       item?.changes.some(
@@ -250,18 +247,47 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
     }
     // onPop is called after Loro applies the inverse. Capture the current
     // values here instead so the next stack item describes the actual redo.
-    reversing = item
-      ? {
-          kind: item.kind,
-          ...(item.axisWorkbook ? { axisWorkbook: item.axisWorkbook } : {}),
-          changes: item.changes.map((change) => ({
-            ...change,
-            before: scalar(doc, change.map, change.key),
-          })),
-        }
-      : item;
+    reversing = withCurrentValues(item);
     history[direction]();
     reversing = undefined;
+
+    function withCurrentValues(
+      itemInput:
+        | {
+            kind: 'structural' | 'edit';
+            changes: HistoryChange[];
+            axisWorkbook?: string;
+          }
+        | undefined
+    ): HistoryMetadata | undefined {
+      return itemInput
+        ? {
+            kind: itemInput.kind,
+            ...(itemInput.axisWorkbook
+              ? { axisWorkbook: itemInput.axisWorkbook }
+              : {}),
+            changes: itemInput.changes.map((change) => ({
+              ...change,
+              before: scalar(doc, change.map, change.key),
+            })),
+          }
+        : itemInput;
+    }
+
+    function workbookChangedSince(
+      itemInput:
+        | {
+            kind: 'structural' | 'edit';
+            changes: HistoryChange[];
+            axisWorkbook?: string;
+          }
+        | undefined
+    ) {
+      return (
+        itemInput?.axisWorkbook &&
+        itemInput.axisWorkbook !== JSON.stringify(readSpreadsheetWorkbook(doc))
+      );
+    }
   }
 
   return {

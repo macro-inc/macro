@@ -580,8 +580,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const itemAction = async (item: MentionItem) => {
     analytics.track('mentions_menu_use', { itemType: item.kind });
-    if (props.onPick) props.onPick(item);
-    else await itemActionHandler?.(item);
+    try {
+      if (props.onPick) props.onPick(item);
+      else await itemActionHandler?.(item);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'mentions-menu', itemKind: item.kind });
+    }
   };
 
   createEffect(() => {
@@ -635,12 +639,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     onSelect: () => {
       const selectedItem = controller.selectedItem();
       if (selectedItem) {
-        itemAction(selectedItem).catch((error) =>
-          Telemetry.error(error, {
-            surface: 'mentions-menu',
-            itemKind: selectedItem.kind,
-          })
-        );
+        fireAndForget(itemAction(selectedItem), 'mentions-menu');
       } else {
         closeMenu();
       }
@@ -902,10 +901,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
-                hasMore={activeViewAllBucket()?.hasMore?.() ?? false}
-                isLoadingMore={
-                  activeViewAllBucket()?.isLoadingMore?.() ?? false
-                }
+                hasMore={getMentionsMenuInnerHasMore()}
+                isLoadingMore={getMentionsMenuInnerIsLoadingMore()}
                 onEndReached={() => {
                   fireAndForget(
                     activeViewAllBucket()?.loadMore?.(),
@@ -919,6 +916,14 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       </ScopedPortal>
     </Show>
   );
+
+  function getMentionsMenuInnerIsLoadingMore(): boolean {
+    return activeViewAllBucket()?.isLoadingMore?.() ?? false;
+  }
+
+  function getMentionsMenuInnerHasMore(): boolean {
+    return activeViewAllBucket()?.hasMore?.() ?? false;
+  }
 }
 
 function VirtualizedItemList(props: {

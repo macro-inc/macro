@@ -24,8 +24,8 @@ import type {
 import {
   type CompleteFormula,
   createFormulaAssistance,
-} from '../primitives/create-formula-assistance';
-import { createTouchPress } from '../primitives/create-touch-press';
+} from './create-formula-assistance';
+import { createTouchPress } from './create-touch-press';
 import { EditorPopup } from './EditorPopup';
 
 /** Shared cell/formula-bar input. The popup keeps focus and editing in the textarea. */

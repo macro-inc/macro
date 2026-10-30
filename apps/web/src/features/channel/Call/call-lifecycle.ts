@@ -266,7 +266,8 @@ export function createCallLifecycle(options: {
         const releasePreparation = () => {
           const cleanup = finishPreparation;
           finishPreparation = undefined;
-          if (cleanup) void cleanup().catch(options.reportError);
+          if (cleanup)
+            fireAndForget(runPreparationCleanup(cleanup), 'channel-call');
         };
         const fail = (error: unknown) => {
           if (!active) return;
@@ -294,26 +295,11 @@ export function createCallLifecycle(options: {
               await Promise.allSettled(pendingServerLeaves);
               if (!active) return;
             }
-            if (request.restoredCall) {
-              let activeCall: ActiveCallLookup;
-              try {
-                activeCall = await options.lookup(request.channelId);
-              } catch (error) {
-                if (!active) return;
-                options.reportError(error);
-                activeCall = 'unavailable';
-              }
-              if (!active) return;
-              if (
-                checkAutoRejoinTarget({
-                  attempt: { ...request.restoredCall, scheduledAt: Date.now() },
-                  activeCall,
-                })
-              ) {
-                await releaseStaleNativeSession(request.restoredCall, true);
-                return;
-              }
-            }
+            if (
+              request.restoredCall &&
+              (await skipRestoredCall(request.restoredCall))
+            )
+              return;
             let call = options.currentCall();
             const needsConnection = options.shouldRequestToken(
               request.channelId
@@ -368,15 +354,11 @@ export function createCallLifecycle(options: {
             options.setError(null);
             settled = true;
             request.resolve();
-            const connected = call ?? {
-              channelId: request.channelId,
-              callId: null,
-            };
+            const connected = buildConnected(call);
             dispatch({ t: 'connected', call: connected });
             try {
               const current = machine.getState();
-              if (current.t === 'active' && sameCall(current.call, connected))
-                options.onJoined(connected, request.source);
+              notifyJoined(current, connected);
             } catch (error) {
               options.reportError(error);
             }
@@ -384,6 +366,49 @@ export function createCallLifecycle(options: {
             fail(error);
           } finally {
             releasePreparation();
+          }
+
+          /**
+           * Whether a restored call must not rejoin: this scope ended, or the
+           * call it restores is over and its stale native session is released.
+           */
+          async function skipRestoredCall(restoredCall: CallIdentity) {
+            let activeCall: ActiveCallLookup;
+            try {
+              activeCall = await options.lookup(request.channelId);
+            } catch (error) {
+              if (!active) return true;
+              options.reportError(error);
+              activeCall = 'unavailable';
+            }
+            if (!active) return true;
+            if (
+              checkAutoRejoinTarget({
+                attempt: { ...restoredCall, scheduledAt: Date.now() },
+                activeCall,
+              })
+            ) {
+              await releaseStaleNativeSession(restoredCall, true);
+              return true;
+            }
+            return false;
+          }
+
+          function buildConnected(call: CallIdentity | undefined) {
+            return (
+              call ?? {
+                channelId: request.channelId,
+                callId: null,
+              }
+            );
+          }
+
+          function notifyJoined(
+            current: CallLifecycleState,
+            connected: CallIdentity
+          ) {
+            if (current.t === 'active' && sameCall(current.call, connected))
+              options.onJoined(connected, request.source);
           }
         }
         fireAndForget(connect(), 'channel-call');
@@ -532,7 +557,7 @@ export function createCallLifecycle(options: {
             !request.skipServerLeave && request.options?.endNativeCall !== false
               ? leaveServerOnce()
               : undefined;
-          let result: LeaveResult = undefined;
+          let result: LeaveResult | undefined;
           try {
             try {
               await options.disconnect(request.options);
@@ -669,6 +694,14 @@ export function createCallLifecycle(options: {
     };
     machine.dispatch({ t: 'leave', request });
     return request.promise;
+  }
+
+  async function runPreparationCleanup(cleanup: () => Promise<void>) {
+    try {
+      await cleanup();
+    } catch (error) {
+      options.reportError(error);
+    }
   }
 
   async function leaveEndedNativeSession(

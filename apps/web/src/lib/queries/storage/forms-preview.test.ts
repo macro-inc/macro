@@ -31,7 +31,7 @@ vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
   isFeatureEnabled: () => false,
 }));
-vi.mock('@service-connection/client', () => ({
+vi.mock('@queries/connection/tracked-entities', () => ({
   useEntitySubscription: vi.fn(),
 }));
 vi.mock('@service-connection/websocket', () => ({

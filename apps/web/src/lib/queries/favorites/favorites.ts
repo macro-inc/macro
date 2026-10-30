@@ -175,12 +175,12 @@ function restoreLists(snapshot: FavoriteListsSnapshot) {
   }
 }
 
-export function invalidateFavorites() {
+export async function invalidateFavorites(): Promise<void> {
   if (isFeatureEnabled(enableGraphqlSoup)) {
-    return refreshActiveGraphqlFavoritesQueries();
+    return await refreshActiveGraphqlFavoritesQueries();
   }
 
-  return Promise.all([
+  await Promise.all([
     queryClient.invalidateQueries({ queryKey: favoriteKeys.list._def }),
     queryClient.invalidateQueries({
       queryKey: soupKeys._def,
@@ -193,7 +193,7 @@ export function invalidateFavorites() {
             part.favorites_only === true
         ),
     }),
-  ]).then(() => undefined);
+  ]);
 }
 
 function updateSoupFavorite(entityId: string, favorite: boolean) {

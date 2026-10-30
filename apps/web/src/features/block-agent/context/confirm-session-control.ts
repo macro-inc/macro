@@ -1,4 +1,4 @@
-import type { AgentSession } from '@core/agent-session/AgentSession';
+import type { AgentSession } from '@app/lib/queries/agent-session/agent-session';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { issueSessionAction } from '../queries/issue-session-action';

@@ -26,7 +26,7 @@ import {
 } from 'solid-js';
 import { SpreadsheetSkeleton } from '../../block-spreadsheet/components/SpreadsheetSkeleton';
 import { isUploadedWorkbook } from '../../block-spreadsheet/core/uploaded-workbook';
-import { useSpreadsheetAccess } from '../../block-spreadsheet/primitives/use-spreadsheet-access';
+import { useSpreadsheetAccess } from '../../block-spreadsheet/use-spreadsheet-access';
 import {
   legacyOfficeUpgradeTarget,
   pollForLegacyUpgrade,
@@ -129,39 +129,41 @@ function useLegacyOfficeUpgrade(documentId: string) {
     const controller = new AbortController();
     onCleanup(() => controller.abort());
 
-    fireAndForget(
-      (async () => {
-        const upgraded = await pollForLegacyUpgrade({
-          target,
-          fetchMetadata: () => fetchDocumentMetadata(documentId),
-          fileTypeOf: (metadata) => metadata.fileType,
-          sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-          signal: controller.signal,
-        });
-        if (controller.signal.aborted) return;
-        if (!upgraded) {
-          setWaiting(false);
-          return;
-        }
-        // Word content becomes readable once the DOCX pipeline processes it.
-        if (target === 'docx') {
+    const reopenWhenUpgraded = async () => {
+      const upgraded = await pollForLegacyUpgrade({
+        target,
+        fetchMetadata: () => fetchDocumentMetadata(documentId),
+        fileTypeOf: (metadata) => metadata.fileType,
+        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (!upgraded) {
+        setWaiting(false);
+        return;
+      }
+      // Word content becomes readable once the DOCX pipeline processes it.
+      if (target === 'docx') {
+        try {
           await waitForDocumentContentReady({
             documentId,
             timeoutMs: 60_000,
-          }).catch(() => undefined);
-          if (controller.signal.aborted) return;
+          });
+        } catch {
+          // Reopen it anyway when the content is not ready in time.
         }
-        const blockName = fileTypeToBlockName(upgraded.fileType);
-        if (blockName === 'unknown') {
-          // Excel workbooks stay in this block, which previews them.
-          blockMetadataSignal.set(upgraded);
-          setWaiting(false);
-          return;
-        }
-        replaceSplit({ content: { type: blockName, id: documentId } });
-      })(),
-      'legacy-office-upgrade'
-    );
+        if (controller.signal.aborted) return;
+      }
+      const blockName = fileTypeToBlockName(upgraded.fileType);
+      if (blockName === 'unknown') {
+        // Excel workbooks stay in this block, which previews them.
+        blockMetadataSignal.set(upgraded);
+        setWaiting(false);
+        return;
+      }
+      replaceSplit({ content: { type: blockName, id: documentId } });
+    };
+    fireAndForget(reopenWhenUpgraded(), 'legacy-office-upgrade');
   });
 
   return () => (waiting() && target ? upgradedOfficeLabel(target) : undefined);

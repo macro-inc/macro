@@ -74,9 +74,9 @@ export function isIdentityPath(
 }
 
 /** Clone selected data for store ownership and attach alias-aware entity keys. */
-function entityKey(source: Record<string, unknown>, shape?: QueryShape) {
+function entityKey(source: object, shape?: QueryShape) {
   const selected = (name: string): unknown => {
-    if (!shape) return source[name];
+    if (!shape) return Reflect.get(source, name);
     for (const [key, field] of shape) {
       // Mutually exclusive fragments can reuse an alias for different fields.
       // An ambiguous alias must never identify an unrelated object.
@@ -85,7 +85,7 @@ function entityKey(source: Record<string, unknown>, shape?: QueryShape) {
         field.names.has(name) &&
         Object.hasOwn(source, key)
       )
-        return source[key];
+        return Reflect.get(source, key);
     }
     return undefined;
   };
@@ -146,44 +146,7 @@ export function storeValue(
   )
     return Reflect.get(previous, $PROXY) ?? previous;
   if (Array.isArray(value)) {
-    const before = Array.isArray(previous) ? previous : [];
-    const snapshot = Array.isArray(previousSnapshot) ? previousSnapshot : [];
-    const byKey = new Map<
-      string,
-      { items: { value: unknown; snapshot: unknown }[]; index: number }
-    >();
-    for (const [index, item] of before.entries()) {
-      const key =
-        item && typeof item === 'object'
-          ? Reflect.get(item, RECONCILE_KEY)
-          : undefined;
-      if (typeof key !== 'string') continue;
-      const entries = byKey.get(key) ?? { items: [], index: 0 };
-      entries.items.push({ value: item, snapshot: snapshot[index] });
-      byKey.set(key, entries);
-    }
-    return value.map((item, index) => {
-      const key =
-        item && typeof item === 'object' ? entityKey(item, shape) : undefined;
-      const entries = typeof key === 'string' ? byKey.get(key) : undefined;
-      const matched = entries?.items[entries.index++];
-      // A reordered keyed row may already have mutated the positional object.
-      // New identities cannot borrow its children or its immutable snapshot.
-      const positional = before[index];
-      const usePosition =
-        typeof key !== 'string' &&
-        !(
-          positional &&
-          typeof positional === 'object' &&
-          typeof Reflect.get(positional, RECONCILE_KEY) === 'string'
-        );
-      return storeValue(
-        item,
-        shape,
-        matched?.value ?? (usePosition ? positional : undefined),
-        matched?.snapshot ?? (usePosition ? snapshot[index] : undefined)
-      );
-    });
+    return reconcileArray(value);
   }
   if (value === null || typeof value !== 'object') return value;
   const source = value as Record<string, unknown>;
@@ -215,4 +178,45 @@ export function storeValue(
   if (typeof key === 'string' && before?.[RECONCILE_KEY] === key)
     return reconcile(copy, { key: RECONCILE_KEY, merge: false })(before);
   return copy;
+
+  function reconcileArray(items: unknown[]): unknown[] {
+    const before = Array.isArray(previous) ? previous : [];
+    const snapshot = Array.isArray(previousSnapshot) ? previousSnapshot : [];
+    const byKey = new Map<
+      string,
+      { items: { value: unknown; snapshot: unknown }[]; index: number }
+    >();
+    for (const [index, item] of before.entries()) {
+      const key =
+        item && typeof item === 'object'
+          ? Reflect.get(item, RECONCILE_KEY)
+          : undefined;
+      if (typeof key !== 'string') continue;
+      const entries = byKey.get(key) ?? { items: [], index: 0 };
+      entries.items.push({ value: item, snapshot: snapshot[index] });
+      byKey.set(key, entries);
+    }
+    return items.map((item, index) => {
+      const key =
+        item && typeof item === 'object' ? entityKey(item, shape) : undefined;
+      const entries = typeof key === 'string' ? byKey.get(key) : undefined;
+      const matched = entries?.items[entries.index++];
+      // A reordered keyed row may already have mutated the positional object.
+      // New identities cannot borrow its children or its immutable snapshot.
+      const positional = before[index];
+      const usePosition =
+        typeof key !== 'string' &&
+        !(
+          positional &&
+          typeof positional === 'object' &&
+          typeof Reflect.get(positional, RECONCILE_KEY) === 'string'
+        );
+      return storeValue(
+        item,
+        shape,
+        matched?.value ?? (usePosition ? positional : undefined),
+        matched?.snapshot ?? (usePosition ? snapshot[index] : undefined)
+      );
+    });
+  }
 }

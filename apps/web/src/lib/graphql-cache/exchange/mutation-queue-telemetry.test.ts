@@ -51,7 +51,14 @@ const telemetry = vi.hoisted(() => {
       (name: string, work?: (span: ReturnType<typeof makeSpan>) => unknown) => {
         const span = makeSpan(name);
         if (!work) return span;
-        return Promise.resolve(work(span)).finally(span.end);
+        const run = async () => {
+          try {
+            return await work(span);
+          } finally {
+            span.end();
+          }
+        };
+        return run();
       }
     ),
   };

@@ -1,11 +1,11 @@
-import { isTokenExpired } from '@core/signal/token';
+import { isTokenExpired } from '@app/lib/queries/storage/permission-token';
 import { storageServiceClient } from '@service-storage/client';
 
 type Token = string;
 
 /**
  * Cache of sync-service connection tokens per surface id. Mirrors the block
- * permission-token store (`@core/signal/token`): tokens are reused until 60s
+ * permission-token store (`@queries/storage/permission-token`): tokens are reused until 60s
  * before expiry, then re-minted.
  */
 const surfaceTokenCache = new Map<string, Token>();

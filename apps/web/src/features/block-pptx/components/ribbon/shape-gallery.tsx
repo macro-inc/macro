@@ -236,12 +236,17 @@ export function ShapeGallery(props: {
 }) {
   const [paths] = createResource(
     () => props.load,
-    (load) =>
-      load(
-        SHAPE_CATEGORIES.flatMap((c) => c.presets),
-        W,
-        H
-      ).catch(() => ({}) as Record<string, PresetPath[]>)
+    async (load): Promise<Record<string, PresetPath[]>> => {
+      try {
+        return await load(
+          SHAPE_CATEGORIES.flatMap((c) => c.presets),
+          W,
+          H
+        );
+      } catch {
+        return {};
+      }
+    }
   );
   const categories = () =>
     props.categories

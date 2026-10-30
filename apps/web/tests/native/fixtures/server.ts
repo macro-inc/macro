@@ -135,10 +135,7 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
     if (operation === 'SoupSharedMailBackfill')
       return { items: sharedMail, nextCursor: null };
     if (operation === 'SoupBackfill') {
-      const coreLane =
-        input.initial?.filters?.emailFilter?.tree?.literal?.threadId ===
-          fixtureId(0) &&
-        input.initial.filters.documentFilter?.literal?.id !== fixtureId(0);
+      const coreLane = buildCoreLane();
       return { items: coreLane ? core : [], nextCursor: null };
     }
     if (
@@ -151,18 +148,12 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
       if (excludesMail(input)) {
         return { items: [], nextCursor: null };
       }
-      const tree = input.initial?.filters?.emailFilter?.tree;
+      const tree = buildTree();
       // The sidebar's unread badge adds read=false to the same Signal scope.
       // It must not create online baselines for the offline Noise/All views.
-      const unreadOnly = tree?.and?.right?.literal?.read === false;
-      const signalTree = unreadOnly ? tree?.and?.left : tree;
-      if (
-        input.initial?.emailView !== 'INBOX' ||
-        signalTree?.and?.left?.literal?.importance !== true ||
-        signalTree?.and?.right?.literal?.shared !== 'EXCLUDE'
-      ) {
-        throw new Error('Only the initial Signal view may be fetched online');
-      }
+      const unreadOnly = buildUnreadOnly(tree);
+      const signalTree = buildSignalTree(unreadOnly, tree);
+      updateSoupPage(signalTree);
       return {
         items: unreadOnly
           ? signalMail.filter((item) => item.isRead === false)
@@ -171,6 +162,39 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
       };
     }
     throw new Error(`Unimplemented Soup operation: ${operation}`);
+
+    function buildTree() {
+      return input.initial?.filters?.emailFilter?.tree;
+    }
+
+    function buildSignalTree(
+      unreadOnly: boolean,
+      tree: GraphqlEmailExpr | null | undefined
+    ) {
+      return unreadOnly ? tree?.and?.left : tree;
+    }
+
+    function buildUnreadOnly(tree: GraphqlEmailExpr | null | undefined) {
+      return tree?.and?.right?.literal?.read === false;
+    }
+
+    function buildCoreLane() {
+      return (
+        input.initial?.filters?.emailFilter?.tree?.literal?.threadId ===
+          fixtureId(0) &&
+        input.initial.filters.documentFilter?.literal?.id !== fixtureId(0)
+      );
+    }
+
+    function updateSoupPage(signalTree: GraphqlEmailExpr | null | undefined) {
+      if (
+        input.initial?.emailView !== 'INBOX' ||
+        signalTree?.and?.left?.literal?.importance !== true ||
+        signalTree?.and?.right?.literal?.shared !== 'EXCLUDE'
+      ) {
+        throw new Error('Only the initial Signal view may be fetched online');
+      }
+    }
   }
 
   const cors = {

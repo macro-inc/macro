@@ -1,8 +1,8 @@
 import { err, ok } from 'neverthrow';
 import { createRenderEffect, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getDisplayName } from './displayName';
-import type { MacroId } from './macroId';
+import type { MacroId } from '../../identity/macro-id';
+import { getDisplayName } from '../../queries/auth/display-name';
 
 const mocks = vi.hoisted(() => ({ getUserNamesWithEmail: vi.fn() }));
 vi.mock('@service-auth/client', () => ({

@@ -9,6 +9,7 @@ import type { MutationInspection } from '../protocol';
  * worker-host.ts.
  */
 
+import { unlistenWhenReady } from '@app/lib/tauri/unlisten';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -163,71 +164,88 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
             reject(new Error(`graphql cache ipc timeout: ${command}`));
           }, requestTimeoutMs)
         : undefined;
-      invoke<T>(command, args).then(
-        (value) => {
-          if (timer !== undefined) clearTimeout(timer);
-          resolve(value);
-        },
-        (error) => {
-          if (timer !== undefined) clearTimeout(timer);
+      const settle = async () => {
+        try {
+          resolve(await invoke<T>(command, args));
+        } catch (error) {
           // Command errors cross the boundary as strings; normalize to
           // Error for parity with worker-host rejections.
           reject(error instanceof Error ? error : new Error(String(error)));
+        } finally {
+          if (timer !== undefined) clearTimeout(timer);
         }
-      );
+      };
+      fireAndForget(settle(), 'graphql-cache-host');
     });
   }
 
   // Failure tolerated: reads/writes still work, only push-driven
   // re-execution is lost — same degradation as a broken worker port.
-  const unlistenOps: Promise<UnlistenFn | undefined> =
-    listen<OpsAffectedPayload>(OPS_AFFECTED_EVENT, (event) => {
-      const prefix = `${clientId}:`;
-      const opKeys = event.payload.opIds
-        .filter((id) => id.startsWith(prefix))
-        .map((id) => Number(id.slice(prefix.length)))
-        .filter((n) => Number.isFinite(n));
-      if (opKeys.length > 0) {
-        for (const cb of affectedSubscribers) {
-          if (isRecordFieldChanges(event.payload.fieldChanges))
-            cb(opKeys, event.payload.fieldChanges);
-          else cb(opKeys);
+  async function listenForAffectedOps(): Promise<UnlistenFn | undefined> {
+    try {
+      return await listen<OpsAffectedPayload>(OPS_AFFECTED_EVENT, (event) => {
+        const prefix = `${clientId}:`;
+        const opKeys = event.payload.opIds
+          .filter((id) => id.startsWith(prefix))
+          .map((id) => Number(id.slice(prefix.length)))
+          .filter((n) => Number.isFinite(n));
+        if (opKeys.length > 0) {
+          for (const cb of affectedSubscribers) {
+            if (isRecordFieldChanges(event.payload.fieldChanges))
+              cb(opKeys, event.payload.fieldChanges);
+            else cb(opKeys);
+          }
         }
-      }
-    }).catch((error) => {
+      });
+    } catch (error) {
       console.warn('graphql cache ops-affected listener failed', error);
       return undefined;
-    });
-  const unlistenSettlements: Promise<UnlistenFn | undefined> =
-    listen<MutationSettlement>(MUTATION_SETTLED_EVENT, (event) => {
-      for (const cb of settlementSubscribers) cb(event.payload);
-    }).catch((error) => {
+    }
+  }
+  const unlistenOps = listenForAffectedOps();
+
+  async function listenForSettlements(): Promise<UnlistenFn | undefined> {
+    try {
+      return await listen<MutationSettlement>(
+        MUTATION_SETTLED_EVENT,
+        (event) => {
+          for (const cb of settlementSubscribers) cb(event.payload);
+        }
+      );
+    } catch (error) {
       console.warn('graphql cache mutation-settled listener failed', error);
       return undefined;
-    });
+    }
+  }
+  const unlistenSettlements = listenForSettlements();
 
-  const unlistenCacheChanges: Promise<UnlistenFn | undefined> =
-    listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, (event) => {
-      const revision = parseCacheRevision(event.payload.revision);
-      observeRevision(revision);
-      if (event.payload.reset) {
-        for (const cb of generationChangeSubscribers) cb({ storage: 'reset' });
-      }
-      for (const cb of cacheChangeSubscribers) {
-        if (
-          event.payload.reset ||
-          event.payload.searchChangedBuckets === undefined
-        )
-          cb(revision);
-        else
-          cb(revision, {
-            searchChangedBuckets: event.payload.searchChangedBuckets,
-          });
-      }
-    }).catch((error) => {
+  async function listenForCacheChanges(): Promise<UnlistenFn | undefined> {
+    try {
+      return await listen<CacheChangedPayload>(CACHE_CHANGED_EVENT, (event) => {
+        const revision = parseCacheRevision(event.payload.revision);
+        observeRevision(revision);
+        if (event.payload.reset) {
+          for (const cb of generationChangeSubscribers)
+            cb({ storage: 'reset' });
+        }
+        for (const cb of cacheChangeSubscribers) {
+          if (
+            event.payload.reset ||
+            event.payload.searchChangedBuckets === undefined
+          )
+            cb(revision);
+          else
+            cb(revision, {
+              searchChangedBuckets: event.payload.searchChangedBuckets,
+            });
+        }
+      });
+    } catch (error) {
       console.warn('graphql cache change listener failed', error);
       return undefined;
-    });
+    }
+  }
+  const unlistenCacheChanges = listenForCacheChanges();
 
   async function listenForHydration(): Promise<UnlistenFn | undefined> {
     try {
@@ -684,11 +702,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         unlistenHydration,
         unlistenSettlements,
       ]) {
-        // UnlistenFn returns the unlisten IPC promise despite its void type.
-        fireAndForget(
-          unlisten.then((fn) => fn?.()),
-          'graphql-cache-host'
-        );
+        fireAndForget(unlistenWhenReady(unlisten), 'graphql-cache-host');
       }
     },
   };

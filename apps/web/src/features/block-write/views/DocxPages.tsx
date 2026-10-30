@@ -4,7 +4,7 @@ import type {
   EditOp,
   PageRect,
   Pos,
-} from '@core/docx-engine/types';
+} from '@app/lib/docx/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
@@ -211,6 +211,31 @@ function StoryChrome(props: {
   );
 }
 
+/** Runs `run` once `previous`, which never rejects, has finished; a failed
+ * run is dropped so the next one still goes. */
+async function afterPrevious(
+  previous: Promise<void>,
+  run: () => Promise<void>
+) {
+  await previous;
+  try {
+    await run();
+  } catch {
+    // The engine is reopening; the press is lost like any during a reload.
+  }
+}
+
+/** Writes to the system clipboard; a refused write leaves it as it was. */
+/** Builds the item only when the clipboard API exists, as ClipboardItem may not. */
+async function writeClipboard(item: () => ClipboardItem) {
+  if (!navigator.clipboard) return;
+  try {
+    await navigator.clipboard.write([item()]);
+  } catch {
+    // The browser refused (no permission or the page lost focus).
+  }
+}
+
 /** How far (points) outside the notes' lines a click still edits a note. */
 const NOTE_SLOP = 4;
 
@@ -286,14 +311,17 @@ export function DocxPages(props: DocxPagesProps) {
       return;
     }
     clipTimer = setTimeout(() => {
-      editor
-        .copySelection()
-        .then((clip) => {
-          if (selectionKey() === key) clipboard = { key, clip };
-        })
-        .catch(() => {});
+      fireAndForget(prefetchClip(key), 'docx-editor');
     }, 120);
   });
+  async function prefetchClip(key: string) {
+    try {
+      const clip = await editor.copySelection();
+      if (selectionKey() === key) clipboard = { key, clip };
+    } catch {
+      // A copy then fetches the content itself.
+    }
+  }
 
   // Keep the caret in view after keyboard edits and moves.
   let followCaret = false;
@@ -420,6 +448,9 @@ export function DocxPages(props: DocxPagesProps) {
   /** Presses are handled one after another, each after the last one's
    * hit test, so a quick second click never overtakes the first. */
   let presses: Promise<void> = Promise.resolve();
+  function queuePress(run: () => Promise<void>) {
+    presses = afterPrevious(presses, run);
+  }
   /** Whether the button is still down (a drag extends the selection). */
   let held = false;
 
@@ -465,16 +496,14 @@ export function DocxPages(props: DocxPagesProps) {
     touchSelecting = true;
     held = true;
     input.focus({ preventScroll: true });
-    presses = presses
-      .then(async () => {
-        const pos = await editor.hitTest(point.page, point.x, point.y);
-        if (!pos) return;
-        editor.run([{ op: 'selectWord', at: pos }]);
-        await editor.idle();
-        const selection = editor.state()?.selection;
-        if (held && selection) dragAnchor = selection.anchor;
-      })
-      .catch(() => {});
+    queuePress(async () => {
+      const pos = await editor.hitTest(point.page, point.x, point.y);
+      if (!pos) return;
+      editor.run([{ op: 'selectWord', at: pos }]);
+      await editor.idle();
+      const selection = editor.state()?.selection;
+      if (held && selection) dragAnchor = selection.anchor;
+    });
   }
 
   function touchUp(event: PointerEvent) {
@@ -494,9 +523,7 @@ export function DocxPages(props: DocxPagesProps) {
     // Focus inside the tap's own handler, so mobile browsers open the
     // keyboard.
     input.focus({ preventScroll: true });
-    presses = presses
-      .then(() => press(point, double ? 2 : 1, false))
-      .catch(() => {});
+    queuePress(() => press(point, double ? 2 : 1, false));
   }
 
   /** Ends any press or drag (also when the browser takes the pointer over
@@ -532,7 +559,7 @@ export function DocxPages(props: DocxPagesProps) {
     const shift = event.shiftKey;
     held = true;
     column.setPointerCapture(event.pointerId);
-    presses = presses.then(() => press(point, clicks, shift)).catch(() => {});
+    queuePress(() => press(point, clicks, shift));
   }
 
   async function press(
@@ -641,18 +668,20 @@ export function DocxPages(props: DocxPagesProps) {
       case 'page':
         fireAndForget(pageMove(action.forward, action.extend), 'docx-editor');
         break;
-      case 'tab': {
-        const state = editor.state();
-        const selection = state?.selection;
-        const spans =
-          selection && selection.anchor.block !== selection.focus.block;
-        const atListStart = state?.format.list && selection?.focus.offset === 0;
-        if (spans || atListStart || !action.forward)
-          run([{ op: 'indent', forward: action.forward }]);
-        else run([{ op: 'insertText', text: '\t' }], 'typing');
+      case 'tab':
+        tab(action.forward);
         break;
-      }
     }
+  }
+
+  /** Tab indents a list item or a multi-paragraph selection, else types a tab. */
+  function tab(forward: boolean) {
+    const state = editor.state();
+    const selection = state?.selection;
+    const spans = selection && selection.anchor.block !== selection.focus.block;
+    const atListStart = state?.format.list && selection?.focus.offset === 0;
+    if (spans || atListStart || !forward) run([{ op: 'indent', forward }]);
+    else run([{ op: 'insertText', text: '\t' }], 'typing');
   }
 
   function typeText(text: string) {
@@ -719,16 +748,20 @@ export function DocxPages(props: DocxPagesProps) {
     }
     // Not fetched yet: the clipboard API takes the content when it is.
     const clip = editor.copySelection();
-    const blob = (type: string, data: (c: Clip) => string) =>
-      clip.then((c) => new Blob([data(c)], { type }));
-    void navigator.clipboard
-      ?.write([
-        new ClipboardItem({
-          'text/plain': blob('text/plain', (c) => c.text),
-          'text/html': blob('text/html', (c) => clipboardHtml(c, documentId())),
-        }),
-      ])
-      .catch(() => {});
+    const blob = async (type: string, data: (c: Clip) => string) =>
+      new Blob([data(await clip)], { type });
+    fireAndForget(
+      writeClipboard(
+        () =>
+          new ClipboardItem({
+            'text/plain': blob('text/plain', (c) => c.text),
+            'text/html': blob('text/html', (c) =>
+              clipboardHtml(c, documentId())
+            ),
+          })
+      ),
+      'docx-editor'
+    );
     return true;
   }
 

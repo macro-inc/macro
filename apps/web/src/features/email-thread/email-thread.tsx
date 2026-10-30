@@ -145,6 +145,13 @@ export function EmailThread(props: EmailThreadProps) {
     },
   };
   const rendering = createEmailRenderingContext();
+  const refreshThread = async () => {
+    try {
+      await source.refresh();
+    } catch (error) {
+      compose.notices.reportError(error);
+    }
+  };
   createEffectOnEntityTypeNotification(
     useGlobalNotificationSource(),
     'email',
@@ -154,7 +161,7 @@ export function EmailThread(props: EmailThreadProps) {
         meta.tag === 'new_email' &&
         meta.content.threadId === source.thread()?.db_id
       )
-        void source.refresh().catch(compose.notices.reportError);
+        fireAndForget(refreshThread(), 'email-thread');
     }
   );
   createEffect(() => {

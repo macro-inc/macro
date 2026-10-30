@@ -1,5 +1,5 @@
 import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-handling';
-import type { AgentSession } from '@core/agent-session/AgentSession';
+import type { AgentSession } from '@app/lib/queries/agent-session/agent-session';
 
 /** Deliver a foreground session action and present any typed quota refusal. */
 export async function issueSessionAction(

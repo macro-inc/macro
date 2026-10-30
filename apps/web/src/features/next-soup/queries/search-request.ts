@@ -35,151 +35,187 @@ function includePropertiesToFilters(
   return [...byPropId.values()];
 }
 
-function filterDataToQueryFilters(data: QueryState): EntityFilters {
-  const filters: EntityFilters = {};
-  const { include } = data;
-  filters.agent_session_filters = agentSessionSearchFilters(include);
+type SearchInclude = QueryState['include'];
 
-  // Calendar events are searchable by title, so they are scoped like every
-  // other entity type: a view that names ids gets them, one that names none
-  // leaves the type unfiltered. Views that should not surface events keep
-  // NIL-excluding them (the inbox feed does), and every view's client
-  // predicates gate the merged pool regardless.
-  if (include.calendarEventId?.length) {
-    filters.calendar_event_filters = {
-      calendar_event_ids: include.calendarEventId,
-    };
-  }
+// Calendar events are searchable by title, so they are scoped like every
+// other entity type: a view that names ids gets them, one that names none
+// leaves the type unfiltered. Views that should not surface events keep
+// NIL-excluding them (the inbox feed does), and every view's client
+// predicates gate the merged pool regardless.
+function calendarEventFilters(include: SearchInclude): EntityFilters {
+  if (!include.calendarEventId?.length) return {};
+  return {
+    calendar_event_filters: { calendar_event_ids: include.calendarEventId },
+  };
+}
 
-  // Document filters
+function documentFilters(include: SearchInclude): EntityFilters {
   if (
-    include.documentId?.length ||
-    include.fileType?.length ||
-    include.subType?.length ||
-    include.projectId?.length ||
-    include.documentOwnerId?.length
-  ) {
-    filters.document_filters = {
+    !include.documentId?.length &&
+    !include.fileType?.length &&
+    !include.subType?.length &&
+    !include.projectId?.length &&
+    !include.documentOwnerId?.length
+  )
+    return {};
+  return {
+    document_filters: {
       document_ids: include.documentId,
       file_types: include.fileType,
       sub_types: include.subType,
       project_ids: include.projectId,
       owners: include.documentOwnerId,
-    };
-  }
+    },
+  };
+}
 
-  // Email filters
+function emailFilters(include: SearchInclude): EntityFilters {
   if (
-    include.threadId?.length ||
-    include.emailSender?.length ||
-    include.emailShared ||
-    include.emailImportance !== undefined ||
-    include.emailLinkId?.length
-  ) {
-    filters.email_filters = {
+    !include.threadId?.length &&
+    !include.emailSender?.length &&
+    !include.emailShared &&
+    include.emailImportance === undefined &&
+    !include.emailLinkId?.length
+  )
+    return {};
+  return {
+    email_filters: {
       email_thread_ids: include.threadId,
       senders: include.emailSender,
       shared: include.emailShared,
       importance: include.emailImportance,
       link_ids: include.emailLinkId,
-    };
-  }
+    },
+  };
+}
 
-  // Channel filters
+function channelFilters(include: SearchInclude): EntityFilters {
   if (
-    include.channelId?.length ||
-    include.channelType?.length ||
-    include.channelSenderId?.length ||
-    include.channelMessageThreadId?.length
-  ) {
-    filters.channel_filters = {
+    !include.channelId?.length &&
+    !include.channelType?.length &&
+    !include.channelSenderId?.length &&
+    !include.channelMessageThreadId?.length
+  )
+    return {};
+  return {
+    channel_filters: {
       channel_ids: include.channelId,
       channel_types: include.channelType,
       sender_ids: include.channelSenderId,
       thread_ids: include.channelMessageThreadId,
-    };
-  }
+    },
+  };
+}
 
-  // Channel thread filters
+function channelThreadFilters(include: SearchInclude): EntityFilters {
   if (
-    include.channelThreadId?.length ||
-    include.channelThreadRootSenderId?.length ||
-    include.channelThreadParticipantId?.length
-  ) {
-    filters.channel_thread_filters = {
+    !include.channelThreadId?.length &&
+    !include.channelThreadRootSenderId?.length &&
+    !include.channelThreadParticipantId?.length
+  )
+    return {};
+  return {
+    channel_thread_filters: {
       thread_ids: include.channelThreadId,
       root_sender_ids: include.channelThreadRootSenderId,
       participant_ids: include.channelThreadParticipantId,
-    };
-  }
+    },
+  };
+}
 
-  // Chat filters
+function chatFilters(include: SearchInclude): EntityFilters {
   if (
-    include.chatId?.length ||
-    include.chatOwnerId?.length ||
-    include.chatProjectId?.length
-  ) {
-    filters.chat_filters = {
+    !include.chatId?.length &&
+    !include.chatOwnerId?.length &&
+    !include.chatProjectId?.length
+  )
+    return {};
+  return {
+    chat_filters: {
       chat_ids: include.chatId,
       owners: include.chatOwnerId,
       project_ids: include.chatProjectId,
-    };
-  }
+    },
+  };
+}
 
-  // Project/folder filters
-  if (include.folderId?.length || include.folderOwnerId?.length) {
-    filters.project_filters = {
+function projectFilters(include: SearchInclude): EntityFilters {
+  if (!include.folderId?.length && !include.folderOwnerId?.length) return {};
+  return {
+    project_filters: {
       project_ids: include.folderId,
       owners: include.folderOwnerId,
-    };
-  }
+    },
+  };
+}
 
-  // Call filters
+function callFilters(include: SearchInclude): EntityFilters {
   if (
-    include.callId?.length ||
-    include.callChannelId?.length ||
-    include.callSpeakerId?.length ||
-    include.callStatus !== undefined ||
-    include.callAttended !== undefined
-  ) {
-    filters.call_filters = {
+    !include.callId?.length &&
+    !include.callChannelId?.length &&
+    !include.callSpeakerId?.length &&
+    include.callStatus === undefined &&
+    include.callAttended === undefined
+  )
+    return {};
+  return {
+    call_filters: {
       call_ids: include.callId,
       channel_ids: include.callChannelId,
       speaker_ids: include.callSpeakerId,
       status: include.callStatus,
       attended:
         include.callStatus === undefined ? include.callAttended : undefined,
-    };
-  }
+    },
+  };
+}
 
-  // Foreign entity filters
+function foreignEntityFilters(include: SearchInclude): EntityFilters {
   if (
-    include.foreignEntityRecordId?.length ||
-    include.foreignEntitySource?.length
-  ) {
-    filters.foreign_entity_filters = {
+    !include.foreignEntityRecordId?.length &&
+    !include.foreignEntitySource?.length
+  )
+    return {};
+  return {
+    foreign_entity_filters: {
       ids: include.foreignEntityRecordId,
       foreign_entity_sources: include.foreignEntitySource,
-    };
-  }
+    },
+  };
+}
 
-  // Property filters (status, priority, assignees, custom)
-  const propertyFilters = includePropertiesToFilters(include.properties);
-  if (propertyFilters.length) {
-    filters.property_filters = propertyFilters;
-  }
+// Property filters (status, priority, assignees, custom)
+function propertyFilters(include: SearchInclude): EntityFilters {
+  const filters = includePropertiesToFilters(include.properties);
+  return filters.length ? { property_filters: filters } : {};
+}
 
-  // Tags: match on the option ids alone (globally unique), combined across
-  // all tag definitions. No definition id is sent — the backend matches
-  // values only. The mode picks any-of (default) vs all-of combining.
-  if (include.tagFilters?.length) {
-    filters.tag_option_ids = include.tagFilters.map((t) => t.value);
-    if (include.tagFilterMode === 'all') {
-      filters.tag_filter_mode = 'all';
-    }
-  }
+// Tags: match on the option ids alone (globally unique), combined across
+// all tag definitions. No definition id is sent — the backend matches
+// values only. The mode picks any-of (default) vs all-of combining.
+function tagFilters(include: SearchInclude): EntityFilters {
+  if (!include.tagFilters?.length) return {};
+  return {
+    tag_option_ids: include.tagFilters.map((t) => t.value),
+    ...(include.tagFilterMode === 'all' ? { tag_filter_mode: 'all' } : {}),
+  };
+}
 
-  return filters;
+function filterDataToQueryFilters({ include }: QueryState): EntityFilters {
+  return {
+    agent_session_filters: agentSessionSearchFilters(include),
+    ...calendarEventFilters(include),
+    ...documentFilters(include),
+    ...emailFilters(include),
+    ...channelFilters(include),
+    ...channelThreadFilters(include),
+    ...chatFilters(include),
+    ...projectFilters(include),
+    ...callFilters(include),
+    ...foreignEntityFilters(include),
+    ...propertyFilters(include),
+    ...tagFilters(include),
+  };
 }
 
 /** Shared full-text request mapping for Search surfaces. */

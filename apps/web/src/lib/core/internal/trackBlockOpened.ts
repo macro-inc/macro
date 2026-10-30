@@ -12,7 +12,7 @@ import {
   type HistoryItemType,
   type ItemType,
   isCloudStorageItem,
-} from '@service-storage/client';
+} from '@service-storage/itemType';
 import type { QueryClient } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { match } from 'ts-pattern';

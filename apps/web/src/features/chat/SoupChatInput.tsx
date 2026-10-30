@@ -24,8 +24,9 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
+import { createChat, sendChatMessage } from '@queries/cognition/requests';
 import { invalidateAllSoup } from '@queries/soup/cache';
-import { cognitionApiServiceClient } from '@service-cognition/client';
+
 import { createEffect, Show } from 'solid-js';
 import { MobileAgentComposer } from '../agents-view/mobile-agent-composer';
 
@@ -74,7 +75,7 @@ function SoupChatInputInner() {
     const backgroundSend = request.metaKey;
 
     // Create a new persistent chat
-    const response = await cognitionApiServiceClient.createChat({});
+    const response = await createChat({});
     if (response.isErr()) {
       if (isPaymentError(response)) {
         const { showPaywall } = usePaywallState();
@@ -98,7 +99,7 @@ function SoupChatInputInner() {
 
     if (backgroundSend) {
       // Send the message in the background without navigating
-      const sent = await cognitionApiServiceClient.sendStreamChatMessage({
+      const sent = await sendChatMessage({
         content: request.content,
         model: request.model,
         speed: request.speed,

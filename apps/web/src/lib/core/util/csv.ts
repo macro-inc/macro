@@ -69,9 +69,7 @@ export function parseCsv(
       row.push(field);
       field = '';
       // Skip trailing completely-empty rows (e.g. final newline).
-      if (!(row.length === 1 && row[0] === '' && rows.length > 0)) {
-        rows.push(row);
-      }
+      flushNonemptyRow();
       row = [];
       continue;
     }
@@ -83,9 +81,7 @@ export function parseCsv(
 
   // Flush the last field/row (common when file does not end with newline).
   row.push(field);
-  if (!(row.length === 1 && row[0] === '' && rows.length > 0)) {
-    rows.push(row);
-  }
+  flushNonemptyRow();
 
   const headerRow = rows[0];
   if (!headerRow || headerRow.length === 0) {
@@ -112,4 +108,10 @@ export function parseCsv(
   }
 
   return { ok: true, headers, records };
+
+  function flushNonemptyRow() {
+    if (!(row.length === 1 && row[0] === '' && rows.length > 0)) {
+      rows.push(row);
+    }
+  }
 }

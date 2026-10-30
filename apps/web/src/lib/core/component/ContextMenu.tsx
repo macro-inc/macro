@@ -137,8 +137,6 @@ type MenuItemProps =
   | CheckboxMenuItemProps
   | RadioMenuItemProps;
 
-export const MENU_ITEM_CLASS = `group rounded-lg w-full flex items-center gap-1.5 text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed ${isMobile() ? 'py-2 px-1.5 text-base' : 'p-1.5 px-2 text-sm'}`;
-
 /**
  * A context-menu item with consistent styling.
  *
@@ -151,7 +149,7 @@ export function MenuItem(props: MenuItemProps) {
   return (
     <MenuItemWrapper
       class={cn(
-        MENU_ITEM_CLASS,
+        `group rounded-lg w-full flex items-center gap-1.5 text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed ${isMobile() ? 'py-2 px-1.5 text-base' : 'p-1.5 px-2 text-sm'}`,
         props.disabled && 'opacity-50 cursor-not-allowed',
         props.class
       )}
@@ -240,7 +238,7 @@ export function SubTrigger(props: {
   return (
     <ContextMenu.SubTrigger
       class={cn(
-        MENU_ITEM_CLASS,
+        `group rounded-lg w-full flex items-center gap-1.5 text-left text-ink font-normal cursor-default outline-none data-[highlighted]:bg-ink/5 data-disabled:opacity-50 data-disabled:cursor-not-allowed ${isMobile() ? 'py-2 px-1.5 text-base' : 'p-1.5 px-2 text-sm'}`,
         props.disabled && 'opacity-50 cursor-not-allowed'
       )}
       disabled={props.disabled}
@@ -328,8 +326,6 @@ function MobileConditionalOverlay(
 }
 
 const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
-
-export const MENU_CONTENT_CLASS = `menu-surface flex flex-col justify-start items-start p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
@@ -443,7 +439,8 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
               component={props.contentComponent ?? ContextMenu.Content}
               class={cn(
                 MENU_SURFACE_SCOPE,
-                !props.overrideStyling && MENU_CONTENT_CLASS,
+                !props.overrideStyling &&
+                  `menu-surface flex flex-col justify-start items-start p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`,
                 'menu-open-animation',
                 props.class,
                 props.mobileFullScreen &&
@@ -462,7 +459,10 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         <ContextMenu.Portal>
           <Layer depth={2}>
             <ContextMenu.SubContent
-              class={cn(MENU_CONTENT_CLASS, props.class)}
+              class={cn(
+                `menu-surface flex flex-col justify-start items-start p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`,
+                props.class
+              )}
               ref={contentRef}
             >
               {props.children}

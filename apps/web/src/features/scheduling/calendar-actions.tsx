@@ -1,10 +1,12 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { tryMacroId } from '@app/lib/identity/macro-id';
 import { useNavigate } from '@app/lib/split-router';
 import { bookingLinksRoute } from '@app/routes/routes';
 import { toast } from '@core/component/Toast/Toast';
 import { enableCalendarScheduling } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { getDisplayNameParts } from '@core/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
@@ -26,7 +28,11 @@ function Actions(props: { sidebar?: boolean; compact?: boolean }) {
       canEdit: true,
       canManageBookings: true,
     }),
-    () => user() ?? ''
+    () => user() ?? '',
+    () => {
+      const id = tryMacroId(user() ?? '');
+      return id ? getDisplayNameParts(id).firstName : '';
+    }
   );
 
   const enabledLinks = () => {
