@@ -71,8 +71,7 @@ function summary(
         ?.parts.find(
           (part) => part.kind === 'tool_use' && part.id === permission.toolCall
         );
-      if (tool?.kind !== 'tool_use')
-        return 'Wants permission to run a tool';
+      if (tool?.kind !== 'tool_use') return 'Wants permission to run a tool';
       const label =
         tool.detail.kind === 'terminal'
           ? (tool.detail.command ?? 'a command')
@@ -124,10 +123,7 @@ export function selectAgentUpdates(
           sessionId: session.id,
           sessionName,
           updatedAt,
-          summary: summary(
-            request,
-            messagesBySession.get(session.id) ?? []
-          ),
+          summary: summary(request, messagesBySession.get(session.id) ?? []),
           request,
         })
       );
