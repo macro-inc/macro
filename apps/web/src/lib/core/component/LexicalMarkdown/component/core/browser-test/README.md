@@ -44,4 +44,5 @@ HTML, and Lexical clipboards, both into an empty quote and over selected text.
 All pasted paragraphs stay quoted, inline formatting and surrounding text survive,
 and typing at the paste caret and saving keep the quote formatting.
 
-Screenshots: [desktop](proof/quotes-desktop.png) and [phone](proof/quotes-mobile.png).
+Screenshots: [desktop](proof/quotes-desktop.png), [phone](proof/quotes-mobile.png),
+and [multi-paragraph paste](proof/quote-paste.png).
