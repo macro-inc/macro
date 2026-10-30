@@ -57,6 +57,7 @@ tools — hexagonal, heavily feature-gated.
 - All Mail excludes present messages in spam/junk or trash before pagination;
   canonical cached previews and non-draft baselines use the same rule for Gmail
   labels and Outlook mailbox facts. Mixed threads show their latest eligible message.
+  Synced Macro drafts in junk/trash must not advance All Mail timestamps.
   Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
   ordered, limited scans; do not add a separate whole-mailbox sort.
 

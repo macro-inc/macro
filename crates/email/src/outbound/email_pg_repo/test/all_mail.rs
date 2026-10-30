@@ -204,3 +204,92 @@ async fn all_mail_keeps_provider_drafts_without_received_or_sent_dates(
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_outlook_threads", "email_all_mail")
+    )
+)]
+async fn all_mail_excludes_synced_macro_drafts_in_junk_and_trash(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let message = uuid::uuid!("0a000000-0000-0000-0000-0000000000b1");
+    let thread = uuid::uuid!("0a000000-0000-0000-0000-0000000000a1");
+    let link = uuid::uuid!("0a000000-0000-0000-0000-000000000001");
+    sqlx::query!(
+        "UPDATE email_messages SET is_draft = true, internal_date_ts = NULL WHERE id = $1",
+        message
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO email_mailbox_drafts
+            (message_id, link_id, generation, actor_id, desired_content, state)
+            VALUES ($1, $2, 1, 'macro|mail@example.com', '{}'::jsonb, 'synced')"#,
+        message,
+        link
+    )
+    .execute(&pool)
+    .await?;
+    let repo = EmailPgRepo::new(pool.clone());
+    let viewer = MacroUserIdStr::parse_from_str("macro|mail@example.com")?;
+    for mailbox_state in [
+        serde_json::json!({"in_junk": true}),
+        serde_json::json!({"in_trash": true}),
+    ] {
+        sqlx::query!(
+            "UPDATE email_messages SET mailbox_state = $2 WHERE id = $1",
+            message,
+            mailbox_state
+        )
+        .execute(&pool)
+        .await?;
+        let mut conn = pool.acquire().await?;
+        email_db_client::threads::update::recompute_thread_metadata(&mut conn, thread, link)
+            .await?;
+        let timestamp = sqlx::query_scalar!(
+            "SELECT latest_non_spam_message_ts FROM email_threads WHERE id = $1",
+            thread
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert!(timestamp.is_none(), "isolated drafts cannot order All Mail");
+        let projections = repo
+            .thread_mail_projections_by_ids(viewer.clone(), &[thread])
+            .await?;
+        assert!(projections[0].previews.all.is_none());
+        let draft = &projections[0].draft_state.as_ref().unwrap().drafts[0];
+        assert!(draft.macro_draft, "synced drafts retain Macro ownership");
+        assert!(draft.facts.latest_non_spam_message_ts.is_none());
+
+        let clean = Uuid::now_v7();
+        let clean_timestamp = chrono::DateTime::parse_from_rfc3339("2025-01-01T00:00:00Z")?
+            .with_timezone(&chrono::Utc);
+        sqlx::query!(
+            r#"INSERT INTO email_messages (id, thread_id, link_id, provider_id, internal_date_ts)
+                VALUES ($1, $2, $3, 'clean-message', $4)"#,
+            clean,
+            thread,
+            link,
+            clean_timestamp
+        )
+        .execute(&pool)
+        .await?;
+        email_db_client::threads::update::recompute_thread_metadata(&mut conn, thread, link)
+            .await?;
+        let mixed = repo
+            .thread_mail_projections_by_ids(viewer.clone(), &[thread])
+            .await?;
+        assert_eq!(mixed[0].previews.all.as_ref().unwrap().id, clean);
+        assert_eq!(
+            mixed[0].cache_facts.latest_non_spam_message_ts,
+            Some(clean_timestamp)
+        );
+        sqlx::query!("DELETE FROM email_messages WHERE id = $1", clean)
+            .execute(&pool)
+            .await?;
+    }
+    Ok(())
+}

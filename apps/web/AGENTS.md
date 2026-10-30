@@ -310,7 +310,8 @@ the user's newest account for that app from the last fifteen minutes.
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
 - All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
-  an excluded preview; Drafts and Sent retain their own canonical membership.
+  an excluded preview or timestamp, including synced Macro drafts; Drafts and
+  Sent retain their own canonical membership.
 
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to

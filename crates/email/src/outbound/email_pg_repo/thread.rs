@@ -115,7 +115,7 @@ pub(super) async fn thread_mail_projections_by_ids(
                 ) AS inbound_ts,
                 GREATEST(
                     CASE WHEN NOT (facts.in_junk OR facts.in_trash) THEN COALESCE(m.internal_date_ts, CASE WHEN m.is_draft THEN m.created_at END) END,
-                    CASE WHEN draft.macro_draft THEN m.updated_at END
+                    CASE WHEN draft.macro_draft AND NOT (facts.in_junk OR facts.in_trash) THEN m.updated_at END
                 ) AS all_ts,
                 CASE WHEN m.is_sent AND NOT facts.in_trash THEN m.internal_date_ts END AS sent_ts,
                 CASE WHEN NOT facts.in_trash AND (m.is_draft OR NOT facts.in_junk) THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,

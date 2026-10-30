@@ -246,9 +246,11 @@ export function updateDraftThread(
           latestInboundMessageTs: previous.macroDraft
             ? fresh.facts.latestInboundMessageTs
             : previous.facts.latestInboundMessageTs,
-          latestNonSpamMessageTs: previous.macroDraft
-            ? draft.updatedAt
-            : previous.facts.latestNonSpamMessageTs,
+          latestNonSpamMessageTs:
+            previous.macroDraft &&
+            previous.facts.latestNonSpamMessageTs !== null
+              ? draft.updatedAt
+              : previous.facts.latestNonSpamMessageTs,
           preview: previous.facts.preview ? fresh.facts.preview : null,
         },
       }
