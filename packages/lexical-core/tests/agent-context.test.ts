@@ -432,6 +432,36 @@ describe('composeAgentContextPrompt', () => {
     expect(text?.match(/<\/session>/g)).toHaveLength(1);
   });
 
+  it('states the current time in the user time zone', () => {
+    const text = composedContext({
+      promptMarkdown: 'which leads came in today?',
+      currentTime: {
+        iso: '2026-09-24T16:03:36-04:00',
+        local: 'Thursday, September 24, 2026, 4:03 PM',
+        timeZone: 'America/New_York',
+      },
+    });
+    expect(text).toContain(
+      '<current_time iso="2026-09-24T16:03:36-04:00" time_zone="America/New_York">Thursday, September 24, 2026, 4:03 PM'
+    );
+    expect(text).toContain('Today is the date above');
+    expect(text).toContain('2026-09-24 for today');
+  });
+
+  it('states the current time in UTC when the time zone is unknown', () => {
+    const text = composedContext({
+      promptMarkdown: 'what is due today?',
+      currentTime: {
+        iso: '2026-09-24T20:03:36+00:00',
+        local: 'Thursday, September 24, 2026, 8:03 PM',
+      },
+    });
+    expect(text).toContain(
+      '<current_time iso="2026-09-24T20:03:36+00:00" time_zone="UTC">'
+    );
+    expect(text).toContain('time zone of the user is unknown');
+  });
+
   it('does not add context when there is none', () => {
     expect(
       composeAgentContextPrompt({ promptMarkdown: 'original', channel: [] })

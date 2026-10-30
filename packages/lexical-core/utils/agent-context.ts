@@ -380,6 +380,16 @@ export type AgentContextPerson = {
   name: string;
 };
 
+/** When a prompt was sent, as the person reading the reply keeps time. */
+export type AgentContextCurrentTime = {
+  /** ISO 8601 timestamp carrying the time zone's UTC offset. */
+  iso: string;
+  /** The same instant written out, e.g. "Thursday, September 24, 2026, 4:03 PM". */
+  local: string;
+  /** IANA zone of the user's primary calendar; absent when unknown, and `iso` is UTC. */
+  timeZone?: string;
+};
+
 /** Input used to compose an agent prompt with private conversation context. */
 export type AgentContextPrompt = {
   promptMarkdown: string;
@@ -389,6 +399,8 @@ export type AgentContextPrompt = {
   owner?: AgentContextPerson;
   /** Who sent the prompt; absent when a bot sent it on nobody's behalf. */
   sender?: AgentContextPerson;
+  /** Now, so relative dates and date chips resolve. Supplied by the harness. */
+  currentTime?: AgentContextCurrentTime;
   /**
    * Why the agent was called. Supplied by the trigger pipeline, never by the
    * prompt's author. Cannot be combined with the legacy fields below.
@@ -1444,6 +1456,27 @@ function sessionNode(
   );
 }
 
+/**
+ * Now, in the user's time zone. Models do not know the date, and a date chip
+ * written as UTC midnight reads as the previous day west of Greenwich.
+ */
+function currentTimeNode(time: AgentContextCurrentTime): FxpNode {
+  const today = time.iso.slice(0, 10);
+  const zone = time.timeZone
+    ? `in ${time.timeZone}, the time zone of the primary calendar of the user`
+    : 'in UTC, because the time zone of the user is unknown (no connected calendar)';
+  return el(
+    'current_time',
+    [
+      text(time.local),
+      note(
+        `The time this prompt was sent, ${zone}. Today is the date above; resolve today, yesterday, this week and other relative dates from it, never from a guess or a web search. A date chip for a whole day takes the local calendar date alone as its date, ${today} for today; a chip with a clock time takes a full ISO timestamp with this UTC offset.`
+      ),
+    ],
+    { iso: time.iso, time_zone: time.timeZone ?? 'UTC' }
+  );
+}
+
 /** Legacy conversation fields the input sets. */
 export function legacyConversationFieldsIn(
   input: Partial<Record<(typeof LEGACY_CONVERSATION_FIELDS)[number], unknown>>
@@ -1459,6 +1492,7 @@ function renderContext(input: AgentContextPrompt): string | undefined {
     : renderConversation(input);
   const nodes = [
     ...(input.owner ? [sessionNode(input.owner, input.sender)] : []),
+    ...(input.currentTime ? [currentTimeNode(input.currentTime)] : []),
     ...(body ? [body] : []),
   ];
   if (nodes.length === 0) return undefined;
