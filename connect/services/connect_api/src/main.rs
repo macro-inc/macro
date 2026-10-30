@@ -13,7 +13,7 @@ use axum::{
     routing::{get, post},
 };
 use clap::{Parser, Subcommand};
-use connect_platform::{ConfigLoader, Telemetry, http_trace_layer};
+use connect_platform::{ConfigLoader, Telemetry, http_trace_layer, load_aws_config};
 use connect_registry::{Access, App, ClientRegistration, Status, all_apps};
 use domain::oauth::{
     Client, ConnectSessionResponse, OAuthService, set_redirect_origins as update_redirect_origins,
@@ -511,7 +511,7 @@ async fn run(config: &Config, apps: &'static [App]) -> Result<(), rootcause::Rep
     let pool = PgPoolOptions::new().connect(&config.database_url).await?;
     MIGRATOR.run(&pool).await?;
     let wrapper: Arc<dyn outbound::KeyWrapper> = if let Some(key_id) = &config.kms_key_id {
-        let aws = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+        let aws = load_aws_config().await;
         Arc::new(KmsKeyWrapper::new(
             aws_sdk_kms::Client::new(&aws),
             key_id.clone(),

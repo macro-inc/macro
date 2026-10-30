@@ -217,6 +217,7 @@ deny = [
   { crate = "webpki-roots:>0.26.11, <1.0.10", reason = "Contains distrusted emSign roots (RUSTSEC-2026-0381)" },
   { crate = "aws-config", wrappers = [
     "aws-msk-iam-sasl-signer", # External crate, requires aws-config directly
+    "connect_platform",       # Connect's platform crate; Connect may not depend on Macro's wrappers
     "macro_aws_config",
     "workspace-hack",          # cargo-hakari generated crate
   ], reason = "Use macro_aws_config for AWS configuration in workspace crates" },
@@ -228,6 +229,7 @@ deny = [
     "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
     "channels",                  # Dev logging only
+    "connect_platform",         # Connect's platform crate; Connect may not depend on Macro's wrappers
     "coding_agent_worker",       # Standalone daemon logging setup
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only

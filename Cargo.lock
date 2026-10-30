@@ -4872,7 +4872,6 @@ dependencies = [
  "aes-gcm 0.10.3",
  "async-stream",
  "async-trait",
- "aws-config",
  "aws-sdk-kms",
  "axum",
  "base64 0.22.1",
@@ -4913,6 +4912,7 @@ dependencies = [
 name = "connect_platform"
 version = "0.1.0"
 dependencies = [
+ "aws-config",
  "http 1.4.0",
  "opentelemetry",
  "opentelemetry-http",

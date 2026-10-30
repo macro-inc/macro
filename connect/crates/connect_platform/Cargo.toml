@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+aws-config = { workspace = true }
 http = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-http = { workspace = true }

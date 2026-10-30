@@ -2,12 +2,13 @@
 
 ## What it is
 
-Shared startup configuration, OpenTelemetry setup, and inbound HTTP tracing for
-Macro Connect services.
+Shared startup configuration, AWS SDK config loading, OpenTelemetry setup, and
+inbound HTTP tracing for Macro Connect services.
 
 ## Start here
 
 - `src/config.rs`: one environment snapshot and `APP_SECRETS_JSON` precedence.
+- `src/lib.rs`: default AWS SDK config loading.
 - `src/telemetry.rs`: tracing subscriber and optional OTLP export.
 - `src/http.rs`: request spans and W3C parent extraction.
 
