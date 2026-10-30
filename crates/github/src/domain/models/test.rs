@@ -709,6 +709,33 @@ fn task_status_source_reads_the_pull_request_from_a_comment_event() {
 }
 
 #[test]
+fn task_status_source_names_the_editor_of_an_already_merged_pull_request() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "edited",
+            "pull_request": {
+                "merged": true,
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "merged_by": { "login": "merger", "id": 333 }
+            },
+            "sender": { "login": "editor", "id": 444 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "444".to_string(),
+                login: "editor".to_string(),
+            },
+        })
+    );
+}
+
+#[test]
 fn a_delivery_keeps_its_meaning_and_drops_api_links() {
     let body = serde_json::json!({
         "action": "completed",

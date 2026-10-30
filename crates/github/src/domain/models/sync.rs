@@ -350,10 +350,10 @@ impl ValidatedGithubWebhookEvent {
             .payload
             .get("pull_request")
             .or_else(|| self.payload.get("issue"))?;
-        let account = pull_request
+        let merged_by = pull_request
             .get("merged_by")
-            .filter(|merged_by| !merged_by.is_null())
-            .or_else(|| self.payload.get("sender"))?;
+            .filter(|merged_by| !merged_by.is_null() && self.action() == Some("closed"));
+        let account = merged_by.or_else(|| self.payload.get("sender"))?;
         Some(PropertyChangeSource::GithubPullRequest {
             url: pull_request.get("html_url")?.as_str()?.to_string(),
             account: GithubAccount {

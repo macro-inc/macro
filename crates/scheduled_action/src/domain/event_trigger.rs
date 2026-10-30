@@ -1011,8 +1011,11 @@ fn task_property_event(
         _ => EventName::TaskPropertyChanged,
     };
     // GitHub reports what happened to a pull request whether or not its account
-    // has a Macro user, so its status changes need no Macro actor.
-    if name != EventName::TaskStatusChanged || source.is_none() {
+    // has a Macro user, so its status changes need no Macro actor. An actor that
+    // is present still has to be a person.
+    let from_github =
+        name == EventName::TaskStatusChanged && source.is_some() && actor.is_none() && !delegated;
+    if !from_github {
         document_actor(actor, fallback, delegated)?;
     }
     Ok((name, entity_id, source))

@@ -600,6 +600,20 @@ fn a_github_source_only_opens_status_changes() {
 }
 
 #[test]
+fn a_source_does_not_admit_a_change_made_by_a_bot_or_for_someone_else() {
+    for (field, value) in [("actor", BOT), ("on_behalf_of", HUMAN)] {
+        let mut data = unattributed_status_change();
+        data["source"] = github_source();
+        data[field] = json!(value);
+
+        assert_eq!(
+            property_event("entity_property.updated", data).normalize(),
+            Err(EventRejection::UnsafeAttribution)
+        );
+    }
+}
+
+#[test]
 fn mention_trigger_is_only_for_the_mentioned_user() {
     let owner = MacroUserIdStr::parse_from_str(HUMAN).unwrap();
     let other = MacroUserIdStr::parse_from_str("macro|other@example.com").unwrap();
