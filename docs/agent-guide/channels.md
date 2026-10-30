@@ -900,7 +900,8 @@ All section headers use the shared collapsible-section styling, and channel rows
 align across sections. The caret stays hidden in expanded sections until hover
 and remains visible when collapsed. Team-shared sections show a neutral Shared
 badge after the caret. Personal sections have no scope icon or badge. Header
-focus backgrounds fill the entire header row, including its trailing controls.
+focus backgrounds fill the entire header row, including its trailing controls,
+with no extra right padding.
 
 The upper sidebar uses one virtualized scroll area instead of dividing available
 height between sections. Direct messages have a separate collapsible panel fixed
@@ -923,16 +924,17 @@ deleting saved labels. The New conversation action remains independent of the
 label service and its feature flag.
 
 Use **New → New section** to create a section. The wider dialog has a name field
-and independent **Shared with team** and **Smart section** switches. Both off
-creates a personal manual section; smart grouping reveals its name rule and
-preview. Edit and delete through each section's own More menu. Personal
-sections are private to the account, including for team
-members, and accept joined team, public, or private channels. Shared sections
+and a **Smart section** switch in its body. **Shared with team** sits on the left
+of the footer, with the action buttons on the right. With both switches off, the
+section is personal and manual; smart grouping reveals its name rule and preview.
+Edit and delete through each section's own More menu. Personal sections are
+private to the account, including for team members, and accept joined team,
+public, or private channels. Shared sections
 retain the team's existing label permissions and accept only channels from that
 team. Neither kind accepts DMs. A personal assignment never changes a shared
 assignment. Names are unique within each scope, case-insensitively.
 
-Each heading has a sliders-icon sort/filter menu with independent sorting and
+Each heading has a funnel-icon sort/filter menu with independent sorting and
 **Unread only**. The unread label sits on the left and its switch on the right;
 toggling it keeps the menu open.
 Custom sections have a separate **More** menu for editing, Mark all as read, and

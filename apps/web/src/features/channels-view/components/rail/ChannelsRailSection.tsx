@@ -47,7 +47,7 @@ export function ChannelSectionHeading(props: {
       class="pt-2"
     >
       <WorkspaceSection.Header
-        class={cn('rounded-lg', props.focused && 'bg-hover text-ink')}
+        class={cn('rounded-lg pr-0', props.focused && 'bg-hover text-ink')}
       >
         <WorkspaceSection.Trigger
           id={props.id}
@@ -198,7 +198,7 @@ function CollapsibleSectionHeader(props: {
     <WorkspaceSection.Header
       ref={props.ref}
       class={cn(
-        'w-full rounded-lg text-xs leading-5 font-medium text-ink-muted transition-colors group-hover/sidebar-section:text-ink',
+        'w-full rounded-lg pr-0 text-xs leading-5 font-medium text-ink-muted transition-colors group-hover/sidebar-section:text-ink',
         props.focused && 'bg-hover text-ink-muted',
         !props.focused && props.focusWithin && 'text-ink-muted',
         props.class

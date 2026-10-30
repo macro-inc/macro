@@ -201,17 +201,6 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
               onInput={(event) => setName(event.currentTarget.value)}
             />
             <Show when={!props.initial}>
-              <Show when={props.canShare}>
-                <ToggleSwitch
-                  label={t('channelSections.shared')}
-                  labelClass="text-sm text-ink"
-                  checked={scope() === 'team'}
-                  onChange={(checked) =>
-                    setScope(checked ? 'team' : 'personal')
-                  }
-                  disabled={saving()}
-                />
-              </Show>
               <ToggleSwitch
                 label={t('channelSections.newSmartSection')}
                 labelClass="text-sm text-ink"
@@ -252,26 +241,38 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
               </Show>
             </Show>
           </div>
-          <div class="flex items-center justify-end gap-2 px-5 py-3">
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={saving()}
-              onClick={() => props.onOpenChange(false)}
-            >
-              {t('channelSections.cancel')}
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={!canSubmit() || saving()}
-            >
-              {saving()
-                ? t('channelSections.saving')
-                : props.initial
-                  ? t('channelSections.saveSection')
-                  : t('channelSections.createSection')}
-            </Button>
+          <div class="flex flex-wrap items-center justify-end gap-3 px-5 py-3">
+            <Show when={!props.initial && props.canShare}>
+              <ToggleSwitch
+                class="mr-auto shrink-0"
+                label={t('channelSections.shared')}
+                labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+                checked={scope() === 'team'}
+                onChange={(checked) => setScope(checked ? 'team' : 'personal')}
+                disabled={saving()}
+              />
+            </Show>
+            <div class="ml-auto flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={saving()}
+                onClick={() => props.onOpenChange(false)}
+              >
+                {t('channelSections.cancel')}
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!canSubmit() || saving()}
+              >
+                {saving()
+                  ? t('channelSections.saving')
+                  : props.initial
+                    ? t('channelSections.saveSection')
+                    : t('channelSections.createSection')}
+              </Button>
+            </div>
           </div>
         </form>
       </Surface>

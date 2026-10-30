@@ -1,7 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import CheckIcon from '@icon/system/regular/check.svg';
-import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
+import FunnelIcon from '@icon/system/regular/funnel.svg';
 import { Dropdown, ToggleSwitch } from '@ui';
 import { For } from 'solid-js';
 import type { ChannelSectionKey } from '../../types';
@@ -22,7 +22,7 @@ export function ChannelSectionDropdown(props: {
         variant="ghost"
         size="icon-sm"
       >
-        <SlidersIcon class="size-3.5" />
+        <FunnelIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-40">
         <ChannelSectionMenuItems section={props.section} />
@@ -77,7 +77,11 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
           }
         >
           <span class="flex-1">{t('channelSections.unreadOnly')}</span>
-          <span inert aria-hidden="true" class="pointer-events-none">
+          <span
+            inert
+            aria-hidden="true"
+            class="pointer-events-none flex shrink-0 items-center"
+          >
             <ToggleSwitch
               checked={preferences().unreadOnly ?? false}
               readOnly
