@@ -405,6 +405,7 @@ async fn a_cancelled_turn_presses_esc_until_the_native_agent_stops() {
             &session,
             guard.as_mut().unwrap(),
             &cancel,
+            false,
         )
         .await
         .unwrap();
