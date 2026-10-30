@@ -622,7 +622,7 @@ Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
 as `teo+123456@macro.com`, whether or not it is a saved contact. A name or
 address word that starts with the query ranks above recent substring matches
-(`gab` finds Gab Birman). Opened empty, the list puts colleagues on the sending
+(`gab` finds Gab Rowan). Opened empty, the list puts colleagues on the sending
 inbox's domain first. A chip shows the name and its hover card the address.
 Press Send with To empty, then add a recipient: the error clears at once, as a
 missing message or subject error does once filled in. Suggestions leave out
