@@ -937,6 +937,8 @@ empty sections, assignment failures, and one channel in both scopes. Scroll a
 long sidebar with many sections and confirm that the DM heading remains
 available at the bottom. Keyboard navigation and section shortcuts must follow
 the same order as the rendered rows.
+Drag a channel between sections and confirm the sidebar stays visible while
+lookups refetch, including with a slow or paused connection.
 
 ### New conversation
 

@@ -1,6 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import { QueryClient } from '@tanstack/query-core';
-import { createRoot } from 'solid-js';
+import { createMemo, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() =>
@@ -157,55 +157,77 @@ describe('channels resolved by id', () => {
   const resolved = [channelEntity('design'), channelEntity('support')];
   const settled = {
     isEnabled: true,
-    isLoading: false,
+    isPending: false,
     error: undefined,
-    entities: undefined,
+    data: undefined,
   };
 
   it('replaces the previous answer, dropping channels the lookup stops returning', () => {
     expect(
       resolveReferencedChannels(resolved, {
         ...settled,
-        entities: [
-          channelEntity('design'),
-          { id: 'note', type: 'document' } as never,
-        ],
+        data: {
+          entities: [
+            channelEntity('design'),
+            { id: 'note', type: 'document' } as never,
+          ],
+        },
       })
     ).toEqual([channelEntity('design')]);
   });
 
-  it('keeps the previous answer while the lookup is disabled or loading', () => {
-    expect(
-      resolveReferencedChannels(resolved, {
-        ...settled,
-        isEnabled: false,
-        entities: [],
-      })
-    ).toBe(resolved);
-    expect(
-      resolveReferencedChannels(resolved, {
-        ...settled,
-        isLoading: true,
-        entities: [],
-      })
-    ).toBe(resolved);
+  it.each(['disabled', 'pending', 'failed'] as const)(
+    'keeps the previous answer without reading %s query data',
+    (state) => {
+      expect(
+        resolveReferencedChannels(resolved, {
+          isEnabled: state !== 'disabled',
+          isPending: state === 'pending',
+          error: state === 'failed' ? new Error('page failed') : undefined,
+          get data(): { entities: ChannelEntity[] } {
+            throw new Error('An unavailable query resource was read');
+          },
+        })
+      ).toBe(resolved);
+    }
+  );
+
+  it('retains resolved rows while a changed lookup is pending and updates when it settles', () => {
+    const { dispose, result, setPending, setEntities } = createRoot(
+      (dispose) => {
+        const [pending, setPending] = createSignal(false);
+        const [entities, setEntities] = createSignal(resolved);
+        const query = {
+          ...settled,
+          get isPending() {
+            return pending();
+          },
+          get data() {
+            if (pending()) throw new Error('A pending query resource was read');
+            return { entities: entities() };
+          },
+        };
+        const result = createMemo<ChannelEntity[]>(
+          (previous) => resolveReferencedChannels(previous, query),
+          []
+        );
+        return { dispose, result, setPending, setEntities };
+      }
+    );
+    try {
+      const previous = result();
+      setPending(true);
+      setEntities([channelEntity('support')]);
+      expect(result()).toBe(previous);
+      setPending(false);
+      expect(result()).toEqual([channelEntity('support')]);
+    } finally {
+      dispose();
+    }
   });
 
-  it('keeps the previous answer when a page fails instead of emptying the rows', () => {
-    expect(
-      resolveReferencedChannels(resolved, {
-        ...settled,
-        error: new Error('page failed'),
-        entities: [channelEntity('design')],
-      })
-    ).toBe(resolved);
-    // A failed first page leaves no data behind at all.
-    expect(
-      resolveReferencedChannels(resolved, {
-        ...settled,
-        error: new Error('lookup failed'),
-      })
-    ).toBe(resolved);
+  it('keeps the previous answer when a settled lookup has no data', () => {
+    expect(resolveReferencedChannels(resolved, settled)).toBe(resolved);
   });
 });
 

@@ -12,6 +12,7 @@ import {
   isChannelEntity,
   isChannelThreadEntity,
 } from '@entity';
+import { queryReadyGate } from '@queries/gate';
 import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
@@ -183,15 +184,15 @@ export function resolveReferencedChannels(
   previous: ChannelEntity[],
   lookup: {
     isEnabled: boolean;
-    isLoading: boolean;
+    isPending: boolean;
     error: unknown;
-    entities: readonly EntityData[] | undefined;
+    data: { entities: readonly EntityData[] } | undefined;
   }
 ): ChannelEntity[] {
-  if (!lookup.isEnabled || lookup.isLoading || lookup.error || !lookup.entities)
+  if (!lookup.isEnabled || lookup.error || !queryReadyGate(lookup))
     return previous;
 
-  return lookup.entities.filter(isChannelEntity);
+  return lookup.data.entities.filter(isChannelEntity);
 }
 
 export function deduplicateChannels(

@@ -381,13 +381,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   });
   const referencedChannelsQuery = useChannelsByIdsQuery(missingChannelIds);
   const referencedChannels = createMemo<ChannelEntity[]>(
-    (previous) =>
-      resolveReferencedChannels(previous, {
-        isEnabled: referencedChannelsQuery.isEnabled,
-        isLoading: referencedChannelsQuery.isLoading,
-        error: referencedChannelsQuery.error,
-        entities: referencedChannelsQuery.data?.entities,
-      }),
+    (previous) => resolveReferencedChannels(previous, referencedChannelsQuery),
     []
   );
   // Only a label puts a fetched channel in a section. A favorited one stays
