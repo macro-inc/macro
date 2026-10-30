@@ -249,10 +249,10 @@ def periodcentered(p):
 @glyph("ellipsis", 0x2026)
 def ellipsis(p):
     s, sb, _ = _period(p)
-    # The gap follows the dot: about 123 / 129 / 158 at 300 / 400 / 800,
-    # 1.3 / 1.2 / 0.9 of the dot as in Inter, a little under the gap of
-    # typed periods so the three read as one sign.
-    pitch = s + s * 0.45 + 80
+    # The gap follows the dot: about 124 / 128 / 147 at 300 / 400 / 800,
+    # 1.3 / 1.2 / 0.85 of the dot (Inter: 1.7 / 1.2 / 0.9), at or a little
+    # under the gap of typed periods so the three read as one sign.
+    pitch = s + s * 0.3 + 95
     shape = Shape()
     for i in range(3):
         shape = shape + dot(sb + s / 2 + i * pitch, s / 2, s)

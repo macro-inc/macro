@@ -1137,7 +1137,8 @@ def florin(p):
     # Lower hook: the same turned half a turn.
     lower = upper.rotate180(xs + s / 2, (top + bot) / 2)
     lcy = top + bot - ucy
-    stem = rect(xs, lcy - 1, xs + s, ucy + 1)
+    # The stem meets both hooks edge to edge at their vertical extremes.
+    stem = rect(xs, lcy, xs + s, ucy)
     bar_y = P.XH - h / 2
     bar = rect(xs - p.w(118, 0.3), bar_y - h / 2, xs + s + p.w(118, 0.3), bar_y + h / 2)
     sh = (upper + lower + stem + bar).skew(11, cy=(top + bot) / 2)
@@ -1515,10 +1516,10 @@ def _small_a(q):
     ibox = (s * 0.98, hb + h, w - s, ytop - h)
     cy = (hb + ytop) / 2
     yt = cy + 0.5 * (ibox[3] - cy)
-    hook = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(cy - 1)
+    hook = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(cy)
     hook = hook - (left_of(w / 2) & below(yt))
     hook = hook - chamfer(_ox(box, n, yt, "left"), yt, q.cut, "sw")
-    stem = rect(xs, 0, w, cy + 1)
+    stem = rect(xs, 0, w, cy)  # edge to edge with the hook's extreme
     # Bowl: outer contour leaves the stem edge at y_o (and mirrored at the
     # top); the counter is a squircle clipped by the stem edge.
     y0, bt = -P.OS, xh * 0.57

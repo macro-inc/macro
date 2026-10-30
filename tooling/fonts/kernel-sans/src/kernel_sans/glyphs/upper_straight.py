@@ -265,7 +265,7 @@ def V(p):
 @glyph("W", 0x0057)
 def W(p):
     s = p.cstem
-    w = p.w(910, 1.4)
+    w = p.w(910, 1.4)  # grows about like Inter's W: colour, not width
     t_dn, t_up = s * 0.95, s * 0.9  # down-strokes heavier, as in V
     fb = s * 0.8  # flat bottom vertices
     fa = s * 0.8  # flat middle apex, at the cap height
@@ -306,7 +306,7 @@ def W(p):
 @glyph("M", 0x004D)
 def M(p):
     s = p.cstem
-    w = p.w(710, 1.5)
+    w = p.w(710, 1.5)  # grows about like Inter's M
     sm = s * 0.92  # vertical sides
     td = s * 0.93  # diagonals
     fv = s * 0.8  # flat vertex on the baseline
@@ -343,7 +343,7 @@ def M(p):
 @glyph("N", 0x004E)
 def N(p):
     s = p.cstem
-    w = p.w(580, 1.0)
+    w = p.w(580, 1.0)  # a two-stem letter, like H
     sn = s * 0.92  # thin stems
     td = s * 0.97  # heavier diagonal
     e = sn * 0.3
@@ -480,14 +480,15 @@ def Z(p):
 def AE(p):
     s = p.cstem
     h = p.chair
-    xs = p.w(420, 1.0)  # left edge of the E stem
+    xs = p.w(420, 1.0)  # left edge of the E stem; wide A part, slow growth
     # The A's thin up-stroke runs from the baseline at x = 0 into the E stem,
     # crossing the stem's left edge clearly below the top arm (an apex crotch
     # like A's); the top arm caps it like A's flat apex.
     dg = _Slant(0, xs + s * 0.55, s * 0.88, "l", "r")
     ew = p.w(420, 0.55)  # E arms, measured from the stem
     # One bar serves as A crossbar and E middle arm: lower than E's so the A
-    # counter above it stays open.
+    # counter above it stays open at ExtraBold (the E counters then split
+    # about 1:2, as in Inter's AE).
     mid_y = CAP * 0.42
     shape = (
         dg.shape()
