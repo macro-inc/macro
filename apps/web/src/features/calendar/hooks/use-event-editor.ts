@@ -108,9 +108,17 @@ function hasTimeChanged(
     .otherwise(() => true);
 }
 
+/** A new event's id and the time it was created with. */
+export type CreatedCalendarEvent = {
+  eventId: string;
+  time: EventEditorSubmitValues['time'];
+};
+
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
+  /** Called with a new event once it exists, before `onSaved`. */
+  onCreated?: (created: CreatedCalendarEvent) => void;
   macroCallsEnabled: Accessor<boolean>;
   /**
    * Whether the guest-invites rollout is on: a guest the organizer lets
@@ -339,7 +347,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       if (!event) {
         // The server mints the call and writes its link into the event, so
         // the one invitation attendees receive already carries it.
-        await create.mutateAsync({
+        const created = await create.mutateAsync({
           title: values.title,
           time: values.time,
           calendarId: values.calendarId,
@@ -357,6 +365,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
         });
+        props.onCreated?.({ eventId: created.id, time: values.time });
         props.onSaved();
         return;
       }

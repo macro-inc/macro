@@ -259,18 +259,19 @@ describe('favorites GraphQL mutations', () => {
           },
         }),
       });
-      const result = await executeGraphqlReorderFavoritesMutation(client, args);
-      expect(graphqlReorderFavoritesResult(result)).toEqual({
+      const queued = {
         kind: 'queued',
         transactionId: kind === 'queued' ? 'transaction-1' : 'transaction-2',
-      });
+      };
+      const result = await executeGraphqlReorderFavoritesMutation(client, args);
+      expect(graphqlReorderFavoritesResult(result)).toEqual(queued);
       const toggle = await executeGraphqlSetFavoriteMutation(
         client,
         input,
         true,
         2
       );
-      expect(graphqlSetFavoriteResult(toggle)).toBeUndefined();
+      expect(graphqlSetFavoriteResult(toggle)).toEqual(queued);
     }
   );
 

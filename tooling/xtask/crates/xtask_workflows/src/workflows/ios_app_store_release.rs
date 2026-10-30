@@ -2,7 +2,8 @@
 //! native (Tauri) changes and this workflow builds the iOS app from the PR
 //! head, uploads it to TestFlight, and submits it for App Review — the release
 //! the `iOS Native Check` merge gate (a job of [`super::web_app_check_main`]) then waits on
-//! ([`super::ios_release_watch`] re-runs the gate once Apple releases it).
+//! ([`super::ios_release_watch`] re-runs the gate once Apple approves it).
+//! The approved version is held until the next prod deploy releases it.
 //! The success comment tells the author to enable GitHub auto-merge on the
 //! PR if they want it merged the moment Apple approves. The workflow does not
 //! enable it itself: that would need a user token (a merge set up by the
@@ -262,11 +263,12 @@ fn pr_comment() -> Step<Use> {
                 const SUCCESS_BODY = [
                   `📱 iOS ${version} (build ${build}) was uploaded to TestFlight and submitted for App Review.`,
                   '',
-                  'When Apple approves it, the version releases to the App Store automatically,',
-                  'the **iOS Release Watch** workflow re-runs the **iOS Native Check** on this PR',
-                  'within half an hour of that, and the PR becomes mergeable. To merge it the',
-                  'moment that happens, click **Enable auto-merge** on this PR now (squash).',
-                  'After merge, the next prod deploy applies the iOS native build floor committed in `min-native-build.json`, prompting older installs to update.',
+                  'When Apple approves it, the **iOS Release Watch** workflow re-runs the',
+                  '**iOS Native Check** on this PR within half an hour, and the PR becomes',
+                  'mergeable. To merge it the moment that happens, click **Enable auto-merge**',
+                  'on this PR now (squash). Apple holds the approved version until the next',
+                  'prod deploy releases it on the App Store and applies the iOS native build floor',
+                  'committed in `min-native-build.json`, prompting older installs to update.',
                   '',
                   `[Workflow run](${runUrl})`,
                 ].join('\n');

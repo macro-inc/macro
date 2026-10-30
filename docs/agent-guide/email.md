@@ -73,6 +73,12 @@ draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 list and quote. Check discard from both a reply (the reply closes) and
 standalone compose (the view goes back), with focus in the body.
 
+Star and mute feedback reports what happened to the write. With GraphQL Soup
+enabled, a star queued while offline toasts that it is waiting to sync (for
+example `Added to favorites, waiting to sync`) rather than confirming it. A REST
+star and a mute fail offline with an error toast and roll back instead of
+waiting for reconnect, so pressing them again works at once.
+
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
 Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
@@ -519,6 +525,9 @@ controls. Verify these remain
 available when returning to Drafts and reopening the draft.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
+**Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender
+commands in the command menu, appear only when the thread has a sender other
+than you. A thread you sent alone omits them.
 **Download .eml** in the title menu saves the thread's newest sent or received
 message (drafts and sends still in flight are skipped) exactly as Gmail or
 Outlook holds it, named after its subject. Anyone who can view the thread can

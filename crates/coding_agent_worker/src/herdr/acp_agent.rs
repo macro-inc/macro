@@ -30,7 +30,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use super::HerdrSession;
-use super::cli::{HerdrCli, HerdrError};
+use super::cli::{AgentLaunch, HerdrCli, HerdrError};
 use super::hub::title_from;
 use super::store::{Record, Store, write_private};
 use super::tail::Cursor;
@@ -72,8 +72,6 @@ const STATUS_EVERY: u32 = 4;
 const SETTLED_CHECKS: u32 = 3;
 /// How long the transcript must stay quiet before a ready status ends a turn.
 const SETTLED_QUIET: Duration = Duration::from_secs(3);
-/// How long a new tab's shell may take to reach its prompt.
-const SHELL_READY_TIMEOUT: Duration = Duration::from_secs(10);
 const QUIET_START: Duration = Duration::from_secs(20);
 const MISSING_AGENT_CHECKS: u32 = 5;
 /// Esc presses a cancel spends before the native turn is left to run.
@@ -106,6 +104,15 @@ impl TuiAgent {
         match self {
             Self::Claude => "claude",
             Self::Codex => "codex",
+        }
+    }
+
+    /// Whether the TUI reports its own status through OSC 7501, which
+    /// herdr-core relies on to see it working, blocked, or ready.
+    pub(crate) fn reports_status(self) -> bool {
+        match self {
+            Self::Claude => true,
+            Self::Codex => false,
         }
     }
 
@@ -222,9 +229,7 @@ pub async fn run(options: AdapterOptions) -> rootcause::Result<()> {
         pending: Mutex::new(HashMap::new()),
         next_id: AtomicU64::new(0),
         sessions: Mutex::new(HashMap::new()),
-        herdr: herdr
-            .as_ref()
-            .map(|herdr| HerdrCli::new(&herdr.bin, herdr.workspace_id.clone())),
+        herdr: herdr.as_ref().map(HerdrSession::cli),
         options,
         home,
         store: Store(state_dir),
@@ -877,17 +882,14 @@ impl Adapter {
     ) -> Result<Live, RpcError> {
         let kind = self.options.kind;
         let label = title_from(first_prompt).unwrap_or_else(|| kind.herdr_kind().to_owned());
-        let window = if self.options.managed_worktrees {
-            let source = crate::outbound::git::primary_worktree(&session.cwd)
-                .await
-                .map_err(|error| RpcError::internal(error.to_string()))?;
-            herdr
-                .open_worktree(&source, &session.cwd, &label, !self.options.no_focus)
-                .await?
+        let source = if self.options.managed_worktrees {
+            Some(
+                crate::outbound::git::primary_worktree(&session.cwd)
+                    .await
+                    .map_err(|error| RpcError::internal(error.to_string()))?,
+            )
         } else {
-            herdr
-                .open_window(&session.cwd, &label, !self.options.no_focus)
-                .await?
+            None
         };
 
         let model = lock(&session.model).clone();
@@ -921,40 +923,32 @@ impl Adapter {
                 ]);
             }
         }
+        let mut environment = None;
         if kind == TuiAgent::Codex && !session.mcp_servers.is_empty() {
             let prepared = super::mcp::codex(
                 &self.store.0.join("mcp").join(&session.id),
                 &session.mcp_servers,
             )
             .map_err(|error| RpcError::internal(error.to_string()))?;
-            herdr
-                .run_in_pane(
-                    &window.pane_id,
-                    &format!(
-                        ". {}",
-                        shell_words::quote(&prepared.environment.to_string_lossy())
-                    ),
-                )
-                .await?;
             args.extend(prepared.args);
+            environment = Some(prepared.environment);
         }
         args.extend(self.options.agent_args.iter().cloned());
         let name = agent_name(&session.id);
         let started = std::time::SystemTime::now();
-        // The tab's shell must reach its prompt before an agent can start,
-        // and a worktree's direnv can hold it for seconds.
-        let deadline = tokio::time::Instant::now() + SHELL_READY_TIMEOUT;
-        loop {
-            match herdr
-                .start_agent(&name, kind.herdr_kind(), &window.pane_id, &args)
-                .await
-            {
-                Err(error) if error.pane_busy() && tokio::time::Instant::now() < deadline => {
-                    tokio::time::sleep(POLL).await;
-                }
-                result => break result?,
-            }
-        }
+        let window = herdr
+            .launch_agent(&AgentLaunch {
+                name: &name,
+                kind: kind.herdr_kind(),
+                reports_status: kind.reports_status(),
+                cwd: &session.cwd,
+                label: &label,
+                focus: !self.options.no_focus,
+                worktree_source: source.as_deref(),
+                environment: environment.as_deref(),
+                args: &args,
+            })
+            .await?;
         tracing::info!(
             session = %session.id,
             pane = %window.pane_id,

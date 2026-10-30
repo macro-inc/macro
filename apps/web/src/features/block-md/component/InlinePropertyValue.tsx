@@ -6,7 +6,13 @@ import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { openPropertyEditor } from '@property/editor/state/propertyEditor';
 import type { Property as PropertyT } from '@property/types';
 import { Button } from '@ui';
-import { type Component, createSignal, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  type ComponentProps,
+  createSignal,
+  type JSX,
+  Show,
+} from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
@@ -17,6 +23,8 @@ type InlinePropertyValueProps = {
   class?: string;
   canManage?: boolean;
   canRemove?: boolean;
+  /** The editor the pill opens; see `PropertyValuePill`. */
+  editor?: ComponentProps<typeof PropertyValuePill>['editor'];
 };
 
 /**
@@ -119,6 +127,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
         </Show>
       }
       entitySelfFilter={{ entityType: ctx.entityType, blockId: props.entityId }}
+      editor={props.editor}
     />
   );
 };

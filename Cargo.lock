@@ -4581,6 +4581,7 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "arboard",
+ "base64 0.22.1",
  "bot_id",
  "channel_sender",
  "channels",

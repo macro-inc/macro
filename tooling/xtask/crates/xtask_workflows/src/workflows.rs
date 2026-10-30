@@ -43,6 +43,7 @@ mod deploy_web_app;
 mod deploy_website;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
+mod ios_app_store_publish;
 mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
@@ -323,6 +324,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ios_app_store_release",
         file_name: "ios-app-store-release.yml",
         render_yaml: || render_gh_workflow(ios_app_store_release::ios_app_store_release)(),
+    },
+    WorkflowFile {
+        slug: "ios_app_store_publish",
+        file_name: "ios-app-store-publish.yml",
+        render_yaml: || render_gh_workflow(ios_app_store_publish::ios_app_store_publish)(),
     },
     WorkflowFile {
         slug: "native_check_label",
