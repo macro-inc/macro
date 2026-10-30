@@ -149,8 +149,10 @@ describe('TeamOooUpcomingList', () => {
       eventId: item.eventId,
       occurrenceKey: item.occurrenceKey,
     });
+    expect(gotoDate).toHaveBeenCalledWith(
+      focusOccurrence.mock.calls[0][0].date
+    );
     expect(selectEvent).not.toHaveBeenCalled();
-    expect(gotoDate).not.toHaveBeenCalled();
   });
 
   it('falls back to the row when the chip never renders', async () => {
@@ -160,10 +162,9 @@ describe('TeamOooUpcomingList', () => {
     const row = await screen.findByRole('button', { name: /Jackson/ });
     fireEvent.click(row);
 
-    const [occurrence, onTimeout] = focusOccurrence.mock.calls[0];
+    const [, onTimeout] = focusOccurrence.mock.calls[0];
     onTimeout();
 
-    expect(gotoDate).toHaveBeenCalledWith(occurrence.date);
     expect(selectEvent).toHaveBeenCalledTimes(1);
     expect(selectEvent.mock.calls[0][1]).toBe(row);
     expect(selectEvent.mock.calls[0][2]).toBe('agenda');

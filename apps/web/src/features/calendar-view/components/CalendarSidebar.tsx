@@ -170,10 +170,9 @@ export function TeamOooUpcomingList() {
   const isActive = (window: TeamOooWindow) =>
     calendarView.selectedEvent()?.id === window.event.id;
   const openWindow = (window: TeamOooWindow, row: HTMLElement) => {
-    const openOnRow = () => {
-      calendarPager.gotoDate(window.start);
+    const openOnRow = () =>
       calendarView.selectEvent(window.event, row, 'agenda');
-    };
+    calendarPager.gotoDate(window.start);
     // With the overlay on, the absence also renders on the grid: open it on
     // its chip once the page shows it, as a navigation request does, so the
     // card never opens on the row and then jumps to the chip.
