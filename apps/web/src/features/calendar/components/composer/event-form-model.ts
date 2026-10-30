@@ -554,14 +554,19 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     }
     return true;
   });
+  const recurrenceConfig = (): RecurrenceConfig | undefined => {
+    const choice = recurrenceChoice();
+    if (choice === 'none') return undefined;
+    if (choice === 'existing') return initialConfig();
+    return choice === 'custom'
+      ? customConfig()
+      : presets().find((candidate) => candidate.id === choice)?.config;
+  };
   const recurrenceLines = (): string[] | undefined => {
     const choice = recurrenceChoice();
     if (choice === 'existing') return undefined;
     if (choice === 'none') return [];
-    const config =
-      choice === 'custom'
-        ? customConfig()
-        : presets().find((candidate) => candidate.id === choice)?.config;
+    const config = recurrenceConfig();
     if (!config) return undefined;
     // What the stored rule means at the current start: a weekly rule without
     // BYDAY follows the start to another weekday.
@@ -643,6 +648,7 @@ export function createEventEditorState(options: CreateEventEditorStateOptions) {
     setCustomConfig,
     changeRecurrenceChoice,
     recurrenceLines,
+    recurrenceConfig,
     dateRangeError,
     eventTime,
     canSave,

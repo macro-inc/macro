@@ -5,7 +5,6 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SearchRailButton } from './search-bar-button';
 
@@ -43,9 +42,7 @@ vi.mock('../split-layout/layout', () => ({
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@ui/components/Hotkey', () => ({ Hotkey: () => null }));
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
+
 vi.mock('@ui', async () => ({
   ...(await import('@ui/utils/classname')),
   ...(await import('@ui/utils/menuKeyboardNavigation')),

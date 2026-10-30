@@ -12,7 +12,7 @@ import { ConversationSectionList } from '../components/conversation-sections';
 import { PairingDialog, type PasskeyMode } from '../components/pairing-dialog';
 import { useWhatsAppLinked } from '../context/whatsapp-linked-context';
 import { accountStatus } from '../core/account';
-import { adoptFailureMessage } from '../core/adopt';
+import { addFailureMessage } from '../core/add';
 import {
   chatSections,
   conversationSections,
@@ -32,7 +32,12 @@ function LoadFailure(props: { what: string; onRetry: () => void }) {
   return (
     <div class="flex items-center gap-3 px-4 py-2 text-sm text-ink-muted">
       <span role="alert">Couldn't load {props.what}.</span>
-      <Button type="button" size="sm" variant="outline" onClick={props.onRetry}>
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        onClick={props.onRetry}
+      >
         Try again
       </Button>
     </div>
@@ -108,16 +113,16 @@ export function WhatsAppPage(props: {
       else next.delete(jid);
       return next;
     });
-  const adopt = async (chat: WhatsAppChat) => {
+  const add = async (chat: WhatsAppChat) => {
     if (adding().has(chat.jid)) return;
     setAddErrors(({ [chat.jid]: _previous, ...rest }) => rest);
     setPending(chat.jid, true);
-    const result = await whatsapp.adopt(chat.jid);
+    const result = await whatsapp.add(chat);
     setPending(chat.jid, false);
     if (result.isErr())
       setAddErrors((current) => ({
         ...current,
-        [chat.jid]: adoptFailureMessage(result.error),
+        [chat.jid]: addFailureMessage(result.error),
       }));
   };
 
@@ -183,18 +188,15 @@ export function WhatsAppPage(props: {
                                 label={label}
                                 chats={items}
                                 inCommunity={items[0]?.community !== undefined}
-                                canAdd={
-                                  whatsapp.features.data?.adoption ?? false
-                                }
                                 adding={adding()}
                                 errors={addErrors()}
                                 onAdd={(chat) =>
                                   fireAndForget(
-                                    adopt(chat),
-                                    'whatsapp-linked.adopt'
+                                    add(chat),
+                                    'whatsapp-linked.add'
                                   )
                                 }
-                                onOpenGroup={whatsapp.openGroup}
+                                onOpenChat={whatsapp.openChat}
                               />
                             )}
                           />
@@ -242,7 +244,6 @@ export function WhatsAppPage(props: {
               <ConnectCard
                 reconnect={current().reconnect}
                 phone={isMobile()}
-                unavailable={whatsapp.features.data?.pairing === false}
                 pending={whatsapp.isConnecting()}
                 onConnect={() => pairing.start()}
               />

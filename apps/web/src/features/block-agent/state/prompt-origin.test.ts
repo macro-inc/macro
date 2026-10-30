@@ -501,6 +501,25 @@ describe('promptOrigin', () => {
       tail: '· Acme renewal ended',
       destination: { kind: 'call', callId: 'call-1' },
     });
+
+    expect(
+      routine({
+        type: 'event',
+        event: {
+          event: 'github',
+          delivery: {
+            event: 'workflow_run',
+            action: 'completed',
+            repository: 'macro-inc/macro',
+          },
+        },
+      })
+    ).toEqual({
+      lead: 'via routine',
+      place: 'Watcher',
+      tail: '· GitHub workflow_run completed in macro-inc/macro',
+      destination: { kind: 'routine', routineId: 'r-2' },
+    });
   });
 
   it('is undefined when the context names no trigger', () => {

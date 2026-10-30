@@ -42,6 +42,8 @@ import type {
   SendMobileWelcomeEmailResponse,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
+  SetGithubPullRequestStateRequest,
+  SetGithubPullRequestStateResponse,
   TrialEligibility,
   UserQuota,
 } from './generated/schemas';
@@ -292,7 +294,8 @@ const githubMergeErrorResponseHandler = githubChangeErrorResponseHandler({
   rejected: 'GitHub declined to merge the pull request',
 });
 
-const githubDraftErrorResponseHandler = githubChangeErrorResponseHandler({
+/** Shared by the draft and open/closed state routes, which fail the same ways. */
+const githubUpdateErrorResponseHandler = githubChangeErrorResponseHandler({
   noLink: 'Connect GitHub in Settings to change pull requests',
   rejected: 'GitHub declined to change the pull request',
 });
@@ -585,7 +588,19 @@ export const authServiceClient = {
       >(`${authHost}/github_pull_requests/draft`, {
         method: 'POST',
         body: JSON.stringify(args),
-        errorResponseHandler: githubDraftErrorResponseHandler,
+        errorResponseHandler: githubUpdateErrorResponseHandler,
+      })
+    ).map((result) => result);
+  },
+  async setGithubPullRequestState(args: SetGithubPullRequestStateRequest) {
+    return (
+      await fetchWithAuth<
+        SetGithubPullRequestStateResponse,
+        GithubMergeErrorCode
+      >(`${authHost}/github_pull_requests/state`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: githubUpdateErrorResponseHandler,
       })
     ).map((result) => result);
   },

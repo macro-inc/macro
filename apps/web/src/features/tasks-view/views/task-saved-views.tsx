@@ -1,14 +1,23 @@
+import { t } from '@app/lib/i18n';
 import { replacePaneSearchParams } from '@app/lib/split-router';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
-import { Button, type DialogHandle, Dropdown, openDialog } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  type DialogHandle,
+  Dropdown,
+  openDialog,
+} from '@ui';
 import { ok } from 'neverthrow';
 import { batch, For, getOwner, type Owner, onCleanup, Show } from 'solid-js';
 import { v4 as uuid } from 'uuid';
@@ -286,46 +295,9 @@ function TaskSavedViewMenuItems(props: {
   );
 }
 
-export function TaskSavedViewsList() {
-  const {
-    savedViews,
-    savedViewsList,
-    startSavedView,
-    isSidebarSectionOpen,
-    setSidebarSectionOpen,
-  } = useTasksView();
-  return (
-    <Show when={savedViews && savedViewsList}>
-      <SavedViewList.Root
-        open={isSidebarSectionOpen('saved-views')}
-        onOpenChange={(open) => setSidebarSectionOpen('saved-views', open)}
-      >
-        <SavedViewList.Header
-          onCreate={() => {
-            setSidebarSectionOpen('saved-views', true);
-            startSavedView();
-          }}
-        />
-        <SavedViewList.Content>
-          <TaskSavedViewRows />
-        </SavedViewList.Content>
-      </SavedViewList.Root>
-    </Show>
-  );
-}
-
-function TaskSavedViewRows(props: {
-  onAction?: (action: () => void) => void;
-  dialogOwner?: Owner | null;
-}) {
-  const { savedViews, savedViewsList, selectSavedView, closeTask } =
-    useTasksView();
+function useTaskSavedViewListState() {
+  const { savedViews, savedViewsList } = useTasksView();
   const viewerId = useUserId();
-  const owner = props.dialogOwner ?? getOwner();
-  const selectedId = () => {
-    const view = savedViews?.view();
-    return view?.kind === 'saved' ? view.record.id : undefined;
-  };
   const creating = () => savedViews?.view().kind === 'new';
   const items = () => {
     const records = savedViewsList?.items();
@@ -339,6 +311,64 @@ function TaskSavedViewRows(props: {
       return [selection.record, ...(records ?? [])];
     return records;
   };
+  return {
+    creating,
+    items,
+    empty: () =>
+      !creating() && !savedViewsList?.loading() && items()?.length === 0,
+  };
+}
+
+export function TaskSavedViewsList() {
+  const {
+    savedViews,
+    savedViewsList,
+    startSavedView,
+    isSidebarSectionOpen,
+    setSidebarSectionOpen,
+  } = useTasksView();
+  const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
+  const create = () => {
+    setSidebarSectionOpen('saved-views', true);
+    startSavedView();
+  };
+  return (
+    <Show when={savedViews && savedViewsList}>
+      <SavedViewList.Root
+        open={isSidebarSectionOpen('saved-views')}
+        onOpenChange={(open) => setSidebarSectionOpen('saved-views', open)}
+      >
+        <SavedViewList.Header
+          onCreate={create}
+          createButtonRef={attachCreateHotkeys}
+        />
+        <SavedViewList.Content>
+          <TaskSavedViewRows />
+        </SavedViewList.Content>
+      </SavedViewList.Root>
+    </Show>
+  );
+}
+
+function TaskSavedViewRows(props: {
+  onAction?: (action: () => void) => void;
+  dialogOwner?: Owner | null;
+}) {
+  const {
+    savedViews,
+    savedViewsList,
+    selectSavedView,
+    startSavedView,
+    closeTask,
+  } = useTasksView();
+  const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
+  const viewerId = useUserId();
+  const owner = props.dialogOwner ?? getOwner();
+  const selectedId = () => {
+    const view = savedViews?.view();
+    return view?.kind === 'saved' ? view.record.id : undefined;
+  };
+  const { creating, items, empty } = useTaskSavedViewListState();
   const run = (action: () => void) =>
     props.onAction ? props.onAction(action) : action();
   return (
@@ -372,12 +402,26 @@ function TaskSavedViewRows(props: {
               Loading views…
             </p>
           </Show>
-          <Show
-            when={!creating() && !views().loading() && items()?.length === 0}
-          >
-            <p class="px-3 py-2 text-xs text-ink-muted">
-              Save a set of filters to return to it.
-            </p>
+          <Show when={empty()}>
+            <div class="mx-2 my-1 flex flex-col items-start gap-2 rounded-lg border border-edge-muted p-3 group-data-closed/sidebar-section:invisible">
+              <div class="space-y-1">
+                <p class="text-xs font-medium text-ink">
+                  {t('viewMenus.savedViewsEmptyTitle')}
+                </p>
+                <p class="text-xs text-ink-muted">
+                  {t('viewMenus.savedViewsEmptyDescription')}
+                </p>
+              </div>
+              <Button
+                ref={attachCreateHotkeys}
+                size="sm"
+                variant="secondary"
+                onClick={() => run(startSavedView)}
+              >
+                <PlusIcon class="size-3.5" />
+                {t('viewMenus.createSavedView')}
+              </Button>
+            </div>
           </Show>
           <Show when={views().error()}>
             <Button
@@ -417,7 +461,7 @@ export function TaskSavedViewsPicker() {
           scopeKey={viewerId()}
           label={
             views().view().kind === 'default'
-              ? 'Saved views'
+              ? t('viewMenus.savedViews')
               : taskSavedViewTitle(views().view())
           }
         >
@@ -454,11 +498,9 @@ export function TaskSaveViewButton() {
   };
   return (
     <Show when={visible()}>
-      <HeaderActionGroup label="Save task view">
-        <Button size="md" variant="cta" onClick={() => create()}>
-          Save view
-        </Button>
-      </HeaderActionGroup>
+      <Button variant="primary" onClick={() => create()}>
+        Save view
+      </Button>
     </Show>
   );
 }
@@ -484,7 +526,7 @@ export function TaskSavedViewCreateBanner(props: TaskSavedViewDialogProps) {
       >
         <InfoIcon class="size-4 shrink-0 text-accent" aria-hidden="true" />
         <span class="min-w-0 flex-1">Save these filters as a view</span>
-        <Button size="sm" variant="cta" onClick={showCreate}>
+        <Button size="sm" variant="primary" onClick={showCreate}>
           <BookmarkIcon class="size-4" aria-hidden="true" />
           Save view
         </Button>
@@ -551,7 +593,8 @@ export function TaskSavedViewMenu() {
             ref={trigger}
             size="icon-md"
             variant="ghost"
-            label="Saved view actions"
+            aria-label="Saved view actions"
+            tooltip="Saved view actions"
           >
             <DotsIcon class="size-4" />
           </Dropdown.Trigger>
@@ -630,45 +673,43 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
   return (
     <>
       <Show when={savedViews?.view().kind === 'new' || selected()?.dirty}>
-        <HeaderActionGroup label="Saved view actions">
-          <Show
-            when={savedViews?.view().kind === 'new'}
-            fallback={
-              <>
-                <Show when={selected()?.record.ownerId === viewerId()}>
-                  <Button
-                    size="md"
-                    variant="cta"
-                    class="touch:order-last"
-                    disabled={update.isPending || !!selected()?.issues.length}
-                    title={
-                      selected()?.issues.length
-                        ? 'Update the app or remove unsupported settings before saving.'
-                        : undefined
-                    }
-                    onClick={() => fireAndForget(save(), 'saved-views')}
-                  >
-                    Save changes
-                  </Button>
-                </Show>
-                <Button
-                  size="md"
-                  variant="ghost"
-                  onClick={() => savedViews?.reset()}
+        <Show
+          when={savedViews?.view().kind === 'new'}
+          fallback={
+            <HeaderActionGroup label="Saved view actions">
+              <Show when={selected()?.record.ownerId === viewerId()}>
+                <ButtonGroup.Button
+                  variant="primary"
+                  class="touch:order-last"
+                  disabled={update.isPending || !!selected()?.issues.length}
+                  title={
+                    selected()?.issues.length
+                      ? 'Update the app or remove unsupported settings before saving.'
+                      : undefined
+                  }
+                  onClick={() => fireAndForget(save(), 'saved-views')}
                 >
-                  Reset
-                </Button>
-              </>
-            }
-          >
-            <Button size="md" variant="cta" onClick={() => showCreate()}>
+                  Save changes
+                </ButtonGroup.Button>
+              </Show>
+              <ButtonGroup.Button
+                variant="ghost"
+                onClick={() => savedViews?.reset()}
+              >
+                Reset
+              </ButtonGroup.Button>
+            </HeaderActionGroup>
+          }
+        >
+          <div class="flex items-center gap-2">
+            <Button variant="primary" onClick={() => showCreate()}>
               Save view
             </Button>
-            <Button size="md" variant="ghost" onClick={leaveSavedView}>
+            <Button variant="ghost" onClick={leaveSavedView}>
               Cancel
             </Button>
-          </Show>
-        </HeaderActionGroup>
+          </div>
+        </Show>
       </Show>
       <Show when={failure()}>
         {(error) => (
@@ -683,21 +724,19 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
             <Show
               when={error().graphQLErrors[0]?.extensions.code === 'CONFLICT'}
             >
-              <Button
-                size="sm"
+              <ButtonGroup.Button
                 variant="ghost"
                 onClick={() => fireAndForget(reload(), 'saved-views')}
               >
                 Reload saved view
-              </Button>
+              </ButtonGroup.Button>
             </Show>
-            <Button
-              size="sm"
+            <ButtonGroup.Button
               variant="ghost"
               onClick={() => showCreate(selected()?.record)}
             >
               Duplicate
-            </Button>
+            </ButtonGroup.Button>
           </HeaderActionGroup>
         )}
       </Show>
@@ -715,7 +754,9 @@ export function TaskSavedViewFailure() {
   return (
     <div class="flex h-full flex-col items-center justify-center gap-4 p-6 text-sm">
       <p role="alert">{message()}</p>
-      <Button onClick={() => setTab('my-tasks')}>Return to Tasks</Button>
+      <Button variant="ghost" onClick={() => setTab('my-tasks')}>
+        Return to Tasks
+      </Button>
     </div>
   );
 }

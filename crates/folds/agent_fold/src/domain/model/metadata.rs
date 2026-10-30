@@ -103,6 +103,8 @@ pub enum TurnState {
     /// No turn is open.
     #[default]
     Idle,
+    /// No turn is open, and the newest agent reply failed.
+    Failed,
     /// A prompt this client issued is on the wire, unconfirmed, and the agent
     /// has produced nothing. Only a speculative fold reports this.
     Starting,

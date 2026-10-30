@@ -1,0 +1,37 @@
+[package]
+name = "universal_input"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+agent = { path = "../agent" }
+ai_billing = { path = "../ai_billing" }
+ai_usage = { path = "../ai_usage" }
+axum = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+futures = { workspace = true }
+schemars = { workspace = true }
+jev = { path = "../jev" }
+macro_authorization = { path = "../macro_authorization" }
+macro_env_var = { path = "../macro_env_var" }
+macro_tower_layers = { path = "../macro_tower_layers" }
+macro_user_id = { path = "../macro_user_id" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["preserve_order"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[build-dependencies]
+sha2 = { workspace = true }
+
+[dev-dependencies]
+model_user = { path = "../model_user" }
+rootcause = { workspace = true }
+tower = { workspace = true, features = ["util"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+wiremock = { workspace = true }

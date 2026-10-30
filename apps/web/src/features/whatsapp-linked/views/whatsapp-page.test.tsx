@@ -93,7 +93,7 @@ const chats = [
     jid: '120363001@g.us',
     name: 'Design Crit',
     lastActivityAt: '2025-03-06T10:00:00Z',
-    inMacro: { kind: 'own' as const, groupId: 'group-design' },
+    inMacro: { kind: 'own' as const, chatId: 'group-design' },
     canAdd: false,
   },
   {
@@ -108,7 +108,7 @@ const chats = [
     name: 'Ana, Ben, +2',
     inMacro: {
       kind: 'shared' as const,
-      groupId: 'group-family',
+      chatId: 'group-family',
       ownerId: 'macro|ana@example.test',
       ownerName: 'Ana Silva',
     },
@@ -125,13 +125,11 @@ const chats = [
 ];
 
 describe('not connected', () => {
-  it('explains the account risk and links WhatsApp through a QR dialog', async () => {
+  it('links WhatsApp through a QR dialog', async () => {
     const fake = createFakeWhatsApp({ account: null });
     mount(fake);
 
-    expect(
-      screen.getByText(/unofficial WhatsApp client/, { exact: false })
-    ).toBeTruthy();
+    expect(screen.queryByText(/unofficial|ban accounts/i)).toBeNull();
     expect(fake.chatsEnabled[0]?.()).toBe(false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
@@ -403,7 +401,7 @@ describe('connected', () => {
     fireEvent.click(
       list.getByRole('button', { name: /shared with you by Ana Silva/i })
     );
-    expect(fake.capabilities.openGroup).toHaveBeenCalledWith('group-family');
+    expect(fake.capabilities.openChat).toHaveBeenCalledWith('group-family');
 
     expect(screen.queryByText('Neighbourhood')).toBeNull();
     fireEvent.click(
@@ -487,7 +485,7 @@ describe('connected', () => {
     fireEvent.input(search, { target: { value: 'design' } });
     const found = within(screen.getByRole('list', { name: 'Groups' }));
     fireEvent.click(found.getByRole('button', { name: 'Open' }));
-    expect(fake.capabilities.openGroup).toHaveBeenCalledWith('group-design');
+    expect(fake.capabilities.openChat).toHaveBeenCalledWith('group-design');
 
     fireEvent.input(search, { target: { value: 'ana' } });
     const list = within(screen.getByRole('list', { name: 'Groups' }));
@@ -519,7 +517,9 @@ describe('connected', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add to Macro' }));
     await waitFor(() =>
-      expect(fake.capabilities.adopt).toHaveBeenCalledWith('120363003@g.us')
+      expect(fake.capabilities.add).toHaveBeenCalledWith(
+        expect.objectContaining({ jid: '120363003@g.us', kind: 'group' })
+      )
     );
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -545,8 +545,11 @@ describe('connected', () => {
     expect(row.getByText('Direct chat')).toBeTruthy();
     fireEvent.click(row.getByRole('button', { name: 'Add to Macro' }));
     await waitFor(() =>
-      expect(fake.capabilities.adopt).toHaveBeenCalledWith(
-        '15550001111@s.whatsapp.net'
+      expect(fake.capabilities.add).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jid: '15550001111@s.whatsapp.net',
+          kind: 'direct',
+        })
       )
     );
   });
@@ -655,8 +658,8 @@ describe('connected', () => {
       account: { generation: 3, phone: '+14155550142', health: 'connected' },
       chats,
     });
-    fake.capabilities.adopt.mockReturnValueOnce(
-      errAsync({ kind: 'adopt-failed', reason: 'disconnected' })
+    fake.capabilities.add.mockReturnValueOnce(
+      errAsync({ kind: 'add-failed', reason: 'disconnected' })
     );
     mount(fake);
 

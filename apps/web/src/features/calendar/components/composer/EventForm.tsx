@@ -9,6 +9,7 @@ import {
   createSignal,
   createUniqueId,
   For,
+  type JSX,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -29,6 +30,7 @@ import {
   EventComposerRecurrencePill,
   EventComposerRemindersPill,
 } from './EventPropertyPills';
+import { EventTitleInput } from './EventTitleInput';
 import type {
   EventEditorDisabledFields,
   EventEditorSubmitValues,
@@ -46,6 +48,8 @@ export interface EventFormProps {
   addOnlyGuests?: boolean;
   /** Why a read-only guest list cannot change. */
   guestsReadOnlyReason?: string;
+  /** An action beside the guests, such as forwarding the invitation. */
+  guestsAction?: JSX.Element;
   /** The organizer hides the guest list, so the seeded guests are not all of them. */
   guestListHidden?: boolean;
   /** Whether the viewer may set what guests may do, as the organizer. */
@@ -266,17 +270,11 @@ export function EventForm(props: EventFormProps) {
               reason={props.detailsReadOnlyReason}
               class="flex w-full"
             >
-              <input
-                type="text"
+              <EventTitleInput
                 value={state().title}
-                onInput={(event) =>
-                  controller.setField('title', event.currentTarget.value)
-                }
-                placeholder="New event"
-                aria-label="Title"
+                onChange={(value) => controller.setField('title', value)}
                 autofocus={!isEdit()}
                 disabled={fieldIsDisabled('title')}
-                class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
               />
             </LockedField>
 
@@ -352,6 +350,7 @@ export function EventForm(props: EventFormProps) {
                     props.addOnlyGuests ? controller.initialGuests() : undefined
                   }
                 />
+                {props.guestsAction}
                 <LockedField reason={props.detailsReadOnlyReason}>
                   <EventComposerConferencePill
                     value={state().conference}
@@ -531,6 +530,7 @@ export function EventForm(props: EventFormProps) {
       <div class="flex shrink-0 items-center justify-end gap-3">
         <Show when={props.showRecurringEditNotice}>
           <RadioGroup
+            size="sm"
             value={editScope()}
             onChange={(value) => changeEditScope(value as CalendarUpdateScope)}
             disabled={formIsDisabled()}
@@ -540,7 +540,7 @@ export function EventForm(props: EventFormProps) {
             <For each={RECURRING_EDIT_SCOPE_OPTIONS}>
               {(option) => (
                 <RadioGroup.Item value={option.scope} class="gap-1.5">
-                  <RadioGroup.ItemControl class="size-3.5" />
+                  <RadioGroup.ItemControl />
                   <RadioGroup.ItemLabel>{option.label}</RadioGroup.ItemLabel>
                 </RadioGroup.Item>
               )}
@@ -557,8 +557,7 @@ export function EventForm(props: EventFormProps) {
         </Button>
         <Button
           type="submit"
-          variant="strong"
-          depth={3}
+          variant="primary"
           disabled={!controller.canSave() || formIsDisabled()}
           aria-label={isEdit() ? 'Save' : 'Create event'}
         >

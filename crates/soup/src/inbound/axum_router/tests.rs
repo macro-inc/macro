@@ -211,6 +211,15 @@ impl SoupService for MockSoup {
         ))
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a crate::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<crate::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
@@ -1792,6 +1801,29 @@ async fn it_can_expand_assoc_ast() {
 // ============================================================================
 
 use item_filters::ast::CrmScope;
+
+#[test]
+fn ast_endpoint_initiative_filter_opts_initiatives_in() {
+    use item_filters::ast::initiative::{InitiativeLiteral, initiatives_requested};
+    let api: ApiEntityFilterAst =
+        serde_json::from_value(json!({ "if": { "l": { "ns": "unseen" } } })).unwrap();
+    let ast = api.into_entity_ast().unwrap();
+    let tree = ast
+        .initiative_filter
+        .as_deref()
+        .expect("initiative filter kept");
+    assert!(initiatives_requested(Some(tree)));
+    assert!(matches!(
+        tree,
+        filter_ast::Expr::Literal(InitiativeLiteral::NotificationState(
+            item_filters::NotificationState::Unseen
+        ))
+    ));
+
+    // Omitted on the wire means no initiatives, as before.
+    let api: ApiEntityFilterAst = serde_json::from_value(json!({})).unwrap();
+    assert!(api.into_entity_ast().unwrap().initiative_filter.is_none());
+}
 
 #[test]
 fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {

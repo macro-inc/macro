@@ -53,8 +53,13 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   // Calendar lists invite threads from the "all" email view, so done rows
   // stay in place and flip to the done state exactly like mail "All".
   'mail-calendar',
+  // Focus rows are signal threads; done archives them like Signal does.
+  'mail-focus',
   'mail-shared',
   'mail-archived',
+  // Search lists done and open rows alike, like mail "All": a marked row flips
+  // to done (or drops out of a not-done filter) and focus moves on.
+  'search-all',
 ];
 
 export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
@@ -91,7 +96,7 @@ type MarkDoneVariables = {
   notificationEntities: NotificationEntityRef[];
   restoreFocus?: () => void;
   /** Suppress the "Marked as done" toast, e.g. for send-triggered mark done
-   *  where it would replace the "Email sent" toast. */
+   *  where it would replace the send toast. */
   silent?: boolean;
   /** Receives the undo handle once the mark-done is pushed onto the undo
    *  stack, so callers (e.g. undo-send) can reverse it programmatically. */

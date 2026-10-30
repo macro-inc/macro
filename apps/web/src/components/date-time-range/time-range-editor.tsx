@@ -117,11 +117,11 @@ export function TimeRangeEditor(props: {
             <Button
               size="icon-sm"
               variant="ghost"
-              label={`Clear ${props.subject}`}
+              aria-label={`Clear ${props.subject}`}
               tooltip="Clear"
               onClick={clear}
             >
-              <XIcon />
+              <XIcon class="size-3.5" />
             </Button>
           </Show>
         }

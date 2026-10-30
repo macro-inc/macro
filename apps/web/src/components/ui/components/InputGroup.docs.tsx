@@ -4,7 +4,6 @@ import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal } from 'solid-js';
-import { Button } from './Button';
 import { ButtonGroup } from './ButtonGroup';
 import { InputGroup } from './InputGroup';
 
@@ -54,8 +53,8 @@ function AddonsDemo() {
         <InputGroup.Addon align="inline-start">https://</InputGroup.Addon>
         <InputGroup.Input placeholder="macro.com" aria-label="Website" />
         <InputGroup.Addon align="inline-end">
-          <InputGroup.Button aria-label="Open website" square>
-            <ArrowRightIcon />
+          <InputGroup.Button size="icon-md" aria-label="Open website">
+            <ArrowRightIcon class="size-4" />
           </InputGroup.Button>
         </InputGroup.Addon>
       </InputGroup>
@@ -68,7 +67,8 @@ function AddonsDemo() {
 function ButtonGroupDemo() {
   return (
     <ButtonGroup
-      variant="outline"
+      finish="raised"
+      variant="secondary"
       size="md"
       class="w-full max-w-sm"
       aria-label="Search documents"
@@ -83,9 +83,9 @@ function ButtonGroupDemo() {
         </InputGroup.Addon>
       </InputGroup>
       <ButtonGroup.Divider />
-      <Button aria-label="Submit search" square>
-        <ArrowRightIcon />
-      </Button>
+      <ButtonGroup.Button size="icon-md" aria-label="Submit search">
+        <ArrowRightIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      </ButtonGroup.Button>
     </ButtonGroup>
   );
 }

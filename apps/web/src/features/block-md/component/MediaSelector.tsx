@@ -119,14 +119,15 @@ export function MediaSelector(props: MediaSelectorProps) {
     // TODO bring up to menu best practices, ie. fully focusable menu items, etc.
     <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
       <Dropdown.Trigger
-        label="Insert Media File"
+        aria-label="Insert Media File"
+        tooltip="Insert Media File"
         variant="ghost"
         size="icon-md"
         disabled={props?.buttonIsDisabled?.() ?? false}
         tabIndex={-1}
       >
-        <ImageIcon />
-        <CaretDown />
+        <ImageIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+        <CaretDown class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Show when={!props?.buttonIsDisabled?.()}>
         <Dropdown.Content

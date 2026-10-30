@@ -1,10 +1,11 @@
+import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import type { EntityLoadError } from '@core/component/EntityLoadGate';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
 import type { ApiThread } from '@service-email/generated/schemas';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { batch, createSignal, onCleanup, onMount } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   EmailThreadLoadGate,
   type EmailThreadLoadGateProps,
@@ -14,6 +15,11 @@ const markers = vi.hoisted(() => ({
   mounts: [] as string[],
   releases: [] as string[],
 }));
+const localDrafts = vi.hoisted(() => vi.fn<() => LocalDraft[]>(() => []));
+vi.mock('@queries/email/local-draft-source', () => ({
+  createLocalDraftSource: () => ({ drafts: localDrafts, ready: () => true }),
+}));
+beforeEach(() => localDrafts.mockReset().mockReturnValue([]));
 vi.mock('@notifications', () => ({
   EmailDebouncedReadMarker: (props: { threadId: string; linkId?: string }) => {
     const id = props.threadId;
@@ -32,10 +38,80 @@ vi.mock('@core/mobile/native-network-status', () => ({
 vi.mock('@core/component/AccessErrorViews/NotFound', () => ({
   default: () => <div>Not found</div>,
 }));
+vi.mock('@core/component/AccessErrorViews/Unauthorized', () => ({
+  default: () => <div>Access denied</div>,
+}));
 vi.mock('@core/component/LoadingBlock', () => ({
   LoadingBlock: () => <div>Loading</div>,
 }));
 afterEach(cleanup);
+
+it('opens an unqueued local draft after a server 404 without overriding access errors or confirmed deletion', () => {
+  const [draft, setDraft] = createSignal<LocalDraft>({
+    key: 'local-draft',
+    draftId: 'local-draft',
+    threadId: 'local-thread',
+    accountId: 'owner',
+    generation: 'generation',
+    revision: 1,
+    acknowledgedRevision: 0,
+    content: { subject: 'Recovered subject', body_html: btoa('Saved body') },
+    attachments: [],
+    status: 'dirty',
+    updatedAt: Date.now(),
+  });
+  localDrafts.mockImplementation(() => [draft()]);
+  const [error, setError] = createSignal<EntityLoadError>('NOT_FOUND');
+  render(() => {
+    const source = createEmailThreadSource(() => 'local-thread', {
+      transport: 'graphql',
+      resolvedThreadId: 'local-thread',
+      isError: true,
+      isSuccess: false,
+      isLoading: false,
+      data: undefined,
+    } as ThreadQueryResult<ThreadQueryData>);
+    return (
+      <EmailThreadLoadGate
+        result={{ data: source.thread, error, isPending: source.isLoading }}
+        isLocalDraft={source.isLocalDraft()}
+        threadId="local-thread"
+        notificationSource={
+          {} as EmailThreadLoadGateProps<ApiThread>['notificationSource']
+        }
+        onRetry={() => {}}
+      >
+        <input
+          aria-label="Subject"
+          value={source.thread()?.messages[0].subject ?? ''}
+        />
+      </EmailThreadLoadGate>
+    );
+  });
+  expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe(
+    'Recovered subject'
+  );
+  expect(screen.queryByTestId('read-marker')).toBeNull();
+  expect(screen.queryByText('Not found')).toBeNull();
+
+  setError('FORBIDDEN');
+  expect(screen.queryByRole('textbox')).toBeNull();
+  setError('NOT_FOUND');
+  expect(screen.getByRole('textbox')).toBeTruthy();
+
+  // Once the server has acknowledged the thread, a later 404 is authoritative.
+  setDraft({ ...draft(), serverThreadId: 'server-thread' });
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(screen.getByText('Not found')).toBeTruthy();
+  // Editing a previously saved draft also proves a server identity even if
+  // its working copy has not separately recorded the server thread ID yet.
+  setDraft({
+    ...draft(),
+    serverThreadId: undefined,
+    serverDraftId: 'server-draft',
+  });
+  expect(screen.queryByRole('textbox')).toBeNull();
+});
 
 it('clears the previous thread and read marker when a reused host navigates', () => {
   const [route, setRoute] = createSignal('first');

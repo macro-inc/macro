@@ -710,7 +710,6 @@ export default {
     groupAdmin: 'ผู้ดูแลระบบ',
     tabTeamGeneral: 'ทั่วไป',
     tabTeamMembers: 'สมาชิก',
-    tabTeamConnections: 'การเชื่อมต่อ',
     tabEmail: 'อีเมล',
     tabCalendar: 'ปฏิทิน',
     tabAgents: 'เอเจนต์',

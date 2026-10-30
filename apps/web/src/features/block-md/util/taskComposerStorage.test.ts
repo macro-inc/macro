@@ -2,9 +2,11 @@
  * @vitest-environment jsdom
  */
 
+import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   clearTaskComposerDraft,
+  createTaskComposerSharing,
   loadTaskComposerDraft,
   saveTaskComposerDraft,
   type TaskComposerDraft,
@@ -121,5 +123,38 @@ describe('context drafts', () => {
     clearTaskComposerDraft(company);
     expect(loadTaskComposerDraft(contact)?.title).toBe('Contact');
     expect(loadTaskComposerDraft()?.title).toBe('A task');
+  });
+});
+
+it('keeps recovered sharing local while new composers remember the default', () => {
+  localStorage.setItem('task-composer-share-with-team', 'true');
+  createRoot((dispose) => {
+    const [recovered, setRecovered] = createTaskComposerSharing(false);
+    expect(recovered()).toBe(false);
+    expect(localStorage.getItem('task-composer-share-with-team')).toBe('true');
+    setRecovered(true);
+    setRecovered(false);
+    expect(localStorage.getItem('task-composer-share-with-team')).toBe('true');
+    const [fresh, setFresh] = createTaskComposerSharing();
+    expect(fresh()).toBe(true);
+    setFresh(false);
+    expect(createTaskComposerSharing()[0]()).toBe(false);
+    dispose();
+  });
+});
+
+it('preserves specific message references through draft recovery', () => {
+  const reference = {
+    entity_id: 'channel',
+    entity_type: 'CHANNEL' as const,
+    specific_message_id: '0195dbd0-7b5d-7000-8000-000000000001',
+  };
+  saveTaskComposerDraft({
+    ...draft,
+    propertyValues: { source: { valueType: 'ENTITY', refs: [reference] } },
+  });
+  expect(loadTaskComposerDraft()?.propertyValues.source).toEqual({
+    valueType: 'ENTITY',
+    refs: [reference],
   });
 });

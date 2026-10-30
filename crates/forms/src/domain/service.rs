@@ -27,6 +27,7 @@ use entity_access::domain::models::{
 };
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
+use tracing::Level;
 
 use crate::domain::events::{self, FormMacroEvent, FormTopicEvent};
 use crate::domain::models::{
@@ -359,7 +360,7 @@ where
         self.submit(&receipt, submission).await
     }
 
-    #[tracing::instrument(skip(self, receipt), err)]
+    #[tracing::instrument(skip(self, receipt), err(level = Level::DEBUG))]
     async fn my_response(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,

@@ -209,6 +209,10 @@ pub(crate) fn stored_owner(service: &TestService, id: Uuid) -> Option<Owner> {
         .map(|action| action.owner.clone())
 }
 
+pub(crate) fn stored_actions(service: &TestService) -> Vec<ScheduledAction> {
+    service.repo.actions.lock().unwrap().clone()
+}
+
 /// The same store behind a dispatcher that has stopped.
 pub(crate) fn with_stopped_dispatcher(service: &TestService) -> Arc<TestService> {
     let (tx, _) = tokio::sync::mpsc::channel(1);
@@ -931,6 +935,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         next_run_at: None,
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let expires_at = action
         .claim_expires_at()
@@ -1000,6 +1005,7 @@ fn seeded(
         next_run_at: None,
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 
@@ -1392,4 +1398,85 @@ fn conditions_are_trimmed_bounded_and_round_trip() {
         serde_json::to_value(&unconditional).unwrap(),
         json!([{"events": ["document.created"]}])
     );
+}
+
+/// Whether the owner has linked GitHub.
+struct Linked(bool);
+impl github::domain::ports::GithubInstallationClaims for Linked {
+    async fn is_linked(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<bool, github::domain::models::GithubError> {
+        Ok(self.0)
+    }
+
+    async fn has_claim(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: u64,
+    ) -> Result<bool, github::domain::models::GithubError> {
+        Ok(self.0)
+    }
+}
+
+fn github_configuration(enabled: bool) -> ActionConfiguration {
+    ActionConfiguration {
+        trigger: serde_json::from_value(json!({
+            "type": "events",
+            "filters": [{"events": ["github"], "github": {"events": ["workflow_run"]}}]
+        }))
+        .unwrap(),
+        enabled,
+        ..configuration(true)
+    }
+}
+
+#[tokio::test]
+async fn a_github_trigger_runs_only_once_github_is_linked() {
+    let unlinked = service(true);
+    assert_policy(
+        unlinked
+            .create_action(
+                &user_principal(),
+                CreateScheduledAction::Canonical(github_configuration(true)),
+            )
+            .await,
+        ActionPolicyError::GithubNotLinked,
+    );
+    // A paused GitHub routine can still be drafted and edited, but not resumed.
+    let paused = unlinked
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(github_configuration(false)),
+        )
+        .await
+        .unwrap();
+    let id = paused.id.unwrap();
+    assert_policy(
+        unlinked.set_enabled(edit_receipt(id), true).await,
+        ActionPolicyError::GithubNotLinked,
+    );
+
+    let linked = TestService::new(
+        unlinked.repo.clone(),
+        unlinked.executor.clone(),
+        unlinked.dispatcher_tx.clone(),
+        grants(&unlinked.repo),
+    )
+    .with_event_management_enabled(true)
+    .with_github_links(Linked(true));
+    assert!(
+        linked
+            .set_enabled(edit_receipt(id), true)
+            .await
+            .unwrap()
+            .enabled
+    );
+    linked
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(github_configuration(true)),
+        )
+        .await
+        .unwrap();
 }

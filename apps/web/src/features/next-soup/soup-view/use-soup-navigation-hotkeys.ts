@@ -27,6 +27,12 @@ type UseSoupNavigationHotkeysOptions = {
   isFetchingNextPage?: Accessor<boolean>;
   fetchNextPage?: () => Promise<void>;
   error?: Accessor<Error | null>;
+  /** Server-grouped lists continue each group with its own pages. */
+  groupPaging?: {
+    load: (groupKey: string) => Promise<void>;
+    isLoading: (groupKey: string) => boolean;
+    failed: (groupKey: string) => boolean;
+  };
 };
 
 // These callbacks outlive SoupViewList. Keep their closure separate from the
@@ -95,7 +101,18 @@ function createPersistentNavigation(
   };
 
   const navigateToOpenableEntity = (offset: -1 | 1) =>
-    soup.navigate.by(offset, { skipGroupHeaders: true });
+    soup.navigate.by(offset, { skipGroupHeaders: true, skipLoadMore: true });
+
+  // A group's next page continues right after the focused row: wait for it
+  // rather than skipping the rest of the group. A failed page lets focus move on.
+  const pendingGroupPage = () => {
+    const { groupPaging } = options;
+    if (!groupPaging) return;
+    const next = soup.rows()[soup.focus.index() + 1];
+    if (!next?.getIsLoadMore() || !next.group?.isExpanded()) return;
+    if (groupPaging.failed(next.group.key)) return;
+    return next.group.key;
+  };
 
   const { fetchNextPage, isFetching, isFetchingNextPage, hasNextPage } =
     options;
@@ -108,6 +125,13 @@ function createPersistentNavigation(
   };
 
   const navigateDown = () => {
+    const groupKey = pendingGroupPage();
+    if (groupKey !== undefined) {
+      if (!options.groupPaging?.isLoading(groupKey))
+        options.groupPaging?.load(groupKey).catch(reportSoupNavigationError);
+      return true;
+    }
+
     const rowCount = soup.rows().length;
     const next = navigateToOpenableEntity(1);
 
@@ -199,12 +223,16 @@ export const useSoupNavigationHotkeys = (
       isFetchingNextPage: options.isFetchingNextPage,
       fetchNextPage: options.fetchNextPage,
       error: options.error,
+      groupPaging: options.groupPaging,
     },
     viewport
   );
 
   const navigateAndSelectEntity = (offset: number) => {
-    const nextRow = soup.navigate.by(offset, { skipGroupHeaders: true });
+    const nextRow = soup.navigate.by(offset, {
+      skipGroupHeaders: true,
+      skipLoadMore: true,
+    });
     if (!nextRow) return true;
     soup.selection.select(nextRow.row.original);
     scrollTo(nextRow.index);
@@ -213,7 +241,10 @@ export const useSoupNavigationHotkeys = (
 
   const handleNavigationSelection = (offset: number) => {
     const focusedEntity = soup.focus.item();
-    const next = soup.navigate.peekOffset(offset, { skipGroupHeaders: true });
+    const next = soup.navigate.peekOffset(offset, {
+      skipGroupHeaders: true,
+      skipLoadMore: true,
+    });
 
     const selection = soup.selection;
 
@@ -245,7 +276,7 @@ export const useSoupNavigationHotkeys = (
 
     if (selection.isSelected(nextEntity.id)) {
       selection.toggle(focusedEntity);
-      soup.navigate.by(offset, { skipGroupHeaders: true });
+      soup.navigate.by(offset, { skipGroupHeaders: true, skipLoadMore: true });
       scrollTo(next.index);
       return true;
     }

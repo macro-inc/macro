@@ -53,7 +53,7 @@ fn validate_batch_with_limit(
 
     let mut seen = HashSet::with_capacity(refs.len());
     if let Some((entity_type, entity_id)) = refs.into_iter().find(|key| !seen.insert(key.clone())) {
-        let entity_type = entity_type.into_model();
+        let entity_type = entity_type.into_model()?;
         return Err(invalid_request(format!(
             "{operation} contains duplicate entity {entity_type}:{entity_id}"
         )));
@@ -99,8 +99,8 @@ pub struct EntityRefInput {
 
 impl EntityRefInput {
     /// Convert this GraphQL reference into the canonical entity model.
-    pub fn into_model(self) -> Entity<'static> {
-        self.entity_type.into_model().with_entity_string(self.id.0)
+    pub fn into_model(self) -> async_graphql::Result<Entity<'static>> {
+        Ok(self.entity_type.into_model()?.with_entity_string(self.id.0))
     }
 }
 
@@ -115,11 +115,11 @@ pub struct RenameEntityInput {
 
 impl RenameEntityInput {
     /// Convert this GraphQL input into a domain rename request.
-    pub fn into_model(self) -> RenameEntityRequest {
-        RenameEntityRequest {
-            entity: self.entity.into_model(),
+    pub fn into_model(self) -> async_graphql::Result<RenameEntityRequest> {
+        Ok(RenameEntityRequest {
+            entity: self.entity.into_model()?,
             display_name: self.display_name,
-        }
+        })
     }
 }
 
@@ -134,11 +134,11 @@ pub struct MoveEntityInput {
 
 impl MoveEntityInput {
     /// Convert this GraphQL input into a domain move request.
-    pub fn into_model(self) -> MoveEntityRequest {
-        MoveEntityRequest {
-            entity: self.entity.into_model(),
+    pub fn into_model(self) -> async_graphql::Result<MoveEntityRequest> {
+        Ok(MoveEntityRequest {
+            entity: self.entity.into_model()?,
             project_id: self.project_id.map(|id| id.0),
-        }
+        })
     }
 }
 
@@ -153,11 +153,11 @@ pub struct DuplicateEntityInput {
 
 impl DuplicateEntityInput {
     /// Convert this GraphQL input into a domain duplication request.
-    pub fn into_model(self) -> DuplicateEntityRequest {
-        DuplicateEntityRequest {
-            entity: self.entity.into_model(),
+    pub fn into_model(self) -> async_graphql::Result<DuplicateEntityRequest> {
+        Ok(DuplicateEntityRequest {
+            entity: self.entity.into_model()?,
             display_name: self.display_name,
-        }
+        })
     }
 }
 
@@ -277,11 +277,11 @@ pub struct UpdateEntitySharePolicyInput {
 
 impl UpdateEntitySharePolicyInput {
     /// Convert this GraphQL input into a domain share-policy request.
-    pub fn into_model(self) -> UpdateEntitySharePolicyRequest {
-        UpdateEntitySharePolicyRequest {
-            entity: self.entity.into_model(),
+    pub fn into_model(self) -> async_graphql::Result<UpdateEntitySharePolicyRequest> {
+        Ok(UpdateEntitySharePolicyRequest {
+            entity: self.entity.into_model()?,
             policy: self.policy.into_model(),
-        }
+        })
     }
 }
 
@@ -538,7 +538,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     inputs
                         .into_iter()
                         .map(RenameEntityInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
@@ -570,7 +570,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     inputs
                         .into_iter()
                         .map(MoveEntityInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
@@ -603,7 +603,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     inputs
                         .into_iter()
                         .map(UpdateEntitySharePolicyInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
@@ -632,7 +632,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     entities
                         .into_iter()
                         .map(EntityRefInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
@@ -661,7 +661,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     entities
                         .into_iter()
                         .map(EntityRefInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
@@ -693,7 +693,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     entities
                         .into_iter()
                         .map(EntityRefInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))
@@ -725,7 +725,7 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                     inputs
                         .into_iter()
                         .map(DuplicateEntityInput::into_model)
-                        .collect(),
+                        .collect::<async_graphql::Result<_>>()?,
                 )
                 .await,
         ))

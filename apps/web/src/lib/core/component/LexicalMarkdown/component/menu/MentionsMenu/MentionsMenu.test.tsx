@@ -54,14 +54,14 @@ vi.mock('@core/constant/featureFlags', () => {
     ENABLE_BEARER_TOKEN_AUTH: false,
   };
 });
-vi.mock('@app/features/whatsapp-group/queries/production-api', () => ({
-  whatsappGroupApi: {},
+vi.mock('@app/features/external-chat/queries/production-api', () => ({
+  externalChatApi: {},
 }));
 vi.mock('@queries/gate', () => ({
   queryReadyGate: (query: { isSuccess: boolean }) => query.isSuccess,
 }));
-vi.mock('@queries/whatsapp-groups', () => ({
-  useWhatsappGroupsQuery: (_api: unknown, userId: () => string) => ({
+vi.mock('@queries/external-chats', () => ({
+  useExternalChatsQuery: (_api: unknown, userId: () => string) => ({
     get isSuccess() {
       mocks.whatsappUserIds.push(userId());
       return userId() !== '';

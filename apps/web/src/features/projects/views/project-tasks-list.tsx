@@ -40,6 +40,7 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           onOpenTask={props.onOpenTask}
           onCreateTask={props.onCreateTask}
           onCloseTask={() => {}}
+          hideTaskProject
           sourceFactory={(state, options) =>
             createProjectTasksDataSource(
               projectId,
@@ -69,7 +70,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 }
 
 function ProjectTasksListBody(props: ProjectTasksListProps) {
-  const { state, setState, source } = useTasksView();
+  const { state, setState } = useTasksView();
   return (
     <div class="flex size-full min-h-0 flex-col">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
@@ -82,24 +83,13 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           <TasksControls />
           {props.addTasksAction}
           <Show when={props.onCreateTask}>
-            <Button variant="outline" onClick={() => props.onCreateTask?.()}>
+            <Button variant="secondary" onClick={() => props.onCreateTask?.()}>
               <PlusIcon class="size-4" />
               New task
             </Button>
           </Show>
         </div>
       </div>
-      <Show when={source.paginationError?.()}>
-        <div
-          role="alert"
-          class="flex items-center gap-3 px-3 pb-2 text-sm text-ink-muted"
-        >
-          Some tasks could not be loaded.
-          <Button size="sm" onClick={() => source.retryPagination?.()}>
-            Try again
-          </Button>
-        </div>
-      </Show>
       <TasksContent />
     </div>
   );

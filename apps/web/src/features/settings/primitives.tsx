@@ -51,7 +51,7 @@ export function SettingsPage(props: {
     <div
       data-settings-page
       data-drawer-scroll-body={inSheet ? true : undefined}
-      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel [&_[data-variant=cta]]:bg-ink [&_[data-variant=cta]]:text-panel [&_[data-variant=cta]]:focus-visible:ring-panel/70 [&_:has(>input[type=checkbox])]:[--color-accent:var(--color-ink)] [&_input[type=checkbox]]:accent-ink"
+      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel"
     >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
@@ -309,14 +309,17 @@ export function ChoiceRow(props: {
   checked: boolean;
   title: string;
   description: string;
+  suggested?: boolean;
   disabled?: boolean;
   onChange: () => void;
 }) {
   return (
     <label
-      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
         'cursor-not-allowed opacity-50': props.disabled,
+        'p-4': props.suggested,
+        'p-3': !props.suggested,
       }}
     >
       <input
@@ -330,7 +333,14 @@ export function ChoiceRow(props: {
         class="mt-0.5 accent-accent"
       />
       <span class="min-w-0">
-        <span class="block text-sm font-medium text-ink">{props.title}</span>
+        <span class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
+          {props.title}
+          <Show when={props.suggested}>
+            <span class="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink-muted">
+              Suggested
+            </span>
+          </Show>
+        </span>
         <span class="mt-0.5 block text-sm text-ink-muted">
           {props.description}
         </span>
@@ -370,7 +380,8 @@ export function IntegrationRow(props: {
           {props.icon}
         </div>
       </Show>
-      <div class="flex-1 min-w-0 flex flex-col gap-0.5">
+      {/* The basis wraps actions below the text on narrow screens. */}
+      <div class="flex-1 basis-48 min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
           <div
             class={cn(
@@ -406,6 +417,7 @@ export function IntegrationRow(props: {
 export function SettingsButton(props: ButtonProps) {
   return (
     <Button
+      variant="ghost"
       {...props}
       class={cn('rounded-full font-normal gap-1.5', props.class)}
     />

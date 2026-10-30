@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO mcp_oauth_pending_authorizations\n                (session_id, client_id, code_challenge, client_state, client_redirect_uri, expires_at)\n            VALUES ($1, $2, $3, $4, $5, $6)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "55496bc527685dbc76bf9d83e5d090fc6b56a918d59c3f159e96ae378c2e8288"
+}

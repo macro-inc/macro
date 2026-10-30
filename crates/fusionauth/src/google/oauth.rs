@@ -108,6 +108,9 @@ pub(crate) async fn refresh_google_token(
 #[derive(Debug, serde::Deserialize)]
 /// Response from exchanging a Google authorization code for tokens.
 pub struct GoogleExchangeTokenResponse {
+    /// The access token.
+    #[serde(default)]
+    pub access_token: String,
     /// The refresh token.
     #[serde(default)]
     pub refresh_token: String,
@@ -116,6 +119,48 @@ pub struct GoogleExchangeTokenResponse {
     /// The actual scopes granted by the user.
     #[serde(default)]
     pub scope: String,
+}
+
+/// Google's token revocation endpoint. Revoking either token of a grant
+/// revokes the whole grant, so the next consent screen lists every scope again.
+/// See https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke
+pub(crate) const GOOGLE_REVOKE_URL: &str = "https://oauth2.googleapis.com/revoke";
+
+/// Revokes the grant behind `token` (an access or refresh token) at `endpoint`.
+/// Google answers an unknown or already revoked token with 400 `invalid_token`,
+/// which counts as revoked so the call is safe to repeat.
+pub(crate) async fn revoke_token(
+    client: &UnauthedClient,
+    endpoint: &str,
+    token: &str,
+) -> Result<()> {
+    let response = client
+        .client()
+        .post(endpoint)
+        .form(&[("token", token)])
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| {
+            FusionAuthClientError::Generic(GenericErrorResponse {
+                message: e.to_string(),
+            })
+        })?;
+
+    match response.status() {
+        reqwest::StatusCode::OK | reqwest::StatusCode::BAD_REQUEST => Ok(()),
+        status => {
+            let body = response.text().await.map_err(|e| {
+                FusionAuthClientError::Generic(GenericErrorResponse {
+                    message: e.to_string(),
+                })
+            })?;
+            tracing::error!(%status, body=%body, "unexpected response from the Google revocation endpoint");
+            Err(FusionAuthClientError::Generic(GenericErrorResponse {
+                message: format!("Google token revocation failed with status {status}: {body}"),
+            }))
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize)]

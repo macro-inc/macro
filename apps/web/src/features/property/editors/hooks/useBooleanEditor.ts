@@ -30,7 +30,6 @@ export function useBooleanEditor(): {
       const current = property.value as boolean | null;
       const next = current === null ? true : !current;
       await ctx.onSave?.(property, { valueType: 'BOOLEAN', value: next });
-      ctx.onRefresh?.();
     } catch {
       // onSave callers own error UX.
     } finally {

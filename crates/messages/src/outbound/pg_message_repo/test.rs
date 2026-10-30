@@ -36,6 +36,7 @@ fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
         canonical_root_id: None,
         parent: MessageParent::parse("document", document).unwrap(),
         actor: USER.to_owned().try_into().unwrap(),
+        triggered_via: None,
         triggered_by: None,
         input: PostMessage {
             id: None,
@@ -80,12 +81,15 @@ async fn shared_reads_preserve_system_and_deleted_bot_profiles(pool: PgPool) {
         let mut input = command("message-doc-a", None, "Agent answer");
         input.actor = channel_sender::ChannelSender::new_from_bot(bot_id);
         input.triggered_by = Some(USER.to_owned());
+        input.triggered_via = Some("Claude Code".to_owned());
         let message = repo.create(input).await.unwrap();
         let read = repo
             .get(&message.parent, message.id)
             .await
             .unwrap()
             .unwrap();
+        assert_eq!(read.triggered_by.as_deref(), Some(USER));
+        assert_eq!(read.triggered_via.as_deref(), Some("Claude Code"));
         assert_eq!(
             read.bot_profile,
             Some(BotSenderProfile {
