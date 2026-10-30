@@ -23,7 +23,7 @@ import {
 } from 'solid-js';
 import { makeMoveToProjectAction } from './make-move-to-project-action';
 
-export type FolderDropTarget = {
+type FolderDropTarget = {
   ref: (element: HTMLElement) => void;
   count: Accessor<number>;
   isOver: Accessor<boolean>;
