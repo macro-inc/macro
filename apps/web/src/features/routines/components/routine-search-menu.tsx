@@ -123,6 +123,7 @@ export function SearchMenu(props: {
       </Popover.Trigger>
       <Popover.Portal mount={menuMount(trigger)}>
         <Popover.Content
+          aria-label={props.label}
           class={cn(
             'menu-surface z-action-menu flex max-h-[min(30rem,var(--kb-popper-content-available-height))] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl text-sm text-ink outline-none',
             props.width ?? 'w-72'
@@ -145,7 +146,8 @@ export function SearchMenu(props: {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
                   move(-1, 1);
-                } else if (event.key === 'Enter') {
+                } else if (event.key === 'Enter' && !event.isComposing) {
+                  // Enter that confirms an IME candidate isn't a choice yet.
                   event.preventDefault();
                   options()[0]?.click();
                 }
