@@ -43,6 +43,7 @@ use model::document::{DocumentBasic, DocumentMetadata};
 use model_entity::Entity;
 use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use notification::domain::{
     models::{Notification, NotificationResult, SendNotificationRequest},
     service::{NotificationIngress, SendNotificationError},
@@ -92,6 +93,7 @@ sNRx7TF4iOEBkdJgBUoY4X/rZ+51FQOrdZGqeWo+8TjBhMQN7b4=
 struct TaskStatusCall {
     entity_id: String,
     credited_user: Option<MacroUserIdStr<'static>>,
+    source: Option<PropertyChangeSource>,
     status: String,
 }
 
@@ -261,11 +263,13 @@ impl DocumentService for StubDocumentService {
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
         credited_user: Option<MacroUserIdStr<'static>>,
+        source: Option<PropertyChangeSource>,
         status: &str,
     ) -> Result<(), DocumentError> {
         self.task_status_calls.lock().unwrap().push(TaskStatusCall {
             entity_id: receipt.entity().entity_id.clone(),
             credited_user,
+            source,
             status: status.to_string(),
         });
         Ok(())
@@ -2392,6 +2396,48 @@ async fn pr_merged_by_an_unlinked_github_account_is_not_credited() {
     assert_eq!(status_calls.len(), 1);
     assert_eq!(status_calls[0].status, "Completed");
     assert!(status_calls[0].credited_user.is_none());
+}
+
+#[tokio::test]
+async fn pr_merged_by_an_unlinked_account_records_who_merged() {
+    let (service, doc_service) = make_sync_service_with_doc_service();
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true,
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "merged_by": { "login": "someone-else", "id": 444 }
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 },
+            "sender": { "login": "someone-else", "id": 444 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert!(status_calls[0].credited_user.is_none());
+    assert_eq!(
+        status_calls[0].source,
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "444".to_string(),
+                login: "someone-else".to_string(),
+            },
+        })
+    );
 }
 
 #[tokio::test]

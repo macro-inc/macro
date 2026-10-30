@@ -27,7 +27,8 @@ cleanup is an internal call and produces `entity_properties.cleared` with a null
 actor. A task status change from a linked GitHub pull request (opened, edited,
 commented on, merged, or closed) credits the Macro user linked to the GitHub
 account that caused it when that user can edit the task, and is internal
-otherwise. Optional metadata fields are serialized as `null` unless their reused
+otherwise; either way its `source` names the pull request and GitHub account.
+Optional metadata fields are serialized as `null` unless their reused
 nested model specifies otherwise.
 
 | Event name | Emitted after | Metadata |
@@ -37,7 +38,7 @@ nested model specifies otherwise.
 | `property_option.created` | An option is added to a SELECT or TAG definition. | `option_id`, `property_definition_id`, `actor_user_id`, `value`, `color`, `display_order` |
 | `property_option.updated` | An option is renamed, recolored, reordered, or moved to another definition by a tag promotion. The metadata is the full post-update state, not a delta, so `property_definition_id` is the definition that owns the option *after* the change. | `option_id`, `property_definition_id`, `actor_user_id`, `value`, `color`, `display_order` |
 | `property_option.deleted` | An option is deleted. `value` is the pre-delete snapshot. | `option_id`, `property_definition_id`, `actor_user_id`, `value` |
-| `entity_property.updated` | An entity value is set, replaced, attached with a null value, changed by an option add/remove, or has a deleted option stripped from it. Bulk operations emit one event for each actual `(entity, property_definition)` mutation. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id`, `value`, `updated_at` |
+| `entity_property.updated` | An entity value is set, replaced, attached with a null value, changed by an option add/remove, or has a deleted option stripped from it. Bulk operations emit one event for each actual `(entity, property_definition)` mutation. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id`, `source` (optional, the outside event behind the change), `value`, `updated_at` |
 | `entity_property.deleted` | One entity-property row is deleted. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id` |
 | `entity_properties.cleared` | `delete_entity_properties` successfully wipes all property values for an entity, including the document-deletion path. One clear event replaces per-value deletion events. | `entity_id`, `entity_type`, `actor_user_id` |
 

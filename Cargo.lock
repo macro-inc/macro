@@ -8888,6 +8888,7 @@ dependencies = [
  "model_owner",
  "model_user",
  "models_permissions",
+ "models_properties",
  "notification",
  "redis",
  "regex",

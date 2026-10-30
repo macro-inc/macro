@@ -25,6 +25,7 @@ use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts,
 };
+use models_properties::service::property_change_source::PropertyChangeSource;
 
 use super::content::DocumentContent;
 use super::events::InteractionReason;
@@ -381,11 +382,13 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Updates the tasks status, credited to `credited_user` when they can edit
-    /// the task (see [`credited_task_edit_receipt`]).
+    /// the task (see [`credited_task_edit_receipt`]). `source` records the
+    /// outside event behind the change on its published event.
     fn update_task_status(
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         credited_user: Option<&MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
         status: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
@@ -612,11 +615,13 @@ pub trait DocumentService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
     /// Updates the tasks status to what is provided, credited to
-    /// `credited_user` when they can edit the task
+    /// `credited_user` when they can edit the task, and recording `source` as
+    /// the outside event behind the change
     fn update_task_status(
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
         credited_user: Option<MacroUserIdStr<'static>>,
+        source: Option<PropertyChangeSource>,
         status: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 

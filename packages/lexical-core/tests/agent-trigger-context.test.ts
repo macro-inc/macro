@@ -614,6 +614,45 @@ describe('composeAgentContextPrompt with a trigger', () => {
     );
   });
 
+  it('names the pull request and who acted when one changed the task status', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Tell me what landed.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-3',
+        name: 'Watch the fix',
+        owner: {
+          id: 'macro|julia@example.com',
+          name: 'Julia',
+          email: 'julia@example.com',
+        },
+        instructions: 'Tell me when this ships.',
+        triggers: [{ type: 'events', events: ['task.status_changed'] }],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'task_status_changed',
+            task: {
+              id: 'task-3',
+              title: 'Renew SSL cert',
+              markdown: 'Expires Friday.',
+              status: 'Completed',
+            },
+            pull_request: {
+              url: 'https://github.com/my-org/my-repo/pull/42',
+              github_login: 'someone-else',
+            },
+          },
+          conditions: [],
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toContain(
+      '<change property="status" to="Completed" pull_request="https://github.com/my-org/my-repo/pull/42" by="someone-else"/>'
+    );
+  });
+
   it('renders a routine fired by an email', () => {
     const markdown = composeAgentContextPrompt({
       promptMarkdown: 'File the invoice.',
