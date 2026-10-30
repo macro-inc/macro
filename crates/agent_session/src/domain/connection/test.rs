@@ -165,6 +165,20 @@ fn model_probe_responses_belong_to_the_connection_waiters() {
 }
 
 #[test]
+fn an_answer_to_the_connection_is_neither_a_session_frame_nor_an_orphan() {
+    let mut routes = Routes::default();
+    routes.expect_connection_response(RequestId::Str("macro-live-sessions-1".to_owned()));
+
+    let answer = response(
+        "macro-live-sessions-1",
+        serde_json::json!({"sessionIds": []}),
+    );
+    assert_eq!(routes.route(&answer), Routed::Answer);
+    // Answered once: a second reply to the same request has no owner.
+    assert_eq!(routes.route(&answer), Routed::Orphan);
+}
+
+#[test]
 fn a_finished_session_stops_owning_anything() {
     let mut routes = Routes::default();
     routes.expect_response(RequestId::Str("pending".to_owned()), AgentSessionId::TEST_A);
@@ -482,5 +496,96 @@ async fn pending_model_probe_ends_when_the_connection_closes() {
     assert!(matches!(
         probing.await.expect("probe task"),
         Err(ModelProbeError::Closed)
+    ));
+}
+
+fn sent_request(
+    message: Option<ToRuntimeMessage>,
+) -> agent_client_protocol::schema::v1::Request<agent_client_protocol::RawJsonRpcParams> {
+    let Some(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request)))) = message
+    else {
+        panic!("expected an ACP request, got {message:?}");
+    };
+    request
+}
+
+#[tokio::test]
+async fn a_runtime_lists_the_sessions_it_still_serves() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let attachment = connection.bind(AgentSessionId::TEST_A).await;
+    let (_session_outbound, mut session_inbound) = attachment.connector.split();
+    let asking = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.live_sessions().await })
+    };
+    let request = sent_request(runtime.rx.recv().await);
+    assert_eq!(request.method.as_ref(), "_macro/live_sessions");
+
+    runtime
+        .tx
+        .send(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::response(
+                request.id,
+                Ok(serde_json::json!({"sessionIds": ["acp-1", "acp-2"]})),
+            ),
+        )))
+        .expect("response should send");
+
+    assert_eq!(
+        asking
+            .await
+            .expect("ask task")
+            .expect("the runtime answered"),
+        [SessionId::from("acp-1"), SessionId::from("acp-2")]
+    );
+    assert!(
+        tokio::time::timeout(Duration::from_millis(20), session_inbound.recv())
+            .await
+            .is_err(),
+        "a connection answer must not land in a session transcript"
+    );
+}
+
+#[tokio::test]
+async fn a_runtime_without_live_sessions_answers_with_an_error() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let asking = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.live_sessions().await })
+    };
+    let request = sent_request(runtime.rx.recv().await);
+
+    runtime
+        .tx
+        .send(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::response(
+                request.id,
+                Err(agent_client_protocol::Error::method_not_found()),
+            ),
+        )))
+        .expect("response should send");
+
+    assert!(matches!(
+        asking.await.expect("ask task"),
+        Err(LiveSessionsError::Runtime(_))
+    ));
+}
+
+#[tokio::test]
+async fn a_closed_connection_ends_the_live_sessions_question() {
+    let (carrier, mut runtime) = Channel::duplex();
+    let connection = RuntimeConnection::connect(carrier);
+    let asking = {
+        let connection = Arc::clone(&connection);
+        tokio::spawn(async move { connection.live_sessions().await })
+    };
+    sent_request(runtime.rx.recv().await);
+    drop(runtime);
+
+    assert!(matches!(
+        asking.await.expect("ask task"),
+        Err(LiveSessionsError::Closed)
     ));
 }

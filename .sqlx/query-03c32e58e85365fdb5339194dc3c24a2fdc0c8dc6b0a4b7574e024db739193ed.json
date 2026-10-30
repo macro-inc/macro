@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id\n            FROM agent_session s\n            JOIN agent_configs ac ON ac.bot_id = s.bot_id\n            JOIN harnesses h ON h.id = ac.harness_id\n            WHERE ac.harness_id = $1\n              AND h.deleted_at IS NULL\n              AND s.acp_session_id = ANY($2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "03c32e58e85365fdb5339194dc3c24a2fdc0c8dc6b0a4b7574e024db739193ed"
+}

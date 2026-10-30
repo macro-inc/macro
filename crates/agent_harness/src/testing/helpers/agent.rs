@@ -269,7 +269,11 @@ impl FakeAgent {
     /// its session exists, or `session/new` before `initialize`. A real agent
     /// would reject these, so failing loudly beats recording them.
     pub(crate) fn deliver(&self, frame: RawJsonRpcMessage) {
-        if let RawJsonRpcMessage::Request(request) = &frame {
+        // Asked of the connection, so valid before anything is initialized.
+        if let RawJsonRpcMessage::Request(request) = &frame
+            && request.method.as_ref()
+                != agent_runtime_protocol::domain::live_sessions::LIVE_SESSIONS_METHOD
+        {
             let mut progress = self.lock_progress();
             let parsed = ClientRequest::parse_message(&request.method, &request.params);
             if parsed.is_err()

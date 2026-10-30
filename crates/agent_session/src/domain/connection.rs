@@ -18,12 +18,13 @@
 //! session-scoped request or notification matches the session holding that ACP
 //! session id, and system events belong to the connection itself.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{McpServer, RequestId, Response, SessionId};
+use agent_runtime_protocol::domain::live_sessions::{LIVE_SESSIONS_METHOD, LiveSessionsResponse};
 use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
 };
@@ -31,7 +32,7 @@ use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
 use dashmap::DashMap;
-use tokio::sync::{Mutex, mpsc, watch};
+use tokio::sync::{Mutex, mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::{AgentSessionId, SessionClaim};
@@ -59,6 +60,8 @@ pub(crate) enum Routed {
     Connection,
     /// A connection-level model probe response, never session traffic.
     Probe,
+    /// The answer to a request the connection itself sent.
+    Answer,
     /// Nothing owns it. Kept as its own answer rather than folded into
     /// `Connection` so it can be counted and logged as the anomaly it is.
     Orphan,
@@ -70,6 +73,7 @@ pub(crate) enum Routed {
 #[derive(Debug, Default)]
 pub(crate) struct Routes {
     requests: HashMap<RequestId, AgentSessionId>,
+    connection_requests: HashSet<RequestId>,
     acp_sessions: HashMap<SessionId, AgentSessionId>,
 }
 
@@ -77,6 +81,11 @@ impl Routes {
     /// Remember that `session` is awaiting an answer to `request`.
     pub(crate) fn expect_response(&mut self, request: RequestId, session: AgentSessionId) {
         self.requests.insert(request, session);
+    }
+
+    /// Remember that the connection itself is awaiting an answer to `request`.
+    pub(crate) fn expect_connection_response(&mut self, request: RequestId) {
+        self.connection_requests.insert(request);
     }
 
     /// Remember that `acp_session` is `session`'s session on the agent.
@@ -104,10 +113,13 @@ impl Routes {
         };
 
         if let Some(id) = frame.response_id() {
-            return match self.requests.remove(id) {
-                Some(session) => Routed::Session(session),
-                None => Routed::Orphan,
-            };
+            if let Some(session) = self.requests.remove(id) {
+                return Routed::Session(session);
+            }
+            if self.connection_requests.remove(id) {
+                return Routed::Answer;
+            }
+            return Routed::Orphan;
         }
 
         match acp_session_of(frame).and_then(|acp| self.acp_sessions.get(&acp)) {
@@ -266,6 +278,8 @@ pub struct RuntimeConnection<Sender> {
     /// on this connection asks the same parameterless question, so any answer
     /// serves any waiter.
     probe_answers: ProbeAnswers,
+    /// Waiters for answers to requests the connection itself sent.
+    answers: DashMap<RequestId, oneshot::Sender<RawJsonRpcMessage>>,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
     /// Cancelled once this connection's transport has ended.
@@ -298,6 +312,7 @@ where
             runtime_ready: AtomicBool::new(false),
             bound: DashMap::new(),
             probe_answers: watch::channel(None).0,
+            answers: DashMap::new(),
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
             closed: CancellationToken::new(),
@@ -310,6 +325,7 @@ where
     /// Stop serving this connection: it has been displaced by a newer dial.
     pub fn evict(&self) {
         self.bound.clear();
+        self.answers.clear();
         // Nothing will answer a probe on a connection that is no longer served.
         let _ = self.probe_answers.send(None);
         if let Some(router) = self.router.get() {
@@ -361,6 +377,54 @@ where
             Some(ModelProbeResult::Available { config_options }) => Ok(config_options),
             Some(ModelProbeResult::Error { message }) => Err(ModelProbeError::Runtime(message)),
             None => Err(ModelProbeError::Closed),
+        }
+    }
+
+    /// Ask the runtime which ACP sessions it still serves.
+    ///
+    /// Asked of every new connection: agents that outlived the previous one
+    /// keep working, and nothing else would load their sessions until someone
+    /// prompted them. An agent without the extension answers with an error,
+    /// which is [`LiveSessionsError::Runtime`]. The caller owns the deadline.
+    pub async fn live_sessions(&self) -> Result<Vec<SessionId>, LiveSessionsError> {
+        let id = RequestId::Str(format!(
+            "macro-live-sessions-{}",
+            macro_uuid::generate_uuid_v7()
+        ));
+        let (answered, answer) = oneshot::channel();
+        self.answers.insert(id.clone(), answered);
+        self.routes
+            .lock()
+            .await
+            .expect_connection_response(id.clone());
+        let request = RawJsonRpcMessage::request(
+            LIVE_SESSIONS_METHOD.to_owned(),
+            serde_json::json!({}),
+            id.clone(),
+        )
+        .map_err(|error| LiveSessionsError::Runtime(error.to_string()))?;
+        if let Err(error) = self
+            .outbound
+            .send(ToRuntimeMessage::Acp(AcpMessage(request)))
+            .await
+        {
+            self.answers.remove(&id);
+            return Err(LiveSessionsError::Transport(error));
+        }
+        let answer = tokio::select! {
+            answer = answer => answer.map_err(|_| LiveSessionsError::Closed)?,
+            () = self.closed.cancelled() => return Err(LiveSessionsError::Closed),
+        };
+        match answer {
+            RawJsonRpcMessage::Response(Response::Result { result, .. }) => {
+                serde_json::from_value::<LiveSessionsResponse>(result)
+                    .map(|response| response.session_ids)
+                    .map_err(|error| LiveSessionsError::Runtime(error.to_string()))
+            }
+            RawJsonRpcMessage::Response(Response::Error { error, .. }) => {
+                Err(LiveSessionsError::Runtime(error.message))
+            }
+            _ => Err(LiveSessionsError::Runtime("not a response".to_owned())),
         }
     }
 
@@ -468,6 +532,7 @@ where
                 Routed::Session(session) => self.deliver(session, message).await,
                 Routed::Connection => self.on_connection_message(message).await,
                 Routed::Probe => self.answer_probes(message),
+                Routed::Answer => self.answer(message),
                 Routed::Orphan => {
                     tracing::warn!(
                         frame = ?message,
@@ -477,7 +542,20 @@ where
             }
         }
         self.bound.clear();
+        self.answers.clear();
         self.closed.cancel();
+    }
+
+    /// Hand an answer to the connection request waiting for it.
+    fn answer(&self, message: ToServerMessage) {
+        let ToServerMessage::Acp(AcpMessage(frame)) = message else {
+            tracing::error!("dropping a connection answer that is not an ACP response");
+            return;
+        };
+        let Some((_, waiter)) = frame.response_id().and_then(|id| self.answers.remove(id)) else {
+            return;
+        };
+        let _ = waiter.send(frame);
     }
 
     /// Hand one answer to every probe waiting on this connection. An answer
@@ -565,6 +643,21 @@ where
             }
         }
     }
+}
+
+/// Why a runtime could not say which sessions it still serves.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum LiveSessionsError {
+    /// Sending the request over the runtime transport failed.
+    #[error("could not ask the runtime for its live sessions: {0}")]
+    Transport(#[source] TransportError),
+    /// The runtime connection closed before answering.
+    #[error("runtime connection closed before listing its live sessions")]
+    Closed,
+    /// The runtime refused or answered something unreadable.
+    #[error("runtime could not list its live sessions: {0}")]
+    Runtime(String),
 }
 
 /// A connection-level model probe failure.

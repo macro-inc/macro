@@ -27,6 +27,14 @@ impl HarnessBindings for Arc<FakeBindings> {
     async fn harness_for(&self, bot: BotId) -> anyhow::Result<Option<HarnessId>> {
         Ok(self.bindings.lock().unwrap().get(&bot).copied())
     }
+
+    async fn sessions_on_harness(
+        &self,
+        _harness: HarnessId,
+        _acp_sessions: &[SessionId],
+    ) -> anyhow::Result<Vec<AgentSessionId>> {
+        Ok(Vec::new())
+    }
 }
 
 fn connections(
@@ -238,8 +246,10 @@ async fn attach_and_close_report_presence() {
     }
 
     let presence = Arc::new(RecordingPresence::default());
-    let registry: Arc<RuntimeRegistry<ContainerSender>> =
-        RuntimeRegistry::with_presence(Arc::clone(&presence) as Arc<dyn HarnessPresence>);
+    let registry: Arc<RuntimeRegistry<ContainerSender>> = RuntimeRegistry::with_presence(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        mpsc::unbounded_channel().0,
+    );
     let runtime = ContainerMock::default();
     registry.attach(HarnessId::TEST_A, runtime.clone());
     let connection = registry
@@ -263,4 +273,32 @@ async fn attach_and_close_report_presence() {
     let events = presence.events.lock().unwrap().clone();
     assert!(events.contains(&(HarnessId::TEST_A, "connected")));
     assert!(events.contains(&(HarnessId::TEST_A, "disconnected")));
+}
+
+#[tokio::test]
+async fn a_dial_reports_the_sessions_its_runtime_still_serves() {
+    let (live_sessions, mut reports) = mpsc::unbounded_channel();
+    let registry = RuntimeRegistry::<ContainerSender>::reporting_live_sessions(live_sessions);
+    let runtime = ContainerMock::default();
+    registry.attach(HarnessId::TEST_A, runtime.clone());
+
+    let agent = runtime.agent();
+    agent.wait_for_requests(1).await;
+    let Some(agent_client_protocol::RawJsonRpcMessage::Request(request)) =
+        agent.received_frames().into_iter().next()
+    else {
+        panic!("expected the live sessions request");
+    };
+    assert_eq!(request.method.as_ref(), "_macro/live_sessions");
+    agent.sends_reply(
+        request.id,
+        serde_json::json!({"sessionIds": ["acp-1", "acp-2"]}),
+    );
+
+    let report = reports.recv().await.expect("the dial reports");
+    assert_eq!(report.harness, HarnessId::TEST_A);
+    assert_eq!(
+        report.acp_sessions,
+        [SessionId::from("acp-1"), SessionId::from("acp-2")]
+    );
 }

@@ -439,6 +439,7 @@ where
             | HarnessCommand::ToolApproval(_)
             | HarnessCommand::PresentTool { .. }
             | HarnessCommand::SessionStopped { .. }
+            | HarnessCommand::Reattach
             | HarnessCommand::Delete => {}
             HarnessCommand::SetSandboxSize(_) => {
                 if self.sessions.get_session(session_id).await?.is_archived {
@@ -887,6 +888,10 @@ where
             }
             HarnessCommand::SetSandboxSize(size) => {
                 self.apply_sandbox_size(session_id, size).await?;
+                Ok(CommandOutcome::Completed)
+            }
+            HarnessCommand::Reattach => {
+                self.reattach(session_id).await?;
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Delete => {

@@ -9,8 +9,9 @@
 //! socket and one harness process serve every session of every agent bound to
 //! the harness. Which sessions those are is not something the dial declares:
 //! the runtime dials once, and sessions are bound to the connection as work
-//! arrives for them. A session nobody is prompting costs nothing, and one
-//! prompted after a reconnect restores itself on the way to being prompted.
+//! arrives for them. The registry asks each dial which sessions its agents
+//! still serve (`_macro/live_sessions`) and the harness loads those; any other
+//! session prompted after a reconnect restores itself on the way.
 //!
 //! The token is the whole gate: a valid, unrevoked credential on a live
 //! (undeleted) harness is exactly what the authorizer verifies, so a revoked

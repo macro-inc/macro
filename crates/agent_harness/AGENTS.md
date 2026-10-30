@@ -67,6 +67,12 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+External runtimes bind sessions lazily. On each dial `RuntimeRegistry` asks the
+runtime for `_macro/live_sessions` and `AgentHarnessService::reattach_live_sessions`
+runs `HarnessCommand::Reattach` for those bound to that harness, restoring each
+(`session/load` or `session/resume`) without a prompt; attached, archived and
+managed sessions are skipped. Macrod answers with native Herdr sessions whose agent still runs.
+
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session
 worker drains waking batches after a turn; quiet batches join a real prompt.
