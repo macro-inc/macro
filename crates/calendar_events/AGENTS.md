@@ -185,7 +185,15 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   sharer twice. While the requester's request is pending or accepted,
   `copy_shared_event` refuses with `JoinRequestOpen`: the answer is an
   invitation under the meeting's UID, which a snapshot imported meanwhile
-  would take in. A declined requester may still add a copy.
+  would take in. A declined requester may still add a copy. Nothing in the
+  domain retires the sharer's notification: opening the event marks it seen,
+  and two triggers on `calendar_events` running
+  `delete_calendar_event_join_request_notifications` delete it with the event
+  row, or when the row turns `cancelled` (Outlook can keep a cancelled
+  meeting). That covers the ways a copy goes away listed for channel grants
+  above, and the delete reaches open clients through
+  `trg_notify_user_notification_deletes`. The cancelled row keeps its requests,
+  as it keeps its grants, and a cancelled occurrence changes neither.
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with
