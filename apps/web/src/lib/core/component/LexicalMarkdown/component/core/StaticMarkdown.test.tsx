@@ -288,3 +288,17 @@ describe('static markdown citations', () => {
     rendered.unmount();
   });
 });
+
+describe('static markdown ordered lists', () => {
+  it('keeps a non-1 start on the rendered list', () => {
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown markdown="6. Reply to item six" lazy={false} />
+      </StaticMarkdownContext>
+    ));
+    const list = rendered.container.querySelector('ol');
+    expect(list?.getAttribute('start')).toBe('6');
+    expect(list?.style.counterReset).toBe('static-md-counter-1 5');
+    rendered.unmount();
+  });
+});

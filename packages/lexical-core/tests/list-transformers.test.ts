@@ -12,12 +12,19 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
-import { SupportedNodeTypes } from '../node-list';
-import { CUSTOM_TRANSFORMERS } from '../transformers/customTransformers';
+import { NodeReplacements, SupportedNodeTypes } from '../node-list';
+import {
+  CUSTOM_TRANSFORMERS,
+  ORDERED_LIST_ENTER,
+} from '../transformers/customTransformers';
+import {
+  markdownToSerializedEditorStateWithIds,
+  serializedEditorStateToMarkdown,
+} from '../utils/markdown-state';
 
 function makeEditor() {
   return createEditor({
-    nodes: SupportedNodeTypes,
+    nodes: [...SupportedNodeTypes, ...NodeReplacements],
     onError: console.error,
   });
 }
@@ -42,7 +49,83 @@ function getCustomOrderedListTransformer(): ElementTransformer {
   return transformer;
 }
 
+function readOrderedList(editor: LexicalEditor) {
+  return editor.getEditorState().read(() => {
+    const [list] = $getRoot().getChildren();
+    expect($isListNode(list)).toBe(true);
+    if (!$isListNode(list)) {
+      throw new Error('Expected converted node to be an ordered list');
+    }
+    return {
+      listType: list.getListType(),
+      start: list.getStart(),
+      items: list.getChildren().map((item) => item.getTextContent()),
+    };
+  });
+}
+
 describe('custom ordered-list transformer', () => {
+  it('keeps a non-1 start when replacing ListNode with TaskListNode', async () => {
+    const editor = makeEditor();
+
+    await update(editor, () => {
+      $getRoot()
+        .clear()
+        .append($createListNode('number', 6).append($createListItemNode()));
+    });
+
+    expect(readOrderedList(editor)).toEqual({
+      listType: 'number',
+      start: 6,
+      items: [''],
+    });
+  });
+
+  it('starts a new list at the typed marker', async () => {
+    const editor = makeEditor();
+
+    await update(editor, () => {
+      const paragraph = $createParagraphNode();
+      const transformer = getCustomOrderedListTransformer();
+      const match = '6. '.match(transformer.regExp);
+
+      if (!match) {
+        throw new Error('Expected ordered list marker to match');
+      }
+
+      $getRoot().clear().append(paragraph);
+      transformer.replace(paragraph, [$createTextNode('Reply')], match, false);
+    });
+
+    expect(readOrderedList(editor)).toEqual({
+      listType: 'number',
+      start: 6,
+      items: ['Reply'],
+    });
+  });
+
+  it('starts a list at the typed marker on Enter without a trailing space', async () => {
+    const editor = makeEditor();
+
+    await update(editor, () => {
+      const paragraph = $createParagraphNode();
+      const match = '6.'.match(ORDERED_LIST_ENTER.regExp);
+
+      if (!match) {
+        throw new Error('Expected bare ordered list marker to match');
+      }
+
+      $getRoot().clear().append(paragraph);
+      ORDERED_LIST_ENTER.replace(paragraph, [], match, false);
+    });
+
+    expect(readOrderedList(editor)).toEqual({
+      listType: 'number',
+      start: 6,
+      items: [''],
+    });
+  });
+
   it('uses the incoming marker as the start when inserting before an ordered list', async () => {
     const editor = makeEditor();
 
@@ -71,20 +154,22 @@ describe('custom ordered-list transformer', () => {
       );
     });
 
-    editor.getEditorState().read(() => {
-      const [list] = $getRoot().getChildren();
-
-      expect($isListNode(list)).toBe(true);
-      if (!$isListNode(list)) {
-        throw new Error('Expected converted node to be an ordered list');
-      }
-
-      expect(list.getListType()).toBe('number');
-      expect(list.getStart()).toBe(1);
-      expect(list.getChildren().map((item) => item.getTextContent())).toEqual([
-        'Incoming',
-        'Existing',
-      ]);
+    expect(readOrderedList(editor)).toEqual({
+      listType: 'number',
+      start: 1,
+      items: ['Incoming', 'Existing'],
     });
+  });
+
+  it('imports and exports a markdown list that starts after 1', () => {
+    const state = markdownToSerializedEditorStateWithIds('6. Reply');
+    const [list] = state.root.children;
+
+    expect(list).toMatchObject({
+      type: 'task-list',
+      listType: 'number',
+      start: 6,
+    });
+    expect(serializedEditorStateToMarkdown(state)).toBe('6. Reply');
   });
 });
