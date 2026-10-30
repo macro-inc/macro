@@ -4,7 +4,7 @@ icon: "cubes"
 description: "Blocks are at the core of Macro's philosophy. They are designed to work together like legos."
 ---
 
-Everything in Macro is a **block**. The current first-party block types are `md` (documents), `email`, `channel`, `chat` and `agent` (agents), `routine`, `skill`, `snippet`, `task`, `initiative` (projects), `project` (folders), `spreadsheet`, `contact` (customers), `company` (customers), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback).
+Everything in Macro is a **Block**. The current first-party Block types are `md` (documents), `email`, `channel`, `chat` and `agent` (agents), `routine`, `skill`, `snippet`, `task`, `initiative` (projects), `project` (folders), `spreadsheet`, `contact` (customers), `company` (customers), `call`, `canvas`, `code`, `image`, `video`, `pdf`, and `unknown` (fallback).
 
 ## Splits
 
@@ -24,7 +24,7 @@ The number of splits you can have open at once is determined by your monitor siz
 
 ## Previews
 
-Most block types have on-hover previews to provide context without needing to click. When you @mention a block in any markdown area (a task, doc, channel, etc.), anyone who hovers over the mention sees the preview. For example, here is a task preview:
+Most Block types have on-hover previews to provide context without needing to click. When you @mention a Block in any markdown area (a task, doc, channel, etc.), anyone who hovers over the mention sees the preview. For example, here is a task preview:
 
 <Frame>
   <img
@@ -38,10 +38,10 @@ Most block types have on-hover previews to provide context without needing to cl
 
 ## Embeds
 
-Most blocks embed read-only in a markdown doc, with editing and markup tools disabled. Note that permissions are not auto-granted for embeds or mentions in documents, unlike mentions in channels, where channel members get access automatically. You'll have to also share the files you embed.
+Most Blocks embed read-only in a markdown doc, with editing and markup tools disabled. Note that permissions are not auto-granted for embeds or mentions in documents, unlike mentions in channels, where channel members get access automatically. You'll have to also share the files you embed.
 
 <Frame>
-  ![A block embedded read-only inside a markdown document](/images/Screenshot-2026-06-09-at-4.50.07-PM.png)
+  ![A Block embedded read-only inside a markdown document](/images/Screenshot-2026-06-09-at-4.50.07-PM.png)
 </Frame>
 
 To create an embed, first create an @mention by hitting `@` or dragging and dropping, then hover and click **Convert to embed**.
@@ -56,8 +56,8 @@ To create an embed, first create an @mention by hitting `@` or dragging and drop
   />
 </Frame>
 
-## More about blocks
+## More about Blocks
 
-- **References, sharing & permissions**: every block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
-- **Real-time collaboration**: collaborative blocks (docs, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support.
-- **Search & Home**: one unified [Search](/product/search) index covers every block type, filterable by type and by mentioned person. [Home](/product/home) pulls open notifications from across blocks into a single recency-sorted feed.
+- **References, sharing & permissions**: every Block has a References panel (backlinks to everywhere it's mentioned or embedded) and the same share dialog, with owner / editor / commenter / viewer access levels plus public links for documents.
+- **Real-time collaboration**: collaborative Blocks (docs, pdf markup) sync through **Loro CRDTs** over a **Cloudflare Durable Objects** backend: the Rust `sync-service` spins up one Durable Object "room" per document, and clients connect over WebSocket to `/document/:id`. This is what gives you multiplayer editing, presence cursors, and full offline support.
+- **Search & Home**: one unified [Search](/product/search) index covers every Block type, filterable by type and by mentioned person. [Home](/product/home) pulls open notifications from across Blocks into a single recency-sorted feed.

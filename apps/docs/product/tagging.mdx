@@ -1,40 +1,68 @@
 ---
 title: "Unified Tagging"
-icon: "tags"
-description: "One set of colored tags that spans every block type: docs, email, tasks, chats, and calls."
+icon: "tag"
+description: "One set of colored tags that spans every Block type: docs, email, tasks, chats, and calls."
 ---
 
-A tag is a [property](/concepts/properties), and because properties are shared across your whole workspace, a single tag namespace spans every block type. Tag an email `marketing` and a task `marketing` and it's the same `marketing`: one color, one filter, one click to see everything carrying it.
+A tag is a [property](/concepts/properties) shared across your workspace, so the same tags work on every Block type. Tag an email `marketing` and a task `marketing` and it's the same `marketing`.
 
 Tags are for organizing your work by project, team, or area, like `marketing`, `hiring`, or `q3-launch`. They aren't for tracking status. Status, priority, and assignees are [properties](/concepts/properties) that describe a single item, while a tag is a property that ties related items together across the whole workspace.
 
-<Frame>
-  ![Filtering the whole workspace by a tag in search](/images/search_tags.png)
-</Frame>
-
-## What you can tag
-
-The same tags apply across:
-
-- **Documents** — tag PDFs, other files, and [snippets](/product/snippets)
-- **Tasks** — tag a task to group it with related work
-- **Emails** — tag a whole thread
-- **AI chats** — tag a conversation with an agent
-- **Calls** — tag a recording or transcript
+<div className="search-preview" role="img" aria-label="Search filtered to the marketing tag across an email, a task, a doc, a chat, and a call">
+  <div className="search-preview-bar">
+    <div className="search-preview-title">Search</div>
+    <div className="search-preview-field">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M10.6 3.75a6.85 6.85 0 1 1 0 13.7 6.85 6.85 0 0 1 0-13.7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="m15.6 15.6 4.65 4.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span>Search</span>
+    </div>
+  </div>
+  <div className="search-preview-filters">
+    <div className="search-preview-chip"><span>Type</span><span>All</span></div>
+    <div className="search-preview-chip">
+      <span>Tags</span>
+      <span className="search-preview-chip-value"><span className="search-preview-dot" />marketing</span>
+      <span className="search-preview-chip-clear" aria-hidden="true">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="m6 6 12 12m0-12-12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+      </span>
+    </div>
+  </div>
+  <ul className="search-preview-rows is-tagged">
+    <li className="is-selected">
+      <svg className="search-preview-icon search-preview-icon-email" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5.25" width="18" height="13.5" rx="2.75" stroke="currentColor" strokeWidth="2" /><path d="m3.75 6.5 6.8 5.6a2.3 2.3 0 0 0 2.9 0l6.8-5.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <span className="search-preview-kind">Launch timing</span>
+      <span className="search-preview-pill"><span className="search-preview-dot" />marketing</span>
+    </li>
+    <li>
+      <svg className="search-preview-icon search-preview-icon-task" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.25" y="3.25" width="17.5" height="17.5" rx="3.5" stroke="currentColor" strokeWidth="2" /><path d="m7.5 12.1 3 3.15 6-6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <span className="search-preview-kind">Write the launch email</span>
+      <span className="search-preview-pill"><span className="search-preview-dot" />marketing</span>
+    </li>
+    <li>
+      <svg className="search-preview-icon search-preview-icon-doc" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13.5 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-10L13.5 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M13.5 3v3.5a2 2 0 0 0 2 2H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <span className="search-preview-kind">Launch plan</span>
+      <span className="search-preview-pill"><span className="search-preview-dot" />marketing</span>
+    </li>
+    <li>
+      <svg className="search-preview-icon search-preview-icon-agent" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10.5 3.5C12 9.25 13.25 10.5 19 12c-5.75 1.5-7 2.75-8.5 8.5C9 14.75 7.75 13.5 2 12c5.75-1.5 7-2.75 8.5-8.5Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M19 2.5c.55 2.25 1.25 2.95 3.5 3.5-2.25.55-2.95 1.25-3.5 3.5-.55-2.25-1.25-2.95-3.5-3.5 2.25-.55 2.95-1.25 3.5-3.5Z" fill="currentColor" stroke="none" /></svg>
+      <span className="search-preview-kind">Launch questions</span>
+      <span className="search-preview-pill"><span className="search-preview-dot" />marketing</span>
+    </li>
+    <li>
+      <svg className="search-preview-icon search-preview-icon-call" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3.5H4.5A1.5 1.5 0 0 0 3 5c0 8.8 7.2 16 16 16a1.5 1.5 0 0 0 1.5-1.5V16l-4.5-2-2 2a12 12 0 0 1-6-6l2-2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M14 3.5a7 7 0 0 1 6.5 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <span className="search-preview-kind">Launch review</span>
+      <span className="search-preview-pill"><span className="search-preview-dot" />marketing</span>
+    </li>
+  </ul>
+</div>
 
 ## Creating and applying tags
 
-Type `#` in a document to open the tag menu, then pick an existing tag or create a new one. Tags render inline as colored pills, and clicking a pill shows everything else carrying it.
-
-Everywhere else, use the tag panel in the properties window. Select one of your existing tags or start typing to create a new one.
-
-An item can carry as many tags as you like, so the same email or task can sit under `marketing` and `q3-launch` at once.
-
-> If you would like to select or unselect multiple tags, hold <kbd>Shift</kbd> while clicking them.
-
-<Frame>
-  <img src="/images/create_tags.png" alt="Creating a tag inline with the tag menu" style={{ maxWidth: '320px', width: '100%', margin: '0 auto', display: 'block' }} />
-</Frame>
+- Type `#` in a document and pick a tag, or create one.
+- Right-click a Block and choose **Add tag**.
+- In the side panel, click **Add tags**.
 
 ## Personal and team tags
 
@@ -45,35 +73,36 @@ When you create a tag you choose its scope:
 
 Renaming or recoloring a tag keeps its identity, so the change flows to every item already carrying it. Deleting a tag is destructive and it will be removed from everything at once and can't be undone.
 
-## Colors
-
-Every tag has a color from a fixed palette:
-
-<div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem 1.25rem', paddingLeft: '1.625rem', margin: '1rem 0' }}>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#E5484D', display: 'inline-block' }} /> Red</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#E54D2E', display: 'inline-block' }} /> Tomato</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#F76B15', display: 'inline-block' }} /> Orange</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FFB224', display: 'inline-block' }} /> Amber</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#F5D90A', display: 'inline-block' }} /> Yellow</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#46A758', display: 'inline-block' }} /> Green</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#12A594', display: 'inline-block' }} /> Teal</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#0091FF', display: 'inline-block' }} /> Blue</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#3E63DD', display: 'inline-block' }} /> Indigo</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#8E4EC6', display: 'inline-block' }} /> Purple</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#E93D82', display: 'inline-block' }} /> Pink</span>
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}><span style={{ width: 10, height: 10, borderRadius: '50%', background: '#889096', display: 'inline-block' }} /> Gray</span>
-</div>
-
 ## Filtering and search
 
-In any block, go to **Filter → Tags** to show only the items carrying a tag. To filter across your entire workspace at once, use the same **Tags** chip in the filter menu of [search](/product/search#filtering-by-tags). Select two or more tags and a match-mode toggle appears:
+In any Block, go to **Filter → Tags** to show only the items carrying a tag. To filter across your entire workspace at once, use the same **Tags** chip in the filter menu of [search](/product/search#filtering-by-tags). Select two or more tags and a match-mode toggle appears:
 
 - **Any** — items that have any of the selected tags (the default)
 - **All** — items that have every selected tag, for example everything tagged both `marketing` and `q3-launch`
 
-<Frame>
-  <img src="/images/filter_tags.png" alt="Filtering a block's list by tag with Filter → Tags" style={{ maxWidth: '320px', width: '100%', margin: '0 auto', display: 'block' }} />
-</Frame>
+<div className="tag-mock" role="img" aria-label="Filter menu open to Tags, with marketing, hiring, and q3-launch">
+  <div className="tag-mock-row">
+    <div className="tag-menu tag-menu-narrow">
+      <div className="tag-menu-list">
+        <div className="tag-menu-item"><span className="tag-menu-label">Status</span><svg className="tag-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9.5 6.75 5 5.25-5 5.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+        <div className="tag-menu-item"><span className="tag-menu-label">Attachments</span><svg className="tag-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9.5 6.75 5 5.25-5 5.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+        <div className="tag-menu-item"><span className="tag-menu-label">Calendar</span><svg className="tag-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9.5 6.75 5 5.25-5 5.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+        <div className="tag-menu-item is-selected"><span className="tag-menu-label">Tags</span><svg className="tag-caret" width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9.5 6.75 5 5.25-5 5.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
+      </div>
+    </div>
+    <div className="tag-menu">
+      <div className="tag-menu-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10.6 3.75a6.85 6.85 0 1 1 0 13.7 6.85 6.85 0 0 1 0-13.7Z" stroke="currentColor" strokeWidth="2" /><path d="m15.6 15.6 4.65 4.65" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+        <span>Filter by tag...</span>
+      </div>
+      <div className="tag-menu-list">
+        <div className="tag-menu-item is-selected"><span className="tag-check" /><span className="tag-dot tag-dot-amber" /><span className="tag-menu-label">marketing</span><span className="tag-only">Only</span></div>
+        <div className="tag-menu-item"><span className="tag-check" /><span className="tag-dot tag-dot-green" /><span className="tag-menu-label">hiring</span></div>
+        <div className="tag-menu-item"><span className="tag-check" /><span className="tag-dot tag-dot-blue" /><span className="tag-menu-label">q3-launch</span></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 Clicking a tag pill anywhere jumps straight to everything else carrying it.
 
@@ -81,9 +110,28 @@ Clicking a tag pill anywhere jumps straight to everything else carrying it.
 
 Curate the full set from **Settings → Tags**, which lists your **Personal** and **Team** tags with edit and delete actions and a **New tag** button. It's the place to rename, recolor, or clean up tags without hunting for an item that uses them.
 
-<Frame>
-  ![The Settings → Tags page, with Personal and Team sections](/images/settings_tags.png)
-</Frame>
+<div className="tag-mock tag-settings" role="img" aria-label="Settings Tags page with a personal marketing tag and team tags hiring and q3-launch">
+  <div className="tag-settings-head">
+    <div>
+      <div className="tag-settings-title">Tags</div>
+      <p className="tag-settings-desc">Manage personal labels and shared team labels.</p>
+    </div>
+    <span className="tag-btn tag-btn-neutral"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>New tag</span>
+  </div>
+  <div className="tag-section">
+    <div className="tag-section-head"><span>Personal</span><span className="tag-btn tag-btn-secondary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>New tag</span></div>
+    <div className="tag-card">
+      <div className="tag-card-row"><span className="tag-dot tag-dot-lg tag-dot-amber" /><span className="tag-menu-label">marketing</span><span className="tag-row-actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20l4.75-1 11-11a2.3 2.3 0 0 0-3.25-3.25l-11 11L4 20Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="m14.5 6.75 3.25 3.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.5 6.75h15M9 6.75V4.5c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v2.25M6.25 6.75l.6 11.35c.07 1.34 1.17 2.4 2.51 2.4h5.28c1.34 0 2.44-1.06 2.51-2.4l.6-11.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span></div>
+    </div>
+  </div>
+  <div className="tag-section">
+    <div className="tag-section-head"><span>Team</span><span className="tag-btn tag-btn-secondary"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>New tag</span></div>
+    <div className="tag-card">
+      <div className="tag-card-row"><span className="tag-dot tag-dot-lg tag-dot-green" /><span className="tag-menu-label">hiring</span><span className="tag-row-actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20l4.75-1 11-11a2.3 2.3 0 0 0-3.25-3.25l-11 11L4 20Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="m14.5 6.75 3.25 3.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.5 6.75h15M9 6.75V4.5c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v2.25M6.25 6.75l.6 11.35c.07 1.34 1.17 2.4 2.51 2.4h5.28c1.34 0 2.44-1.06 2.51-2.4l.6-11.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span></div>
+      <div className="tag-card-row"><span className="tag-dot tag-dot-lg tag-dot-blue" /><span className="tag-menu-label">q3-launch</span><span className="tag-row-actions"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20l4.75-1 11-11a2.3 2.3 0 0 0-3.25-3.25l-11 11L4 20Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="m14.5 6.75 3.25 3.25" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg><svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4.5 6.75h15M9 6.75V4.5c0-.55.45-1 1-1h4c.55 0 1 .45 1 1v2.25M6.25 6.75l.6 11.35c.07 1.34 1.17 2.4 2.51 2.4h5.28c1.34 0 2.44-1.06 2.51-2.4l.6-11.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></span></div>
+    </div>
+  </div>
+</div>
 
 <Note>
   **Tags are not email labels.** Your Gmail labels (Inbox, Starred, Important, and any you've made) still sync and drive inbox actions like archive and star. Macro tags are a separate, cross-workspace layer that sits on top — an email thread can carry both.

@@ -41,7 +41,6 @@
         "pages": [
           "product/search",
           "product/unified-memory",
-          "product/projects",
           "product/tagging"
         ]
       },
@@ -62,7 +61,14 @@
           },
           "product/email",
           "product/channels",
-          "product/tasks",
+          {
+            "group": "Tasks",
+            "icon": "square-check",
+            "root": "product/tasks",
+            "pages": [
+              "product/projects"
+            ]
+          },
           {
             "group": "Calendar",
             "icon": "calendar",
@@ -73,7 +79,7 @@
           },
           {
             "group": "Agents",
-            "icon": "wand-magic-sparkles",
+            "icon": "sparkle",
             "root": "product/agents",
             "pages": [
               "product/routines",
@@ -81,7 +87,8 @@
             ]
           },
           "product/crm",
-          "product/calls"
+          "product/calls",
+          "product/reviews"
         ]
       },
       {

@@ -1,87 +1,67 @@
 ---
 title: "Welcome to Macro"
 icon: "house"
-description: "Extremely fast, unified interface for all your work, all linked together in one database."
+description: "Extremely fast, unified interface for all your work."
 ---
 
 <iframe src="https://www.youtube.com/embed/Fn5hdzXsQQ8" title="YouTube video player" frameborder="0" className="w-full aspect-video rounded-xl" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen />
 
-Macro unifies your email, messaging, tasks, docs, and files into a single system, all linked together in one database. We built it with a Solid frontend and a Rust backend, so it's fast.
+Macro is the unified workspace that combines your email, messaging, tasks, docs, calendar, CRM, files, and agents into a single system, all linked together in one database.
 
 <Card title="Getting started" icon="rocket" href="/getting-started" horizontal>
-  New to Macro? Go from a fresh account to a working setup in about 15 minutes.
+  Connect email, create a team, import your data, and set up agents.
 </Card>
 
 ## Core Blocks
 
-For each block, we've studied the best prior art and tried to make it even better. For example, Email is faster than Superhuman, and [Home](/product/home) brings every notification into one feed. Messaging is designed to be more focused, and less noisy, than Slack. Docs are simpler than Notion. Tasks are modeled on Linear but are less ceremonious (cycles, points, etc. are there if you _really want_ but we advise not).
+"Blocks" are the terminology we use to distinguish between different parts of the product. The sidebar is split into each of these Blocks: Home, Drive, Email, Chat, Tasks, Calendar, Agents, Customers, Calls, Reviews, and Scheduling. These Blocks are meant to interact with one another: @mention a task in a channel, insert a #channel-thread into an agent chat, and so on.
 
 **All of this works together as a single integrated system: one interface, one bidirectional database with shared memory for your agents.**
 
-<Frame>
-  <img
-    src="/images/Screenshot-2026-06-09-at-11.33.57-AM.png"
-    alt="Macro's Home feed with the sidebar listing the available blocks"
-  />
-</Frame>
-
-The following are the core first-party blocks available in Macro today. Each card links to that block's documentation page, with videos where applicable.
 
 <CardGroup cols={2}>
-  <Card title="Email" icon="envelope" href="/product/email">
-    Multi-account unified inbox, keyboard shortcuts, and shared inboxes. Gmail.
-  </Card>
-
-  <Card title="Chat" icon="comments" href="/product/channels">
-    Channels and direct messages designed for technical discussions.
-  </Card>
-
-  <Card title="Tasks" icon="check-square" href="/product/tasks">
-    Linear-inspired tasks tightly integrated with channels, email and agents.
-  </Card>
-
-  <Card title="Unified Projects" icon="layer-group" href="/product/projects">
-    Tasks grouped with a description, assignees, and discussion.
-  </Card>
-
-  <Card title="Docs" icon="file-text" href="/product/docs">
-    Real-time collaborative, markdown-native docs using CRDTs, @mentions.
-  </Card>
-
-  <Card title="Spreadsheets" icon="table" href="/product/spreadsheets">
-    Spreadsheets with formulas, charts, and Excel import and export.
-  </Card>
-
-  <Card title="Canvas" icon="diagram-project" href="/product/canvas">
-    2D board with embedded @links to tasks, files, and emails. 
-  </Card>
-
-  <Card title="Agents" icon="sparkles" href="/product/agents">
-    Unified memory, team-level memory. Can take action on your behalf.
-  </Card>
-
-  <Card title="Routines" icon="clock" href="/product/routines">
-    Agent prompts that run on a schedule or on workspace activity.
-  </Card>
-
-  <Card title="Calls" icon="video" href="/product/calls">
-    Recorded, transcribed and logged to team-level memory for agents.
-  </Card>
-
-  <Card title="Calendar" icon="calendar" href="/product/calendar">
-    Google Calendar events and booking links.
+  <Card title="Home" icon="house" href="/product/home">
+    Email, messages, @mentions, tasks, and agent activity in one feed.
   </Card>
 
   <Card title="Drive" icon="folder" href="/product/drive">
-    Store and share files, auto-imported from email and channels, fully searchable.
+    Documents and files in the workspace.
   </Card>
 
-  <Card title="Pull Requests" icon="code-merge" href="/integrations/github">
-    Linked to tasks, embeddable in channels, available to agents.
+  <Card title="Email" icon="envelope" href="/product/email">
+    Email with Gmail sync.
   </Card>
 
-  <Card title="Customers" icon="chart-network" href="/product/crm">
-    Customer & Contact objects, custom properties, email sync, enrichment.
+  <Card title="Chat" icon="comments" href="/product/channels">
+    Channels and direct messages.
+  </Card>
+
+  <Card title="Tasks" icon="list-check" href="/product/tasks">
+    Tasks with priorities, statuses, and linked context.
+  </Card>
+
+  <Card title="Calendar" icon="calendar" href="/product/calendar">
+    Google Calendar, searchable and editable in Macro.
+  </Card>
+
+  <Card title="Agents" icon="wand-magic-sparkles" href="/product/agents">
+    Agents with context on your email, tasks, docs, calls, and channels.
+  </Card>
+
+  <Card title="Customers" icon="building" href="/product/crm">
+    Contact and company records from your team's email.
+  </Card>
+
+  <Card title="Calls" icon="phone" href="/product/calls">
+    Video calls with transcriptions.
+  </Card>
+
+  <Card title="Reviews" icon="code-pull-request" href="/product/reviews">
+    GitHub pull requests, including ones waiting on your review.
+  </Card>
+
+  <Card title="Scheduling" icon="calendar-check" href="/product/booking-links">
+    Public links where people book time on your calendar.
   </Card>
 </CardGroup>
 
@@ -89,7 +69,7 @@ The following are the core first-party blocks available in Macro today. Each car
 
 ### Bidirectional @linking
 
-When you @mention a document in a channel message, both the message and the document know about each other, so you can always trace where something has been discussed. This works across every block type: docs, tasks, emails, files, calls, etc.
+When you @mention a document in a channel message, both the message and the document know about each other, so you can always trace where something has been discussed. This works across every Block type: docs, tasks, emails, files, calls, etc.
 
 ### Intelligent permissions
 

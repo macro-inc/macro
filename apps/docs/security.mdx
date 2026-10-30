@@ -41,7 +41,7 @@ You have the option to select the region where you want your data to be stored. 
 
 Most of the data associated with the workspace — including email, messages, documents, tasks, call recordings, and CRM records — will only be stored in the selected region, across three systems inside it:
 
-* **Postgres** for blocks and the relationships between them
+* **Postgres** for Blocks and the relationships between them
 * **S3** for files, attachments, images, and call recordings
 * **OpenSearch** for the index that powers [Search](/product/search)
 
@@ -49,8 +49,8 @@ Most of the data associated with the workspace — including email, messages, do
 
 Access in Macro is derived from [channel-based sharing](/permissions) rather than per-file permission dialogs. That model is the security boundary:
 
-* Mentioning a block in a channel shares it with every member of that channel. Removing someone from the channel revokes what was shared there.
-* [Teams](/account/teams) set the defaults for some block types. Tasks are visible to the team, calls are shared to team memory unless a call is opted out, and emails flow into the CRM when Email Sync is enabled for that company.
+* Mentioning a Block in a channel shares it with every member of that channel. Removing someone from the channel revokes what was shared there.
+* [Teams](/account/teams) set the defaults for some Block types. Tasks are visible to the team, calls are shared to team memory unless a call is opted out, and emails flow into the CRM when Email Sync is enabled for that company.
 * Team roles are **Member**, **Admin**, and **Owner**. Admins and owners can remove members and can limit invitations to admins.
 * **Auto-join on domain**, when an admin enables it, adds anyone who signs up with an email on the owner's domain to the team.
 * **Public links** make a document readable by anyone with the URL, including people without a Macro account.
@@ -83,7 +83,7 @@ Macro routes requests to model providers including Anthropic and OpenAI, dependi
 
 ## Retention and deletion
 
-* Deleting a block moves it to trash first, so it can be recovered.
+* Deleting a Block moves it to trash first, so it can be recovered.
 * Deleting your account is permanent. **Settings → Account → Delete account** removes your account and its associated data after a confirmation step.
 * Organizations can set a retention window that deletes documents and chats which haven't been accessed within a set number of days. Contact [support@macro.com](mailto:support@macro.com) to configure one for your organization.
 

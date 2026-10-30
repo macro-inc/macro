@@ -1,86 +1,163 @@
 ---
-title: "Get Started"
+title: "Getting started"
+description: "Connect email, create a team, import your data, and set up agents."
 icon: "rocket"
-description: "Set up Macro and learn the core workflow in about 15 minutes."
 ---
 
-Macro replaces the pile of tabs (email, chat, tasks, docs, calls) with one fast, keyboard-driven workspace. This guide takes you from a fresh account to a working setup.
+Macro is meant to be an all in one solution. The more context it has, the better your workspace will be.
 
 <Card title="Prefer a guided tour?" icon="calendar" href="https://macro.com/app/book/6de4003c-15e4-549f-b5a9-0e930bbf56e4/demo">
   Book a live onboarding call and a member of our team will walk you through setup and answer questions.
 </Card>
 
-## 1. Connect your email
+## 1. Connect email
 
-Macro is not an email server, it's just an email client. It syncs with your existing Gmail or Google Workspace account, so your mail stays in Gmail. We recommend connecting your account during signup so your inbox is ready from the first minute.
+Connecting an account lets Macro read, send, and organize that email, as well as manage the calendar on a Google or Outlook account.
 
-Have more than one address? Add additional Gmail or Google Workspace accounts in **Settings**, and they all flow into a [single unified inbox](/product/email#multi-account-inbox). When you compose, you choose which address to send from.
+After signup, connect from either place:
 
-<Note>
-  Outlook and custom IMAP/SMTP support are planned. See the [FAQ](/faq) for details.
-</Note>
+1. On Home, click **Connect email** when the feed is empty.
+2. Open **Settings → Email** and click **Connect**.
 
-## 2. Learn five keys
+In the **Connect email** dialog, choose **Gmail** or **Outlook / Microsoft 365** and finish signing in with that provider.
 
-Macro is built keyboard-first. These five get you most of the way:
+To add another inbox, open **Settings → Email**, click **Add account**, and connect it the same way. When you write an email, you choose which connected address it sends from.
 
-| Key | What it does |
-| --- | --- |
-| <kbd>c</kbd> | Open the create launcher, then <kbd>d</kbd> for a doc, <kbd>t</kbd> for a task, <kbd>e</kbd> for an email, <kbd>m</kbd> for a message, <kbd>a</kbd> for an agent |
-| <kbd>cmd</kbd>\+<kbd>k</kbd> | Command menu to jump to anything by name |
-| <kbd>/</kbd> | [Unified search](/product/search) across email, docs, tasks, messages, calls, and files |
-| <kbd>j</kbd> / <kbd>k</kbd> | Move down / up in any list |
-| <kbd>e</kbd> | Mark done: archive an email, clear a Home item |
+You can disconnect an account from **Settings → Email**.
 
-The full list lives in [Keyboard shortcuts](/keyboard-shortcuts).
+## 2. Create a team
 
-## 3. Triage from Home
+A team is the workspace you share. People you invite work in the same channels, tasks, customers, and agents. Your email stays in your inbox. Roles, invites, and billing are covered in [Teams](/account/teams).
 
-Press <kbd>g</kbd> \+ <kbd>h</kbd> to open [Home](/product/home). Emails, channel messages, task assignments, @mentions, and agent responses all land here. Items that need your attention are in **Signal**. Everything else is in **Noise**.
+Create a team during onboarding or from the app:
 
-Work the list with <kbd>j</kbd> / <kbd>k</kbd>; the selected item previews next to the list. Clear items with <kbd>e</kbd>. The list shrinks as you go.
+1. Open **Settings**.
+2. At the bottom of the settings sidebar, click **Create a team**.
+3. Enter a **Team name**. Under **Invite members (optional)**, add email addresses for anyone who should join now.
+4. Click **Create Team**.
 
-## 4. Open work side by side
+To invite people after the team exists, open **Settings** and click **Invite your team** at the bottom of the sidebar.
 
-Macro has its own window manager. Press <kbd>\\</kbd> to create a _split_, and <kbd>shift</kbd>\+<kbd>enter</kbd> to open any list item or @mention in a new split, for example Home on the left and the doc someone sent you on the right. Move focus with <kbd>shift</kbd>\+<kbd>h</kbd> / <kbd>shift</kbd>\+<kbd>l</kbd>, maximize with <kbd>shift</kbd>\+<kbd>escape</kbd>. More in [Blocks](/concepts/blocks#splits).
+- **Invite link** shares one link. Click **Create link**, then **Copy link**. An admin or owner can **Reset link** or **Turn off**.
+- **Invite by email** sends an invite to each address. Invited people appear as pending until they accept.
 
-## 5. Create a team
+Under **Settings → Team → Members**, an owner or admin can turn on **Auto-join on domain** so people who sign up with your company's email domain join the team. **Members can invite** lets members send invites. When it is off, only admins and owners can invite.
 
-Open **Settings → Team** to create one. Teams exist to help you collaborate better as a group:
+Once the team exists, this is what you set up on it:
 
-- **Auto-sharing**: tasks are visible to the whole team, and channel calls are recorded, transcribed, and shared by default. No "can you share that with me?" requests.
-- [**Team memory**](/product/unified-memory): agents remember what your whole team is doing across email, messages, tasks, docs, and calls, not just your own chats.
+- **Channels.** A team channel is visible to everyone on the team. Turn on **Automatically add teammates** to add current and future members.
+- **Tasks and projects.** Tasks and [projects](/product/projects) you create are shared with your team by default, and you can make them private. Teammates can view and comment. You and the assignee control status and properties.
+- **Calls.** A call started in a channel is recorded, transcribed, and shared with the team. Uncheck **Share with team** during the call to keep it with the people on the call. A call you start on your own stays with the people on it. See [Calls](/product/calls).
+- **Customers.** An admin turns on **Team CRM** in **Settings → CRM**. Macro builds company and contact records from the team's email. **Email Sync** on a company shows that company's email threads to the team. See [Customers](/product/crm).
+- **Booking links.** Open Scheduling and select **Personal** or your team, then open **Booking links** and click **New booking link**. You can also open **Booking links** from the calendar. A team link is **Collective**, which books every host, or **Round robin**, which books one host. Owners and admins edit team links. Other members can view them. See [Booking links](/product/booking-links).
+- **Agents.** In **Settings → Agents**, choose **Team** under **Who can use it**. Teammates mention that agent by its **@tag** in a channel.
+- **Routines.** A [routine](/product/routines) runs a saved prompt on a schedule, or when something happens that you can see: a channel message, a task change, or a new email. Create one from the Agents Block. A routine is visible only to you and runs with your permissions.
+- **Connections.** **Settings → Team → Connections** is where an admin imports Slack for the team and configures the **GitHub App** so the team's repositories sync pull requests.
+- **Files.** In a file's **Share** dialog, **Team access** sets view, comment, or edit for the whole team.
 
-Then create a [channel](/product/channels) per team or project (<kbd>c</kbd> \+ <kbd>g</kbd>). Channels are also how [permissions](/permissions) work in Macro: anything you @mention in a channel is automatically shared with its members, and access follows people as they join or leave. You can add anyone by email, even if they don't have a Macro account yet.
+On **Settings → Team → General**, the owner sets the team **Name** and **Slug**. The slug is the prefix on task references, such as ENG-42. An admin sets **Default link sharing** for new links: **Only people with access**, **Anyone with the link**, or **Team members with the link**.
 
-## 6. Put the agent to work
+## 3. Import your data
 
-Press <kbd>c</kbd> \+ <kbd>a</kbd> to start a conversation with an [agent](/product/agents) that has access to your entire workspace. Ask "what's the latest on the launch?" and it answers from your team's recent emails, messages, tasks, docs, and call transcripts. In any channel, mention **@Macro** to pull an agent into the conversation.
+Connect the other tool under **Settings → Integrations**, then ask an agent to copy it. Each person connects their own account. The agent reads the other tool and waits for you to approve before it creates anything.
 
-You can also set up [routines](/product/routines): agent runs on a schedule, like a daily to-do summary, or whenever something happens in Macro, like a new email arriving.
+### Notion
 
-## 7. Connect your tools
+1. Open **Settings → Integrations**.
+2. Under **MCP integrations**, click **Connect** on Notion and finish signing in.
+3. Open Agents, click **New conversation**, and ask it to import. For example:
 
-- **GitHub**: Link your account in **Settings → Integrations**. Tasks will move through "In Progress," "In Review," and "Completed" as you branch, open PRs, and merge. See [GitHub integration](/integrations/github).
-- **Agent connections**: connect Notion, Slack, Linear, and other tools under **Settings → Agent connections** so agents can reach them. Migrating off one of them? See [Switch to Macro](/switch-to-macro).
-- **Your coding agents**: point Claude Code, Codex, or any MCP client at your Macro workspace. See [MCP setup](/AI/mcp/overview).
+```text
+Import my Notion workspace. Show me the plan before you create anything.
+```
 
-## Next steps
+Pages become docs, kept in the same folder tree. Databases become databases. Databases that we detect track work become tasks.
 
-<CardGroup cols={2}>
-  <Card title="Watch the demo" icon="play" href="https://www.youtube.com/watch?v=Fn5hdzXsQQ8">
-    A full walkthrough of Macro's core features in one video.
-  </Card>
+We have a dedicated Notion importer. It reads the connected workspace and shows a plan of the pages, databases, and task lists it found. You choose what to include and whether the team can see it. Nothing is created until you approve the plan, and anything already imported stays.
 
-  <Card title="Key concepts" icon="cubes" href="/concepts/blocks">
-    Blocks, mentions, and properties: the primitives everything is built from.
-  </Card>
+### Linear
 
-  <Card title="Keyboard shortcuts" icon="keyboard" href="/keyboard-shortcuts">
-    The complete reference for working at full speed.
-  </Card>
+1. Open **Settings → Integrations**.
+2. Under **MCP integrations**, click **Connect** on Linear and finish signing in.
+3. Open Agents, click **New conversation**, and ask it to import. For example:
 
-  <Card title="FAQ" icon="circle-question" href="/faq">
-    Licensing, self-hosting, comparisons, and how Macro fits your stack.
-  </Card>
-</CardGroup>
+```text
+Import my Linear workspace. Show me the plan before you create anything.
+```
+
+Issues become tasks. Linear teams, projects, and initiatives become projects.
+
+### Slack
+
+An admin does this from team settings.
+
+1. Open **Settings → Team → Connections**.
+2. Click **Import from Slack**.
+
+**Import with history** uses a Slack export from a workspace admin. Pick the channels, leave **Include message history** on to bring messages and threads, confirm the export belongs to the team's Slack workspace, and click **Import selected channels**. Files are not imported.
+
+**Import channels without history** copies public channels and the teammates who are on your team. Messages stay in Slack.
+
+### ClickUp
+
+1. Open **Settings → Integrations**.
+2. Under **MCP integrations**, click **Add server**.
+3. Set **Name** to ClickUp and **URL** to `https://mcp.clickup.com/mcp`.
+4. Sign in to ClickUp when Macro asks.
+5. Open Agents, click **New conversation**, and tell it what to copy. For example:
+
+```text
+Import my open ClickUp tasks and the Docs in the Engineering space.
+Skip archived work. Show me the list before you create anything.
+```
+
+The agent reads ClickUp and lists what it will create. It creates tasks and docs only after you say to.
+
+### Importing with MCP
+
+**Settings → Integrations → MCP integrations** is where these connections live. Notion and Linear have a **Connect** button. For any other tool, click **Add server**, enter its name and MCP URL, and sign in.
+
+Then start a chat and name what to copy and what to skip. Ask the agent to show the list before it creates anything. The connected tool is only read.
+
+You can also import from Claude, Cursor, or Codex. Open **Settings → MCP server** and connect your account, or point the client at `https://mcp-server.macro.com/mcp` and sign in. The client can then create docs, tasks, and channels in your workspace. See [MCP setup](/AI/mcp/overview).
+
+Macro's MCP server has no rate limit. That includes the Free plan.
+
+## 4. Set up your agents
+
+The built-in agent is ready once you are signed in. It can use the email, tasks, docs, calls, and channels you can open, and it asks before it sends email.
+
+Start a conversation from the box at the top of Home, or open the Agents Block and click **New conversation**.
+
+In a channel, type **@Macro** and your message. The reply stays in that thread.
+
+To add an agent of your own:
+
+1. Open **Settings → Agents**.
+2. Click **Add agent**.
+3. Set the **Name** and **@tag**. The tag is how people mention this agent.
+4. Write **Instructions**. The agent receives them at the start of every conversation.
+5. Under **Where it runs**, choose **In Macro**, **In Cursor**, or **In your harness**. **In Macro** uses Macro's tools and the apps you have connected. **In Cursor** needs Cursor connected on this page. **In your harness** runs the agent on your machine through MacroD.
+6. Under **Who can use it**, choose **Private** or **Team**. A private agent is yours. A team agent can be used in shared channels. Team agents need a team.
+7. Click **Create agent**.
+
+Mention a team agent with its **@tag** in a channel, the same way you mention **@Macro**.
+
+Apps you connect for an import are also available to agents that run in Macro. To connect an app without starting an import, open **Settings → Integrations** and connect it there. Each person connects their own account.
+
+### Routines
+
+A [routine](/product/routines) is a saved prompt an agent runs without you starting a chat. It runs on a schedule, or when something happens that you can see.
+
+Open the Agents Block, open **Routines**, and click **Create Routine**. Name it and write the instructions. Instructions can @mention people, docs, and tasks. Choose the agent or model, click **Add trigger**, and click **Create routine**.
+
+Activity triggers include:
+
+- **Channels.** A channel is created, a message is sent, or you are @mentioned.
+- **Documents.** A document is created or deleted.
+- **Tasks.** A task is created, or its status, priority, or another property changes.
+- **Email.** A new email arrives. Spam, trash, and drafts are skipped.
+
+### MacroD
+
+MacroD is a local daemon that connects coding agents on your machine, or a cloud instance, to Macro. Herdr, Claude Code, Codex, and similar agents hook in. It is bundled in the desktop app, and you can also install it from the command line. It connects out to Macro, so you do not need a tunnel, a webhook, or an open port. Setup is in [Bring your own agent](/AI/bring-your-own).

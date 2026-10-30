@@ -4,7 +4,7 @@ icon: "folder"
 description: "Store, organize, and share documents and files."
 ---
 
-Drive contains the documents and files in your workspace: docs, spreadsheets, canvases, PDFs, images, videos, code files, and uploads.
+Drive contains the documents and files in your workspace: docs, databases, spreadsheets, canvases, PDFs, images, videos, code files, and uploads.
 
 > To go to Drive use shortcut <kbd>g</kbd> \+ <kbd>f</kbd>.
 
@@ -22,6 +22,9 @@ Attachments shared in channels are imported to Drive. Email attachments are extr
   </Card>
   <Card title="Snippets" icon="brackets-curly" href="/product/snippets">
     Reusable text inserted by typing <kbd>;</kbd>.
+  </Card>
+  <Card title="Databases" icon="database" href="/product/drive#databases">
+    Records in tables, boards, and timelines.
   </Card>
 </CardGroup>
 
@@ -43,7 +46,7 @@ The folder creation dialog accepts a name, tags, and files or folders to upload.
 
 ## Creating and uploading
 
-Click **New** in the Drive sidebar to create a document, spreadsheet, canvas, folder, or other file. Inside a folder, the menu reads **Create in** followed by the folder name, and new files are created in that folder.
+Click **New** in the Drive sidebar to create a document, database, spreadsheet, canvas, folder, or other file. Inside a folder, the menu reads **Create in** followed by the folder name, and new files are created in that folder. **Database** stays on the **New** menu for **My Files**, **Recent**, **Shared with me**, and the folders overview. A database is not placed in a folder.
 
 Drag files from your computer onto a folder to upload them.
 
@@ -56,3 +59,105 @@ The file menu has **Duplicate**, **Rename**, **Move to folder**, **Download**, a
 ## Sharing
 
 Folders have owner, editor, commenter, and viewer access. On a team, the **Share** dialog includes **Team access**, which sets view, comment, or edit access for the whole team. Folders with open notifications appear on [Home](/product/home).
+
+## Databases
+
+A database stores records in tables. Each column is a field on those records. A new database is named **Untitled database** and starts with one table and a **Name** column.
+
+> To create a database use shortcut <kbd>c</kbd> \+ <kbd>l</kbd>.
+
+Press <kbd>c</kbd> \+ <kbd>l</kbd>, choose **Database** from the **Create** menu, or choose **New → Database** in Drive.
+
+**My Files** lists databases you own. **Shared with me** lists databases other people have shared with you. The **Databases** section in the Drive sidebar lists every database you can open, by name. **Search Drive** matches a database by its name. **Filter → Type → Database** limits the list to databases. On **My Files**, **Filter → Files → All files** also includes databases you can open that someone else owns. In the file list, a database is ordered by when it was created.
+
+The row menu has **Open in new split**, **Rename**, **Favorite**, **Copy Link**, **Copy ID**, **Share**, and **Delete**. **Delete** is for the owner.
+
+When you have no databases you can open, Macro creates one **Getting started** database. Its **Ideas** table has **Name** and **Stage** columns and three records: "Add your first idea", "Try moving a card", and "Explore table and board views", on stages To do, Doing, and Done. It has a **Table** view and a **Board** view, and opens on **Board**. This database is created once. Deleting it does not create another.
+
+### Tables and records
+
+The tabs at the top of a database are its tables. **+ → New table** adds a table with a **Name** column. Right-click a tab to rename it or choose **Delete table**. Drag a tab to reorder the tables. The order is saved for everyone who can open the database. Deleting a table deletes its columns, records, and views, and cannot be undone. The only table in a database cannot be deleted.
+
+Type in the empty row under the records to add a record. Click a cell to edit it. Edits save as you work. When two people change the same cell, the later save is kept. Edits from other people appear in a database you have open.
+
+Click a row number, or choose **Open record**, to edit that record in a dialog. The row menu also has **Duplicate** and **Delete record**. Deleting a record asks you to confirm.
+
+<kbd>cmd</kbd>\+<kbd>z</kbd> undoes your last change in this database during this session: a cell, a record, a column, an option, a view, or a card move. A change someone else made after yours stays. <kbd>cmd</kbd>\+<kbd>shift</kbd>\+<kbd>z</kbd> redoes. Deleting a record, column, or option also offers **Undo** on a toast.
+
+Double-click the name in the header, or choose **Rename** in **Database actions**, to rename the database.
+
+### Columns
+
+**Add column**, after the column headers, adds a **Text** column named **Unnamed**. The first value in a new text column, including **Name**, sets its type. A plain number becomes **Number**. Starting with `@` and choosing a person, document, or task makes the column that type. Choosing **Text** in **Change type** keeps the column as text. A column that already has values does not change type from what you type next.
+
+**Change type** on a column header offers:
+
+- **Text**
+- **Number**
+- **Select**
+- **Multi-select**
+- **Date**
+- **Time range**
+- **Checkbox**
+- **URL**
+- **People**
+- **Documents**
+- **Tasks**
+- **Formula**
+- **Related table**, a link to records in another table in this database. One cell can link to more than one record.
+
+A type the current values cannot become is left out of the list. When some values would not fit, the menu offers **Convert into a new column** next to this one and leaves this column unchanged. Changing type does not clear a value.
+
+**Formula** calculates from number, date, and other formula columns. Formula cells cannot be edited. Put a name that contains spaces in braces, for example `{Unit price} * Quantity`. Adding a number to a date counts days. Subtracting one date from another gives the number of days between them. A column that a formula still uses cannot be deleted.
+
+A **Select** or **Multi-select** cell opens its options. Type a name that is not an option yet and choose **Create "…"** to add it. Each option has a name and a color. **Delete option** clears that option from every cell that used it.
+
+A **People**, **Documents**, or **Tasks** cell holds one item of that kind. A date cell takes a date or a phrase such as `tomorrow`, `3d`, or `feb 17`. Click a document or file in a cell to open it. A related-table cell searches the other table. Removing a link leaves the other record in place.
+
+Drag a column header to reorder columns. Right-click a header for **Rename column**, **Insert left**, **Insert right**, and **Delete column**. On **All records**, moving a column moves it for everyone. A saved view keeps its own column order.
+
+The footer shows how many records are in the current view. **Add calculation** on a column can show **Count filled** or **Count unique**. A number column can also show **Sum**, **Average**, **Min**, or **Max**, and starts on **Sum**. These totals apply to the table you have open. They are not saved on a view.
+
+### Views
+
+**All records** is the first view. It shows the table in the table's own order. Filters, sorts, and column order you change there apply to you until you save a view.
+
+**New view** offers **Table**, **Board**, and **Timeline**. The new view keeps the filter and sort you had. A saved view is stored on the database and is the same for everyone who can open it. Double-click a view tab to rename it. Drag a tab to reorder views. **Delete view** removes the view and leaves the records.
+
+**Filter**, **Sort**, and **Search** are on the views row.
+
+**Filter** tests a column: text, numbers, dates, whether a checkbox is checked, which options are selected, and whether a cell is empty. **Add condition** adds another test. **Add group** nests a group joined with **And** or **Or**.
+
+**Sort** orders by one or more columns. The first sort is applied first.
+
+**Search**, or <kbd>cmd</kbd>\+<kbd>f</kbd>, searches every table in the database. It leaves the grid as it is. Results are grouped by table and show the record title. When the match is in another column, that column and the matching text are shown too. Choosing a result switches to that table and highlights the row, or opens the record when the current view does not include it.
+
+A **Board** has one lane per option, or per person, in its grouping column. It uses the first single **Select** or **People** column. When the table has neither, the board adds a **Status** column with **To do**, **In progress**, and **Done**. **Group by** in the **Board menu** changes the column. Drag a card into another lane to set that value. The order is saved for everyone. A record with an empty grouping value stays in the table and is left off the board. **+ New** at the bottom of a lane adds a card in that lane. **New group** adds an option and a lane.
+
+A **Timeline** draws one bar per record across a **Time range** column. When the table has none, the view adds one. Drag a bar to move the range, or drag either end to change the start or end. A record with no dates shows **No dates**. **New** creates a record that spans today. In the **Timeline menu**, **Group by** can split the timeline by a single select or a person, and **Color by** colors bars from a select column.
+
+### Import, export, and webhooks
+
+**Database actions** (…) has **Rename**, **Import CSV**, **Webhooks**, **Download**, and, for the owner, **Delete**.
+
+**Import CSV** adds a table from the file. Values stay **Text**, including leading zeros and long identifiers. Change a column's type after import. A file can be up to 8 MB, with up to 100 columns and 10,000 rows.
+
+**Download → Current table as CSV** exports every record in the current table, including records the current filter hides.
+
+**Webhooks** is for the current table, and is available with edit access. **Create webhook** shows the URL once. Sending a JSON object to that URL adds one row. The keys are column names, and capitalization does not matter. An array adds one row per object, up to 100. A value that does not fit the column, or a key that is not a column, rejects the whole request. Each row is saved as the person who created the webhook. The webhook stops accepting rows when that person no longer has edit access.
+
+### Sharing
+
+**Share** opens the same dialog as other Drive files. Share with people or channels. The owner sets **Team access** to view, comment, or edit for the whole team. A database has no public link.
+
+View and comment access can open the database, search it, and change filters and sorts on **All records** for that person. Edit access can change records, columns, tables, and saved views. The owner can delete the database.
+
+### In a document
+
+In a document, type `/database` and choose **Database** to create a database and insert its editor. Type `@` and choose a database to insert a chip. **Expand** opens the editor in the document. **Collapse** returns it to a chip. **Open** opens the database on its own. Edits in the document change the database. Removing the chip or the editor leaves the database and its records in place. Sharing the document does not share the database. The table and view selected in the document are saved with the document. Filters and sorts in the embedded editor apply to that visit.
+
+Type `/query` and choose **Query** to insert an answer about a database. Choose the database under the question, or leave it on **Automatic**. **Insert answer** saves the result in the document. The result updates when the tables it reads change, and each person sees the rows their access allows. It can show a single value, a table, or a bar, line, area, scatter, or pie chart. Double-click the answer title to rename it. The question and its saved query stay as they are.
+
+### AI
+
+**AI** in the database header opens a chat with this database attached. The agent can read the database, and can change records, columns, and tables when you have edit access. An answer inserted with `/query` is a read of the database.
