@@ -73,6 +73,7 @@
   "AI/mcp/tools/import-pipeline-csv",
   "AI/mcp/tools/issue-bot-credential",
   "AI/mcp/tools/list-agents",
+  "AI/mcp/tools/list-agent-updates",
   "AI/mcp/tools/list-booking-links",
   "AI/mcp/tools/list-bookings",
   "AI/mcp/tools/list-bots",
