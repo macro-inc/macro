@@ -85,6 +85,19 @@ LANGUAGE sql STABLE AS $$
     WHERE p_type = 'project' AND p.id = ANY (p_ids)
 $$;
 
+-- Whether the (p_id, p_source) row belongs in the table: the item exists and the source holds a
+-- grant on it. Index probes, so callers test any number of rows in linear time; their arrays are
+-- parameters, whose size the plan cannot see, and a join against a set of unknown size can
+-- become a nested loop over it.
+CREATE FUNCTION public.source_items_wanted(p_type text, p_id text, p_source text) RETURNS boolean
+LANGUAGE sql STABLE AS $$
+    SELECT EXISTS (
+               SELECT 1 FROM public.entity_access ea
+               WHERE ea.entity_id::text = p_id AND ea.entity_type = p_type AND ea.source_id = p_source
+           )
+       AND EXISTS (SELECT 1 FROM public.source_items_state(p_type, ARRAY[p_id]))
+$$;
+
 -- Rewrites every row of p_ids from entity_access and the item tables. Callers hold the items'
 -- buckets and call this in a statement of its own.
 CREATE FUNCTION public.source_items_rebuild(p_type text, p_ids text[]) RETURNS void
@@ -97,9 +110,7 @@ LANGUAGE sql AS $$
     ), stale AS (
         DELETE FROM public.source_items s
         WHERE s.entity_type = p_type AND s.entity_id = ANY (p_ids)
-          AND NOT EXISTS (
-              SELECT 1 FROM wanted w WHERE w.entity_id = s.entity_id AND w.source_id = s.source_id
-          )
+          AND NOT public.source_items_wanted(p_type, s.entity_id, s.source_id)
     )
     INSERT INTO public.source_items AS s (source_id, entity_type, kind, entity_id, sort_ts, grants)
     SELECT source_id, p_type, kind, entity_id, sort_ts, grants FROM wanted
@@ -120,7 +131,7 @@ LANGUAGE sql AS $$
     ), wanted AS (
         SELECT k.source_id, i.entity_id, i.kind, i.sort_ts, count(*)::int AS grants
         FROM keys k
-        JOIN public.source_items_state(p_type, p_ids) i ON i.entity_id = k.entity_id
+        CROSS JOIN LATERAL public.source_items_state(p_type, ARRAY[k.entity_id]) i
         JOIN public.entity_access ea
           ON ea.entity_id::text = k.entity_id AND ea.entity_type = p_type AND ea.source_id = k.source_id
         GROUP BY k.source_id, i.entity_id, i.kind, i.sort_ts
@@ -128,9 +139,7 @@ LANGUAGE sql AS $$
         DELETE FROM public.source_items s
         USING keys k
         WHERE s.entity_type = p_type AND s.entity_id = k.entity_id AND s.source_id = k.source_id
-          AND NOT EXISTS (
-              SELECT 1 FROM wanted w WHERE w.entity_id = s.entity_id AND w.source_id = s.source_id
-          )
+          AND NOT public.source_items_wanted(p_type, s.entity_id, s.source_id)
     )
     INSERT INTO public.source_items AS s (source_id, entity_type, kind, entity_id, sort_ts, grants)
     SELECT source_id, p_type, kind, entity_id, sort_ts, grants FROM wanted
@@ -189,6 +198,7 @@ END $$;
 CREATE FUNCTION public.source_items_apply() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
+    changes text[];
     entity text;
     ids text[];
     sources text[];
@@ -204,6 +214,10 @@ BEGIN
         ARRAY(SELECT entity_id FROM pg_temp.source_items_pending)
     );
     -- Every statement from here reads what the previous holders of these buckets committed.
+    -- Which kinds of change are pending, so a save runs one rewrite rather than every query below.
+    -- A rewrite of an item's rows also covers its grant and sort-key changes; running those as
+    -- well rewrites rows already current, which keeps every step linear in what changed.
+    changes := ARRAY(SELECT DISTINCT change || ':' || entity_type FROM pg_temp.source_items_pending);
     FOR entity IN
         SELECT DISTINCT entity_type FROM pg_temp.source_items_pending WHERE change = 'truncate'
     LOOP
@@ -216,36 +230,25 @@ BEGIN
         END IF;
     END LOOP;
     FOREACH entity IN ARRAY ARRAY['chat', 'document', 'project'] LOOP
-        ids := ARRAY(
-            SELECT DISTINCT entity_id FROM pg_temp.source_items_pending
-            WHERE change = 'item' AND entity_type = entity
-        );
-        IF cardinality(ids) > 0 THEN
-            PERFORM public.source_items_rebuild(entity, ids);
+        IF 'item:' || entity = ANY (changes) THEN
+            PERFORM public.source_items_rebuild(entity, ARRAY(
+                SELECT DISTINCT entity_id FROM pg_temp.source_items_pending
+                WHERE change = 'item' AND entity_type = entity
+            ));
         END IF;
-        SELECT coalesce(array_agg(k.entity_id), '{}'), coalesce(array_agg(k.source_id), '{}')
-        INTO ids, sources
-        FROM (
-            SELECT DISTINCT p.entity_id, p.source_id FROM pg_temp.source_items_pending p
-            WHERE p.change = 'grant' AND p.entity_type = entity
-              AND NOT EXISTS (
-                  SELECT 1 FROM pg_temp.source_items_pending q
-                  WHERE q.change = 'item' AND q.entity_type = entity AND q.entity_id = p.entity_id
-              )
-        ) k;
-        IF cardinality(ids) > 0 THEN
+        IF 'grant:' || entity = ANY (changes) THEN
+            SELECT array_agg(k.entity_id), array_agg(k.source_id) INTO ids, sources
+            FROM (
+                SELECT DISTINCT entity_id, source_id FROM pg_temp.source_items_pending
+                WHERE change = 'grant' AND entity_type = entity
+            ) k;
             PERFORM public.source_items_rebuild_sources(entity, ids, sources);
         END IF;
-        ids := ARRAY(
-            SELECT DISTINCT p.entity_id FROM pg_temp.source_items_pending p
-            WHERE p.change = 'state' AND p.entity_type = entity
-              AND NOT EXISTS (
-                  SELECT 1 FROM pg_temp.source_items_pending q
-                  WHERE q.change = 'item' AND q.entity_type = entity AND q.entity_id = p.entity_id
-              )
-        );
-        IF cardinality(ids) > 0 THEN
-            PERFORM public.source_items_restate(entity, ids);
+        IF 'state:' || entity = ANY (changes) THEN
+            PERFORM public.source_items_restate(entity, ARRAY(
+                SELECT DISTINCT entity_id FROM pg_temp.source_items_pending
+                WHERE change = 'state' AND entity_type = entity
+            ));
         END IF;
     END LOOP;
     DELETE FROM pg_temp.source_items_pending;

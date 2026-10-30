@@ -69,9 +69,10 @@ REPEATABLE READ or SERIALIZABLE with `25000`: an older snapshot could miss a
 concurrent change.
 
 A bulk change rewrites its items' rows at commit while holding their buckets, so
-another transaction's commit on one of those items waits for it. Deleting a
-team that sees 200,000 items, for example, briefly delays commits that touch
-those items; it does not block saves in the middle of a transaction.
+another transaction's commit on one of those items waits for it; saves in the
+middle of a transaction are not blocked. The rewrite takes time linear in the
+change: on the synthetic copy, re-granting a team's 200,000 items held their
+buckets for 10 s and revoking them for 6 s.
 
 `SET CONSTRAINTS ALL IMMEDIATE` makes the rewrite run at the end of each
 statement instead; that stays exact, but the buckets are then held while the

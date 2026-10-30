@@ -734,3 +734,80 @@ async fn discarding_temporary_tables_mid_transaction_fails_safely(
     assert_eq!(rows(&mut conn, DOC).await?.len(), 1);
     assert_exact(&pool).await
 }
+
+/// A commit that touches thousands of grants rewrites them in time linear in their number, whatever
+/// joins the planner picks. The rewrite's arrays are parameters whose size its plan cannot see; on
+/// a production-sized table it chose nested loops that re-read every pending item for each one,
+/// and 5,000 grants took a minute to commit. Ruling out hash and merge joins forces nested loops
+/// here, where that rewrite took 215 s to share 15,000 items and this one well under a second.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bulk_grant_changes_commit_in_linear_time(pool: PgPool) -> Result<(), sqlx::Error> {
+    const ITEMS: i32 = 15_000;
+    const BOUND: std::time::Duration = std::time::Duration::from_secs(20);
+    let mut conn = pool.acquire().await?;
+    sqlx::query!(
+        r#"WITH docs AS (
+               INSERT INTO "Document" (id, name, owner, "createdAt", "updatedAt")
+               SELECT format('60000000-0000-4000-8000-%s', lpad(n::text, 12, '0')), 'Document',
+                      $1, '2026-01-01'::timestamp, '2026-01-01'::timestamp
+               FROM generate_series(1, $2::int) n
+               RETURNING id
+           )
+           INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           SELECT id::uuid, 'document', $1, 'user', 'owner' FROM docs"#,
+        OWNER,
+        ITEMS,
+    )
+    .execute(&mut *conn)
+    .await?;
+
+    let started = std::time::Instant::now();
+    let mut tx = pool.begin().await?;
+    nested_loops_only(&mut tx).await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           SELECT format('60000000-0000-4000-8000-%s', lpad(n::text, 12, '0'))::uuid, 'document',
+                  $1, 'team', 'view'
+           FROM generate_series(1, $2::int) n"#,
+        TEAM,
+        ITEMS,
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    let shared = started.elapsed();
+    assert_exact(&pool).await?;
+    let team_rows = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "rows!" FROM source_items WHERE source_id = $1"#,
+        TEAM
+    )
+    .fetch_one(&mut *conn)
+    .await?;
+    assert_eq!(team_rows, i64::from(ITEMS));
+
+    let started = std::time::Instant::now();
+    let mut tx = pool.begin().await?;
+    nested_loops_only(&mut tx).await?;
+    sqlx::query!("DELETE FROM entity_access WHERE source_id = $1", TEAM)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    let revoked = started.elapsed();
+    assert_exact(&pool).await?;
+    assert!(
+        shared < BOUND && revoked < BOUND,
+        "sharing {ITEMS} items took {shared:?} and revoking them {revoked:?}"
+    );
+    Ok(())
+}
+
+/// Rules out hash and merge joins for the rest of the transaction, commit included.
+async fn nested_loops_only(conn: &mut PgConnection) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"SELECT set_config('enable_hashjoin', 'off', true) AS hash,
+                  set_config('enable_mergejoin', 'off', true) AS merge"#
+    )
+    .fetch_one(conn)
+    .await?;
+    Ok(())
+}
