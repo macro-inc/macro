@@ -244,11 +244,13 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       },
       () => {
         const content = panel.handle.content();
-        const next =
-          content.type === 'component'
-            ? parseAgentsPage(content.params?.agentPage)
-            : undefined;
+        if (content.type !== 'component') return;
+        const next = parseAgentsPage(content.params?.agentPage);
         if (next) openPage(next);
+        // The create menu opens the new-agent wizard on the roster.
+        const kind = content.params?.createAgent;
+        if (next === 'agents' && (kind === 'agent' || kind === 'coder'))
+          setCreatingKind(kind);
       }
     )
   );

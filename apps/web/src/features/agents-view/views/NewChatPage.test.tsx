@@ -810,7 +810,7 @@ describe('agent-led new conversation', () => {
     );
     openAgents();
     const row = screen.getByRole('menuitem', { name: /Laptop agent/ });
-    // The row stays clickable: selecting it opens Settings → Runtimes, where
+    // The row stays clickable: selecting it opens Settings → Agents → Runtimes, where
     // the runtime can be restarted (one click on desktop) or re-paired.
     expect(row.getAttribute('aria-disabled')).not.toBe('true');
     expect(row.getAttribute('title')).toBe('Its runtime is disconnected');
@@ -866,7 +866,7 @@ describe('agent-led new conversation', () => {
       expect(saved.textContent).toContain('Laptop · Sonnet 5.5');
       expect(offline.textContent).toContain('Offline agent');
       // The disconnected row stays clickable: it offers to reconnect the
-      // runtime (opens Settings → Runtimes) and keeps the reason as a tooltip.
+      // runtime (opens Settings → Agents → Runtimes) and keeps the reason as a tooltip.
       expect(offline.textContent).toContain('Reconnect runtime');
       expect(
         within(picker).queryByText('Connect the runtime to load models.')

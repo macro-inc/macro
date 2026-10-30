@@ -622,32 +622,31 @@ the shimmer.
   its mode and conversation. Newly created sessions replace their temporary
   URL with the real id without remounting the composer or adding a temporary
   history step.
-- **Agents page** uses the same **Agents** management screen as Settings. Two
-  slim strips sit above the list: **Connect Cursor** (**Manage** once connected)
-  and **Bring your own agent** (**Set up**, or **Paired** + **Manage** once a
-  machine is paired). One **Your agents** list shows Macro, team agents, then
-  private agents, each with a TEAM/PRIVATE pill and an "In Macro / In Cursor /
-  In your harness · model · channels" subtitle, plus Edit / Delete actions.
-  **Add agent**, the setup strips, and Edit replace the list with full pages,
+- **Agents page** uses the same **Agents** management screen as Settings. One
+  **Your agents** list shows Macro, team agents, then private agents, each with
+  a TEAM/PRIVATE pill and an "In Macro / In Cursor / In your harness · model ·
+  channels" subtitle, plus Edit / Delete actions. **Runtimes** is the last
+  section of the same page, below Coding sessions.
+  **Add agent**, **New runtime**, and Edit replace the list with full pages,
   not dialogs; Back/Cancel returns to the list. Use **Create → Agent** to open a new composer.
-  The agent editor has Profile, Instructions, **Where it runs** (In Macro, In
-  Cursor, In your harness) and **Who can use it** (Private / Team). The selected
+  The agent editor has Look, Name, Instructions, **Where it runs** (In Macro, In
+  Cursor, In your harness), **Who can use it** (Private / Team) and Channels. The selected
   place opens its Model picker inside its card; In your harness adds a Harness
   picker beside it. In Macro on an Anthropic or OpenAI model also shows an
   optional **Anthropic API key** / **OpenAI API key** field (see
   [agent API keys](#agent-api-keys)). An unconnected Cursor or unpaired harness is disabled with
   **Connect** / **Set up**, which open the setup guide in place and return to the
-  editor with that option selected. Mention style, permission requests,
-  connections, and channels sit in a collapsed **Advanced** section whose
-  description summarizes the current choices.
+  editor with that option selected. Mention style, permission requests, and
+  connections sit under a collapsed **More options** whose summary line
+  describes the current choices.
   **Connect Cursor** is a three-step guide: a screenshot of Cursor's API & SSH
   Keys page with **Open API & SSH Keys** (cursor.com/dashboard/api), an API key
   field focused on open, and a default model picker that enables once the key is
   saved. Connected, the same page shows the saved date, **Disconnect**, and
-  **Done**. **Manage** on a paired machine opens **Runtimes** (Back returns to
-  Agents): built-in providers, **New runtime**, and the **Paired runtimes** list,
-  which appears once you have a paired runtime.
-  On the desktop app, **Runtimes** opens with a **This computer** card that sets
+  **Done**. **Runtimes** lists the built-in Macro, Cursor (API key, default
+  model, and Disconnect), and Codex runtimes, **New runtime**, and the
+  **Paired runtimes** list, which appears once you have a paired runtime.
+  On the desktop app, **Runtimes** starts with a **This computer** card that sets
   up the bundled macrod daemon in one click: **Set up** detects installed agents,
   then **Start running agents here** configures, pairs (auto-approved, no code),
   and starts it. The manual flow below remains for pairing other machines.
@@ -2321,4 +2320,4 @@ tasks · 3 projects", "Jira import finished"). The row never shows the
 report's error text. The row stays on one line and
 truncates on phones.
 
-The desktop Agents sidebar New menu offers Conversation, Work agent, Coding agent, and Routine, with short descriptions. Conversation opens the existing composer; Work agent and Coding agent open the agent editor with that kind preselected, including when a runtime setup page was previously open. Routine opens its unsaved composer. Canceling creation returns to the existing management flow.
+The desktop Agents sidebar New menu offers Conversation, Work agent, Coding agent, and Routine, with short descriptions. Conversation opens the existing composer; Work agent and Coding agent open the new-agent wizard with that kind preselected, including when a runtime setup page was previously open. Routine opens its unsaved composer. Canceling creation returns to the existing management flow.

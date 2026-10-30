@@ -315,7 +315,7 @@ export function ChoiceRow(props: {
 }) {
   return (
     <label
-      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-ink"
       classList={{
         'cursor-not-allowed opacity-50': props.disabled,
         'p-4': props.suggested,
@@ -330,7 +330,7 @@ export function ChoiceRow(props: {
         disabled={props.disabled}
         onChange={props.onChange}
         aria-label={props.title}
-        class="mt-0.5 accent-accent"
+        class="mt-0.5 accent-ink"
       />
       <span class="min-w-0">
         <span class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">

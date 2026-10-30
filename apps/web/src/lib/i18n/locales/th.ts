@@ -725,7 +725,6 @@ export default {
     tabMobileApp: 'แอปบนอุปกรณ์เคลื่อนที่',
     tabTags: 'แท็ก',
     tabIntegrations: 'การผสานรวม',
-    tabRuntimes: 'รันไทม์',
     tabMcpServer: 'เซิร์ฟเวอร์ MCP',
     tabApiKeys: 'คีย์ API',
     tabBots: 'บอท',

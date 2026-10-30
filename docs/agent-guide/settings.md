@@ -287,7 +287,7 @@ Left nav (feature and platform gates still apply):
   sidebar is hidden, **Routines** (`/app/settings/routines`) follows Agents.
 - **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
-- **Developer**: Runtimes, MCP server, API Keys, Bots.
+- **Developer**: MCP server, API Keys, Bots. Runtimes are a section of Agents.
 
 **Desktop App** (`/app/settings/desktop-app`) is titled
 **Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
@@ -380,7 +380,8 @@ language has loaded, PostHog stores it on the person as `interface_language`
 `interface_language`.
 
 Existing settings URLs remain valid; `connections` still opens Integrations,
-`agent-connections` aliases Integrations, and `harness` aliases Runtimes.
+`agent-connections` aliases Integrations, and `runtimes` and `harness` open Agents
+scrolled to its Runtimes section.
 
 `Usage` appears directly above Billing, including for Free accounts. In
 production, the `enable-ai-usage-billing` PostHog flag controls activation. While
@@ -542,8 +543,10 @@ also start with, with `Customize`, inline rename, reorder by drag handle or arro
 keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,
 editable by the role set as `edit_stages_role`)
 
-`Agents` unifies agent definitions and runtime configuration in one page, also used by the Agents workspace. Its `Agents` section lists team and private agents. `New agent` / `Edit <name>` open full-page forms grouped
-Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
+`Agents` unifies agent definitions and runtime configuration in one page, also used by the Agents workspace. Its `Agents` section lists team and private agents. `New agent` opens a step-by-step wizard and
+`Edit <name>` the same stage as one scrolling page: Look, Name, Instructions, Where it runs,
+Who can use it, and Channels, with `More options` (answering a mention, permissions,
+Connections) under Channels. Connections is a radio pair:
 `Use my connected apps` (default; the agent gets whatever the person running it has
 connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
 Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
@@ -594,8 +597,8 @@ dot sits beside the name.
   the connector import dialog.
 - **Granola**, **Claude Code, Codex, and ChatGPT** (Macro MCP setup), and
   **Coding agents on your computer** (Claude Code, Codex, OpenCode, OpenClaw,
-  Hermes; opens Runtimes within Integrations and follows the Runtimes
-  availability gate; Back returns to Integrations).
+  Hermes; opens Settings → Agents at its Runtimes section and follows the
+  Agents availability gate).
 - Installed catalog apps and custom MCP servers, with their More menus.
 - The catalog: every Pipedream app not yet connected, tagged with its directory
   categories. Apps Macro can import from show **Import** beside **Connect**.
@@ -657,7 +660,28 @@ Email, Accounts and AI apps above the agent tools and app catalog. The native-on
 available when `pipedream-mcp` is disabled.
 Open Settings with the rail's gear button or `Ctrl+;`; leave it by picking any other rail item.
 
-`Agents` → `New agent` (or edit an existing agent) opens a full-page form. The
+`Agents` → `New agent` opens a full-page wizard, one question per screen, with
+progress along the top, Back on the left and Cancel on the right. Its steps are
+`Meet your new agent` (a `Face` radio group of Mark faces, `Classic`, `Curious`,
+`Cubes`, `Wide`, `Tall`, and a `Color` group, `Clay` through `Ink`, or `Upload a
+picture instead`), `What’s its name?` (Name, then an `@tag` that follows the name
+until edited), the instructions, `Where should it run?`, `Who can use it?`
+(`More options` reveals answering a mention, permissions, and Connections), and
+`Work with <name> anywhere`: sample doc, CRM record, and task cards showing the
+agent mentioned, as an owner, and as an assignee, above the `Channels` choice and
+`Create agent`. The backdrop glows in the face's color. A created agent without
+an uploaded picture saves a picture of its face as its avatar; the wizard ends on
+`<name> is ready` with `Done` and, under it, `Message <name>`. Agents listed without any
+picture show a face derived from their @tag.
+
+Editing an existing agent opens the same stage as the wizard: Back at the top
+left, the agent's face (or picture) over its color's glow, its name
+with `@tag · Private/Team agent`, then the sections in one column, and
+`Cancel` / `Save changes` held at the bottom of the view. Under Look, the face
+picker starts with nothing chosen, drawn in the face its @tag would get;
+choosing a face or color previews it, and saving replaces the picture with one
+of that face. `Keep its current picture` undoes the choice, and `Upload a
+picture` replaces it with an upload. The
 edit form offers `Delete agent` to the agent's creator, the team owner, and
 team admins for team agents. Confirming removes it from channels and returns
 to the agent list; Cancel keeps the edit form open. Other team members can edit
@@ -668,10 +692,10 @@ mention picker; select text to open the formatting menu. Saved instructions
 retain mention identities using the shared editor's Markdown format and reopen
 with their formatting intact. Enter adds a new paragraph; use `Create agent` or
 `Save changes` to submit. The form also includes runtime selectors.
-`Advanced` starts collapsed on desktop and mobile, showing only its heading,
-summary, and `Show` action, without an empty card beneath it. `Show` reveals the
-settings; `Hide` collapses them again and preserves the selected options.
-Under `Advanced`, `Answering a mention` chooses between `Coding agent` (a
+`More options` starts collapsed on desktop and mobile, showing only the button
+and a summary line of the current choices. Its caret turns down when it opens
+the settings below, and closing it preserves the selected options.
+Under `More options`, `Answering a mention` chooses between `Coding agent` (a
 channel mention is answered with a magic chip that opens into the live session)
 and `Chat agent` (the agent replies in the thread, like `@macro`). It is the
 agent's own setting and always saved: a new form starts from the selected runtime
@@ -688,8 +712,8 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
-Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
+The `Runtimes` section is the last section of the Agents page. It shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. A running runtime with no agent bound to it offers `Create agent`. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The section's `New runtime` action opens the full-page pairing flow: enter the code, look up the request, review the machine, name, sharing and permission consent, then Approve and Done. Back/Cancel returns to the Agents page scrolled to Runtimes. Destructive removal still requires confirmation. `/settings/runtimes` opens Agents scrolled to this section; `/settings/harness?pair=…` links open the pairing flow with the code filled in.
+Connection chips in agent replies open this section, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling

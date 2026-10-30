@@ -327,6 +327,7 @@ export const TOKENS = {
     reminder: 'create.reminder',
     agent: 'create.agent',
     agentNewSplit: 'create.agentNewSplit',
+    customAgent: 'create.customAgent',
     database: 'create.database',
     databaseNewSplit: 'create.databaseNewSplit',
     form: 'create.form',

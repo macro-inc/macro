@@ -1,4 +1,5 @@
 import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
 import { createAiDocument } from '@app/features/block-ai/queries/create-ai';
@@ -97,6 +98,7 @@ import {
   sortLauncherBlocks,
 } from './core/launcher-history';
 import { createCallCommand } from './create-call-command';
+import { createCustomAgentCommand } from './create-custom-agent-command';
 import { MobileCreateSheet } from './mobile/MobileCreateSheet';
 import type { CreatableBlock, CreatableName, OpenCreatedItem } from './types';
 
@@ -997,9 +999,14 @@ export const CREATABLE_BLOCKS = createBlocks(runCreateAction);
 /** Router-backed commands are bound once in each host's component owner. */
 export function useCreateCommands(): CreatableBlock[] {
   const navigate = useNavigate();
+  const layout = useSplitLayout();
   const quickCalls = useQuickCallsFlag();
   return [
     ...createBlocks(useCreateAction()),
+    createCustomAgentCommand({
+      open: () => openAgentsPage(layout, 'agents', { createAgent: 'agent' }),
+      close: () => setCreateMenuOpen(false, false),
+    }),
     createCallCommand({
       navigate,
       close: () => setCreateMenuOpen(false, false),

@@ -23,7 +23,7 @@ import {
 } from '@tanstack/solid-query';
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Harness } from './Harness';
+import { AgentRuntimes } from './AgentRuntimes';
 import { chooseModelOption } from './tests/select-helpers';
 
 vi.mock('@ui', async (importOriginal) => ({
@@ -72,20 +72,6 @@ const harnessMocks = vi.hoisted(() => ({
     isError: false,
   },
   deleteHarness: vi.fn(),
-  approve: vi.fn(),
-  pairing: {
-    data: {
-      code: 'KX7M-4QHD',
-      requested_name: 'Dev laptop',
-      requested_scope: null,
-      host: 'erics-mbp.local',
-      created_at: '2026-08-27T12:00:00Z',
-      expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
-    },
-    isError: false,
-  },
-  searchParams: { pair: undefined as string | undefined },
-  setSearchParams: vi.fn(),
 }));
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
@@ -114,38 +100,7 @@ vi.mock('@queries/harnesses/harnesses', () => ({
     mutateAsync: harnessMocks.deleteHarness,
     isPending: false,
   }),
-  useHarnessPairingQuery: (code: () => string | undefined) => ({
-    get data() {
-      return code() && !harnessMocks.pairing.isError
-        ? harnessMocks.pairing.data
-        : undefined;
-    },
-    get isError() {
-      return Boolean(code()) && harnessMocks.pairing.isError;
-    },
-    get isSuccess() {
-      return Boolean(code()) && !harnessMocks.pairing.isError;
-    },
-    get error() {
-      return harnessMocks.pairing.isError ? new Error('gone') : null;
-    },
-  }),
-  useApproveHarnessPairingMutation: () => ({
-    mutateAsync: harnessMocks.approve,
-    isPending: false,
-  }),
   invalidateHarnesses: vi.fn(),
-}));
-
-vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: { team: { id: 'team-1' } } }),
-}));
-
-vi.mock('@solidjs/router', () => ({
-  useSearchParams: () => [
-    harnessMocks.searchParams,
-    harnessMocks.setSearchParams,
-  ],
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -192,18 +147,15 @@ beforeEach(() => {
   mocks.disconnect.mockResolvedValue(undefined);
   harnessMocks.query.data = [];
   harnessMocks.query.isError = false;
-  harnessMocks.pairing.isError = false;
   harnessMocks.deleteHarness.mockResolvedValue(undefined);
-  harnessMocks.approve.mockResolvedValue(REGISTERED_HARNESS);
-  harnessMocks.searchParams.pair = undefined;
 });
 
-describe('Harness', () => {
+describe('AgentRuntimes', () => {
   it.each([false, true])(
     'shows Codex settings only within its rollout (access %s)',
     (enabled) => {
       codexAccess.enabled = enabled;
-      render(() => <Harness />);
+      render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
       expect(Boolean(screen.queryByTestId('codex-harness'))).toBe(enabled);
     }
   );
@@ -232,7 +184,7 @@ describe('Harness', () => {
       const view = render(() => (
         <QueryClientProvider client={client}>
           <Suspense fallback={<p>Settings suspended</p>}>
-            <Harness />
+            <AgentRuntimes onNewRuntime={vi.fn()} />
           </Suspense>
         </QueryClientProvider>
       ));
@@ -275,7 +227,7 @@ describe('Harness', () => {
   );
 
   it('lists Macro Agent and Cursor in the harness list', () => {
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'Macro Agent' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
@@ -285,7 +237,7 @@ describe('Harness', () => {
   });
 
   it('validates and saves a Cursor API key', async () => {
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     const apiKeyInput = screen.getByLabelText('API key');
     const saveButton = screen.getByRole('button', { name: 'Save' });
@@ -312,7 +264,7 @@ describe('Harness', () => {
   });
 
   it('still accepts a Cursor API key minted with the older crsr_ prefix', async () => {
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     fireEvent.input(screen.getByLabelText('API key'), {
       target: { value: 'crsr_example' },
@@ -336,7 +288,7 @@ describe('Harness', () => {
       name: 'Another Model',
     });
 
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
@@ -359,14 +311,14 @@ describe('Harness', () => {
   it('does not flash the API key form while connection status loads', () => {
     mocks.status.isPlaceholderData = true;
 
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     expect(screen.getByText('Loading…')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
   it('hides the empty paired runtimes section', () => {
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     expect(screen.queryByText('No paired runtimes yet')).toBeNull();
     expect(
@@ -377,28 +329,18 @@ describe('Harness', () => {
     ).toBeNull();
   });
 
-  it('opens pairing from New runtime and returns to the runtimes list', () => {
-    render(() => <Harness />);
+  it('asks to pair a new runtime from New runtime', () => {
+    const onNewRuntime = vi.fn();
+    render(() => <AgentRuntimes onNewRuntime={onNewRuntime} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New runtime' }));
-    expect(screen.getByRole('region', { name: 'New runtime' })).toBeTruthy();
-    expect(screen.queryByRole('dialog')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(screen.getByRole('heading', { name: 'Runtimes' })).toBeTruthy();
-  });
-
-  it('goes back to Agents from the runtimes page', () => {
-    const onBack = vi.fn();
-    render(() => <Harness onBack={onBack} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Agents' }));
-    expect(onBack).toHaveBeenCalledOnce();
+    expect(onNewRuntime).toHaveBeenCalledOnce();
   });
 
   it('renders a registered harness row', () => {
     harnessMocks.query.data = [REGISTERED_HARNESS];
 
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     expect(screen.getByText('Dev box')).toBeTruthy();
     expect(screen.getByText('Team')).toBeTruthy();
@@ -417,7 +359,7 @@ describe('Harness', () => {
       },
     ];
 
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
 
     expect(screen.getByText('Private')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Disconnected' })).toBeTruthy();
@@ -427,7 +369,7 @@ describe('Harness', () => {
   it('confirms before removing a harness', async () => {
     harnessMocks.query.data = [REGISTERED_HARNESS];
 
-    render(() => <Harness />);
+    render(() => <AgentRuntimes onNewRuntime={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     const dialog = screen.getByRole('dialog');
@@ -448,26 +390,5 @@ describe('Harness', () => {
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime removed');
       expect(screen.queryByRole('dialog')).toBeNull();
     });
-  });
-
-  it('opens the pairing dialog prefilled from the pair search param', async () => {
-    harnessMocks.searchParams.pair = 'KX7M-4QHD';
-
-    render(() => <Harness />);
-
-    const dialog = screen.getByRole('region', { name: 'New runtime' });
-    expect(screen.queryByRole('dialog')).toBeNull();
-    expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
-    expect(within(dialog).getByText('Dev laptop')).toBeTruthy();
-    expect(harnessMocks.setSearchParams).toHaveBeenCalledWith(
-      { pair: undefined },
-      { replace: true }
-    );
-  });
-  it('uses the supplied return destination for the back button', () => {
-    const onBack = vi.fn();
-    render(() => <Harness onBack={onBack} backLabel="Integrations" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Integrations' }));
-    expect(onBack).toHaveBeenCalledOnce();
   });
 });

@@ -7,12 +7,11 @@ import GearIcon from '@icon/system/regular/gear.svg';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import { Button } from '@ui';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { IntegrationsView } from './connections/integrations-view';
 import { EmailCard } from './Email';
 import { GitHubCard } from './GitHub';
 import { GranolaCard } from './Granola';
-import { Harness } from './Harness';
 import { IntegrationsSection } from './Integrations';
 import { IntegrationGroup } from './integration-ui';
 import { SettingsPage } from './primitives';
@@ -23,7 +22,6 @@ export function IntegrationsPage() {
   const pipedreamMcp = usePipedreamMcpFlag();
   const isTabAvailable = useSettingsTabAvailable();
   const { openSettings } = useSettingsState();
-  const [showLocalAgents, setShowLocalAgents] = createSignal(false);
   return (
     <Show
       when={pipedreamMcp()}
@@ -36,25 +34,14 @@ export function IntegrationsPage() {
         </SettingsPage>
       }
     >
-      <Show
-        when={showLocalAgents() && isTabAvailable('Harness')}
-        fallback={
-          <IntegrationsView
-            onOpenEmailSettings={() => openSettings('Email')}
-            onOpenMacroMcp={() => openSettings('Agent')}
-            onOpenLocalAgents={
-              isTabAvailable('Harness')
-                ? () => setShowLocalAgents(true)
-                : undefined
-            }
-          />
+      {/* Local agents live in the Runtimes section of Agents. */}
+      <IntegrationsView
+        onOpenEmailSettings={() => openSettings('Email')}
+        onOpenMacroMcp={() => openSettings('Agent')}
+        onOpenLocalAgents={
+          isTabAvailable('Harness') ? () => openSettings('Harness') : undefined
         }
-      >
-        <Harness
-          onBack={() => setShowLocalAgents(false)}
-          backLabel="Integrations"
-        />
-      </Show>
+      />
     </Show>
   );
 }

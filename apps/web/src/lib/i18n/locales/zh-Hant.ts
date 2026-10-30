@@ -719,7 +719,6 @@ export default {
     tabMobileApp: '行動應用程式',
     tabTags: '標籤',
     tabIntegrations: '整合',
-    tabRuntimes: '執行環境',
     tabMcpServer: 'MCP 伺服器',
     tabApiKeys: 'API 金鑰',
     tabBots: '機器人',
