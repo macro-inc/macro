@@ -27,7 +27,9 @@ deliberately stable and widely depended on.
 
 ## Scope
 
-- Owns: the tool trait, schema generation, and collection mechanics.
+- Owns: the tool trait, schema generation, and collection mechanics, plus
+  the tool-search wire types (`tool_search.rs`: `SearchToolsResponse`,
+  `LoadToolsResponse`) the agent loop reads loads back from.
 - Not here: any actual tool implementation — those live in domain crates
   and are assembled in `ai_tools`.
 
