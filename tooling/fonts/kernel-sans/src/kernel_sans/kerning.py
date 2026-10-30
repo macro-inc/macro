@@ -89,7 +89,18 @@ REGULAR = {
     "r_z",
 }
 PUNCT = {"p_dot", "p_qr", "p_ql", "p_qs", "p_dash", "p_open"}
-FIGURES = set("zero one two three four five six seven eight nine".split())
+FIGURES = {
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+}
 # Glyph names spaced by their own extent rather than a letter band.
 PUNCT_PREFIXES = ("quote", "hyphen", "endash", "emdash", "paren", "bracket", "brace")
 

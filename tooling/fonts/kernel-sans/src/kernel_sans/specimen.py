@@ -59,7 +59,7 @@ def _detail_view(font, name, framing, p):
 
     bp = BoundsPen(font.getGlyphSet())
     font.getGlyphSet()[name].draw(bp)
-    x0, y0, x1, y1 = bp.bounds
+    x0, _y0, x1, y1 = bp.bounds
     if framing == "chamfer":
         size = 2.6 * p.stem
         return (x0 - 0.35 * size, P.XH + 0.3 * size, size, size)
@@ -84,10 +84,7 @@ def _glyph_svg(font, name, view=None, pad=40):
     on, off, handles = [], [], []
     prev = None
     for op, args in rec.value:
-        if op == "moveTo":
-            on.append(args[0])
-            prev = args[0]
-        elif op == "lineTo":
+        if op == "moveTo" or op == "lineTo":
             on.append(args[0])
             prev = args[0]
         elif op == "curveTo":

@@ -6,13 +6,14 @@ Run from tooling/fonts/kernel-sans: python3 -m unittest discover tests
 import os
 import sys
 import unittest
+from typing import ClassVar
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "src"))
 
-from kernel_sans import glyphs  # noqa: E402
-from kernel_sans import params as P  # noqa: E402
-from kernel_sans.variable import MASTERS, compatible_outlines  # noqa: E402
+from kernel_sans import glyphs
+from kernel_sans import params as P
+from kernel_sans.variable import MASTERS, compatible_outlines
 
 # Basic Latin, Latin-1 Supplement, the rest of Windows-1252, and extras.
 REQUIRED = (
@@ -58,7 +59,7 @@ def setUpModule():
 
 
 class _Drawn:
-    cache = {}
+    cache: ClassVar[dict] = {}
 
     @classmethod
     def at(cls, wght):

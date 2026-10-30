@@ -352,7 +352,7 @@ R_FALL = 28  # steepest fall of r's underside at the terminal, in degrees
 @glyph("r", 0x0072)
 def r(p):
     s = p.stem
-    a, xr, yc, crotch, obox, ibox = _shoulder(p, s, p.w(250, -0.3))
+    a, _xr, _yc, crotch, obox, ibox = _shoulder(p, s, p.w(250, -0.3))
     # Cut the flag between the arch's crown and the counter's right side:
     # past the crown by more than the chamfer (so the chamfer never eats the
     # crown) and short of the counter's side (so the flag never catches the
@@ -461,7 +461,7 @@ def f(p):
 def _f_lig_layout(p):
     """Where the f sits in a ligature and where the next stem starts, so the
     ligature sets exactly like f followed by i or l."""
-    hook, stem, bar, x0, x_term = _f_parts(p)
+    *_, x_term = _f_parts(p)
     lsb, rsb = _f_metrics(p)
     f_adv = lsb + x_term + rsb  # the bar's left end and the hook are the extremes
     x_next = f_adv + p.sb
@@ -474,7 +474,7 @@ def f_i(p):
     # place of the dot; the i keeps its own stem top. (A hook joined into the
     # stem would make fi look like fl.)
     s = p.stem
-    lsb, f_adv, xi = _f_lig_layout(p)
+    lsb, _f_adv, xi = _f_lig_layout(p)
     x0 = _f_dims(p)[0]
     ext = (xi - lsb) - x0
     hook, stem, bar, _, _ = _f_parts(p, ext=ext)
@@ -488,7 +488,7 @@ def f_l(p):
     # The f's hook runs flat into the top of the l; the l keeps its own
     # chamfered outer corner.
     s = p.stem
-    lsb, f_adv, xl = _f_lig_layout(p)
+    lsb, _f_adv, xl = _f_lig_layout(p)
     x0 = _f_dims(p)[0]
     ext = (xl - lsb) - x0
     hook, stem, bar, _, _ = _f_parts(p, ext=ext)
@@ -594,7 +594,7 @@ def v(p):
     W = _v_width(p)
     vw = p.stem * 0.96
     w = p.stem * 0.95
-    left, hw, vx0, c = _v_geom(p, W, vw, w)
+    left, _hw, vx0, c = _v_geom(p, W, vw, w)
     shape = left + left.flip_x(W / 2)
     d1 = _unit(-vx0, P.XH)
     d2 = (-d1[0], d1[1])
@@ -607,7 +607,7 @@ def y(p):
     W = _v_width(p)
     vw = p.stem * 0.96
     w = p.stem * 0.95
-    left, hw, vx0, c = _v_geom(p, W, vw, w)
+    left, _hw, vx0, c = _v_geom(p, W, vw, w)
     # Right stroke: the v's right stroke run on straight to the descender,
     # cut flat there.
     xr_b = W - vx0  # right edge at the baseline

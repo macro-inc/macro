@@ -15,6 +15,7 @@ contours, or of corners in a contour. Those glyphs raise IncompatibleGlyph
 and need a construction that behaves the same at every weight.
 """
 
+import itertools
 import math
 
 from fontTools.pens.recordingPen import RecordingPen
@@ -64,7 +65,7 @@ def _length_table(s, n=48):
         return [L * i / n for i in range(n + 1)]
     pts = [_cubic_point(s, i / n) for i in range(n + 1)]
     out = [0.0]
-    for a, b in zip(pts, pts[1:]):
+    for a, b in itertools.pairwise(pts):
         out.append(out[-1] + _dist(a, b))
     return out
 
@@ -302,8 +303,6 @@ def _assign(cost):
     """Minimum-cost perfect matching for a square matrix whose entries may be
     None (not allowed). Returns a list col[i] or None when impossible.
     Exhaustive for small sizes, greedy otherwise."""
-    import itertools
-
     n = len(cost)
     if n <= 7:
         best = None

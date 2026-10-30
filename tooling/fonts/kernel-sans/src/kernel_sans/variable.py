@@ -7,6 +7,7 @@ are converted to compatible quadratics.
 
 import os
 
+from fontTools import varLib
 from fontTools.designspaceLib import (
     AxisDescriptor,
     DesignSpaceDocument,
@@ -16,7 +17,6 @@ from fontTools.designspaceLib import (
 from fontTools.otlLib.builder import buildStatTable
 from fontTools.pens.cu2quPen import Cu2QuMultiPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
-from fontTools import varLib
 
 from . import features
 from . import params as P

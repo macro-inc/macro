@@ -18,9 +18,9 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "src"))
 
-from kernel_sans import features, glyphs  # noqa: E402
-from kernel_sans import params as P  # noqa: E402
-from kernel_sans.fontbuild import build_font, to_woff2  # noqa: E402
+from kernel_sans import features, glyphs
+from kernel_sans import params as P
+from kernel_sans.fontbuild import build_font, to_woff2
 
 DEFAULT_PROOF_TEXT = [
     "Hamburgefonstiv HOHOHO nnonnoo",
@@ -80,7 +80,7 @@ def zoom(names, weights, out_dir, cell):
     os.makedirs(out_dir, exist_ok=True)
     tmp = tempfile.mkdtemp(prefix="ks-zoom-")
     for wght in weights:
-        paths, drawn, errors = build_static(wght, tmp, ["ttf"], strict=False)
+        paths, _drawn, errors = build_static(wght, tmp, ["ttf"], strict=False)
         for name, err in errors.items():
             if name in names:
                 print(f"!! {name} @ {wght} failed:\n{err}", file=sys.stderr)

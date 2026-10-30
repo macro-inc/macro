@@ -33,7 +33,18 @@ STYLISTIC_SET_NAMES = {
     "ss02": "Distinct I, l and 1",
 }
 
-FIGURES = "zero one two three four five six seven eight nine".split()
+FIGURES = [
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+]
 
 
 def feature_code(drawn, p):

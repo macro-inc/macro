@@ -4,6 +4,7 @@ Every glyph is drawn from a `Params` instance, so a weight is just another set o
 numbers. Units are font units at 1000 UPM, y up, baseline at 0.
 """
 
+import itertools
 from dataclasses import dataclass
 
 UPM = 1000
@@ -49,7 +50,7 @@ def stem_for(wght):
         return STEMS[keys[0]]
     if wght >= keys[-1]:
         return STEMS[keys[-1]]
-    for lo, hi in zip(keys, keys[1:]):
+    for lo, hi in itertools.pairwise(keys):
         if lo <= wght <= hi:
             t = (wght - lo) / (hi - lo)
             return STEMS[lo] + t * (STEMS[hi] - STEMS[lo])
