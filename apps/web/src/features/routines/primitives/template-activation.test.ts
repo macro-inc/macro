@@ -248,6 +248,37 @@ describe('createTemplateActivation', () => {
     });
   });
 
+  it('can’t activate a step acting on a document the activator can’t open', () => {
+    createRoot((dispose) => {
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              {
+                type: 'tool',
+                tool: 'Comment',
+                arguments: {
+                  entityType: 'document',
+                  entityId: 'private-doc',
+                  content: 'Weekly check-in',
+                },
+              },
+            ],
+          },
+          variables: [],
+        }),
+        activator: () => ACTIVATOR,
+        access: () => new Map([['private-doc', false]]),
+      });
+      expect(activation.blocked()).toEqual([
+        { id: 'private-doc', blockName: 'md' },
+      ]);
+      expect(activation.request()).toBeUndefined();
+      dispose();
+    });
+  });
+
   it('fills the author in as the activator in every agent, branches included', () => {
     createRoot((dispose) => {
       const author =

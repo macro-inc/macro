@@ -123,6 +123,14 @@ describe('routine step catalog', () => {
       createActionStep(action(key), triggerScope('email'));
     expect(validateToolStep(create('add_label'))).toMatch(/label/);
     expect(validateToolStep(create('archive'))).toBeNull();
+    // A target cleared on activation must be chosen before the step runs.
+    const comment = create('comment');
+    expect(
+      validateToolStep({
+        ...comment,
+        arguments: { ...comment.arguments, entityId: '', content: 'Hi' },
+      })
+    ).toMatch(/acts on/);
     expect(validateToolStep(create('add_tag'))).toMatch(/tag/);
     expect(validateToolStep(create('send_message'))).toMatch(/channel/);
     expect(validateToolStep(create('create_task'))).toBeNull();

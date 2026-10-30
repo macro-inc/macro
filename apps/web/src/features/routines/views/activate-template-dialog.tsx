@@ -89,6 +89,8 @@ export function ActivateTemplateDialog(props: {
   checking: boolean;
   /** Steps whose destination the activator can't open; they start empty. */
   unreachable: number;
+  /** Documents steps act on that the activator can't open; can't activate. */
+  blocked: number;
   pending: boolean;
   error?: string;
   onActivate(): void;
@@ -198,9 +200,11 @@ export function ActivateTemplateDialog(props: {
                     ? `Decide on ${props.undecided} ${props.undecided === 1 ? 'reference' : 'references'} to activate.`
                     : props.checking
                       ? 'Checking what you can open…'
-                      : props.unreachable > 0
-                        ? `${props.unreachable} ${props.unreachable === 1 ? 'step points' : 'steps point'} to something you can’t open. Choose your own in the editor; the routine starts off until then.`
-                        : 'Your routine runs as you, on its own schedule.'
+                      : props.blocked > 0
+                        ? `${props.blocked === 1 ? 'A step acts on a document' : `Steps act on ${props.blocked} documents`} you can’t open. Ask its author to share ${props.blocked === 1 ? 'it' : 'them'} with you.`
+                        : props.unreachable > 0
+                          ? `${props.unreachable} ${props.unreachable === 1 ? 'step points' : 'steps point'} to something you can’t open. Choose your own in the editor; the routine starts off until then.`
+                          : 'Your routine runs as you, on its own schedule.'
                 }
               >
                 {(error) => <span class="text-failure">{error()}</span>}
@@ -216,7 +220,10 @@ export function ActivateTemplateDialog(props: {
               <Button
                 variant="primary"
                 disabled={
-                  props.undecided > 0 || props.checking || props.pending
+                  props.undecided > 0 ||
+                  props.checking ||
+                  props.blocked > 0 ||
+                  props.pending
                 }
                 onClick={() => props.onActivate()}
               >

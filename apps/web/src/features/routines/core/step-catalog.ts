@@ -595,6 +595,9 @@ export function describeToolStep(step: ToolStepDraft): string {
 /** What a tool step must have before it can be saved. */
 export function validateToolStep(step: ToolStepDraft): string | null {
   const args = step.arguments;
+  // A cleared target, e.g. one a shared routine's activator can't open.
+  if (stepTarget(step) === '')
+    return `Choose what each “${stepTitle(step)}” step acts on.`;
   return match(stepActionKey(step))
     .returnType<string | null>()
     .with('add_label', 'remove_label', () =>

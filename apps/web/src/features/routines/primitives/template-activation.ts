@@ -152,16 +152,34 @@ export function createTemplateActivation(args: {
   /** Still learning whether the activator can open each step's destination. */
   const checking = () =>
     destinations().some((destination) => !args.access().has(destination.id));
-  /** Destinations the activator can't open: their steps start empty. */
+  /** Channels and folders the activator can't open: their steps start empty. */
   const unreachable = () =>
     destinations().filter(
-      (destination) => args.access().get(destination.id) === false
+      (destination) =>
+        destination.blockName !== 'md' &&
+        args.access().get(destination.id) === false
+    );
+  /**
+   * Documents the activator can't open. A step acting on one has nothing to
+   * act on in their routine, so the template can't be activated as is.
+   */
+  const blocked = () =>
+    destinations().filter(
+      (destination) =>
+        destination.blockName === 'md' &&
+        args.access().get(destination.id) === false
     );
 
   /** The routine to create, once every reference that needs one has a decision. */
   const request = (): CreateScheduledAction | undefined => {
     const activator = args.activator();
-    if (!activator || undecided().length > 0 || checking()) return undefined;
+    if (
+      !activator ||
+      undecided().length > 0 ||
+      checking() ||
+      blocked().length > 0
+    )
+      return undefined;
     const template = args.template();
     const context = {
       authorId: template.author,
@@ -201,5 +219,6 @@ export function createTemplateActivation(args: {
     request,
     checking,
     unreachable,
+    blocked,
   };
 }

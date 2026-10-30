@@ -195,6 +195,7 @@ function ActivateTemplate(
       undecided={activation.undecided().length}
       checking={activation.checking()}
       unreachable={activation.unreachable().length}
+      blocked={activation.blocked().length}
       pending={mutation.isPending}
       error={error()}
       onActivate={() => fireAndForget(activate(), 'routines')}
