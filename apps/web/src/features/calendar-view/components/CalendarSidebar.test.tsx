@@ -5,6 +5,7 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 import type { TeamOutOfOfficeItem } from '@service-storage/generated/schemas/teamOutOfOfficeItem';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import {
   QueryClient,
   QueryClientProvider,
@@ -24,7 +25,10 @@ vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|gab@macro.com',
 }));
 vi.mock('@core/user', () => ({
-  getDisplayName: () => 'Jackson Kustec',
+  getDisplayName: (id: string) =>
+    id === 'macro|jackson@macro.com'
+      ? 'Jackson Kustec'
+      : `Teammate ${id.slice('macro|teammate-'.length, id.indexOf('@'))}`,
   tryMacroId: (id: string) => id,
 }));
 vi.mock('@core/component/UserIcon', () => ({
@@ -58,18 +62,44 @@ vi.mock('@app/components/view-shell', () => ({
   useViewShell: () => ({ aside: { isOverlay: () => false } }),
 }));
 
-function teamOooItems(): TeamOutOfOfficeItem[] {
-  const day = format(addDays(new Date(), 28), 'yyyy-MM-dd');
-  const nextDay = format(addDays(new Date(), 29), 'yyyy-MM-dd');
-  return [
-    {
-      eventId: 'ooo-1',
+/** One all-day absence per person, on consecutive days four weeks out. */
+function teamOooItems(count = 1): TeamOutOfOfficeItem[] {
+  return Array.from({ length: count }, (_, index) => {
+    const day = format(addDays(new Date(), 28 + index), 'yyyy-MM-dd');
+    const nextDay = format(addDays(new Date(), 29 + index), 'yyyy-MM-dd');
+    return {
+      eventId: `ooo-${index + 1}`,
       occurrenceKey: day,
-      ownerId: 'macro|jackson@macro.com',
+      ownerId:
+        index === 0
+          ? 'macro|jackson@macro.com'
+          : `macro|teammate-${index + 1}@macro.com`,
       time: { kind: 'allDay', startDate: day, endDate: nextDay },
-    },
-  ];
+    };
+  });
 }
+
+function renderList() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  let refetch!: () => Promise<unknown>;
+  function Harness() {
+    const queryClient = useQueryClient();
+    refetch = () => queryClient.refetchQueries({ queryKey: ['team-ooo'] });
+    return <TeamOooUpcomingList />;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  return { refetch: () => refetch() };
+}
+
+const rows = () =>
+  screen.queryAllByRole('button', { name: /^(Jackson Kustec|Teammate \d+)/ });
+const toggle = () => screen.queryByRole('button', { name: /more$|^Show less$/ });
 
 afterEach(() => {
   cleanup();
@@ -80,20 +110,7 @@ afterEach(() => {
 describe('TeamOooUpcomingList', () => {
   it('keeps the selected row attached when the poll refetches', async () => {
     requests.teamOoo.mockImplementation(async () => teamOooItems());
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    let refetch!: () => Promise<unknown>;
-    function Harness() {
-      const queryClient = useQueryClient();
-      refetch = () => queryClient.refetchQueries({ queryKey: ['team-ooo'] });
-      return <TeamOooUpcomingList />;
-    }
-    render(() => (
-      <QueryClientProvider client={client}>
-        <Harness />
-      </QueryClientProvider>
-    ));
+    const { refetch } = renderList();
 
     fireEvent.click(await screen.findByRole('button', { name: /Jackson/ }));
     const anchor = selectEvent.mock.calls[0][1];
@@ -105,5 +122,95 @@ describe('TeamOooUpcomingList', () => {
     expect(requests.teamOoo).toHaveBeenCalledTimes(initialRequests * 2);
     expect(screen.getByRole('button', { name: /Jackson/ })).toBe(anchor);
     expect(anchor.isConnected).toBe(true);
+  });
+
+  it('shows ten rows and the rest behind a "+N more" toggle', async () => {
+    requests.teamOoo.mockImplementation(async () => teamOooItems(15));
+    renderList();
+
+    await screen.findByRole('button', { name: /Jackson/ });
+
+    expect(rows()).toHaveLength(10);
+    expect(toggle()?.textContent).toBe('+5 more');
+    expect(toggle()?.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('expands to every row and collapses again', async () => {
+    const user = userEvent.setup();
+    requests.teamOoo.mockImplementation(async () => teamOooItems(15));
+    renderList();
+    await screen.findByRole('button', { name: /Jackson/ });
+    const control = toggle();
+    if (!control) throw new Error('missing "+N more" toggle');
+
+    await user.click(control);
+
+    expect(rows()).toHaveLength(15);
+    expect(toggle()).toBe(control);
+    expect(control.textContent).toBe('Show less');
+    expect(control.getAttribute('aria-expanded')).toBe('true');
+
+    await user.click(control);
+
+    expect(rows()).toHaveLength(10);
+    expect(control.textContent).toBe('+5 more');
+    expect(control.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(control);
+  });
+
+  it('opens a row past the tenth from the expanded list', async () => {
+    const user = userEvent.setup();
+    requests.teamOoo.mockImplementation(async () => teamOooItems(15));
+    renderList();
+    await screen.findByRole('button', { name: /Jackson/ });
+
+    await user.click(screen.getByRole('button', { name: '+5 more' }));
+    const row = screen.getByRole('button', { name: /^Teammate 14/ });
+    await user.click(row);
+
+    expect(selectEvent).toHaveBeenCalledTimes(1);
+    expect(selectEvent.mock.calls[0][1]).toBe(row);
+    expect(row.getAttribute('aria-current')).toBe('true');
+  });
+
+  it('stays expanded when the poll refetches', async () => {
+    const user = userEvent.setup();
+    requests.teamOoo.mockImplementation(async () => teamOooItems(15));
+    const { refetch } = renderList();
+    await screen.findByRole('button', { name: /Jackson/ });
+    await user.click(screen.getByRole('button', { name: '+5 more' }));
+
+    await refetch();
+
+    expect(rows()).toHaveLength(15);
+    expect(toggle()?.textContent).toBe('Show less');
+  });
+
+  it('follows count changes and keeps the expanded choice', async () => {
+    const user = userEvent.setup();
+    let count = 15;
+    requests.teamOoo.mockImplementation(async () => teamOooItems(count));
+    const { refetch } = renderList();
+    await screen.findByRole('button', { name: /Jackson/ });
+    await user.click(screen.getByRole('button', { name: '+5 more' }));
+
+    count = 10;
+    await refetch();
+
+    expect(rows()).toHaveLength(10);
+    expect(toggle()).toBeNull();
+
+    count = 12;
+    await refetch();
+
+    expect(rows()).toHaveLength(12);
+    expect(toggle()?.textContent).toBe('Show less');
+
+    await user.click(screen.getByRole('button', { name: 'Show less' }));
+    count = 13;
+    await refetch();
+
+    expect(rows()).toHaveLength(10);
+    expect(toggle()?.textContent).toBe('+3 more');
   });
 });

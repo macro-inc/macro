@@ -24,7 +24,7 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
-import { Checkbox, cn, Calendar as MiniCalendar } from '@ui';
+import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { format } from 'date-fns';
 import {
@@ -167,6 +167,12 @@ export function TeamOooUpcomingList() {
   const calendarView = useCalendarView();
   const isActive = (window: TeamOooWindow) =>
     calendarView.selectedEvent()?.id === window.event.id;
+  // The choice outlives count changes: a list that shrinks to the cap and grows
+  // again comes back the way the person left it.
+  const [expanded, setExpanded] = createSignal(false);
+  const hiddenCount = () => windows().length - UPCOMING_SHOWN_MAX;
+  const shownWindows = () =>
+    expanded() ? windows() : windows().slice(0, UPCOMING_SHOWN_MAX);
 
   return (
     <div class="flex flex-col gap-0.5">
@@ -185,56 +191,66 @@ export function TeamOooUpcomingList() {
           </span>
         </Match>
         <Match when={windows().length > 0}>
-          <Key
-            each={windows().slice(0, UPCOMING_SHOWN_MAX)}
-            by={(window) => window.event.id}
-          >
-            {(window) => (
-              <button
-                type="button"
-                class={cn(
-                  'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs',
-                  isActive(window()) ? 'bg-active' : 'hover:bg-hover'
-                )}
-                aria-current={isActive(window()) ? 'true' : undefined}
-                onClick={(event) => {
-                  calendarPager.gotoDate(window().start);
-                  calendarView.selectEvent(
-                    window().event,
-                    event.currentTarget,
-                    'agenda'
-                  );
-                  if (shell.aside.isOverlay()) shell.aside.collapse();
-                }}
-              >
-                <UserIcon
-                  id={window().ownerId}
-                  size="md"
-                  suppressClick
-                  showTooltip={false}
-                />
-                <span class="flex min-w-0 flex-1 flex-col">
-                  <span class="flex w-full items-baseline gap-2">
-                    <span class="min-w-0 flex-1 truncate text-ink">
-                      {window().name}
-                    </span>
-                    <span class="shrink-0 text-ink-muted">
-                      {windowDateLabel(window())}
-                    </span>
-                  </span>
-                  <Show when={window().title}>
-                    <span class="w-full truncate text-ink-muted">
-                      {window().title}
-                    </span>
-                  </Show>
-                </span>
-              </button>
+          <div
+            class={cn(
+              'flex flex-col gap-0.5',
+              expanded() && hiddenCount() > 0 && 'max-h-120 overflow-y-auto'
             )}
-          </Key>
-          <Show when={windows().length > UPCOMING_SHOWN_MAX}>
-            <span class="px-2 py-1 text-xs text-ink-muted">
-              +{windows().length - UPCOMING_SHOWN_MAX} more
-            </span>
+          >
+            <Key each={shownWindows()} by={(window) => window.event.id}>
+              {(window) => (
+                <button
+                  type="button"
+                  class={cn(
+                    'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs',
+                    isActive(window()) ? 'bg-active' : 'hover:bg-hover'
+                  )}
+                  aria-current={isActive(window()) ? 'true' : undefined}
+                  onClick={(event) => {
+                    calendarPager.gotoDate(window().start);
+                    calendarView.selectEvent(
+                      window().event,
+                      event.currentTarget,
+                      'agenda'
+                    );
+                    if (shell.aside.isOverlay()) shell.aside.collapse();
+                  }}
+                >
+                  <UserIcon
+                    id={window().ownerId}
+                    size="md"
+                    suppressClick
+                    showTooltip={false}
+                  />
+                  <span class="flex min-w-0 flex-1 flex-col">
+                    <span class="flex w-full items-baseline gap-2">
+                      <span class="min-w-0 flex-1 truncate text-ink">
+                        {window().name}
+                      </span>
+                      <span class="shrink-0 text-ink-muted">
+                        {windowDateLabel(window())}
+                      </span>
+                    </span>
+                    <Show when={window().title}>
+                      <span class="w-full truncate text-ink-muted">
+                        {window().title}
+                      </span>
+                    </Show>
+                  </span>
+                </button>
+              )}
+            </Key>
+          </div>
+          <Show when={hiddenCount() > 0}>
+            <Button
+              variant="ghost"
+              size="xs"
+              class="self-start"
+              aria-expanded={expanded()}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              {expanded() ? 'Show less' : `+${hiddenCount()} more`}
+            </Button>
           </Show>
         </Match>
       </Switch>
