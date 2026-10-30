@@ -134,10 +134,17 @@ export function createTaskBoardQueries(options: {
   };
 
   const columns = createMemo(() => {
-    return rawColumns().map((column) => ({
+    const labeled = rawColumns().map((column) => ({
       ...column,
       label: columnLabel(column),
     }));
+    if (options.grouping() !== 'project') return labeled;
+    // Search results arrive in result order; projects follow the list:
+    // by name, No Project last.
+    return labeled.sort((a, b) => {
+      if (!a.id || !b.id) return a.id ? -1 : b.id ? 1 : 0;
+      return a.label.localeCompare(b.label);
+    });
   });
 
   const save = useBulkSaveEntityPropertiesMutation();

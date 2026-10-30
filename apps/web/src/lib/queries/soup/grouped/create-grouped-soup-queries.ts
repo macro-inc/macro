@@ -259,7 +259,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     const field = args.groupByField();
     if (!field || !initialGroupedPage) return;
 
-    const stale = new Set<string>();
+    const stale = new Map<string, GroupQueryPage>();
     batch(() => {
       for (const group of initialGroupedPage.groups) {
         const initialPage = makeInitialPage(initialGroupedPage, group);
@@ -281,7 +281,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
               initialPage,
               (page) => page.group.nextCursor
             );
-            if (merged.stale) stale.add(group.key);
+            if (merged.stale) stale.set(group.key, initialPage);
             return merged.data;
           }
         );
@@ -291,12 +291,30 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     });
     // The kept pages chained from the old first page. A refetch re-walks them
     // from the new boundary while the rows already loaded stay on screen.
-    const rewalk = async (query: { refetch: () => Promise<unknown> }) => {
-      await query.refetch();
+    const rewalk = async (
+      query: { key: string; refetch: () => Promise<{ isError: boolean }> },
+      initialPage: GroupQueryPage
+    ) => {
+      const result = await query.refetch();
+      // A chain that could not be rebuilt falls back to its first page rather
+      // than keeping rows that follow the old boundary.
+      if (result.isError) {
+        queryClient.setQueryData<InfiniteData<GroupQueryPage, string | null>>(
+          soupKeys.groupedGroup({
+            params: args.soupParams(),
+            body: args.soupBody(),
+            groupBy: field,
+            groupKey: query.key,
+          }).queryKey,
+          { pages: [initialPage], pageParams: [null] }
+        );
+      }
       setGroupDataVersion((version) => version + 1);
     };
     for (const query of queries.list()) {
-      if (stale.has(query.key)) fireAndForget(rewalk(query), 'grouped-soup');
+      const initialPage = stale.get(query.key);
+      if (initialPage)
+        fireAndForget(rewalk(query, initialPage), 'grouped-soup');
     }
   };
 
