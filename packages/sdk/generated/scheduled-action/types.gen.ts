@@ -116,7 +116,7 @@ export type AgentTask = {
 };
 
 /**
- * A selected agent (persona).
+ * A persona selection, independent of its runtime and current default model.
  */
 export type AgentTaskAgent = {
     /**
@@ -241,8 +241,7 @@ export type LegacyActionConfiguration = {
 };
 
 /**
- * A nonblank model identifier. Runtime catalogs, not the scheduler, own
- * which models are available.
+ * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
  */
 export type RoutineModelId = string;
 
@@ -350,6 +349,7 @@ export type ScheduledAction = {
  * responses omit legacy fields rather than inventing a schedule or timezone.
  */
 export type ScheduledActionResponse = ScheduledAction & {
+    last_run?: null | ActionExecutionRecord;
     /**
      * Deprecated: use `trigger.schedule`. Present only for cron actions.
      *

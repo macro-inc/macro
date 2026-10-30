@@ -1098,7 +1098,7 @@
       },
       "AgentTaskAgent": {
         "type": "object",
-        "description": "A selected agent (persona).",
+        "description": "A persona selection, independent of its runtime and current default model.",
         "required": ["bot_id"],
         "properties": {
           "bot_id": {
@@ -1336,7 +1336,7 @@
       },
       "RoutineModelId": {
         "type": "string",
-        "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own\nwhich models are available."
+        "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
       },
       "RoutineTemplate": {
         "type": "object",
@@ -1531,6 +1531,17 @@
           {
             "type": "object",
             "properties": {
+              "last_run": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ActionExecutionRecord",
+                    "description": "The routine's latest run. Listing includes it for routines the caller\nowns; other responses omit it."
+                  }
+                ]
+              },
               "schedule": {
                 "type": ["string", "null"],
                 "description": "Deprecated: use `trigger.schedule`. Present only for cron actions.",

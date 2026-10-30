@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
@@ -392,6 +393,33 @@ where
                 })
                 .collect(),
         )
+    }
+
+    async fn get_actions_with_last_run(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        include_events: bool,
+    ) -> Result<Vec<(ScheduledAction, Option<ActionExecutionRecord>)>> {
+        let actions = self.get_actions(user_id.clone(), include_events).await?;
+        let owned: Vec<Uuid> = actions
+            .iter()
+            .filter(|action| action.owner.as_user() == Some(&user_id))
+            .filter_map(|action| action.id)
+            .collect();
+        let mut latest: HashMap<Uuid, ActionExecutionRecord> = self
+            .repo
+            .get_latest_execution_records(&owned)
+            .await?
+            .into_iter()
+            .map(|record| (record.action_id, record))
+            .collect();
+        Ok(actions
+            .into_iter()
+            .map(|action| {
+                let last_run = action.id.and_then(|id| latest.remove(&id));
+                (action, last_run)
+            })
+            .collect())
     }
 
     async fn update_action(

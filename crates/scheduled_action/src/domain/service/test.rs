@@ -38,6 +38,7 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 #[derive(Default)]
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
+    records: Mutex<Vec<ActionExecutionRecord>>,
 }
 
 impl ScheduledActionRepo for FakeRepo {
@@ -93,6 +94,23 @@ impl ScheduledActionRepo for FakeRepo {
 
     async fn get_execution_records(&self, _id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         Ok(vec![])
+    }
+
+    async fn get_latest_execution_records(
+        &self,
+        action_ids: &[Uuid],
+    ) -> Result<Vec<ActionExecutionRecord>> {
+        let records = self.records.lock().unwrap();
+        Ok(action_ids
+            .iter()
+            .filter_map(|id| {
+                records
+                    .iter()
+                    .filter(|record| record.action_id == *id)
+                    .max_by_key(|record| record.start_time)
+                    .cloned()
+            })
+            .collect())
     }
 
     async fn get_next_unclaimed_actions(&self, _limit: i64) -> Result<Vec<ScheduledAction>> {
@@ -693,6 +711,53 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
         .await
         .unwrap();
     assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn lists_each_routine_with_its_latest_run() {
+    let svc = service(true);
+    let ran = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(configuration(true)),
+        )
+        .await
+        .unwrap();
+    let never_ran = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(configuration(true)),
+        )
+        .await
+        .unwrap();
+    let record = |minutes: i64, is_success: bool| ActionExecutionRecord {
+        id: Some(generate_uuid_v7()),
+        action_id: ran.id.unwrap(),
+        resource_id: None,
+        start_time: Utc::now() - chrono::Duration::minutes(minutes),
+        end_time: Utc::now(),
+        is_success,
+        result: json!({}),
+        created_at: Utc::now(),
+    };
+    svc.repo
+        .records
+        .lock()
+        .unwrap()
+        .extend([record(30, true), record(5, false)]);
+
+    let listed = svc.get_actions_with_last_run(user(), true).await.unwrap();
+    let last_run = |id: Option<Uuid>| {
+        listed
+            .iter()
+            .find(|(action, _)| action.id == id)
+            .unwrap()
+            .1
+            .as_ref()
+            .map(|record| record.is_success)
+    };
+    assert_eq!(last_run(ran.id), Some(false));
+    assert_eq!(last_run(never_ran.id), None);
 }
 
 #[tokio::test]

@@ -73,6 +73,7 @@ export * from './scheduledActionId';
 export * from './scheduledActionNextRunAt';
 export * from './scheduledActionResponse';
 export * from './scheduledActionResponseAllOf';
+export * from './scheduledActionResponseAllOfLastRun';
 export * from './scheduledActionResponseAllOfSchedule';
 export * from './scheduledActionResponseAllOfTimezone';
 export * from './scheduledActionTask';

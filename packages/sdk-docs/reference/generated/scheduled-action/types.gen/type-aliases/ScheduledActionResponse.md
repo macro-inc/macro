@@ -1,6 +1,6 @@
 # Type Alias: ScheduledActionResponse
 
-> **ScheduledActionResponse** = [`ScheduledAction`](ScheduledAction.md) & \{ `schedule?`: `string` \| `null`; `timezone?`: `string` \| `null`; \}
+> **ScheduledActionResponse** = [`ScheduledAction`](ScheduledAction.md) & \{ `last_run?`: `null` \| [`ActionExecutionRecord`](ActionExecutionRecord.md); `schedule?`: `string` \| `null`; `timezone?`: `string` \| `null`; \}
 
 Canonical trigger plus deprecated cron fields for existing clients. Event
 responses omit legacy fields rather than inventing a schedule or timezone.
@@ -9,5 +9,6 @@ responses omit legacy fields rather than inventing a schedule or timezone.
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
+| `last_run?` | `null` \| [`ActionExecutionRecord`](ActionExecutionRecord.md) | - |
 | `schedule?` | `string` \| `null` | Deprecated: use `trigger.schedule`. Present only for cron actions. **Deprecated** |
 | `timezone?` | `string` \| `null` | Deprecated: use `trigger.timezone`. Present only for cron actions. **Deprecated** |

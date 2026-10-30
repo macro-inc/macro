@@ -493,6 +493,47 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             .collect())
     }
 
+    async fn get_latest_execution_records(
+        &self,
+        action_ids: &[Uuid],
+    ) -> Result<Vec<ActionExecutionRecord>> {
+        // One index probe per action on (action_id, start_time DESC).
+        let rows = sqlx::query!(
+            r#"
+            SELECT r.id AS "id!", r.action_id AS "action_id!", r.resource_id,
+                   r.start_time AS "start_time!", r.end_time AS "end_time!",
+                   r.is_success AS "is_success!", r.result AS "result!",
+                   r.created_at AS "created_at!"
+            FROM UNNEST($1::uuid[]) AS ids(action_id)
+            CROSS JOIN LATERAL (
+                SELECT id, action_id, resource_id, start_time, end_time, is_success,
+                       result, created_at
+                FROM action_execution_record
+                WHERE action_execution_record.action_id = ids.action_id
+                ORDER BY start_time DESC
+                LIMIT 1
+            ) AS r
+            "#,
+            action_ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ActionExecutionRecord {
+                id: Some(row.id),
+                action_id: row.action_id,
+                resource_id: row.resource_id,
+                start_time: row.start_time,
+                end_time: row.end_time,
+                is_success: row.is_success,
+                result: row.result,
+                created_at: row.created_at,
+            })
+            .collect())
+    }
+
     async fn update_next_run_at(&self, id: &Uuid) -> Result<()> {
         // Lock through the update so a concurrent trigger replacement cannot
         // receive a firing time derived from the old schedule.

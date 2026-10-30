@@ -180,10 +180,18 @@ fn malformed_bot_ids_are_rejected_even_with_a_model() {
 fn supplied_model_must_be_nonblank_for_both_target_forms() {
     for model in ["", " ", "\t\n", "\u{2003}"] {
         for agent in [json!(null), json!({ "bot_id": generate_uuid_v7() })] {
-            let step = agent_step(json!({
+            // A single-agent task with a blank model doesn't parse.
+            let task = json!({
                 "agent": agent, "model": model,
                 "prompt": "system", "user_prompt": "user",
-            }));
+            });
+            assert!(RoutineProgram::from_task(&task).is_err());
+            // An agent step with one parses, then has no target.
+            let step = AgentStep {
+                model: Some(model.to_owned()),
+                agent: serde_json::from_value(agent).unwrap(),
+                instructions: "user".to_owned(),
+            };
             assert_eq!(
                 ResolvedTaskTarget::of(&step),
                 Err(TaskTargetError::BlankModel)

@@ -221,6 +221,9 @@ impl ScheduledActionRepo for Repo {
     async fn get_execution_records(&self, _: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         unimplemented!()
     }
+    async fn get_latest_execution_records(&self, _: &[Uuid]) -> Result<Vec<ActionExecutionRecord>> {
+        unimplemented!()
+    }
 }
 
 #[derive(Default)]

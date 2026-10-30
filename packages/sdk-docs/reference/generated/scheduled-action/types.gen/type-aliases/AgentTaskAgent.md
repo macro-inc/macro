@@ -2,7 +2,7 @@
 
 > **AgentTaskAgent** = \{ `bot_id`: `string`; \}
 
-A selected agent (persona).
+A persona selection, independent of its runtime and current default model.
 
 ## Properties
 

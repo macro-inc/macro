@@ -101,6 +101,12 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
+    /// The latest execution record of each of `action_ids` that has run.
+    fn get_latest_execution_records(
+        &self,
+        action_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+
     /// Advance the cron firing time; event actions are left unchanged.
     fn update_next_run_at(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
@@ -167,6 +173,14 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
     ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// [`Self::get_actions`], each with its latest run when `user_id` owns
+    /// it: run history stays owner-scoped.
+    fn get_actions_with_last_run(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        include_events: bool,
+    ) -> impl Future<Output = Result<Vec<(ScheduledAction, Option<ActionExecutionRecord>)>>> + Send;
 
     fn update_action(
         &self,

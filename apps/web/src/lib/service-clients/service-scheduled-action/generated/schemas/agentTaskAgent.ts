@@ -7,7 +7,7 @@
  */
 
 /**
- * A selected agent (persona).
+ * A persona selection, independent of its runtime and current default model.
  */
 export interface AgentTaskAgent {
   /** The agent's bot id. */
