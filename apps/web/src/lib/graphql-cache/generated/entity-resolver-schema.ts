@@ -80,6 +80,16 @@ export const entityResolverSchema = {
       argumentPaths: [['input', 'entityId']],
     },
   },
+  SoupQueryRoot: {
+    agentSession: {
+      targets: ['GraphqlSoupAgentSession'],
+      argumentPaths: [['sessionId']],
+    },
+    initiative: {
+      targets: ['GraphqlSoupInitiative'],
+      argumentPaths: [['initiativeId']],
+    },
+  },
 } as const;
 
 export type GeneratedEntityResolverSchema = typeof entityResolverSchema;

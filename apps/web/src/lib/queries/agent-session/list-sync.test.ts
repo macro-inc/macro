@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
       context: { requestPolicy: string }
     ) => Promise<{
       error?: Error;
-      data?: { user: { agentSession: { id: string; turnState: string } } };
+      data?: { agentSession: { id: string; turnState: string } };
     }>
   >(async () => ({})),
   held: vi.fn((_id: string) => false),
@@ -153,7 +153,7 @@ it('hydrates a REST row from the primary after its replica-backed lists refetch'
     data: { id: 'first', turnState: 'running' },
   });
   mocks.row.mockResolvedValueOnce({
-    data: { user: { agentSession: { id: 'first', turnState: 'idle' } } },
+    data: { agentSession: { id: 'first', turnState: 'idle' } },
   });
 
   await refreshAgentSessionLists('first');
@@ -205,7 +205,7 @@ it('lets every row read settle before retrying the batch', async () => {
 it('keeps the refetch and every row read in the pass trace', async () => {
   mocks.graphqlSoup.mockReturnValue(true);
   mocks.row.mockResolvedValue({
-    data: { user: { agentSession: { id: 'first', turnState: 'idle' } } },
+    data: { agentSession: { id: 'first', turnState: 'idle' } },
   });
   await Promise.all([
     refreshAgentSessionLists('first'),

@@ -48,21 +48,25 @@ fragment InitiativeDetailFields on GraphqlSoupInitiative {
   }
 }
 
-query Initiative($initiativeId: ID!) {
-  user {
+# A project reads at the root, so a public or team link opens it signed in or
+# not. A signed-in read also selects the viewer's id: the cache binds its
+# records to that account, and the project view drops a result read for
+# another one.
+query Initiative($initiativeId: ID!, $signedIn: Boolean = false) {
+  user @include(if: $signedIn) {
     id
-    initiative(initiativeId: $initiativeId) {
-      ...InitiativeDetailFields
-    }
+  }
+  initiative(initiativeId: $initiativeId) {
+    ...InitiativeDetailFields
   }
 }
 
-query InitiativeIdentity($initiativeId: ID!) {
-  user {
+query InitiativeIdentity($initiativeId: ID!, $signedIn: Boolean = false) {
+  user @include(if: $signedIn) {
     id
-    initiative(initiativeId: $initiativeId) {
-      ...InitiativeIdentityFields
-    }
+  }
+  initiative(initiativeId: $initiativeId) {
+    ...InitiativeIdentityFields
   }
 }
 

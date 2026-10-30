@@ -4,13 +4,10 @@
 # new state without refetching the lists. No frecencyScore: a single-session
 # read carries none, and the list's score must survive.
 query AgentSessionRow($sessionId: ID!) {
-  user {
-    id
-    agentSession(sessionId: $sessionId) {
-      __typename
-      cacheProjection @cacheOnly
-      ...SoupEntityIdentityFields
-      ...SoupAgentSessionFields
-    }
+  agentSession(sessionId: $sessionId) {
+    __typename
+    cacheProjection @cacheOnly
+    ...SoupEntityIdentityFields
+    ...SoupAgentSessionFields
   }
 }

@@ -43,9 +43,7 @@ const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
 function entry(
   n: number
-): NonNullable<
-  AgentSessionLogQuery['user']['agentSession']
->['log']['entries'][number] {
+): NonNullable<AgentSessionLogQuery['agentSession']>['log']['entries'][number] {
   return {
     id: `00000000-0000-0000-0000-${n.toString(16).padStart(12, '0')}`,
     createdAt: new Date(Date.UTC(2026, 7, 13, 0, 0, n)).toISOString(),
@@ -64,12 +62,9 @@ const bot = { id: 'bot-id', name: 'Agent', handle: 'agent', avatarUrl: null };
 
 function logData(ids: number[]): AgentSessionLogQuery {
   return {
-    user: {
-      id: 'user-1',
-      agentSession: {
-        id: SESSION,
-        log: { bot, entries: ids.map(entry) },
-      },
+    agentSession: {
+      id: SESSION,
+      log: { bot, entries: ids.map(entry) },
     },
   };
 }
@@ -138,7 +133,7 @@ describe('watchAgentSessionLog', () => {
       direction: 'notification',
       content: { type: 'notification', notifications: [] },
     };
-    data.user.agentSession?.log.entries.push(notification);
+    data.agentSession?.log.entries.push(notification);
     query.next(fromCache(data));
     query.next(fromNetwork(data));
     expect((await watch.cached)?.rows[1].direction).toBe('notification');
@@ -162,7 +157,7 @@ describe('watchAgentSessionLog', () => {
     expect(networkFirst.cacheMiss()).toBe('network_first');
 
     const empty = watchAgentSessionLog(SESSION);
-    query.next(fromCache({ user: { id: 'user-1', agentSession: null } }));
+    query.next(fromCache({ agentSession: null }));
     query.next(fromNetwork(logData([1])));
     await empty.cached;
     expect(empty.cacheMiss()).toBe('empty');
@@ -226,7 +221,7 @@ describe('watchAgentSessionLog', () => {
     const written = host.writeQuery.mock.calls[0]?.[0]
       .data as AgentSessionLogQuery;
     expect(
-      written.user.agentSession?.log.entries.map((written) => written.id)
+      written.agentSession?.log.entries.map((written) => written.id)
     ).toEqual([entry(1).id, entry(2).id, entry(3).id]);
     watch.stop();
   });
@@ -248,7 +243,7 @@ describe('watchAgentSessionLog', () => {
     expect(host.writeQuery).toHaveBeenCalledOnce();
     const written = host.writeQuery.mock.calls[0]?.[0]
       .data as AgentSessionLogQuery;
-    expect(written.user.agentSession?.log.entries).toHaveLength(2);
+    expect(written.agentSession?.log.entries).toHaveLength(2);
   });
 
   it('reports a gap when the subscription errors', async () => {

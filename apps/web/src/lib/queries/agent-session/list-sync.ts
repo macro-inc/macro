@@ -39,7 +39,7 @@ function readSessionRow(
       span.error(result.error);
       throw result.error;
     }
-    const session = result.data?.user.agentSession;
+    const session = result.data?.agentSession;
     span.setAttr('agent_session.turn_state', session?.turnState ?? 'absent');
     const cached = session && getSoupEntityById(session.id);
     if (!session || cached?.tag !== 'agentSession') {

@@ -175,12 +175,10 @@ it('seeds the live detail and identity edges from an authoritative create withou
     expect(write).toHaveBeenCalledWith(
       expect.objectContaining({
         operationName,
-        variables: { initiativeId: 'project' },
+        variables: { initiativeId: 'project', signedIn: true },
         data: {
-          user: {
-            id: 'viewer',
-            initiative: { __typename: 'GraphqlSoupInitiative', id: 'project' },
-          },
+          user: { id: 'viewer' },
+          initiative: { __typename: 'GraphqlSoupInitiative', id: 'project' },
         },
       })
     );
