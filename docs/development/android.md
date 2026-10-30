@@ -234,6 +234,10 @@ there: its `fuser -km /nix` can kill the runner when `/nix` is on the root
 filesystem, preventing GitHub from receiving the build logs. Let the hosted
 VM be discarded.
 
+The shared authenticated Git fetch helper clears `LD_LIBRARY_PATH` for Git only.
+After Nix setup, the host Git HTTPS helper cannot safely load the build shell's
+Nix libraries; keep this isolation in the helper used by the release head guard.
+
 Testers install through Google Play's internal testing track once the
 bundle is uploaded; an AAB cannot be installed directly on a device.
 

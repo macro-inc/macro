@@ -2,11 +2,12 @@
 # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
 # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
 # may persist credentials, so clear inherited headers before supplying one
-# explicitly. Fails if the commit is unreachable (a force-pushed-away head).
+# explicitly. Keep Nix build libraries out of the host Git HTTPS helper.
+# Fails if the commit is unreachable (a force-pushed-away head).
 gh_fetch() {
   local auth
   auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-  git -c "http.https://github.com/.extraheader=" \
+  LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
     -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
     fetch -q --depth=1 origin "$1"
 }

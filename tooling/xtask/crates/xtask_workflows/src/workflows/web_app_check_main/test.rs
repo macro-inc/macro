@@ -405,33 +405,50 @@ fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
 }
 
 /// Exercise Git's actual HTTP header handling with and without checkout's
-/// persisted credentials. The local endpoint records the request, then rejects
-/// it: fetching repository objects is irrelevant to this authentication test.
+/// persisted credentials and Android's inherited Nix build environment. The
+/// local endpoint records the request, then rejects it: repository objects are
+/// irrelevant to this transport test.
 #[test]
 fn native_fetches_send_one_authorization_header() {
     use std::io::{BufRead, BufReader, Write};
     use std::net::TcpListener;
     use std::process::Command;
 
-    for (source, fetch, persisted) in [
+    for (source, fetch, persisted, build_environment) in [
         (
             include_str!("../scripts/ios_native_tree.sh"),
             "native_tree_fetch",
+            false,
             false,
         ),
         (
             include_str!("../scripts/ios_native_tree.sh"),
             "native_tree_fetch",
             true,
-        ),
-        (
-            include_str!("../scripts/android_git_fetch.sh"),
-            "gh_fetch",
             false,
         ),
         (
             include_str!("../scripts/android_git_fetch.sh"),
             "gh_fetch",
+            false,
+            false,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            true,
+            false,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            false,
+            true,
+        ),
+        (
+            include_str!("../scripts/android_git_fetch.sh"),
+            "gh_fetch",
+            true,
             true,
         ),
     ] {
@@ -469,20 +486,25 @@ fn native_fetches_send_one_authorization_header() {
             .arg("-c")
             .arg(format!(
                 r#"set -euo pipefail
+build_library_path=${{LD_LIBRARY_PATH-}}
+unset LD_LIBRARY_PATH
 git init -q
 git remote add origin "$TEST_URL"
 if [[ "$TEST_PERSISTED" == true ]]; then
   git config "http.${{TEST_URL}}.extraheader" "AUTHORIZATION: basic checkout-token"
 fi
 {script}
+if [[ "$TEST_BUILD_ENVIRONMENT" == true ]]; then
+  export LD_LIBRARY_PATH="$build_library_path"
+fi
 {fetch} HEAD
 "#
             ))
             .current_dir(repo.path())
-            // CI's BASH_ENV reloads the Nix dev shell; its library path can
-            // make the runner's host git-remote-http fail before connecting.
+            // Keep fixture setup outside the build environment; restore its
+            // library path at the fetch boundary, as the release head guard sees it.
             .env_remove("BASH_ENV")
-            .env_remove("LD_LIBRARY_PATH")
+            .env("TEST_BUILD_ENVIRONMENT", build_environment.to_string())
             .env("TEST_URL", &url)
             .env("TEST_PERSISTED", persisted.to_string())
             .env("GH_TOKEN", "test-token")
@@ -500,7 +522,7 @@ fi
                     String::from_utf8_lossy(&output.stderr)
                 )),
             ["AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46dGVzdC10b2tlbg=="],
-            "fetch helper: {fetch}; persisted credentials: {persisted}"
+            "fetch helper: {fetch}; persisted credentials: {persisted}; build environment: {build_environment}"
         );
     }
 }
