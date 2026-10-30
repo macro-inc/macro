@@ -26,9 +26,9 @@ use sqlx::{Postgres, QueryBuilder};
 
 use super::{
     DOCUMENT_TASK_PROPERTY_JOINS, DocumentIdArrays, USER_HOLDS_GRANT_SOURCE, build_chat_filter,
-    build_document_filter, build_project_filter, build_properties_filter, chat_literal_constant,
-    document_filter_needs_task_property_joins, document_literal_constant, project_literal_constant,
-    push_not_inward, push_union_separator,
+    build_document_filter, build_notification_join, build_project_filter, build_properties_filter,
+    chat_literal_constant, document_filter_needs_task_property_joins, document_literal_constant,
+    project_literal_constant, push_not_inward, push_union_separator,
 };
 
 /// The sort key main gives never-viewed items under `ViewedAt`.
@@ -107,16 +107,18 @@ enum Driver {
     /// set is the user's notifications, sorted whole.
     Notifications,
     /// The item table's own indexes, for a filter that pins every row to an id
-    /// or a parent project. The few matches are sorted whole.
-    Lookup,
+    /// or a parent project. The few matches are sorted whole. Joined to
+    /// `NotificationItems` when the filter also names a notification state, which
+    /// is then probed per match rather than read whole.
+    Lookup { notified: bool },
 }
 
 impl Driver {
     fn single_kind(notified: bool, pinned: bool) -> Self {
-        if notified {
+        if pinned {
+            Driver::Lookup { notified }
+        } else if notified {
             Driver::Notifications
-        } else if pinned {
-            Driver::Lookup
         } else {
             Driver::Sources
         }
@@ -125,7 +127,7 @@ impl Driver {
     fn reads_in_order(self) -> bool {
         match self {
             Driver::Sources | Driver::Owner => true,
-            Driver::Notifications | Driver::Lookup => false,
+            Driver::Notifications | Driver::Lookup { .. } => false,
         }
     }
 }
@@ -197,12 +199,12 @@ impl FeedArm {
                 _ => {}
             }
         }
-        let driver = if notified {
-            Driver::Notifications
-        } else if pins_rows(filter_ast, |lit| {
+        let driver = if pins_rows(filter_ast, |lit| {
             matches!(lit, DocumentLiteral::Id(_) | DocumentLiteral::ProjectId(_))
         }) {
-            Driver::Lookup
+            Driver::Lookup { notified }
+        } else if notified {
+            Driver::Notifications
         } else if owned_by_viewer {
             Driver::Owner
         } else {
@@ -608,13 +610,21 @@ impl FeedArm {
 
     /// Lists every live item the filter keeps, found through the item table's
     /// indexes.
-    fn lookup_scan(&self, sort: FeedSort) -> String {
+    fn lookup_scan(&self, sort: FeedSort, notified: bool) -> String {
         let alias = self.entity.alias();
         let id = format!("{alias}.id");
+        let notification = if notified {
+            format!(
+                "\n{}",
+                build_notification_join(alias, self.entity.item_type())
+            )
+        } else {
+            String::new()
+        };
         format!(
             r#"
                 SELECT '{item_type}'::text AS item_type, {id} AS id, {sort_ts} AS sort_ts
-                FROM {table}{joins}{access}{history}
+                FROM {table}{joins}{notification}{access}{history}
                 WHERE {alias}."deletedAt" IS NULL{filter}{properties}
 "#,
             item_type = self.entity.item_type(),
@@ -672,7 +682,7 @@ fn served_by_scan<T: Clone>(
     properties: Option<&Expr<PropertiesLiteral>>,
 ) -> bool {
     match driver {
-        Driver::Lookup | Driver::Notifications => true,
+        Driver::Lookup { .. } | Driver::Notifications => true,
         Driver::Sources | Driver::Owner => {
             conjuncts
                 .iter()
@@ -866,7 +876,7 @@ impl Feed {
         for arm in &self.arms {
             match (arm.driver, self.sort) {
                 (Driver::Notifications, sort) => push(arm.notifications_scan(sort)),
-                (Driver::Lookup, sort) => push(arm.lookup_scan(sort)),
+                (Driver::Lookup { notified }, sort) => push(arm.lookup_scan(sort, notified)),
                 (Driver::Sources | Driver::Owner, FeedSort::UpdatedAt) => {
                     push(arm.ordered_scan(Phase::All, self.exclude_frecency))
                 }

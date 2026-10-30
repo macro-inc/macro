@@ -370,6 +370,26 @@ fn shapes() -> Vec<(&'static str, EntityFilterAst)> {
             },
         ),
         (
+            "unseen and pinned",
+            EntityFilterAst {
+                document_filter: tree(Expr::and(
+                    Expr::val(DocumentLiteral::NotificationState(
+                        NotificationState::Unseen,
+                    )),
+                    Expr::val(DocumentLiteral::Id(document(20))),
+                )),
+                chat_filter: tree(Expr::and(
+                    Expr::val(ChatLiteral::NotificationState(NotificationState::Unseen)),
+                    Expr::val(ChatLiteral::ProjectId(project(1))),
+                )),
+                project_filter: tree(Expr::and(
+                    Expr::val(ProjectLiteral::NotificationState(NotificationState::Unseen)),
+                    Expr::val(ProjectLiteral::ProjectIdSelf(project(1))),
+                )),
+                ..Default::default()
+            },
+        ),
+        (
             "in P1",
             EntityFilterAst {
                 document_filter: tree(Expr::val(DocumentLiteral::ProjectId(project(1)))),
@@ -569,6 +589,7 @@ fn shapes_reach_every_driver_and_phase() {
         ("owner", r#"ORDER BY d."updatedAt" DESC, d.id DESC"#),
         ("notifications", "FROM NotificationItems ni"),
         ("lookup", r#"WHERE c."deletedAt" IS NULL"#),
+        ("notified lookup", "INNER JOIN NotificationItems ni_chat"),
         ("viewed items", "ViewedItems AS MATERIALIZED"),
         ("never viewed tail", "ORDER BY si.entity_id DESC"),
         ("unviewed", r#"SELECT 1 FROM "UserHistory" seen"#),
