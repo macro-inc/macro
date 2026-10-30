@@ -12,7 +12,7 @@ import type { ScheduleDraft } from '../core/draft';
  * The raised card a page section sits on: the composer surface settings use
  * (menu fill, large radius, glass edge), framed on touch as settings are.
  */
-export function RoutineSurface(props: ParentProps<{ class?: string }>) {
+function RoutineSurface(props: ParentProps<{ class?: string }>) {
   return (
     <ComposerSurface
       as="div"
