@@ -1,6 +1,6 @@
 # Type Alias: ApiDraftInput
 
-> **ApiDraftInput** = \{ `bcc?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; `body_html?`: `string` \| `null`; `body_macro?`: `string` \| `null`; `body_text?`: `string` \| `null`; `cc?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; `db_id?`: `string` \| `null`; `draft_generation?`: `number`; `headers_json?`: `null` \| [`Value`](Value.md); `include_signature?`: `boolean` \| `null`; `provider_id?`: `string` \| `null`; `provider_thread_id?`: `string` \| `null`; `replying_to_id?`: `string` \| `null`; `subject`: `string`; `thread_db_id?`: `string` \| `null`; `to?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; \}
+> **ApiDraftInput** = \{ `bcc?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; `body_html?`: `string` \| `null`; `body_macro?`: `string` \| `null`; `body_text?`: `string` \| `null`; `cc?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; `db_id?`: `string` \| `null`; `draft_generation?`: `number`; `headers_json?`: `null` \| [`Value`](Value.md); `include_signature?`: `boolean` \| `null`; `provider_id?`: `string` \| `null`; `provider_thread_id?`: `string` \| `null`; `replying_to_id?`: `string` \| `null`; `reuse_reply_draft?`: `boolean`; `subject`: `string`; `thread_db_id?`: `string` \| `null`; `to?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; \}
 
 The draft input matching the current `MessageToSend` JSON shape for backward compat.
 
@@ -20,6 +20,7 @@ The draft input matching the current `MessageToSend` JSON shape for backward com
 | <a id="property-provider_id"></a> `provider_id?` | `string` \| `null` | Provider message ID. |
 | <a id="property-provider_thread_id"></a> `provider_thread_id?` | `string` \| `null` | Provider thread ID. |
 | <a id="property-replying_to_id"></a> `replying_to_id?` | `string` \| `null` | ID of the message this draft is replying to. |
+| <a id="property-reuse_reply_draft"></a> `reuse_reply_draft?` | `boolean` | Without `db_id`, continue an existing unsent draft replying to `replying_to_id` in this inbox. `false` always creates a new draft, as a sequence step does, leaving the user's own reply draft untouched. |
 | <a id="property-subject"></a> `subject` | `string` | Subject line. |
 | <a id="property-thread_db_id"></a> `thread_db_id?` | `string` \| `null` | Thread DB ID. |
 | <a id="property-to"></a> `to?` | [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null` | To recipients. |
