@@ -70,6 +70,23 @@ query InitiativeIdentity($initiativeId: ID!, $signedIn: Boolean = false) {
   }
 }
 
+# The tasks a project read found visible to the viewer, hydrated without
+# another access check. A visitor with no account lists a project's tasks
+# this way; the Tasks list needs an account.
+query InitiativeTasks($initiativeId: ID!) {
+  initiative(initiativeId: $initiativeId) {
+    id
+    tasks {
+      __typename
+      id
+      displayName
+      properties {
+        ...SoupPropertyFields
+      }
+    }
+  }
+}
+
 mutation CreateInitiative($input: CreateInitiativeInput!) {
   createInitiative(input: $input) {
     ...InitiativeDetailFields

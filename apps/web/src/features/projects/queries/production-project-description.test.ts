@@ -23,8 +23,8 @@ vi.mock('./project-description', () => ({
 import { createProductionProjectDescriptionSession } from './production-project-description';
 import type { ProjectDescriptionTransport } from './project-description';
 
-function transport(): ProjectDescriptionTransport<string> {
-  createProductionProjectDescriptionSession('project-1');
+function transport(signedIn = true): ProjectDescriptionTransport<string> {
+  createProductionProjectDescriptionSession('project-1', { signedIn });
   const [surfaceId, port] = doubles.session.mock.calls[0];
   // The description surface has the project's id.
   expect(surfaceId).toBe('project-1');
@@ -47,6 +47,16 @@ describe('production project description transport', () => {
     expect(doubles.ensure.mock.invocationCallOrder[0]).toBeLessThan(
       doubles.token.mock.invocationCallOrder[0]
     );
+  });
+
+  it('reads the surface as it stands for a caller with no account', async () => {
+    doubles.token.mockResolvedValue('token-1');
+
+    await expect(
+      transport(false).authorize('project-1', new AbortController().signal)
+    ).resolves.toBe('token-1');
+
+    expect(doubles.ensure).not.toHaveBeenCalled();
   });
 
   it('fails without a connection token', async () => {

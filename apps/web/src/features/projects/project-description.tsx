@@ -1,4 +1,5 @@
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { useIsAuthenticated } from '@core/auth';
 import { CollabMarkdownEditor } from '@core/collab-surface/CollabMarkdownEditor';
 import { Button } from '@ui';
 import { createMemo, createSignal, onCleanup, Show, Suspense } from 'solid-js';
@@ -7,10 +8,13 @@ import { createProductionProjectDescriptionSession } from './queries/production-
 
 function DescriptionSession(props: {
   projectId: string;
+  signedIn: boolean;
   canEdit: boolean;
   onRetry(): void;
 }) {
-  const session = createProductionProjectDescriptionSession(props.projectId);
+  const session = createProductionProjectDescriptionSession(props.projectId, {
+    signedIn: props.signedIn,
+  });
   onCleanup(session.dispose);
   return (
     <>
@@ -44,23 +48,33 @@ export function ProjectDescription(props: {
   projectId: string;
   canEdit: boolean;
 }) {
+  const authenticated = useIsAuthenticated();
   const [attempt, setAttempt] = createSignal(0);
-  // Project refreshes keep the same session; only a new project or retry reopens.
+  // Project refreshes keep the same session; only a new project, a settled
+  // sign-in state, or a retry reopens. Opening waits for sign-in to settle:
+  // only an account ensures the surface.
   const identity = createMemo(
-    () => ({ projectId: props.projectId, attempt: attempt() }),
+    () => {
+      const signedIn = authenticated();
+      return signedIn === undefined
+        ? undefined
+        : { projectId: props.projectId, signedIn, attempt: attempt() };
+    },
     undefined,
     {
       equals: (previous, next) =>
-        previous.projectId === next.projectId &&
-        previous.attempt === next.attempt,
+        previous?.projectId === next?.projectId &&
+        previous?.signedIn === next?.signedIn &&
+        previous?.attempt === next?.attempt,
     }
   );
   return (
     <Suspense fallback={<ProjectDescriptionSkeleton />}>
-      <Show when={identity()} keyed>
+      <Show when={identity()} keyed fallback={<ProjectDescriptionSkeleton />}>
         {(identity) => (
           <DescriptionSession
             projectId={identity.projectId}
+            signedIn={identity.signedIn}
             canEdit={props.canEdit}
             onRetry={() => setAttempt((attempt) => attempt + 1)}
           />

@@ -1,5 +1,6 @@
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
+import { useIsAuthenticated } from '@core/auth';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
@@ -21,6 +22,7 @@ import {
   ProjectTasksList,
   type ProjectTasksListProps,
 } from './project-tasks-list';
+import { ProjectVisitorTasks } from './project-visitor-tasks';
 
 const PROJECT_PROPERTY_ORDER = [
   SYSTEM_PROPERTY_IDS.STATUS,
@@ -41,6 +43,7 @@ export function ProjectWorkspace(props: {
   description: JSX.Element;
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
+  const authenticated = useIsAuthenticated();
   const [error, setError] = createSignal<string>();
   const canEdit = () => canEditProject(props.project);
   const run = async (action: () => Promise<void>) => {
@@ -157,6 +160,14 @@ export function ProjectWorkspace(props: {
                   {props.discussion}
                 </div>
               </div>
+            </Match>
+            <Match
+              when={props.section === 'tasks' && authenticated() === false}
+            >
+              <ProjectVisitorTasks
+                projectId={props.project.id}
+                section={props.section}
+              />
             </Match>
             <Match when={props.section === 'tasks'}>
               <ProjectTasksList

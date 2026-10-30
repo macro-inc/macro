@@ -33,6 +33,7 @@ vi.mock(
   })
 );
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@queries/messages/document-messages', () => ({
   useMessageLink: mocks.link,
 }));
