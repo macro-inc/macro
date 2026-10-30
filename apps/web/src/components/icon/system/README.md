@@ -64,8 +64,11 @@ Completed task status uses the filled check-circle through the shared property
 and task-status renderers. Empty priority uses a muted circled minus.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
-tokens for icons and group-header tints. Their defaults are muted gray, amber
-(in both light and dark modes), violet, green, and muted gray respectively.
+tokens for icons and group-header tints. Their defaults are muted gray, blended
+amber, violet, green, and muted gray respectively. In Progress mixes amber with
+`content-0` in sRGB: 80% amber in dark mode and 50% in light mode, improving contrast
+without rotating amber toward a tinted foreground's hue. Authored overrides stay
+unchanged.
 Status property glyphs default to 16 px, including desktop and mobile edit menus;
 compact display callers can still set an explicit smaller size.
 

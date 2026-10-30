@@ -425,7 +425,7 @@ body.tauri-ios {
   --color-failure: var(--color-red);
   --color-priority-urgent: var(--color-orange);
   --color-task-status-not-started: var(--color-content-1);
-  --color-task-status-in-progress: var(--color-amber);
+  --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0));
   --color-task-status-in-review: var(--color-violet);
   --color-task-status-completed: var(--color-green);
   --color-task-status-canceled: var(--color-content-1);
@@ -655,7 +655,7 @@ body.tauri-ios {
 [data-theme-light] {
   --color-priority-urgent: var(--color-orange);
   --color-task-status-not-started: var(--color-content-1);
-  --color-task-status-in-progress: var(--color-amber);
+  --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0));
   --color-task-status-in-review: var(--color-violet);
   --color-task-status-completed: var(--color-green);
   --color-task-status-canceled: var(--color-content-1);
@@ -736,6 +736,7 @@ body.tauri-ios {
 }
 
 [data-theme-light='true'] {
+  --color-task-status-in-progress: color-mix(in srgb, var(--color-amber) 50%, var(--color-content-0));
   /* Neutral borders. */
   --border-primary: oklch(0 0 0 / 16%);
   --border-secondary: oklch(0 0 0 / 12%);
