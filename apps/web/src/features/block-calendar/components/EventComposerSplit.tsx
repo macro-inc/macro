@@ -11,7 +11,10 @@ import {
   useCalendarGuestInvitesFlag,
   useCalendarInvitationForwardFlag,
 } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
+import {
+  type CreatedCalendarEvent,
+  useEventEditor,
+} from '@app/features/calendar/hooks/use-event-editor';
 import { useSyncedCalendarEvent } from '@app/features/calendar/hooks/use-synced-calendar-event';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { viewerReplacesGuests } from '@app/features/calendar/utils/event-guest-editing';
@@ -62,6 +65,8 @@ type EventComposerSplitProps = {
   onCalendarChange?: (calendarId: string, color: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveSuccess?: () => void;
+  /** Called with a new event once it exists, before the composer closes. */
+  onCreated?: (created: CreatedCalendarEvent) => void;
 };
 
 export function EventComposerSplit(props: EventComposerSplitProps) {
@@ -105,6 +110,7 @@ function EventComposerContent(
     invitationForwardEnabled,
     syncedEvent: useSyncedCalendarEvent(() => props.event),
     onDetailsLocked: () => controller.resetDetails(),
+    onCreated: (created) => props.onCreated?.(created),
     onSaved: () => {
       props.onSaveSuccess?.();
       close();

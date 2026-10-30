@@ -11,6 +11,7 @@ const sources = vi.hoisted(() => ({
   blocks: vi.fn(),
   calendar: vi.fn(),
   openEvent: vi.fn(),
+  openCalendarEvent: vi.fn(),
   openCompany: vi.fn(),
   openMenu: vi.fn(),
 }));
@@ -31,6 +32,9 @@ vi.mock(
     useOpenEventComposer: () => sources.openEvent,
   })
 );
+vi.mock('@app/features/calendar-view/open-calendar-event', () => ({
+  openCalendarEventSplit: sources.openCalendarEvent,
+}));
 vi.mock('@app/features/crm/creation-adapter', () => ({
   openCreateCompanyModal: sources.openCompany,
 }));
@@ -76,6 +80,27 @@ describe('mobile create availability', () => {
     setCalendar(false);
     expect(screen.queryByRole('button', { name: 'Event' })).toBeNull();
     expect(sources.openEvent).not.toHaveBeenCalled();
+  });
+
+  it('shows an event made from the inbox quick menu in the calendar', async () => {
+    const { setCalendar } = setup();
+    setCalendar(true);
+    sources.openCalendarEvent.mockResolvedValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'New' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Event' }));
+    await vi.waitFor(() => expect(sources.openEvent).toHaveBeenCalledOnce());
+    expect(sources.openCalendarEvent).not.toHaveBeenCalled();
+
+    const created = {
+      eventId: 'event-1',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-09-22T14:00:00Z',
+        endsAt: '2026-09-22T15:00:00Z',
+      },
+    };
+    sources.openEvent.mock.lastCall?.[0].onCreated(created);
+    expect(sources.openCalendarEvent).toHaveBeenCalledExactlyOnceWith(created);
   });
 
   it('omits Task when unavailable and invokes its launcher action when available', async () => {

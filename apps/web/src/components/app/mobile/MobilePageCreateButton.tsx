@@ -1,5 +1,6 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
+import { openCalendarEventSplit } from '@app/features/calendar-view/open-calendar-event';
 import {
   setCreateMenuOpen,
   useCreateMenuBlocks,
@@ -7,6 +8,7 @@ import {
 import { openCreateCompanyModal } from '@app/features/crm/creation-adapter';
 import { type TranslationKey, t } from '@app/lib/i18n';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import MessageIcon from '@icon/system/regular/chat-circle.svg';
 import MoreIcon from '@icon/system/regular/dots-three.svg';
@@ -63,7 +65,18 @@ export function MobilePageCreateButton() {
     }
     if (view === 'calendar') {
       return calendarEnabled()
-        ? { label: t('mobile.event'), onSelect: () => openEventComposer() }
+        ? {
+            label: t('mobile.event'),
+            // Created away from the calendar, the event shows there next.
+            onSelect: () =>
+              openEventComposer({
+                onCreated: (created) =>
+                  fireAndForget(
+                    openCalendarEventSplit(created),
+                    'mobile-create'
+                  ),
+              }),
+          }
         : undefined;
     }
     const block = mobilePageCreateBlock(view, createBlocks());

@@ -242,13 +242,17 @@ per row. Guests opens its own sheet over the composer, as tall as the event
 sheet, with Cancel, the `Guests` title, and Done; its list fills the sheet.
 Picks apply only on Done, and Cancel, the backdrop, or Escape drop them; the
 guest sheet has no handle and does not drag, since a drag there also reached
-the event sheet beneath. Picking a guest keeps the keyboard up. The title sits directly below the pinned chrome.
-The sheet has no Cancel: drag, the backdrop, or Escape dismiss it.
+the event sheet beneath. Picking a guest keeps the keyboard up. The title
+sits directly below the pinned chrome. The sheet has no Cancel: drag, the
+backdrop, or Escape dismiss it.
 `This event`/`All events` sits at the bottom when editing a recurring event.
 Desktop retains the centered dialog with inline dates, wrapping pills, and its
 Cancel footer; both layouts compose `EventFormParts` (`MobileEventForm` and
 `EventForm`), and the range rows compose `DateTimeRange` parts.
-Dismissing a changed event still asks before discarding the draft.
+Dismissing a changed event still asks before discarding the draft. An event
+created from Home's **+ New** → Event opens the calendar on it once it saves,
+with its details showing; events created inside the calendar stay where they
+were made.
 
 On phones, event details use inset round action buttons and a transparent RSVP
 footer. Answering a recurring invitation opens a rounded glass sheet: choose
