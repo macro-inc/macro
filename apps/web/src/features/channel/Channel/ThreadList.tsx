@@ -3,6 +3,7 @@ import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
+import { SELF_ANCHORED_SCROLLER } from '@core/util/scrollAnchor';
 import { Key } from '@solid-primitives/keyed';
 import { isIOS, isSafari } from '@solid-primitives/platform';
 import {
@@ -623,6 +624,7 @@ export function ThreadList(props: ThreadListProps) {
       <div
         ref={scrollRef}
         data-channel-scroll
+        {...{ [SELF_ANCHORED_SCROLLER]: '' }}
         class="scrollbar-hidden px-2"
         {...scrollIntent.handlers}
         onScroll={scheduleScrollState}

@@ -8,6 +8,7 @@ import {
   captureScrollAnchor,
   holdScrollAnchor,
   restoreScrollAnchor,
+  SELF_ANCHORED_SCROLLER,
 } from './scrollAnchor';
 
 const rect = (top: number, bottom: number) =>
@@ -210,6 +211,13 @@ describe('element scroll anchor', () => {
     inner.append(element);
 
     expect(captureElementScrollAnchor(element)?.scroller).toBe(scroller);
+  });
+
+  it('leaves a scroll container that anchors its own content alone', () => {
+    const { scroller, element } = setupScrolledElement(450);
+    scroller.setAttribute(SELF_ANCHORED_SCROLLER, '');
+
+    expect(captureElementScrollAnchor(element)).toBeUndefined();
   });
 
   it('falls back to a scroll container whose content still fits', () => {

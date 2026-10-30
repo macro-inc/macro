@@ -99,6 +99,14 @@ function verticalScrollParent(element: Element): HTMLElement | undefined {
 }
 
 /**
+ * Marks a scroll container that keeps its own content anchored through
+ * reflows, such as a virtualized list that corrects for remeasured rows.
+ * Element anchors leave it alone: two writers correcting the same reflow
+ * double-count it and scroll the content away.
+ */
+export const SELF_ANCHORED_SCROLLER = 'data-self-anchored-scroller';
+
+/**
  * Anchors on `element` when any of it is on screen in the nearest container
  * that scrolls it vertically.
  */
@@ -107,7 +115,9 @@ export function captureElementScrollAnchor(
 ): { scroller: HTMLElement; anchor: ScrollAnchor } | undefined {
   if (!element?.isConnected) return undefined;
   const scroller = verticalScrollParent(element);
-  if (!scroller) return undefined;
+  if (!scroller || scroller.hasAttribute(SELF_ANCHORED_SCROLLER)) {
+    return undefined;
+  }
 
   const view = scroller.getBoundingClientRect();
   const { top, bottom } = element.getBoundingClientRect();
