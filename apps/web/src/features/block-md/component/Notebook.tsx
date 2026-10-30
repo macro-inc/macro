@@ -32,7 +32,7 @@ import {
   untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
-import { isKeyboardFocusedControl } from '../util/isKeyboardFocusedControl';
+import { createKeyboardFocusedControl } from '../util/createKeyboardFocusedControl';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -99,6 +99,7 @@ export function Notebook(props: {
   const { md, setMd } = state.editor;
   const { displayName: documentName } = useMarkdownName();
   const scopeId = () => props.hotkeyScope;
+  const ownsEnter = createKeyboardFocusedControl();
   const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
@@ -207,7 +208,7 @@ export function Notebook(props: {
         hotkeyToken: TOKENS.block.focus,
         description: 'Focus Title or Markdown Editor',
         keyDownHandler: (event) => {
-          if (isKeyboardFocusedControl(event?.target)) return false;
+          if (ownsEnter(event?.target)) return false;
           const titleEditor = md.titleEditor;
           const markdownEditor = md.editor;
           const docName = untrack(documentName);
