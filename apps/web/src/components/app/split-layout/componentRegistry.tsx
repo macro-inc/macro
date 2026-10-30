@@ -73,6 +73,10 @@ const CallsRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'CallsRouteView'
 );
+const EmailMarketingRouteView = lazyNamed(
+  () => import('@app/features/email-marketing/route-views'),
+  'EmailMarketingRouteView'
+);
 const FoldersRouteView = lazyNamed(
   () => import('@app/features/next-soup/route-views'),
   'FoldersRouteView'
@@ -374,6 +378,11 @@ registerComponent('companies', () => <CompaniesRouteView />, {
   splitPanelLayout: 'composable',
 });
 registerComponent('folders', () => <FoldersRouteView />);
+registerComponent(
+  'email-marketing',
+  () => <EmailMarketingRouteView />,
+  () => composableLayout()
+);
 registerComponent('search', () => <SearchRouteView />);
 registerComponent('firehose', () => (
   <RedirectSplit to={{ type: 'component', id: 'activity' }} />

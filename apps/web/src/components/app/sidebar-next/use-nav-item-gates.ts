@@ -5,6 +5,7 @@ import {
   ENABLE_CALLS,
   enableCalendarScheduling,
   enableCrm,
+  enableEmailMarketing,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -24,6 +25,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
   const external = useFeatureFlag(enableWhatsappLinked);
+  const emailMarketing = useFeatureFlag(enableEmailMarketing);
   const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
@@ -34,6 +36,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showReviews: reviews().enabled,
     showActivity: activity(),
     showExternal: external().enabled,
+    showEmailMarketing: emailMarketing().enabled,
     prefs: prefs(),
   }));
 }

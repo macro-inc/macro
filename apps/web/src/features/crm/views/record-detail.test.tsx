@@ -36,6 +36,7 @@ vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
     listsEnabled: () => () => false,
     pipelinesEnabled: () => () => false,
+    emailMarketingEnabled: () => () => false,
     isTeamAdmin: () => () => false,
     openCreateContact: vi.fn(),
     registerTaskComposerRecord: (source: () => CrmTaskRecord) => {

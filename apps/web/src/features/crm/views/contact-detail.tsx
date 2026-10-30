@@ -35,6 +35,7 @@ export function Contact(props: {
 }) {
   const context = useCrmContext();
   const pipelinesEnabled = context.pipelinesEnabled();
+  const emailMarketingEnabled = context.emailMarketingEnabled();
   const contactQuery = useContactQuery(() => props.contactId);
   const contact = () => contactQuery.data;
   onCleanup(
@@ -81,6 +82,13 @@ export function Contact(props: {
                     record={{ type: 'contact', id: props.contactId }}
                     onOpenPipeline={props.onOpenPipeline}
                   />
+                </Show>
+                <Show when={emailMarketingEnabled() && contact()?.email}>
+                  {(email) => (
+                    <Suspense>
+                      <context.MarketingEnrollments email={email()} />
+                    </Suspense>
+                  )}
                 </Show>
                 <ContactDiscussionSection contactId={props.contactId} />
               </RecordOverview>

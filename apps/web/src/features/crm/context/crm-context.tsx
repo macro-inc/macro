@@ -82,6 +82,7 @@ export type CrmContext = {
   };
   listsEnabled(): Accessor<boolean>;
   pipelinesEnabled(): Accessor<boolean>;
+  emailMarketingEnabled(): Accessor<boolean>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(
@@ -136,7 +137,8 @@ export type CrmContext = {
   ): ItemListSource;
   /** The record's Tasks tab, scoped to tasks associated with it. */
   RecordTasks: Component<{ scope: CrmRecordScope }>;
-  MarketingEnrollments?: Component<{ email: string }>;
+  /** Email Marketing enrollments for a contact, shown on its overview. */
+  MarketingEnrollments: Component<{ email: string }>;
   createPropertyCommands(): PropertyCommands;
   hydrateCompany(company: CrmCompanyEntity): CrmCompanyEntity;
   createSettingsCommands(): CrmMutation<

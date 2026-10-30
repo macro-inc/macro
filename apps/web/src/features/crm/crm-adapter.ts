@@ -12,6 +12,7 @@ import {
   enableCrmLists,
   enableCrmPipelines,
   enableDatabases,
+  enableEmailMarketing,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
@@ -253,6 +254,10 @@ export function createAppCrmContext(): CrmContext {
     },
     pipelinesEnabled() {
       const flag = useFeatureFlag(enableCrmPipelines);
+      return () => flag().enabled;
+    },
+    emailMarketingEnabled() {
+      const flag = useFeatureFlag(enableEmailMarketing);
       return () => flag().enabled;
     },
     createCompanyEmails: (...args) =>

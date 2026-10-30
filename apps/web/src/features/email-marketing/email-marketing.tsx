@@ -1,7 +1,7 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
-import { useQuery } from '@tanstack/solid-query';
 import type {
   MarketingCapabilities,
   MarketingRepository,
@@ -9,18 +9,20 @@ import type {
 import { createContactQueries } from './queries/contacts';
 import { createSequenceContentSession } from './queries/content-session';
 import { createDatabaseMarketingRepository } from './queries/database-repository';
+import { marketingQueryKey } from './queries/enrollments-query';
 import { createGmailSequenceDelivery } from './queries/gmail-delivery';
 import { MarketingWorkspaceView } from './views/marketing-workspace';
-
-export const marketingQueryKey = (userId: string | undefined) =>
-  ['email-marketing', userId ?? 'signed-out'] as const;
 
 function createQueryRepository(
   userId: () => string | undefined
 ): MarketingRepository {
   const repository = createDatabaseMarketingRepository();
+  // CRM cards refetch in the background; a sequence write never waits on them.
   const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: marketingQueryKey(userId()) });
+    fireAndForget(
+      queryClient.invalidateQueries({ queryKey: marketingQueryKey(userId()) }),
+      'email-marketing'
+    );
   return {
     async load() {
       // Writes need this repository's fresh row handles and table versions.
@@ -30,11 +32,11 @@ function createQueryRepository(
     },
     async saveCampaign(value) {
       await repository.saveCampaign(value);
-      await invalidate();
+      invalidate();
     },
     async saveEnrollment(value) {
       await repository.saveEnrollment(value);
-      await invalidate();
+      invalidate();
     },
   };
 }
@@ -62,17 +64,4 @@ export function EmailMarketing() {
     },
   };
   return <MarketingWorkspaceView capabilities={capabilities} />;
-}
-
-/** Shared query shape for CRM, scoped to the signed-in account. */
-export function useMarketingEnrollments() {
-  const userId = useUserId();
-  const repository = createDatabaseMarketingRepository();
-  return useQuery(() => ({
-    queryKey: marketingQueryKey(userId()),
-    queryFn: () => repository.load(),
-    enabled: !!userId(),
-    staleTime: 0,
-    refetchOnWindowFocus: true,
-  }));
 }
