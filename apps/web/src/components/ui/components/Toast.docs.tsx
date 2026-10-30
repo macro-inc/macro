@@ -1,9 +1,6 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { createMobileToastSwipe } from '@core/component/Toast/create-mobile-toast-swipe';
-import {
-  ToastContent,
-  ToastType,
-} from '@core/component/Toast/Toast';
+import { ToastContent, ToastType } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
@@ -47,15 +44,17 @@ function createToastPreview(options?: { appPosition?: boolean }) {
           toastId={props.toastId}
           onDismiss={() => {
             ids.delete(props.toastId);
-            if (activeTransientId === props.toastId) activeTransientId = undefined;
+            if (activeTransientId === props.toastId)
+              activeTransientId = undefined;
             content.onDismiss?.();
           }}
         />
       ),
       {
-        region: options?.appPosition && content.persistent
-          ? persistentRegionId
-          : regionId,
+        region:
+          options?.appPosition && content.persistent
+            ? persistentRegionId
+            : regionId,
       }
     );
     ids.add(id);
@@ -125,44 +124,55 @@ function StatusesDemo(props: ToastDemoProps = {}) {
       <div class="flex flex-wrap justify-center gap-2">
         <Button
           variant="secondary"
-          onClick={() => preview.show({
-            toastType: ToastType.SUCCESS,
-            message: 'Changes saved',
-          })}
+          onClick={() =>
+            preview.show({
+              toastType: ToastType.SUCCESS,
+              message: 'Changes saved',
+            })
+          }
         >
           Success
         </Button>
         <Button
           variant="secondary"
-          onClick={() => preview.show({
-            toastType: ToastType.ALERT,
-            message: 'Attachment permissions',
-            subtext: 'Some recipients cannot open this attachment. Ask its owner to update access.',
-          })}
+          onClick={() =>
+            preview.show({
+              toastType: ToastType.ALERT,
+              message: 'Attachment permissions',
+              subtext:
+                'Some recipients cannot open this attachment. Ask its owner to update access.',
+            })
+          }
         >
           Warning
         </Button>
         <Button
           variant="secondary"
-          onClick={() => preview.show({
-            toastType: ToastType.FAILURE,
-            message: 'Download failed',
-            subtext: 'The file could not be downloaded. Try again.',
-          })}
+          onClick={() =>
+            preview.show({
+              toastType: ToastType.FAILURE,
+              message: 'Download failed',
+              subtext: 'The file could not be downloaded. Try again.',
+            })
+          }
         >
           Failure
         </Button>
         <Button
           variant="secondary"
-          onClick={() => preview.show({
-            toastType: ToastType.SUCCESS,
-            message: 'Link copied',
-            showCloseButton: false,
-          })}
+          onClick={() =>
+            preview.show({
+              toastType: ToastType.SUCCESS,
+              message: 'Link copied',
+              showCloseButton: false,
+            })
+          }
         >
           Without close button
         </Button>
-        <Button variant="ghost" onClick={preview.clear}>Clear</Button>
+        <Button variant="ghost" onClick={preview.clear}>
+          Clear
+        </Button>
       </div>
       <Show when={!props.preview}>
         <PreviewRegion preview={preview} label="Status previews" />
@@ -181,13 +191,18 @@ function ActionsDemo(props: ToastDemoProps = {}) {
       message: 'Email sent',
       duration: 5000,
       actionLayout: 'inline',
-      actions: [{
-        label: 'Undo',
-        onClick: () => {
-          preview.dismiss(id);
-          preview.show({ toastType: ToastType.SUCCESS, message: 'Send cancelled' });
+      actions: [
+        {
+          label: 'Undo',
+          onClick: () => {
+            preview.dismiss(id);
+            preview.show({
+              toastType: ToastType.SUCCESS,
+              message: 'Send cancelled',
+            });
+          },
         },
-      }],
+      ],
     });
   };
   const prompt = () => {
@@ -216,24 +231,35 @@ function ActionsDemo(props: ToastDemoProps = {}) {
   return (
     <div class="flex w-full flex-col items-center gap-4">
       <div class="flex flex-wrap justify-center gap-2">
-        <Button variant="secondary" onClick={undo}>Undo send</Button>
-        <Button variant="secondary" onClick={prompt}>Persistent prompt</Button>
+        <Button variant="secondary" onClick={undo}>
+          Undo send
+        </Button>
+        <Button variant="secondary" onClick={prompt}>
+          Persistent prompt
+        </Button>
         <Button
           variant="secondary"
-          onClick={() => preview.show({
-            embed: () => (
-              <div class="flex flex-col gap-1">
-                <Toast.Title class="text-base font-medium text-ink">Custom content</Toast.Title>
-                <Toast.Description class="text-sm text-ink-muted">
-                  Embedded content retains the shared surface and dismissal controls.
-                </Toast.Description>
-              </div>
-            ),
-          })}
+          onClick={() =>
+            preview.show({
+              embed: () => (
+                <div class="flex flex-col gap-1">
+                  <Toast.Title class="text-base font-medium text-ink">
+                    Custom content
+                  </Toast.Title>
+                  <Toast.Description class="text-sm text-ink-muted">
+                    Embedded content retains the shared surface and dismissal
+                    controls.
+                  </Toast.Description>
+                </div>
+              ),
+            })
+          }
         >
           Embedded content
         </Button>
-        <Button variant="ghost" onClick={preview.clear}>Clear</Button>
+        <Button variant="ghost" onClick={preview.clear}>
+          Clear
+        </Button>
       </div>
       <Show when={!props.preview}>
         <PreviewRegion preview={preview} label="Action previews" />
@@ -261,7 +287,9 @@ function AsyncDemo(props: ToastDemoProps = {}) {
       preview.show({
         toastType: fail ? ToastType.FAILURE : ToastType.SUCCESS,
         message: fail ? 'Some files could not be moved' : 'Files moved',
-        subtext: fail ? 'Two files remain in their original folder.' : undefined,
+        subtext: fail
+          ? 'Two files remain in their original folder.'
+          : undefined,
       });
     }, 1800);
   };
@@ -292,16 +320,20 @@ function AsyncDemo(props: ToastDemoProps = {}) {
                 style={{ transform: `scaleX(${progress() / 100})` }}
               />
             </div>
-            <span class="text-xs text-ink-muted tabular-nums">{progress()} of 100 MB</span>
+            <span class="text-xs text-ink-muted tabular-nums">
+              {progress()} of 100 MB
+            </span>
           </div>
         ),
-        actions: [{
-          label: 'Cancel',
-          onClick: () => {
-            cancel?.();
-            preview.dismiss(id);
+        actions: [
+          {
+            label: 'Cancel',
+            onClick: () => {
+              cancel?.();
+              preview.dismiss(id);
+            },
           },
-        }],
+        ],
       },
     });
     const advance = () => {
@@ -309,7 +341,10 @@ function AsyncDemo(props: ToastDemoProps = {}) {
       setProgress(next);
       if (next === 100) {
         preview.dismiss(id);
-        preview.show({ toastType: ToastType.SUCCESS, message: 'Archive downloaded' });
+        preview.show({
+          toastType: ToastType.SUCCESS,
+          message: 'Archive downloaded',
+        });
         return;
       }
       cancel = preview.later(advance, 300);
@@ -319,10 +354,18 @@ function AsyncDemo(props: ToastDemoProps = {}) {
   return (
     <div class="flex w-full flex-col items-center gap-4">
       <div class="flex flex-wrap justify-center gap-2">
-        <Button variant="secondary" onClick={() => simulateOperation(false)}>Loading to success</Button>
-        <Button variant="secondary" onClick={() => simulateOperation(true)}>Loading to failure</Button>
-        <Button variant="secondary" onClick={simulateDownload}>Download progress</Button>
-        <Button variant="ghost" onClick={preview.clear}>Clear</Button>
+        <Button variant="secondary" onClick={() => simulateOperation(false)}>
+          Loading to success
+        </Button>
+        <Button variant="secondary" onClick={() => simulateOperation(true)}>
+          Loading to failure
+        </Button>
+        <Button variant="secondary" onClick={simulateDownload}>
+          Download progress
+        </Button>
+        <Button variant="ghost" onClick={preview.clear}>
+          Clear
+        </Button>
       </div>
       <Show when={!props.preview}>
         <PreviewRegion preview={preview} label="Async previews" />
@@ -337,30 +380,50 @@ function StackDemo(props: ToastDemoProps = {}) {
   const preview = props.preview ?? createToastPreview();
   const replay = () => {
     preview.clear();
-    preview.show({ toastType: ToastType.SUCCESS, message: 'Link copied', duration: 12000 });
-    preview.later(() => preview.show({
-      toastType: ToastType.ALERT,
-      message: 'Check attachment access',
-      subtext: 'Recipients need permission before they can open the file.',
-      duration: 12000,
-    }), 300);
-    preview.later(() => preview.show({
-      toastType: ToastType.FAILURE,
-      message: 'Download failed',
-      duration: 12000,
-    }), 600);
-    preview.later(() => preview.show({
+    preview.show({
       toastType: ToastType.SUCCESS,
-      message: 'Queued notice',
-      subtext: 'A fourth notice waits until a slot is available.',
+      message: 'Link copied',
       duration: 12000,
-    }), 900);
+    });
+    preview.later(
+      () =>
+        preview.show({
+          toastType: ToastType.ALERT,
+          message: 'Check attachment access',
+          subtext: 'Recipients need permission before they can open the file.',
+          duration: 12000,
+        }),
+      300
+    );
+    preview.later(
+      () =>
+        preview.show({
+          toastType: ToastType.FAILURE,
+          message: 'Download failed',
+          duration: 12000,
+        }),
+      600
+    );
+    preview.later(
+      () =>
+        preview.show({
+          toastType: ToastType.SUCCESS,
+          message: 'Queued notice',
+          subtext: 'A fourth notice waits until a slot is available.',
+          duration: 12000,
+        }),
+      900
+    );
   };
   return (
     <div class="flex w-full flex-col items-center gap-4">
       <div class="flex flex-wrap justify-center gap-2">
-        <Button variant="secondary" onClick={replay}>Replay stack</Button>
-        <Button variant="ghost" onClick={preview.clear}>Clear</Button>
+        <Button variant="secondary" onClick={replay}>
+          Replay stack
+        </Button>
+        <Button variant="ghost" onClick={preview.clear}>
+          Clear
+        </Button>
       </div>
       <Show when={!props.preview}>
         <PreviewRegion preview={preview} label="Stack preview" stack />
@@ -409,16 +472,32 @@ function AppPositionDemo() {
       </Switch>
       <Portal>
         <div
-          on:pointerdown={{ capture: true, handleEvent: mobileSwipe.onPointerDown }}
-          on:pointermove={{ capture: true, handleEvent: mobileSwipe.onPointerMove }}
+          on:pointerdown={{
+            capture: true,
+            handleEvent: mobileSwipe.onPointerDown,
+          }}
+          on:pointermove={{
+            capture: true,
+            handleEvent: mobileSwipe.onPointerMove,
+          }}
           on:pointerup={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
-          on:pointercancel={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
-          class={isMobile()
-            ? 'fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5'
-            : 'fixed bottom-5 right-5 m-0 w-95 max-w-[calc(100vw-32px)] pointer-events-none z-toast-region flex flex-col items-stretch gap-4'}
-          style={isMobile()
-            ? { bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)' }
-            : undefined}
+          on:pointercancel={{
+            capture: true,
+            handleEvent: mobileSwipe.clearSwipe,
+          }}
+          class={
+            isMobile()
+              ? 'fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5'
+              : 'fixed bottom-5 right-5 m-0 w-95 max-w-[calc(100vw-32px)] pointer-events-none z-toast-region flex flex-col items-stretch gap-4'
+          }
+          style={
+            isMobile()
+              ? {
+                  bottom:
+                    'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
+                }
+              : undefined
+          }
         >
           <Toast.Region
             regionId={preview.persistentRegionId}
@@ -462,17 +541,34 @@ export default defineDoc({
     {
       id: 'app-position',
       title: 'App position',
-      description: 'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock and swipe away in either direction without a close icon. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
+      description:
+        'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock and swipe away in either direction without a close icon. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
       render: AppPositionDemo,
       fill: true,
     },
-    { id: 'notifications', title: 'Statuses and close controls', render: StatusesDemo, fill: true },
-    { id: 'actions', title: 'Inline undo, stacked prompts, and custom content', render: ActionsDemo, fill: true },
-    { id: 'async', title: 'Loading and progress', render: AsyncDemo, fill: true },
+    {
+      id: 'notifications',
+      title: 'Statuses and close controls',
+      render: StatusesDemo,
+      fill: true,
+    },
+    {
+      id: 'actions',
+      title: 'Inline undo, stacked prompts, and custom content',
+      render: ActionsDemo,
+      fill: true,
+    },
+    {
+      id: 'async',
+      title: 'Loading and progress',
+      render: AsyncDemo,
+      fill: true,
+    },
     {
       id: 'stack',
       title: 'Desktop stack and queue',
-      description: 'Hover or focus to expand this three-card queue and pause dismissal. The app uses a separate, single transient slot on phones.',
+      description:
+        'Hover or focus to expand this three-card queue and pause dismissal. The app uses a separate, single transient slot on phones.',
       render: StackDemo,
       fill: true,
     },

@@ -237,7 +237,9 @@ function ActionButtons(props: {
             class="max-w-full"
           >
             <Show when={action.icon}>
-              {(icon) => <Dynamic component={icon()} class="size-3.5 shrink-0" />}
+              {(icon) => (
+                <Dynamic component={icon()} class="size-3.5 shrink-0" />
+              )}
             </Show>
             <span class="min-w-0 whitespace-normal break-words">
               {action.label}
@@ -310,7 +312,10 @@ export function ToastContent(props: {
     >
       <div ref={surface} class="macro-toast-surface">
         <div
-          class={cn('macro-toast-content min-w-0', showCloseButton() && 'pr-10')}
+          class={cn(
+            'macro-toast-content min-w-0',
+            showCloseButton() && 'pr-10'
+          )}
         >
           <Show
             when={props.embed}

@@ -4,13 +4,13 @@ import { cn } from '../utils/classname';
 
 export type SpinnerSize = 'sm' | 'md' | 'lg';
 
-export interface SpinnerProps {
+export type SpinnerProps = {
   size?: SpinnerSize;
   label?: string;
   /** Use when nearby content already describes the loading state. */
   decorative?: boolean;
   class?: string;
-}
+};
 
 const sizes: Record<SpinnerSize, string> = {
   sm: 'size-4',
@@ -41,7 +41,6 @@ export function Spinner(props: SpinnerProps) {
         stroke="currentColor"
         stroke-width="2.5"
         aria-hidden="true"
-        focusable="false"
         class="size-full motion-safe:animate-spin"
       >
         <circle cx="12" cy="12" r="9" opacity="0.2" />

@@ -68,7 +68,10 @@ export function ToastRegion() {
           handleEvent: mobileSwipe.onPointerMove,
         }}
         on:pointerup={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
-        on:pointercancel={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
+        on:pointercancel={{
+          capture: true,
+          handleEvent: mobileSwipe.clearSwipe,
+        }}
         style={{
           bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
         }}
