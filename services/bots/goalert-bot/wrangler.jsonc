@@ -33,7 +33,7 @@
 			// GoAlert alert id → posted message id (`alert:<AlertID>`).
 			"binding": "ALERT_MESSAGES",
 			// From `wrangler kv namespace create ALERT_MESSAGES` — see README.
-			"id": "REPLACE_WITH_ALERT_MESSAGES_NAMESPACE_ID"
+			"id": "3cfc0519b2254d6b9e64434658156d52"
 		}
 	]
 }
