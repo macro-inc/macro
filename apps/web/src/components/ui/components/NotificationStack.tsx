@@ -9,6 +9,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  untrack,
 } from 'solid-js';
 import { Button } from './Button';
 
@@ -32,7 +33,10 @@ export type NotificationStackProps<T> = {
   items: readonly T[];
   /** Stable identity; keys the card across reorders and removals. */
   itemKey: (item: T) => string;
-  /** Renders one card's content. The stack draws the card surface. */
+  /**
+   * Renders one card's content, once per key like `For`. The stack draws the
+   * card surface; read live data inside the card, not from a new item object.
+   */
   children: (item: T) => JSX.Element;
   /** Controlled disclosure state. A stack with fewer than two items always closes. */
   expanded?: boolean;
@@ -219,7 +223,7 @@ export function NotificationStack<T>(props: NotificationStackProps<T>) {
                     class="flow-root motion-safe:transition-opacity motion-safe:duration-200 motion-reduce:transition-none"
                     classList={{ 'opacity-0': behind() }}
                   >
-                    {props.children(entry.item())}
+                    {untrack(() => props.children(entry.item()))}
                   </div>
                 </article>
               );

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const fake = vi.hoisted(() => ({ answer: vi.fn(async () => true) }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'me' }));
@@ -29,9 +29,21 @@ vi.mock('../primitives/create-agent-updates', () => ({
 
 import { AgentUpdatesStack } from './AgentUpdatesStack';
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
 afterEach(() => {
   cleanup();
   fake.answer.mockClear();
+  vi.unstubAllGlobals();
 });
 
 describe('AgentUpdatesStack', () => {
