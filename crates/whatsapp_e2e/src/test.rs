@@ -31,6 +31,7 @@ use super::*;
 mod direct_chats;
 mod group_kinds;
 mod message_types;
+mod new_chats;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 /// A test user's id, typed.
