@@ -64,6 +64,22 @@ export function templateDestinations(
   );
 }
 
+/** The tag options a template's steps apply. */
+function templateTagOptions(template: Pick<RoutineTemplate, 'task'>): string[] {
+  const steps = stepsFromTask(template.task) ?? [];
+  return [
+    ...new Set(
+      flattenSteps(steps).flatMap((step) =>
+        step.kind === 'tool' && Array.isArray(step.arguments.add_option_ids)
+          ? step.arguments.add_option_ids.filter(
+              (id): id is string => typeof id === 'string'
+            )
+          : []
+      )
+    ),
+  ];
+}
+
 /**
  * The template's task filled in for the activator: every agent's instructions,
  * including agents in branches, and each tool step's arguments.
@@ -112,6 +128,11 @@ export function createTemplateActivation(args: {
    * destination (`templateDestinations`), by item ID.
    */
   access: Accessor<ReadonlyMap<string, boolean>>;
+  /**
+   * Tag options the activator can apply: undefined while loading, null when
+   * they couldn't be loaded (tags are then kept as shared).
+   */
+  tags?: Accessor<ReadonlySet<string> | null | undefined>;
 }) {
   const [choices, setChoices] = createSignal<
     ReadonlyMap<string, ReferenceChoice>
@@ -149,9 +170,16 @@ export function createTemplateActivation(args: {
   };
 
   const destinations = createMemo(() => templateDestinations(args.template()));
-  /** Still learning whether the activator can open each step's destination. */
+  const tagIds = createMemo(() => templateTagOptions(args.template()));
+  /** Still learning what the activator can open and apply. */
   const checking = () =>
-    destinations().some((destination) => !args.access().has(destination.id));
+    destinations().some((destination) => !args.access().has(destination.id)) ||
+    (tagIds().length > 0 && args.tags?.() === undefined);
+  /** Tags the steps apply that the activator can't: those steps start empty. */
+  const missingTags = () => {
+    const available = args.tags?.();
+    return available ? tagIds().filter((id) => !available.has(id)) : [];
+  };
   /** Channels and folders the activator can't open: their steps start empty. */
   const unreachable = () =>
     destinations().filter(
@@ -186,6 +214,7 @@ export function createTemplateActivation(args: {
       activator,
       keepAuthor: keepsAuthor(template.variables, template.author),
       inaccessible: new Set(unreachable().map((destination) => destination.id)),
+      tags: args.tags?.() ?? undefined,
     };
     let cleared = false;
     const task = filledTask(template.task, fill(activator), (stepArgs) => {
@@ -219,6 +248,7 @@ export function createTemplateActivation(args: {
     request,
     checking,
     unreachable,
+    missingTags,
     blocked,
   };
 }

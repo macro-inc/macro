@@ -203,7 +203,7 @@ export function ActivateTemplateDialog(props: {
                       : props.blocked > 0
                         ? `${props.blocked === 1 ? 'A step acts on a document' : `Steps act on ${props.blocked} documents`} you can’t open. Ask its author to share ${props.blocked === 1 ? 'it' : 'them'} with you.`
                         : props.unreachable > 0
-                          ? `${props.unreachable} ${props.unreachable === 1 ? 'step points' : 'steps point'} to something you can’t open. Choose your own in the editor; the routine starts off until then.`
+                          ? `${props.unreachable} ${props.unreachable === 1 ? 'step uses' : 'steps use'} something you can’t open or apply. Choose your own in the editor; the routine starts off until then.`
                           : 'Your routine runs as you, on its own schedule.'
                 }
               >

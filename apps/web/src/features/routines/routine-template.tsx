@@ -38,6 +38,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { StepsOutline } from './components/routine-steps-outline';
 import { TemplateCard } from './components/template-card';
 import { stepsFromTask } from './core/routine-steps';
@@ -53,6 +54,7 @@ import {
   templatePrompt,
 } from './primitives/template-activation';
 import { parseRoutineTriggers } from './queries/routine-trigger-mapping';
+import { useRoutineTags } from './queries/step-sources';
 import {
   useActivateTemplateMutation,
   useReferenceAccess,
@@ -136,10 +138,17 @@ function ActivateTemplate(
     ...itemReferences(props.template.variables),
     ...templateDestinations(props.template),
   ]);
+  const tags = useRoutineTags();
   const activation = createTemplateActivation({
     template: () => props.template,
     activator,
     access,
+    tags: () =>
+      match(tags.status())
+        .with('pending', () => undefined)
+        .with('error', () => null)
+        .with('ready', () => new Set(tags().map((tag) => tag.optionId)))
+        .exhaustive(),
   });
   const mutation = useActivateTemplateMutation();
   const [error, setError] = createSignal<string>();
@@ -194,7 +203,9 @@ function ActivateTemplate(
       onChoose={activation.choose}
       undecided={activation.undecided().length}
       checking={activation.checking()}
-      unreachable={activation.unreachable().length}
+      unreachable={
+        activation.unreachable().length + activation.missingTags().length
+      }
       blocked={activation.blocked().length}
       pending={mutation.isPending}
       error={error()}

@@ -100,6 +100,8 @@ export function fillStepArguments(
     activator: Activator;
     keepAuthor: boolean;
     inaccessible: ReadonlySet<string>;
+    /** Tag options the activator can apply; undefined if unknown. */
+    tags?: ReadonlySet<string>;
   }
 ): { args: Record<string, unknown>; cleared: boolean } {
   const filled: Record<string, unknown> = { ...args };
@@ -133,6 +135,17 @@ export function fillStepArguments(
     'documentId',
   ])
     clear(key);
+  // Another person's personal tags can't be applied; the step asks for one.
+  const tags = context.tags;
+  if (tags && Array.isArray(args.add_option_ids)) {
+    const kept = args.add_option_ids.filter(
+      (id: unknown) => typeof id === 'string' && tags.has(id)
+    );
+    if (kept.length < args.add_option_ids.length) {
+      cleared = true;
+      filled.add_option_ids = kept;
+    }
+  }
   return { args: filled, cleared };
 }
 

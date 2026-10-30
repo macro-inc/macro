@@ -279,6 +279,45 @@ describe('createTemplateActivation', () => {
     });
   });
 
+  it('asks for a tag where the author’s can’t be applied, and starts off', () => {
+    createRoot((dispose) => {
+      const [tags, setTags] = createSignal<ReadonlySet<string> | undefined>();
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              {
+                type: 'tool',
+                tool: 'SetEntityProperty',
+                arguments: {
+                  entity_id: '{{trigger.entity_id}}',
+                  entity_type: 'document',
+                  property_definition_id: 'tags',
+                  add_option_ids: ['authors-tag', 'team-tag'],
+                },
+              },
+            ],
+          },
+          variables: [],
+        }),
+        activator: () => ACTIVATOR,
+        access: () => new Map(),
+        tags,
+      });
+      // Until the activator's tags load, there's nothing to activate.
+      expect(activation.request()).toBeUndefined();
+      setTags(new Set(['team-tag']));
+      expect(activation.missingTags()).toEqual(['authors-tag']);
+      const body = activation.request();
+      expect(body?.enabled).toBe(false);
+      expect(body?.task).toMatchObject({
+        steps: [{ arguments: { add_option_ids: ['team-tag'] } }],
+      });
+      dispose();
+    });
+  });
+
   it('fills the author in as the activator in every agent, branches included', () => {
     createRoot((dispose) => {
       const author =
