@@ -17,7 +17,7 @@ Newest first. Each entry: date, decision, reason, who decided.
   still depends on no Macro crate. Reason: a separate platform is weeks of
   work with no product value in week one. (Claude)
 - **Connect uses runtime-checked SQLx queries,** each exercised by a
-  `#[sqlx::test]` against Connect's own migrations, instead of Macro's
+  `#[tokio::test]` with Connect's migrations on `template0`, instead of Macro's
   workspace query cache. Reason: Connect has its own database; one
   `DATABASE_URL` cannot serve both at compile time. (Claude)
 - **Generated Cargo artifacts are accepted in Connect changes:** hakari adds

@@ -3,6 +3,8 @@
 mod domain;
 mod mcp;
 mod outbound;
+#[cfg(test)]
+mod test_support;
 
 use axum::{
     Json, Router,

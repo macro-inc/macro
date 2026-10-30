@@ -64,3 +64,9 @@ grants in Connect's own Postgres database.
 - `cargo nextest run --all-features -p connect_api`
 - `cargo clippy -p connect_api --all-features --all-targets -- -D warnings`
 - `cargo x deps --check` after `just hakari` when dependencies change.
+
+## Gotchas
+
+- Database tests create each database from `template0` because CI pre-migrates
+  `template1` with Macro's schema and migration history, which conflicts with
+  Connect's separate migrator.

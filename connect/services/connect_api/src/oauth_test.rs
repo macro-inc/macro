@@ -22,8 +22,9 @@ use crate::{
         GrantCipher, Repository as _, Service,
         oauth::{Client, OAuthService},
     },
-    outbound::{EnvelopeCipher, LocalKeyWrapper, MIGRATOR, PostgresRepository, oauth::VendorOAuth},
+    outbound::{EnvelopeCipher, LocalKeyWrapper, PostgresRepository, oauth::VendorOAuth},
     router,
+    test_support::TestDatabase,
 };
 
 #[test]
@@ -276,12 +277,14 @@ async fn export(app: &axum::Router, key: &str) -> (StatusCode, Value) {
     (status, body)
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
+#[tokio::test]
 #[expect(
     clippy::disallowed_methods,
     reason = "Connect tests use runtime-checked SQLx queries against their own test database"
 )]
-async fn cimd_flow_state_reuse_expiry_allowlist_and_vendor_error(pool: sqlx::PgPool) {
+async fn cimd_flow_state_reuse_expiry_allowlist_and_vendor_error() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::Cimd, 3600, false, 0).await;
     let (app, repository, _) = fixture(
         pool.clone(),
@@ -385,8 +388,10 @@ async fn cimd_flow_state_reuse_expiry_allowlist_and_vendor_error(pool: sqlx::PgP
     vendor.verify().await;
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn dcr_registers_once_and_reconnects(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn dcr_registers_once_and_reconnects() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::Dcr, 3600, false, 0).await;
     let (app, repository, _) = fixture(
         pool,
@@ -427,8 +432,10 @@ async fn dcr_registers_once_and_reconnects(pool: sqlx::PgPool) {
     vendor.verify().await;
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn own_app_refreshes_concurrent_exports_once(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn own_app_refreshes_concurrent_exports_once() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::OwnApp, 30, false, 1).await;
     let (app, repository, _) = fixture(
         pool,
@@ -470,8 +477,10 @@ async fn own_app_refreshes_concurrent_exports_once(pool: sqlx::PgPool) {
     vendor.verify().await;
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn invalid_grant_marks_connection_needs_reauth(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn invalid_grant_marks_connection_needs_reauth() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::OwnApp, 30, true, 1).await;
     let (app, repository, _) = fixture(
         pool,

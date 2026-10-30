@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_support::TestDatabase;
 
 fn cipher() -> EnvelopeCipher {
     EnvelopeCipher::new(Arc::new(
@@ -40,8 +41,10 @@ async fn grant_cipher_round_trips_and_rejects_tampering_or_wrong_owner() {
     assert!(cipher.open(customer, connection, &envelope).await.is_err());
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn repository_queries_are_customer_scoped(pool: PgPool) {
+#[tokio::test]
+async fn repository_queries_are_customer_scoped() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let repository = PostgresRepository::new(pool);
     let owner_key = repository.create_customer("Owner").await.unwrap();
     assert!(!format!("{owner_key:?}").contains(owner_key.as_str()));

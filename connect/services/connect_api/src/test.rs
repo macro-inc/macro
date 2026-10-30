@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::Repository as _;
-use crate::outbound::MIGRATOR;
+use crate::test_support::TestDatabase;
 use axum::{body::Body, http::Request};
 use http_body_util::BodyExt as _;
 use tower::ServiceExt as _;
@@ -218,12 +218,14 @@ async fn openapi_route_describes_catalog() {
     );
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
+#[tokio::test]
 #[expect(
     clippy::disallowed_methods,
     reason = "Connect's test database uses its own runtime migration per connect/docs/decisions.md"
 )]
-async fn routes_enforce_keys_and_customer_scope(pool: sqlx::PgPool) {
+async fn routes_enforce_keys_and_customer_scope() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     use crate::{
         domain::{Grant, GrantCipher},
         outbound::{EnvelopeCipher, LocalKeyWrapper, PostgresRepository},
@@ -435,8 +437,10 @@ async fn routes_enforce_keys_and_customer_scope(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn expired_token_requires_reauthorization(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn expired_token_requires_reauthorization() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     use crate::{
         domain::{Grant, GrantCipher},
         outbound::{EnvelopeCipher, LocalKeyWrapper, PostgresRepository},

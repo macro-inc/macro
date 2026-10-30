@@ -14,7 +14,7 @@ use wiremock::{
 
 use crate::{
     oauth_test::{callback, fixture, start, vendor_server},
-    outbound::MIGRATOR,
+    test_support::TestDatabase,
 };
 
 #[tokio::test]
@@ -94,8 +94,10 @@ async fn json_response(response: axum::response::Response) -> Value {
     serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap()
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn forwards_json_headers_and_isolates_customers(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn forwards_json_headers_and_isolates_customers() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::OwnApp, 3600, false, 0).await;
     Mock::given(method("POST"))
         .and(path("/mcp"))
@@ -159,8 +161,10 @@ async fn forwards_json_headers_and_isolates_customers(pool: sqlx::PgPool) {
     assert_eq!(json_response(response).await["app_id"], "unknown");
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn streams_sse_and_preserves_content_type(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn streams_sse_and_preserves_content_type() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::OwnApp, 3600, false, 0).await;
     Mock::given(method("GET"))
         .and(path("/mcp"))
@@ -189,8 +193,10 @@ async fn streams_sse_and_preserves_content_type(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn unauthorized_refreshes_and_retries_once(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn unauthorized_refreshes_and_retries_once() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::OwnApp, 3600, false, 1).await;
     Mock::given(method("POST"))
         .and(path("/mcp"))
@@ -224,8 +230,10 @@ async fn unauthorized_refreshes_and_retries_once(pool: sqlx::PgPool) {
     );
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn second_unauthorized_marks_connection_needs_reauth(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn second_unauthorized_marks_connection_needs_reauth() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::OwnApp, 3600, false, 1).await;
     Mock::given(method("POST"))
         .and(path("/mcp"))
@@ -256,8 +264,10 @@ async fn second_unauthorized_marks_connection_needs_reauth(pool: sqlx::PgPool) {
     assert_eq!(json_response(response).await["error"], "needs_reauth");
 }
 
-#[sqlx::test(migrator = "MIGRATOR")]
-async fn large_post_is_forwarded_without_retry(pool: sqlx::PgPool) {
+#[tokio::test]
+async fn large_post_is_forwarded_without_retry() {
+    let database = TestDatabase::new().await;
+    let pool = database.pool().clone();
     let vendor = vendor_server(ClientRegistration::OwnApp, 3600, false, 0).await;
     Mock::given(method("POST"))
         .and(path("/mcp"))
