@@ -242,14 +242,14 @@ the focused tile again (**Back to grid**) to restore the grid. If that participa
 leaves, the grid returns automatically. Focus does not replace the video tracks.
 A talking participant has an accent-colored border above their video or avatar.
 
-Open live chat with **Open chat** alongside the media controls. On phones, chat
-joins the full-width, fully rounded control bar, with side gutters and a 48px tap
-target. On desktop, chat stays at the bottom-right and Copy Meeting Url stays at
-the bottom-left. On phones, Copy Meeting Url uses the same header island style
-as the channel header. Media controls and chat occupy a separate row below the
-video, never over it. Controls remain visible while idle; auto-hide is disabled
-for now. Header islands also stay visible. Check 320px phones, safe-area insets,
-and rotation.
+Open live chat with **Open chat** alongside the media controls. On phones, the
+fully rounded control bar fills the available space beside a separate chat button,
+with side gutters, an 8px gap, and a 48px chat tap target. On desktop, chat stays at
+the bottom-right and Copy Meeting Url stays at the bottom-left. On phones, Copy
+Meeting Url uses the same header island style as the channel header. Media
+controls and chat occupy a separate row below the video, never over it. Controls
+remain visible while idle; auto-hide is disabled for now. Header islands also
+stay visible. Check 320px phones, safe-area insets, and rotation.
 Desktop chat fills the call content height alongside both
 the video and its media controls, with a rounded, raised background and a gap from
 the participant tiles. Narrow desktop panes overlay chat instead; phones use the

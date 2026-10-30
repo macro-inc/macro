@@ -547,7 +547,7 @@ export function CallOverlay(props: {
             inert={controlsHidden()}
             data-holds-prompts={isTouchDevice() ? undefined : ''}
           >
-            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:grid-cols-1 mobile:px-[max(16px,var(--mobile-chrome-gutter))] @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
               <div class="min-w-0 max-w-48 mobile:hidden">
                 {props.footerLeading}
               </div>
@@ -566,16 +566,11 @@ export function CallOverlay(props: {
                       onOpenChange={setSharingOpen}
                     />
                   </Show>
-                  <Show when={isMobile()}>
-                    <ChatToggle />
-                  </Show>
                 </CallControls>
               </div>
-              <Show when={!isMobile()}>
-                <div class="flex justify-end">
-                  <ChatToggle />
-                </div>
-              </Show>
+              <div class="flex justify-end">
+                <ChatToggle />
+              </div>
             </div>
           </div>
         </div>
