@@ -17,6 +17,14 @@ import {
   useCalendarView,
 } from './CalendarViewContext';
 
+const teamReset = vi.hoisted(() => ({ fire: () => {} }));
+
+vi.mock('@queries/calendar/team-cache', () => ({
+  subscribeToTeamCalendarReset: (onReset: () => void) => {
+    teamReset.fire = onReset;
+    return () => {};
+  },
+}));
 vi.mock('../hooks/use-calendar-sources', () => ({
   useCalendarSources: () => ({
     sources: () => [],
@@ -111,6 +119,18 @@ describe('CalendarViewContext with a row waiting for its chip', () => {
     vi.advanceTimersByTime(OCCURRENCE_FOCUS_TIMEOUT_MS);
     expect(onTimeout).not.toHaveBeenCalled();
     expect(view().selectedEventAnchor()).toBe(chip);
+  });
+
+  it('drops the waiting row when team data resets', () => {
+    const { focus } = renderContexts();
+    const onTimeout = vi.fn();
+
+    focus().focusOccurrence(OCCURRENCE, onTimeout);
+    teamReset.fire();
+
+    expect(focus().pendingTarget()).toBeUndefined();
+    vi.advanceTimersByTime(OCCURRENCE_FOCUS_TIMEOUT_MS);
+    expect(onTimeout).not.toHaveBeenCalled();
   });
 
   it('keeps the row waiting when an open card only changes anchor', () => {

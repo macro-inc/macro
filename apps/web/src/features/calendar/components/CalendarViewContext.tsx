@@ -103,6 +103,7 @@ export const [CalendarViewContextProvider, useCalendarView] =
       // A revoked OOO agenda entry can lie outside every mounted viewport.
       // Close detached selections synchronously when authorization resets data.
       const unsubscribeTeamReset = subscribeToTeamCalendarReset(() => {
+        calendarFocus.cancelOccurrence();
         const selected = selection.event();
         if (
           selected?.teamProjection ||
