@@ -13055,9 +13055,12 @@ version = "0.1.0"
 dependencies = [
  "cool_asserts",
  "cowlike",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
+ "specta",
  "strum 0.27.2",
+ "unicode-segmentation",
  "utoipa",
  "workspace-hack",
 ]

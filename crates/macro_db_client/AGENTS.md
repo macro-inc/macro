@@ -36,6 +36,9 @@ errors; extend it additively before services begin writing new turn states.
 Install widened checks as `NOT VALID` and validate in a separate migration so
 the scan does not retain the replacement migration's exclusive table lock.
 
+Entity appearance is nullable JSON on each owning entity table (including routine
+template snapshots); appearance-only writes preserve content timestamps.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
