@@ -20,6 +20,18 @@ Entry point for coding-agent sessions.
 
 ## Methods
 
+### autoArchivePreferences()
+
+> **autoArchivePreferences**(): `Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+Which triggers archive the caller's sessions by default; each is off unless chosen.
+
+#### Returns
+
+`Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+***
+
 ### byId()
 
 > **byId**(`id`): [`AgentSession`](../../agent-session/classes/AgentSession.md)
@@ -148,6 +160,24 @@ lists.
 #### Returns
 
 `Promise`\<`string`[]\>
+
+***
+
+### setAutoArchivePreferences()
+
+> **setAutoArchivePreferences**(`preferences`): `Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+Replace which triggers archive the caller's sessions by default.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `preferences` | [`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md) |
+
+#### Returns
+
+`Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
 
 ***
 

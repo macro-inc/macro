@@ -46,6 +46,12 @@ Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOp
 
 ***
 
+### AutoArchiveOverrides
+
+Re-exports [AutoArchiveOverrides](../entities/agent-sessions/agent-session/type-aliases/AutoArchiveOverrides.md)
+
+***
+
 ### CalendarNote
 
 Re-exports [CalendarNote](../entities/calendar/note/classes/CalendarNote.md)
@@ -613,6 +619,12 @@ Re-exports [RoutineOptions](../entities/routines/routine/interfaces/RoutineOptio
 ### RoutineTriggerOptions
 
 Re-exports [RoutineTriggerOptions](../entities/routines/routine/type-aliases/RoutineTriggerOptions.md)
+
+***
+
+### SessionAutoArchive
+
+Re-exports [SessionAutoArchive](../entities/agent-sessions/agent-session/type-aliases/SessionAutoArchive.md)
 
 ***
 

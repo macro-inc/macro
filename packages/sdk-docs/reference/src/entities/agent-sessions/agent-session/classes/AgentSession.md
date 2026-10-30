@@ -43,6 +43,18 @@ Archive this session, making it read-only until unarchived.
 
 ***
 
+### autoArchive()
+
+> **autoArchive**(): `Promise`\<[`SessionAutoArchive`](../type-aliases/SessionAutoArchive.md)\>
+
+This session's auto-archive settings, and the archive a trigger made.
+
+#### Returns
+
+`Promise`\<[`SessionAutoArchive`](../type-aliases/SessionAutoArchive.md)\>
+
+***
+
 ### changes()
 
 > **changes**(): `Promise`\<[`AgentSessionChangesResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionChangesResponse.md)\>
@@ -229,6 +241,25 @@ Rename this session.
 
 ***
 
+### setAutoArchive()
+
+> **setAutoArchive**(`overrides`): `Promise`\<`void`\>
+
+Replace this session's auto-archive choices. Owner only; a trigger left
+`undefined` follows the owner's default.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `overrides` | [`AutoArchiveOverrides`](../type-aliases/AutoArchiveOverrides.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### setSandboxSize()
 
 > **setSandboxSize**(`size`): `Promise`\<[`SandboxSize`](../../../../../generated/agent-harness/types.gen/type-aliases/SandboxSize.md)\>
@@ -342,6 +373,24 @@ Replace sharing grants.
 #### Returns
 
 `Promise`\<[`SharePermissionV2`](../../../../../generated/agent-harness/types.gen/type-aliases/SharePermissionV2.md)\>
+
+***
+
+### autoArchivePreferences()
+
+> `static` **autoArchivePreferences**(`client`): `Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+Which triggers archive the caller's sessions by default; each is off unless chosen.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+
+#### Returns
+
+`Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
 
 ***
 
@@ -501,6 +550,25 @@ lists.
 #### Returns
 
 `Promise`\<`string`[]\>
+
+***
+
+### setAutoArchivePreferences()
+
+> `static` **setAutoArchivePreferences**(`client`, `preferences`): `Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
+
+Replace which triggers archive the caller's sessions by default.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+| `preferences` | [`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md) |
+
+#### Returns
+
+`Promise`\<[`AutoArchivePreferencesBody`](../../../../../generated/agent-harness/types.gen/type-aliases/AutoArchivePreferencesBody.md)\>
 
 ***
 
