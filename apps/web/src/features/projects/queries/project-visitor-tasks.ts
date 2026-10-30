@@ -1,12 +1,10 @@
 import { createLiveQuery } from '@graphql-cache/solid/create-live-query';
-import type { Property } from '@property/types';
 import { InitiativeTasksDocument } from '@service-storage/graphql/generated/graphql';
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import type { Accessor } from 'solid-js';
+import type { VisitorTask } from '../context/projects-context';
 import { taskProperties } from './project-properties';
-
-export type VisitorTask = { id: string; name: string; properties: Property[] };
 
 /**
  * The tasks a project read found visible to the viewer, for a caller with no

@@ -68,6 +68,7 @@ function launch(source: {
     userId: () => 'owner',
     createCollectionSource: unused,
     createPropertyDefinitionsSource: unused,
+    createVisitorTasksSource: unused,
     createProjectSource: (id) => {
       requested.push(id());
       return {

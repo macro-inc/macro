@@ -28,6 +28,18 @@ export type ProjectSource = {
   refresh(): Promise<void>;
 };
 
+/** A task a project read found visible to a caller with no account. */
+export type VisitorTask = {
+  id: string;
+  name: string;
+  properties: readonly Property[];
+};
+
+export type VisitorTasksSource = {
+  tasks: Accessor<readonly VisitorTask[] | undefined>;
+  failed: Accessor<boolean>;
+};
+
 export type ProjectPropertyDraft = {
   property: Property;
   value: PropertyApiValues;
@@ -49,6 +61,8 @@ export type ProjectsContext = {
     enabled?: Accessor<boolean>
   ): ProjectsSource;
   createProjectSource(id: Accessor<string>): ProjectSource;
+  /** The project's tasks as its read hydrates them, for a caller with no account. */
+  createVisitorTasksSource(id: Accessor<string>): VisitorTasksSource;
   createPropertyDefinitionsSource(): {
     properties: Accessor<readonly Property[]>;
     loading: Accessor<boolean>;

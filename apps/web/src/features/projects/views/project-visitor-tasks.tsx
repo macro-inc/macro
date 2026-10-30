@@ -4,11 +4,10 @@ import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { hasValue } from '@property/utils';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { EmptyStatePanel } from '@ui';
 import { For, Match, Switch } from 'solid-js';
+import { useProjectsContext } from '../context/projects-context';
 import type { ProjectSection } from '../core/project';
-import { createProjectVisitorTasksQuery } from '../queries/project-visitor-tasks';
 
 /**
  * A project's tasks as a caller with no account reads them: the ones they may
@@ -19,8 +18,7 @@ export function ProjectVisitorTasks(props: {
   section: ProjectSection;
 }) {
   const navigate = useNavigate();
-  const query = createProjectVisitorTasksQuery(
-    getGraphqlSoupClient,
+  const source = useProjectsContext().createVisitorTasksSource(
     () => props.projectId
   );
   const openTask = (taskId: string) =>
@@ -37,21 +35,21 @@ export function ProjectVisitorTasks(props: {
     );
   return (
     <Switch>
-      <Match when={query.isError}>
+      <Match when={source.failed()}>
         <EmptyStatePanel
           centered
           title="Tasks unavailable"
           description="This project's tasks could not be loaded."
         />
       </Match>
-      <Match when={query.data?.length === 0}>
+      <Match when={source.tasks()?.length === 0}>
         <EmptyStatePanel
           centered
           title="No tasks"
           description="Tasks you can see in this project appear here."
         />
       </Match>
-      <Match when={query.data}>
+      <Match when={source.tasks()}>
         {(tasks) => (
           <ul
             aria-label="Project tasks"

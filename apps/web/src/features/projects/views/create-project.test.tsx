@@ -134,6 +134,7 @@ function setup(
     userId: () => 'owner',
     createCollectionSource: unused,
     createProjectSource: unused,
+    createVisitorTasksSource: unused,
     createPropertyDefinitionsSource: () => ({
       properties: () => [dueDate],
       loading: () => false,
