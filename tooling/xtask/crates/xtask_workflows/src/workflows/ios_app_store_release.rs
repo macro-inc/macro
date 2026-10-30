@@ -61,6 +61,8 @@ fn release_job() -> Job {
         .timeout_minutes(90u32)
         .permissions(
             Permissions::default()
+                // The failure comment names the step that failed.
+                .actions(Level::Read)
                 .checks(Level::Read)
                 .contents(Level::Read)
                 .pull_requests(Level::Write)
@@ -70,6 +72,7 @@ fn release_job() -> Job {
         .add_env(("GH_TOKEN", "${{ github.token }}"))
         .add_env(("GH_REPO", "${{ github.repository }}"))
         .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
+        .add_env(("BASE_BRANCH", "${{ github.event.pull_request.base.ref }}"))
         .add_step(checkout_pr_head())
         .add_step(require_cli_tools())
         .add_step(preconditions())
@@ -88,23 +91,26 @@ fn release_job() -> Job {
 /// PR must already be mergeable: not a draft, every other check on the head
 /// commit green (pending ones are waited on). Fails before the long build.
 fn preconditions() -> Step<Run> {
-    Step::new("Require the PR to be ready to merge")
-        .run(concat!(
+    steps::logged_run(
+        "Require the PR to be ready to merge",
+        concat!(
             include_str!("scripts/ios_native_tree.sh"),
             include_str!("scripts/pr_merge_commit.sh"),
+            include_str!("scripts/merge_result_native_check.sh"),
             include_str!("scripts/ios_release_preconditions.sh")
-        ))
-        .shell("bash")
-        .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
-        .add_env(("WAIT_MINUTES", "30"))
+        ),
+    )
+    .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+    .add_env(("WAIT_MINUTES", "30"))
 }
 
 /// The pre-build steps run outside the Nix dev shell (it isn't installed
 /// yet) and need `gh` + `jq`; the Namespace macOS image is not guaranteed to
 /// ship them.
 fn require_cli_tools() -> Step<Run> {
-    Step::new("Ensure gh and jq are installed")
-        .run(indoc::indoc! {r#"
+    steps::logged_run(
+        "Ensure gh and jq are installed",
+        indoc::indoc! {r#"
             set -euo pipefail
             for tool in gh jq; do
               if ! command -v "$tool" >/dev/null; then
@@ -114,20 +120,23 @@ fn require_cli_tools() -> Step<Run> {
             done
             gh --version | head -1
             jq --version
-        "#})
-        .shell("bash")
+        "#},
+    )
 }
 
-/// Native code pushed while the build ran would make the upload stale; don't
-/// submit it (the drift workflow also withdraws after the fact).
+/// Native code pushed while the build ran, on the PR or on `main`, would make
+/// the upload stale; don't submit it (the drift workflow also withdraws after
+/// the fact).
 fn head_guard() -> Step<Run> {
-    Step::new("Require the PR's native code to be unchanged since the build")
-        .run(concat!(
+    steps::logged_run(
+        "Require the PR's native code to be unchanged since the build",
+        concat!(
             include_str!("scripts/ios_native_tree.sh"),
             include_str!("scripts/pr_merge_commit.sh"),
+            include_str!("scripts/merge_result_native_check.sh"),
             include_str!("scripts/ios_release_head_guard.sh")
-        ))
-        .shell("bash")
+        ),
+    )
 }
 
 fn checkout_pr_head() -> Step<Use> {
@@ -143,13 +152,14 @@ fn checkout_pr_head() -> Step<Use> {
         .add_with(("persist-credentials", false))
 }
 
-/// Run a command in `apps/web` inside the Nix dev shell.
+/// Run a command in `apps/web` inside the Nix dev shell, with its output
+/// quotable by the failure comment (so not for the build: see `logged_run`).
 fn in_dev_shell(name: &str, commands: &str) -> Step<Run> {
-    Step::new(name)
-        .run(format!(
-            "nix develop --command bash -euo pipefail -c '\n{commands}'"
-        ))
-        .shell("bash")
+    steps::logged_run(name, dev_shell_script(commands))
+}
+
+fn dev_shell_script(commands: &str) -> String {
+    format!("nix develop --command bash -euo pipefail -c '\n{commands}'")
 }
 
 fn verify_bump() -> Step<Run> {
@@ -201,15 +211,16 @@ fn configure_signing() -> Step<Run> {
 /// `wait-build` stamps the processed build with the native tree it was built
 /// from (and the PR number), which the merge gate later verifies.
 fn build_and_upload() -> Step<Run> {
-    in_dev_shell(
-        "Build and upload to App Store Connect",
-        "  bun install --frozen-lockfile\n  cd apps/web\n  just ios-release --no-bump\n",
-    )
-    .if_condition(Expression::new(
-        "steps.build-check.outputs.uploaded != 'true'",
-    ))
-    .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
-    .add_env(("IOS_RELEASE_PR", "${{ github.event.pull_request.number }}"))
+    Step::new("Build and upload to App Store Connect")
+        .run(dev_shell_script(
+            "  bun install --frozen-lockfile\n  cd apps/web\n  just ios-release --no-bump\n",
+        ))
+        .shell("bash")
+        .if_condition(Expression::new(
+            "steps.build-check.outputs.uploaded != 'true'",
+        ))
+        .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
+        .add_env(("IOS_RELEASE_PR", "${{ github.event.pull_request.number }}"))
 }
 
 /// `IOS_RELEASE_PR` lets `submit` recognise (and take over) this PR's own
@@ -237,6 +248,7 @@ fn pr_comment() -> Step<Use> {
             "script",
             indoc::indoc! {r#"
                 const fs = require('fs');
+                const path = require('path');
                 const confPath = 'apps/web/tauri/src-tauri/tauri.ios.conf.json';
                 const conf = fs.existsSync(confPath)
                   ? JSON.parse(fs.readFileSync(confPath, 'utf8'))
@@ -247,23 +259,55 @@ fn pr_comment() -> Step<Use> {
                   `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                   `/actions/runs/${context.runId}`;
                 const success = '${{ job.status }}' === 'success';
-                const body = success
-                  ? [
-                      `📱 iOS ${version} (build ${build}) was uploaded to TestFlight and submitted for App Review.`,
-                      '',
-                      'When Apple approves it, the version releases to the App Store automatically,',
-                      'the **iOS Release Watch** workflow re-runs the **iOS Native Check** on this PR',
-                      'within half an hour of that, and the PR becomes mergeable. To merge it the',
-                      'moment that happens, click **Enable auto-merge** on this PR now (squash).',
-                      'After merge, the next prod deploy applies the iOS native build floor committed in `min-native-build.json`, prompting older installs to update.',
-                      '',
-                      `[Workflow run](${runUrl})`,
-                    ].join('\n')
-                  : [
-                      `📱 iOS App Store release for ${version} (build ${build}) **failed** — see the [workflow run](${runUrl}).`,
-                      '',
-                      'Fix the problem, then remove and re-add the `ios-update` label to retry.',
-                    ].join('\n');
+                const SUCCESS_BODY = [
+                  `📱 iOS ${version} (build ${build}) was uploaded to TestFlight and submitted for App Review.`,
+                  '',
+                  'When Apple approves it, the version releases to the App Store automatically,',
+                  'the **iOS Release Watch** workflow re-runs the **iOS Native Check** on this PR',
+                  'within half an hour of that, and the PR becomes mergeable. To merge it the',
+                  'moment that happens, click **Enable auto-merge** on this PR now (squash).',
+                  'After merge, the next prod deploy applies the iOS native build floor committed in `min-native-build.json`, prompting older installs to update.',
+                  '',
+                  `[Workflow run](${runUrl})`,
+                ].join('\n');
+                let body;
+                if (success) {
+                  body = SUCCESS_BODY;
+                } else {
+                  // Name the failed step and, when it is one that logs its
+                  // output (steps::logged_run), quote the end of that output.
+                  let failedStep = null;
+                  try {
+                    const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      run_id: context.runId,
+                      attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+                    });
+                    const job = data.jobs.find((j) => j.name === 'iOS App Store Release');
+                    failedStep = job?.steps.find((s) => s.conclusion === 'failure')?.name ?? null;
+                  } catch (error) {
+                    core.warning(`Could not list this job's steps: ${error.message}`);
+                  }
+                  const read = (file) => {
+                    try {
+                      return fs.readFileSync(path.join(process.env.RUNNER_TEMP, file), 'utf8');
+                    } catch {
+                      return '';
+                    }
+                  };
+                  let tail = '';
+                  if (failedStep && read('last-step.name').trim() === failedStep) {
+                    const lines = read('last-step.log').replace(/\x1b\[[0-9;]*m/g, '').trimEnd().split('\n');
+                    tail = lines.slice(-30).join('\n').slice(-3000);
+                  }
+                  body = [
+                    `📱 iOS App Store release for ${version} (build ${build}) **failed**${failedStep ? ` at **${failedStep}**` : ''} — see the [workflow run](${runUrl}).`,
+                    ...(tail ? ['', '```text', tail, '```'] : []),
+                    '',
+                    'Fix the problem, then remove and re-add the `ios-update` label to retry.',
+                  ].join('\n');
+                }
                 await github.rest.issues.createComment({
                   owner: context.repo.owner,
                   repo: context.repo.repo,

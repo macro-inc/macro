@@ -277,7 +277,12 @@ function swallowRestOfTap() {
  * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
-  (props: ComponentProps<typeof Drawer>) => {
+  (
+    props: Omit<
+      ComponentProps<typeof Drawer>,
+      'activeSnapPoint' | 'onActiveSnapPointChange'
+    >
+  ) => {
     const [local, rest] = splitProps(props, [
       'onOutsidePointer',
       'onOpenChange',
@@ -300,9 +305,9 @@ export const MobileDrawer = Object.assign(
         closeOnOutsideFocus={false}
         noOutsidePointerEvents={false}
         restoreFocus={false}
+        {...rest}
         activeSnapPoint={activeSnapPoint()}
         onActiveSnapPointChange={setActiveSnapPoint}
-        {...rest}
         onOpenChange={(open) => {
           uncontrolledOpen = open;
           local.onOpenChange?.(open);

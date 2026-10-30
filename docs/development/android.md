@@ -170,21 +170,26 @@ To release:
    first refuses drafts, PRs with failing checks (pending ones are waited on,
    up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
-   the merge result, so such a bundle could never pass it; merge `main`,
-   bump, re-add the label). It then builds the signed App Bundle from the PR
-   head on a hosted Ubuntu runner (Android SDK, Nix, signing and Firebase
-   config from Doppler `android-release/prd`), verifies it with bundletool,
+   the merge result, so such a bundle could never pass it; the refusal lists
+   the native files `main` changed; merge `main`, bump, re-add the label).
+   When GitHub has no merge result (the PR conflicts with `main`, or GitHub
+   hasn't computed it yet) the check compares `main` with the PR's branch
+   point instead and goes ahead if `main`'s native code hasn't moved. It
+   then builds the signed App Bundle from the PR head on a hosted Ubuntu
+   runner (Android SDK, Nix, signing and Firebase config from Doppler
+   `android-release/prd`), verifies it with bundletool,
    checks again that neither the PR head nor `main` changed native code
    during the build, uploads it to the **internal** track with
    `status=completed`, and promotes it to **production** as a full rollout
    (Google review applies). The bundle and R8 mapping are kept as a workflow
    artifact for 90 days. The release notes carry a provenance stamp,
    `native tree <hash> for PR #<n>`, the twin of the iOS TestFlight stamp.
-   The run comments the outcome on the PR; remove and re-add the label to
-   retry. Click **Enable auto-merge** on the PR to merge the moment it is
-   live. The label only works on a PR that is mergeable: GitHub does not
-   run `pull_request` workflows on a PR that conflicts with `main`, so the
-   release never starts there. The **`Release Label Check`** workflow
+   The run comments the outcome on the PR (a failure names the step that
+   failed and, for the checking steps, quotes the end of its output);
+   remove and re-add the label to retry. Click **Enable auto-merge** on the
+   PR to merge the moment it is live. The label only works on a PR that is
+   mergeable: GitHub does not run `pull_request` workflows on a PR that
+   conflicts with `main`, so the release never starts there. The **`Release Label Check`** workflow
    (`.github/workflows/release-label-check.yml`, a `pull_request_target`
    workflow, which GitHub does run) then comments and removes the label;
    resolve the conflicts and re-add it. On a mergeable PR that workflow

@@ -191,7 +191,7 @@ export function RoutineDetailView(props: {
   onBack(): void;
   onDelete(): void;
   onCopyPrompt(prompt: string): Promise<void>;
-  onShareTemplate?(): void;
+  onShare?(): void;
   onOpenTemplate?(templateId: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
 }) {
@@ -318,10 +318,10 @@ export function RoutineDetailView(props: {
                       <CopyIcon class="size-4" />
                       Duplicate
                     </Dropdown.Item>
-                    <Show when={props.onShareTemplate}>
-                      <Dropdown.Item onSelect={props.onShareTemplate}>
+                    <Show when={props.onShare}>
+                      <Dropdown.Item onSelect={props.onShare}>
                         <ShareIcon class="size-4" />
-                        Share as template…
+                        Share
                       </Dropdown.Item>
                     </Show>
                   </Dropdown.Group>
@@ -356,7 +356,7 @@ export function RoutineDetailView(props: {
                   </Show>
                 </EntityMetadata>
               </SidePanel.Footer>
-              <Show when={props.onOpenTemplate || props.onShareTemplate}>
+              <Show when={props.onOpenTemplate || props.onShare}>
                 <SidePanel.Section
                   id="routine-template"
                   title="Template"
@@ -368,7 +368,7 @@ export function RoutineDetailView(props: {
                     fallback={
                       <div class="flex items-center justify-between gap-2 text-xs text-ink-muted">
                         Not shared
-                        <Show when={isOwned() && props.onShareTemplate}>
+                        <Show when={isOwned() && props.onShare}>
                           {(share) => (
                             <Button
                               variant="ghost"

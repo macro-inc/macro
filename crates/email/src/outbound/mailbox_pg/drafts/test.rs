@@ -374,6 +374,88 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
     }
 }
 
+async fn inbox_state(db: &PgPool, thread: Uuid) -> (bool, Option<chrono::DateTime<chrono::Utc>>) {
+    let row = sqlx::query!(
+        "SELECT inbox_visible,latest_inbound_message_ts FROM email_threads WHERE id = $1",
+        thread
+    )
+    .fetch_one(db)
+    .await
+    .unwrap();
+    (row.inbox_visible, row.latest_inbound_message_ts)
+}
+
+/// Outlook accepts the Macro draft as provider draft "a", and sync reads it back.
+async fn sync_draft(sync: &PgMailboxSync, link: Uuid) {
+    let lease = sync
+        .claim_draft(
+            Uuid::now_v7(),
+            crate::domain::mailbox::drafts::models::DraftClaimMode::All,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    sync.settle_draft(&lease, &checkpoint(&lease, DraftStage::Ready))
+        .await
+        .unwrap();
+    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let state = MailboxState {
+        is_draft: true,
+        ..MailboxState::default()
+    };
+    sync.ingest(&work, snapshot(link, "a", state, "v2"))
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_unsynced_draft_only_thread_stays_out_of_the_inbox(db: PgPool) {
+    let (_, _, input, _) = setup(&db, false).await;
+    assert_eq!(inbox_state(&db, input.thread_db_id).await, (false, None));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_synced_draft_only_thread_stays_out_of_the_inbox(db: PgPool) {
+    let (sync, _, input, link) = setup(&db, false).await;
+    sync_draft(&sync, link).await;
+    let provider_id = sqlx::query_scalar!(
+        "SELECT provider_id FROM email_messages WHERE id = $1",
+        input.db_id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(provider_id.as_deref(), Some("a"));
+    assert_eq!(inbox_state(&db, input.thread_db_id).await, (false, None));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_synced_reply_draft_returns_archived_received_mail_to_the_inbox(db: PgPool) {
+    let (sync, _, input, link) = setup(&db, false).await;
+    sqlx::query!(
+        r#"INSERT INTO email_messages (id,link_id,thread_id,provider_id,provider_thread_id,internal_date_ts,mailbox_state)
+        VALUES ($1,$2,$3,'received','conversation','2026-09-30T12:00:00Z','{"in_inbox":false}')"#,
+        Uuid::now_v7(),
+        link,
+        input.thread_db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sync_draft(&sync, link).await;
+    let draft_updated_at = sqlx::query_scalar!(
+        "SELECT updated_at FROM email_messages WHERE id = $1 AND provider_id = 'a'",
+        input.db_id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        inbox_state(&db, input.thread_db_id).await,
+        (true, Some(draft_updated_at))
+    );
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn saving_an_imported_draft_keeps_its_provider_identity_and_baseline(db: PgPool) {
     let (_, _, input, _) = setup(&db, true).await;

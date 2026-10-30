@@ -15,6 +15,7 @@ import type { EmailArchiveDisposition } from '@queries/email/integration';
 import { threadCanBeMarkedNotDone } from '@queries/email/thread';
 import { fetchDoneNotificationIdsByEventItemIds } from '@queries/notification/user-notifications';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
+import { canMarkNotDone } from './can-mark-not-done';
 import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotDoneOptions = {
@@ -143,14 +144,9 @@ async function restoreEmailNotifications(
  * queued writes; only a completely failed email selection rejects the action.
  */
 export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
-  const canExecute = (entity: EntityData): boolean =>
-    entity.type === 'email' && entity.done === true;
-
   const execute = async (entities: EntityData[]) => {
     const graphql = isFeatureEnabled(enableGraphqlSoup);
-    const doneEmails = entities.filter(
-      (e) => e.type === 'email' && e.done === true
-    );
+    const doneEmails = entities.filter(canMarkNotDone);
     // GraphQL owns per-thread transactions: snapshot identities before awaiting
     // and deduplicate group occurrences. Keep REST's existing input flow intact.
     const candidates = graphql
@@ -162,8 +158,9 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
       : doneEmails;
     if (candidates.length === 0) return;
 
-    // REST may rule out sent-only threads up front. GraphQL leaves eligibility
-    // to the server; the per-thread transactions below isolate those rejections.
+    // REST rows lack received-mail facts, so REST looks the thread up. GraphQL
+    // rows read true until their thread is recomputed, so the server still has
+    // the final say; the per-thread transactions below isolate its rejections.
     const eligibility = await Promise.all(
       candidates.map((entity) => threadCanBeMarkedNotDone(entity.id))
     );
@@ -236,5 +233,5 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     await execute(entities);
   };
 
-  return { canExecute, execute, executeWithSoup };
+  return { canExecute: canMarkNotDone, execute, executeWithSoup };
 };

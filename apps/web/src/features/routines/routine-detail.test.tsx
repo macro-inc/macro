@@ -84,7 +84,7 @@ vi.mock('./routine-template', () => ({
   RoutineTemplatePage: (props: { scheduleId: string }) => (
     <div>Template for {props.scheduleId}</div>
   ),
-  openShareTemplateDialog: vi.fn(),
+  openShareRoutineDialog: vi.fn(),
 }));
 vi.mock('@core/block', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/block')>()),
