@@ -34,7 +34,9 @@ export function AgentUpdatesStack(props: {
             <>
               <span class="size-2 rounded-full bg-warning" aria-hidden="true" />
               <strong>
-                {model.updates().length} updates from coding agents
+                {model.updates().length === 1
+                  ? '1 update from a coding agent'
+                  : `${model.updates().length} updates from coding agents`}
               </strong>
             </>
           }
