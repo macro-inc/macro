@@ -388,7 +388,10 @@ function TaskBoardColumnHeader(props: {
         aria-hidden="true"
       >
         <Suspense>
-          <TaskBoardColumnIcon grouping={props.grouping} id={props.column.id} />
+          <TaskBoardColumnIcon
+            propertyDefinitionId={taskBoardPropertyId(props.grouping)}
+            id={props.column.id}
+          />
         </Suspense>
       </span>
       <Show

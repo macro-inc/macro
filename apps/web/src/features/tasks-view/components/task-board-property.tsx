@@ -1,19 +1,21 @@
 import { UserIcon } from '@core/component/UserIcon';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
-import EmptyIcon from '@icon/system/regular/circle-dashed.svg';
 import ProjectIcon from '@icon/system/regular/stack.svg';
-import UsersIcon from '@icon/system/regular/users.svg';
 import { Property } from '@property';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import type { PropertySaveFn } from '@property/core/context';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property as PropertyValue } from '@property/types';
-import { getEntityValues, getSelectValues } from '@property/utils/typeGuards';
+import {
+  getEntityValues,
+  getSelectValues,
+  hasValue,
+} from '@property/utils/typeGuards';
 import { Match, Show, Switch } from 'solid-js';
-import type { TaskBoardGrouping } from '../core/task-board';
 
 export function TaskBoardColumnIcon(props: {
-  grouping: TaskBoardGrouping;
+  propertyDefinitionId: string;
   id: string;
 }) {
   const hasOptionIcon = () => {
@@ -21,30 +23,44 @@ export function TaskBoardColumnIcon(props: {
       return false;
     }
 
-    return props.grouping === 'status' || props.grouping === 'priority';
+    return (
+      props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS ||
+      props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY
+    );
   };
 
   return (
-    <Switch fallback={<EmptyIcon class="size-4 text-ink-muted" />}>
+    <Switch
+      fallback={
+        <PropertyEmptyIcon
+          propertyDefinitionId={props.propertyDefinitionId}
+          class="size-4 text-ink-muted"
+        />
+      }
+    >
       <Match when={hasOptionIcon()}>
         <PropertyValueIcon optionId={props.id} class="size-4" />
       </Match>
-      <Match when={props.grouping === 'project'}>
+      <Match
+        when={
+          props.id && props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+        }
+      >
         <ProjectIcon class="size-4 text-ink-muted" />
       </Match>
-      <Match when={props.grouping === 'assignee'}>
-        <Show
-          when={props.id}
-          fallback={<UsersIcon class="size-4 text-ink-muted" />}
-        >
-          <UserIcon
-            id={props.id}
-            size="sm"
-            class="size-4"
-            suppressClick
-            showTooltip={false}
-          />
-        </Show>
+      <Match
+        when={
+          props.id &&
+          props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
+        }
+      >
+        <UserIcon
+          id={props.id}
+          size="sm"
+          class="size-4"
+          suppressClick
+          showTooltip={false}
+        />
       </Match>
     </Switch>
   );
@@ -88,22 +104,20 @@ export function TaskBoardProperty(props: {
               >
                 <Switch
                   fallback={
-                    <EmptyIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+                    <PropertyEmptyIcon
+                      propertyDefinitionId={shown().propertyDefinitionId}
+                      class="size-3.5 text-ink-extra-muted"
+                    />
                   }
                 >
-                  <Match when={isAssignee()}>
-                    <Show
-                      when={getEntityValues(shown()).length}
-                      fallback={<UsersIcon class="size-3.5 shrink-0" />}
-                    >
-                      <Property.UserStack
-                        property={shown()}
-                        maxUsers={props.iconOnly ? 1 : 2}
-                        avatarClass="size-4"
-                      />
-                    </Show>
+                  <Match when={isAssignee() && hasValue(shown())}>
+                    <Property.UserStack
+                      property={shown()}
+                      maxUsers={props.iconOnly ? 1 : 2}
+                      avatarClass="size-4"
+                    />
                   </Match>
-                  <Match when={isProject()}>
+                  <Match when={isProject() && hasValue(shown())}>
                     <Show when={showProjectIcon()}>
                       <ProjectIcon class="size-3.5 shrink-0" />
                     </Show>

@@ -19,7 +19,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 - Keep list rows and group headers inset from the surrounding container on desktop and touch; group disclosures keep a 44px touch target.
 - Edit status through the leading `TaskStatusControl` icon on desktop and mobile; keep the separate Status column and trailing mobile status pill removed.
-- Reuse `PropertyEmptyIcon` for absent values in rows and group headers: a dash for priority, a dashed stack for Project, and a dashed person for Assignees.
+- Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers; keep the glyphs aligned with the property feature.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.

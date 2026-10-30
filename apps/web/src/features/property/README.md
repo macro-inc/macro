@@ -16,10 +16,11 @@ property, not the prop you passed in. Save handlers keep their own caches
 current, so `Property.Root` editors never refetch properties after a save;
 side-panel collections own their refresh (below).
 
-`extractors/PropertyEmpty.tsx` shares empty-value glyphs across task rows, group
-headers, and pickers: a dash for no priority, a dashed stack for no project,
-and a dashed person for no assignees. Other empty properties retain the dashed
-circle. Keep these state indicators static and readable in compact rows.
+`extractors/PropertyEmpty.tsx` shares empty-value glyphs across task list rows,
+board cards, group and column headers, and pickers: a dash for no priority, a
+dashed stack for no project, and a dashed person for no assignees. Other empty
+properties retain the dashed circle. Keep these state indicators static and
+readable in compact rows.
 
 ## Side-panel collections
 
