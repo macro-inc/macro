@@ -500,6 +500,7 @@
       "name": "goalert-bot",
       "version": "0.0.1",
       "dependencies": {
+        "@macro-inc/observability": "workspace:*",
         "hono": "^4.6.20",
         "zod": "^4.4.3",
       },

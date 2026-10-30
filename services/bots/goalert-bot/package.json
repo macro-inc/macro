@@ -11,6 +11,7 @@
 		"deploy": "wrangler deploy"
 	},
 	"dependencies": {
+		"@macro-inc/observability": "workspace:*",
 		"hono": "^4.6.20",
 		"zod": "^4.4.3"
 	},
