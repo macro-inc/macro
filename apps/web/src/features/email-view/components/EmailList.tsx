@@ -77,6 +77,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
+import { createEmailFolderRestore } from '../primitives/folder-restore';
 import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
@@ -415,29 +416,23 @@ export function EmailList(props: EmailListProps) {
     state.tab === 'spam'
       ? t('entityActions.notSpam')
       : t('entityActions.restoreEmail');
-  async function restoreThreads(entities: EntityData[]) {
-    const folder = state.tab;
-    if (!isExcludedEmailFolder(folder) || restoreFolder.isPending) return;
-    const threadIds = entities
-      .filter((entity) => entity.type === 'email')
-      .map((entity) => entity.id);
-    try {
-      const result = await restoreFolder.mutateAsync({ folder, threadIds });
-      if (result.failedIds.length) {
-        toast.failure(
-          t('entityActions.toastEmailRestoreFailed', {
-            count: result.failedIds.length,
-          })
-        );
-      } else {
-        listInteractions.selection.clear();
-        toast.success(t('entityActions.toastEmailRestoreRequested'));
-      }
-    } catch {
-      toast.failure(
-        t('entityActions.toastEmailRestoreFailed', { count: threadIds.length })
-      );
-    }
+  const restoreFolderThreads = createEmailFolderRestore({
+    tab: () => state.tab,
+    isPending: () => restoreFolder.isPending,
+    selection: list.selection.requestedKeys,
+    clearSelection: listInteractions.selection.clear,
+    restore: (input) => restoreFolder.mutateAsync(input),
+    onRestored: () =>
+      toast.success(t('entityActions.toastEmailRestoreRequested')),
+    onFailed: (count) =>
+      toast.failure(t('entityActions.toastEmailRestoreFailed', { count })),
+  });
+  function restoreThreads(entities: EntityData[]) {
+    return restoreFolderThreads(
+      entities
+        .filter((entity) => entity.type === 'email')
+        .map((entity) => entity.id)
+    );
   }
 
   async function runRowAction(

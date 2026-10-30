@@ -374,7 +374,10 @@ and does not expose those operation notices. A success toast means the request w
 accepted, not that the provider has confirmed it. Read/unread actions and provider
 sync events refresh the isolated folder lists. Bulk restores limit concurrent
 requests. Failed requests remain retryable, and a partial
-bulk failure does not undo successful restores. No permanent-delete action is added.
+bulk failure does not undo successful restores. While a restore is pending, switch
+folders and select another row; completing the old restore must preserve the new
+selection. The same applies to selecting different rows in the original folder.
+No permanent-delete action is added.
 
 ### Cached Mail filtering
 
