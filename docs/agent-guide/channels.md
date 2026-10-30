@@ -696,6 +696,13 @@ A newer message navigation cancels a pending jump to latest. Scrolling manually
 or choosing another destination also cancels the initial target's delayed fallback.
 A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 
+On touch, a rightward swipe anywhere in the message list navigates back to the
+previous view. The finger does not have to start at the left edge, and the
+message stays put. A leftward swipe on a message still replies. The composer
+and text fields keep their own gestures. A wide code block or table keeps a
+rightward swipe only after it has been scrolled sideways; at its start, that
+swipe goes back. Outside the message list, only the left edge swipes back.
+
 The **Unread notification** chip navigates unread threads whose destinations are
 outside the viewport. A collapsed thread with hidden unread replies shows a
 dot and accent border on its show-replies control. While that control is visible,

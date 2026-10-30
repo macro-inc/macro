@@ -75,8 +75,8 @@ export function MaybeSwipeToReplyRow(
         class="channel-message-swipe-to-reply-row"
         onSwipeLeft={reply}
         // Transparent throughout: decorations behind the row (thread rails)
-        // must stay visible, and the rubber-banded right direction must not
-        // tint the row. The badge alone signals the pending action.
+        // must stay visible. Rightward drags are not a row gesture; they
+        // navigate back. The badge alone signals the pending reply.
         swipeLeftColor="bg-transparent"
         swipeRightColor="bg-transparent"
         rowBgClass="bg-transparent"
