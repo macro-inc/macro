@@ -35,7 +35,7 @@ export type VisitorTask = {
   properties: readonly Property[];
 };
 
-export type VisitorTasksSource = {
+type VisitorTasksSource = {
   tasks: Accessor<readonly VisitorTask[] | undefined>;
   failed: Accessor<boolean>;
 };
