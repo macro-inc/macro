@@ -266,7 +266,13 @@ impl FeedArm {
         let served = |conjunct: &Expr<ChatLiteral>| {
             matches!(conjunct, Expr::Literal(ChatLiteral::UpdatedAt(_)))
         };
-        served_by_scan(driver, &conjuncts, served, properties).then(|| {
+        let constant = |lit: &ChatLiteral| match lit {
+            ChatLiteral::Importance(important) => Some(*important),
+            _ => None,
+        };
+        (served_by_scan(driver, &conjuncts, served, properties)
+            && !matches_nothing(filter_ast, constant))
+        .then(|| {
             FeedArm::single_kind(
                 FeedEntity::Chat,
                 driver,
@@ -302,7 +308,13 @@ impl FeedArm {
         let served = |conjunct: &Expr<ProjectLiteral>| {
             matches!(conjunct, Expr::Literal(ProjectLiteral::UpdatedAt(_)))
         };
-        served_by_scan(driver, &conjuncts, served, properties).then(|| {
+        let constant = |lit: &ProjectLiteral| match lit {
+            ProjectLiteral::Importance(important) => Some(*important),
+            _ => None,
+        };
+        (served_by_scan(driver, &conjuncts, served, properties)
+            && !matches_nothing(filter_ast, constant))
+        .then(|| {
             FeedArm::single_kind(
                 FeedEntity::Project,
                 driver,
@@ -663,6 +675,31 @@ fn selective<T>(expr: &Expr<T>) -> bool {
         Expr::And(a, b) => selective(a) || selective(b),
         Expr::Or(a, b) => selective(a) && selective(b),
     }
+}
+
+/// Whether `filter_ast` keeps no row once the literals `constant` fixes take their values. Those
+/// literals render as SQL constants, which Postgres folds, so the item-table arm for such a
+/// filter reads nothing; a source scan would still read every source to test each row.
+fn matches_nothing<T: Clone>(
+    filter_ast: Option<&Expr<T>>,
+    constant: impl Fn(&T) -> Option<bool>,
+) -> bool {
+    filter_ast.is_some_and(|expr| {
+        expr.collapse_frames(|frame: ExprFrame<Option<bool>, T>| match frame {
+            ExprFrame::Literal(lit) => constant(&lit),
+            ExprFrame::Not(value) => value.map(|value| !value),
+            ExprFrame::And(a, b) => match (a, b) {
+                (Some(false), _) | (_, Some(false)) => Some(false),
+                (Some(true), Some(true)) => Some(true),
+                _ => None,
+            },
+            ExprFrame::Or(a, b) => match (a, b) {
+                (Some(true), _) | (_, Some(true)) => Some(true),
+                (Some(false), Some(false)) => Some(false),
+                _ => None,
+            },
+        }) == Some(false)
+    })
 }
 
 /// Whether every row `filter_ast` keeps must match a literal `pins` accepts.

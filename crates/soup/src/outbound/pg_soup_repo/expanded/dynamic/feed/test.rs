@@ -836,4 +836,41 @@ fn selective_filters_read_the_item_tables() {
         FeedArm::chat(Some(&Expr::val(ChatLiteral::Owner(user()))), None, false).is_none(),
         "chats have no owner driver"
     );
+    assert!(
+        FeedArm::chat(
+            Some(&Expr::is_not(Expr::val(ChatLiteral::Importance(true)))),
+            None,
+            false
+        )
+        .is_none(),
+        "every chat is important"
+    );
+    assert!(
+        FeedArm::project(
+            Some(&Expr::and(
+                Expr::val(ProjectLiteral::UpdatedAt(DateLiteral::GreaterThan(
+                    february(1, 0)
+                ))),
+                Expr::is_not(Expr::val(ProjectLiteral::Importance(true))),
+            )),
+            None,
+            false
+        )
+        .is_none(),
+        "every project is important"
+    );
+    assert!(
+        FeedArm::project(
+            Some(&Expr::or(
+                Expr::val(ProjectLiteral::Importance(false)),
+                Expr::is_not(Expr::val(ProjectLiteral::UpdatedAt(
+                    DateLiteral::GreaterThan(february(1, 0))
+                ))),
+            )),
+            None,
+            false
+        )
+        .is_some(),
+        "a disjunct can still match"
+    );
 }
