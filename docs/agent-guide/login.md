@@ -36,6 +36,16 @@ connected, that returning from consent shows the second account, and that
 canceling leaves the app usable. iOS and Android continue to use their native
 authentication sessions.
 
+A consent that ends without a usable grant returns to the callback with
+`email_link_error` instead of a provisionable `link_id`: `cancelled` returns
+quietly, `admin_consent_required` shows the Microsoft approval dialog,
+`gmail_not_granted` (the email permissions were left unchecked on Google's
+screen, so nothing was connected and the auth service tried, best effort, to
+revoke the partial grant at Google unless an inbox for that address still
+works on it) shows a persistent `Email access required`
+prompt whose `Try again` reopens `Connect email`, and anything else shows a
+failure toast.
+
 ## Temporary open signup in Develop
 
 Once the temporary authentication-service override is deployed, Develop accepts

@@ -2,7 +2,7 @@ import type { TagFilterMode } from '@app/features/next-soup/filters/filter-store
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import XIcon from '@icon/system/regular/x.svg';
 import { Combobox } from '@kobalte/core/combobox';
-import { Button, Dropdown, Layer, SingleSelectCheck } from '@ui';
+import { ButtonGroup, Dropdown, Layer, SingleSelectCheck } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -21,17 +21,13 @@ interface SearchFacetChipProps {
   onPickerClose?: () => void;
 }
 
-const ChipDivider = () => (
-  <div class="w-px self-stretch bg-edge-divider shrink-0" />
-);
-
 const ValueDisplay = (props: { values: FacetOption[] }) => {
   const first = () => props.values[0];
   const overflowCount = () => props.values.length - 1;
 
   return (
     <span
-      class="inline-flex h-full items-center gap-1.5"
+      class="inline-flex min-w-0 items-center gap-1.5"
       title={props.values.map((v) => v.label).join(', ')}
     >
       <Show when={first()?.icon}>
@@ -62,10 +58,7 @@ const SingleValueSegment = (props: {
 
   return (
     <Dropdown open={isOpen()} onOpenChange={setOpen}>
-      <Dropdown.Trigger
-        variant="ghost"
-        class="inline-flex items-center gap-1.5 px-2 h-auto! hover:overlay-hover active:overlay-active rounded-none"
-      >
+      <Dropdown.Trigger as={ButtonGroup.Button} variant="ghost" size="xs">
         <ValueDisplay values={props.facet.values()} />
       </Dropdown.Trigger>
       <Dropdown.Content portalScope="local">
@@ -103,10 +96,7 @@ const MODE_OPTIONS: { id: TagFilterMode; label: string }[] = [
 
 const ModeSegment = (props: { mode: FacetModeVM }) => (
   <Dropdown>
-    <Dropdown.Trigger
-      variant="ghost"
-      class="inline-flex items-center px-2 h-auto! text-ink-muted hover:overlay-hover active:overlay-active rounded-none"
-    >
+    <Dropdown.Trigger as={ButtonGroup.Button} variant="ghost" size="xs">
       {MODE_OPTIONS.find((o) => o.id === props.mode.value())?.label}
     </Dropdown.Trigger>
     <Dropdown.Content portalScope="local">
@@ -157,8 +147,10 @@ const MultiValueSegment = (props: {
       }}
     >
       <Combobox.Trigger
+        as={ButtonGroup.Button}
+        variant="ghost"
+        size="xs"
         aria-label={`Change ${props.facet.label} filter`}
-        class="inline-flex h-full items-center gap-1.5 px-2 hover:bg-hover active:bg-active"
       >
         <ValueDisplay values={props.facet.values()} />
       </Combobox.Trigger>
@@ -173,12 +165,12 @@ const MultiValueSegment = (props: {
  */
 export const SearchFacetChip = (props: SearchFacetChipProps) => (
   <Layer depth={2}>
-    <div class="flex h-6 items-stretch overflow-clip whitespace-nowrap rounded-full border border-edge-button bg-control text-xs text-ink not-touch:elevated">
-      <span class="inline-flex items-center px-2 text-ink-muted">
+    <ButtonGroup aria-label={props.facet.label} size="xs" class="shrink-0">
+      <span class="inline-flex items-center px-2 text-xs text-ink-muted">
         {props.facet.label}
       </span>
 
-      <ChipDivider />
+      <ButtonGroup.Divider />
 
       <Show
         when={
@@ -190,7 +182,7 @@ export const SearchFacetChip = (props: SearchFacetChipProps) => (
         {(mode) => (
           <>
             <ModeSegment mode={mode()} />
-            <ChipDivider />
+            <ButtonGroup.Divider />
           </>
         )}
       </Show>
@@ -216,19 +208,19 @@ export const SearchFacetChip = (props: SearchFacetChipProps) => (
       </Switch>
 
       <Show when={!props.facet.isDefault()}>
-        <ChipDivider />
-        <Button
-          class="rounded-none h-full not-disabled:hover:text-failure"
+        <ButtonGroup.Divider />
+        <ButtonGroup.Button
+          variant="ghost"
           aria-label={`Clear ${props.facet.label} filter`}
-          size="icon-sm"
+          size="icon-xs"
           onClick={(e) => {
             e.stopPropagation();
             props.facet.reset();
           }}
         >
-          <XIcon class="size-3.5!" />
-        </Button>
+          <XIcon class="size-3.5" />
+        </ButtonGroup.Button>
       </Show>
-    </div>
+    </ButtonGroup>
   </Layer>
 );

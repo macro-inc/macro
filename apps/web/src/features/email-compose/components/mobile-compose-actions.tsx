@@ -18,12 +18,14 @@ export function MobileComposeActions(props: {
     <HeaderIsland class="h-(--mobile-chrome-button-size) p-[5px]">
       <Show when={props.attachRef}>
         <Button
+          aria-label="Attach"
+          tooltip="Attach"
           ref={props.attachRef}
-          label="Attach"
+          variant="ghost"
           size="icon-sm"
           disabled={props.editingDisabled}
         >
-          <Paperclip />
+          <Paperclip class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
       {props.scheduleControl}

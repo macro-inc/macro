@@ -8,6 +8,8 @@ pub mod contacts_dispatcher;
 pub mod entity_access_comment_parents;
 /// Notification adapter for channel notification side effects.
 pub mod notification_sender;
+/// Postgres adapter for what a bot created for a person's request.
+pub mod pg_agent_creations;
 /// Postgres adapter for channel reference share-permission side effects.
 pub mod pg_channel_reference_share_permissions;
 /// Postgres repository for channels.

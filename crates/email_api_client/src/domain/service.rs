@@ -15,6 +15,8 @@ mod labels;
 /// Credential and quota orchestration for generation-bound mailbox operations.
 pub mod mailbox;
 mod messages;
+pub use messages::SEPARATE_LABEL_WRITES_BELOW;
+mod raw_message;
 mod send;
 mod subscription;
 mod sync;

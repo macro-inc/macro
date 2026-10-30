@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM external_chat_media_blob b WHERE b.created_at < now() - interval '1 day'\n            AND NOT EXISTS (SELECT 1 FROM external_chat_attachment a WHERE a.blob_id = b.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "265be4a5f8623239c48caa6f651b612926f9bbff7d5094d08d1c704dd1d9ea44"
+}

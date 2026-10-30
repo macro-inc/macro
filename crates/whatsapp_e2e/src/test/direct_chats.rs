@@ -3,7 +3,7 @@
 //! phone number or LID landing in the same chat, and shared viewers reading
 //! without sending.
 
-use whatsapp_linked::domain::models::ReplyBlock;
+use external_chat::domain::models::ReplyBlock;
 
 use super::*;
 
@@ -67,20 +67,22 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
     let chat = listed_customer_chat(&world).await;
     assert_eq!(
         (chat.kind, chat.can_add, chat.name.as_str()),
-        (ChatKind::Direct, true, "Customer")
+        (ExternalChatKind::Direct, true, "Customer")
     );
     let binding = world
-        .linked
-        .adopt(
+        .external
+        .add(
             &person(ALICE),
-            &AdoptGroup {
-                group_jid: chat.jid.clone(),
+            &AddChat {
+                provider: ExternalChatProvider::WhatsApp,
+                remote_id: chat.jid.clone(),
+                kind: ExternalChatKind::Direct,
             },
             SendAuthority::Human,
         )
         .await
         .unwrap();
-    assert_eq!(binding.kind, ChatKind::Direct);
+    assert_eq!(binding.kind, ExternalChatKind::Direct);
     assert_eq!(
         backfill_state(&world, &binding, &["done", "partial"])
             .await
@@ -125,8 +127,8 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
         assert_eq!(world.timeline(&binding, source).await, [text]);
     }
     let senders = sqlx::query_scalar!(
-        r#"SELECT p.user_id FROM whatsapp_group_message m JOIN whatsapp_external_person p ON p.id = m.person_id
-        WHERE m.binding_id = $1 AND m.source_id = $2"#,
+        r#"SELECT p.user_id FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id
+        WHERE m.chat_id = $1 AND m.source_id = $2"#,
         binding.id,
         from_phone
     )
@@ -157,7 +159,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
     entity_access_db_utils::direct_share::set(
         &mut tx,
         &binding.id,
-        EntityType::WhatsAppGroup,
+        EntityType::ExternalChat,
         &BOB.to_owned().try_into().unwrap(),
         Some(AccessLevel::View),
         false,
@@ -166,17 +168,17 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
     .unwrap();
     tx.commit().await.unwrap();
     let bobs = world
-        .linked
-        .group_detail(&receipt::<ViewAccessLevel>(BOB, binding.id))
+        .external
+        .detail(&receipt::<ViewAccessLevel>(BOB, binding.id))
         .await
         .unwrap();
     assert_eq!(
-        (bobs.group.can_send, bobs.group.send_reason),
-        (false, Some(ReplyBlock::NotObserving))
+        (bobs.chat.can_send, bobs.chat.send_reason),
+        (false, Some(ReplyBlock::NotAdded))
     );
     assert!(
         world
-            .linked
+            .external
             .send_reply(
                 &receipt::<ViewAccessLevel>(BOB, binding.id),
                 &SendReply {
@@ -193,7 +195,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
             .is_err()
     );
     let read = world
-        .linked
+        .external
         .messages(
             &receipt::<ViewAccessLevel>(BOB, binding.id),
             None,

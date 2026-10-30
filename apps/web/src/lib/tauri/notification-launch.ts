@@ -4,11 +4,51 @@ import {
   pendingNotificationNavigation,
   receiveNotificationTap,
 } from '@notifications/notification-navigation-intent';
+import { notificationOpenSpan } from '@notifications/notification-open-trace';
+import { createEffect, on, onCleanup, onMount } from 'solid-js';
 import {
   createPushApi,
   releaseNotificationCover,
   supportsNotificationLaunch,
 } from './push-api';
+
+const NOTIFICATION_COVER_MAX_WAIT_MS = 8000;
+
+/** Keep every tap usable even when navigation or its acknowledgment stalls. */
+export function useNotificationCoverTimeout(): void {
+  onMount(() => {
+    if (!supportsNotificationLaunch()) return;
+    const startedAt = performance.now();
+    const timeout = setTimeout(() => {
+      // A tap received during startup owns its later deadline. Keep the
+      // bootstrap fallback for launches that have not delivered an intent.
+      if (pendingNotificationNavigation()?.deliveryId) return;
+      const span = Telemetry.span('notification.cover_startup_fallback');
+      span.setAttr('notification.cover.outcome', 'startup_timeout');
+      span.setAttr('notification.cover.wait_ms', performance.now() - startedAt);
+      span.event('notification.cover_timeout');
+      span.end();
+      fireAndForget(releaseNotificationCover(), 'notification-launch');
+    }, NOTIFICATION_COVER_MAX_WAIT_MS);
+    onCleanup(() => clearTimeout(timeout));
+  });
+
+  createEffect(
+    on(pendingNotificationNavigation, (intent) => {
+      if (!supportsNotificationLaunch() || !intent?.deliveryId) return;
+      const timeout = setTimeout(() => {
+        if (pendingNotificationNavigation() !== intent) return;
+        notificationOpenSpan(intent.notificationId)?.event(
+          'notification.cover_timeout'
+        );
+        // Revealing the app does not consume the durable destination. Native
+        // can redeliver it, and a later route acknowledgment still completes it.
+        fireAndForget(releaseNotificationCover(), 'notification-launch');
+      }, NOTIFICATION_COVER_MAX_WAIT_MS);
+      onCleanup(() => clearTimeout(timeout));
+    })
+  );
+}
 
 /** Read the native launch intent before the hash router can restore another page. */
 export async function prepareNotificationLaunch(): Promise<void> {

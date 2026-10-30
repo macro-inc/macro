@@ -82,8 +82,8 @@ function ControlsOnDepthDemo() {
           <Panel depth={depth}>
             <Panel.Body class="flex flex-wrap gap-2 p-3">
               <Button variant="ghost">Ghost</Button>
-              <Button variant="outline">Outline</Button>
-              <Button variant="accent">Accent</Button>
+              <Button variant="secondary">Outline</Button>
+              <Button variant="primary">Primary</Button>
               <Button variant="danger">Danger</Button>
             </Panel.Body>
           </Panel>

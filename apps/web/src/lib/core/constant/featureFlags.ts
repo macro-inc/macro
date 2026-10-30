@@ -150,6 +150,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+/** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
+export const enableDesktopTabs = defineFlag({
+  key: 'enable-desktop-tabs',
+  env: 'ENABLE_DESKTOP_TABS',
+  default: onInDev,
+});
+
 // Leave the production PostHog flag disabled until archive-import rollout.
 export const enableSlackArchiveImport = defineFlag({
   key: 'enable-slack-archive-import',
@@ -179,6 +186,18 @@ export const enableTasksReviews = defineFlag({
   key: 'enable-tasks-reviews',
   env: 'ENABLE_TASKS_REVIEWS',
   default: onInDev,
+});
+
+/**
+ * Sends a new session's first prompt on its create. A harness that predates
+ * `promptActionId` and `promptAttachments` ignores them, duplicating the
+ * prompt bubble and dropping its files, so deployed environments stay off
+ * until that harness is live; local stacks build both together.
+ */
+export const enableFirstPromptOnCreate = defineFlag({
+  key: 'enable-first-prompt-on-create',
+  env: 'ENABLE_FIRST_PROMPT_ON_CREATE',
+  default: LOCAL_ONLY || undefined,
 });
 
 /** Gantt is visible in local previews; deployed apps retain the remote rollout. */
@@ -513,6 +532,15 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// The Focus tab in Mail: signal threads the email focus worker classified as
+// worth the owner's attention. Only allowlisted inboxes are classified, so the
+// tab is empty for everyone else.
+export const enableEmailFocus = defineFlag({
+  key: 'enable-email-focus',
+  env: 'ENABLE_EMAIL_FOCUS',
+  default: onInDev,
+});
+
 export const enableHistoryComponent = defineFlag({
   key: 'enable-history-component',
   env: 'ENABLE_HISTORY_COMPONENT',
@@ -714,6 +742,17 @@ export const enableCalendarGuestInvites = defineFlag({
   default: onInDev,
 });
 
+// Forwarding an invitation: event details' and the editor's "Forward
+// invitation", offered where a guest cannot add guests, which emails the
+// event's .ics from the inbox holding the viewer's copy. On in dev only until
+// a real send has passed on dev; there is no PostHog flag yet, so it stays off
+// in production. Override with VITE_ENABLE_CALENDAR_INVITATION_FORWARD.
+export const enableCalendarInvitationForward = defineFlag({
+  key: 'enable-calendar-invitation-forward',
+  env: 'ENABLE_CALENDAR_INVITATION_FORWARD',
+  default: onInDev,
+});
+
 // Adding a channel-shared event to your own calendar: the "Add to calendar"
 // action on a shared event's mention card. On in dev only until a real Google
 // import has passed on dev; there is no PostHog flag yet, so it stays off in
@@ -824,6 +863,13 @@ export const enableRoutineConditions = defineFlag({
   default: onInDev,
 });
 
+// Templates are not ready for general use. Follow PostHog even in development
+// so the UI and the server's per-user rollout agree.
+export const enableRoutineSharing = defineFlag({
+  key: 'enable-routine-sharing',
+  env: 'ENABLE_ROUTINE_SHARING',
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;
@@ -923,10 +969,9 @@ export const enableInAppTours = defineFlag({
 
 /**
  * Personal WhatsApp linked devices: the External tab, pairing, adding chats
- * to Macro and sharing them by mention in channels. Off in dev too: dev has no WhatsApp session
- * service, so the tab would only show errors. Override locally with
- * VITE_ENABLE_WHATSAPP_LINKED=true. Backend switches gate each operation
- * independently.
+ * to Macro and sharing them by mention in channels. The only rollout gate;
+ * the backend always serves the routes. Follows PostHog everywhere; override
+ * locally with VITE_ENABLE_WHATSAPP_LINKED=true.
  */
 export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',

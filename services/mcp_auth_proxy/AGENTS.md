@@ -11,7 +11,8 @@ in front of FusionAuth, which doesn't support DCR itself.
 
 - `README.md`: the security model — which redirect URIs are usable, and which
   client a grant belongs to. Read before touching `/register`, `/authorize`,
-  or `/token` logic.
+  or `/token` logic, and its "Disconnecting a client" section before touching
+  `/revoke`.
 - `src/domain/service.rs` + `src/domain/service/test.rs`: the broker's core
   logic (registration, authorize, token/refresh).
 - `src/domain/redirect_uri.rs`: the redirect URI usability policy from the README.
@@ -23,8 +24,9 @@ in front of FusionAuth, which doesn't support DCR itself.
 
 ## Scope
 
-- Owns: DCR-compliant client registration, authorization-code issuance, and
-  refresh-token rotation/binding, all proxied in front of FusionAuth.
+- Owns: DCR-compliant client registration, authorization-code issuance,
+  refresh-token rotation/binding, and RFC 7009 revocation, all proxied in
+  front of FusionAuth.
 - Not here: the MCP tool surface itself → `services/agent_harness_service/src/public_mcp.rs`.
 
 ## Recipes
@@ -47,12 +49,19 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 
 ## Gotchas
 
+- Don't add an MCP client's host to FusionAuth's authorized origins
+  (`infra/stacks/fusionauth-instance/origins.ts`). `/authorize` withholds the
+  client's Referer from FusionAuth; a new client needs only a trusted redirect
+  host. See README "Origin versus redirect URI".
 - `client_id` is not a secret; every endpoint must still check it against a
   live registration — see README "Which client a grant belongs to" before
   changing token/refresh validation.
 - Refresh tokens are bound by SHA-256 digest with rotate-before-drop ordering;
   don't weaken that to avoid a race, and remember pre-binding-era refresh
   tokens have no binding (clients reauthorize once).
+- A binding carries the grant id of its token family; rotation must copy it
+  and refresh must check the revoked-grant marker, or `/revoke` stops covering
+  rotated tokens. Bindings stored as a bare client id are their own family.
 
 ## Related
 

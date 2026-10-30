@@ -250,6 +250,26 @@ describe('maybeHandlePlatformNotification', () => {
     expect(handle.onClick).toHaveBeenCalledOnce();
   });
 
+  it('silences the system alert when Macro plays its own sound', async () => {
+    const showNotification = vi.fn<
+      PlatformNotificationState['showNotification']
+    >(async () => createNotificationHandle());
+    const notificationInterface = createNotificationInterface(showNotification);
+
+    await maybeHandlePlatformNotification(
+      createChannelInviteNotification(),
+      notificationInterface,
+      {} as SplitManager,
+      { silent: true }
+    );
+
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({ silent: true }),
+      })
+    );
+  });
+
   it('opens the original notification target only when its platform handle is clicked', async () => {
     const focus = vi.spyOn(window, 'focus').mockImplementation(() => {});
     vi.mocked(openNotification).mockClear();

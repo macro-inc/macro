@@ -64,7 +64,7 @@ event contract (schema, sanitization, delivery semantics).
 - After query changes: `nix develop --command just prepare_db` from the repo root
   inside Nix.
 
-- Registered WhatsApp groups are human-owned; owned-entity cleanup treats their dependency order like other conversations.
+- Registered external chats are human-owned; owned-entity cleanup treats their dependency order like other conversations.
 
 ## Related
 

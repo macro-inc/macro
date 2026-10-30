@@ -13,6 +13,7 @@ import {
   localDraftStore,
   watchEmailStorageEnded,
 } from './local-drafts';
+import { setQueuedSendSession } from './queued-sends';
 import {
   emailSendFailureKind,
   recordEmailSend,
@@ -40,6 +41,7 @@ export function setEmailOutboxSession(accountId: string | undefined): void {
   stopWatching?.();
   stopWatching = undefined;
   setServerSendSession(accountId);
+  setQueuedSendSession(accountId);
   if (!accountId) return;
   // This page's draft session ended outside it; only a new page can reopen
   // drafts. This page's own sign-out clears the account first, so it never

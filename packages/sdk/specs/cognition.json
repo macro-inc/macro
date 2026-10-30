@@ -1046,6 +1046,87 @@
         }
       }
     },
+    "/database-query": {
+      "post": {
+        "tags": ["database_query"],
+        "operationId": "generate_database_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseQueryAnswer"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/decisions": {
       "post": {
         "tags": ["decisions"],
@@ -1444,7 +1525,7 @@
       },
       "post": {
         "tags": ["mcp"],
-        "summary": "Add a new MCP server for the authenticated user.",
+        "summary": "Add a new MCP server for the authenticated user. A URL the user already\nhas is returned as stored, keeping its credentials.",
         "operationId": "add_mcp_server",
         "requestBody": {
           "content": {
@@ -1463,6 +1544,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -1885,7 +1976,7 @@
       "post": {
         "tags": ["pipedream-mcp"],
         "summary": "Register a connected account reported by the Pipedream Connect UI.",
-        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything.",
+        "description": "Verifies with Pipedream that the account exists and was connected for\nthe authenticated user before persisting anything. An overlaid app is\nrefused with 409: it connects through its own MCP server instead.",
         "operationId": "complete_pipedream_mcp_connection",
         "requestBody": {
           "content": {
@@ -1919,6 +2010,16 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -2091,11 +2192,54 @@
         }
       }
     },
+    "/pipedream/mcp/overlays": {
+      "get": {
+        "tags": ["pipedream-mcp"],
+        "summary": "List the catalog apps that connect through their own MCP server.",
+        "description": "Clients connect these with the native MCP OAuth flow against\n`server_url`; Pipedream refuses to complete a connection for them.",
+        "operationId": "list_pipedream_mcp_overlays",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipedreamOverlayResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pipedream/mcp/recover": {
       "post": {
         "tags": ["pipedream-mcp"],
         "summary": "Register an account a Connect flow created but the Connect UI never\nreported.",
-        "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.",
+        "description": "Called after the Connect UI closes without a success event. Answers 404\nwhen Pipedream has no new account for this user and app.\nAn overlaid app is refused with 409, as in [`complete_connection`].",
         "operationId": "recover_pipedream_mcp_connection",
         "requestBody": {
           "content": {
@@ -2129,6 +2273,16 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "",
             "content": {
               "application/json": {
@@ -2504,7 +2658,8 @@
           "agent_repository_choice",
           "agent_mode_choice",
           "dictation",
-          "image_generation"
+          "image_generation",
+          "email_focus"
         ]
       },
       "AssistantMessagePart": {
@@ -3296,6 +3451,100 @@
         ],
         "description": "What a successful tool call committed to the user's databases."
       },
+      "DatabaseQueryAnswer": {
+        "type": "object",
+        "description": "A proposal, never stored results or permission to read the named database.",
+        "required": [
+          "answerable",
+          "sql",
+          "explanation",
+          "title",
+          "displayMode"
+        ],
+        "properties": {
+          "answerable": {
+            "type": "boolean"
+          },
+          "chart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DatabaseQueryChart"
+              }
+            ]
+          },
+          "databaseId": {
+            "type": ["string", "null"]
+          },
+          "displayMode": {
+            "$ref": "#/components/schemas/DatabaseQueryDisplayMode"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "sql": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatabaseQueryChart": {
+        "type": "object",
+        "description": "Chart fields name the proposal's result columns exactly.",
+        "required": ["x", "y", "title", "stack"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
+          "stack": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "x": {
+            "type": "string"
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatabaseQueryDisplayMode": {
+        "type": "string",
+        "description": "Supported live-answer presentations.",
+        "enum": ["scalar", "table", "bar", "line", "area", "scatter", "pie"]
+      },
+      "DatabaseQueryRequest": {
+        "type": "object",
+        "description": "The question and untrusted schema hints; authorization remains in the read services.",
+        "required": ["model", "prompt", "sql", "schema"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "The SQL engine's error from one failed proposal, used for a bounded repair."
+          },
+          "model": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "schema": {},
+          "sql": {
+            "type": "string"
+          }
+        }
+      },
       "DecisionErrorBody": {
         "type": "object",
         "description": "Sanitized, machine-readable failure of a decision request.",
@@ -3464,7 +3713,7 @@
           "database",
           "database_row",
           "form",
-          "whatsapp_group"
+          "external_chat"
         ]
       },
       "ErrorBody": {
@@ -4984,6 +5233,21 @@
           "server_name": {
             "type": "string",
             "description": "Human-readable display name."
+          }
+        }
+      },
+      "PipedreamOverlayResponse": {
+        "type": "object",
+        "description": "A catalog app that connects through its own MCP server instead of\nPipedream.",
+        "required": ["app_slug", "server_url"],
+        "properties": {
+          "app_slug": {
+            "type": "string",
+            "description": "Pipedream app name slug, as it appears in the catalog."
+          },
+          "server_url": {
+            "type": "string",
+            "description": "The MCP server to authorize with the native MCP OAuth flow."
           }
         }
       },

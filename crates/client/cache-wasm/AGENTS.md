@@ -46,6 +46,9 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 ## Gotchas
 
+- Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`
+  tells the frontend which server rows still lack canonical local metadata.
+
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
 - The engine is guarded by an async mutex so overlapping JS calls serialize

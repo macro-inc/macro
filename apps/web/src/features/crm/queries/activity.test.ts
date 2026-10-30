@@ -7,7 +7,7 @@ import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { EMPTY_TAG_FACET_CONTEXT } from '../../soup';
 import type { CrmActivityViewState } from '../core/activity-view';
-import type { CrmActivityTab } from '../core/navigation';
+import type { CrmSoupActivityTab } from '../core/navigation';
 import { useCrmActivityQuery } from './activity';
 import { crmActivityBody } from './activity-filter';
 import {
@@ -15,7 +15,7 @@ import {
   crmActivityItemMatches,
 } from './activity-options';
 
-const tabs: CrmActivityTab[] = ['tasks', 'notes', 'calls', 'email'];
+const tabs: CrmSoupActivityTab[] = ['tasks', 'notes', 'calls', 'email'];
 
 describe('CRM activity queries', () => {
   it.each(tabs)(
@@ -58,7 +58,7 @@ describe('CRM activity queries', () => {
   it('starts with the authenticated viewer and delegates errors, retries, and paging to Soup', () => {
     createRoot((dispose) => {
       const [userId, setUserId] = createSignal<string>();
-      const [tab, setTab] = createSignal<CrmActivityTab>('tasks');
+      const [tab, setTab] = createSignal<CrmSoupActivityTab>('tasks');
       const query: SoupAstItemsQuery = {
         data: undefined,
         error: new Error('Request failed'),

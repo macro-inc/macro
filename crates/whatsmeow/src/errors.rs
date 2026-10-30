@@ -116,6 +116,9 @@ pub enum ClientError {
     /// `ErrRecipientADJID`.
     #[error("message recipient must be a user JID with no device part")]
     RecipientAdJid,
+    /// `ErrRecipientNotOnWhatsApp`.
+    #[error("recipient is not on WhatsApp")]
+    RecipientNotOnWhatsApp,
     /// `ErrServerReturnedError`.
     #[error("server returned error")]
     ServerReturnedError,

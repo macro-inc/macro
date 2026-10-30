@@ -71,7 +71,17 @@ vi.mock('@ui', () => ({
   ),
 }));
 vi.mock('./components/record-section', () => ({
-  RecordSection: (props: { actions: JSX.Element }) => props.actions,
+  RecordSection: (props: {
+    actions: JSX.Element;
+    createAction: { label: string; onClick: () => void };
+  }) => (
+    <>
+      {props.actions}
+      <button onClick={props.createAction.onClick}>
+        {props.createAction.label}
+      </button>
+    </>
+  ),
 }));
 
 afterEach(() => {

@@ -16,7 +16,7 @@ use crate::domain::session_task::LinkedTask;
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "link_task",
-    description = "Link this coding session to the Macro task it works on, replacing any earlier link. The session's pull request, now or later, is linked to the task. Returns the task's id, title, link, and the reference to put in the pull request description."
+    description = "Link this coding session to the Macro task it works on, replacing any earlier link. The session's pull request, now or later, is linked to the task. Returns the task's id, title, link, mention chip to paste when naming the task, and the reference to put in the pull request description."
 )]
 pub struct LinkTask {
     /// The task to link.

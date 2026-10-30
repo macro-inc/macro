@@ -40,6 +40,7 @@ export function SaveFailureNotice(props: {
         <p class="mt-1 text-ink-muted">{props.message}</p>
       </div>
       <Button
+        variant="primary"
         size="xs"
         class="shrink-0"
         disabled={props.pending}
@@ -50,6 +51,7 @@ export function SaveFailureNotice(props: {
       <Show when={props.onDiscard}>
         {(discard) => (
           <Button
+            variant="ghost"
             size="xs"
             class="shrink-0"
             disabled={props.pending}
@@ -60,9 +62,10 @@ export function SaveFailureNotice(props: {
         )}
       </Show>
       <Button
+        variant="ghost"
+        aria-label="Dismiss save error"
+        tooltip={{ content: 'Dismiss save error', disabled: true }}
         size="icon-xs"
-        label="Dismiss save error"
-        tooltipDisabled
         onClick={props.onDismiss}
       >
         <XIcon class="size-3.5" />
@@ -108,13 +111,19 @@ export function HiddenRecordNotice(props: {
         <p class="font-medium text-ink">{props.title}</p>
         <p class="mt-1 text-ink-muted">{props.message}</p>
       </div>
-      <Button size="xs" class="shrink-0 text-accent" onClick={props.onOpen}>
+      <Button
+        variant="ghost"
+        size="xs"
+        class="shrink-0 text-accent"
+        onClick={props.onOpen}
+      >
         Open record
       </Button>
       <Button
+        variant="ghost"
+        aria-label="Dismiss record notice"
+        tooltip={{ content: 'Dismiss record notice', disabled: true }}
         size="icon-xs"
-        label="Dismiss record notice"
-        tooltipDisabled
         onClick={props.onDismiss}
       >
         <XIcon class="size-3.5" />
@@ -137,12 +146,18 @@ export function DraftFailureNotice(props: {
       class="flex items-center gap-3 border-b border-edge-muted px-4 py-2 text-xs text-ink-muted"
     >
       <span class="flex-1">{props.message}</span>
-      <Button size="xs" disabled={props.pending} onClick={props.onAction}>
+      <Button
+        variant="primary"
+        size="xs"
+        disabled={props.pending}
+        onClick={props.onAction}
+      >
         {props.actionLabel}
       </Button>
       <Show when={props.onDiscard}>
         {(discard) => (
           <Button
+            variant="ghost"
             size="xs"
             disabled={props.pending}
             onClick={() => discard()()}

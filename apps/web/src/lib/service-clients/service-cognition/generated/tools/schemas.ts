@@ -1316,6 +1316,20 @@ export const ConfigureBotResponse = z.object({
   summary: z.string(),
 });
 
+export const ConnectMcpServer = z.object({
+  url: z.string(),
+  serverName: z.string(),
+});
+
+export const ConnectMcpServerResponse = z.object({
+  url: z.string(),
+  serverName: z.string(),
+  alreadyConnected: z.boolean(),
+  authenticated: z.boolean(),
+  enabled: z.boolean(),
+  summary: z.string(),
+});
+
 export const ContentSearch = z.object({
   query: z.string(),
   matchType: z
@@ -16309,7 +16323,7 @@ export const ShareWithChannel = z.object({
       z.literal('call'),
       z.literal('thread'),
       z.literal('agent_session'),
-      z.literal('whatsapp_group'),
+      z.literal('external_chat'),
       z.literal('chat'),
     ];
     const errors = schemas.reduce<z.ZodError[]>(
@@ -16343,7 +16357,7 @@ export const ShareWithChannelResponse = z.object({
       z.literal('call'),
       z.literal('thread'),
       z.literal('agent_session'),
-      z.literal('whatsapp_group'),
+      z.literal('external_chat'),
       z.literal('chat'),
     ];
     const errors = schemas.reduce<z.ZodError[]>(

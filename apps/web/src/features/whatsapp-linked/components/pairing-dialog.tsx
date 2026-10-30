@@ -50,7 +50,7 @@ function CodeSlot(props: {
         <Match when={props.expired}>
           <CodeBox>
             <p role="status">Code expired</p>
-            <Button type="button" variant="strong" onClick={props.onRetry}>
+            <Button type="button" variant="primary" onClick={props.onRetry}>
               Show a new code
             </Button>
           </CodeBox>
@@ -141,7 +141,7 @@ function PasskeyStep(props: {
           </Show>
           <Button
             type="button"
-            variant="strong"
+            variant="primary"
             disabled={!props.challengeReady || !!running()}
             onClick={props.onConfirm}
           >
@@ -304,7 +304,7 @@ export function PairingDialog(props: {
                     ? 'Linking was cancelled.'
                     : "Linking didn't finish."}
                 </p>
-                <Button type="button" variant="strong" onClick={props.onRetry}>
+                <Button type="button" variant="primary" onClick={props.onRetry}>
                   Show a new code
                 </Button>
               </div>
@@ -312,12 +312,7 @@ export function PairingDialog(props: {
           </Switch>
         </ActionDialogShell.Body>
         <ActionDialogShell.Footer>
-          <Button
-            type="button"
-            variant="ghost"
-            depth={2}
-            onClick={props.onCancel}
-          >
+          <Button type="button" variant="ghost" onClick={props.onCancel}>
             Cancel
           </Button>
         </ActionDialogShell.Footer>

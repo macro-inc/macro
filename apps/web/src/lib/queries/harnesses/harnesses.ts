@@ -90,6 +90,32 @@ export function useApproveHarnessPairingMutation() {
   }));
 }
 
+/**
+ * Approves a pairing opened by this computer's own daemon, granting exactly
+ * the permission-bypass ceiling the daemon requested from its config, so a
+ * re-pair keeps the access the user chose at setup.
+ */
+export function useApproveOwnHarnessPairingMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (code: string) => {
+      const pairing = await throwOnErr(() =>
+        storageServiceClient.getHarnessPairing({ code })
+      );
+      return await throwOnErr(() =>
+        storageServiceClient.approveHarnessPairing({
+          code,
+          allow_permission_bypass:
+            pairing.requested_allow_permission_bypass ?? false,
+        })
+      );
+    },
+    onSuccess: async () => await invalidateHarnesses(),
+    onError: (error) =>
+      console.error('failed to approve local harness pairing', error),
+  }));
+}
+
 export function useDeleteHarnessMutation() {
   return useMutation(() => ({
     gcTime: 0,

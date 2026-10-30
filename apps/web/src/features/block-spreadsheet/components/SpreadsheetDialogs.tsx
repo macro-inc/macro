@@ -95,7 +95,7 @@ export function SpreadsheetFindDialog(props: SpreadsheetFindDialogProps) {
             classList={{ '!text-accent': !!props.query.trim() }}
             onClick={() => props.onFind()}
           >
-            <MagnifyingGlass />
+            <MagnifyingGlass class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <input
             ref={findInputRef}
@@ -131,7 +131,7 @@ export function SpreadsheetFindDialog(props: SpreadsheetFindDialogProps) {
             disabled={!props.matchCount}
             onClick={() => props.onFind(true)}
           >
-            <CaretUp />
+            <CaretUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button
             size="icon-sm"
@@ -140,17 +140,18 @@ export function SpreadsheetFindDialog(props: SpreadsheetFindDialogProps) {
             disabled={!props.matchCount}
             onClick={() => props.onFind()}
           >
-            <CaretDown />
+            <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Show when={!props.readonly}>
             <Button
+              aria-label={replacing() ? 'Hide replace' : 'Replace'}
+              tooltip={replacing() ? 'Hide replace' : 'Replace'}
               size="icon-sm"
               variant="ghost"
-              label={replacing() ? 'Hide replace' : 'Replace'}
               aria-pressed={replacing()}
               onClick={() => setReplacing((open) => !open)}
             >
-              <Swap />
+              <Swap class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Button
@@ -159,7 +160,7 @@ export function SpreadsheetFindDialog(props: SpreadsheetFindDialogProps) {
             aria-label="Close find bar"
             onClick={close}
           >
-            <X />
+            <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
         <Show when={replacing() && !props.readonly}>
@@ -182,7 +183,7 @@ export function SpreadsheetFindDialog(props: SpreadsheetFindDialogProps) {
               />
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 disabled={props.matchIndex < 0}
                 onClick={() => props.onReplace(false)}
               >
@@ -190,7 +191,7 @@ export function SpreadsheetFindDialog(props: SpreadsheetFindDialogProps) {
               </Button>
               <Button
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 disabled={!props.matchCount}
                 onClick={() => props.onReplace(true)}
               >
@@ -278,7 +279,7 @@ export function SpreadsheetMoveDialog(props: {
           >
             Cancel
           </Button>
-          <Button size="sm" variant="strong" type="submit">
+          <Button size="sm" variant="secondary" type="submit">
             Replace
           </Button>
         </div>

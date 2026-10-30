@@ -159,7 +159,7 @@ export function SetupStatus() {
           fallback={
             <div class="absolute right-2 bottom-2 z-20 flex items-center gap-2 rounded-full border border-edge-muted bg-surface py-1 pr-1 pl-2.5 text-xs text-ink-muted shadow-menu">
               <span>{setupMessage().title}</span>
-              <Button variant="accent" size="sm" onClick={startSetup}>
+              <Button variant="primary" size="sm" onClick={startSetup}>
                 {setupMessage().action}
               </Button>
             </div>
@@ -174,7 +174,7 @@ export function SetupStatus() {
                 {setupMessage().title}
               </div>
               <p class="text-xs text-ink-muted">{setupMessage().description}</p>
-              <Button variant="accent" size="sm" onClick={startSetup}>
+              <Button variant="primary" size="sm" onClick={startSetup}>
                 {setupMessage().action}
               </Button>
             </div>

@@ -78,7 +78,7 @@ pub enum AccountSignal {
     Pairing(Uuid),
     /// `whatsapp_send_requested`: claim pending sends.
     Send,
-    /// `whatsapp_groups_requested`: refresh the group list.
+    /// `whatsapp_roster_requested`: refresh the group list.
     Groups,
     /// `whatsapp_account_changed`: consent or adopted groups changed.
     Changed,

@@ -41,9 +41,10 @@ function ActionMenu(
   return (
     <Dropdown placement={props.placement ?? 'bottom-start'} modal={false}>
       <Dropdown.Trigger
+        aria-label={props.label}
+        tooltip={props.label}
         size="icon-sm"
         variant="ghost"
-        label={props.label}
         disabled={props.disabled}
         class="h-7 w-7 min-h-7 min-w-7 shrink-0 p-1 text-ink-muted touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
       >
@@ -309,9 +310,10 @@ export function SpreadsheetImportButton(props: {
 }) {
   return (
     <Button
+      aria-label="Import"
+      tooltip="Import"
       size="icon-sm"
       variant="ghost"
-      label="Import"
       disabled={props.disabled}
       class="h-7 w-7 min-h-7 min-w-7 shrink-0 p-1 text-ink-muted touch:h-[44px] touch:w-[44px] touch:min-h-[44px] touch:min-w-[44px]"
       onClick={() => props.onCommand('import')}

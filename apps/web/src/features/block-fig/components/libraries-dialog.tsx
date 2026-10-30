@@ -82,13 +82,14 @@ export function LibrariesDialog(props: {
                 Libraries
               </Dialog.Title>
               <Dialog.CloseButton
+                aria-label="Close"
+                tooltip="Close"
                 as={Button}
                 variant="ghost"
                 size="icon-sm"
-                label="Close"
                 tabIndex={-1}
               >
-                <XIcon />
+                <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dialog.CloseButton>
             </div>
             <section class="flex flex-col gap-2">
@@ -112,7 +113,7 @@ export function LibrariesDialog(props: {
                 </div>
                 <Show when={props.canEdit}>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     data-testid="fig-library-publish"
                     disabled={

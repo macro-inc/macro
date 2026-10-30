@@ -29,6 +29,8 @@ export function taskMatchesTab(
     case 'team-tasks':
       return true;
     case 'projects':
+    case 'my-projects':
+    case 'created-projects':
       return false;
   }
 }

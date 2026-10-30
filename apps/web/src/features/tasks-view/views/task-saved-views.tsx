@@ -11,7 +11,13 @@ import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
-import { Button, type DialogHandle, Dropdown, openDialog } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  type DialogHandle,
+  Dropdown,
+  openDialog,
+} from '@ui';
 import { ok } from 'neverthrow';
 import { batch, For, getOwner, type Owner, onCleanup, Show } from 'solid-js';
 import { v4 as uuid } from 'uuid';
@@ -321,7 +327,7 @@ export function TaskSavedViewsList() {
     isSidebarSectionOpen,
     setSidebarSectionOpen,
   } = useTasksView();
-  const list = useTaskSavedViewListState();
+  const [attachCreateHotkeys] = useHotkeyDOMScope('create-saved-view', true);
   const create = () => {
     setSidebarSectionOpen('saved-views', true);
     startSavedView();
@@ -333,11 +339,8 @@ export function TaskSavedViewsList() {
         onOpenChange={(open) => setSidebarSectionOpen('saved-views', open)}
       >
         <SavedViewList.Header
-          onCreate={
-            !isSidebarSectionOpen('saved-views') || !list.empty()
-              ? create
-              : undefined
-          }
+          onCreate={create}
+          createButtonRef={attachCreateHotkeys}
         />
         <SavedViewList.Content>
           <TaskSavedViewRows />
@@ -411,12 +414,12 @@ function TaskSavedViewRows(props: {
               </div>
               <Button
                 ref={attachCreateHotkeys}
-                size="icon-sm"
-                label={t('viewMenus.createSavedView')}
-                variant="outline"
+                size="sm"
+                variant="secondary"
                 onClick={() => run(startSavedView)}
               >
                 <PlusIcon class="size-3.5" />
+                {t('viewMenus.createSavedView')}
               </Button>
             </div>
           </Show>
@@ -495,11 +498,9 @@ export function TaskSaveViewButton() {
   };
   return (
     <Show when={visible()}>
-      <HeaderActionGroup label="Save task view">
-        <Button size="md" variant="cta" onClick={() => create()}>
-          Save view
-        </Button>
-      </HeaderActionGroup>
+      <Button variant="primary" onClick={() => create()}>
+        Save view
+      </Button>
     </Show>
   );
 }
@@ -525,7 +526,7 @@ export function TaskSavedViewCreateBanner(props: TaskSavedViewDialogProps) {
       >
         <InfoIcon class="size-4 shrink-0 text-accent" aria-hidden="true" />
         <span class="min-w-0 flex-1">Save these filters as a view</span>
-        <Button size="sm" variant="cta" onClick={showCreate}>
+        <Button size="sm" variant="primary" onClick={showCreate}>
           <BookmarkIcon class="size-4" aria-hidden="true" />
           Save view
         </Button>
@@ -592,7 +593,8 @@ export function TaskSavedViewMenu() {
             ref={trigger}
             size="icon-md"
             variant="ghost"
-            label="Saved view actions"
+            aria-label="Saved view actions"
+            tooltip="Saved view actions"
           >
             <DotsIcon class="size-4" />
           </Dropdown.Trigger>
@@ -671,45 +673,43 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
   return (
     <>
       <Show when={savedViews?.view().kind === 'new' || selected()?.dirty}>
-        <HeaderActionGroup label="Saved view actions">
-          <Show
-            when={savedViews?.view().kind === 'new'}
-            fallback={
-              <>
-                <Show when={selected()?.record.ownerId === viewerId()}>
-                  <Button
-                    size="md"
-                    variant="cta"
-                    class="touch:order-last"
-                    disabled={update.isPending || !!selected()?.issues.length}
-                    title={
-                      selected()?.issues.length
-                        ? 'Update the app or remove unsupported settings before saving.'
-                        : undefined
-                    }
-                    onClick={() => fireAndForget(save(), 'saved-views')}
-                  >
-                    Save changes
-                  </Button>
-                </Show>
-                <Button
-                  size="md"
-                  variant="ghost"
-                  onClick={() => savedViews?.reset()}
+        <Show
+          when={savedViews?.view().kind === 'new'}
+          fallback={
+            <HeaderActionGroup label="Saved view actions">
+              <Show when={selected()?.record.ownerId === viewerId()}>
+                <ButtonGroup.Button
+                  variant="primary"
+                  class="touch:order-last"
+                  disabled={update.isPending || !!selected()?.issues.length}
+                  title={
+                    selected()?.issues.length
+                      ? 'Update the app or remove unsupported settings before saving.'
+                      : undefined
+                  }
+                  onClick={() => fireAndForget(save(), 'saved-views')}
                 >
-                  Reset
-                </Button>
-              </>
-            }
-          >
-            <Button size="md" variant="cta" onClick={() => showCreate()}>
+                  Save changes
+                </ButtonGroup.Button>
+              </Show>
+              <ButtonGroup.Button
+                variant="ghost"
+                onClick={() => savedViews?.reset()}
+              >
+                Reset
+              </ButtonGroup.Button>
+            </HeaderActionGroup>
+          }
+        >
+          <div class="flex items-center gap-2">
+            <Button variant="primary" onClick={() => showCreate()}>
               Save view
             </Button>
-            <Button size="md" variant="ghost" onClick={leaveSavedView}>
+            <Button variant="ghost" onClick={leaveSavedView}>
               Cancel
             </Button>
-          </Show>
-        </HeaderActionGroup>
+          </div>
+        </Show>
       </Show>
       <Show when={failure()}>
         {(error) => (
@@ -724,21 +724,19 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
             <Show
               when={error().graphQLErrors[0]?.extensions.code === 'CONFLICT'}
             >
-              <Button
-                size="sm"
+              <ButtonGroup.Button
                 variant="ghost"
                 onClick={() => fireAndForget(reload(), 'saved-views')}
               >
                 Reload saved view
-              </Button>
+              </ButtonGroup.Button>
             </Show>
-            <Button
-              size="sm"
+            <ButtonGroup.Button
               variant="ghost"
               onClick={() => showCreate(selected()?.record)}
             >
               Duplicate
-            </Button>
+            </ButtonGroup.Button>
           </HeaderActionGroup>
         )}
       </Show>
@@ -756,7 +754,9 @@ export function TaskSavedViewFailure() {
   return (
     <div class="flex h-full flex-col items-center justify-center gap-4 p-6 text-sm">
       <p role="alert">{message()}</p>
-      <Button onClick={() => setTab('my-tasks')}>Return to Tasks</Button>
+      <Button variant="ghost" onClick={() => setTab('my-tasks')}>
+        Return to Tasks
+      </Button>
     </div>
   );
 }

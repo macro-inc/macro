@@ -40,6 +40,7 @@ export function AgentSessionListItem(props: Props) {
         modeForKind(systemBotKind(props.entity.botId) ?? 'agent'));
   const state = () =>
     conversationState(props.entity.status, props.entity.turnState);
+  const failed = () => props.entity.turnState === 'failed';
   const details = (): SessionCodeDetails | undefined => {
     if (mode() !== 'code') return undefined;
     const pr = parseGithubPrUrl(props.entity.pullRequestUrl ?? '');
@@ -64,11 +65,19 @@ export function AgentSessionListItem(props: Props) {
   const hideLeading = () => props.surface === 'agents';
   const codeStatusIndicator = () =>
     props.surface === 'agents' && mode() === 'code' ? (
-      <AgentSessionStatusIndicator state={state()} unread={props.unread} />
+      <AgentSessionStatusIndicator
+        state={state()}
+        unread={props.unread}
+        failed={failed()}
+      />
     ) : undefined;
   const workStatusIndicator = () =>
-    props.surface === 'agents' && mode() !== 'code' ? (
-      <AgentSessionStatusIndicator state={state()} unread={props.unread} />
+    props.surface === 'agents' && (mode() !== 'code' || !details()) ? (
+      <AgentSessionStatusIndicator
+        state={state()}
+        unread={props.unread}
+        failed={failed()}
+      />
     ) : undefined;
 
   return (
@@ -77,6 +86,7 @@ export function AgentSessionListItem(props: Props) {
       title={props.entity.name || 'Untitled conversation'}
       kind={mode()}
       state={state()}
+      failed={failed()}
       active={props.active}
       unread={props.unread}
       hideLeading={hideLeading()}
@@ -89,6 +99,7 @@ export function AgentSessionListItem(props: Props) {
             <AgentSessionStatusIndicator
               state={state()}
               unread={props.unread}
+              failed={failed()}
             />
           }
         >
@@ -106,10 +117,11 @@ export function AgentSessionListItem(props: Props) {
               class="size-3.5 shrink-0 text-ink-extra-muted"
             />
           </Show>
-          <Show when={props.surface === 'home' && props.unread}>
+          <Show when={props.surface === 'home' && (props.unread || failed())}>
             <span
-              aria-label="Unread"
-              class="size-1.5 shrink-0 rounded-full bg-accent"
+              aria-label={props.unread ? 'Unread' : 'Last turn failed'}
+              class="size-1.5 shrink-0 rounded-full"
+              classList={{ 'bg-failure': failed(), 'bg-accent': !failed() }}
             />
           </Show>
           {workStatusIndicator()}

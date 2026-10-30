@@ -9,6 +9,7 @@ anyhow = { workspace = true }
 bebop = { workspace = true }
 futures = { workspace = true }
 opentelemetry = { workspace = true }
+rustls = { workspace = true }
 sync_service_bebop_schema = { path = "../../services/sync-service/bebop-schema", features = ["bebop-owned-all"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
@@ -17,6 +18,7 @@ url = { workspace = true }
 tokio-tungstenite = { workspace = true }
 tracing = { workspace = true }
 tracing-opentelemetry = { workspace = true }
+webpki-roots = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

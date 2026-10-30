@@ -40,13 +40,13 @@ function replacePendingAttachment(
   );
 
   if (pendingIndex === -1) {
-    tracker.addAttachment(uploaded);
-    return;
+    return false;
   }
 
   const next = [...current];
   next[pendingIndex] = uploaded;
   tracker.setAttachments(next);
+  return true;
 }
 
 /**
@@ -75,8 +75,12 @@ export async function uploadInputAttachments(options: {
   files: File[];
   tracker: InputAttachmentTracker;
   uploadFile: (file: File) => Promise<UploadResult>;
+  /** Stop publishing uploads after the owning draft is disposed. */
+  isActive?: () => boolean;
 }): Promise<void> {
+  const isActive = options.isActive ?? (() => true);
   for (const file of options.files) {
+    if (!isActive()) break;
     const uploadSource = createUploadFile(file);
     const pendingId = crypto.randomUUID();
     const pendingKind = getAttachmentKindFromFile(uploadSource);
@@ -94,6 +98,14 @@ export async function uploadInputAttachments(options: {
       previewSrc,
     });
 
+    // A full tracker rejected this file; do not upload an invisible attachment.
+    if (!options.tracker.attachments().some((item) => item.id === pendingId)) {
+      if (previewSrc) URL.revokeObjectURL(previewSrc);
+      toast.failure(`Could not attach ${file.name}: attachment limit reached`);
+      continue;
+    }
+
+    let retainedPreview = false;
     try {
       const dimensionsPromise = resolveMediaDimensions(
         uploadSource,
@@ -101,16 +113,17 @@ export async function uploadInputAttachments(options: {
       );
       const result = await options.uploadFile(file);
 
+      if (!isActive()) continue;
+
       if (result.failed) {
-        options.tracker.removeAttachment(pendingId);
         toast.failure(result.reason ?? `Failed to upload ${file.name}`);
         continue;
       }
 
       const dimensions = await dimensionsPromise;
+      if (!isActive()) continue;
       const uploaded = buildUploadedAttachment(file, pendingKind, result);
       if (!uploaded) {
-        options.tracker.removeAttachment(pendingId);
         toast.failure(`Failed to upload ${file.name}`);
         continue;
       }
@@ -125,11 +138,19 @@ export async function uploadInputAttachments(options: {
         uploaded.height = dimensions.height;
       }
 
-      replacePendingAttachment(options.tracker, pendingId, uploaded);
+      retainedPreview = replacePendingAttachment(
+        options.tracker,
+        pendingId,
+        uploaded
+      );
     } catch (error) {
       console.error('failed to upload attachment', error);
-      options.tracker.removeAttachment(pendingId);
-      toast.failure(`Failed to upload ${file.name}`);
+      if (isActive()) toast.failure(`Failed to upload ${file.name}`);
+    } finally {
+      if (!retainedPreview) {
+        options.tracker.removeAttachment(pendingId);
+        if (previewSrc) URL.revokeObjectURL(previewSrc);
+      }
     }
   }
 }

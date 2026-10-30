@@ -257,7 +257,7 @@ export function BookingPicker(props: {
                   </For>
                   <Button
                     type="submit"
-                    variant="strong"
+                    variant="primary"
                     disabled={flow.submitting() || props.preview}
                   >
                     {props.preview
@@ -292,18 +292,20 @@ export function BookingPicker(props: {
                     </span>
                     <div class="flex gap-1">
                       <Button
+                        aria-label="Previous month"
+                        tooltip="Previous month"
                         type="button"
                         variant="ghost"
-                        label="Previous month"
                         disabled={month() <= currentMonth()}
                         onClick={() => shiftMonth(-1)}
                       >
                         ‹
                       </Button>
                       <Button
+                        aria-label="Next month"
+                        tooltip="Next month"
                         type="button"
                         variant="ghost"
-                        label="Next month"
                         onClick={() => shiftMonth(1)}
                       >
                         ›
@@ -325,7 +327,9 @@ export function BookingPicker(props: {
                       {(d) => (
                         <Button
                           type="button"
-                          variant={date() === dateKey(d) ? 'strong' : 'ghost'}
+                          variant={
+                            date() === dateKey(d) ? 'secondary' : 'ghost'
+                          }
                           class="h-auto w-full aspect-square"
                           aria-pressed={date() === dateKey(d)}
                           disabled={dateKey(d) < today()}
@@ -383,7 +387,7 @@ export function BookingPicker(props: {
                           {(slot) => (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="secondary"
                               onClick={() => flow.select(slot.startsAt)}
                             >
                               {new Date(slot.startsAt).toLocaleTimeString([], {

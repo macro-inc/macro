@@ -12,13 +12,20 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { Tabs } from '@ui';
+import { Badge, Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
-import { EMAIL_TAB_LABELS, EMAIL_TABS } from '../constants';
+import {
+  EMAIL_FOCUS_TAB,
+  EMAIL_INBOX_TAB_IDS,
+  EMAIL_TAB_LABELS,
+  EMAIL_TABS,
+  isEmailInboxTab,
+} from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
+import { useVisibleEmailTab } from '../use-visible-email-tab';
 import { EmailControls } from './EmailControls';
 
 export type EmailHeaderProps = {
@@ -29,8 +36,7 @@ export type EmailHeaderProps = {
 
 export function EmailViewBreadcrumbItem() {
   const { state, tagViewTitle } = useEmailView();
-  const inboxSelected = () =>
-    !isTouchDevice() && (state.tab === 'important' || state.tab === 'noise');
+  const inboxSelected = () => !isTouchDevice() && isEmailInboxTab(state.tab);
   const tabTitle = () =>
     tagViewTitle() ??
     (inboxSelected()
@@ -81,8 +87,13 @@ export function EmailHeader(props: EmailHeaderProps) {
   const [filterOpen, setFilterOpen] = createSignal(false);
   let focusSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
-  const inboxSelected = () =>
-    state.tab === 'important' || state.tab === 'noise';
+  const isVisible = useVisibleEmailTab();
+  const inboxSelected = () => isEmailInboxTab(state.tab);
+  const inboxTabs = () =>
+    EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
+      value: id,
+      label: EMAIL_TAB_LABELS[id],
+    }));
   const selectedTabLabel = () =>
     tagViewTitle() ??
     (inboxSelected()
@@ -148,14 +159,17 @@ export function EmailHeader(props: EmailHeaderProps) {
             <Tabs
               ref={tourTarget(EMAIL_TOUR.signalNoise)}
               aria-label="Inbox view"
+              size="md"
               class="shrink-0"
-              options={[
-                { value: 'important', label: EMAIL_TAB_LABELS.important },
-                { value: 'noise', label: EMAIL_TAB_LABELS.noise },
-              ]}
+              options={inboxTabs()}
               value={state.tab}
               onChange={setTab}
             />
+          </Show>
+          <Show when={state.tab === 'focus'}>
+            <Badge variant="outline" size="xs" class="shrink-0">
+              {EMAIL_FOCUS_TAB.badge}
+            </Badge>
           </Show>
         </div>
       }

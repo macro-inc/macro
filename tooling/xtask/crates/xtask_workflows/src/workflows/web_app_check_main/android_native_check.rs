@@ -24,8 +24,11 @@
 //! included, for native changes that don't break the native/web contract,
 //! like `skip-ios-update`: the bump only feeds the Play release, which
 //! re-checks it before building, and a PR that skips the gate never
-//! releases. Labels are read at run time (a re-run keeps the original event
-//! payload). The job name must stay
+//! releases. Because it never releases, such a PR must not raise the Android
+//! native build floor in `min-native-build.json` either: after the next
+//! production deploy, older installs would be told to update to a version
+//! Play never published. Labels are read at run time (a re-run keeps the
+//! original event payload). The job name must stay
 //! stable: the release preconditions, the watcher and the label workflow
 //! find it by name.
 
@@ -54,6 +57,7 @@ pub(super) fn job() -> Job {
         .add_step(setup_bun())
         .add_step(read_labels())
         .add_step(version_check())
+        .add_step(floor_check())
         .add_step(play_auth())
         .add_step(require_live())
         .add_step(skip_notice())
@@ -93,6 +97,21 @@ fn version_check() -> Step<Run> {
         "#})
         .id("android-version")
         .if_condition(Expression::new(NOT_SKIPPED))
+        .shell("bash")
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// With the skip label the PR never releases, so the Android floor must not
+/// rise above the base's.
+fn floor_check() -> Step<Run> {
+    Step::new("Keep the Android native build floor without a release")
+        .run(indoc::indoc! {r#"
+            set -euo pipefail
+            base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+            git fetch -q --depth=1 origin "$base"
+            bun scripts/android-version-check.mjs --skip-release "$base"
+        "#})
+        .if_condition(Expression::new(SKIP_LABEL))
         .shell("bash")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
 }

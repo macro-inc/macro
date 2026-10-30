@@ -6,6 +6,10 @@ Sidebar `Search` button → `/app/search` with a focused query box. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+Desktop filter chips use one compact control size for values, match mode, and
+clear actions. Labels and controls stay vertically centered inside a frame that
+grows to fit them, rather than clipping taller segments.
+
 On touch devices, the dock's **Search** button opens a persistent **Search…**
 input in `/app/search`. It starts in **All** with Command Menu-style Quick Access
 name search. Categories are **All, Email, Agents, Files, Tasks, Projects, Channels,

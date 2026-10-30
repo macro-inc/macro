@@ -96,6 +96,7 @@ pub(super) fn opted_in(expr: &Expr<AgentSessionLiteral>) -> bool {
     out.include || out.named
 }
 
+#[tracing::instrument(err, skip_all, fields(limit = req.limit))]
 pub(super) async fn cursor_soup(
     db: &PgPool,
     req: SimpleSortRequest<'_>,

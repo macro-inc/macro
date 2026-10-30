@@ -26,6 +26,10 @@ function Fixture() {
   });
   onCleanup(() => client.clear());
   const [open, setOpen] = createSignal(true);
+  const [sent, setSent] = createSignal('');
+  const [pending, setPending] = createSignal(false);
+  let completeSend: (() => void) | undefined;
+  let failSend: (() => void) | undefined;
   return (
     <QueryClientProvider client={client}>
       <AnalyticsContextProvider>
@@ -39,6 +43,21 @@ function Fixture() {
                     <button type="button" onClick={() => setOpen(!open())}>
                       {open() ? 'Leave channel' : 'Open channel'}
                     </button>
+                    <output aria-label="Sent message">{sent()}</output>
+                    <button
+                      type="button"
+                      disabled={!pending()}
+                      onClick={() => completeSend?.()}
+                    >
+                      Complete send
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!pending()}
+                      onClick={() => failSend?.()}
+                    >
+                      Fail send
+                    </button>
                     <Show when={open()}>
                       <ChannelInput
                         input={{
@@ -46,6 +65,21 @@ function Fixture() {
                           id: `channel-input-${channelId}`,
                           placeholder: 'Message #draft-fixture',
                         }}
+                        onSend={(snapshot) => {
+                          setSent(snapshot.value);
+                          setPending(true);
+                          return new Promise<void>((resolve, reject) => {
+                            completeSend = () => {
+                              setPending(false);
+                              resolve();
+                            };
+                            failSend = () => {
+                              setPending(false);
+                              reject(new Error('offline'));
+                            };
+                          });
+                        }}
+                        onSendError={() => {}}
                         participants={() => []}
                         bots={() => []}
                         persistenceKey={makeInputValuePersistenceKey({

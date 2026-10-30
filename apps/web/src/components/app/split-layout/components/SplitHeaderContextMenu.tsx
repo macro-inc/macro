@@ -17,6 +17,10 @@ import SplitIcon from '@icon/system/regular/columns.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import {
+  DomCollectionContext,
+  useOptionalDomCollectionContext,
+} from '@kobalte/core/primitives/create-dom-collection';
 import { createMemo, type ParentProps, useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
@@ -29,6 +33,10 @@ export function SplitHeaderContextMenu(props: ParentProps) {
   const layout = useContext(SplitLayoutContext);
   if (!panel || !layout) return props.children;
 
+  // Kobalte's menu provides its item collection around the trigger too. Hand
+  // the header the collection it sits in, or tabs whose root wraps the header
+  // join the menu's collection and stop responding.
+  const collection = useOptionalDomCollectionContext();
   const router = useSplitRouter();
   const splitIndex = createMemo(() =>
     layout.manager.splits().findIndex((split) => split.id === panel.handle.id)
@@ -98,7 +106,9 @@ export function SplitHeaderContextMenu(props: ParentProps) {
   return (
     <ContextMenu>
       <ContextMenu.Trigger class="contents">
-        {props.children}
+        <DomCollectionContext.Provider value={collection}>
+          {props.children}
+        </DomCollectionContext.Provider>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenuContent class="min-w-60 max-w-[min(22rem,calc(100vw-1rem))]">

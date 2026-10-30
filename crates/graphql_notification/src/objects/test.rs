@@ -84,7 +84,7 @@ async fn group_access_notifications_retain_the_canonical_entity_identity() {
     };
     let mut row = raw_notification(serde_json::to_value(metadata).unwrap());
     row.notification_event_type = "entity_access_granted".into();
-    row.entity = EntityType::WhatsAppGroup.with_entity_string("group-1".into());
+    row.entity = EntityType::ExternalChat.with_entity_string("group-1".into());
     let notification = GraphqlNotification::try_from(row).unwrap();
     let schema = Schema::new(Query { notification }, EmptyMutation, EmptySubscription);
     let response = schema
@@ -94,10 +94,10 @@ async fn group_access_notifications_retain_the_canonical_entity_identity() {
     assert_eq!(
         response.data.into_json().unwrap(),
         json!({
-            "notification": { "targetEntityType": "WHATSAPP_GROUP", "entityId": "group-1", "eventType": "entity_access_granted" }
+            "notification": { "targetEntityType": "EXTERNAL_CHAT", "entityId": "group-1", "eventType": "entity_access_granted" }
         })
     );
-    assert!(graphql_common::GraphqlSoupEntityType::try_new(EntityType::WhatsAppGroup).is_none());
+    assert!(graphql_common::GraphqlSoupEntityType::try_new(EntityType::ExternalChat).is_none());
 }
 
 #[test]

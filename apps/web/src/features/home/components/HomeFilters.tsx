@@ -73,10 +73,21 @@ const FILTER_ICONS = new Map<string, () => JSX.Element>([
     ),
   ],
   [
-    'projects',
+    'folders',
     () => (
       <EntityIcon
         targetType="project"
+        size="xs"
+        theme="monochrome"
+        class="text-ink-muted"
+      />
+    ),
+  ],
+  [
+    'initiatives',
+    () => (
+      <EntityIcon
+        targetType="initiative"
         size="xs"
         theme="monochrome"
         class="text-ink-muted"
@@ -218,13 +229,13 @@ export function HomeFilterDropdown() {
         label="Filter Home"
         customTrigger={
           <Dropdown.Trigger
+            aria-label="Filter Home"
+            tooltip="Filter Home"
             ref={tourTarget(HOME_TOUR.filter)}
             variant="ghost"
-            size="icon-sm"
-            class="size-(--sidebar-control-size)"
-            label="Filter Home"
+            size="icon-xs"
           >
-            <FilterIcon class="size-4" />
+            <FilterIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
         }
         groups={HOME_FILTER_GROUPS}

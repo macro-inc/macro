@@ -318,6 +318,52 @@ describe('agent session search navigation', () => {
   });
 });
 
+describe('project rows', () => {
+  const projectId = '01a1899a-b629-7e50-8e65-079fca623856';
+  const entity: EntityData = {
+    type: 'initiative',
+    id: projectId,
+    name: 'Roadmap',
+    ownerId: 'owner',
+  };
+
+  it.each([false, true])(
+    'opens a project through its Tasks-hosted identity (new split: %s)',
+    async (openInNewSplit) => {
+      const openWithSplit = vi.fn(() => ({ status: 'opened' }));
+      setGlobalSplitManager({
+        activeSplit: () => undefined,
+        getOrchestrator: () => ({
+          getBlockHandle: vi.fn(async () => undefined),
+        }),
+        openWithSplit,
+      } as unknown as SplitManager);
+      await openEntityInSplitFromUnifiedList(entity, { openInNewSplit });
+      expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+        {
+          type: 'initiative',
+          id: projectId,
+          entryMetadata: {
+            route: paneRoute(
+              { id: 'view-tasks', params: {} },
+              {
+                id: 'tasks-project',
+                params: { projectId, section: 'overview' },
+              }
+            ),
+            search: { tasks: { tab: ['projects'] } },
+          },
+          params: undefined,
+        },
+        expect.objectContaining({
+          preferNewSplit: openInNewSplit,
+          allowDuplicate: false,
+        })
+      );
+    }
+  );
+});
+
 const sendNotification = (id: string, messageId: string): UnifiedNotification =>
   ({
     id,
