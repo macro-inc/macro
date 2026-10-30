@@ -265,7 +265,7 @@ def V(p):
 @glyph("W", 0x0057)
 def W(p):
     s = p.cstem
-    w = p.w(910, 2.2)
+    w = p.w(910, 1.4)
     t_dn, t_up = s * 0.95, s * 0.9  # down-strokes heavier, as in V
     fb = s * 0.8  # flat bottom vertices
     fa = s * 0.8  # flat middle apex, at the cap height
@@ -306,7 +306,7 @@ def W(p):
 @glyph("M", 0x004D)
 def M(p):
     s = p.cstem
-    w = p.w(710, 1.8)
+    w = p.w(710, 1.3)
     sm = s * 0.92  # vertical sides
     td = s * 0.93  # diagonals
     fv = s * 0.8  # flat vertex on the baseline
@@ -343,7 +343,7 @@ def M(p):
 @glyph("N", 0x004E)
 def N(p):
     s = p.cstem
-    w = p.w(580, 1.2)
+    w = p.w(580, 1.0)
     sn = s * 0.92  # thin stems
     td = s * 0.97  # heavier diagonal
     e = sn * 0.3

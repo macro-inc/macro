@@ -740,7 +740,7 @@ def _over(p, num, den, gap=None, t=None, y0=0.0, y1=P.CAP):
 
 
 def _sup_glyph(p, name):
-    return _fit(p, _small(p, name), width=round(p.w(400, 0.6)))
+    return _fit(p, _small(p, name), width=round(p.w(400, 0.3)))
 
 
 @glyph("onesuperior", 0x00B9)
@@ -1476,7 +1476,7 @@ for _name in CASE_OPERATORS:
 def degree(p):
     n, ni = _n(p), _ni(p)
     g = max(0.0, p.grow) / 70
-    d = p.w(268, 0.9)
+    d = p.w(268, 0.6)
     ws = p.fstem * (0.74 - 0.16 * g)
     h = _fh(p) * (0.68 - 0.12 * g)
     top = P.CAP + P.COS * 0.6
