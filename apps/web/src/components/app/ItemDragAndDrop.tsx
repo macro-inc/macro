@@ -73,13 +73,15 @@ function ItemDragOverlay() {
     return (data?.selection?.entities().length ?? 1) - 1;
   };
 
-  const centeredOnPointerStyle = createMemo(() => {
+  // Beside the pointer, not under it: a narrow target like a sidebar folder
+  // has to stay visible while it is being aimed at.
+  const besidePointerStyle = createMemo(() => {
     const overlay = state?.active.overlay;
     const sensor = state?.active.sensor;
     if (!overlay || !sensor) return;
 
     return {
-      transform: `translate(${sensor.coordinates.origin.x - overlay.layout.left}px, ${sensor.coordinates.origin.y - overlay.layout.top}px) translate(-50%, -50%)`,
+      transform: `translate(${sensor.coordinates.origin.x - overlay.layout.left + 12}px, ${sensor.coordinates.origin.y - overlay.layout.top + 12}px)`,
     };
   });
 
@@ -87,7 +89,7 @@ function ItemDragOverlay() {
     <Layer depth={2}>
       <div
         class="w-auto max-w-75 flex flex-col gap-2 bg-surface p-2 rounded-lg z-drag shadow-md shadow-drop-shadow pointer-events-none"
-        style={centeredOnPointerStyle()}
+        style={besidePointerStyle()}
       >
         <div class="flex flex-row items-center gap-2">
           <Show
