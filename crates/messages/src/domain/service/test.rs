@@ -793,7 +793,8 @@ async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
                 allowed,
                 checked: Arc::default(),
             };
-            let service = MessageService::new(repo.clone(), Events::default())
+            let events = Events::default();
+            let service = MessageService::new(repo.clone(), events.clone())
                 .with_references(references.clone());
             let mut input = post_input();
             input.mentions = vec![SimpleMention {
@@ -819,6 +820,16 @@ async fn editor_reference_tags_are_authorized_for_posts_and_edits() {
                 } else {
                     assert!(message.mentions.is_empty(), "{tag}: {message:?}");
                 }
+            }
+            // Delivery shares and notifies from the event's mentions, so an unviewable
+            // mention must never reach it.
+            for event in events.0.lock().unwrap().iter() {
+                let (MessageChange::Posted { mentions, .. }
+                | MessageChange::Edited { mentions, .. }) = &event.change
+                else {
+                    panic!("expected post or edit");
+                };
+                assert_eq!(mentions.len(), usize::from(allowed), "{tag}");
             }
             assert_eq!(repo.creates.lock().unwrap().len(), 1);
             assert_eq!(repo.edits.lock().unwrap().len(), 1);
