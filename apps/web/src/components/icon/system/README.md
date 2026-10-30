@@ -74,7 +74,7 @@ amber, violet, green, and muted gray respectively. In Progress mixes amber with
 `content-0` in sRGB: 80% amber in dark mode and 50% in light mode, improving contrast
 without rotating amber toward a tinted foreground's hue. Authored overrides stay
 unchanged.
-Status and Urgent property glyphs default to 20 px, including task-list rows,
+Status and Urgent property glyphs default to 18 px, including task-list rows,
 list/board headers, property pills, and desktop/mobile edit menus. Other priority
 glyphs use 16 px in desktop task-list rows and 20 px on phones. Group-header carets
 use 16 px. Hit targets stay unchanged; compact display callers can set a smaller size.

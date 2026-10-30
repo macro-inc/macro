@@ -23,7 +23,7 @@ for no assignees. Other empty properties retain the dashed circle. Populated pro
 properties use the solid-stroke stack icon through `Property.Icon`. Keep these
 state indicators static and readable in compact rows. When composing a project
 icon separately, pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
-Status and Urgent option icons default to 20px in property pills and both desktop
+Status and Urgent option icons default to 18px in property pills and both desktop
 and mobile editors; compact displays can override the size explicitly.
 
 ## Side-panel collections

@@ -72,7 +72,7 @@ export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
       <Match when={props.optionId === PROPERTY_OPTION_IDS.PRIORITY.URGENT}>
         <PriorityUrgent
           class={twMerge(
-            'size-5 shrink-0',
+            'size-4.5 shrink-0',
             props.class,
             'text-priority-urgent'
           )}
@@ -83,7 +83,7 @@ export const PropertyValueIcon: Component<PropertyValueIconProps> = (props) => {
       <Match when={taskStatusIds.has(props.optionId)}>
         <TaskStatusIcon
           statusId={props.optionId}
-          class={twMerge('size-5 shrink-0', props.class)}
+          class={twMerge('size-4.5 shrink-0', props.class)}
         />
       </Match>
 
