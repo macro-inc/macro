@@ -10448,6 +10448,7 @@ export type MessagePatchedMetadata = {
      * Actor that patched the message.
      */
     actor: ChannelSender;
+    completed_reply?: null | MessagePostedMetadata;
     /**
      * Macro Markdown body after the patch.
      */
