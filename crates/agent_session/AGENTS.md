@@ -75,6 +75,16 @@ without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
 
+Auto-archive (`domain/auto_archive.rs`, `outbound/postgres/auto_archive.rs`,
+`inbound/axum_router/auto_archive.rs`): opt-in triggers (pull requests merged,
+runtime deliberately closed) with per-user defaults and per-session overrides.
+`auto_archive` locks the row and archives only an idle session with no queued
+prompts that does not answer a conversation, recording the reason in
+`agent_session_auto_archive`. That row is the session's activity record and is
+never deleted on restore, so a session auto-archives at most once. A session
+archives for pull requests once every linked pull request is closed and at
+least one merged; links with no `github_pull_request` row count as open.
+
 Session names: the first prompt names a session (`set_name_if_default`), and
 after each turn that ends with a reply, `domain/retitle.rs` hands the
 conversation digest to the namer. `name_generation::ClassifiedRetitle` asks Jev
