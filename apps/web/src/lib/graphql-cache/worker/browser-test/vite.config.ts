@@ -28,7 +28,14 @@ export default defineConfig(({ command }) => ({
     port: 4189,
     strictPort: true,
   },
-  worker: { format: 'es' },
+  worker: {
+    format: 'es',
+    plugins: () => [
+      tsconfigPaths({
+        projects: [resolve(directory, '../../../../../tsconfig.json')],
+      }),
+    ],
+  },
   build: {
     target: 'esnext',
     outDir: resolve(directory, '.dist-production'),
