@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { createRoot, getOwner } from 'solid-js';
+import { createMemo, createRoot, createSignal, getOwner } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ImperativeDialogHost, openDialog } from './ImperativeDialog';
 
@@ -41,5 +41,41 @@ describe('keyed imperative dialogs', () => {
       reason: 'owner-disposed',
     });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('closes dialogs when a memo owner reruns without changing identity', async () => {
+    render(() => <ImperativeDialogHost />);
+    const Dialog = () => <div role="dialog">Section</div>;
+    const { owner, setSections, dispose } = createRoot((dispose) => {
+      const [sections, setSections] = createSignal(true);
+      const owner = createMemo(() => {
+        sections();
+        return getOwner();
+      });
+      return { owner, setSections, dispose };
+    });
+    try {
+      const initialOwner = owner();
+      const first = openDialog(Dialog, {}, { owner: initialOwner });
+      setSections(false);
+      expect(first.isOpen()).toBe(false);
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(owner()).toBe(initialOwner);
+      expect(await first.closed).toEqual({
+        id: first.id,
+        reason: 'owner-disposed',
+      });
+
+      const second = openDialog(Dialog, {}, { owner: owner() });
+      setSections(true);
+      expect(second.isOpen()).toBe(false);
+      expect(await second.closed).toEqual({
+        id: second.id,
+        reason: 'owner-disposed',
+      });
+      expect(screen.queryByRole('dialog')).toBeNull();
+    } finally {
+      dispose();
+    }
   });
 });

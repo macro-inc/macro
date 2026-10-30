@@ -12,7 +12,7 @@ import { ChannelLabelMenuItems } from './ChannelLabelRows';
 
 const rail = vi.hoisted(() => ({
   channelTagsEnabled: (): boolean => false,
-  sectionsEnabled: () => true,
+  sectionsEnabled: (): boolean => true,
   labelsAvailable: (): boolean => true,
   canShareSections: () => true,
   labels: () => [

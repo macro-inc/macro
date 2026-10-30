@@ -148,6 +148,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setThreadsChannelId,
   } = useChannelsView();
   // Dispose label dialogs when either rollout switches their owning UI.
+  // Memo recomputation runs these cleanups even when the owner identity is unchanged.
   const labelDialogOwner = createMemo(() => {
     sectionsEnabled();
     return channelTagsEnabled() ? getOwner() : undefined;
