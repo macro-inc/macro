@@ -605,11 +605,14 @@ top of the sheet (with a solid background only while pinned over content), so
 `Create Task` stays in reach. The properties sit on a single line that scrolls
 horizontally, with the `Share with <team name>` switch below them. The sheet
 has no `Create More` switch and no similar-tasks list. `Create Task` shows no
-keyboard shortcut on touch. Assignees, Project, and Tags open their pickers
-in a full-height sheet stacked over the composer (`PickerSheet`), with Cancel,
-the property's name, and Done: picks apply on Done, Cancel or the backdrop
-drop them, picking keeps the keyboard up, and a single-choice Project applies
-its pick at once. Status, Priority, and Due Date keep their dropdowns. Desktop uses
+keyboard shortcut on touch. Assignees, Project, Tags, and Due Date open their
+pickers in a full-height sheet stacked over the composer (`PickerSheet`), with
+Cancel, the property's name, and Done: picks apply on Done, Cancel or the
+backdrop drop them, picking keeps the keyboard up, and a single-choice Project
+or a date applies its pick at once. Status and Priority keep their dropdowns,
+which leave focus in the title. Tapping a pill doesn't take focus, and closing
+a picker sheet returns it to the title or description with its caret, so the
+keyboard stays up throughout. Desktop uses
 the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
