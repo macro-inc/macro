@@ -50,6 +50,7 @@ vi.mock('@queries/soup/grouped/create-grouped-soup-queries', () => ({
   },
 }));
 
+import type { TasksTab } from '../types';
 import { useTasksDataSource } from './use-tasks-query';
 
 it('delegates grouped task pagination to the current Soup query owner', async () => {
@@ -555,6 +556,47 @@ it('keeps activity membership in list and grouped paging and excludes optimistic
       fixture.mapItem.mockReturnValueOnce(crmTask('linked', ['acme']));
       expect(meta.meta.insertFilter({})).toBe(false);
       expect(fixture.searchState).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+});
+
+it('pauses task reads across project views and resumes when returning to tasks', () => {
+  fixture.calls = [];
+  fixture.query = {
+    isLoading: false,
+    isPending: false,
+    data: { entities: [] },
+  };
+  createRoot((dispose) => {
+    try {
+      const [tab, setTab] = createSignal<TasksTab>('my-projects');
+      useTasksDataSource(
+        {
+          get tab() {
+            return tab();
+          },
+          search: '',
+          facets: {},
+          groupBy: 'none',
+          sort: [],
+        },
+        {
+          userId: () => 'viewer',
+          tagSets: () => [],
+          tagSetsReady: () => true,
+          isGroupExpanded: () => true,
+        }
+      );
+      const options = fixture.calls[0]?.options;
+      expect(options?.()).toMatchObject({ enabled: false });
+      setTab('created-projects');
+      expect(options?.()).toMatchObject({ enabled: false });
+      setTab('projects');
+      expect(options?.()).toMatchObject({ enabled: false });
+      setTab('my-tasks');
+      expect(options?.()).toMatchObject({ enabled: true });
     } finally {
       dispose();
     }

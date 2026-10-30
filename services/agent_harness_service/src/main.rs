@@ -1073,8 +1073,14 @@ async fn run() -> anyhow::Result<()> {
         channels::domain::message_delivery::ChannelMessageDelivery::new(
             PgChannelsRepo::new(pool.clone()),
             SpawnedChannelEventDispatcher::new(side_effects),
-            channels::domain::service::NoopChannelReferenceSharePermissions,
+            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+                pool.clone(),
+                entity_access.clone(),
+            ),
             message_realtime.clone(),
+            channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                pool.clone(),
+            ),
         ),
         messages::domain::delivery::DiscussionDelivery::new(
             messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())

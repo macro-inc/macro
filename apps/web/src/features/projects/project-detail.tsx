@@ -24,7 +24,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import StackIcon from '@icon/system/regular/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
-import { Button, Tabs } from '@ui';
+import { Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
@@ -47,6 +47,7 @@ import { openProject } from './open-project';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
+import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
 
@@ -342,18 +343,11 @@ function ProjectDetailHost(props: ProjectDetailProps) {
               )}
             </Match>
             <Match when={true}>
-              <div role="alert" class="p-6">
-                <p>
-                  Project unavailable. It may have been deleted, or you may no
-                  longer have access.
-                </p>
-                <Button
-                  variant="ghost"
-                  onClick={() => fireAndForget(source.refresh(), 'projects')}
-                >
-                  Try again
-                </Button>
-              </div>
+              <ProjectUnavailable
+                projectId={props.route.id}
+                section={props.route.section}
+                onRetry={source.refresh}
+              />
             </Match>
           </Switch>
         </Suspense>

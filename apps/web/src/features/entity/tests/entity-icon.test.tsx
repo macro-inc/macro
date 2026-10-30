@@ -1,3 +1,5 @@
+import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { ChannelTopIcon } from '@channel/components/ChannelTopIcon';
 import GitMergeBold from '@icon/system/bold/git-merge-bold.svg';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -19,6 +21,23 @@ import type {
   UnknownForeignEntity,
 } from '../types/entity';
 
+type CachedIconChannel = {
+  channel_type: 'direct_message';
+  name: string;
+  participants: { user_id: string }[];
+  agent_dm?: { bot_id: string; name: string; avatar_url?: string | null };
+};
+
+const channelCache = vi.hoisted(() => ({
+  read: (): Record<string, CachedIconChannel> => ({}),
+}));
+vi.mock('@queries/channel/channel-participants', () => ({
+  useChannelParticipantsQuery: vi.fn(),
+}));
+vi.mock('@app/util/favorites', () => ({
+  favoriteIconType: () => 'channel',
+}));
+
 const channelPicture = vi.hoisted(() => ({
   url: undefined as string | undefined,
   channelIds: [] as string[],
@@ -37,7 +56,8 @@ vi.mock('@core/constant/allBlocks', () => ({
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({ channelsById: () => ({}) }),
+  useChannelsContext: () => ({ channelsById: () => channelCache.read() }),
+  useChannelType: (id: string) => () => channelCache.read()[id]?.channel_type,
 }));
 vi.mock('@app/features/agent-dms/components/persona-avatar', () => ({
   PersonaAvatar: (props: { botId: string; name: string }) => (
@@ -107,6 +127,7 @@ describe('Entity.Icon', () => {
   beforeEach(() => {
     channelPicture.url = undefined;
     channelPicture.channelIds = [];
+    channelCache.read = () => ({});
   });
 
   const channel: ChannelEntity = {
@@ -180,6 +201,138 @@ describe('Entity.Icon', () => {
     expect(
       container.querySelector('[data-testid="agent-avatar"]')?.textContent
     ).toBe('Researcher');
+  });
+
+  it('updates favorite, row, and header DM avatars when participant data arrives', () => {
+    const [cached, setCached] = createSignal<Record<string, CachedIconChannel>>(
+      {}
+    );
+    channelCache.read = cached;
+    const { container } = render(() => (
+      <>
+        <FavoriteIcon
+          favorite={{
+            entityType: 'channel',
+            entityId: 'dm',
+            channelType: 'direct_message',
+            sortOrder: 0,
+            createdAt: '2026-01-01',
+          }}
+        />
+        <EntityIcon
+          entity={{ ...channel, id: 'dm', channelType: 'direct_message' }}
+        />
+        <ChannelTopIcon
+          channelId="dm"
+          channelType="direct_message"
+          participants={(cached().dm?.participants ?? []).map(
+            (participant) => ({
+              ...participant,
+              channel_id: 'dm',
+              role: 'member' as const,
+              joined_at: '2026-01-01',
+            })
+          )}
+          suppressClick
+        />
+      </>
+    ));
+    expect(container.querySelector('[data-testid="user-avatar"]')).toBeNull();
+    expect(channelPicture.channelIds).toEqual([]);
+
+    setCached({
+      dm: {
+        channel_type: 'direct_message',
+        name: 'Direct message',
+        participants: [{ user_id: 'user' }, { user_id: 'other-user' }],
+      },
+    });
+    expect(
+      [...container.querySelectorAll('[data-testid="user-avatar"]')].map(
+        (avatar) => avatar.getAttribute('data-user-id')
+      )
+    ).toEqual(['other-user', 'other-user', 'other-user']);
+
+    setCached({
+      dm: {
+        channel_type: 'direct_message',
+        name: 'Self DM',
+        participants: [{ user_id: 'user' }],
+      },
+    });
+    expect(
+      [...container.querySelectorAll('[data-testid="user-avatar"]')].map(
+        (avatar) => avatar.getAttribute('data-user-id')
+      )
+    ).toEqual(['user', 'user', 'user']);
+  });
+
+  it('uses the same persona for favorites, rows, and headers as cached identity changes', () => {
+    const [cached, setCached] = createSignal<Record<string, CachedIconChannel>>(
+      {
+        dm: {
+          channel_type: 'direct_message',
+          name: 'Assistant',
+          participants: [{ user_id: 'user' }, { user_id: 'bot|assistant' }],
+        },
+      }
+    );
+    channelCache.read = cached;
+    const { container } = render(() => (
+      <>
+        <FavoriteIcon
+          favorite={{
+            entityType: 'channel',
+            entityId: 'dm',
+            channelType: 'direct_message',
+            sortOrder: 0,
+            createdAt: '2026-01-01',
+          }}
+        />
+        <EntityIcon
+          entity={{
+            ...channel,
+            id: 'dm',
+            channelType: 'direct_message',
+            name: 'Assistant',
+          }}
+        />
+        <ChannelTopIcon
+          channelId="dm"
+          channelType="direct_message"
+          participants={(cached().dm?.participants ?? []).map(
+            (participant) => ({
+              ...participant,
+              channel_id: 'dm',
+              role: 'member' as const,
+              joined_at: '2026-01-01',
+            })
+          )}
+          suppressClick
+        />
+      </>
+    ));
+    expect(container.querySelector('[data-testid="user-avatar"]')).toBeNull();
+    expect(
+      [...container.querySelectorAll('[data-testid="agent-avatar"]')].map(
+        (avatar) => avatar.getAttribute('data-bot-id')
+      )
+    ).toEqual(['assistant', 'assistant', 'assistant']);
+
+    setCached({
+      dm: {
+        channel_type: 'direct_message',
+        name: 'Assistant',
+        participants: [],
+        agent_dm: { bot_id: 'researcher', name: 'Researcher' },
+      },
+    });
+    expect(
+      [...container.querySelectorAll('[data-testid="agent-avatar"]')].map(
+        (avatar) => avatar.textContent
+      )
+    ).toEqual(['Researcher', 'Researcher', 'Researcher']);
+    expect(channelPicture.channelIds).toEqual([]);
   });
 
   it.each(['user', 'other-user'])(

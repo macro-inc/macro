@@ -1,13 +1,14 @@
 import type { FacetSelection } from '@app/features/soup';
-import type { EmailTab } from './constants';
+import type { EmailFocusSort, EmailTab } from './constants';
 
-export type { EmailTab };
+export type { EmailFocusSort, EmailTab };
 
 export type EmailFilterGroupId =
   | 'read'
   | 'done'
   | 'attachments'
   | 'calendar'
+  | 'focus'
   | 'tags';
 
 export type EmailFilterOptionId =
@@ -19,7 +20,9 @@ export type EmailFilterOptionId =
   | 'attachment-pdf'
   | 'attachment-image'
   | 'attachment-document'
-  | 'has-calendar-invite';
+  | 'has-calendar-invite'
+  | 'focus-reply-needed'
+  | 'focus-follow-up';
 
 export type EmailViewState = {
   tab: EmailTab;
@@ -33,6 +36,8 @@ export type EmailViewState = {
   /** An alias is always scoped to the inbox that owns its provider grant. */
   aliasFilter?: { inboxId: string; emailAddress: string };
   facets: FacetSelection;
+  /** The Focus tab's order; kept per user. */
+  focusSort: EmailFocusSort;
   /** Sidebar sections the user folded away; kept per user, not per visit. */
   collapsedSidebarSectionIds: string[];
 };

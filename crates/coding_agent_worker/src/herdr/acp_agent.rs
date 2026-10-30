@@ -73,6 +73,10 @@ const SETTLED_CHECKS: u32 = 3;
 const SHELL_READY_TIMEOUT: Duration = Duration::from_secs(10);
 const QUIET_START: Duration = Duration::from_secs(20);
 const MISSING_AGENT_CHECKS: u32 = 5;
+/// Esc presses a cancel spends before the native turn is left to run.
+const INTERRUPT_PRESSES: u32 = 3;
+/// Status checks, one per [`POLL`], after each Esc press.
+const INTERRUPT_CHECKS: u32 = 4;
 /// Which coding-agent TUI each session runs.
 #[derive(
     Debug,
@@ -413,12 +417,16 @@ impl Adapter {
             let Ok(info) = herdr.agent_info(&name).await else {
                 return;
             };
-            if native_id.is_some()
-                && info.session_id == native_id
-                && matches!(info.status.as_str(), "working" | "blocked")
-                && let Err(error) = herdr.send_keys(&name, &["esc"]).await
+            if native_id.is_none()
+                || info.session_id != native_id
+                || !matches!(info.status.as_str(), "working" | "blocked")
             {
-                tracing::warn!(%error, "could not interrupt native turn");
+                return;
+            }
+            match interrupt(&herdr, &name).await {
+                Ok(true) => {}
+                Ok(false) => tracing::warn!(%name, "the native turn kept running after Esc"),
+                Err(error) => tracing::warn!(%error, "could not interrupt native turn"),
             }
         });
     }
@@ -890,14 +898,19 @@ impl Adapter {
         let mut asking = false;
         let mut last_output = Instant::now();
         let mut asked_seq = None;
+        let mut interrupt_failed = false;
         let _epoch = PermissionEpoch(generation.clone());
         loop {
             tokio::select! {
-                () = cancel.cancelled() => {
-                    herdr.send_keys(&live.name, &["esc"]).await?;
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    self.forward(session, live, &mut open_tool)?;
-                    return Ok("cancelled");
+                () = cancel.cancelled(), if !interrupt_failed => {
+                    if interrupt(herdr, &live.name).await? {
+                        self.forward(session, live, &mut open_tool)?;
+                        return Ok("cancelled");
+                    }
+                    // Answering `cancelled` now would end the turn in Macro
+                    // while the agent keeps working; follow it to its end.
+                    tracing::warn!(session = %session.id, "the native turn kept running after Esc");
+                    interrupt_failed = true;
                 }
                 () = tokio::time::sleep(POLL) => {}
             }
@@ -1066,6 +1079,34 @@ impl Adapter {
 }
 
 /// A herdr agent name for the session: `[a-z][a-z0-9_-]{0,31}`.
+/// Press Esc until herdr reports the agent `idle` or `done`, and say whether
+/// it is. One press is not proof: in Claude Code's vim editor mode the first
+/// Esc only leaves insert mode. No press follows a stop, since Esc at an idle
+/// Claude Code prompt opens its rewind menu.
+#[tracing::instrument(
+    name = "macrod.herdr.interrupt",
+    skip(herdr),
+    fields(herdr.agent = name, presses, stopped),
+    err
+)]
+async fn interrupt(herdr: &HerdrCli, name: &str) -> Result<bool, HerdrError> {
+    let span = tracing::Span::current();
+    for press in 1..=INTERRUPT_PRESSES {
+        span.record("presses", press);
+        herdr.send_keys(name, &["esc"]).await?;
+        for _ in 0..INTERRUPT_CHECKS {
+            tokio::time::sleep(POLL).await;
+            let status = herdr.agent_info(name).await?.status;
+            if matches!(status.as_str(), "idle" | "done") {
+                span.record("stopped", true);
+                return Ok(true);
+            }
+        }
+    }
+    span.record("stopped", false);
+    Ok(false)
+}
+
 pub(crate) fn agent_name(session: &str) -> String {
     let short: String = session
         .chars()

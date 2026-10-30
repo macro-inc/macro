@@ -379,8 +379,12 @@ A desktop view's name opens the view switcher: clicking it shows the rail's apps
 in rail order, then the More apps, with a check on the current one. Choosing one
 replaces the view in that split, not the active split; Shift opens it in a new
 split. The navigation panel's title shows the name with a caret, sharing one
-hover background. Short names stay whole; long names ellipsize. Main headers show the name alone, with the same hover:
-`ViewSidebar.Title caret={false}` for plain titles, and the first breadcrumb
+hover background. Short names stay whole; long names ellipsize without shrinking
+the caret. Saved-view icons stay beside their labels on one line. List headers
+reserve the title's natural width and scroll the controls beside it when space
+runs out; the switcher trigger stays inside the header's clipping boundary.
+Main headers show the name alone, with the same hover: `ViewSidebar.Title caret={false}` for
+plain titles, and the first breadcrumb
 (Drive, Email, Tasks, Reviews) while it is the current page; deeper, that crumb
 returns to the list. Titles that name content rather than the view (Calendar's
 date, a channel, an agent session, a CRM record) do not switch views. Touch
@@ -986,7 +990,8 @@ the person's name and email above Copy email, Copy name, Open contact (CRM teams
 only), DM, and Assign task. An agent's or bot's card offers Settings instead of
 DM when the viewer can configure it: Macro opens Settings → Agents, an agent the
 viewer manages opens straight into its Edit agent form, and a plain bot opens
-its page under Settings → Bots. Touch devices have no hover, so tapping the mention
+its page under Settings → Bots. An agent's avatar beside its channel messages
+opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.

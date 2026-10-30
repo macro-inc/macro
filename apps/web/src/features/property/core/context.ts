@@ -9,11 +9,12 @@ export type PropertySaveFn = (
 export type PropertyEditFn = (property: Property, anchor?: HTMLElement) => void;
 
 export interface PropertyRootContextValue {
+  /** The property as shown: a pick still saving replaces the source value. */
   property: () => Property;
   canEdit: () => boolean;
+  /** Saves through the consumer's handler and shows the pick until then. */
   onSave?: PropertySaveFn;
   onEdit?: PropertyEditFn;
-  onRefresh?: () => void;
 
   // Local editor open state. Populated by EditTrigger when the consumer hasn't
   // supplied an external onEdit; consumed by PopoverEditor. The anchor passed

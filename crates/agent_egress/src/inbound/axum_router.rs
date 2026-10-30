@@ -16,6 +16,7 @@ use axum_extra::headers::{Authorization, HeaderMapExt};
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
 use std::sync::Arc;
+use tracing::Level;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
@@ -81,7 +82,7 @@ async fn health() -> &'static str {
 // `skip_all` on every handler is load-bearing: the request's headers carry the
 // sandbox's session token, and an instrument attribute that Debug-formatted
 // `request` would put it in the trace.
-#[tracing::instrument(skip_all, err, fields(%slug))]
+#[tracing::instrument(skip_all, err(level = Level::INFO), fields(%slug))]
 async fn mcp_handler<Service>(
     State(state): State<EgressRouterState<Service>>,
     Path(slug): Path<String>,
@@ -101,7 +102,7 @@ where
 
 /// One of the owner's custom servers, on its own route: a key is not a slug,
 /// and keeping the two apart means neither can be mistaken for the other.
-#[tracing::instrument(skip_all, err, fields(%key))]
+#[tracing::instrument(skip_all, err(level = Level::INFO), fields(%key))]
 async fn custom_mcp_handler<Service>(
     State(state): State<EgressRouterState<Service>>,
     Path(key): Path<String>,
@@ -116,7 +117,7 @@ where
     mcp_proxy(state, McpDestination::Custom(key), request).await
 }
 
-#[tracing::instrument(skip_all, err)]
+#[tracing::instrument(skip_all, err(level = Level::INFO))]
 async fn preview_mcp_handler<Service: EgressService>(
     State(state): State<EgressRouterState<Service>>,
     request: Request,
@@ -127,7 +128,7 @@ async fn preview_mcp_handler<Service: EgressService>(
 /// Macro's own MCP server, on its own route rather than under `/mcp/{slug}`:
 /// with no name shared between the built-in server and the owner's connected
 /// apps, no connected app can collide with it.
-#[tracing::instrument(skip_all, err)]
+#[tracing::instrument(skip_all, err(level = Level::INFO))]
 async fn macro_mcp_handler<Service>(
     State(state): State<EgressRouterState<Service>>,
     request: Request,
@@ -166,7 +167,7 @@ where
 }
 
 /// One git smart-HTTP request through the proxy.
-#[tracing::instrument(skip_all, err, fields(%path))]
+#[tracing::instrument(skip_all, err(level = Level::INFO), fields(%path))]
 async fn git_proxy<Service>(
     state: EgressRouterState<Service>,
     path: String,

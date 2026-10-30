@@ -2190,14 +2190,22 @@ impl<
         })
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(
+        skip(self, entity_access_receipt, credited_user),
+        fields(
+            task_id = %entity_access_receipt.entity().entity_id,
+            credit_requested = credited_user.is_some()
+        ),
+        err
+    )]
     async fn update_task_status(
         &self,
         entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        credited_user: Option<MacroUserIdStr<'static>>,
         status: &str,
     ) -> Result<(), DocumentError> {
         self.task_properties_service
-            .update_task_status(&entity_access_receipt.entity().entity_id, status)
+            .update_task_status(&entity_access_receipt, credited_user.as_ref(), status)
             .await
             .map_err(DocumentError::Internal)?;
 

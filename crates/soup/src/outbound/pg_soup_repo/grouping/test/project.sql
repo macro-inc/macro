@@ -14,6 +14,11 @@ FROM (VALUES
 CROSS JOIN "Document" document
 WHERE document.id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
+-- The task owner can read Project One; Project Two stays unreadable.
+INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+SELECT 'ad000000-0000-0000-0000-000000000001'::uuid, 'initiative', document.owner, 'user', 'owner'
+FROM "Document" document
+WHERE document.id = '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values) VALUES
 ('e0000000-0000-0000-0000-000000000101', '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'TASK',
  '00000001-0000-0000-0000-000000000014',

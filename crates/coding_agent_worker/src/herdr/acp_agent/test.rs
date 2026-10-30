@@ -369,6 +369,50 @@ async fn an_unconfirmed_submission_never_sends_an_extra_enter_or_reports_success
     adapter.shutdown.cancel();
 }
 
+/// Claude Code in vim editor mode spends the first Esc leaving insert mode;
+/// the turn keeps running until the second.
+#[tokio::test]
+async fn a_cancelled_turn_presses_esc_until_the_native_agent_stops() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    let presses = root.path().join("presses");
+    let script = root.path().join("herdr");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\npresses={}\ncase \"$2\" in\n  send-keys) printf '%s\\n' \"$4\" >> \"$presses\";;\n  get) if [ \"$(wc -l < \"$presses\" 2>/dev/null || echo 0)\" -ge 2 ]; then status=done; else status=working; fi\n       printf '{{\"result\":{{\"agent\":{{\"agent_status\":\"%s\"}}}}}}\\n' \"$status\";;\n  *) exit 2;;\nesac\n",
+            shell_words::quote(&presses.to_string_lossy())
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    save_transcript(root.path(), &id);
+    let (adapter, _) = test_adapter(root.path());
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    let mut guard = session.live.lock().await;
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+
+    let stop = adapter
+        .follow(
+            &HerdrCli::new(script, None),
+            &session,
+            guard.as_mut().unwrap(),
+            &cancel,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(stop, "cancelled");
+    assert_eq!(std::fs::read_to_string(presses).unwrap(), "esc\nesc\n");
+    adapter.shutdown.cancel();
+}
+
 #[test]
 fn configured_models_are_advertised_even_when_not_in_the_builtin_catalog() {
     let options = config_options(TuiAgent::Codex, "custom-model");

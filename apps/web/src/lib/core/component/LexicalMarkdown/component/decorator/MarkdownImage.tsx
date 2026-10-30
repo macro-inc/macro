@@ -34,6 +34,7 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { DRAG_DATA_FORMAT } from '../../plugins/draggable-block/draggableBlockPlugin';
 import {
   $upgradeDSSMediaUrl,
   getMediaUrl,
@@ -345,6 +346,12 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           )}
           draggable={true}
           use:internalDrag={true}
+          onDragStart={(e) => {
+            // Dropped in this editor the image moves; anywhere else it is
+            // copied from its URL.
+            if (interactable() && editor()?.isEditable())
+              e.dataTransfer?.setData(DRAG_DATA_FORMAT, props.key);
+          }}
           ref={imageRef}
           src={imageUrl()}
           style={{
