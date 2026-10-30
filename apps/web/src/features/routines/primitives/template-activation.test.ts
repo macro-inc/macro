@@ -113,6 +113,41 @@ describe('createTemplateActivation', () => {
     });
   });
 
+  it('assigns to the activator what the author assigned to themselves', () => {
+    createRoot((dispose) => {
+      const assign = (entityId: string) => ({
+        type: 'tool',
+        tool: 'SetEntityProperty',
+        arguments: {
+          entity_id: '{{trigger.entity_id}}',
+          entity_type: 'document',
+          property_definition_id: 'assignees',
+          entity_refs: [{ entityType: 'user', entityId }],
+        },
+      });
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              assign('macro|eric@macro.com'),
+              assign('macro|sam@macro.com'),
+            ],
+          },
+          variables: [],
+        }),
+        activator: () => ACTIVATOR,
+        access: () => new Map(),
+      });
+      const steps = (activation.request()?.task as { steps: unknown[] }).steps;
+      expect(JSON.stringify(steps[0])).toContain('macro|jun@macro.com');
+      expect(JSON.stringify(steps[0])).not.toContain('eric@macro.com');
+      // Someone else the author chose stays as chosen.
+      expect(JSON.stringify(steps[1])).toContain('macro|sam@macro.com');
+      dispose();
+    });
+  });
+
   it('fills the author in as the activator in every agent, branches included', () => {
     createRoot((dispose) => {
       const author =

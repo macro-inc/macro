@@ -52,6 +52,31 @@ function isSameUser(mention: { id: string; email?: string }, userId: string) {
   );
 }
 
+/**
+ * A step's arguments with the template's author replaced by whoever activates
+ * it: an "assign to me" step must not keep giving the author the activator's
+ * items. The author's ID or bare email, anywhere in the arguments, is theirs.
+ */
+export function fillTemplateArguments<T>(
+  value: T,
+  authorId: string,
+  activator: Activator
+): T {
+  const fill = (current: unknown): unknown => {
+    if (typeof current === 'string')
+      return isSameUser({ id: current, email: current }, authorId)
+        ? activator.userId
+        : current;
+    if (Array.isArray(current)) return current.map(fill);
+    if (current && typeof current === 'object')
+      return Object.fromEntries(
+        Object.entries(current).map(([key, item]) => [key, fill(item)])
+      );
+    return current;
+  };
+  return fill(value) as T;
+}
+
 /** The ID a variable is keyed by within one template. */
 export function variableKey(variable: TemplateVariable): string {
   return match(variable)

@@ -4,16 +4,19 @@ import type {
   TemplateVariable,
 } from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import {
-  agentSteps,
   firstAgent,
+  flattenSteps,
+  type StepDraft,
   stepsFromTask,
   stepsToWire,
   updateStep,
 } from '../core/routine-steps';
 import {
   type Activator,
+  fillTemplateArguments,
   fillTemplatePrompt,
   fillTemplateTrigger,
   needsDecision,
@@ -43,26 +46,34 @@ export function templatePrompt(
 }
 
 /**
- * The template's task with every agent's instructions filled in for the
- * activator, including agents in branches.
+ * The template's task filled in for the activator: every agent's instructions,
+ * including agents in branches, and the author named in any step's arguments.
  */
 function filledTask(
   task: RoutineTemplate['task'],
-  fill: (instructions: string) => string
+  fill: (instructions: string) => string,
+  fillArguments: <T>(value: T) => T
 ) {
   const steps = stepsFromTask(task);
   if (!steps) return { ...task, user_prompt: fill(templatePrompt({ task })) };
-  const agents = agentSteps(steps);
-  if (!agents.length) return task;
   return {
     ...task,
     steps: stepsToWire(
-      agents.reduce(
-        (filled, agent) =>
-          updateStep(filled, agent.id, (step) =>
-            step.kind === 'agent'
-              ? { ...step, instructions: fill(step.instructions) }
-              : step
+      flattenSteps(steps).reduce(
+        (filled, current) =>
+          updateStep(filled, current.id, (step) =>
+            match(step)
+              .returnType<StepDraft>()
+              .with({ kind: 'agent' }, (agent) => ({
+                ...agent,
+                instructions: fill(agent.instructions),
+              }))
+              .with({ kind: 'tool' }, (tool) => ({
+                ...tool,
+                arguments: fillArguments(tool.arguments),
+              }))
+              .with({ kind: 'if' }, { kind: 'choose' }, (decision) => decision)
+              .exhaustive()
           ),
         steps
       )
@@ -128,7 +139,9 @@ export function createTemplateActivation(args: {
         activator,
       }),
       kind: 'Agent',
-      task: filledTask(template.task, fill(activator)),
+      task: filledTask(template.task, fill(activator), (value) =>
+        fillTemplateArguments(value, template.author, activator)
+      ),
       enabled: true,
       run_visibility: DEFAULT_RUN_VISIBILITY,
     };
