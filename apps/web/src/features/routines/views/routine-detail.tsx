@@ -1,8 +1,3 @@
-import { SidePanel } from '@components/app/side-panel';
-import {
-  EntityMetadata,
-  EntityMetadataRow,
-} from '@components/app/side-panel/EntityMetadata';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -17,11 +12,7 @@ import UserIcon from '@icon/system/regular/user.svg';
 import { Button, Dropdown, ToggleSwitch } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { ConnectionRows } from '../components/routine-connections';
-import {
-  RoutineEditor,
-  RoutineSettingRow,
-  RoutineSurface,
-} from '../components/routine-editor';
+import { RoutineEditor, RoutineSettingRow } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
 import {
   RoutineSteps,
@@ -49,23 +40,6 @@ import {
   RoutineConflictError,
 } from '../primitives/routine-detail';
 import { RoutineHistory } from './routine-history';
-
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-
-/** Runs in the last week by outcome, from the history loaded so far. */
-function lastWeek(records: readonly HistoryRecord[], now = Date.now()) {
-  const recent = records.filter((record) => {
-    const started = record.startedAt ? Date.parse(record.startedAt) : NaN;
-    return Number.isFinite(started) && now - started <= WEEK_MS;
-  });
-  if (!recent.length) return 'No runs';
-  const skipped = recent.filter((record) => record.skipped).length;
-  const failed = recent.filter(
-    (record) => !record.skipped && record.success === false
-  ).length;
-  const ran = recent.length - skipped - failed;
-  return `${ran} ran · ${skipped} skipped · ${failed} failed`;
-}
 
 /** When the latest run started: its time today, else its day. */
 function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
@@ -263,68 +237,6 @@ export function RoutineDetailView(props: {
               </Dropdown>
             )
           }
-          details={
-            <>
-              <SidePanel.Footer>
-                {/* The routine's facts on a card, like the page's sections. */}
-                <RoutineSurface class="px-4 py-3">
-                  <EntityMetadata
-                    ownerId={routine().ownerId}
-                    createdAt={routine().createdAt}
-                  >
-                    <EntityMetadataRow label="Next run">
-                      {nextRun()}
-                    </EntityMetadataRow>
-                    <Show when={isOwned() && !props.source.historyLoading()}>
-                      <EntityMetadataRow label="Last 7 days">
-                        {lastWeek(props.source.history())}
-                      </EntityMetadataRow>
-                    </Show>
-                  </EntityMetadata>
-                </RoutineSurface>
-              </SidePanel.Footer>
-              <Show when={props.onOpenTemplate || props.onShare}>
-                <SidePanel.Section
-                  id="routine-template"
-                  title="Template"
-                  order={20}
-                  defaultOpen
-                >
-                  <Show
-                    when={props.onOpenTemplate && routine().templateId}
-                    fallback={
-                      <div class="flex items-center justify-between gap-2 text-xs text-ink-muted">
-                        Not shared
-                        <Show when={isOwned() && props.onShare}>
-                          {(share) => (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => share()()}
-                            >
-                              Share…
-                            </Button>
-                          )}
-                        </Show>
-                      </div>
-                    }
-                  >
-                    {(templateId) => (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        class="-ml-2"
-                        onClick={() => props.onOpenTemplate?.(templateId())}
-                      >
-                        Created from template
-                        <ArrowUpRightIcon class="size-3.5" />
-                      </Button>
-                    )}
-                  </Show>
-                </SidePanel.Section>
-              </Show>
-            </>
-          }
           nextRun={nextRun()}
           metaAction={
             isOwned() && (
@@ -369,6 +281,23 @@ export function RoutineDetailView(props: {
                       ·
                     </span>
                     <span>Last run {at()}</span>
+                  </>
+                )}
+              </Show>
+              <Show when={props.onOpenTemplate && routine().templateId}>
+                {(templateId) => (
+                  <>
+                    <span aria-hidden="true" class="text-ink-extra-muted">
+                      ·
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => props.onOpenTemplate?.(templateId())}
+                    >
+                      From a template
+                      <ArrowUpRightIcon class="size-3" />
+                    </Button>
                   </>
                 )}
               </Show>

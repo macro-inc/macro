@@ -509,9 +509,8 @@ function StepCard(props: StepCardProps) {
           <StepMenu {...props} open={open()} />
         </div>
         <Show when={open()}>
-          {/* Fields start under the title (padding, number, icon and their gaps)
-            and keep the card's padding on the right and bottom. */}
-          <div class="grid min-w-0 gap-3 pb-4 pl-20 pr-4 pt-1 @max-[30rem]/step:pl-4">
+          {/* Fields keep the card's padding on every side. */}
+          <div class="grid min-w-0 gap-3 px-4 pb-4 pt-1">
             <StepBody
               step={props.step}
               path={props.path}

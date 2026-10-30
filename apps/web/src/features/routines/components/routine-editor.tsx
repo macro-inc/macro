@@ -1,11 +1,9 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
-import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { ComposerSurface, cn, TabSelector } from '@ui';
-import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
+import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';
 import { RoutineDescription } from './routine-description';
 
@@ -92,27 +90,6 @@ function RoutineSection(props: {
   );
 }
 
-/** Below the shared side panel's split width, the details panel floats over the page, as in tasks. */
-const SPLIT_DETAILS_MIN_PX = 1224;
-
-/**
- * The page's scroller. A floating details card covers the right of the pane,
- * so while it is open the document column makes room for it.
- */
-function DocumentScroller(props: ParentProps<{ floating: boolean }>) {
-  const panel = useSidePanel();
-  const clearance = () =>
-    props.floating && panel?.isOpen() ? SidePanel.FLOATING_CLEARANCE_PX : 0;
-  return (
-    <div
-      class="size-full overflow-y-auto @min-[900px]/routine:pr-(--details-clearance)"
-      style={{ '--details-clearance': `${clearance()}px` }}
-    >
-      {props.children}
-    </div>
-  );
-}
-
 /**
  * A routine's page: When and Then in a document column, its settings in the
  * details panel beside it, and a full-width run list.
@@ -158,8 +135,6 @@ export function RoutineEditor(props: {
   /** The routine menu, shown right after its name. */
   actions?: JSX.Element;
   feedback?: JSX.Element;
-  /** Details panel sections (`SidePanel.Section`, `SidePanel.Footer`). */
-  details?: JSX.Element;
 }) {
   const tabs = () =>
     props.showHistory === false
@@ -170,244 +145,227 @@ export function RoutineEditor(props: {
         ];
   const breadcrumbName = () =>
     props.draft.name.trim() || (props.creating ? 'New routine' : 'Untitled');
-  const [pane, setPane] = createSignal<HTMLElement>();
-  const paneSize = createElementSize(pane);
-  // A pane too narrow for the details column gets the floating card instead
-  // of a full-screen overlay; until it is measured, assume it is wide.
-  const floating = () =>
-    paneSize.width !== null && paneSize.width < SPLIT_DETAILS_MIN_PX;
   return (
-    <SidePanel.Root persistKey="routine">
-      <ViewBreadcrumbs.Root
-        value="routine"
-        onChange={(value) => {
-          if (value === 'routines') props.onBack();
-          else props.onTab('settings');
-        }}
-      >
-        <ViewBreadcrumbs.Item value="routines" metadata={{}} order={0}>
-          {(item) => (
-            <ViewBreadcrumbs.ReturnButton
+    <ViewBreadcrumbs.Root
+      value="routine"
+      onChange={(value) => {
+        if (value === 'routines') props.onBack();
+        else props.onTab('settings');
+      }}
+    >
+      <ViewBreadcrumbs.Item value="routines" metadata={{}} order={0}>
+        {(item) => (
+          <ViewBreadcrumbs.ReturnButton
+            onClick={item.onSelect}
+            aria-label="Back to routines"
+            tooltip="Routines"
+          >
+            Routines
+          </ViewBreadcrumbs.ReturnButton>
+        )}
+      </ViewBreadcrumbs.Item>
+      <ViewBreadcrumbs.Item value="routine" metadata={{}} order={1}>
+        {(item) => (
+          <div class="flex min-w-0 items-center">
+            <ViewBreadcrumbs.Button
+              class="gap-1.5"
+              isActive={item.isActive()}
               onClick={item.onSelect}
-              aria-label="Back to routines"
-              tooltip="Routines"
+              tooltip={breadcrumbName()}
             >
-              Routines
-            </ViewBreadcrumbs.ReturnButton>
-          )}
-        </ViewBreadcrumbs.Item>
-        <ViewBreadcrumbs.Item value="routine" metadata={{}} order={1}>
-          {(item) => (
-            <div class="flex min-w-0 items-center">
-              <ViewBreadcrumbs.Button
-                class="gap-1.5"
-                isActive={item.isActive()}
-                onClick={item.onSelect}
-                tooltip={breadcrumbName()}
-              >
-                <ClockIcon class="size-3 shrink-0" />
-                <span class="truncate">{breadcrumbName()}</span>
-              </ViewBreadcrumbs.Button>
-              <Show when={props.actions}>
-                <div class="shrink-0">{props.actions}</div>
-              </Show>
-            </div>
-          )}
-        </ViewBreadcrumbs.Item>
-        <TabSelector.Root
-          value={props.tab}
-          onChange={(value) => {
-            if (value === 'settings' || value === 'history') props.onTab(value);
-          }}
-          class="@container/routine flex size-full min-h-0 min-w-0 flex-col text-ink"
-        >
-          <ViewShell.TopBar
-            class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
-            aria-label="Routine toolbar"
-          >
-            <ViewBreadcrumbs.Outlet
-              aria-label="Routine location"
-              class="min-w-0 @max-[600px]/routine:flex-1"
-            />
-            <Show when={!props.creating}>
-              <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
-                <TabSelector class="w-fit">
-                  <TabSelector.List aria-label="Routine details">
-                    <For each={tabs()}>
-                      {(tab) => (
-                        <TabSelector.Tab value={tab.value}>
-                          {tab.label}
-                          <Show when={tab.count}>
-                            {(count) => (
-                              <span
-                                aria-hidden="true"
-                                class="ml-1.5 tabular-nums text-ink-extra-muted"
-                              >
-                                {count()}
-                              </span>
-                            )}
-                          </Show>
-                        </TabSelector.Tab>
-                      )}
-                    </For>
-                  </TabSelector.List>
-                </TabSelector>
-              </div>
+              <ClockIcon class="size-3 shrink-0" />
+              <span class="truncate">{breadcrumbName()}</span>
+            </ViewBreadcrumbs.Button>
+            <Show when={props.actions}>
+              <div class="shrink-0">{props.actions}</div>
             </Show>
-            <div class="ml-auto flex shrink-0 items-center gap-2">
-              {props.headerActions}
-              <Show when={props.tab === 'settings' && !props.creating}>
-                <SidePanel.Toggle size="sm" />
-              </Show>
+          </div>
+        )}
+      </ViewBreadcrumbs.Item>
+      <TabSelector.Root
+        value={props.tab}
+        onChange={(value) => {
+          if (value === 'settings' || value === 'history') props.onTab(value);
+        }}
+        class="@container/routine flex size-full min-h-0 min-w-0 flex-col text-ink"
+      >
+        <ViewShell.TopBar
+          class="gap-x-3 gap-y-2 touch:flex @max-[600px]/routine:h-auto @max-[600px]/routine:flex-wrap"
+          aria-label="Routine toolbar"
+        >
+          <ViewBreadcrumbs.Outlet
+            aria-label="Routine location"
+            class="min-w-0 @max-[600px]/routine:flex-1"
+          />
+          <Show when={!props.creating}>
+            <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
+              <TabSelector class="w-fit">
+                <TabSelector.List aria-label="Routine details">
+                  <For each={tabs()}>
+                    {(tab) => (
+                      <TabSelector.Tab value={tab.value}>
+                        {tab.label}
+                        <Show when={tab.count}>
+                          {(count) => (
+                            <span
+                              aria-hidden="true"
+                              class="ml-1.5 tabular-nums text-ink-extra-muted"
+                            >
+                              {count()}
+                            </span>
+                          )}
+                        </Show>
+                      </TabSelector.Tab>
+                    )}
+                  </For>
+                </TabSelector.List>
+              </TabSelector>
             </div>
-          </ViewShell.TopBar>
-          <TabSelector.Panel
-            ref={setPane}
-            value="settings"
-            class="relative min-h-0 flex-1 outline-none"
-          >
-            <SidePanel.Layout headerToggle={false} floating={floating()}>
-              <DocumentScroller floating={floating()}>
-                <div class="mx-auto flex w-full max-w-[760px] flex-col gap-8 px-10 pb-18 pt-10 @max-[600px]/routine:px-4 touch:pt-6">
-                  <header class="flex min-w-0 flex-col gap-3">
-                    <span
-                      aria-hidden="true"
-                      class="flex size-11 items-center justify-center rounded-xl bg-accent-bg text-accent"
-                    >
-                      <ClockCounterIcon class="size-5.5" />
-                    </span>
-                    <div class="min-w-0">
-                      <Show
-                        when={!props.disabled}
-                        fallback={
-                          <h1 class="min-w-0 truncate text-[28px] font-semibold leading-[34px]">
-                            {props.draft.name}
-                          </h1>
-                        }
-                      >
-                        <InlineTitleEditor
-                          value={props.draft.name}
-                          placeholder="Routine name"
-                          ariaLabel="Routine name"
-                          class="text-[28px] leading-[34px]"
-                          onRename={(name) =>
-                            props.onChange((draft) => ({ ...draft, name }))
-                          }
-                        />
-                      </Show>
-                    </div>
-                    <Show
-                      when={!props.disabled}
-                      fallback={
-                        <Show when={props.draft.description}>
-                          <p class="whitespace-pre-wrap text-base text-ink-muted">
-                            {props.draft.description}
-                          </p>
-                        </Show>
-                      }
-                    >
-                      <RoutineDescription
-                        class="-mt-1.5"
-                        value={props.draft.description ?? ''}
-                        onChange={(description) =>
-                          props.onChange((draft) => ({ ...draft, description }))
-                        }
-                      />
-                    </Show>
-                    <Show when={props.meta}>
-                      <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-muted">
-                        {props.meta}
-                        <Show when={props.metaAction}>
-                          <div class="ml-auto shrink-0">{props.metaAction}</div>
-                        </Show>
-                      </div>
-                    </Show>
-                  </header>
-                  <RoutineSection
-                    label="Trigger"
-                    aside={props.nextRun && `Next run: ${props.nextRun}`}
+          </Show>
+          <div class="ml-auto flex shrink-0 items-center gap-2">
+            {props.headerActions}
+          </div>
+        </ViewShell.TopBar>
+        <TabSelector.Panel
+          value="settings"
+          class="relative min-h-0 flex-1 outline-none"
+        >
+          <div class="size-full overflow-y-auto">
+            <div class="mx-auto flex w-full max-w-[760px] flex-col gap-8 px-10 pb-18 pt-10 @max-[600px]/routine:px-4 touch:pt-6">
+              <header class="flex min-w-0 flex-col gap-3">
+                <span
+                  aria-hidden="true"
+                  class="flex size-11 items-center justify-center rounded-xl bg-accent-bg text-accent"
+                >
+                  <ClockCounterIcon class="size-5.5" />
+                </span>
+                <div class="min-w-0">
+                  <Show
+                    when={!props.disabled}
+                    fallback={
+                      <h1 class="min-w-0 truncate text-[28px] font-semibold leading-[34px]">
+                        {props.draft.name}
+                      </h1>
+                    }
                   >
-                    <fieldset
-                      aria-label="Routine triggers"
-                      disabled={props.disabled}
-                      inert={props.disabled}
-                      class="grid min-w-0"
-                    >
-                      <Show when={props.hasTriggers !== false}>
-                        <RoutineSurface class="px-6 py-5 @max-[600px]/routine:px-4">
-                          {props.triggerContent}
-                        </RoutineSurface>
-                      </Show>
-                      <Show when={props.triggerAdd}>
-                        <RoutineTray
-                          attached={props.hasTriggers !== false}
-                          class={
-                            props.hasTriggers !== false ? '-mt-3' : undefined
-                          }
-                        >
-                          {props.triggerAdd}
-                        </RoutineTray>
-                      </Show>
-                    </fieldset>
-                  </RoutineSection>
-                  <RoutineSection label="Steps" aside={props.stepsAside}>
-                    {/* Each step is its own card. */}
-                    <fieldset
-                      disabled={props.disabled}
-                      inert={props.disabled}
-                      class="min-w-0"
-                      aria-label="Routine steps"
-                    >
-                      {props.steps}
-                    </fieldset>
-                  </RoutineSection>
-                  <Show when={props.connections}>
-                    {(connections) => (
-                      <RoutineSection
-                        label="Connections"
-                        aside="Apps Ask AI steps can use, on top of the agent’s own"
-                      >
-                        <RoutineSurface>
-                          <fieldset
-                            disabled={props.disabled}
-                            inert={props.disabled}
-                            class="min-w-0"
-                            aria-label="Routine connections"
-                          >
-                            {connections()}
-                          </fieldset>
-                        </RoutineSurface>
-                      </RoutineSection>
-                    )}
-                  </Show>
-                  <Show when={props.settings}>
-                    {(settings) => (
-                      <RoutineSection label="Runs & notifications">
-                        <RoutineSurface>{settings()}</RoutineSurface>
-                      </RoutineSection>
-                    )}
-                  </Show>
-                  <Show when={props.feedback}>
-                    <div class="grid gap-2 empty:hidden">{props.feedback}</div>
-                  </Show>
-                  <Show when={props.footer}>
-                    <div class="flex items-center justify-end gap-2">
-                      {props.footer}
-                    </div>
+                    <InlineTitleEditor
+                      value={props.draft.name}
+                      placeholder="Routine name"
+                      ariaLabel="Routine name"
+                      class="text-[28px] leading-[34px]"
+                      onRename={(name) =>
+                        props.onChange((draft) => ({ ...draft, name }))
+                      }
+                    />
                   </Show>
                 </div>
-              </DocumentScroller>
-              {props.details}
-            </SidePanel.Layout>
-          </TabSelector.Panel>
-          <TabSelector.Panel
-            value="history"
-            class="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
-          >
-            {props.history}
-          </TabSelector.Panel>
-        </TabSelector.Root>
-      </ViewBreadcrumbs.Root>
-    </SidePanel.Root>
+                <Show
+                  when={!props.disabled}
+                  fallback={
+                    <Show when={props.draft.description}>
+                      <p class="whitespace-pre-wrap text-base text-ink-muted">
+                        {props.draft.description}
+                      </p>
+                    </Show>
+                  }
+                >
+                  <RoutineDescription
+                    class="-mt-1.5"
+                    value={props.draft.description ?? ''}
+                    onChange={(description) =>
+                      props.onChange((draft) => ({ ...draft, description }))
+                    }
+                  />
+                </Show>
+                <Show when={props.meta}>
+                  <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-muted">
+                    {props.meta}
+                    <Show when={props.metaAction}>
+                      <div class="ml-auto shrink-0">{props.metaAction}</div>
+                    </Show>
+                  </div>
+                </Show>
+              </header>
+              <RoutineSection
+                label="Trigger"
+                aside={props.nextRun && `Next run: ${props.nextRun}`}
+              >
+                <fieldset
+                  aria-label="Routine triggers"
+                  disabled={props.disabled}
+                  inert={props.disabled}
+                  class="grid min-w-0"
+                >
+                  <Show when={props.hasTriggers !== false}>
+                    <RoutineSurface class="px-6 py-5 @max-[600px]/routine:px-4">
+                      {props.triggerContent}
+                    </RoutineSurface>
+                  </Show>
+                  <Show when={props.triggerAdd}>
+                    <RoutineTray
+                      attached={props.hasTriggers !== false}
+                      class={props.hasTriggers !== false ? '-mt-3' : undefined}
+                    >
+                      {props.triggerAdd}
+                    </RoutineTray>
+                  </Show>
+                </fieldset>
+              </RoutineSection>
+              <RoutineSection label="Steps" aside={props.stepsAside}>
+                {/* Each step is its own card. */}
+                <fieldset
+                  disabled={props.disabled}
+                  inert={props.disabled}
+                  class="min-w-0"
+                  aria-label="Routine steps"
+                >
+                  {props.steps}
+                </fieldset>
+              </RoutineSection>
+              <Show when={props.connections}>
+                {(connections) => (
+                  <RoutineSection
+                    label="Connections"
+                    aside="Apps Ask AI steps can use, on top of the agent’s own"
+                  >
+                    <RoutineSurface>
+                      <fieldset
+                        disabled={props.disabled}
+                        inert={props.disabled}
+                        class="min-w-0"
+                        aria-label="Routine connections"
+                      >
+                        {connections()}
+                      </fieldset>
+                    </RoutineSurface>
+                  </RoutineSection>
+                )}
+              </Show>
+              <Show when={props.settings}>
+                {(settings) => (
+                  <RoutineSection label="Runs & notifications">
+                    <RoutineSurface>{settings()}</RoutineSurface>
+                  </RoutineSection>
+                )}
+              </Show>
+              <Show when={props.feedback}>
+                <div class="grid gap-2 empty:hidden">{props.feedback}</div>
+              </Show>
+              <Show when={props.footer}>
+                <div class="flex items-center justify-end gap-2">
+                  {props.footer}
+                </div>
+              </Show>
+            </div>
+          </div>
+        </TabSelector.Panel>
+        <TabSelector.Panel
+          value="history"
+          class="flex min-h-0 flex-1 flex-col overflow-hidden outline-none"
+        >
+          {props.history}
+        </TabSelector.Panel>
+      </TabSelector.Root>
+    </ViewBreadcrumbs.Root>
   );
 }
