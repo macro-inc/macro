@@ -266,7 +266,9 @@ No storage schema, projection version, or database migration changes are needed.
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
 Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
 measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.
-The `web` test target exercises the same parity contract over real browser OPFS.
+The `web` test target exercises the same parity contract over real browser OPFS;
+its ignored `search_100k_rows_over_opfs` measurement runs with
+`-- --include-ignored --nocapture` under the browser runner.
 
 ## Browser OPFS writes
 

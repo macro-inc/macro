@@ -33,6 +33,26 @@ pub fn entry(index: u64, name: &str, dm: bool) -> (EntityKey<'static>, Record) {
     )
 }
 
+pub async fn seed_100k<S: Storage>(storage: &mut S) {
+    for batch in 0..400 {
+        storage
+            .put_batch(
+                (0..250)
+                    .map(|offset| {
+                        let index = batch * 250 + offset;
+                        entry(
+                            index,
+                            &format!("contact {index:06} user@example.com"),
+                            false,
+                        )
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+    }
+}
+
 pub async fn assert_search_contract<S: Storage>(mut storage: S) -> S {
     let mut corpus: Vec<SearchDocument> = Vec::new();
     // More matches than the result cap, with the best match late in storage order.

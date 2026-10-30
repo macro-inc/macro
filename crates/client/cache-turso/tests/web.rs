@@ -38,6 +38,55 @@ async fn streaming_sql_search_matches_reference_ranking_over_opfs() {
         .unwrap();
 }
 
+#[wasm_bindgen_test(async)]
+#[ignore = "100k-row OPFS search measurement; run with --include-ignored --nocapture"]
+async fn search_100k_rows_over_opfs() {
+    use cache_core::search::{SearchProfile, SearchRequest};
+    let owner = OpfsOwner::acquire("cache-turso-search-100k.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh search storage must open")
+    };
+    let session = session.connect().unwrap();
+    // Use the OPFS clock: std::time::Instant is unavailable on browser WASM.
+    let clock = session.connection().prepare("SELECT 1").unwrap();
+    let mut storage = TursoStorage::from_opfs_session(session, "search-100k").unwrap();
+    search_streaming::seed_100k(&mut storage).await;
+    let mut engine = Engine::new(storage);
+    for query in ["contact", "99999", "no-match", "contact", "99999"] {
+        let start = clock._io().current_time_monotonic();
+        let result = engine
+            .search(&SearchRequest {
+                profile: SearchProfile::QuickAccessV1,
+                buckets: vec!["document".into()],
+                query: query.into(),
+                cursor: None,
+                limit: 50,
+                now_ms: 2_000,
+            })
+            .await
+            .unwrap();
+        console_log!(
+            "100k OPFS search: query={query:?}, elapsed={:?}, results={}",
+            clock._io().current_time_monotonic().duration_since(start),
+            result.documents.len()
+        );
+        assert!(result.documents.len() <= 50);
+        assert_eq!(result.documents.is_empty(), query == "no-match");
+    }
+    drop(clock);
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
 fn key(value: &str) -> EntityKey<'static> {
     EntityKey(value.to_owned().into())
 }

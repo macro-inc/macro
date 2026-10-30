@@ -6,7 +6,7 @@ mod search_streaming;
 use cache_core::engine::Engine;
 use cache_core::search::{SearchProfile, SearchQuery, SearchRequest};
 use cache_core::store::Storage;
-use cache_turso::TursoStorage;
+use cache_turso::{TursoFileDatabase, TursoStorage};
 use pollster::block_on;
 use std::time::Instant;
 
@@ -21,24 +21,10 @@ fn streaming_sql_search_matches_reference_ranking() {
 #[ignore = "100k-row search latency measurement; run explicitly with --ignored --nocapture"]
 fn search_100k_rows() {
     block_on(async {
-        let mut storage = TursoStorage::open_in_memory("search-100k").unwrap();
-        for batch in 0..400 {
-            storage
-                .put_batch(
-                    (0..250)
-                        .map(|offset| {
-                            let index = batch * 250 + offset;
-                            search_streaming::entry(
-                                index,
-                                &format!("contact {index:06} user@example.com"),
-                                false,
-                            )
-                        })
-                        .collect(),
-                )
-                .await
-                .unwrap();
-        }
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("search.turso")).unwrap();
+        let mut storage = database.open("search-100k").unwrap();
+        search_streaming::seed_100k(&mut storage).await;
         let mut engine = Engine::new(storage);
         // Broad, selective, and missing queries, repeated without a retained catalog.
         for query in ["contact", "99999", "no-match", "contact", "99999"] {
