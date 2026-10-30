@@ -669,6 +669,10 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
+  This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
+  where session tabs open in macrod's space. Under herdr-core, Codex reports no
+  status, so its permission prompts must be answered in Herdr; see "Herdr
+  versions" in `crates/coding_agent_worker/README.md`.
   Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
   Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
   check their result and any confirmation in Herdr. For Claude, use `/fast on`
