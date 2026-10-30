@@ -46,8 +46,10 @@ pub enum GraphqlWorkFeedItemType {
     Task,
     /// AI chats.
     Chat,
-    /// Projects.
+    /// Projects (folders).
     Project,
+    /// Task projects (initiatives).
+    Initiative,
     /// Email threads.
     Email,
     /// Channel activity outside a dedicated thread item.
@@ -69,6 +71,7 @@ impl From<GraphqlWorkFeedItemType> for WorkFeedItemType {
             GraphqlWorkFeedItemType::Task => Self::Task,
             GraphqlWorkFeedItemType::Chat => Self::Chat,
             GraphqlWorkFeedItemType::Project => Self::Project,
+            GraphqlWorkFeedItemType::Initiative => Self::Initiative,
             GraphqlWorkFeedItemType::Email => Self::Email,
             GraphqlWorkFeedItemType::Channel => Self::Channel,
             GraphqlWorkFeedItemType::ChannelThread => Self::ChannelThread,

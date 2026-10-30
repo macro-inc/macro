@@ -6,6 +6,7 @@ use entity_access::{
 use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
+use tracing::Level;
 use utoipa::{IntoParams, ToSchema};
 
 use crate::domain::{auth::CrmTeamReceipt, model::CrmError, service::CrmService};
@@ -46,7 +47,7 @@ pub struct GetContactByEmailResponse {
         (status = 500, body = ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip_all, err, fields(email = %params.email))]
+#[tracing::instrument(skip_all, err(level = Level::DEBUG), fields(email = %params.email))]
 pub async fn handler<
     C: CrmService,
     St,
@@ -57,7 +58,8 @@ pub async fn handler<
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Query(params): Query<GetContactByEmailParams>,
 ) -> Result<Json<GetContactByEmailResponse>, CrmError> {
-    let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)?;
+    let receipt = CrmTeamReceipt::from_team_receipt(access.entity_access_receipt)
+        .inspect_err(|error| tracing::error!(error = ?error, "invalid crm team receipt"))?;
     let contact = state
         .service
         .get_contact_by_email(&receipt, &params.email)

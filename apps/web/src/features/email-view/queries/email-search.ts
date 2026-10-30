@@ -29,8 +29,12 @@ const nonEmailFilters: EntityFilters = {
 // user's own threads — the same reach the legacy mail search had. It cannot
 // filter archive state either, so `emailMatchesTab` trims Archived hits.
 function tabFilters(tab: EmailTab): EmailFilters {
+  // Focus filters its own list on the client; this search stays dormant there.
   return match(tab)
-    .with('important', () => ({ importance: true, shared: 'exclude' as const }))
+    .with('important', 'focus', () => ({
+      importance: true,
+      shared: 'exclude' as const,
+    }))
     .with('noise', () => ({ importance: false, shared: 'exclude' as const }))
     .with('calendar', () => ({
       calendar_only: true,

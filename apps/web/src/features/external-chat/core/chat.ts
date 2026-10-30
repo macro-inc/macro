@@ -203,6 +203,15 @@ function deliveryFailure(progress: SendProgress, label: string): string {
       'disconnected',
       () => `Your ${label} disconnected before this was sent.`
     )
+    .with(
+      'recipient_not_on_provider',
+      () => `This person isn't on ${label}, so this wasn't sent.`
+    )
+    .with(
+      'rate_limited',
+      () =>
+        `${label} is limiting messages right now. Try again in a few minutes.`
+    )
     .otherwise(() => `${label} didn't accept this message.`);
 }
 

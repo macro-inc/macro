@@ -48,6 +48,7 @@
 | <a id="property-forms"></a> `forms` | `readonly` | [`FormNamespace`](../../entities/forms/namespace/classes/FormNamespace.md) | Build forms and submit answers without granting respondents database access. |
 | <a id="property-githubpullrequests"></a> `githubPullRequests` | `readonly` | [`GithubPullRequestNamespace`](../../entities/github-pull-requests/namespace/classes/GithubPullRequestNamespace.md) | githubPullRequests resources and operations. |
 | <a id="property-harnesses"></a> `harnesses` | `readonly` | [`HarnessNamespace`](../../entities/harnesses/namespace/classes/HarnessNamespace.md) | harnesses resources and operations. |
+| <a id="property-images"></a> `images` | `readonly` | [`ImagesNamespace`](../../entities/images/namespace/classes/ImagesNamespace.md) | Generate images with AI and attach them to messages. |
 | <a id="property-initiatives"></a> `initiatives` | `readonly` | [`InitiativeNamespace`](../../entities/initiatives/namespace/classes/InitiativeNamespace.md) | initiatives resources and operations. |
 | <a id="property-meetings"></a> `meetings` | `readonly` | [`MeetingNamespace`](../../entities/meetings/namespace/classes/MeetingNamespace.md) | meetings resources and operations. |
 | <a id="property-notifications"></a> `notifications` | `readonly` | [`NotificationNamespace`](../../entities/notifications/namespace/classes/NotificationNamespace.md) | - |

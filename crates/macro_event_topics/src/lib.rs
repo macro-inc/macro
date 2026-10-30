@@ -55,6 +55,8 @@ topics! {
     MacroDocumentsTopic => "macro.documents",
     /// Committed GitHub pull request updates.
     MacroGithubPullRequestsTopic => "macro.github_pull_requests",
+    /// Every delivery the GitHub App verified, whatever its event.
+    MacroGithubWebhooksTopic => "macro.github_webhooks",
     /// User-scoped full Soup items produced from entity updates.
     MacroSoupRealtimeTopic => "macro.soup",
     /// Project lifecycle events (created, updated, deleted, restored, permanently deleted, and uploaded).

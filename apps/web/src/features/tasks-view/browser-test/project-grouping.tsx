@@ -17,19 +17,23 @@ import { TaskGroupHeader } from '../components/task-list/TaskGroupHeader';
 enableProjects.override = true;
 enableGraphqlSoup.override = false;
 const VIEWER_ID = 'macro|project-grouping@example.test';
+const PROJECT_ONE = 'ad000000-0000-0000-0000-000000000001';
+const PROJECT_TWO = 'ad000000-0000-0000-0000-000000000002';
 const PROJECTS = new Map([
-  ['ad000000-0000-0000-0000-000000000001', 'Project One'],
-  ['ad000000-0000-0000-0000-000000000002', 'Project Two'],
+  [PROJECT_ONE, 'Project One'],
+  [PROJECT_TWO, 'Project Two'],
 ]);
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: VIEWER_ID,
   email: 'project-grouping@example.test',
   authenticated: true,
 });
+// The grouped page names Project Two; only Project One, still labeled by its
+// key, resolves its name through an identity read.
 window.fetch = async (_input, init) => {
   const body = JSON.parse(String(init?.body ?? '{}'));
   const id = body.variables?.initiativeId;
-  if (id && PROJECTS.has(id)) {
+  if (id === PROJECT_ONE) {
     return Response.json({
       data: {
         user: {
@@ -116,7 +120,8 @@ function Fixture() {
                   kind: 'group-header',
                   id: `group-${key}`,
                   groupId: key,
-                  label: key || 'No Project',
+                  label:
+                    key === PROJECT_TWO ? 'Project Two' : key || 'No Project',
                   count: items.length,
                 }}
                 groupBy="project"

@@ -1,6 +1,6 @@
 # Type Alias: CreateAgentSessionRequest
 
-> **CreateAgentSessionRequest** = \{ `botId?`: `string` \| `null`; `id?`: `string` \| `null`; `instructions?`: `string` \| `null`; `model?`: `string` \| `null`; `owner?`: `string` \| `null`; `prompt?`: `string` \| `null`; `repoBranch?`: `string` \| `null`; `repoUrl?`: `string` \| `null`; `thread?`: `null` \| [`CreateSessionThread`](CreateSessionThread.md); `workspace?`: `string` \| `null`; \}
+> **CreateAgentSessionRequest** = \{ `botId?`: `string` \| `null`; `id?`: `string` \| `null`; `instructions?`: `string` \| `null`; `model?`: `string` \| `null`; `owner?`: `string` \| `null`; `prompt?`: `string` \| `null`; `promptActionId?`: `null` \| [`AgentActionId`](AgentActionId.md); `promptAttachments?`: [`PromptAttachment`](PromptAttachment.md)[]; `repoBranch?`: `string` \| `null`; `repoUrl?`: `string` \| `null`; `thread?`: `null` \| [`CreateSessionThread`](CreateSessionThread.md); `workspace?`: `string` \| `null`; \}
 
 Request body for `POST /agent-sessions`.
 
@@ -25,6 +25,8 @@ Clients serialize this, so both derives are used.
 | <a id="property-model"></a> `model?` | `string` \| `null` | Model the managed session runs on, overriding the persona's. Managed sessions only: an external runtime picks its own. The session's model from the moment it exists, which is what a caller choosing one before the first prompt means. Selecting a model *during* a session is a control action instead, and reads as one in its transcript. |
 | <a id="property-owner"></a> `owner?` | `string` \| `null` | The user who owns the session. Ignored for user callers, who always own their own sessions, for harness callers, whose verified acting user owns the session, and for bots that already act for a verified user. A bot without one may name a user here. That claim is trusted for the bot's own sessions. With no claim, a team bot owns the session itself only while non-user owners are enabled. Every other bot still needs an owner. |
 | <a id="property-prompt"></a> `prompt?` | `string` \| `null` | First prompt to deliver once the session is running. Managed sessions only - an external runtime sends its own first prompt through the control endpoint. Omitted, the session opens idle. |
+| <a id="property-promptactionid"></a> `promptActionId?` | `null` \| [`AgentActionId`](AgentActionId.md) | - |
+| <a id="property-promptattachments"></a> `promptAttachments?` | [`PromptAttachment`](PromptAttachment.md)[] | Files `prompt` refers to, in the order the user attached them. Requires `prompt`. |
 | <a id="property-repobranch"></a> `repoBranch?` | `string` \| `null` | Starting branch for a managed coding session's selected repository. Omitted, the session starts on the repository's default branch. |
 | <a id="property-repourl"></a> `repoUrl?` | `string` \| `null` | Explicit GitHub repository for a managed Cursor session, as one of the urls `GET /agent-repositories` lists for the caller. Access is checked for the session owner. For external sessions this is informational: cloning it is the runtime operator's job. |
 | <a id="property-thread"></a> `thread?` | `null` \| [`CreateSessionThread`](CreateSessionThread.md) | - |

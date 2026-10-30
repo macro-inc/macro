@@ -11,9 +11,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
-import { Button } from '@ui';
 import { Show } from 'solid-js';
 import {
   CrmListEmpty,
@@ -91,15 +89,9 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
       search={state.search}
       onSearchChange={(search) => setState('search', search)}
       onSearchEscape={() => listElement?.focus()}
-      actions={
-        <>
-          <TasksControls />
-          <Button variant="secondary" onClick={composeTask}>
-            <PlusIcon class="size-4" />
-            New task
-          </Button>
-        </>
-      }
+      actions={<TasksControls />}
+      createAction={{ label: 'New task', onClick: composeTask }}
+      toolbarCreate
     >
       <TaskList
         loadingContent={<CrmListSkeleton label="Loading tasks" />}

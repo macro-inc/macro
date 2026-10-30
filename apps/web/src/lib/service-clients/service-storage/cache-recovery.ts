@@ -1,5 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isOwnerLockUnavailableError } from '@graphql-cache/protocol';
+import {
+  isOwnerHandoffBlockedError,
+  isOwnerLockUnavailableError,
+} from '@graphql-cache/protocol';
 import { CacheBootstrapExhaustedError } from '@graphql-cache/worker/startup';
 import { createSignal } from 'solid-js';
 
@@ -54,10 +57,12 @@ export function createCacheRecovery(rebuild: () => Promise<void>) {
   const failed = (error: unknown) => {
     failure = error;
     // Only these typed errors prove restarting cannot bypass a quarantined
-    // journal. Unknown storage/transport failures stay closed for recovery.
+    // journal: nothing opened storage, or a read was refused while the database
+    // moved between owners. Unknown storage/transport failures stay closed.
     const recoverable =
       error instanceof CacheBootstrapExhaustedError ||
-      isOwnerLockUnavailableError(error);
+      isOwnerLockUnavailableError(error) ||
+      isOwnerHandoffBlockedError(error);
     setState(recoverable ? 'unavailable' : 'recovery-required');
     if (recoverable) schedule();
     else {

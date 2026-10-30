@@ -12,7 +12,6 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import { queryReadyGate } from '@queries/gate';
@@ -27,6 +26,8 @@ import {
 import { TasksHeader, TaskViewBreadcrumbItem } from './components/TasksHeader';
 import { TasksMobileTabs } from './components/TasksMobileTabs';
 import { TasksSidebar } from './components/TasksSidebar';
+import { TASK_TABS } from './constants';
+import { isProjectTab } from './core/task-navigation';
 import { TasksContent, TasksLoading } from './tasks-content';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import { tasksTour } from './tour';
@@ -150,18 +151,24 @@ function TasksViewRoot() {
                 fallback={() => (
                   <Show
                     when={
-                      state.tab === 'projects' &&
+                      isProjectTab(state.tab) &&
                       projectsEnabled() &&
                       !state.savedViewActive
                     }
                     fallback={taskList()}
                   >
-                    <Show when={isTouchDevice()}>
-                      <div class="hidden @max-[720px]/view-shell:block">
-                        <TasksMobileTabs />
-                      </div>
-                    </Show>
                     <ProjectsTab
+                      scope={() =>
+                        state.tab === 'my-projects'
+                          ? 'assigned-to-me'
+                          : state.tab === 'created-projects'
+                            ? 'created-by-me'
+                            : 'all'
+                      }
+                      title={
+                        TASK_TABS.find((tab) => tab.id === state.tab)?.label
+                      }
+                      mobileNavigation={<TasksMobileTabs />}
                       search={{
                         value: () => state.search,
                         onChange: (search) => setState('search', search),

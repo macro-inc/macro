@@ -91,6 +91,7 @@ sNRx7TF4iOEBkdJgBUoY4X/rZ+51FQOrdZGqeWo+8TjBhMQN7b4=
 #[derive(Debug, Clone)]
 struct TaskStatusCall {
     entity_id: String,
+    credited_user: Option<MacroUserIdStr<'static>>,
     status: String,
 }
 
@@ -259,10 +260,12 @@ impl DocumentService for StubDocumentService {
     async fn update_task_status(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<MacroUserIdStr<'static>>,
         status: &str,
     ) -> Result<(), DocumentError> {
         self.task_status_calls.lock().unwrap().push(TaskStatusCall {
             entity_id: receipt.entity().entity_id.clone(),
+            credited_user,
             status: status.to_string(),
         });
         Ok(())
@@ -1308,6 +1311,12 @@ fn make_sync_service_with_repo_and_notification_ingress(
 }
 
 fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocumentService>) {
+    make_sync_service_with_repo_and_doc_service(StubSyncRepo::new())
+}
+
+fn make_sync_service_with_repo_and_doc_service(
+    repo: StubSyncRepo,
+) -> (TestGithubSyncService, Arc<StubDocumentService>) {
     let doc_service = Arc::new(StubDocumentService::new());
     let foreign_entity_service = StubForeignEntityService::new();
 
@@ -1324,7 +1333,7 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
         doc_service.clone(),
         pull_request_service(&foreign_entity_service),
         StubNotificationIngress::new(),
-        StubSyncRepo::new(),
+        repo,
         StubSyncClient::new(),
         StubRealtime::default(),
     );
@@ -2311,6 +2320,78 @@ async fn pr_merged_sets_task_status_completed() {
     assert_eq!(status_calls.len(), 1);
     assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
     assert_eq!(status_calls[0].status, "Completed");
+}
+
+#[tokio::test]
+async fn pr_merged_credits_the_linked_macro_user_who_merged() {
+    let (service, doc_service) = make_sync_service_with_repo_and_doc_service(
+        StubSyncRepo::new().with_github_link("333", "macro|merger@example.com"),
+    );
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 },
+            "sender": { "login": "monalisa", "id": 333 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].status, "Completed");
+    assert_eq!(
+        status_calls[0]
+            .credited_user
+            .as_ref()
+            .map(ToString::to_string),
+        Some("macro|merger@example.com".to_string())
+    );
+}
+
+#[tokio::test]
+async fn pr_merged_by_an_unlinked_github_account_is_not_credited() {
+    let (service, doc_service) = make_sync_service_with_repo_and_doc_service(
+        StubSyncRepo::new().with_github_link("333", "macro|merger@example.com"),
+    );
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 },
+            "sender": { "login": "someone-else", "id": 444 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].status, "Completed");
+    assert!(status_calls[0].credited_user.is_none());
 }
 
 #[tokio::test]
@@ -6049,4 +6130,47 @@ async fn realtime_delivery_failure_keeps_the_saved_mapping() {
         .await;
     assert_eq!(upserts.len(), 1);
     assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
+}
+
+struct RecordingPublisher(Arc<Mutex<Vec<crate::domain::models::GithubWebhookReceived>>>);
+
+impl crate::domain::ports::GithubWebhookPublisher for RecordingPublisher {
+    fn publish_received(
+        &self,
+        delivery: crate::domain::models::GithubWebhookReceived,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), GithubError>> + Send + '_>>
+    {
+        self.0.lock().unwrap().push(delivery);
+        Box::pin(async { Ok(()) })
+    }
+}
+
+#[tokio::test]
+async fn every_installation_delivery_is_published_even_events_sync_ignores() {
+    let TestGithubSyncService { service, .. } = make_sync_service();
+    let published = Arc::new(Mutex::new(Vec::new()));
+    let service = service.with_webhook_publisher(RecordingPublisher(Arc::clone(&published)));
+
+    let workflow_run = ValidatedGithubWebhookEvent::new(
+        "workflow_run".to_string(),
+        serde_json::json!({
+            "action": "completed",
+            "installation": { "id": 12345 },
+            "workflow_run": { "name": "CI", "conclusion": "failure" },
+        }),
+    )
+    .with_delivery_id(Some("delivery-1".to_string()));
+    let app_level = ValidatedGithubWebhookEvent::new(
+        "github_app_authorization".to_string(),
+        serde_json::json!({ "action": "revoked" }),
+    );
+
+    service.process_webhook_event(&workflow_run).await.unwrap();
+    service.process_webhook_event(&app_level).await.unwrap();
+
+    let published = published.lock().unwrap();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].event, "workflow_run");
+    assert_eq!(published[0].delivery_id.as_deref(), Some("delivery-1"));
+    assert_eq!(published[0].installation_id, 12345);
 }

@@ -228,3 +228,54 @@ async fn deletions_publish_and_reactions_typing_and_thread_state_stay_off_the_to
         assert!(publish(parent.clone(), change).await.is_empty());
     }
 }
+
+#[test]
+fn only_finalized_bot_replies_reach_agent_triggers_with_or_without_a_mention() {
+    use crate::domain::models::PatchMessageNotificationPolicy::{Default, NotifyAsPostedMessage};
+    // A bot's streaming updates are `Default` edits; so is a person's ordinary edit.
+    for (bot, policy, has_mention, expected) in [
+        (true, NotifyAsPostedMessage, true, true),
+        (true, NotifyAsPostedMessage, false, true),
+        (true, Default, true, false),
+        (true, Default, false, false),
+        (false, Default, false, false),
+        (false, NotifyAsPostedMessage, true, false),
+    ] {
+        let parent = MessageParent::Channel(Uuid::from_u128(20));
+        let mut message = reply(parent.clone(), vec![]);
+        if bot {
+            message.sender_id =
+                channel_sender::ChannelSender::new_from_bot(bot_id::MACRO_NEW_BOT_ID);
+            message.triggered_by = Some(SENDER.into());
+        }
+        let mentions = if has_mention {
+            vec![mention(
+                "bot",
+                bot_id::CURSOR_BOT_ID.into_storage_id().as_ref(),
+            )]
+        } else {
+            vec![]
+        };
+        let expected_post = MessagePostedMetadata::from_message(&message, mentions.clone());
+        let mut event = event(
+            parent,
+            MessageChange::Edited {
+                message,
+                mentions,
+                notification_policy: policy,
+                previous_attachments: vec![],
+            },
+        );
+        event.actor = expected_post.sender.as_ref().to_owned();
+        let facts = topic_events(&event);
+        assert_eq!(
+            facts.len(),
+            1,
+            "completion is still a patch, not a second post"
+        );
+        let MessageTopicEvent::Patched(patched) = &facts[0].event().event else {
+            panic!("expected a patch");
+        };
+        assert_eq!(patched.completed_reply, expected.then_some(expected_post));
+    }
+}
