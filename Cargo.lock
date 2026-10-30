@@ -4866,6 +4866,80 @@ dependencies = [
 ]
 
 [[package]]
+name = "connect_api"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm 0.10.3",
+ "async-stream",
+ "async-trait",
+ "aws-config",
+ "aws-sdk-kms",
+ "axum",
+ "base64 0.22.1",
+ "bytes",
+ "chrono",
+ "clap",
+ "connect_platform",
+ "connect_registry",
+ "doppler-config",
+ "futures",
+ "http-body-util",
+ "opentelemetry",
+ "opentelemetry-http",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rmcp",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "strum 0.27.2",
+ "subtle",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "url",
+ "utoipa",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "connect_platform"
+version = "0.1.0"
+dependencies = [
+ "http 1.4.0",
+ "opentelemetry",
+ "opentelemetry-http",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tower-http",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "workspace-hack",
+]
+
+[[package]]
+name = "connect_registry"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "thiserror 2.0.18",
+ "toml 0.8.23",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "connection"
 version = "0.1.0"
 dependencies = [
@@ -22960,6 +23034,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-stream",
  "tokio-util",
+ "toml_edit 0.22.27",
  "tower 0.5.3",
  "tower-http",
  "tracing",
