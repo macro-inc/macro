@@ -103,10 +103,11 @@ async fn scan_budget_returns_progress_instead_of_false_exhaustion() {
         .unwrap();
     assert!(first.contacts.is_empty());
     assert!(first.next_cursor.is_some());
-    let requests = names.requests.lock().unwrap();
-    assert_eq!(requests.len(), 4);
-    assert!(requests.iter().all(|(_, ids)| ids.len() == 500));
-    drop(requests);
+    {
+        let requests = names.requests.lock().unwrap();
+        assert_eq!(requests.len(), 4);
+        assert!(requests.iter().all(|(_, ids)| ids.len() == 500));
+    }
     let next = service
         .search_contacts(
             viewer,

@@ -111,17 +111,18 @@ async fn search_and_exact_lookups_are_validated_and_scoped_to_the_root_viewer() 
         serde_json::json!([])
     );
     assert_eq!(*reader.searches.lock().unwrap(), ["café pln"]);
-    let lookups = reader.lookups.lock().unwrap();
-    assert_eq!(lookups.len(), 3);
-    assert_eq!(
-        lookups
-            .iter()
-            .filter(|ids| ids.as_slice() == ["macro|person@example.com"])
-            .count(),
-        2
-    );
-    assert_eq!(lookups.iter().filter(|ids| ids.is_empty()).count(), 1);
-    drop(lookups);
+    {
+        let lookups = reader.lookups.lock().unwrap();
+        assert_eq!(lookups.len(), 3);
+        assert_eq!(
+            lookups
+                .iter()
+                .filter(|ids| ids.as_slice() == ["macro|person@example.com"])
+                .count(),
+            2
+        );
+        assert_eq!(lookups.iter().filter(|ids| ids.is_empty()).count(), 1);
+    }
     let before = reader.requests.lock().unwrap().len();
     for query in [
         "{ user { contactsByUserIds(userIds: [\"not-an-id\"]) { id } } }",
