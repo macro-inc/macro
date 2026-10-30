@@ -20,8 +20,9 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+rand = { workspace = true }
 
 [[bin]]
-name = "backfill_source_items"
-path = "src/bin/backfill_source_items.rs"
+name = "source_items"
+path = "src/bin/source_items.rs"
 required-features = ["cli"]

@@ -1,7 +1,5 @@
--- Canonical mutations on top of source_items_feed.sql. The query-parity test
--- explicitly reconciles the projection after this fixture; live application
--- maintenance is covered by the repository and source_items tests. Item numbers
--- follow source_items_feed.sql.
+-- Writes on top of source_items_feed.sql. The triggers keep source_items current as each
+-- statement runs. Item numbers follow source_items_feed.sql.
 
 ---------------------------------------------------
 --  GRANTS

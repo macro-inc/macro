@@ -1,3 +1,3 @@
--- Model a projection that has not been backfilled yet. The legacy read path
--- must keep returning the existing domain records while rollout is disabled.
+-- Model a projection that has not been backfilled yet. The item-table read path
+-- must keep returning the existing records while projected reads are disabled.
 TRUNCATE source_items;

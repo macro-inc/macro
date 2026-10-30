@@ -2144,9 +2144,10 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
     let item_tables =
         expanded_dynamic_cursor_soup_hydrated(db, args.clone(), ItemSource::ItemTables).await?;
-    // Query tests write canonical SQL fixtures directly. Prepare their projection
-    // explicitly; repository tests separately verify application maintenance.
-    source_items::backfill::run(db).await?;
+    // Fixtures write the item tables and grants directly; the triggers must have kept
+    // the projection exact for every one of them.
+    let mismatches = source_items::audit::run(db).await?;
+    assert!(mismatches.is_empty(), "source_items drifted: {mismatches:?}");
     let source_items =
         expanded_dynamic_cursor_soup_hydrated(db, args, ItemSource::SourceItems).await?;
     let shown = |page: &[SoupProjectionHydration]| {

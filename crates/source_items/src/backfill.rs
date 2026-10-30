@@ -1,4 +1,4 @@
-//! Resumable reconciliation after all application writers have deployed.
+//! Fills `source_items` for items that predate its triggers.
 
 use model_entity::EntityType;
 use sqlx::PgPool;
@@ -9,9 +9,9 @@ const BATCH_SIZE: i64 = 500;
 /// stops the run. A batch that stays blocked this long needs an operator.
 const MAX_ATTEMPTS: u32 = 30;
 
-/// Reconcile canonical items and existing projection keys in committed batches.
-/// Re-running starts from the beginning and is safe, including after old writers
-/// deleted items during rollout. Projection-only IDs are reconciled to no rows.
+/// Rewrites the rows of every document, chat and project, and of every id the table holds, in
+/// committed batches through the function the triggers use. Safe to interrupt and rerun while
+/// writers run: each batch locks its items like a grant change does.
 pub async fn run(pool: &PgPool) -> Result<u64, sqlx::Error> {
     let mut total = 0;
     for kind in [EntityType::Chat, EntityType::Document, EntityType::Project] {
@@ -23,13 +23,20 @@ pub async fn run(pool: &PgPool) -> Result<u64, sqlx::Error> {
                 .execute(&mut *tx)
                 .await?;
             let ids =
-                sqlx::query_file_scalar!("src/next_ids.sql", kind.as_ref(), cursor, BATCH_SIZE,)
+                sqlx::query_file_scalar!("src/next_ids.sql", kind.as_ref(), cursor, BATCH_SIZE)
                     .fetch_all(&mut *tx)
                     .await?;
             if ids.is_empty() {
                 break;
             }
-            if let Err(error) = crate::sync_many(&mut tx, kind, &ids).await {
+            let refreshed = sqlx::query!(
+                r#"SELECT 1 AS "refreshed!" FROM source_items_refresh($1, $2)"#,
+                kind.as_ref(),
+                &ids,
+            )
+            .fetch_one(&mut *tx)
+            .await;
+            if let Err(error) = refreshed {
                 let code = error
                     .as_database_error()
                     .and_then(|db| db.code())
@@ -49,7 +56,7 @@ pub async fn run(pool: &PgPool) -> Result<u64, sqlx::Error> {
             attempts = 0;
             total += ids.len() as u64;
             cursor = ids.last().cloned().unwrap_or_default();
-            tracing::info!(%kind, %cursor, total, "reconciled source items");
+            tracing::info!(%kind, %cursor, total, "backfilled source items");
         }
     }
     sqlx::query!("ANALYZE source_items").execute(pool).await?;

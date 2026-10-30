@@ -70,7 +70,7 @@ async fn source_items_rollout_defaults_to_existing_records(pool: PgPool) -> anyh
     );
     assert!(pending.is_empty(), "enabled rollout must use source_items");
 
-    // The writer-only deployment must also work before the projection exists.
+    // Reads with the projection disabled must not need its table.
     sqlx::query!("ALTER TABLE source_items RENAME TO source_items_pending_rollout")
         .execute(&pool)
         .await?;
@@ -532,36 +532,8 @@ async fn assert_pages_match_item_tables(pool: &PgPool) -> anyhow::Result<Vec<Uui
 
 /// Fails unless `source_items` holds exactly the rows `entity_access` and the item tables imply.
 async fn assert_source_items_match_grants(pool: &PgPool) -> anyhow::Result<()> {
-    let drift = sqlx::query!(
-        r#"
-        WITH want AS (
-            SELECT ea.source_id, ea.entity_type, i.kind, i.entity_id, i.sort_ts, count(*)::int AS grants
-            FROM entity_access ea
-            JOIN (
-                SELECT 'document' AS entity_type, d.id AS entity_id,
-                       CASE WHEN st.sub_type = 'task' THEN 'task' ELSE 'document' END AS kind,
-                       CASE WHEN d."deletedAt" IS NULL THEN d."updatedAt" END AS sort_ts
-                FROM "Document" d
-                LEFT JOIN document_sub_type st ON st.document_id = d.id
-                UNION ALL
-                SELECT 'chat', c.id, 'chat', CASE WHEN c."deletedAt" IS NULL THEN c."updatedAt" END
-                FROM "Chat" c
-                UNION ALL
-                SELECT 'project', p.id, 'project', CASE WHEN p."deletedAt" IS NULL THEN p."updatedAt" END
-                FROM "Project" p
-            ) i ON i.entity_type = ea.entity_type AND i.entity_id = ea.entity_id::text
-            GROUP BY ea.source_id, ea.entity_type, i.kind, i.entity_id, i.sort_ts
-        ), have AS (
-            SELECT source_id, entity_type, kind, entity_id, sort_ts, grants FROM source_items
-        )
-        SELECT 'missing' AS "side!", * FROM (SELECT * FROM want EXCEPT ALL SELECT * FROM have) missing
-        UNION ALL
-        SELECT 'extra', * FROM (SELECT * FROM have EXCEPT ALL SELECT * FROM want) extra
-        "#
-    )
-    .fetch_all(pool)
-    .await?;
-    assert!(drift.is_empty(), "source_items drifted: {drift:#?}");
+    let mismatches = source_items::audit::run(pool).await?;
+    assert!(mismatches.is_empty(), "source_items drifted: {mismatches:?}");
     Ok(())
 }
 
@@ -607,7 +579,6 @@ fn shapes_reach_every_driver_and_phase() {
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn source_items_pages_like_the_item_tables(pool: PgPool) -> anyhow::Result<()> {
-    source_items::backfill::run(&pool).await?;
     assert_source_items_match_grants(&pool).await?;
     let everything = assert_pages_match_item_tables(&pool).await?;
 
@@ -644,8 +615,7 @@ async fn source_items_pages_like_the_item_tables(pool: PgPool) -> anyhow::Result
     ),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn source_items_pages_match_after_reconciliation(pool: PgPool) -> anyhow::Result<()> {
-    source_items::backfill::run(&pool).await?;
+async fn source_items_pages_match_after_writes(pool: PgPool) -> anyhow::Result<()> {
     assert_source_items_match_grants(&pool).await?;
     let everything = assert_pages_match_item_tables(&pool).await?;
 

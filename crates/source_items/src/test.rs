@@ -1,379 +1,485 @@
-use super::*;
+use crate::{audit, backfill};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use sqlx::PgPool;
-use std::{sync::Arc, time::Duration};
+use sqlx::{PgConnection, PgPool};
+
+mod concurrency;
+mod fuzz;
 
 const DOC: &str = "10000000-0000-4000-8000-000000000001";
+const DOC_2: &str = "10000000-0000-4000-8000-000000000002";
+const CHAT: &str = "20000000-0000-4000-8000-000000000001";
+const PROJECT: &str = "30000000-0000-4000-8000-000000000001";
+const CHILD_PROJECT: &str = "30000000-0000-4000-8000-000000000002";
+const OWNER: &str = "macro|owner@example.com";
+const MEMBER: &str = "macro|member@example.com";
+const TEAM: &str = "40000000-0000-4000-8000-000000000001";
+const CHANNEL: &str = "50000000-0000-4000-8000-000000000001";
 
-async fn seed(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'Document', 'owner')"#,
-        DOC,
+/// One `source_items` row, with `sort_ts` as text so tests compare it to the item's own
+/// timestamps in SQL.
+#[derive(Debug, PartialEq, Eq)]
+struct Row {
+    source_id: String,
+    kind: String,
+    sort_ts: Option<String>,
+    grants: i32,
+}
+
+fn row(source_id: &str, kind: &str, sort_ts: Option<&str>, grants: i32) -> Row {
+    Row {
+        source_id: source_id.to_owned(),
+        kind: kind.to_owned(),
+        sort_ts: sort_ts.map(str::to_owned),
+        grants,
+    }
+}
+
+async fn rows(conn: &mut PgConnection, entity_id: &str) -> Result<Vec<Row>, sqlx::Error> {
+    sqlx::query_as!(
+        Row,
+        r#"SELECT source_id, kind, sort_ts::text AS sort_ts, grants
+           FROM source_items WHERE entity_id = $1 ORDER BY source_id"#,
+        entity_id,
     )
-    .execute(pool)
+    .fetch_all(conn)
+    .await
+}
+
+async fn assert_exact(pool: &PgPool) -> Result<(), sqlx::Error> {
+    let mismatches = audit::run(pool).await?;
+    assert!(mismatches.is_empty(), "source_items drifted: {mismatches:?}");
+    Ok(())
+}
+
+async fn insert_document(conn: &mut PgConnection, id: &str, at: &str) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner, "createdAt", "updatedAt")
+           VALUES ($1, 'Document', $2, $3::text::timestamp, $3::text::timestamp)"#,
+        id,
+        OWNER,
+        at,
+    )
+    .execute(conn)
     .await?;
+    Ok(())
+}
+
+async fn grant(
+    conn: &mut PgConnection,
+    entity_type: &str,
+    entity_id: &str,
+    source_id: &str,
+    source_type: &str,
+) -> Result<(), sqlx::Error> {
     sqlx::query!(
         r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-           VALUES ($1::text::uuid, 'document', 'owner', 'user', 'owner')"#,
-        DOC,
+           VALUES ($1::text::uuid, $2, $3, $4::text::entity_access_source_type, 'view')"#,
+        entity_id,
+        entity_type,
+        source_id,
+        source_type,
     )
-    .execute(pool)
+    .execute(conn)
     .await?;
     Ok(())
 }
 
-async fn count(pool: &PgPool) -> Result<i64, sqlx::Error> {
-    Ok(sqlx::query_scalar!("SELECT count(*) FROM source_items")
-        .fetch_one(pool)
-        .await?
-        .unwrap())
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn grants_items_and_subtypes_drive_rows(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    assert_eq!(rows(&mut conn, DOC).await?, []);
+
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    grant(&mut conn, "document", DOC, TEAM, "team").await?;
+    grant(&mut conn, "document", DOC, CHANNEL, "channel").await?;
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Project', $2)"#,
+        PROJECT,
+        OWNER,
+    )
+    .execute(&mut *conn)
+    .await?;
+    // A second grant from the same source, inherited through a project, shares the row.
+    sqlx::query!(
+        r#"INSERT INTO entity_access
+               (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+           VALUES ($1::text::uuid, 'document', $2, 'team', 'view', $3)"#,
+        DOC,
+        TEAM,
+        PROJECT,
+    )
+    .execute(&mut *conn)
+    .await?;
+    let at = Some("2026-01-01 00:00:00");
+    assert_eq!(
+        rows(&mut conn, DOC).await?,
+        [
+            row(TEAM, "document", at, 2),
+            row(CHANNEL, "document", at, 1),
+            row(OWNER, "document", at, 1),
+        ]
+    );
+    assert_exact(&pool).await?;
+
+    sqlx::query!(
+        r#"UPDATE "Document" SET "updatedAt" = '2026-02-01 00:00:00' WHERE id = $1"#,
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task')",
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    let at = Some("2026-02-01 00:00:00");
+    assert_eq!(
+        rows(&mut conn, DOC).await?,
+        [
+            row(TEAM, "task", at, 2),
+            row(CHANNEL, "task", at, 1),
+            row(OWNER, "task", at, 1),
+        ]
+    );
+
+    sqlx::query!(
+        r#"UPDATE "Document" SET "deletedAt" = '2026-02-02 00:00:00' WHERE id = $1"#,
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    assert!(
+        rows(&mut conn, DOC)
+            .await?
+            .iter()
+            .all(|row| row.sort_ts.is_none())
+    );
+    assert_exact(&pool).await?;
+
+    sqlx::query!(
+        r#"UPDATE "Document" SET "deletedAt" = NULL WHERE id = $1"#,
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!("DELETE FROM document_sub_type WHERE document_id = $1", DOC)
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query!(
+        "DELETE FROM entity_access WHERE entity_id = $1::text::uuid AND granted_from_project_id IS NOT NULL",
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    assert_eq!(
+        rows(&mut conn, DOC).await?,
+        [
+            row(TEAM, "document", at, 1),
+            row(CHANNEL, "document", at, 1),
+            row(OWNER, "document", at, 1),
+        ]
+    );
+
+    sqlx::query!(
+        r#"INSERT INTO "Chat" (id, "userId", name, "updatedAt") VALUES ($1, $2, 'Chat', '2026-03-01')"#,
+        CHAT,
+        OWNER,
+    )
+    .execute(&mut *conn)
+    .await?;
+    grant(&mut conn, "chat", CHAT, OWNER, "user").await?;
+    grant(&mut conn, "project", PROJECT, MEMBER, "user").await?;
+    assert_eq!(
+        rows(&mut conn, CHAT).await?,
+        [row(OWNER, "chat", Some("2026-03-01 00:00:00"), 1)]
+    );
+    assert_eq!(rows(&mut conn, PROJECT).await?.len(), 1);
+    assert_exact(&pool).await
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn migration_installs_no_maintenance_triggers(pool: PgPool) -> Result<(), sqlx::Error> {
-    let triggers =
-        sqlx::query_scalar!("SELECT count(*) FROM pg_trigger WHERE tgname LIKE 'source_items%'",)
-            .fetch_one(&pool)
-            .await?;
-    assert_eq!(triggers, Some(0));
-    seed(&pool).await?;
-    assert_eq!(count(&pool).await?, 0);
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn refresh_tracks_subtype_lifecycle_and_rolls_back_atomically(
-    pool: PgPool,
-) -> Result<(), sqlx::Error> {
-    seed(&pool).await?;
+async fn grants_written_before_their_item_count_once(pool: PgPool) -> Result<(), sqlx::Error> {
+    // Replica mode skips foreign keys, so fixtures load grants and subtypes before items.
     let mut tx = pool.begin().await?;
-    sync_one(&mut tx, EntityType::Document, DOC).await?;
-    tx.commit().await?;
-    assert_eq!(count(&pool).await?, 1);
-
-    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL session_replication_role = replica")
+        .execute(&mut *tx)
+        .await?;
+    grant(&mut tx, "document", DOC, OWNER, "user").await?;
     sqlx::query!(
         "INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task')",
         DOC
     )
     .execute(&mut *tx)
     .await?;
-    sqlx::query!(
-        r#"UPDATE "Document" SET "deletedAt" = NOW() WHERE id = $1"#,
-        DOC
-    )
-    .execute(&mut *tx)
-    .await?;
-    sync_one(&mut tx, EntityType::Document, DOC).await?;
-    let row = sqlx::query!(
-        "SELECT kind, sort_ts FROM source_items WHERE entity_id = $1",
-        DOC
-    )
-    .fetch_one(&mut *tx)
-    .await?;
-    assert_eq!(row.kind, "task");
-    assert!(row.sort_ts.is_none());
-    tx.rollback().await?;
-    let row = sqlx::query!(
-        "SELECT kind, sort_ts FROM source_items WHERE entity_id = $1",
-        DOC
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(row.kind, "document");
-    assert!(row.sort_ts.is_some());
+    insert_document(&mut tx, DOC, "2026-01-01 00:00:00").await?;
+    tx.commit().await?;
+    let mut conn = pool.acquire().await?;
+    assert_eq!(
+        rows(&mut conn, DOC).await?,
+        [row(OWNER, "task", Some("2026-01-01 00:00:00"), 1)]
+    );
 
-    let mut tx = pool.begin().await?;
+    // One statement that inserts an item and its grant fires both triggers after the statement.
+    sqlx::query!(
+        r#"WITH d AS (
+               INSERT INTO "Document" (id, name, owner, "updatedAt")
+               VALUES ($1, 'Document', $2, '2026-01-02')
+               RETURNING id
+           )
+           INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           SELECT id::uuid, 'document', $2, 'user', 'owner' FROM d"#,
+        DOC_2,
+        OWNER,
+    )
+    .execute(&mut *conn)
+    .await?;
+    assert_eq!(
+        rows(&mut conn, DOC_2).await?,
+        [row(OWNER, "document", Some("2026-01-02 00:00:00"), 1)]
+    );
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn grant_updates_move_rows(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    insert_document(&mut conn, DOC_2, "2026-01-02 00:00:00").await?;
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+
+    sqlx::query!("UPDATE entity_access SET access_level = 'edit'")
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query!("UPDATE entity_access SET source_id = $1", MEMBER)
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(
+        rows(&mut conn, DOC).await?,
+        [row(MEMBER, "document", Some("2026-01-01 00:00:00"), 1)]
+    );
+    sqlx::query!("UPDATE entity_access SET entity_id = $1::text::uuid", DOC_2)
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(rows(&mut conn, DOC).await?, []);
+    assert_eq!(
+        rows(&mut conn, DOC_2).await?,
+        [row(MEMBER, "document", Some("2026-01-02 00:00:00"), 1)]
+    );
+    sqlx::query!("UPDATE entity_access SET entity_type = 'chat'")
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(rows(&mut conn, DOC_2).await?, []);
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deletes_and_cascades_remove_rows(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Parent', $3), ($2, 'Child', $3)"#,
+        PROJECT,
+        CHILD_PROJECT,
+        OWNER,
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!(
+        r#"UPDATE "Project" SET "parentId" = $1 WHERE id = $2"#,
+        PROJECT,
+        CHILD_PROJECT
+    )
+    .execute(&mut *conn)
+    .await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    sqlx::query!(
+        r#"UPDATE "Document" SET "projectId" = $1 WHERE id = $2"#,
+        CHILD_PROJECT,
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    grant(&mut conn, "project", CHILD_PROJECT, OWNER, "user").await?;
+    grant(&mut conn, "project", CHILD_PROJECT, MEMBER, "user").await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_access
+               (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+           VALUES ($1::text::uuid, 'document', $2, 'user', 'view', $3)"#,
+        DOC,
+        MEMBER,
+        CHILD_PROJECT,
+    )
+    .execute(&mut *conn)
+    .await?;
+    assert_eq!(rows(&mut conn, DOC).await?.len(), 2);
+
+    // Deleting the parent cascades to the child project, the child's inherited grants and the
+    // document's folder, with no application code running.
+    sqlx::query!(r#"DELETE FROM "Project" WHERE id = $1"#, PROJECT)
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(
+        rows(&mut conn, DOC).await?,
+        [row(OWNER, "document", Some("2026-01-01 00:00:00"), 1)]
+    );
+    assert_eq!(rows(&mut conn, CHILD_PROJECT).await?, []);
+    assert_exact(&pool).await?;
+
     sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, DOC)
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?;
-    sync_one(&mut tx, EntityType::Document, DOC).await?;
-    tx.commit().await?;
-    assert_eq!(count(&pool).await?, 0);
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn refuses_autocommit_and_stale_snapshot_isolation(pool: PgPool) -> Result<(), sqlx::Error> {
-    let mut connection = pool.acquire().await?;
-    assert!(matches!(
-        sync_one(&mut connection, EntityType::Document, DOC).await,
-        Err(sqlx::Error::InvalidArgument(_))
-    ));
-    let mut tx = pool.begin().await?;
-    sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-        .execute(&mut *tx)
-        .await?;
-    assert!(matches!(
-        sync_one(&mut tx, EntityType::Document, DOC).await,
-        Err(sqlx::Error::InvalidArgument(_))
-    ));
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn backfill_repairs_missing_and_orphaned_rows_and_can_restart(
-    pool: PgPool,
-) -> Result<(), sqlx::Error> {
-    seed(&pool).await?;
+    assert_eq!(rows(&mut conn, DOC).await?, []);
+    // The grants outlive the item until something deletes them.
     sqlx::query!(
-        "INSERT INTO source_items (source_id, entity_type, kind, entity_id, grants) VALUES ('stale', 'document', 'document', 'deleted-by-old-writer', 1)"
-    ).execute(&pool).await?;
-    backfill::run(&pool).await?;
-    assert_eq!(count(&pool).await?, 1);
-    backfill::run(&pool).await?;
-    assert_eq!(count(&pool).await?, 1);
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn concurrent_overlapping_grants_preserve_both_contributions(
-    pool: PgPool,
-) -> Result<(), sqlx::Error> {
-    seed(&pool).await?;
-    sqlx::query!(
-        r#"INSERT INTO "Project" (id, name, "userId") VALUES ('project', 'Project', 'owner')"#
+        "DELETE FROM entity_access WHERE entity_id = $1::text::uuid",
+        DOC
     )
-    .execute(&pool)
+    .execute(&mut *conn)
     .await?;
-    let barrier = Arc::new(tokio::sync::Barrier::new(2));
-    let grant = |inherited: bool| {
-        let pool = pool.clone();
-        let barrier = barrier.clone();
-        async move {
-            let mut tx = pool.begin().await?;
-            sqlx::query!(
-                r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
-                   VALUES ($1::text::uuid, 'document', 'viewer', 'user', 'view', $2)"#,
-                DOC,
-                inherited.then_some("project"),
-            ).execute(&mut *tx).await?;
-            barrier.wait().await;
-            sync_one(&mut tx, EntityType::Document, DOC).await?;
-            tx.commit().await
-        }
-    };
-    let (first, second) = tokio::time::timeout(Duration::from_secs(10), async {
-        tokio::join!(grant(false), grant(true))
-    })
-    .await
-    .unwrap();
-    first?;
-    second?;
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn id_changes_move_rows(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    sqlx::query!(
+        "INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task')",
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    grant(&mut conn, "document", DOC_2, MEMBER, "user").await?;
+
+    // entity_access does not follow the id, so the new id gets the new id's grants. The subtype
+    // follows through its ON UPDATE CASCADE.
+    sqlx::query!(r#"UPDATE "Document" SET id = $1 WHERE id = $2"#, DOC_2, DOC)
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(rows(&mut conn, DOC).await?, []);
     assert_eq!(
-        sqlx::query_scalar!("SELECT grants FROM source_items WHERE source_id = 'viewer'")
-            .fetch_one(&pool)
-            .await?,
-        2
+        rows(&mut conn, DOC_2).await?,
+        [row(MEMBER, "task", Some("2026-01-01 00:00:00"), 1)]
     );
-    Ok(())
+    assert_exact(&pool).await
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn project_cascade_refreshes_grants_on_surviving_items(
+async fn truncates_clear_rows(pool: PgPool) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+    sqlx::query!(
+        "INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, 'task')",
+        DOC
+    )
+    .execute(&mut *conn)
+    .await?;
+    grant(&mut conn, "document", DOC, OWNER, "user").await?;
+    sqlx::query!(
+        r#"INSERT INTO "Chat" (id, "userId", name) VALUES ($1, $2, 'Chat')"#,
+        CHAT,
+        OWNER
+    )
+    .execute(&mut *conn)
+    .await?;
+    grant(&mut conn, "chat", CHAT, OWNER, "user").await?;
+
+    sqlx::query!("TRUNCATE document_sub_type")
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(rows(&mut conn, DOC).await?[0].kind, "document");
+    assert_exact(&pool).await?;
+    sqlx::query!(r#"TRUNCATE "Chat" CASCADE"#)
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(rows(&mut conn, CHAT).await?, []);
+    assert_exact(&pool).await?;
+    sqlx::query!("TRUNCATE entity_access")
+        .execute(&mut *conn)
+        .await?;
+    assert_eq!(rows(&mut conn, DOC).await?, []);
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rollback_and_other_isolation_levels_change_nothing(
     pool: PgPool,
 ) -> Result<(), sqlx::Error> {
-    seed(&pool).await?;
-    sqlx::query!(
-        r#"INSERT INTO "Project" (id, name, "userId") VALUES ('parent', 'Parent', 'owner')"#
-    )
-    .execute(&pool)
-    .await?;
-    sqlx::query!(r#"INSERT INTO "Project" (id, name, "userId", "parentId") VALUES ('child', 'Child', 'owner', 'parent')"#).execute(&pool).await?;
-    sqlx::query!(
-        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
-           VALUES ($1::text::uuid, 'document', 'viewer', 'user', 'view', 'child')"#, DOC,
-    ).execute(&pool).await?;
-    backfill::run(&pool).await?;
+    let mut conn = pool.acquire().await?;
+    insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
+
     let mut tx = pool.begin().await?;
-    let affected = project_deletion::capture(&mut tx, &["parent".to_owned()]).await?;
-    sqlx::query!(r#"DELETE FROM "Project" WHERE id = 'parent'"#)
-        .execute(&mut *tx)
-        .await?;
-    sync_rows(&mut tx, &affected).await?;
-    tx.commit().await?;
-    assert_eq!(count(&pool).await?, 1);
-    assert_eq!(
-        sqlx::query_scalar!("SELECT source_id FROM source_items")
-            .fetch_one(&pool)
-            .await?,
-        "owner"
-    );
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn concurrent_item_creation_and_grant_cannot_lose_the_projection(
-    pool: PgPool,
-) -> Result<(), sqlx::Error> {
-    let barrier = Arc::new(tokio::sync::Barrier::new(2));
-    let insert_item = async {
-        let mut tx = pool.begin().await?;
-        sqlx::query!(
-            r#"INSERT INTO "Document" (id, name, owner) VALUES ($1, 'Document', 'owner')"#,
-            DOC
-        )
-        .execute(&mut *tx)
-        .await?;
-        barrier.wait().await;
-        sync_one(&mut tx, EntityType::Document, DOC).await?;
-        tx.commit().await
-    };
-    let insert_grant = async {
-        let mut tx = pool.begin().await?;
-        sqlx::query!(
-            r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-               VALUES ($1::text::uuid, 'document', 'owner', 'user', 'owner')"#, DOC,
-        ).execute(&mut *tx).await?;
-        barrier.wait().await;
-        sync_one(&mut tx, EntityType::Document, DOC).await?;
-        tx.commit().await
-    };
-    let (item, grant) = tokio::time::timeout(Duration::from_secs(10), async {
-        tokio::join!(insert_item, insert_grant)
-    })
-    .await
-    .unwrap();
-    item?;
-    grant?;
-    assert_eq!(count(&pool).await?, 1);
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn backfill_crosses_batch_boundaries_without_skipping_keys(
-    pool: PgPool,
-) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        r#"INSERT INTO "Document" (id, name, owner)
-           SELECT '10000000-0000-4000-8000-' || lpad(n::text, 12, '0'), 'Document', 'owner'
-           FROM generate_series(1, 1200) n"#,
-    )
-    .execute(&pool)
-    .await?;
-    sqlx::query!(
-        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-           SELECT id::uuid, 'document', 'owner', 'user', 'owner' FROM "Document""#,
-    )
-    .execute(&pool)
-    .await?;
-    assert_eq!(backfill::run(&pool).await?, 1200);
-    assert_eq!(count(&pool).await?, 1200);
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn refresh_before_update_does_not_deadlock_with_update_before_refresh(
-    pool: PgPool,
-) -> Result<(), sqlx::Error> {
-    seed(&pool).await?;
-    let barrier = Arc::new(tokio::sync::Barrier::new(2));
-    // Saving a document updates its row, then refreshes it.
-    let update_then_refresh = async {
-        let mut tx = pool.begin().await?;
-        sqlx::query!(
-            r#"UPDATE "Document" SET "updatedAt" = NOW() WHERE id = $1"#,
-            DOC
-        )
-        .execute(&mut *tx)
-        .await?;
-        barrier.wait().await;
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        sync_one(&mut tx, EntityType::Document, DOC).await?;
-        tx.commit().await
-    };
-    // Editing a document's team share refreshes it, then updates its row.
-    let refresh_then_update = async {
-        let mut tx = pool.begin().await?;
-        barrier.wait().await;
-        sync_one(&mut tx, EntityType::Document, DOC).await?;
-        sqlx::query!(
-            r#"UPDATE "Document" SET name = 'Renamed' WHERE id = $1"#,
-            DOC
-        )
-        .execute(&mut *tx)
-        .await?;
-        tx.commit().await
-    };
-    let (first, second) = tokio::time::timeout(Duration::from_secs(10), async {
-        tokio::join!(update_then_refresh, refresh_then_update)
-    })
-    .await
-    .unwrap();
-    first?;
-    second?;
-    assert_eq!(count(&pool).await?, 1);
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn bulk_refresh_relies_on_row_locks_alone(pool: PgPool) -> Result<(), sqlx::Error> {
-    let items = ADVISORY_LOCK_LIMIT + 1;
-    sqlx::query!(
-        r#"INSERT INTO "Document" (id, name, owner)
-           SELECT '10000000-0000-4000-8000-' || lpad(n::text, 12, '0'), 'Document', 'owner'
-           FROM generate_series(1, $1) n"#,
-        items,
-    )
-    .execute(&pool)
-    .await?;
-    sqlx::query!(
-        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-           SELECT id::uuid, 'document', 'owner', 'user', 'owner' FROM "Document""#,
-    )
-    .execute(&pool)
-    .await?;
-    let ids = sqlx::query_scalar!(r#"SELECT id FROM "Document""#)
-        .fetch_all(&pool)
-        .await?;
-    let mut tx = pool.begin().await?;
-    sync_many(&mut tx, EntityType::Document, &ids).await?;
-    let advisory = sqlx::query_scalar!(
-        "SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'"
-    )
-    .fetch_one(&mut *tx)
-    .await?;
-    assert_eq!(advisory, Some(0));
-    tx.commit().await?;
-    assert_eq!(count(&pool).await?, i64::from(items));
-    Ok(())
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn advisory_locks_stay_within_the_transaction_limit(pool: PgPool) -> Result<(), sqlx::Error> {
-    let items = ADVISORY_LOCK_LIMIT + 10;
-    sqlx::query!(
-        r#"INSERT INTO "Document" (id, name, owner)
-           SELECT '10000000-0000-4000-8000-' || lpad(n::text, 12, '0'), 'Document', 'owner'
-           FROM generate_series(1, $1) n"#,
-        items,
-    )
-    .execute(&pool)
-    .await?;
-    let ids = sqlx::query_scalar!(r#"SELECT id FROM "Document" ORDER BY id"#)
-        .fetch_all(&pool)
-        .await?;
-    let advisory_locks = async |tx: &mut sqlx::PgConnection| {
-        sqlx::query_scalar!(
-            "SELECT count(*) FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'"
-        )
-        .fetch_one(tx)
-        .await
-    };
-    // A folder upload refreshes each new item on its own.
-    let mut tx = pool.begin().await?;
-    for id in &ids {
-        sync_one(&mut tx, EntityType::Document, id).await?;
-    }
-    assert_eq!(
-        advisory_locks(&mut *tx).await?,
-        Some(i64::from(ADVISORY_LOCK_LIMIT))
-    );
-    tx.commit().await?;
-    // The total starts again in the next transaction.
-    let mut tx = pool.begin().await?;
-    sync_one(&mut tx, EntityType::Document, &ids[0]).await?;
-    assert_eq!(advisory_locks(&mut *tx).await?, Some(1));
+    grant(&mut tx, "document", DOC, OWNER, "user").await?;
+    assert_eq!(rows(&mut tx, DOC).await?.len(), 1);
     tx.rollback().await?;
-    Ok(())
+    assert_eq!(rows(&mut conn, DOC).await?, []);
+
+    // A snapshot older than the previous lock holder's commit could miss its rows.
+    for isolation in ["REPEATABLE READ", "SERIALIZABLE"] {
+        let mut tx = pool.begin().await?;
+        sqlx::query(&format!("SET TRANSACTION ISOLATION LEVEL {isolation}"))
+            .execute(&mut *tx)
+            .await?;
+        let error = grant(&mut tx, "document", DOC, OWNER, "user")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.as_database_error().and_then(|e| e.code()).as_deref(),
+            Some("25000"),
+            "{isolation}: {error}"
+        );
+    }
+    assert_exact(&pool).await
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn backfill_repairs_drift_across_batches_and_reruns(pool: PgPool) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner)
+           SELECT '10000000-0000-4000-8000-' || lpad(n::text, 12, '0'), 'Document', $1
+           FROM generate_series(1, 1200) n"#,
+        OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           SELECT id::uuid, 'document', $1, 'user', 'owner' FROM "Document""#,
+        OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    assert_exact(&pool).await?;
+
+    // Rows written before the triggers existed, or by hand, are drift only the backfill repairs:
+    // a missing row, a wrong row, and a row for an item that no longer exists.
+    sqlx::query!(
+        r#"DELETE FROM source_items WHERE entity_id = '10000000-0000-4000-8000-000000000007'"#
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"UPDATE source_items SET grants = 3, kind = 'task'
+           WHERE entity_id = '10000000-0000-4000-8000-000000000600'"#
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO source_items (source_id, entity_type, kind, entity_id, sort_ts, grants)
+           VALUES ($1, 'document', 'document', 'ffffffff-0000-4000-8000-000000000000', NULL, 1)"#,
+        OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    let drift = audit::run(&pool).await?;
+    assert_eq!(drift.missing_or_wrong, 2);
+    assert_eq!(drift.extra_or_wrong, 2);
+
+    assert_eq!(backfill::run(&pool).await?, 1201);
+    assert_exact(&pool).await?;
+    assert_eq!(backfill::run(&pool).await?, 1200);
+    assert_exact(&pool).await
 }
