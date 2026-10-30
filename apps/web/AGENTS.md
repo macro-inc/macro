@@ -477,8 +477,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
   folder open in Drive, including a team folder, is always in the list. Keep
-  move rules in `folder-destinations.ts` so the picker and `FolderDropZone`
-  agree. Rows learn what a drag carries from `EntityDragSelectionContext`,
+  move rules in `folder-destinations.ts` so the picker and drop targets agree.
+  Create one `createFolderDropTargets` per surface, not per row, so a long
+  folder tree shares its folder list and mutation. Rows learn what a drag
+  carries from `EntityDragSelectionContext`,
   which `SoupEntityContextMenu` provides; see
   [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
