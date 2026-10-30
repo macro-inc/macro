@@ -1,3 +1,11 @@
+-- Give the layered mailbox cases their own reserved-domain owner.
+INSERT INTO macro_user (id, username, email, stripe_customer_id)
+VALUES ('0e000000-0000-0000-0000-000000000001', 'mail@example.com', 'mail@example.com', 'stripe_all_mail');
+INSERT INTO "User" (id, email, name, macro_user_id)
+VALUES ('macro|mail@example.com', 'mail@example.com', 'Mail Fixture', '0e000000-0000-0000-0000-000000000001');
+UPDATE email_links SET macro_id = 'macro|mail@example.com'
+WHERE id IN ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '0a000000-0000-0000-0000-000000000001');
+
 -- Layered on email_dynamic_query and email_outlook_threads. Deliberately retain
 -- stale thread timestamps for excluded messages to exercise pre-LIMIT filtering.
 INSERT INTO email_labels (id, link_id, provider_label_id, name, type)

@@ -77,13 +77,11 @@ async fn graphql_handler(
             acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
             acting_user.and_then(opaque_viewer_id),
         );
-        state
-            .graphql_soup_schema
-            .execute(
-                request
-                    .data(mail_profile)
-                    .data(GraphqlRequestParts::new(request_parts)),
-            )
+        state.graphql_soup_schema.execute(
+            request
+                .data(mail_profile)
+                .data(GraphqlRequestParts::new(request_parts)),
+        )
     })
     .await;
     graphql_response(result)
