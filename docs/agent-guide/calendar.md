@@ -342,7 +342,11 @@ is feature-gated and lists teammates with 24px avatars; its header has the same
 14px checkbox before the title, which shows or hides the grid overlay and is saved
 with the calendar visibility preferences. The teammate rows have no checkboxes and
 stay listed while the overlay is hidden. Clicking a teammate's row navigates to that
-date, opens read-only event details, and marks the row active. The left-aligned
+date, opens read-only event details, and marks the row active. With the overlay shown,
+the details wait for the event's chip and open on it, scrolled into view, the way a
+search result or notification opens; if the chip has not rendered after two seconds
+they open beside the row instead. With the overlay hidden they open beside the row.
+A card opened beside a row stays there when the event's chip mounts later. The left-aligned
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
 An account checkbox toggles its calendars together in one update. The checkbox
