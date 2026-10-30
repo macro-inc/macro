@@ -10,6 +10,7 @@ import {
 import { EcrImage } from '../../packages/service';
 import {
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  config,
   type DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
@@ -59,6 +60,25 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
 
     this.clusterName = clusterName;
     this.role = role;
+
+    const capacity = {
+      desiredCount: config.requireNumber('pubsub_workers_desired_count'),
+      minCapacity: config.requireNumber('pubsub_workers_min_capacity'),
+      maxCapacity: config.requireNumber('pubsub_workers_max_capacity'),
+    };
+    for (const [name, value] of Object.entries(capacity)) {
+      if (!Number.isInteger(value) || value < 1) {
+        throw new Error(`Pub/sub worker ${name} must be a positive integer`);
+      }
+    }
+    if (
+      capacity.desiredCount < capacity.minCapacity ||
+      capacity.desiredCount > capacity.maxCapacity
+    ) {
+      throw new Error(
+        'Pub/sub worker desired count must be between min and max capacity'
+      );
+    }
 
     // ecr image
     const image = new EcrImage(
@@ -139,7 +159,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
             }`,
           },
         },
-        desiredCount: stack === 'prod' ? 5 : 1,
+        desiredCount: capacity.desiredCount,
       },
       {
         parent: this,
@@ -148,7 +168,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
 
     this.service = service;
 
-    this.setupAutoScaling();
+    this.setupAutoScaling(capacity);
 
     this.setupServiceAlarms();
   }
@@ -184,14 +204,20 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
     return serviceSg;
   }
 
-  setupAutoScaling() {
+  setupAutoScaling({
+    minCapacity,
+    maxCapacity,
+  }: {
+    minCapacity: number;
+    maxCapacity: number;
+  }) {
     if (!this.service) return;
 
     const serviceScalableTarget = new aws.appautoscaling.Target(
       `${BASE_NAME}-scalable-target-${stack}`,
       {
-        maxCapacity: stack === 'prod' ? 10 : 2,
-        minCapacity: stack === 'prod' ? 5 : 1,
+        maxCapacity,
+        minCapacity,
         resourceId: pulumi.interpolate`service/${this.clusterName}/${this.service.service.name}`,
         scalableDimension: 'ecs:service:DesiredCount',
         serviceNamespace: 'ecs',
