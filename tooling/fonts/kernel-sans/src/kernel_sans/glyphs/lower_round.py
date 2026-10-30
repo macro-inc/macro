@@ -28,7 +28,6 @@ from ..geom import (
     right_of,
     ring,
     squircle,
-    stem_trap,
     stroke,
     superness,
 )
@@ -231,6 +230,12 @@ def _mirror(shape_xr):
     return shape.flip_x(xr / 2), xr
 
 
+def _counter_cx(p, xr):
+    """Centre of the counter of a mirrored bowl body (g, a.ss01): accents
+    sit over it, not over the part of the bowl left of the stem."""
+    return (xr + 0.03 * p.stem) / 2
+
+
 # ---------------------------------------------------------------------------
 # b d p q thorn
 
@@ -277,7 +282,7 @@ def a_ss01(p):
         shape,
         l=p.sbr,
         r=p.sb,
-        anchors={"top": (xr - p.stem) / 2, "bottom": xr - p.stem / 2},
+        anchors={"top": _counter_cx(p, xr), "bottom": xr - p.stem / 2},
     )
 
 
@@ -301,7 +306,7 @@ def g(p):
     tail = tail - chamfer(
         _ox(x0_t, y0_t, xr, y1_t, p.sq, y_term, "left"), y_term, p.cut, "nw"
     )
-    return G(shape + tail, l=p.sbr, r=p.sb, anchors={"top": (xr - s) / 2})
+    return G(shape + tail, l=p.sbr, r=p.sb, anchors={"top": _counter_cx(p, xr)})
 
 
 # ---------------------------------------------------------------------------
@@ -376,10 +381,12 @@ def _a_shape(p, xr, ae_e=None):
         clip = (lo + e_in) / 2
         bowl = (bw.out & right_of(-clip)) - (bw.cnt & right_of(-xs))
         stem = rect(xs, yb1 * 0.4, clip, yc_h)
-    # Bowl-join traps, as in n (geom.stem_trap). Exception to the 1.3 *
-    # p.trap rule: this counter is short and leaves the stem steeply, so a
-    # deeper notch reaches past its top and leaves a barb of black between
-    # the curve and the cut at ExtraBold.
+    # Bowl-join traps, fitted to the counter like b's (`_trap`), so no stub
+    # of stem edge or sliver of curve survives beside the cut. Exception to
+    # the 1.3 * p.trap rule: this counter is short and leaves the stem
+    # steeply, so a deeper notch reaches past its top and leaves a barb of
+    # black between the curve and the cut at ExtraBold. The + 2 keeps the
+    # Light notch large enough that none of its edges is under 2 units.
     d = p.trap * 0.65 + 2
     traps = bw.traps(d)
     shape = hook + bowl.flip_x(0) + stem - traps.flip_x(0)
@@ -466,12 +473,16 @@ def _s_shape(p, w):
     # them, so no sliver or zero-length segment is left at the joins.
     xt = w / 2
     xb = xt - s * 0.03
+    # Each ring is only half the x-height tall, so its corners take a bigger
+    # share of the stroke than o's do; a slightly squarer counter keeps the
+    # corner crossing near o's (about 1.07 x the mean of side and top).
+    n_in = p.sq_in * 1.06
     # Upper ring (a little narrower, 0.935 w); its bottom stroke is the spine.
     hu = w * 0.4675
     xu0, xu1 = xb - hu, xb + hu
     ub = (xu0, sp0, xu1, P.XH + P.OS)
     U = squircle(*ub, p.sq) - squircle(
-        xu0 + s, sp0 + wsp, xu1 - s * 0.94, P.XH + P.OS - wt, p.sq_in
+        xu0 + s, sp0 + wsp, xu1 - s * 0.94, P.XH + P.OS - wt, n_in
     )
     # The terminal face stays clear above the counter's right extreme (which
     # falls as the strokes thicken), so the curve's node there is cut away
@@ -481,7 +492,7 @@ def _s_shape(p, w):
     U = U - chamfer(_ox(*ub, p.sq, ct, "right"), ct, p.cut, "se")
     # Lower ring; its top stroke is the spine.
     lb = (0, -P.OS, w, sp1)
-    L = squircle(*lb, p.sq) - squircle(s * 0.94, -P.OS + wt, w - s, sp1 - wsp, p.sq_in)
+    L = squircle(*lb, p.sq) - squircle(s * 0.94, -P.OS + wt, w - s, sp1 - wsp, n_in)
     cb = P.XH * 0.27
     L = L - (left_of(xb) & above(cb))
     L = L - chamfer(_ox(*lb, p.sq, cb, "left"), cb, p.cut, "nw")
@@ -528,9 +539,11 @@ def oslash(p):
     x0, _, x1, _ = o.shape.bounds()
     w = x1 - x0
     over = 44
-    slash = diag(
-        x0 + w * 0.12, -P.OS - over, x1 - w * 0.12, P.XH + P.OS + over, p.hair * 0.85
-    )
+    # The slash gets relatively lighter above Regular (as in Oslash), so the
+    # two halves of the heavy counter stay open and o-with-slash keeps o's
+    # colour instead of turning into a blot.
+    wsl = p.hair * (0.85 - 0.2 * _heavy(p))
+    slash = diag(x0 + w * 0.12, -P.OS - over, x1 - w * 0.12, P.XH + P.OS + over, wsl)
     return G(o.shape + slash, l=p.sbr, r=p.sbr)
 
 
@@ -590,6 +603,9 @@ def germandbls(p):
     right half (they meet at the shared top and bottom points), so the waist
     and the bottom stroke are nearly flat where they end."""
     s = p.stem
+    # Exception to the k ~0.6 of rounds: two bowls stacked beside one stem
+    # need the width to keep the upper counter open at ExtraBold (Inter's
+    # sharp s widens as fast).
     W = p.w(508, 0.9)
     top = P.ASC + P.OS * 0.8
     hw = p.hair
