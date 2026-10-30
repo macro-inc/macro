@@ -34,6 +34,7 @@ use crate::domain::ports::{
 };
 use crate::domain::sharing::{SessionBotOwnership, originating_channel_access};
 use crate::domain::turn_state::moves_session_list;
+use crate::domain::updates::{CodingAgentUpdatesRepo, UpdateCandidate, UpdateTurnState};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
@@ -62,6 +63,64 @@ pub struct PgAgentSessionRepo<B> {
     pool: PgPool,
     registrar: OwnedEntityRegistrar<B>,
     list_policy: crate::domain::list_visibility::SessionListPolicy,
+}
+
+impl<B: BotFacts + 'static> CodingAgentUpdatesRepo for PgAgentSessionRepo<B> {
+    async fn candidates(
+        &self,
+        owner: MacroUserIdStr<'static>,
+    ) -> std::result::Result<Vec<UpdateCandidate>, crate::domain::coding_agents::CodingAgentError>
+    {
+        let rows = sqlx::query!(
+            r#"
+            SELECT s.id, s.name, s.harness, s.pull_request_url, s.turn_state,
+                   s.is_archived, GREATEST(s.modified_at, recent.created_at) AS "last_activity!"
+            FROM agent_session s
+            LEFT JOIN agent_configs config ON config.bot_id = s.bot_id
+            LEFT JOIN LATERAL (
+                SELECT created_at FROM agent_session_log
+                WHERE agent_session_id = s.id ORDER BY created_at DESC LIMIT 1
+            ) recent ON true
+            WHERE s.owner_id = $1 AND NOT s.is_archived
+              AND COALESCE(config.is_coding, s.harness NOT IN ('in-memory', 'macro-inmem'))
+              AND (s.turn_state = 'blocked' OR
+                   (s.turn_state = 'running' AND GREATEST(s.modified_at, recent.created_at) <= now() - interval '20 minutes'))
+            ORDER BY GREATEST(s.modified_at, recent.created_at) DESC, s.id DESC
+            LIMIT 26
+            "#,
+            owner.as_ref(),
+        ).fetch_all(&self.pool).await.map_err(|_| crate::domain::coding_agents::CodingAgentError::OperationFailed)?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                Some(UpdateCandidate {
+                    id: AgentSessionId::new_from_uuid(row.id),
+                    name: row.name,
+                    harness: row.harness,
+                    pull_request_url: row.pull_request_url,
+                    turn_state: match row.turn_state.as_deref()? {
+                        "blocked" => UpdateTurnState::Blocked,
+                        "running" => UpdateTurnState::Running,
+                        _ => return None,
+                    },
+                    is_archived: row.is_archived,
+                    last_activity: row.last_activity,
+                })
+            })
+            .collect())
+    }
+
+    async fn log(
+        &self,
+        id: AgentSessionId,
+    ) -> std::result::Result<
+        Vec<StoredAgentSessionLog>,
+        crate::domain::coding_agents::CodingAgentError,
+    > {
+        AgentSessionLogRepo::list_by_session(self, id)
+            .await
+            .map_err(|_| crate::domain::coding_agents::CodingAgentError::OperationFailed)
+    }
 }
 
 impl<B> std::fmt::Debug for PgAgentSessionRepo<B> {

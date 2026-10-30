@@ -1501,6 +1501,7 @@ async fn run() -> anyhow::Result<()> {
             (*harness).clone(),
             routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
         ),
+        session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(

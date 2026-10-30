@@ -100,13 +100,23 @@ fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
         AiHost::Mcp,
     ] {
         let tools = tools_for(host);
-        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+        for name in [
+            "ListCodingAgents",
+            "ListAgentUpdates",
+            "DispatchCodingAgent",
+        ] {
             assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
+        }
+        for name in ["ListCodingAgents", "DispatchCodingAgent"] {
             assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
         }
     }
     let subagent = subagent_toolset();
-    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
+    for name in [
+        "ListCodingAgents",
+        "ListAgentUpdates",
+        "DispatchCodingAgent",
+    ] {
         assert!(!subagent.tools.contains_key(name));
     }
 }

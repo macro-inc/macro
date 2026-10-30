@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id, s.name, s.harness, s.pull_request_url, s.turn_state,\n                   s.is_archived, GREATEST(s.modified_at, recent.created_at) AS \"last_activity!\"\n            FROM agent_session s\n            LEFT JOIN agent_configs config ON config.bot_id = s.bot_id\n            LEFT JOIN LATERAL (\n                SELECT created_at FROM agent_session_log\n                WHERE agent_session_id = s.id ORDER BY created_at DESC LIMIT 1\n            ) recent ON true\n            WHERE s.owner_id = $1 AND NOT s.is_archived\n              AND COALESCE(config.is_coding, s.harness NOT IN ('in-memory', 'macro-inmem'))\n              AND (s.turn_state = 'blocked' OR\n                   (s.turn_state = 'running' AND GREATEST(s.modified_at, recent.created_at) <= now() - interval '20 minutes'))\n            ORDER BY GREATEST(s.modified_at, recent.created_at) DESC, s.id DESC\n            LIMIT 26\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "harness",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "pull_request_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "turn_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_archived",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_activity!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "c416637508bd8cb0ca1b654c04e7778b05de47a979b9879f62d546232b9cec6e"
+}

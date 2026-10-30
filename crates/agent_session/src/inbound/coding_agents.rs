@@ -8,10 +8,11 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
 };
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
@@ -20,9 +21,11 @@ use crate::domain::coding_agents::{
     CodingAgent, CodingAgentError, CodingAgentService, DispatchCodingAgentRequest,
     DispatchedCodingAgent,
 };
+use crate::domain::updates::AgentUpdates;
 
 const DISPATCH_TIMEOUT: Duration = Duration::from_secs(120);
 const LIST_TIMEOUT: Duration = Duration::from_secs(10);
+const UPDATES_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_COMMAND_BYTES: usize = 1024 * 1024;
 
 /// Independent state for the internal coding agent capability.
@@ -64,6 +67,7 @@ pub fn coding_agents_router<Service: CodingAgentService, Auth: MacroAuthorizatio
         "/internal/coding-agents",
         Router::new()
             .route("/list", post(list::<Service, Auth>))
+            .route("/updates", get(updates::<Service, Auth>))
             .route("/dispatch", post(dispatch::<Service, Auth>))
             .route("/create-session", post(create::<Service, Auth>))
             .layer(DefaultBodyLimit::max(MAX_COMMAND_BYTES))
@@ -114,8 +118,11 @@ impl IntoResponse for ApiError {
 }
 
 async fn bound_request(request: Request, next: Next) -> Response {
-    let is_dispatch = !request.uri().path().ends_with("/list");
-    let timeout = if is_dispatch {
+    let path = request.uri().path();
+    let is_dispatch = !path.ends_with("/list") && !path.ends_with("/updates");
+    let timeout = if path.ends_with("/updates") {
+        UPDATES_TIMEOUT
+    } else if is_dispatch {
         DISPATCH_TIMEOUT
     } else {
         LIST_TIMEOUT
@@ -150,6 +157,19 @@ async fn list<Service: CodingAgentService, Auth: MacroAuthorizationService>(
     Ok(Json(ListResponse {
         agents: state.service.list(command?.0.user_id).await?,
     }))
+}
+
+async fn updates<Service: CodingAgentService, Auth: MacroAuthorizationService>(
+    State(state): State<CodingAgentsState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<AgentUpdates>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .list_updates(user.authorization.user.macro_user_id)
+            .await?,
+    ))
 }
 
 async fn dispatch<Service: CodingAgentService, Auth: MacroAuthorizationService>(
