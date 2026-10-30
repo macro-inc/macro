@@ -7,7 +7,7 @@ use super::session::StopReason;
 use crate::domain::events::AgentSessionLifecycleEvent;
 use agent_client_protocol::schema::v1::{McpServer, SessionId};
 use agent_fold::domain::model::TurnSignal;
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use bots::domain::models::BotId;
@@ -318,7 +318,7 @@ pub struct OpenManagedSession {
     pub owner: Owner,
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
-    pub prompt: Option<String>,
+    pub prompt: Option<FirstPrompt>,
     /// A selected persona's authoritative runtime profile. `None` uses the
     /// deployment's default managed coding persona.
     pub profile: Option<SelectedManagedPersona>,
@@ -332,6 +332,37 @@ pub struct OpenManagedSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+}
+
+/// The prompt a managed session opens with, delivered as soon as it can run.
+#[derive(Debug, Clone)]
+pub struct FirstPrompt {
+    /// The id the caller already shows the prompt under, so the logged row
+    /// confirms it in place. `None` mints one.
+    pub action_id: Option<AgentActionId>,
+    /// What to tell the agent.
+    pub prompt: String,
+    /// Files the prompt refers to, in the order the user attached them.
+    pub attachments: Vec<PromptAttachment>,
+}
+
+impl FirstPrompt {
+    /// A plain text prompt under a minted id.
+    pub fn text(prompt: impl Into<String>) -> Self {
+        Self {
+            action_id: None,
+            prompt: prompt.into(),
+            attachments: Vec::new(),
+        }
+    }
+
+    /// The action this prompt delivers, under its id.
+    pub fn into_action(self) -> (AgentActionId, AgentAction) {
+        (
+            self.action_id.unwrap_or_else(AgentActionId::mint),
+            AgentAction::prompt_with_attachments(self.prompt, self.attachments),
+        )
+    }
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which

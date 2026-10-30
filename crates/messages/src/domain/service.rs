@@ -87,41 +87,49 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 
     /// Read the same bounded message timeline for either parent.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
-        let (parent, query) = self.timeline_selection(&access, query).await?;
-        self.repo.timeline(&parent, query).await
+        async {
+            let (parent, query) = self.timeline_selection(&access, query).await?;
+            self.repo.timeline(&parent, query).await
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Read a parent's messages and its timeline activity as one ordered page.
     /// Parents without a timeline activity source return their messages only.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn timeline_entries(
         &self,
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessageTimelinePage, MessageError> {
-        let (parent, query) = self.timeline_selection(&access, query).await?;
-        let Some(source) = timeline_activity(&parent) else {
-            return self.repo.timeline(&parent, query).await.map(Into::into);
-        };
-        // These filters select a subset of roots, and activity has no matching
-        // filter, so the merged window would be wrong. Including deleted threads
-        // only adds tombstones on the same keyset, so it combines with activity.
-        if !query.ids.is_empty()
-            || query.anchored.is_some()
-            || query.activity_after.is_some()
-            || query.activity_before.is_some()
-        {
-            return Err(MessageError::Invalid(
-                "activity timelines cannot be combined with message filters",
-            ));
+        async {
+            let (parent, query) = self.timeline_selection(&access, query).await?;
+            let Some(source) = timeline_activity(&parent) else {
+                return self.repo.timeline(&parent, query).await.map(Into::into);
+            };
+            // These filters select a subset of roots, and activity has no matching
+            // filter, so the merged window would be wrong. Including deleted threads
+            // only adds tombstones on the same keyset, so it combines with activity.
+            if !query.ids.is_empty()
+                || query.anchored.is_some()
+                || query.activity_after.is_some()
+                || query.activity_before.is_some()
+            {
+                return Err(MessageError::Invalid(
+                    "activity timelines cannot be combined with message filters",
+                ));
+            }
+            self.activity_timeline(&parent, source, query).await
         }
-        self.activity_timeline(&parent, source, query).await
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Validate a selection and resolve the parent it reads.
@@ -157,34 +165,42 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 
     /// Read a message and its canonical root for navigation.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn get(
         &self,
         access: EntityAccessReceipt<MessageView>,
         id: Uuid,
     ) -> Result<Message, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
-        self.active_message(&parent, id, true).await
+        async {
+            let parent = parent_from_receipt(&access)?;
+            self.ensure_parent(&parent).await?;
+            self.active_message(&parent, id, true).await
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Open a specific discussion, including roots outside the current timeline page.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn get_thread(
         &self,
         access: EntityAccessReceipt<MessageView>,
         root_id: Uuid,
     ) -> Result<MessageThread, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
-        let state = self.active_thread(&parent, root_id).await?;
-        let root = self.active_message(&parent, root_id, true).await?;
-        let replies = self.repo.replies(&parent, root_id).await?;
-        Ok(MessageThread {
-            state,
-            root,
-            replies,
-        })
+        async {
+            let parent = parent_from_receipt(&access)?;
+            self.ensure_parent(&parent).await?;
+            let state = self.active_thread(&parent, root_id).await?;
+            let root = self.active_message(&parent, root_id, true).await?;
+            let replies = self.repo.replies(&parent, root_id).await?;
+            Ok(MessageThread {
+                state,
+                root,
+                replies,
+            })
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Load authorized history preceding a live prompt in this conversation.
@@ -911,6 +927,21 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
 /// channel messages the same way. Edit and comment access do not.
 fn can_moderate(permission: &EntityPermission) -> bool {
     permission.satisfies::<OwnerAccessLevel>() || permission.satisfies::<AdminParticipantRole>()
+}
+
+/// Logs a failed read in the current span.
+///
+/// Unlike `#[instrument(err)]`, whose level is fixed, this keeps refusals at
+/// INFO: clients and agents read messages, threads, and parents that were
+/// deleted under them. Repository failures stay at ERROR.
+fn log_read_error(error: &MessageError) {
+    match error {
+        MessageError::Repository(_) => tracing::error!(error = %error),
+        MessageError::NotFound
+        | MessageError::Forbidden
+        | MessageError::Invalid(_)
+        | MessageError::Conflict => tracing::info!(error = %error),
+    }
 }
 
 fn parent_from_receipt<P: RequiredPermission>(

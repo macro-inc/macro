@@ -6,7 +6,7 @@ import type {
   MessageListItem,
 } from '@service-storage/messages';
 import { createSignal, type ParentProps } from 'solid-js';
-import { createFocusRequest, type FocusRequest } from '../Thread/focus-request';
+import { createFocusRequest } from '../Thread/focus-request';
 import { getVisibleReplyCount } from '../Thread/utils/thread-reply-indicator-helpers';
 import { StandaloneThreadContext } from './context';
 
@@ -14,12 +14,6 @@ type RootProps = ParentProps<{
   channelId: string;
   messageId: string;
   data?: MessageListItem;
-  /** Show every reply instead of the latest few. */
-  expanded?: boolean;
-  /** Keep the reply input open, as a thread panel does. */
-  keepReplying?: boolean;
-  /** Shared with a host that asks for the reply input's focus. */
-  replyInputFocusRequest?: FocusRequest;
 }>;
 
 export function Root(props: RootProps) {
@@ -31,11 +25,9 @@ export function Root(props: RootProps) {
 }
 
 function RootInner(props: RootProps) {
-  const [isExpanded, setIsExpanded] = createSignal(props.expanded ?? false);
-  const [replying, setIsReplying] = createSignal(false);
-  const isReplying = () => !!props.keepReplying || replying();
-  const replyInputFocusRequest =
-    props.replyInputFocusRequest ?? createFocusRequest();
+  const [isExpanded, setIsExpanded] = createSignal(false);
+  const [isReplying, setIsReplying] = createSignal(false);
+  const replyInputFocusRequest = createFocusRequest();
 
   const parentQuery = useMessageTimelineByIdsQuery(
     () => ({ type: 'channel', id: (() => props.channelId)() }),

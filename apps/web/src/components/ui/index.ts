@@ -182,7 +182,6 @@ export type {
   TabOption,
   TabsProps,
   TabsSize,
-  TabsToggle,
   TabsTouchStyle,
 } from './components/Tabs';
 export { Tabs } from './components/Tabs';

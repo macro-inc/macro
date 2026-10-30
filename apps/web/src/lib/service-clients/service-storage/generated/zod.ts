@@ -32226,7 +32226,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .optional()
           .describe(
-            'Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in.'
+            'Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids`, `owners` or `notification_filters`\nalso opts in.'
           ),
         initiative_ids: zod
           .array(zod.string())
@@ -32238,11 +32238,28 @@ export const postItemsSoupBody = zod
           .string()
           .nullish()
           .describe('Case-insensitive name substring.'),
+        notification_filters: zod
+          .object({
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
+              .describe(
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           ),
       })
       .optional()
@@ -36703,6 +36720,12 @@ export const postItemsSoupAstBody = zod
       .describe(
         'the filters that should be applied to GitHub pull request records, on top of `fef`'
       ),
+    if: zod
+      .unknown()
+      .optional()
+      .describe(
+        'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
+      ),
     pf: zod
       .unknown()
       .optional()
@@ -41089,6 +41112,12 @@ export const postItemsSoupAstGroupedBody = zod
           .describe(
             'the filters that should be applied to GitHub pull request records, on top of `fef`'
           ),
+        if: zod
+          .unknown()
+          .optional()
+          .describe(
+            'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
+          ),
         pf: zod
           .unknown()
           .optional()
@@ -41300,6 +41329,12 @@ export const postItemsSoupAstGroupedBody = zod
           .optional()
           .describe(
             'the filters that should be applied to GitHub pull request records, on top of `fef`'
+          ),
+        if: zod
+          .unknown()
+          .optional()
+          .describe(
+            'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
           ),
         pf: zod
           .unknown()

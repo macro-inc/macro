@@ -688,6 +688,91 @@ export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffe
  */
 export type FreeTierModel = 'google/gemini-3.8-flash';
 
+/**
+ * Shape of the generated image.
+ */
+export type GenerateImageAspectRatio = 'square' | 'landscape' | 'portrait' | 'widescreen' | 'tall';
+
+/**
+ * Sanitized, machine-readable failure of an image request.
+ */
+export type GenerateImageErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without provider or storage diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * A reference image already stored in Macro.
+ */
+export type GenerateImageReference = {
+    /**
+     * The Macro document ID.
+     */
+    id: string;
+    type: 'document';
+} | {
+    /**
+     * The static file ID.
+     */
+    id: string;
+    type: 'staticFile';
+};
+
+/**
+ * What image to generate.
+ */
+export type GenerateImageRequest = {
+    aspectRatio?: null | GenerateImageAspectRatio;
+    /**
+     * Description of the image: subject, style, composition, colours, and any text to render.
+     */
+    prompt: string;
+    /**
+     * Up to three reference images, in the order the prompt refers to them.
+     */
+    referenceImages?: Array<GenerateImageReference>;
+};
+
+/**
+ * The stored generated image.
+ */
+export type GenerateImageResponse = {
+    /**
+     * Intrinsic pixel height.
+     */
+    height: number;
+    /**
+     * IANA media type of the image, e.g. `image/png`.
+     */
+    mimeType: string;
+    /**
+     * Commentary the model produced alongside the image, when any.
+     */
+    note?: string | null;
+    /**
+     * Size of the image in bytes.
+     */
+    sizeBytes: number;
+    /**
+     * Static file ID, reusable as a reference image or a message attachment.
+     */
+    staticFileId: string;
+    /**
+     * Permanent URL of the image.
+     */
+    url: string;
+    /**
+     * Intrinsic pixel width.
+     */
+    width: number;
+};
+
 export type GenericErrorResponse = {
     /**
      * Indicates if an error occurred
@@ -2805,6 +2890,59 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type GenerateImageData = {
+    body: GenerateImageRequest;
+    path?: never;
+    query?: never;
+    url: '/images/generate';
+};
+
+export type GenerateImageErrors = {
+    /**
+     * Invalid prompt or reference
+     */
+    400: GenerateImageErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: GenerateImageErrorBody;
+    /**
+     * A reference is not accessible, or no user to bill
+     */
+    403: GenerateImageErrorBody;
+    /**
+     * The model declined to render the prompt
+     */
+    422: GenerateImageErrorBody;
+    /**
+     * The image could not be read or stored
+     */
+    500: GenerateImageErrorBody;
+    /**
+     * The image model request failed
+     */
+    502: GenerateImageErrorBody;
+    /**
+     * Image generation or usage validation unavailable
+     */
+    503: GenerateImageErrorBody;
+};
+
+export type GenerateImageError = GenerateImageErrors[keyof GenerateImageErrors];
+
+export type GenerateImageResponses = {
+    /**
+     * The stored image
+     */
+    200: GenerateImageResponse;
+};
+
+export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
 
 export type NotionReportHandlerData = {
     body?: never;

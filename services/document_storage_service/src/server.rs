@@ -1285,6 +1285,7 @@ pub async fn run() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         message_realtime,
+        channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(

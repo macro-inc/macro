@@ -17,6 +17,8 @@ export function mountEmailComposer(
     EmailComposerOptions,
     | 'draft'
     | 'draftId'
+    | 'draftPersistence'
+    | 'localDraft'
     | 'initialInboxId'
     | 'initialSubject'
     | 'initialBodyText'

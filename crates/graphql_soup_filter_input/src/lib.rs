@@ -1449,6 +1449,8 @@ enum GraphqlInitiativeLiteral {
     DueBefore(String),
     /// Match projects due after this RFC 3339 timestamp.
     DueAfter(String),
+    /// Exact notification state for the requester; also opts in.
+    NotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
@@ -1465,6 +1467,7 @@ impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
             Self::NameContains(name) => InitiativeLiteral::NameContains(name),
             Self::DueBefore(date) => InitiativeLiteral::DueBefore(GraphqlDateLiteral::parse(date)?),
             Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
+            Self::NotificationState(state) => InitiativeLiteral::NotificationState(state.into()),
         };
         Ok(Expr::val(literal))
     }

@@ -910,6 +910,7 @@ export type CacheRequest = { id: number } & (
 export type CacheResponseErrorCode =
   | 'owner-epoch-lost'
   | 'owner-lock-unavailable'
+  | 'owner-handoff-blocked'
   | 'admitted-enqueue-uncertain';
 
 /** Old-owner work was rejected after fenced engine loss and was not replayed. */
@@ -923,6 +924,14 @@ export const OWNER_EPOCH_LOST_ERROR_CODE: CacheResponseErrorCode =
  */
 export const OWNER_LOCK_UNAVAILABLE_ERROR_CODE: CacheResponseErrorCode =
   'owner-lock-unavailable';
+
+/**
+ * A read-only request was refused because the database was moving between
+ * owners and the foreground wait ran out. Storage is untouched and the engine
+ * keeps running, so the request can be retried once an owner is ready.
+ */
+export const OWNER_HANDOFF_BLOCKED_ERROR_CODE: CacheResponseErrorCode =
+  'owner-handoff-blocked';
 
 /** An admitted enqueue lost its reply and may already be durably queued. */
 export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
@@ -982,6 +991,7 @@ export const isCacheResponseErrorCode = (
 ): value is CacheResponseErrorCode =>
   value === OWNER_EPOCH_LOST_ERROR_CODE ||
   value === OWNER_LOCK_UNAVAILABLE_ERROR_CODE ||
+  value === OWNER_HANDOFF_BLOCKED_ERROR_CODE ||
   value === ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE;
 
 /** Identifies a coordinator-fenced rejection from a lost owner epoch. */
@@ -999,6 +1009,14 @@ export const isOwnerLockUnavailableError = (
   value instanceof Error &&
   'errorCode' in value &&
   value.errorCode === OWNER_LOCK_UNAVAILABLE_ERROR_CODE;
+
+/** Identifies a read refused while the database moved between owners. */
+export const isOwnerHandoffBlockedError = (
+  value: unknown
+): value is Error & { errorCode: 'owner-handoff-blocked' } =>
+  value instanceof Error &&
+  'errorCode' in value &&
+  value.errorCode === OWNER_HANDOFF_BLOCKED_ERROR_CODE;
 
 /** Identifies an admitted enqueue whose durable outcome is unknown. */
 export const isAdmittedEnqueueUncertainError = (

@@ -264,22 +264,6 @@ and reload to verify that the system entry persists in chronological order.
 Also reload a short channel containing mostly system updates. Every entry should
 remain visible when the entire timeline fits without scrolling.
 
-## Thread side panel
-
-On desktop, a switch in its own pill right of a channel's tabs chooses the
-thread layout. Its label names the current mode: **Collapse** (on) collapses
-threads into a panel on the right, **Expand** (off) expands them inline. The
-tooltip names the action and its shortcut, `Cmd/Ctrl+Shift+E`, which also
-works from the composer. The choice persists across channels and sessions.
-In collapsed mode a root shows only an `N replies` summary; clicking it,
-`Reply`, or the reply and expand hotkeys opens the panel with every reply and
-a composer that stays open, and the root stays highlighted. Message images and
-videos shrink to small thumbnails that still open the viewer. A pane narrower
-than 44rem gives the panel its full width. A notification jump to a reply
-closes the panel and expands that thread inline so it can land on the reply.
-Touch devices never offer the switch and keep threads inline. Check opening,
-replying, switching threads, closing, the shortcut, and toggling back.
-
 ## Agent session entities
 
 The Agents list includes owned and shared sessions. Rows show the shared agent
@@ -463,13 +447,15 @@ event without attendees creates the event right away (unlike AI chat, where crea
 for the user to confirm a composer card). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
-email at all. When that reply links something the rest of the channel may not already open
-(a calendar event, document, or similar chip), it ends by asking "Do you want me to share this
-with the members of the channel?" A yes in the thread — "yes", "please", "go ahead" — is
-enough: the bot replies "Okay." and grants current members access. It does not share before
-that yes unless the request already asked it to. A decline is not shared. Private and
-confidential calendar events stay unshared, and a calendar event can only be shared by
-someone who holds it on their own calendar. The bot's prompt carries the current date and time in the mentioning user's
+email at all. A bot or agent reply posted for a person shares, as that person, the linked items
+(chips or attachments) that the replying bot created for them while answering: those with a
+`created` activity row by that bot on the person's behalf since the person's latest message in
+the thread before the reply. Activity arrives asynchronously, so missing rows are re-checked
+after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
+behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
+share an existing item. Private and confidential calendar events stay unshared, and a
+calendar event can only be shared by someone who holds it on their own calendar.
+The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
 bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
@@ -722,9 +708,21 @@ Its count includes only distinct offscreen unread threads, not notifications.
 Three replies and a mention in one thread count as one; reactions do not count.
 Clicking the chip expands the target thread and reveals an unread message.
 Scrolling an inline indicator into view does not expand the thread or mark its
-hidden replies seen. Notifications are still marked seen when their message mounts,
-including virtualized overscan. Collapsed replies that are not rendered remain
-unread.
+hidden replies seen. Automatic read marking waits until the actual message intersects
+the visible scroll area, excluding floating header/composer insets. Offscreen
+overscan, collapsed replies, hidden panes, and background tabs remain unread.
+Expanded standalone threads and the thread side panel use the same visibility
+rule. New notifications on an already-mounted offscreen reply remain unread until
+that reply comes into view. Explicit notification clicks and mark-read actions
+retain their existing behavior.
+
+Visibility is conservative: moving a partly off-window pane without crossing
+either observer's visibility threshold can leave a now-visible reply unread
+until the next intersection update or an explicit mark-read action.
+
+The backend-free regression uses the real message read marker and channel
+virtualizer on desktop, phone, and tablet:
+`bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
 Check the last channel message with a long collapsed unread thread: at the bottom,
 the inline dot and accent border should be visible without a downward chip. With
 another unread thread above, an upward chip should remain and count only that offscreen thread.
@@ -869,7 +867,10 @@ that order. `Team channels` lists team channels; `Channels` lists every other
 non-DM channel (public and private). Each section collapses on its own and
 keeps its own sort; open sections split the column evenly, and the bottom-most
 open one takes any remaining height. Favorites appears when
-the user has channel favorites and only lists channels. Channel favorites open
+the user has channel favorites and only lists channels. Favorites show a custom
+channel picture when set; otherwise all non-DM channels use a hashtag, including
+team channels. Favorites, regular rows, and headers share the same channel/DM
+icon renderer, including participant avatars, self-DMs, and bot personas. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click refreshes the notification
 selection and opens at latest. Split opens mark top-level notifications seen,
@@ -877,19 +878,6 @@ including mentions and reactions, only after the split is opened or reused.
 Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
-
-The **Unread** switch, after a divider in the tabs' frame, lists only
-conversations with an unread dot in every tab: Favorites, Channels (labels
-without unread channels are hidden), DMs, Recent, and the Threads tab's
-Conversations. Search results are not filtered. The open conversation stays
-listed after it is read and drops out once another is opened. Unread state comes
-from the loaded pages, like the section counts. An emptied tab shows **No unread
-conversations** with a `Show all` action. Its track shows a crossed-out eye.
-When the rail is too narrow for every tab label, the switch drops its text into
-a tooltip, and if that is still not enough the tabs show icons (All, a speech
-bubble; Recent, a clock; Threads, a reply arrow) with their names as tooltips.
-The toggle persists with the rail's other view state across reloads. The mobile
-Recent feed has no toggle.
 
 With GraphQL caching enabled, a current-query cached Team channels, Channels, or DMs page
 (including an empty page) remains quiet on a response-free refresh failure.
@@ -918,7 +906,10 @@ with the same sort and `+` controls as the All tab's sections. Conversations
 lists only channels and DMs that hold threads the user takes part in; it pages
 through the user's threads and loads their channels, so scrolling the section
 reveals more. Selecting a row filters the main pane instead of opening the
-conversation. `All threads` clears the filter.
+conversation. `All threads` clears the filter. At desktop width the rail stays
+docked on Threads with no **Hide navigation** control. In narrow splits the tab
+neither opens nor closes the slide-over, so switching between `Threads`, `All`,
+and `Recent` inside it keeps it open.
 
 The main pane is a virtualized list of channel threads the user takes part in,
 newest reply first. It loads more as it nears the end and returns to the top

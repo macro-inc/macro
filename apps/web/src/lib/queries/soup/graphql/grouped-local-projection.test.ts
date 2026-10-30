@@ -58,6 +58,7 @@ describe('loaded grouped pages', () => {
           bins: [
             {
               key: 'todo',
+              label: null,
               totalCount: 300 - index * 10,
               nextCursor: `page-${index + 1}`,
               items: items.slice(index * 10, index * 10 + 10),
@@ -73,6 +74,7 @@ describe('loaded grouped pages', () => {
           bins: [
             {
               key: 'todo',
+              label: null,
               totalCount: 0,
               nextCursor: null,
               items: [groupedDocument('0', ['done'])],
@@ -104,6 +106,7 @@ describe('local grouped Soup projection', () => {
         [
           {
             key: 'server-group',
+            label: null,
             items: [before],
             totalCount: 30,
             nextCursor: 'more',
@@ -117,6 +120,7 @@ describe('local grouped Soup projection', () => {
     ).toEqual([
       {
         key: 'server-group',
+        label: null,
         items: [next],
         totalCount: 30,
         nextCursor: 'more',
@@ -131,6 +135,7 @@ describe('local grouped Soup projection', () => {
     const baseline = [
       {
         key: 'todo',
+        label: null,
         items: [a, b, unknown],
         totalCount: 30,
         nextCursor: 'more',
@@ -145,8 +150,20 @@ describe('local grouped Soup projection', () => {
       now
     );
     expect(result).toEqual([
-      { key: 'todo', items: [unknown], totalCount: 28, nextCursor: 'more' },
-      { key: 'done', items: [next], totalCount: 1, nextCursor: null },
+      {
+        key: 'todo',
+        items: [unknown],
+        label: null,
+        totalCount: 28,
+        nextCursor: 'more',
+      },
+      {
+        key: 'done',
+        items: [next],
+        label: null,
+        totalCount: 1,
+        nextCursor: null,
+      },
     ]);
     expect(result[1].items[0]).toBe(next);
     expect(baseline[0].items).toEqual([a, b, unknown]);
@@ -175,6 +192,7 @@ describe('local grouped Soup projection', () => {
         [
           {
             key: 'todo',
+            label: null,
             items: [selectedBefore, retained, missing, excluded],
             totalCount: 30,
             nextCursor: 'more',
@@ -188,6 +206,7 @@ describe('local grouped Soup projection', () => {
     ).toEqual([
       {
         key: 'todo',
+        label: null,
         items: [selected, current, missing],
         totalCount: 29,
         nextCursor: 'more',
@@ -203,11 +222,18 @@ describe('local grouped Soup projection', () => {
         [
           {
             key: 'todo',
+            label: null,
             items: [before],
             totalCount: 30,
             nextCursor: 'todo-more',
           },
-          { key: 'done', items: [], totalCount: 20, nextCursor: 'done-more' },
+          {
+            key: 'done',
+            items: [],
+            label: null,
+            totalCount: 20,
+            nextCursor: 'done-more',
+          },
         ],
         new Map(),
         snapshot([after]),
@@ -215,8 +241,20 @@ describe('local grouped Soup projection', () => {
         now
       )
     ).toEqual([
-      { key: 'todo', items: [], totalCount: 29, nextCursor: 'todo-more' },
-      { key: 'done', items: [after], totalCount: 20, nextCursor: 'done-more' },
+      {
+        key: 'todo',
+        items: [],
+        label: null,
+        totalCount: 29,
+        nextCursor: 'todo-more',
+      },
+      {
+        key: 'done',
+        items: [after],
+        label: null,
+        totalCount: 20,
+        nextCursor: 'done-more',
+      },
     ]);
   });
 
@@ -236,15 +274,35 @@ describe('local grouped Soup projection', () => {
     const row = { ...groupedDocument('a'), updatedAt: '2026-10-09T23:30:00Z' };
     expect(
       projectLocalGroupedSoup(
-        [{ key: 'today', items: [row], totalCount: 8, nextCursor: 'more' }],
+        [
+          {
+            key: 'today',
+            items: [row],
+            label: null,
+            totalCount: 8,
+            nextCursor: 'more',
+          },
+        ],
         new Map(),
         snapshot([row]),
         { ...input, groupBy: { field: 'DATE' } },
         now
       )
     ).toEqual([
-      { key: 'today', items: [], totalCount: 7, nextCursor: 'more' },
-      { key: 'yesterday', items: [row], totalCount: 1, nextCursor: null },
+      {
+        key: 'today',
+        items: [],
+        label: null,
+        totalCount: 7,
+        nextCursor: 'more',
+      },
+      {
+        key: 'yesterday',
+        items: [row],
+        label: null,
+        totalCount: 1,
+        nextCursor: null,
+      },
     ]);
   });
 
@@ -329,7 +387,15 @@ describe('local grouped Soup projection', () => {
 
     const unassigned = { ...task, properties: [] };
     const result = projectLocalGroupedSoup(
-      [{ key: 'initiative-1', items: [task], totalCount: 1, nextCursor: null }],
+      [
+        {
+          key: 'initiative-1',
+          items: [task],
+          label: 'Project One',
+          totalCount: 1,
+          nextCursor: null,
+        },
+      ],
       new Map(),
       snapshot([unassigned]),
       projectInput,
@@ -341,6 +407,12 @@ describe('local grouped Soup projection', () => {
     expect(result.find((bin) => bin.key === 'initiative-1')?.totalCount).toBe(
       0
     );
+    // The server's name stays with its group; a group created locally has
+    // none until the next grouped page labels it.
+    expect(result.find((bin) => bin.key === 'initiative-1')?.label).toBe(
+      'Project One'
+    );
+    expect(result.find((bin) => bin.key === '')?.label).toBeNull();
   });
 
   it('distinguishes known empty property values from unknown grouping evidence', () => {
