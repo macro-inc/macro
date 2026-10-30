@@ -5,13 +5,13 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 import type { TeamOutOfOfficeItem } from '@service-storage/generated/schemas/teamOutOfOfficeItem';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import userEvent from '@testing-library/user-event';
 import {
   QueryClient,
   QueryClientProvider,
   useQueries,
   useQueryClient,
 } from '@tanstack/solid-query';
+import userEvent from '@testing-library/user-event';
 import { addDays, format } from 'date-fns';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -99,7 +99,8 @@ function renderList() {
 
 const rows = () =>
   screen.queryAllByRole('button', { name: /^(Jackson Kustec|Teammate \d+)/ });
-const toggle = () => screen.queryByRole('button', { name: /more$|^Show less$/ });
+const toggle = () =>
+  screen.queryByRole('button', { name: /more$|^Show less$/ });
 
 afterEach(() => {
   cleanup();
