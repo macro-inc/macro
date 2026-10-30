@@ -133,6 +133,44 @@ async fn event_refusals_return_terminal_bookkeeping_without_replaying_or_releasi
 }
 
 #[tokio::test]
+async fn refused_admission_stops_decisions_before_the_classifier_or_any_action() {
+    for error in admission_failures() {
+        let admission = admission(Err(error));
+        let executor =
+            executor(Repo::default(), Runner::default()).with_admission(admission.clone());
+        let mut action = action();
+        // Only actions and a decision: no model agent, but the classifier is paid.
+        action.task = json!({ "steps": [{
+            "type": "if", "condition": "Is it urgent?",
+            "then": [{ "type": "tool", "tool": "Comment", "arguments": {
+                "entityType": "document", "entityId": "d", "content": "Urgent"
+            } }],
+        }] });
+        let returned = executor.execute_action(action).await.unwrap_err();
+        assert_eq!(returned.downcast_ref::<AiAdmissionError>(), Some(&error));
+        drain(&executor).await;
+        assert_eq!(admission.calls.lock().unwrap().len(), 1);
+        assert_eq!(executor.runner.preparations.load(Ordering::SeqCst), 0);
+        assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test]
+async fn actions_alone_need_no_admission() {
+    let admission = admission(Err(AiAdmissionError::Unavailable));
+    let executor = executor(Repo::default(), Runner::default()).with_admission(admission.clone());
+    executor.runner.finish.cancel();
+    let mut action = action();
+    action.task = json!({ "steps": [{
+        "type": "tool", "tool": "SendChannelMessage",
+        "arguments": { "channel_id": "c", "content": "Standup in 5" },
+    }] });
+    executor.execute_action(action).await.unwrap();
+    drain(&executor).await;
+    assert!(admission.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn admitted_model_execution_uses_the_persisted_owner_and_automation_feature() {
     let admission = admission(Ok(()));
     let executor = executor(Repo::default(), Runner::default()).with_admission(admission.clone());

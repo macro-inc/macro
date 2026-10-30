@@ -125,8 +125,9 @@ where
         self
     }
 
-    /// Admit Macro-funded model work, open a leading agent's transcript, and
-    /// announce the run. Programs without a leading agent start with none.
+    /// Admit Macro-funded model work (a model agent, or decisions, which the
+    /// classifier answers), open a leading agent's transcript, and announce
+    /// the run. Programs without a leading agent start with none.
     async fn prepare(
         &self,
         action: &ScheduledAction,
@@ -136,12 +137,15 @@ where
         let action_id = action.id.context("persisted action required")?;
         let program =
             RoutineProgram::from_task(&action.task).context("invalid routine task definition")?;
-        if program.agent_steps().into_iter().any(|step| {
+        // A program whose questions can't be read is admitted as if it asks some.
+        let decides = !matches!(program.questions(), Ok(questions) if questions.is_empty());
+        let runs_model = program.agent_steps().into_iter().any(|step| {
             matches!(
                 ResolvedTaskTarget::of(step),
                 Ok(ResolvedTaskTarget::Model { .. })
             )
-        }) {
+        });
+        if decides || runs_model {
             self.admission.admit(&owner, AiFeature::Automation).await?;
         }
         handle.preparation_started = true;
