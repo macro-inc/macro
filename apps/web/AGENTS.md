@@ -828,5 +828,6 @@ Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
 
-Keep Favorites channel icons consistent with channel rows: custom pictures first,
-then a hashtag for every non-DM subtype; preserve DM participant avatars.
+Use `features/channel/channel-icon.tsx` for conversation identity in rows,
+favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
+and bot personas share one renderer; keep surface sizing in the caller.
