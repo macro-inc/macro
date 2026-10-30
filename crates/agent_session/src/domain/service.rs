@@ -1440,6 +1440,10 @@ where
     fn session_stopped(&self, id: AgentSessionId, reason: SessionStopReason) {
         self.observer.session_stopped(id, reason);
     }
+
+    fn runtime_closed(&self, id: AgentSessionId) {
+        self.observer.runtime_closed(id);
+    }
 }
 
 fn spawn_agent_session_retitle<R, Folds, Rt, Namer>(

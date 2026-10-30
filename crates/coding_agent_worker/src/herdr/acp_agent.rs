@@ -78,6 +78,11 @@ const MISSING_AGENT_CHECKS: u32 = 5;
 const INTERRUPT_PRESSES: u32 = 3;
 /// Status checks, one per [`POLL`], after each Esc press.
 const INTERRUPT_CHECKS: u32 = 4;
+/// Transcript polls per check, while idle, that the session's native agent
+/// still exists in herdr.
+const CLOSED_CHECK_EVERY: u32 = 20;
+/// How long that check may take before it is skipped as inconclusive.
+const CLOSED_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
 /// Which coding-agent TUI each session runs.
 #[derive(
     Debug,
@@ -335,6 +340,9 @@ struct Live {
     path: Option<PathBuf>,
     cursor: Cursor,
     pending: VecDeque<LogEvent>,
+    /// `_session/closed` was sent for this agent. A relaunch starts a new
+    /// `Live`, so a later close of the new agent is reported again.
+    closed_reported: bool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
@@ -564,6 +572,7 @@ impl Adapter {
             path: record.transcript,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            closed_reported: false,
         };
         if live.path.is_none() {
             live.path = self.locate(&live, record.native_id.as_deref());
@@ -632,8 +641,37 @@ impl Adapter {
                 if ticks.is_multiple_of(STATUS_EVERY) {
                     adapter.sync_model(&session, live).await;
                 }
+                if ticks.is_multiple_of(CLOSED_CHECK_EVERY)
+                    && let Some(herdr) = &adapter.herdr
+                {
+                    adapter.report_if_closed(herdr, &session, live).await;
+                }
             }
         });
+    }
+
+    /// Tell the client, once per native agent, that the agent was closed in
+    /// herdr - its tab or pane ended by the person or the agent. Only herdr's
+    /// explicit `agent_not_found` counts: a socket error, timeout, or
+    /// unreadable answer may be transient and is never reported. The next
+    /// prompt still relaunches the session.
+    async fn report_if_closed(&self, herdr: &HerdrCli, session: &Session, live: &mut Live) {
+        if live.closed_reported {
+            return;
+        }
+        let Ok(Err(error)) =
+            tokio::time::timeout(CLOSED_CHECK_TIMEOUT, herdr.agent_info(&live.name)).await
+        else {
+            return;
+        };
+        if !error.missing_agent() {
+            return;
+        }
+        live.closed_reported = true;
+        tracing::info!(session = %session.id, "native agent was closed in herdr");
+        self.send(
+            json!({"jsonrpc":"2.0", "method":"_session/closed", "params":{"sessionId":session.id}}),
+        );
     }
 
     fn turn_complete(&self, session: &str, stop: &str) {
@@ -931,6 +969,7 @@ impl Adapter {
             path: None,
             cursor: Cursor::default(),
             pending: VecDeque::new(),
+            closed_reported: false,
         })
     }
 

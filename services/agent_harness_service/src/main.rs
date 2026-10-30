@@ -740,6 +740,10 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         session_metadata_realtime.clone(),
     );
+    let runtime_close_archive = agent_session::domain::auto_archive::AutoArchiveService::new(
+        session_repo.clone(),
+        session_metadata_realtime.clone(),
+    );
     let session_tasks: Arc<dyn agent_session::domain::session_task::SessionTasks> = Arc::new(
         agent_session::domain::session_task::SessionTaskService::new(
             session_repo.clone(),
@@ -1344,8 +1348,19 @@ async fn run() -> anyhow::Result<()> {
     );
 
     // Close the loop: turn ends observed by the session actors drain the
-    // harness's prompt queue, and capture what the turn changed.
-    turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
+    // harness's prompt queue and capture what the turn changed, and a
+    // runtime closed on purpose archives its session when its owner opted in.
+    let auto_archive_tasks = tokio_util::task::TaskTracker::new();
+    turn_observer.bind((
+        harness.clone(),
+        (
+            CaptureOnTurnEnd::new(changes.clone()),
+            agent_harness::domain::runtime_closed::ArchiveOnRuntimeClosed::new(
+                runtime_close_archive,
+                auto_archive_tasks.clone(),
+            ),
+        ),
+    ));
     held_tool_calls.bind(harness.clone());
     let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
@@ -2073,6 +2088,8 @@ async fn run() -> anyhow::Result<()> {
     notification_cancel.cancel();
     notification_tasks.close();
     notification_tasks.wait().await;
+    auto_archive_tasks.close();
+    auto_archive_tasks.wait().await;
     http.abort();
     trigger.abort();
     egress_http.abort();
