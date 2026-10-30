@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { useQueryClient } from '@queries/client';
@@ -258,6 +259,7 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     const field = args.groupByField();
     if (!field || !initialGroupedPage) return;
 
+    const stale = new Set<string>();
     batch(() => {
       for (const group of initialGroupedPage.groups) {
         const initialPage = makeInitialPage(initialGroupedPage, group);
@@ -270,15 +272,32 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
 
         queryClient.setQueryData<InfiniteData<GroupQueryPage, string | null>>(
           queryKey,
-          (existing) =>
-            keepLoadedPages
-              ? mergeGroupInitialPage(existing, initialPage)
-              : { pages: [initialPage], pageParams: [null] }
+          (existing) => {
+            if (!keepLoadedPages) {
+              return { pages: [initialPage], pageParams: [null] };
+            }
+            const merged = mergeGroupInitialPage(
+              existing,
+              initialPage,
+              (page) => page.group.nextCursor
+            );
+            if (merged.stale) stale.add(group.key);
+            return merged.data;
+          }
         );
       }
 
       setGroupDataVersion((version) => version + 1);
     });
+    // The kept pages chained from the old first page. A refetch re-walks them
+    // from the new boundary while the rows already loaded stay on screen.
+    const rewalk = async (query: { refetch: () => Promise<unknown> }) => {
+      await query.refetch();
+      setGroupDataVersion((version) => version + 1);
+    };
+    for (const query of queries.list()) {
+      if (stale.has(query.key)) fireAndForget(rewalk(query), 'grouped-soup');
+    }
   };
 
   // A refetched parent page carries each group's first page again; the pages

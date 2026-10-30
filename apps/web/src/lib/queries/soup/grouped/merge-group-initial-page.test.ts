@@ -5,6 +5,7 @@ const page = (ids: string[], nextCursor: string | null) => ({
   itemIds: ids,
   nextCursor,
 });
+const cursorOf = (p: ReturnType<typeof page>) => p.nextCursor;
 
 it('keeps the continuation pages a group already loaded when the parent refetches', () => {
   const merged = mergeGroupInitialPage(
@@ -16,26 +17,48 @@ it('keeps the continuation pages a group already loaded when the parent refetche
       ],
       pageParams: [null, 'c1', 'c2'],
     },
-    page(['z', 'a'], 'c1')
+    page(['a', 'b'], 'c1'),
+    cursorOf
   );
 
-  expect(merged.pages.map((p) => p.itemIds)).toEqual([
-    ['z', 'a'],
+  expect(merged.data.pages.map((p) => p.itemIds)).toEqual([
+    ['a', 'b'],
     ['c', 'd'],
     ['e'],
   ]);
-  expect(merged.pageParams).toEqual([null, 'c1', 'c2']);
+  expect(merged.data.pageParams).toEqual([null, 'c1', 'c2']);
+  expect(merged.stale).toBe(false);
+});
+
+it('flags the kept pages stale when the first page now ends elsewhere', () => {
+  const merged = mergeGroupInitialPage(
+    {
+      pages: [page(['a', 'b'], 'c1'), page(['c', 'd'], null)],
+      pageParams: [null, 'c1'],
+    },
+    page(['z', 'a'], 'cz'),
+    cursorOf
+  );
+
+  expect(merged.data.pages.map((p) => p.itemIds)).toEqual([
+    ['z', 'a'],
+    ['c', 'd'],
+  ]);
+  expect(merged.stale).toBe(true);
 });
 
 it('starts from the new first page when nothing beyond it was loaded', () => {
-  expect(mergeGroupInitialPage(undefined, page(['a'], 'c1'))).toEqual({
-    pages: [page(['a'], 'c1')],
-    pageParams: [null],
-  });
+  expect(mergeGroupInitialPage(undefined, page(['a'], 'c1'), cursorOf)).toEqual(
+    { data: { pages: [page(['a'], 'c1')], pageParams: [null] }, stale: false }
+  );
   expect(
     mergeGroupInitialPage(
       { pages: [page(['old'], 'c0')], pageParams: [null] },
-      page(['a'], 'c1')
+      page(['a'], 'c1'),
+      cursorOf
     )
-  ).toEqual({ pages: [page(['a'], 'c1')], pageParams: [null] });
+  ).toEqual({
+    data: { pages: [page(['a'], 'c1')], pageParams: [null] },
+    stale: false,
+  });
 });

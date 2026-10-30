@@ -43,10 +43,19 @@ export function TaskGroupHeader(props: {
       ? props.row.groupId
       : ''
   );
+  // The server labels a project group with its name when the viewer can read
+  // it; a group still labeled by its key resolves the name here.
+  const serverProjectName = () =>
+    props.groupBy === 'project' && props.row.label !== props.row.groupId
+      ? props.row.label
+      : undefined;
   const project = usePropertyEntityDisplay(
-    () => (props.groupBy === 'project' ? props.row.groupId : ''),
     () =>
-      props.groupBy === 'project' && props.row.groupId
+      props.groupBy === 'project' && !serverProjectName()
+        ? props.row.groupId
+        : '',
+    () =>
+      props.groupBy === 'project' && props.row.groupId && !serverProjectName()
         ? 'INITIATIVE'
         : undefined
   );
@@ -57,7 +66,9 @@ export function TaskGroupHeader(props: {
       return getPropertyOptionLabel(props.row.groupId) ?? props.row.label;
     }
 
-    if (props.groupBy === 'project') return project.name();
+    if (props.groupBy === 'project') {
+      return serverProjectName() ?? project.name();
+    }
 
     if (props.groupBy === 'assignee') {
       if (isBotPrincipalId(props.row.groupId)) return agent.name();

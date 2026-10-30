@@ -326,6 +326,14 @@ impl SoupService for CountingSoupService {
         .into_iter())
     }
 
+    async fn project_group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _keys: &'a [String],
+    ) -> Result<std::collections::HashMap<String, String>, soup::domain::models::SoupErr> {
+        Ok(std::collections::HashMap::new())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,

@@ -136,15 +136,18 @@ export function taskBoardColumns(
     addColumn(option.value, option.label);
   }
 
-  addColumn(
-    '',
-    {
-      status: 'No status',
-      priority: 'No priority',
-      assignee: 'Unassigned',
-      project: 'No project',
-    }[grouping]
-  );
+  const addUnassigned = () =>
+    addColumn(
+      '',
+      {
+        status: 'No status',
+        priority: 'No priority',
+        assignee: 'Unassigned',
+        project: 'No Project',
+      }[grouping]
+    );
+  // Project columns follow the list: projects by name, No Project last.
+  if (grouping !== 'project') addUnassigned();
 
   for (const row of rows) {
     if (row.kind !== 'group-header') {
@@ -155,6 +158,8 @@ export function taskBoardColumns(
 
     column.count = row.count;
   }
+
+  if (grouping === 'project') addUnassigned();
 
   const seen = new Map<string, Set<string>>();
 

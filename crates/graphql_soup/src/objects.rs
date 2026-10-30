@@ -219,11 +219,15 @@ pub struct GroupedSoup<E: SoupEntityEdges> {
 
 impl<E: SoupEntityEdges> GroupedSoup<E> {
     /// Construct grouped GraphQL Soup bins from the domain grouping model.
-    pub fn new(groups: NestedSoupGroups<SoupPropertiesField>) -> Self {
+    pub fn new(
+        groups: NestedSoupGroups<SoupPropertiesField>,
+        labels: &std::collections::HashMap<String, String>,
+    ) -> Self {
         Self {
             bins: groups
                 .into_bins()
                 .map(|(key, bin)| GraphqlSoupBin {
+                    label: labels.get(&key).cloned(),
                     key,
                     total_count: bin.group_total_size(),
                     next_cursor: bin.next_cursor().map(ToOwned::to_owned),
@@ -242,6 +246,10 @@ impl<E: SoupEntityEdges> GroupedSoup<E> {
 pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     /// The grouping key.
     key: String,
+    /// The group's display name when the server resolved one, such as the
+    /// name of a project the viewer can read; otherwise the client labels
+    /// the key.
+    label: Option<String>,
     /// Total number of items in this group across all pages.
     total_count: usize,
     /// Opaque cursor for the next page in this bin, if one exists.

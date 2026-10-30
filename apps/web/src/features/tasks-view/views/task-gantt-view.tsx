@@ -321,7 +321,8 @@ export function TaskGanttView(props: {
                                   <Show
                                     when={
                                       (props.groupBy === 'assignee' ||
-                                        props.groupBy === 'project') &&
+                                        (props.groupBy === 'project' &&
+                                          group().label === group().groupId)) &&
                                       group().groupId
                                     }
                                     fallback={

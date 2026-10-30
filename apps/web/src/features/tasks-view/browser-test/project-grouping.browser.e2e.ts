@@ -68,9 +68,10 @@ for (const mobile of [false, true]) {
       await expect(second.getByRole('button')).toContainText('Project Two');
       const after = await counters();
       expect(after.flips).toBe(before.flips);
-      // This client has no document cache, so a remount may refresh each
-      // project once in the background; the normalized cache serves it.
-      expect(after.requests).toBeLessThanOrEqual(before.requests + 2);
+      // Project Two is named by the server and never asks. This client has no
+      // document cache, so Project One may refresh once in the background;
+      // the normalized cache serves that remount.
+      expect(after.requests).toBeLessThanOrEqual(before.requests + 1);
     });
   });
 }

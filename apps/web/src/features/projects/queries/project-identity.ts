@@ -124,6 +124,11 @@ function createAuthorizedProjectQuery<
       if (result) reads.set(readKey(), result);
     })
   );
+  // A denial the server returned forgets the name for every mount, not only
+  // the one that observed it.
+  createComputed(() => {
+    if (authorization.error()) reads.delete(readKey());
+  });
   const remembered = () => {
     const read = reads.get(readKey()) as AuthorizedRead<Result> | undefined;
     return read?.viewerId === userId() ? read : undefined;

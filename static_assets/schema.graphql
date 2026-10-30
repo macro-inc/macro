@@ -7293,6 +7293,12 @@ type GraphqlSoupBin {
 	"""
 	key: String!
 	"""
+	The group's display name when the server resolved one, such as the
+	name of a project the viewer can read; otherwise the client labels
+	the key.
+	"""
+	label: String
+	"""
 	Total number of items in this group across all pages.
 	"""
 	totalCount: Int!

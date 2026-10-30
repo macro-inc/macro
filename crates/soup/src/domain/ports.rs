@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::domain::models::{
@@ -321,6 +322,14 @@ pub trait SoupService: Send + Sync + 'static {
         >,
     > + Send;
 
+    /// Names of the initiatives behind project group keys that the user can
+    /// read; unreadable and malformed keys are left out.
+    fn project_group_labels<'a>(
+        &'a self,
+        user_id: MacroUserIdStr<'a>,
+        keys: &'a [String],
+    ) -> impl Future<Output = Result<HashMap<String, String>, SoupErr>> + Send;
+
     /// Fetch the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
     fn caller_tag_sets<'a>(
@@ -441,6 +450,14 @@ where
         (**self).get_user_soup_grouped(req).await
     }
 
+    async fn project_group_labels<'a>(
+        &'a self,
+        user_id: MacroUserIdStr<'a>,
+        keys: &'a [String],
+    ) -> Result<HashMap<String, String>, SoupErr> {
+        (**self).project_group_labels(user_id, keys).await
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -521,6 +538,14 @@ impl SoupService for NoOpSoupService {
         _req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(no_op_soup_err())
+    }
+
+    async fn project_group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _keys: &'a [String],
+    ) -> Result<HashMap<String, String>, SoupErr> {
+        Ok(HashMap::new())
     }
 
     async fn caller_tag_sets<'a>(

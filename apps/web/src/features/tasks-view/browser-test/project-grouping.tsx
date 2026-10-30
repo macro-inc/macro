@@ -153,7 +153,12 @@ function Fixture() {
                     kind: 'group-header',
                     id: `group-${key}`,
                     groupId: key,
-                    label: key || 'No Project',
+                    // Project Two arrives named by the server; Project One
+                    // still carries its key and resolves the name itself.
+                    label:
+                      PROJECTS.get(key) === 'Project Two'
+                        ? 'Project Two'
+                        : key || 'No Project',
                     count: items.length,
                   }}
                   groupBy="project"

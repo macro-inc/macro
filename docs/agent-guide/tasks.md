@@ -406,8 +406,10 @@ The shared board primitives remain independent of Tasks queries and mutations.
 
 Project grouping in the task list matches the Project column: tasks group by
 their initiative Project property, with unassigned tasks under **No Project**.
-Legacy folder membership does not affect these groups. Project headers resolve
-through the same authorized identity query as the Project column. Verify two
+Legacy folder membership does not affect these groups. Projects sort by name with
+**No Project** last. Headers show the name the server labels the group with; a
+group still labeled by its key resolves the name through the same authorized
+identity query as the Project column. Verify two
 projects and an unassigned task on desktop and mobile; changing or clearing a
 task’s Project must move it to the matching group without reloading.
 

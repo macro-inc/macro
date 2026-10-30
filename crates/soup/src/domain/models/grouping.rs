@@ -16,7 +16,11 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Resolve label and display order for a group key based on the grouping field.
-fn resolve_group_label_and_order(key: &str, group_by: &GroupByField) -> (String, Option<i32>) {
+fn resolve_group_label_and_order(
+    key: &str,
+    group_by: &GroupByField,
+    labels: &HashMap<String, String>,
+) -> (String, Option<i32>) {
     match group_by {
         GroupByField::Date => (
             date_bucket_label(key).to_string(),
@@ -28,6 +32,11 @@ fn resolve_group_label_and_order(key: &str, group_by: &GroupByField) -> (String,
         ),
         // Project keys are initiative IDs; keep the dedicated unassigned label.
         GroupByField::Project if key.is_empty() => ("No Project".to_string(), Some(i32::MAX)),
+        // The initiative name when the caller can read it; the raw key otherwise.
+        GroupByField::Project => (
+            labels.get(key).cloned().unwrap_or_else(|| key.to_string()),
+            None,
+        ),
         GroupByField::Property { .. } if key.is_empty() => ("Not Set".to_string(), Some(i32::MAX)),
         _ => (key.to_string(), None),
     }
@@ -64,13 +73,15 @@ pub struct GroupedResponse {
     pub page_cursor: Option<String>,
 }
 
-/// Build a grouped response from grouped soup items.
+/// Build a grouped response from grouped soup items. `labels` names groups
+/// whose key is an entity id (project groups) when the caller can read them.
 pub fn build_grouped_response(
     items: impl IntoIterator<Item = ItemGroupingInfo<SoupPropertiesField>>,
     group_by: &GroupByField,
     sort_method: SimpleSortMethod,
     requested_group_key: Option<String>,
     filters: EntityFilterAst,
+    labels: &HashMap<String, String>,
 ) -> GroupedResponse {
     struct GroupData {
         total_count: u32,
@@ -93,7 +104,7 @@ pub fn build_grouped_response(
         let cursor_val = get_cursor_val(&grouped_item.item);
 
         let entry = group_stats.entry(key.clone()).or_insert_with(|| {
-            let (label, display_order) = resolve_group_label_and_order(&key, group_by);
+            let (label, display_order) = resolve_group_label_and_order(&key, group_by, labels);
             GroupData {
                 total_count: grouped_item.total_group_count.min(u32::MAX as usize) as u32,
                 item_ids: Vec::new(),
@@ -227,6 +238,11 @@ impl<T> BinData<T> {
 pub struct NestedSoupGroups<T = (), Bin = String>(IndexMap<Bin, BinData<T>>);
 
 impl<Bin, T> NestedSoupGroups<T, Bin> {
+    /// The keys of every bin, in bin order.
+    pub fn keys(&self) -> impl Iterator<Item = &Bin> {
+        self.0.keys()
+    }
+
     /// Consume the nested groups and iterate over their bins.
     pub fn into_bins(self) -> impl Iterator<Item = (Bin, BinData<T>)> {
         self.0.into_iter()

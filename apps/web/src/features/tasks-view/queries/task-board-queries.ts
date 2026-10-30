@@ -100,7 +100,10 @@ export function createTaskBoardQueries(options: {
       return [];
     }
 
-    return rawColumns().flatMap((column) => (column.id ? [column.id] : []));
+    // A column the server already named needs no identity read.
+    return rawColumns().flatMap((column) =>
+      column.id && column.label === column.id ? [column.id] : []
+    );
   });
 
   const projects = mapArray(projectIds, (id) =>
@@ -123,7 +126,8 @@ export function createTaskBoardQueries(options: {
     }
 
     if (options.grouping() === 'project') {
-      return projectMap().get(column.id)?.name ?? 'Unavailable project';
+      if (column.label !== column.id) return column.label;
+      return projectMap().get(column.id)?.name ?? 'Project unavailable';
     }
 
     return column.label;
