@@ -80,9 +80,11 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - With `with_source_items_enabled`, flat listings read document, chat and
   project candidates from the trigger-maintained `source_items` table
   (`expanded/dynamic/feed.rs`) instead of the item tables, per arm, when the
-  arm's filter lets a source scan stop at the page (`served_by_scan`). Both paths
-  must return identical pages: the query test helper runs every case on both and
-  audits the table. Rollout: `SOURCE_ITEMS_ROLLOUT.md`.
+  arm's filter lets a source scan stop at the page (`served_by_scan`). The whole
+  query reads the item tables when sources × page size exceed `SOURCE_SCAN_ROWS`
+  or the session is not UTC (`ScanBound`). Both paths must return identical
+  pages: the query test helper runs every case on both and audits the table.
+  Rollout: `SOURCE_ITEMS_ROLLOUT.md`.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
 - Keep the notified feed's notification lookup behind a lateral `OFFSET 0`
