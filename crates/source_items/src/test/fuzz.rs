@@ -98,7 +98,11 @@ async fn write(conn: &mut PgConnection, rng: &mut StdRng) -> Result<&'static str
             "save item"
         }
         4 => {
-            let deleted = if rng.random_bool(0.5) { "NULL" } else { "now()" };
+            let deleted = if rng.random_bool(0.5) {
+                "NULL"
+            } else {
+                "now()"
+            };
             let sql = format!(
                 r#"UPDATE {} SET "deletedAt" = {deleted} WHERE id = $1"#,
                 table(entity_type)
@@ -146,11 +150,13 @@ async fn write(conn: &mut PgConnection, rng: &mut StdRng) -> Result<&'static str
             "bulk grant"
         }
         10 => {
-            sqlx::query("DELETE FROM entity_access WHERE entity_id = $1::text::uuid AND source_id = $2")
-                .bind(&id)
-                .bind(source)
-                .execute(conn)
-                .await?;
+            sqlx::query(
+                "DELETE FROM entity_access WHERE entity_id = $1::text::uuid AND source_id = $2",
+            )
+            .bind(&id)
+            .bind(source)
+            .execute(conn)
+            .await?;
             "revoke"
         }
         11 => {
@@ -178,7 +184,11 @@ async fn write(conn: &mut PgConnection, rng: &mut StdRng) -> Result<&'static str
         }
         13 => {
             let doc = document(rng.random_range(0..DOCUMENTS));
-            let sub_type = if rng.random_bool(0.7) { "task" } else { "skill" };
+            let sub_type = if rng.random_bool(0.7) {
+                "task"
+            } else {
+                "skill"
+            };
             sqlx::query(
                 "INSERT INTO document_sub_type (document_id, sub_type) VALUES ($1, $2::text::document_sub_type_value)
                  ON CONFLICT (document_id) DO UPDATE SET sub_type = EXCLUDED.sub_type",
@@ -293,8 +303,8 @@ async fn worker(pool: PgPool, seed: u64) -> Result<Tally, sqlx::Error> {
                 tally.rolled_back += 1;
             }
             Err(error) => {
-                let code =
-                    expected(&error).unwrap_or_else(|| panic!("write failed unexpectedly: {error}"));
+                let code = expected(&error)
+                    .unwrap_or_else(|| panic!("write failed unexpectedly: {error}"));
                 *tally.errors.entry(code).or_default() += 1;
                 tx.rollback().await?;
             }

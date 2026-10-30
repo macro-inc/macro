@@ -47,7 +47,10 @@ async fn rows(conn: &mut PgConnection, entity_id: &str) -> Result<Vec<Row>, sqlx
 
 async fn assert_exact(pool: &PgPool) -> Result<(), sqlx::Error> {
     let mismatches = audit::run(pool).await?;
-    assert!(mismatches.is_empty(), "source_items drifted: {mismatches:?}");
+    assert!(
+        mismatches.is_empty(),
+        "source_items drifted: {mismatches:?}"
+    );
     Ok(())
 }
 
@@ -703,7 +706,9 @@ async fn a_callers_search_path_changes_nothing(pool: PgPool) -> Result<(), sqlx:
     )
     .execute(&mut *conn)
     .await?;
-    sqlx::query!("RESET search_path").execute(&mut *conn).await?;
+    sqlx::query!("RESET search_path")
+        .execute(&mut *conn)
+        .await?;
     assert_eq!(rows(&mut conn, DOC).await?.len(), 1);
     assert_exact(&pool).await
 }
@@ -716,7 +721,12 @@ async fn discarding_temporary_tables_mid_transaction_fails_safely(
     insert_document(&mut conn, DOC, "2026-01-01 00:00:00").await?;
     let mut tx = pool.begin().await?;
     grant(&mut tx, "document", DOC, OWNER, "user").await?;
-    assert!(sqlx::query!("DISCARD TEMP").execute(&mut *tx).await.is_err());
+    assert!(
+        sqlx::query!("DISCARD TEMP")
+            .execute(&mut *tx)
+            .await
+            .is_err()
+    );
     tx.rollback().await?;
     // Between transactions the session's tables can go and come back.
     sqlx::query!("DISCARD TEMP").execute(&mut *conn).await?;

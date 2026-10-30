@@ -381,9 +381,12 @@ async fn deferred_checks_run_before_the_commit_takes_buckets(
         .await?;
     }
     let mut holder = pool.begin().await?;
-    sqlx::query!(r#"SELECT id FROM "Document" WHERE id = $1 FOR UPDATE"#, DOC_2)
-        .fetch_one(&mut *holder)
-        .await?;
+    sqlx::query!(
+        r#"SELECT id FROM "Document" WHERE id = $1 FOR UPDATE"#,
+        DOC_2
+    )
+    .fetch_one(&mut *holder)
+    .await?;
 
     let mut checked = pool.begin().await?;
     share(&mut checked).await?;
@@ -458,7 +461,9 @@ async fn commits_on_the_same_items_in_opposite_orders_both_finish(
         grant(&mut two, "document", DOC_2, MEMBER, "user").await?;
         grant(&mut two, "document", DOC, MEMBER, "user").await?;
         commit(Commit::Together, one, two).await?;
-        sqlx::query!("DELETE FROM entity_access").execute(&pool).await?;
+        sqlx::query!("DELETE FROM entity_access")
+            .execute(&pool)
+            .await?;
     }
     assert_exact(&pool).await
 }

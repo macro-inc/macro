@@ -31,7 +31,7 @@ use std::sync::Arc;
 use system_properties::{PriorityOption, StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-const USER: &str = "macro|user-1@test.com";
+const USER: &str = "macro|user-1@example.com";
 
 /// Small enough that page boundaries land inside the fixture's ties.
 const PAGE: u16 = 5;
@@ -533,7 +533,10 @@ async fn assert_pages_match_item_tables(pool: &PgPool) -> anyhow::Result<Vec<Uui
 /// Fails unless `source_items` holds exactly the rows `entity_access` and the item tables imply.
 async fn assert_source_items_match_grants(pool: &PgPool) -> anyhow::Result<()> {
     let mismatches = source_items::audit::run(pool).await?;
-    assert!(mismatches.is_empty(), "source_items drifted: {mismatches:?}");
+    assert!(
+        mismatches.is_empty(),
+        "source_items drifted: {mismatches:?}"
+    );
     Ok(())
 }
 

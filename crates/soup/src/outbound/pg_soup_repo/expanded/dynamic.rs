@@ -2147,7 +2147,10 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     // Fixtures write the item tables and grants directly; the triggers must have kept
     // the projection exact for every one of them.
     let mismatches = source_items::audit::run(db).await?;
-    assert!(mismatches.is_empty(), "source_items drifted: {mismatches:?}");
+    assert!(
+        mismatches.is_empty(),
+        "source_items drifted: {mismatches:?}"
+    );
     let source_items =
         expanded_dynamic_cursor_soup_hydrated(db, args, ItemSource::SourceItems).await?;
     let shown = |page: &[SoupProjectionHydration]| {
