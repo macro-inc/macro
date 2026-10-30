@@ -1,9 +1,12 @@
 import type { SoupGroupHeaderRow } from '@app/features/soup';
 import { UserIcon } from '@core/component/UserIcon';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { getPropertyOptionLabel } from '@entity';
+import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
+import { useListLayout } from '@entity/composed/list-entity/shared';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import ProjectIcon from '@icon/system/regular/stack.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
@@ -44,6 +47,7 @@ export function TaskGroupHeader(props: {
   onToggle: () => void;
   onFocus: () => void;
 }) {
+  const isWide = useListLayout()?.isWide ?? (() => true);
   const agent = usePropertyUserDisplay(() =>
     props.groupBy === 'assignee' && isBotPrincipalId(props.row.groupId)
       ? props.row.groupId
@@ -88,7 +92,11 @@ export function TaskGroupHeader(props: {
   );
 
   return (
-    <div id={props.row.id} role="row">
+    <div
+      id={props.row.id}
+      role="row"
+      class={isWide() ? SOUP_ROW_CLASS.wide : SOUP_ROW_CLASS.narrow}
+    >
       <div role="gridcell" aria-colspan={props.columnCount}>
         {/* Desktop shares the email card's composer chrome: soft shadow in
             light mode, glass rim in dark mode. */}
@@ -97,7 +105,8 @@ export function TaskGroupHeader(props: {
             as="div"
             data-highlighted={props.focused || undefined}
             class={cn(
-              'group/header relative mx-1 my-0.5 w-[calc(100%-0.5rem)] rounded-xl text-ink-muted hover:bg-active',
+              'group/header relative mr-1 my-0.5 w-[calc(100%-0.5rem)] rounded-xl text-ink-muted hover:bg-active',
+              !isMobile() && 'ml-(--soup-row-gutter)',
               isTouchDevice() &&
                 'rounded-lg border border-edge-muted bg-surface',
               statusTint(),
@@ -107,13 +116,13 @@ export function TaskGroupHeader(props: {
             <button
               type="button"
               tabIndex={-1}
-              class="flex w-full items-center gap-2.5 rounded-[inherit] px-3 py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11"
+              class="grid w-full grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)] items-center gap-x-(--soup-row-column-gap) rounded-[inherit] pl-(--soup-row-padding-l) pr-3 py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11"
               aria-expanded={props.expanded}
               onMouseMove={props.onFocus}
               onClick={props.onToggle}
             >
               <Layer depth={3}>
-                <span class="flex size-4.5 items-center justify-center rounded-xs group-hover/header:bg-ink/5">
+                <span class="flex size-full items-center justify-center rounded-xs group-hover/header:bg-ink/5">
                   <CaretRightIcon
                     class={cn(
                       'size-2.5 transition-transform',
@@ -122,43 +131,48 @@ export function TaskGroupHeader(props: {
                   />
                 </span>
               </Layer>
-              <Switch>
-                <Match when={!props.row.groupId}>
-                  <PropertyEmptyIcon
-                    propertyDefinitionId={
-                      EMPTY_GROUP_PROPERTY_IDS[props.groupBy]
-                    }
-                    class="size-3.5 text-ink-extra-muted"
-                  />
-                </Match>
-                <Match
-                  when={
-                    props.groupBy === 'status' || props.groupBy === 'priority'
-                  }
-                >
-                  <PropertyValueIcon
-                    optionId={props.row.groupId}
-                    class="size-4 shrink-0"
-                  />
-                </Match>
-                <Match when={props.groupBy === 'assignee'}>
-                  <UserIcon
-                    id={props.row.groupId}
-                    size="sm"
-                    suppressClick
-                    showTooltip={false}
-                  />
-                </Match>
-                <Match when={props.groupBy === 'project'}>
-                  <ProjectIcon class="size-3.5 shrink-0" />
-                </Match>
-              </Switch>
-              <span class="truncate">{label()}</span>
-              <Show when={props.row.count !== undefined}>
-                <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-px text-xs font-medium tabular-nums text-ink-extra-muted">
-                  {props.row.count}
+              <div class="flex min-w-0 items-center gap-2">
+                <span class="flex h-4.5 w-6 shrink-0 items-center justify-center touch:w-9">
+                  <Switch>
+                    <Match when={!props.row.groupId}>
+                      <PropertyEmptyIcon
+                        propertyDefinitionId={
+                          EMPTY_GROUP_PROPERTY_IDS[props.groupBy]
+                        }
+                        class="size-3.5 text-ink-extra-muted"
+                      />
+                    </Match>
+                    <Match
+                      when={
+                        props.groupBy === 'status' ||
+                        props.groupBy === 'priority'
+                      }
+                    >
+                      <PropertyValueIcon
+                        optionId={props.row.groupId}
+                        class="size-4 shrink-0"
+                      />
+                    </Match>
+                    <Match when={props.groupBy === 'assignee'}>
+                      <UserIcon
+                        id={props.row.groupId}
+                        size="sm"
+                        suppressClick
+                        showTooltip={false}
+                      />
+                    </Match>
+                    <Match when={props.groupBy === 'project'}>
+                      <ProjectIcon class="size-3.5 shrink-0" />
+                    </Match>
+                  </Switch>
                 </span>
-              </Show>
+                <span class="truncate">{label()}</span>
+                <Show when={props.row.count !== undefined}>
+                  <span class="shrink-0 rounded-full bg-ink/10 px-1.5 py-px text-xs font-medium tabular-nums text-ink-extra-muted">
+                    {props.row.count}
+                  </span>
+                </Show>
+              </div>
             </button>
           </ComposerSurface>
         </Layer>

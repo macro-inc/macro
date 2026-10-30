@@ -72,9 +72,11 @@ export function NarrowLayout(props: LayoutProps) {
             </div>
           }
         >
+          {(task) => <TaskPropertyControl entity={task()} property="status" />}
+        </Show>
+        <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
           {(task) => (
-            <div class="flex shrink-0 items-center">
-              <TaskPropertyControl entity={task()} property="status" />
+            <div class="-mr-2 flex shrink-0 items-center">
               <TaskPropertyControl entity={task()} property="priority" />
             </div>
           )}

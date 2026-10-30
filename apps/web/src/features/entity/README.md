@@ -12,7 +12,8 @@ pills to icons, with full names available in tooltips and the overflow menu.
 
 Task list status and priority editing use `extractors-property/task-property-control.tsx`
 in the leading icon slots before the title, with 16px glyphs on desktop and mobile
-and unchanged hit targets. The controls share the property editor
+and unchanged hit targets. Priority sits directly beside the title, separated
+from status by the row gap. The controls share the property editor
 and mutation path across wide task rows and narrow entity rows, including optimistic
 values and rollback. Narrow rows omit duplicate trailing Status and Priority properties;
 wide task rows omit the separate Status and Priority columns.
