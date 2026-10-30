@@ -32,6 +32,11 @@ export function MobileTaskComposer(props: {
       onCleanup(() => observer.disconnect());
     });
   };
+  // Tapping a pill leaves focus in the title or description, so the keyboard
+  // stays up under a menu and a picker sheet can hand it back.
+  const keepTypingFocus = (event: PointerEvent | MouseEvent) => {
+    if ((event.target as Element).closest('button')) event.preventDefault();
+  };
 
   return (
     <TaskComposer.Root
@@ -62,7 +67,11 @@ export function MobileTaskComposer(props: {
       {/* The sheet scrolls rather than shrinking the composer below its
           content, so nothing needs clipping, and the property row can scroll
           to the sheet's edges. */}
-      <EntityComposer.Main class="overflow-visible">
+      <EntityComposer.Main
+        class="overflow-visible"
+        onPointerDown={keepTypingFocus}
+        onMouseDown={keepTypingFocus}
+      >
         <TaskComposer.Title />
         <TaskComposer.Body />
         <div class="shrink-0 flex items-center py-2">
