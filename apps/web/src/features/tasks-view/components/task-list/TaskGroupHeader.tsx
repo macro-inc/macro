@@ -43,21 +43,14 @@ export function TaskGroupHeader(props: {
       ? props.row.groupId
       : ''
   );
-  // The server labels a project group with its name when the viewer can read
-  // it; a group still labeled by its key resolves the name here.
-  const serverProjectName = () =>
-    props.groupBy === 'project' && props.row.label !== props.row.groupId
-      ? props.row.label
-      : undefined;
-  const project = usePropertyEntityDisplay(
-    () =>
-      props.groupBy === 'project' && !serverProjectName()
-        ? props.row.groupId
-        : '',
-    () =>
-      props.groupBy === 'project' && props.row.groupId && !serverProjectName()
-        ? 'INITIATIVE'
-        : undefined
+  // The grouped page names a project group the viewer can read; a group still
+  // labeled by its key resolves the name here.
+  const unnamedProjectId = () =>
+    props.groupBy === 'project' && props.row.label === props.row.groupId
+      ? props.row.groupId
+      : '';
+  const project = usePropertyEntityDisplay(unnamedProjectId, () =>
+    unnamedProjectId() ? 'INITIATIVE' : undefined
   );
   const label = createMemo(() => {
     if (!props.row.groupId) return props.row.label || 'Not set';
@@ -67,7 +60,7 @@ export function TaskGroupHeader(props: {
     }
 
     if (props.groupBy === 'project') {
-      return serverProjectName() ?? project.name();
+      return unnamedProjectId() ? project.name() : props.row.label;
     }
 
     if (props.groupBy === 'assignee') {

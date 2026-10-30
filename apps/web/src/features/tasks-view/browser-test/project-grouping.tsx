@@ -10,37 +10,30 @@ import { queryClient } from '@queries/client';
 import { localSoupGroupKeys } from '@queries/soup/graphql/grouped-local-projection';
 import { groupedDocument } from '@queries/soup/graphql/grouped-test-fixtures';
 import { QueryClientProvider } from '@tanstack/solid-query';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { TaskGroupHeader } from '../components/task-list/TaskGroupHeader';
 
 enableProjects.override = true;
 enableGraphqlSoup.override = false;
 const VIEWER_ID = 'macro|project-grouping@example.test';
-declare global {
-  interface Window {
-    __identityRequests: number;
-    __loadingFlips: number;
-  }
-}
-window.__identityRequests = 0;
-window.__loadingFlips = 0;
+const PROJECT_ONE = 'ad000000-0000-0000-0000-000000000001';
+const PROJECT_TWO = 'ad000000-0000-0000-0000-000000000002';
 const PROJECTS = new Map([
-  ['ad000000-0000-0000-0000-000000000001', 'Project One'],
-  ['ad000000-0000-0000-0000-000000000002', 'Project Two'],
+  [PROJECT_ONE, 'Project One'],
+  [PROJECT_TWO, 'Project Two'],
 ]);
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: VIEWER_ID,
   email: 'project-grouping@example.test',
   authenticated: true,
 });
+// The grouped page names Project Two; only Project One, still labeled by its
+// key, resolves its name through an identity read.
 window.fetch = async (_input, init) => {
   const body = JSON.parse(String(init?.body ?? '{}'));
   const id = body.variables?.initiativeId;
-  if (id && PROJECTS.has(id)) {
-    window.__identityRequests += 1;
-    // Slow enough that a header asking again would visibly show Loading.
-    await new Promise((resolve) => setTimeout(resolve, 300));
+  if (id === PROJECT_ONE) {
     return Response.json({
       data: {
         user: {
@@ -64,21 +57,6 @@ window.fetch = async (_input, init) => {
 function Fixture() {
   const [cleared, setCleared] = createSignal(false);
   const [collapsed, setCollapsed] = createSignal(new Set<string>());
-  const [mounted, setMounted] = createSignal(true);
-  onMount(() => {
-    let loading = false;
-    new MutationObserver(() => {
-      const now = [...document.querySelectorAll('button[aria-expanded]')].some(
-        (button) => button.textContent?.includes('Loading')
-      );
-      if (now && !loading) window.__loadingFlips += 1;
-      loading = now;
-    }).observe(document.body, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-  });
   const tasks = createMemo(() =>
     ['Task One', 'Task Two', 'Task Without Project'].map((name, index) => {
       const item = groupedDocument(name);
@@ -132,75 +110,59 @@ function Fixture() {
         >
           {cleared() ? 'Restore Project One' : 'Clear Task One project'}
         </button>
-        <button
-          type="button"
-          class="rounded border border-edge-muted px-3 py-2"
-          onClick={() => {
-            setMounted(false);
-            setTimeout(() => setMounted(true), 0);
-          }}
-        >
-          Remount headers
-        </button>
       </div>
-      <Show when={mounted()}>
-        <div role="grid" aria-label="Tasks grouped by Project">
-          <For each={groups()}>
-            {([key, items]) => (
-              <section aria-label={PROJECTS.get(key) ?? 'No Project'}>
-                <TaskGroupHeader
-                  row={{
-                    kind: 'group-header',
-                    id: `group-${key}`,
-                    groupId: key,
-                    // Project Two arrives named by the server; Project One
-                    // still carries its key and resolves the name itself.
-                    label:
-                      PROJECTS.get(key) === 'Project Two'
-                        ? 'Project Two'
-                        : key || 'No Project',
-                    count: items.length,
-                  }}
-                  groupBy="project"
-                  expanded={!collapsed().has(key)}
-                  focused={false}
-                  columnCount={2}
-                  onFocus={() => {}}
-                  onToggle={() =>
-                    setCollapsed((previous) => {
-                      const next = new Set(previous);
-                      if (next.has(key)) next.delete(key);
-                      else next.add(key);
-                      return next;
-                    })
-                  }
-                />
-                <Show when={!collapsed().has(key)}>
-                  <For each={items}>
-                    {(item) => (
-                      <div
-                        role="row"
-                        class="flex items-center justify-between gap-3 border-b border-edge-muted px-5 py-4 text-sm"
-                      >
-                        <span role="gridcell">{item.displayName}</span>
-                        <span role="gridcell" class="truncate text-ink-muted">
-                          {PROJECTS.get(
-                            item.properties[0]?.value?.__typename ===
-                              'GraphqlEntityReferencePropertyValue'
-                              ? (item.properties[0].value.references[0]
-                                  ?.entityId ?? '')
-                              : ''
-                          ) ?? 'No Project'}
-                        </span>
-                      </div>
-                    )}
-                  </For>
-                </Show>
-              </section>
-            )}
-          </For>
-        </div>
-      </Show>
+      <div role="grid" aria-label="Tasks grouped by Project">
+        <For each={groups()}>
+          {([key, items]) => (
+            <section aria-label={PROJECTS.get(key) ?? 'No Project'}>
+              <TaskGroupHeader
+                row={{
+                  kind: 'group-header',
+                  id: `group-${key}`,
+                  groupId: key,
+                  label:
+                    key === PROJECT_TWO ? 'Project Two' : key || 'No Project',
+                  count: items.length,
+                }}
+                groupBy="project"
+                expanded={!collapsed().has(key)}
+                focused={false}
+                columnCount={2}
+                onFocus={() => {}}
+                onToggle={() =>
+                  setCollapsed((previous) => {
+                    const next = new Set(previous);
+                    if (next.has(key)) next.delete(key);
+                    else next.add(key);
+                    return next;
+                  })
+                }
+              />
+              <Show when={!collapsed().has(key)}>
+                <For each={items}>
+                  {(item) => (
+                    <div
+                      role="row"
+                      class="flex items-center justify-between gap-3 border-b border-edge-muted px-5 py-4 text-sm"
+                    >
+                      <span role="gridcell">{item.displayName}</span>
+                      <span role="gridcell" class="truncate text-ink-muted">
+                        {PROJECTS.get(
+                          item.properties[0]?.value?.__typename ===
+                            'GraphqlEntityReferencePropertyValue'
+                            ? (item.properties[0].value.references[0]
+                                ?.entityId ?? '')
+                            : ''
+                        ) ?? 'No Project'}
+                      </span>
+                    </div>
+                  )}
+                </For>
+              </Show>
+            </section>
+          )}
+        </For>
+      </div>
     </main>
   );
 }

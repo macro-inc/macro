@@ -1,8 +1,5 @@
-import { deepEqual } from '@core/util/compareUtils';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
-import { Telemetry } from '@macro-inc/observability';
 import { useQueryClient } from '@queries/client';
 import { createInfiniteQueries } from '@queries/create-infinite-queries';
 import { groupedCacheVersion } from '@queries/soup/cache';
@@ -37,7 +34,6 @@ import {
   untrack,
 } from 'solid-js';
 import { createGraphqlGroupedSoupQueries } from './graphql/create-graphql-grouped-soup-queries';
-import { mergeGroupInitialPage } from './merge-group-initial-page';
 
 type InitialGroupPage = {
   cachedMail?: boolean;
@@ -225,8 +221,6 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
   });
 
   const [groupDataVersion, setGroupDataVersion] = createSignal(0);
-  // In-flight continuation re-walks per group; a Load More waits for its own.
-  const rewalks = new Map<string, Promise<void>>();
 
   const list = createMemo(() => {
     if (usesGraphql()) return graphqlQueries.list();
@@ -241,8 +235,6 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
         return untrack(query.data);
       },
       fetchNextPage: async () => {
-        // Paging during a re-walk would cancel its refetch midway.
-        await rewalks.get(query.key);
         const result = await query.fetchNextPage();
         setGroupDataVersion((version) => version + 1);
         return result;
@@ -258,14 +250,10 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     return next;
   });
 
-  const resetRestToInitialPage = (
-    initialGroupedPage = args.initialPage(),
-    keepLoadedPages = false
-  ) => {
+  const resetRestToInitialPage = (initialGroupedPage = args.initialPage()) => {
     const field = args.groupByField();
     if (!field || !initialGroupedPage) return;
 
-    const stale = new Map<string, GroupQueryPage>();
     batch(() => {
       for (const group of initialGroupedPage.groups) {
         const initialPage = makeInitialPage(initialGroupedPage, group);
@@ -278,86 +266,22 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
 
         queryClient.setQueryData<InfiniteData<GroupQueryPage, string | null>>(
           queryKey,
-          (existing) => {
-            if (!keepLoadedPages) {
-              return { pages: [initialPage], pageParams: [null] };
-            }
-            const merged = mergeGroupInitialPage(
-              existing,
-              initialPage,
-              (page) => page.group.nextCursor
-            );
-            if (merged.stale) stale.set(group.key, initialPage);
-            return merged.data;
+          {
+            pages: [initialPage],
+            pageParams: [null],
           }
         );
       }
 
       setGroupDataVersion((version) => version + 1);
     });
-    // The kept pages chained from the old first page. A refetch re-walks them
-    // from the new boundary while the rows already loaded stay on screen.
-    const rewalk = async (
-      query: { key: string; refetch: () => Promise<{ isError: boolean }> },
-      initialPage: GroupQueryPage
-    ) => {
-      const queryKey = soupKeys.groupedGroup({
-        params: args.soupParams(),
-        body: args.soupBody(),
-        groupBy: field,
-        groupKey: query.key,
-      }).queryKey;
-      const span = Telemetry.span('soup.grouped_rest_rewalk');
-      span.setAttr('grouping.group_key', query.key);
-      await span.run(async () => {
-        const result = await query.refetch();
-        if (!result.isError) {
-          span.setAttr('grouping.rewalk_outcome', 'replaced');
-          return;
-        }
-        // A chain that could not be rebuilt falls back to its first page
-        // rather than keeping rows that follow the old boundary, unless a
-        // later parent page already replaced that first page.
-        let outcome = 'superseded';
-        queryClient.setQueryData<InfiniteData<GroupQueryPage, string | null>>(
-          queryKey,
-          (existing) => {
-            if (!existing || !deepEqual(existing.pages[0], initialPage)) {
-              return existing;
-            }
-            outcome = 'reset';
-            return { pages: [initialPage], pageParams: [null] };
-          }
-        );
-        span.setAttr('grouping.rewalk_outcome', outcome);
-        span.error('continuation rewalk failed');
-      });
-      setGroupDataVersion((version) => version + 1);
-    };
-    for (const query of queries.list()) {
-      const initialPage = stale.get(query.key);
-      if (!initialPage) continue;
-      const run = async () => {
-        try {
-          await rewalk(query, initialPage);
-        } finally {
-          if (rewalks.get(query.key) === pending) rewalks.delete(query.key);
-        }
-      };
-      const pending = run();
-      rewalks.set(query.key, pending);
-      fireAndForget(pending, 'grouped-soup');
-    }
   };
 
-  // A refetched parent page carries each group's first page again; the pages
-  // a Load More already fetched stay, so the list never collapses under the
-  // reader. Only an explicit refresh starts every group over.
   createEffect(
     on(
       () => args.initialPage(),
       (initialGroupedPage) => {
-        if (!usesGraphql()) resetRestToInitialPage(initialGroupedPage, true);
+        if (!usesGraphql()) resetRestToInitialPage(initialGroupedPage);
       },
       { defer: true }
     )

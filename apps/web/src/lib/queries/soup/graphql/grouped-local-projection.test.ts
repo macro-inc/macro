@@ -391,7 +391,7 @@ describe('local grouped Soup projection', () => {
         {
           key: 'initiative-1',
           items: [task],
-          label: null,
+          label: 'Project One',
           totalCount: 1,
           nextCursor: null,
         },
@@ -407,6 +407,12 @@ describe('local grouped Soup projection', () => {
     expect(result.find((bin) => bin.key === 'initiative-1')?.totalCount).toBe(
       0
     );
+    // The server's name stays with its group; a group created locally has
+    // none until the next grouped page labels it.
+    expect(result.find((bin) => bin.key === 'initiative-1')?.label).toBe(
+      'Project One'
+    );
+    expect(result.find((bin) => bin.key === '')?.label).toBeNull();
   });
 
   it('distinguishes known empty property values from unknown grouping evidence', () => {
