@@ -145,6 +145,49 @@ class FeatureTest(unittest.TestCase):
             with self.subTest(pair=pair):
                 self.assertLess(values.get(pair, 0), -20)
 
+    def test_accented_letters_kern_like_their_base(self):
+        """An accented letter is in its base letter's class on each side;
+        accented i has its own class (its accent overhangs the advance)."""
+        import unicodedata
+
+        from kernel_sans import kerning
+
+        cmap = {u: d.name for d in glyphs.REGISTRY.values() for u in d.unicodes}
+        own = {"l_i": "l_iacc", "r_i": "r_iacc"}
+        for classes in (kerning.LEFT, kerning.RIGHT):
+            member = {g: c for c, spec in classes.items() for g in spec.split()}
+            for u, name in cmap.items():
+                base = cmap.get(ord(unicodedata.normalize("NFD", chr(u))[0]))
+                if base in (None, name) or base not in member:
+                    continue
+                # Alternates (agrave.ss01) follow the base's alternate (a.ss01).
+                for alt in [name] + [
+                    n for n in glyphs.REGISTRY if n.startswith(name + ".ss")
+                ]:
+                    base_alt = base + alt[len(name) :]
+                    if base_alt not in glyphs.REGISTRY:
+                        base_alt = base
+                    want = member.get(base_alt)
+                    with self.subTest(glyph=alt):
+                        self.assertEqual(member.get(alt), own.get(want, want))
+
+    def test_kerned_class_members_never_touch(self):
+        from kernel_sans import kerning
+
+        for w in (300, 400, 800):
+            drawn = _Drawn.at(w)
+            values = kerning.pair_values(drawn, P.params(w))
+            prof = kerning._Profiles(drawn)
+            for lc, lspec in kerning.LEFT.items():
+                for rc, rspec in kerning.RIGHT.items():
+                    k = values.get((lc, rc), 0)
+                    for left in (g for g in lspec.split() if g in drawn):
+                        for right in (g for g in rspec.split() if g in drawn):
+                            gap = kerning._closest(prof, left, right, -400, 1200)
+                            if gap is not None:
+                                with self.subTest(w=w, pair=(left, right)):
+                                    self.assertGreater(gap + k, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

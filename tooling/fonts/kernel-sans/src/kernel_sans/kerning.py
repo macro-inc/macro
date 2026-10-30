@@ -8,8 +8,12 @@ punctuation). The pair is kerned by a fraction of the difference, limited so
 that no part of the two outlines comes closer than a minimum gap.
 
 Members of a class share the value measured on the first member, so list the
-plain letter first. Only the default (proportional) figures are kerned; the
-tabular .tf figures keep their fixed advance.
+plain letter first; accented forms and alternates go in their base letter's
+class. On top of that, every member pair of every class pair (measured or
+not) is kept CLEAR of touching over the full glyph height, so an accent
+that overhangs its advance (the dieresis of ï) opens the pair up. Only the
+default (proportional) figures are kerned; the tabular .tf figures keep
+their fixed advance.
 """
 
 from . import params as P
@@ -27,22 +31,29 @@ LEFT = {
     "L_L": "L",
     "L_K": "K X",
     "L_R": "R",
-    "L_O": "O D Q Ograve Oacute Ocircumflex Otilde Odieresis Eth",
+    "L_O": "O D Q Ograve Oacute Ocircumflex Otilde Odieresis Oslash Eth",
     "L_C": "C Ccedilla",
     "l_r": "r",
     "l_v": "v w y yacute ydieresis",
     "l_k": "k x",
     "l_f": "f",
     "l_t": "t",
-    "l_o": "o b p thorn ograve oacute ocircumflex otilde odieresis",
-    "l_e": "e c ccedilla egrave eacute ecircumflex edieresis",
+    "l_o": "o b p thorn ograve oacute ocircumflex otilde odieresis oslash eth",
+    "l_e": "e c ccedilla egrave eacute ecircumflex edieresis ae oe",
     "p_dot": "period comma ellipsis",
     "p_qr": "quoteright quotedblright",
     "p_ql": "quoteleft quotedblleft",
     "p_qs": "quotesingle quotedbl",
     "p_dash": "hyphen endash emdash hyphen.case endash.case emdash.case",
     "p_open": "parenleft bracketleft braceleft parenleft.case bracketleft.case braceleft.case",
-    "l_n": "n h m l i d a u",
+    "l_n": "n h m a u ntilde agrave aacute acircumflex atilde adieresis aring "
+    "ugrave uacute ucircumflex udieresis dotlessi a.ss01 agrave.ss01 aacute.ss01 "
+    "acircumflex.ss01 atilde.ss01 adieresis.ss01 aring.ss01",
+    # Straight right sides that rise above x-height: measured on their own,
+    # so the ascender and the i dot are seen by the collision guard.
+    "l_l": "l d",
+    "l_i": "i",
+    "l_iacc": "igrave iacute icircumflex idieresis",
     "f_7": "seven",
 }
 
@@ -53,9 +64,11 @@ RIGHT = {
     "R_V": "V",
     "R_W": "W",
     "R_Y": "Y Yacute Ydieresis",
-    "R_O": "O C G Q Ccedilla Ograve Oacute Ocircumflex Otilde Odieresis OE",
+    "R_O": "O C G Q Ccedilla Ograve Oacute Ocircumflex Otilde Odieresis Oslash OE",
     "R_J": "J",
-    "r_o": "o c d e g q ccedilla egrave eacute ecircumflex edieresis ograve oacute ocircumflex otilde odieresis oe",
+    "r_o": "o c d e g q ccedilla egrave eacute ecircumflex edieresis ograve oacute "
+    "ocircumflex otilde odieresis oslash oe eth a.ss01 agrave.ss01 aacute.ss01 "
+    "acircumflex.ss01 atilde.ss01 adieresis.ss01 aring.ss01",
     "r_a": "a agrave aacute acircumflex atilde adieresis aring ae",
     "r_v": "v w y yacute ydieresis",
     "r_u": "n m p r u ntilde ugrave uacute ucircumflex udieresis",
@@ -63,6 +76,8 @@ RIGHT = {
     "r_z": "z zcaron",
     "r_x": "x",
     "r_j": "j",
+    "r_i": "i",
+    "r_iacc": "igrave iacute icircumflex idieresis",
     "r_f": "f t f_i f_l",
     "p_dot": "period comma ellipsis",
     "p_qr": "quoteright quotedblright",
@@ -81,12 +96,17 @@ REGULAR = {
     "l_o",
     "l_e",
     "l_n",
+    "l_l",
+    "l_i",
+    "l_iacc",
     "R_O",
     "r_o",
     "r_a",
     "r_u",
     "r_s",
     "r_z",
+    "r_i",
+    "r_iacc",
 }
 PUNCT = {"p_dot", "p_qr", "p_ql", "p_qs", "p_dash", "p_open"}
 FIGURES = {
@@ -127,6 +147,9 @@ STEP = 10  # sampling interval in font units
 FACTOR = 0.5  # fraction of the white-area difference that is corrected
 FLOOR = 0.75  # closest approach allowed, as a fraction of the reference pair's
 COLLIDE = 0.5  # closest approach over the glyphs' full height (dots, arms)
+# Least clearance between any two members of a class pair, whatever the
+# limits: below this the glyphs touch (an overhanging accent, a quote).
+CLEAR = 0.15
 MIN_KERN = 10  # smaller corrections are dropped
 LIMITS = (-150, 15)  # punctuation pairs are never kerned apart
 
@@ -186,6 +209,7 @@ class _Profiles:
     def __init__(self, drawn):
         self.drawn = drawn
         self.cache = {}
+        self.refs = {}
 
     def get(self, name):
         if name not in self.cache:
@@ -255,40 +279,88 @@ def _closest(prof, left, right, lo, hi):
     return best
 
 
-def measure(drawn, left, right):
-    """Kerning value for the glyph pair, or 0."""
-    prof = _Profiles(drawn) if not isinstance(drawn, _Profiles) else drawn
+def _reference_white(prof, left, right):
+    """(zone, white, closest gap) of the reference pair the glyph pair is
+    measured against, or None when the pair isn't measured."""
     _, bl = prof.get(left)
     _, br = prof.get(right)
     if not bl or not br:
-        return 0
+        return None
     zl, zr = _zone(left, bl), _zone(right, br)
     zone = (max(zl[0], zr[0]), min(zl[1], zr[1]))
     if zone[1] - zone[0] < 2 * STEP:
-        return 0
+        return None
     ref_l, ref_r = _reference(left), _reference(right)
     if ref_l == left and ref_r == right:
-        return 0  # punctuation next to punctuation
+        return None  # punctuation next to punctuation
     if ref_l not in prof.drawn or ref_r not in prof.drawn:
-        return 0
-    # Reference white with a generous clamp, then measure the pair against it.
-    ref_white, ref_min = _white(prof, ref_l, ref_r, zone, 10_000)
+        return None
+    key = (ref_l, ref_r, zone)
+    if key not in prof.refs:
+        prof.refs[key] = _white(prof, ref_l, ref_r, zone, 10_000)
+    ref_white, ref_min = prof.refs[key]
     if ref_white is None:
+        return None
+    return zone, ref_white, ref_min if ref_min is not None else ref_white
+
+
+def collide_floor(prof, left, right, frac=COLLIDE):
+    """Least kern that keeps every part of the two glyphs (the dot of j, the
+    arm of T, the dieresis of i) frac of the reference gap apart."""
+    ref = _reference_white(prof, left, right)
+    if ref is None:
+        return None
+    _, bl = prof.get(left)
+    _, br = prof.get(right)
+    full = _closest(prof, left, right, max(bl[1], br[1]), min(bl[3], br[3]))
+    return None if full is None else frac * ref[2] - full
+
+
+def measure(drawn, left, right):
+    """Kerning value for the glyph pair, or 0."""
+    prof = _Profiles(drawn) if not isinstance(drawn, _Profiles) else drawn
+    ref = _reference_white(prof, left, right)
+    if ref is None:
         return 0
+    zone, ref_white, ref_gap = ref
+    # Measure the pair against the reference white, clamped generously.
     clamp = 2.0 * ref_white
     white, min_gap = _white(prof, left, right, zone, clamp)
     ref_white = min(ref_white, clamp)
     k = FACTOR * (ref_white - white)
-    ref_gap = ref_min if ref_min is not None else ref_white
     if min_gap is not None:
         # The floor only limits how far a pair closes up; spacing, not
         # kerning, decides pairs that already sit close.
         k = max(k, min(0.0, FLOOR * ref_gap - min_gap))
-    # Never let any part of the glyphs (the dot of j, the arm of T) collide.
-    full = _closest(prof, left, right, max(bl[1], br[1]), min(bl[3], br[3]))
-    if full is not None:
-        k = max(k, COLLIDE * ref_gap - full)
-    return k
+    floor = collide_floor(prof, left, right)
+    return k if floor is None else max(k, floor)
+
+
+def _member_floor(prof, lmem, rmem, k):
+    """Largest collide_floor over the member pairs that could reach it."""
+    best = None
+    for left in lmem:
+        _, bl = prof.get(left)
+        if not bl:
+            continue
+        rsb = prof.drawn[left].width - bl[2]
+        for right in rmem:
+            _, br = prof.get(right)
+            if not br:
+                continue
+            ref = _reference_white(prof, left, right)
+            # The bounding boxes bound the closest approach from below.
+            if ref is None or rsb + br[0] + k >= CLEAR * ref[2]:
+                continue
+            f = collide_floor(prof, left, right, CLEAR)
+            if f is not None and (best is None or f > best):
+                best = f
+    return best
+
+
+def _round(k, floor):
+    r = int(round(k / 5.0) * 5)
+    return r + 5 if floor is not None and r < floor else r
 
 
 def pair_values(drawn, p):
@@ -297,41 +369,47 @@ def pair_values(drawn, p):
     values = {}
     hh = _closest(prof, "H", "H", 0, P.CAP) if "H" in drawn else None
     nn = _closest(prof, "n", "n", 0, P.XH) if "n" in drawn else None
+    fixed = fixed_pairs(p)
     for lc, lspec in LEFT.items():
-        lrep = next((g for g in _split(lspec) if g in drawn), None)
-        if lrep is None:
+        lmem = [g for g in _split(lspec) if g in drawn]
+        if not lmem:
             continue
         for rc, rspec in RIGHT.items():
-            # Only pairs with at least one open or diagonal side get kerned.
-            if lc in REGULAR | PUNCT and rc in REGULAR | PUNCT:
+            rmem = [g for g in _split(rspec) if g in drawn]
+            if not rmem:
                 continue
-            if rc in ONLY_WITH and lc not in ONLY_WITH[rc]:
-                continue
-            # Opening brackets only kern apart, to keep j's tail clear.
-            if lc == "p_open" and (lc, rc) not in POSITIVE:
-                continue
-            rrep = next((g for g in _split(rspec) if g in drawn), None)
-            if rrep is None:
-                continue
-            if (lc, rc) in BARS and nn:
-                k = BAR_GAP * nn - _closest(prof, lrep, rrep, 0, P.XH)
-            else:
-                k = measure(prof, lrep, rrep) * TWEAKS.get((lc, rc), 1.0)
-            if (lc, rc) in ROUND_CAP and hh:
-                k = max(k, -ROUND_CAP_FRACTION * hh)
-            hi = 0 if (lc in PUNCT or rc in PUNCT) else LIMITS[1]
-            hi = POSITIVE.get((lc, rc), hi)
-            k = max(LIMITS[0], min(hi, k))
-            k = int(round(k / 5.0) * 5)
+            k = fixed.get((lc, rc), 0.0)
+            if (lc, rc) not in fixed and _measured(lc, rc):
+                k = _measure_classes(prof, lc, rc, lmem[0], rmem[0], hh, nn)
+            floor = _member_floor(prof, lmem, rmem, k)
+            if floor is not None and floor > k:
+                k = floor
+            k = _round(k, floor)
             if abs(k) >= MIN_KERN:
                 values[(lc, rc)] = k
-    for pair, v in fixed_pairs(p).items():
-        lc, rc = pair
-        if any(g in drawn for g in _split(LEFT[lc])) and any(
-            g in drawn for g in _split(RIGHT[rc])
-        ):
-            values[pair] = int(round(v / 5.0) * 5)
     return values
+
+
+def _measured(lc, rc):
+    # Only pairs with at least one open or diagonal side get kerned.
+    if lc in REGULAR | PUNCT and rc in REGULAR | PUNCT:
+        return False
+    if rc in ONLY_WITH and lc not in ONLY_WITH[rc]:
+        return False
+    # Opening brackets only kern apart, to keep j's tail clear.
+    return not (lc == "p_open" and (lc, rc) not in POSITIVE)
+
+
+def _measure_classes(prof, lc, rc, lrep, rrep, hh, nn):
+    if (lc, rc) in BARS and nn:
+        k = BAR_GAP * nn - _closest(prof, lrep, rrep, 0, P.XH)
+    else:
+        k = measure(prof, lrep, rrep) * TWEAKS.get((lc, rc), 1.0)
+    if (lc, rc) in ROUND_CAP and hh:
+        k = max(k, -ROUND_CAP_FRACTION * hh)
+    hi = 0 if (lc in PUNCT or rc in PUNCT) else LIMITS[1]
+    hi = POSITIVE.get((lc, rc), hi)
+    return max(LIMITS[0], min(hi, k))
 
 
 def feature_code(drawn, p):
