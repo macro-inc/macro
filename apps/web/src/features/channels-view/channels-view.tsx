@@ -126,6 +126,7 @@ function DesktopChannelThreads(props: { sources: ChannelsSources }) {
           props.sources.channels.items(),
           props.sources.direct_messages.items(),
           props.sources.recents.items(),
+          props.sources.unread.items(),
         ]).map((channel) => [channel.id, channel])
       )
   );
@@ -154,7 +155,9 @@ function ChannelsViewRoot() {
       if (mobileLayout()) return scope === 'recents';
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
-      if (scope === 'recents') return tab() === 'recents';
+      // Desktop has no Recent list; the mobile feed above is its only reader.
+      if (scope === 'recents') return false;
+      if (scope === 'unread') return tab() === 'unread';
       if (scope === 'threads') return tab() === 'threads';
       return tab() === 'browse';
     },
@@ -293,6 +296,7 @@ function ChannelDetailRouteContent() {
             sources.channels.items(),
             sources.direct_messages.items(),
             sources.recents.items(),
+            sources.unread.items(),
             sources.search.items(),
           ])
         : []

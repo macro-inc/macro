@@ -214,6 +214,21 @@ describe('compileToAst', () => {
     });
   });
 
+  it('compiles unread channel messages onto the message notification state', () => {
+    const ast = compileToAst(
+      queryStateFrom({
+        include: { channelMessageSeen: false, channelIsParticipant: [true] },
+      })
+    );
+
+    expect(ast.chanf).toEqual({
+      '&': [
+        { l: { MessageNotificationState: 'unseen' } },
+        { l: { IsParticipant: true } },
+      ],
+    });
+  });
+
   it('compiles channel-thread root sender excludes onto channel-thread filters', () => {
     const ast = compileToAst(
       queryStateFrom({

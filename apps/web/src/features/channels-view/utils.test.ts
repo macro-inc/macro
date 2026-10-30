@@ -11,7 +11,7 @@ describe('activeChannelsTab', () => {
   });
 
   it('leaves the other tabs alone', () => {
-    expect(activeChannelsTab('recents', false)).toBe('recents');
+    expect(activeChannelsTab('unread', false)).toBe('unread');
     expect(activeChannelsTab('browse', false)).toBe('browse');
   });
 });

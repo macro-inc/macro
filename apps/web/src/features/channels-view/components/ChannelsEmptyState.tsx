@@ -13,7 +13,8 @@ import type { ChannelsQueryScope } from '../types';
 type ChannelsEmptyStateContent = {
   title: string;
   description: string;
-  action: EmptyStateAction;
+  /** A create action, offered only to users who may create channels. */
+  action?: EmptyStateAction;
 };
 
 function emptyStateContent(
@@ -43,6 +44,13 @@ function emptyStateContent(
     };
   }
 
+  if (scope === 'unread') {
+    return {
+      title: 'No unread conversations',
+      description: 'New messages and mentions will appear here.',
+    };
+  }
+
   return {
     title: 'No recent conversations',
     description: 'Your latest conversations will appear here.',
@@ -57,9 +65,15 @@ function emptyStateContent(
 export function ChannelsEmptyState(props: {
   scope: ChannelsQueryScope;
   topAligned?: boolean;
+  /** Offered in place of the scope's create action, to every user. */
+  action?: EmptyStateAction;
 }) {
   const isCreatableEnabled = useCreatableEnabled();
   const content = () => emptyStateContent(props.scope);
+  const primaryAction = () => {
+    if (props.action) return props.action;
+    return isCreatableEnabled('channel') ? content().action : undefined;
+  };
 
   return (
     <EmptyStatePanel
@@ -70,9 +84,7 @@ export function ChannelsEmptyState(props: {
       description={content().description}
       descriptionClass="mt-1 text-balance"
       actionsClass="mt-5 flex-row @max-sm:flex-row"
-      primaryAction={
-        isCreatableEnabled('channel') ? content().action : undefined
-      }
+      primaryAction={primaryAction()}
       documentationUrl={`${DOCS_BASE}/product/channels`}
       documentationIcon={BookOpenIcon}
       class={

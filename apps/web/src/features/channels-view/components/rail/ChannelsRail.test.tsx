@@ -173,6 +173,7 @@ vi.mock('../../channels-view-context', () => ({
   }),
 }));
 vi.mock('../../queries', () => ({
+  createRetainedSelectionSource: (source: unknown) => source,
   deduplicateChannels: (collections: ChannelEntity[][]) => [
     ...new Map(
       collections.flat().map((channel) => [channel.id, channel])
@@ -238,6 +239,7 @@ const sources: ChannelsSources = {
   channels: source,
   direct_messages: source,
   recents: source,
+  unread: source,
   search: source,
   threads: source,
 };

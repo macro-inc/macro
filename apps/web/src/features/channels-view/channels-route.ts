@@ -6,7 +6,7 @@ export const channelsSearch = {
   namespace: 'channels',
   schema: z
     .object({
-      tab: z.enum(['browse', 'recents', 'threads']),
+      tab: z.enum(['browse', 'unread', 'threads']),
       messageId: z.string(),
       threadId: z.string(),
       seek: z.string(),

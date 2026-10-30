@@ -88,6 +88,8 @@ export type ScalarFieldFilters = {
   emailCalendarOnly?: boolean;
   channelSeen?: boolean;
   channelDone?: boolean;
+  /** Seen state of the channel's top-level message notifications: the unread dot. */
+  channelMessageSeen?: boolean;
   channelImportance?: boolean;
   channelThreadSeen?: boolean;
   channelThreadDone?: boolean;

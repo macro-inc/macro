@@ -187,6 +187,7 @@ describe('buildChannelRailRows', () => {
         channels: [],
         direct_messages: [],
         recents: [],
+        unread: [],
         threads: [],
       },
       buildChannelSectionRows({
@@ -218,6 +219,7 @@ describe('buildChannelRailRows', () => {
         channels: [privateChannel],
         direct_messages: [dm],
         recents: [],
+        unread: [],
         threads: [],
       },
       buildChannelSectionRows({
@@ -256,6 +258,7 @@ describe('buildChannelRailRows', () => {
         channels: [privateChannel],
         direct_messages: [],
         recents: [],
+        unread: [],
         threads: [],
       },
       buildChannelSectionRows({
@@ -290,6 +293,7 @@ describe('buildChannelRailRows', () => {
         channels: [],
         direct_messages: [],
         recents: [],
+        unread: [],
         threads: [],
       },
       sectionRows
@@ -313,21 +317,25 @@ describe('buildChannelRailRows', () => {
     ]);
   });
 
-  it('leaves the recent tab as a flat list', () => {
+  it('leaves the unread tab as a flat list in source order', () => {
     const rows = buildChannelRailRows(
-      'recents',
+      'unread',
       expanded,
       {
         favorites: [],
         team_channels: [acme],
         channels: [],
         direct_messages: [],
-        recents: [zeta, acme],
+        recents: [],
+        unread: [zeta, acme],
         threads: [],
       },
       []
     );
     expect(rows.map((row) => row.id)).toEqual(['channel:zeta', 'channel:acme']);
+    expect(
+      rows.every((row) => row.kind === 'conversation' && row.scope === 'unread')
+    ).toBe(true);
   });
 
   it('puts All threads above one mixed list of channels and DMs', () => {
@@ -341,6 +349,7 @@ describe('buildChannelRailRows', () => {
         channels: [],
         direct_messages: [],
         recents: [],
+        unread: [],
         threads: [dm, acme],
       },
       []
@@ -396,6 +405,7 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
       channels: [],
       direct_messages: [],
       recents: [],
+      unread: [],
       threads: [],
     },
     sections

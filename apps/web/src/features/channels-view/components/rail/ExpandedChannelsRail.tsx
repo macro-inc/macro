@@ -2,6 +2,7 @@ import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { t } from '@app/lib/i18n';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
 import { useUserId } from '@core/context/user';
@@ -12,6 +13,7 @@ import { type ChannelEntity, Entity } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import ListIcon from '@icon/system/regular/list.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -93,13 +95,13 @@ import {
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
-const CHANNEL_TABS: TabOption<ChannelsTab>[] = [
-  { value: 'browse', label: 'All' },
-  { value: 'recents', label: 'Recent' },
+const channelTabs = (): TabOption<ChannelsTab>[] => [
+  { value: 'browse', label: t('viewMenus.all') },
+  { value: 'unread', label: t('viewMenus.unread') },
 ];
-const CHANNEL_TABS_WITH_THREADS: TabOption<ChannelsTab>[] = [
-  ...CHANNEL_TABS,
-  { value: 'threads', label: 'Threads' },
+const channelTabsWithThreads = (): TabOption<ChannelsTab>[] => [
+  ...channelTabs(),
+  { value: 'threads', label: t('viewMenus.threads') },
 ];
 
 type ChannelRailSearch = {
@@ -436,7 +438,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             aria-label="Chat sidebar views"
             fullWidth={!isTouchDevice()}
             options={
-              rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
+              rail.threadsEnabled() ? channelTabsWithThreads() : channelTabs()
             }
             value={rail.tab()}
             onChange={selectTab}
@@ -512,32 +514,32 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
             ref={pagination.registerVirtualizer}
             data={props.search.results()}
             scrollRef={scrollRoot()}
-            itemSize={rail.tab() === 'recents' ? CONVERSATION_CARD_HEIGHT : 34}
+            itemSize={rail.tab() === 'unread' ? CONVERSATION_CARD_HEIGHT : 34}
             bufferSize={360}
             keepMounted={focusedIndex() >= 0 ? [focusedIndex()] : undefined}
             onScroll={pagination.loadMoreNearEnd}
           >
             {(channel) => (
               <Show
-                when={rail.tab() === 'recents'}
+                when={rail.tab() === 'unread'}
                 fallback={
                   <div class="px-4 pb-0.5">
                     <ChannelOption channel={channel} />
                   </div>
                 }
               >
-                <RecentConversationCard channel={channel} />
+                <ConversationCardRow channel={channel} />
               </Show>
             )}
           </Virtualizer>
           <Show when={rail.sources.search.isLoadingMore()}>
             <RailListLoadingMore
-              variant={rail.tab() === 'recents' ? 'recent' : 'channel'}
+              variant={rail.tab() === 'unread' ? 'recent' : 'channel'}
             />
           </Show>
           <Show when={props.search.isLoading()}>
             <RailListLoadingMore
-              variant={rail.tab() === 'recents' ? 'recent' : 'channel'}
+              variant={rail.tab() === 'unread' ? 'recent' : 'channel'}
             />
           </Show>
         </div>
@@ -926,7 +928,7 @@ function ExpandedBrowse() {
   );
 }
 
-function RecentConversationCard(props: { channel: ChannelEntity }) {
+function ConversationCardRow(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
   const currentUserId = useUserId();
   const item = useChannelRailItemState(() => props.channel.id);
@@ -963,11 +965,12 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
   );
 }
 
-function ExpandedRecents() {
+function ExpandedUnread() {
+  const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   createScrollTopFade(scrollRoot);
-  const scope = useChannelRailScopeState(() => 'recents');
-  const pagination = useChannelRailVirtualizer(() => 'recents');
+  const scope = useChannelRailScopeState(() => 'unread');
+  const pagination = useChannelRailVirtualizer(() => 'unread');
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
@@ -993,7 +996,15 @@ function ExpandedRecents() {
         <RailListError retry={scope().source.refresh} />
       </Match>
       <Match when={forceEmptyState() || scope().items.length === 0}>
-        <ChannelsEmptyState scope="recents" topAligned />
+        <ChannelsEmptyState
+          scope="unread"
+          topAligned
+          action={{
+            label: 'Show all conversations',
+            icon: ListIcon,
+            onClick: () => rail.selectTab('browse'),
+          }}
+        />
       </Match>
       <Match when={true}>
         <div
@@ -1010,7 +1021,7 @@ function ExpandedRecents() {
             keepMounted={scope().keepMounted}
             onScroll={pagination.loadMoreNearEnd}
           >
-            {(channel) => <RecentConversationCard channel={channel} />}
+            {(channel) => <ConversationCardRow channel={channel} />}
           </Virtualizer>
           <Show when={scope().source.isLoadingMore()}>
             <RailListLoadingMore variant="recent" />
@@ -1156,8 +1167,8 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
             <Match when={rail.tab() === 'browse'}>
               <ExpandedBrowse />
             </Match>
-            <Match when={rail.tab() === 'recents'}>
-              <ExpandedRecents />
+            <Match when={rail.tab() === 'unread'}>
+              <ExpandedUnread />
             </Match>
             <Match when={rail.tab() === 'threads'}>
               <ExpandedThreads />

@@ -29,6 +29,8 @@ subscription ChannelUnreadCacheWrite {
 						id
 						state
 						createdAt
+						entityId
+						targetEntityType
 					}
 				}
 			}

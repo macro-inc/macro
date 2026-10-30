@@ -549,7 +549,13 @@ it('maps the unread alias without pretending it is the full notification edge', 
     frecencyScore: null,
     isFavorited: false,
     unreadNotifications: [
-      { id: 'one', state: 'UNSEEN', createdAt: '2026-01-01' },
+      {
+        id: 'one',
+        state: 'UNSEEN',
+        createdAt: '2026-01-01',
+        entityId: 'channel',
+        targetEntityType: 'CHANNEL',
+      },
     ],
   } satisfies ChannelListItemFieldsFragment;
   expect(mapGraphqlSoupItem(item)).toMatchObject({

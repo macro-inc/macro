@@ -111,7 +111,9 @@ export function useChannelRailScopeState(
         ? focusedRow.localIndex
         : -1;
     const targetChannelId =
-      currentScope === 'recents' || currentScope === 'threads'
+      currentScope === 'recents' ||
+      currentScope === 'unread' ||
+      currentScope === 'threads'
         ? undefined
         : rail.channelActivity.targetChannelId(currentScope);
     const activityIndex =

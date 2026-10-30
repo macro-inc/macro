@@ -512,6 +512,8 @@ function mapChannelLiteral(literal: unknown): GraphqlChannelLiteralInput {
       return { isParticipant: mapBoolean(value, 'isParticipant') };
     case 'NotificationState':
       return { notificationState: mapNotificationState(value) };
+    case 'MessageNotificationState':
+      return { messageNotificationState: mapNotificationState(value) };
     default:
       unsupported(`channel literal ${field}`);
   }
