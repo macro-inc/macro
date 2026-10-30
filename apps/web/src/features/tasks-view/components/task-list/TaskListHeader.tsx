@@ -35,12 +35,12 @@ function SortableHeader(props: {
             type="button"
             data-blocks-navigation
             class={cn(
-              'flex h-full min-w-0 items-center gap-1 text-ink-extra-muted hover:text-ink',
+              'flex h-full shrink-0 items-center gap-1 whitespace-nowrap text-ink-extra-muted hover:text-ink',
               active() && 'text-ink'
             )}
             onClick={() => setPrimarySort(sortId())}
           >
-            <span class="truncate">{props.label}</span>
+            <span>{props.label}</span>
             <ArrowDownIcon
               class={cn(
                 'size-3 shrink-0 transition-transform',

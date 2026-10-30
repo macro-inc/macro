@@ -25,7 +25,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit status and priority through leading `TaskPropertyControl` icons on desktop and mobile; place priority directly beside the title after the status gap, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Place Project before Assignees in desktop task headers and rows, preserving the mobile property order and other hosts of the shared grid.
-- Keep Updated at 64px with single-line timestamps and Created by last, using a 16px avatar with a 16px gap after Updated; hide its visual header while retaining accessible labels and existing narrow-container visibility.
+- Keep Updated at 80px with an untruncated header and single-line timestamps; keep Created by last as a 16px avatar with a 16px gap after Updated, retaining its accessible label and existing narrow-container visibility.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers; keep the glyphs aligned with the property feature.
 

@@ -10,7 +10,7 @@
 @container u-list (min-width: 1221px) {
   .task-grid-row.task-grid-icon-creator {
     --task-col-created-by: 1.5rem;
-    --task-col-timestamp: 4rem;
+    --task-col-timestamp: 5rem;
   }
 }
 
