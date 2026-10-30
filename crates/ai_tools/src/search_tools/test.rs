@@ -207,3 +207,23 @@ fn load_without_loader_still_reports() {
     );
     assert!(result.not_found.is_empty());
 }
+
+// --- names the agent loop reads loads back by ---
+
+#[test]
+fn tools_are_named_as_the_agent_loop_reads_them() {
+    let tools = ai_toolset::AsyncToolCollection::<ToolServiceContext>::new()
+        .add_tool::<SearchTools, ToolServiceContext>()
+        .add_tool::<LoadTools, ToolServiceContext>();
+
+    assert!(
+        tools
+            .tools
+            .contains_key(ai_toolset::tool_search::SEARCH_TOOLS)
+    );
+    assert!(
+        tools
+            .tools
+            .contains_key(ai_toolset::tool_search::LOAD_TOOLS)
+    );
+}

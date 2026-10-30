@@ -10,11 +10,13 @@ use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::DynToolSetAdapter;
 use crate::tool_result_limit::ToolResultLimit;
+use ai_toolset::tool_search::tools_loaded_by;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
 use rig_agent::tool::server::{ToolServer, ToolServerHandle};
-use rig_core::message::{AssistantContent, Message};
+use rig_core::message::{AssistantContent, Message, ToolResultContent, UserContent};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, RwLock};
@@ -731,11 +733,15 @@ impl Session {
         };
 
         // A session lives for one turn, so whatever the conversation loaded
-        // before is gone. Reload what it called, in the order it first did,
-        // rather than have the model reload each tool every turn.
-        let called = called_catalog_tools(history, &self.request_context.searchable_tools);
-        if !called.is_empty() {
-            (self.bridge_inputs.register_loaded)(called).await;
+        // before is gone. Reload what it loaded or called, in the order it
+        // first did, rather than have the model reload each tool every turn
+        // or call a tool it loaded that is no longer there.
+        let in_use = HistoryTools::of(history, &self.request_context.searchable_tools);
+        for (call_id, tools) in &in_use.loads {
+            self.bridge_inputs.tool_loads.record_call(call_id, tools);
+        }
+        if !in_use.tools.is_empty() {
+            (self.bridge_inputs.register_loaded)(in_use.tools).await;
         }
 
         let stream = self
@@ -762,25 +768,73 @@ impl Session {
     }
 }
 
-/// The catalog tools `history` called, in the order of their first call.
-fn called_catalog_tools(history: &[Message], catalog: &[SearchableTool]) -> Vec<SearchableTool> {
-    let mut called: Vec<SearchableTool> = Vec::new();
-    for message in history {
-        let Message::Assistant { content, .. } = message else {
-            continue;
-        };
-        for content in content.iter() {
-            let AssistantContent::ToolCall(call) = content else {
-                continue;
-            };
-            let name = &call.function.name;
-            if called.iter().any(|tool| &tool.name == name) {
-                continue;
-            }
-            if let Some(tool) = catalog.iter().find(|tool| &tool.name == name) {
-                called.push(tool.clone());
+/// The catalog tools `history` loaded or called, in the order it first did.
+#[derive(Default)]
+struct HistoryTools {
+    /// Every such tool, once.
+    tools: Vec<SearchableTool>,
+    /// The tools each `SearchTools` or `LoadTools` call loaded, by the call's
+    /// provider id.
+    loads: Vec<(String, Vec<SearchableTool>)>,
+}
+
+impl HistoryTools {
+    fn of(history: &[Message], catalog: &[SearchableTool]) -> Self {
+        let mut found = Self::default();
+        let mut call_names: HashMap<&str, &str> = HashMap::new();
+        for message in history {
+            match message {
+                Message::Assistant { content, .. } => {
+                    for content in content.iter() {
+                        let AssistantContent::ToolCall(call) = content else {
+                            continue;
+                        };
+                        call_names.insert(&call.id, &call.function.name);
+                        found.add(&call.function.name, catalog);
+                    }
+                }
+                Message::User { content } => {
+                    for content in content.iter() {
+                        let UserContent::ToolResult(result) = content else {
+                            continue;
+                        };
+                        let Some(tool_name) = call_names.get(result.id.as_str()) else {
+                            continue;
+                        };
+                        let text: String = result
+                            .content
+                            .iter()
+                            .filter_map(|content| match content {
+                                ToolResultContent::Text(text) => Some(text.text.as_str()),
+                                _ => None,
+                            })
+                            .collect();
+                        let loaded: Vec<SearchableTool> = tools_loaded_by(tool_name, &text)
+                            .iter()
+                            .filter_map(|name| found.add(name, catalog))
+                            .collect();
+                        if !loaded.is_empty() {
+                            // Requests are laid out under the provider's call
+                            // id (see `replay_provider_ids`).
+                            let call_id = result.call_id.as_ref().unwrap_or(&result.id);
+                            found.loads.push((call_id.clone(), loaded));
+                        }
+                    }
+                }
+                Message::System { .. } => {}
             }
         }
+        found
     }
-    called
+
+    /// Adds the catalog tool `name` unless it is already in, returning it if
+    /// it was added.
+    fn add(&mut self, name: &str, catalog: &[SearchableTool]) -> Option<SearchableTool> {
+        if self.tools.iter().any(|tool| tool.name == name) {
+            return None;
+        }
+        let tool = catalog.iter().find(|tool| tool.name == name)?.clone();
+        self.tools.push(tool.clone());
+        Some(tool)
+    }
 }

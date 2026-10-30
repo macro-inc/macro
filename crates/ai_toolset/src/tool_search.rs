@@ -10,8 +10,15 @@
 //! catalog out of every request without depending on any provider's native
 //! tool-search feature.
 
-use schemars::Schema;
+use schemars::{JsonSchema, Schema};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+/// The name of the tool that finds catalog tools and loads the top matches.
+pub const SEARCH_TOOLS: &str = "SearchTools";
+
+/// The name of the tool that loads catalog tools by name.
+pub const LOAD_TOOLS: &str = "LoadTools";
 
 /// A tool that is loaded on demand via tool search rather than sent on every
 /// request. The catalog of these is returned by
@@ -53,6 +60,65 @@ impl std::fmt::Debug for ToolLoader {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("ToolLoader")
     }
+}
+
+/// A catalog tool as [`SEARCH_TOOLS`] and [`LOAD_TOOLS`] report it: just
+/// enough for the model to decide how to call it.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct ToolMatch {
+    /// The exact name to call the tool by.
+    pub name: String,
+    /// What the tool does.
+    pub description: String,
+}
+
+impl ToolMatch {
+    /// The match for `tool`.
+    pub fn of(tool: &SearchableTool) -> Self {
+        Self {
+            name: tool.name.clone(),
+            description: tool.description.clone(),
+        }
+    }
+}
+
+/// Response from [`SEARCH_TOOLS`]: ranked matches, split into the top matches
+/// (auto-loaded, callable on the next model turn) and the remainder (loadable
+/// via [`LOAD_TOOLS`]).
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct SearchToolsResponse {
+    /// Top matches, ranked by relevance. These are loaded: call them by exact
+    /// name on the next step.
+    pub results: Vec<ToolMatch>,
+    /// Matches past the auto-load cap, ranked. Not callable yet — pass a name
+    /// to `LoadTools` if one of these is the tool you need.
+    pub additional_matches: Vec<ToolMatch>,
+}
+
+/// Response from [`LOAD_TOOLS`]: which requested tools were loaded, and any
+/// names that weren't found.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct LoadToolsResponse {
+    /// Tools that are now loaded and callable by name.
+    pub loaded: Vec<ToolMatch>,
+    /// Requested names that don't exist (call `SearchTools` to find valid names).
+    pub not_found: Vec<String>,
+}
+
+/// The names of the catalog tools a `tool_name` call loaded, read from its
+/// `result`. Empty for any other tool, and for a result that is not the
+/// tool's response (an error, or a result cut for length).
+pub fn tools_loaded_by(tool_name: &str, result: &str) -> Vec<String> {
+    let matches = match tool_name {
+        SEARCH_TOOLS => serde_json::from_str::<SearchToolsResponse>(result)
+            .map(|response| response.results)
+            .unwrap_or_default(),
+        LOAD_TOOLS => serde_json::from_str::<LoadToolsResponse>(result)
+            .map(|response| response.loaded)
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    matches.into_iter().map(|tool| tool.name).collect()
 }
 
 #[cfg(test)]
@@ -103,5 +169,24 @@ mod test {
         assert_eq!(ctx.searchable_tools.len(), 1);
         assert_eq!(ctx.searchable_tools[0].name, "mcp__x__y");
         assert!(ctx.tool_loader.is_some());
+    }
+
+    #[test]
+    fn tools_loaded_by_reads_search_and_load_results() {
+        let search = serde_json::json!({
+            "results": [{ "name": "ReadInitiative", "description": "Read a project" }],
+            "additional_matches": [{ "name": "ListInitiatives", "description": "List projects" }],
+        })
+        .to_string();
+        let load = serde_json::json!({
+            "loaded": [{ "name": "ReadInitiative", "description": "Read a project" }],
+            "not_found": ["ReadInitiatives"],
+        })
+        .to_string();
+
+        assert_eq!(tools_loaded_by(SEARCH_TOOLS, &search), ["ReadInitiative"]);
+        assert_eq!(tools_loaded_by(LOAD_TOOLS, &load), ["ReadInitiative"]);
+        assert!(tools_loaded_by("ReadInitiative", &load).is_empty());
+        assert!(tools_loaded_by(LOAD_TOOLS, "Tool call failed").is_empty());
     }
 }
