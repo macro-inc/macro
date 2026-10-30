@@ -58,11 +58,13 @@ staggered bottoms and open counters, following the familiar Phosphor silhouette.
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
-Urgent priority uses a filled rounded-square exclamation badge with a wide solid
-stem and dot for small-size legibility. Its foreground mixes 25% `currentColor`
-with 75% black in sRGB, giving a darker shade of the badge rather than a transparent
-cutout. The badge's dedicated `priority-urgent` token maps to the theme's orange
-rather than warning or accent.
+Urgent priority uses a filled rounded-square exclamation badge with a wide hollow
+stem and dot for small-size legibility. Both marks are transparent cutouts. The
+badge's dedicated `priority-urgent` token maps to the theme's orange rather than
+warning or accent.
+Not started uses a hollow ring with opposing inner shadow and highlight arcs and
+a subtle outer bevel. Keep the shading inside the existing outline and the center
+transparent so its status color and surrounding surface remain visible.
 Completed and Canceled task statuses use filled check-circle and x-circle glyphs
 through the shared property and task-status renderers. Their marks are transparent
 cutouts. Empty priority uses three muted, hollow ascending bars,
