@@ -1079,8 +1079,8 @@ impl Adapter {
 }
 
 /// A herdr agent name for the session: `[a-z][a-z0-9_-]{0,31}`.
-/// Press Esc until herdr reports the native turn over, and say whether it
-/// is. One press is not proof: in Claude Code's vim editor mode the first
+/// Press Esc until herdr reports the agent `idle` or `done`, and say whether
+/// it is. One press is not proof: in Claude Code's vim editor mode the first
 /// Esc only leaves insert mode. No press follows a stop, since Esc at an idle
 /// Claude Code prompt opens its rewind menu.
 #[tracing::instrument(
@@ -1097,7 +1097,7 @@ async fn interrupt(herdr: &HerdrCli, name: &str) -> Result<bool, HerdrError> {
         for _ in 0..INTERRUPT_CHECKS {
             tokio::time::sleep(POLL).await;
             let status = herdr.agent_info(name).await?.status;
-            if !matches!(status.as_str(), "working" | "blocked") {
+            if matches!(status.as_str(), "idle" | "done") {
                 span.record("stopped", true);
                 return Ok(true);
             }
