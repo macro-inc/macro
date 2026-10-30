@@ -12,9 +12,11 @@ holds the backfill, the audit and the tests.
 1. **Deploy as usual.** The migration creates the table, its read index and the
    triggers in one transaction (5 s lock timeout; it needs a brief write lock on
    `entity_access`, `"Document"`, `"Chat"`, `"Project"` and `document_sub_type`).
-   A second migration builds the `"Document"` owner index concurrently. From
-   then on every write keeps the rows of the items it touches current, so no
-   writer needs to deploy first. Projected reads stay off
+   A second migration builds the `"Document"` owner index concurrently, and a
+   third the `"UserHistory"` index that view-time sorts read; indexing
+   `"updatedAt"` makes a view's history upsert a non-HOT update (6 µs, 4%, on
+   the synthetic copy). From then on every write keeps the rows of the items it
+   touches current, so no writer needs to deploy first. Projected reads stay off
    (`SOUP_SOURCE_ITEMS_ENABLED` defaults to false).
 2. **Backfill against the primary.** Items untouched since the migration have no
    rows yet. With `DATABASE_URL` from the environment's normal secret handling:
@@ -40,13 +42,7 @@ holds the backfill, the audit and the tests.
    It compares the whole table with its inputs in one read-only snapshot and
    fails unless both mismatch counts are zero. It reads every grant and item, so
    allow for its load.
-4. **Add the history index before enabling view-time sorts.** `ViewedAt` and
-   `ViewedUpdated` read each user's `"UserHistory"` newest first. Without an
-   index on `("userId", "itemType", "updatedAt", "itemId")` they sort the user's
-   whole history of each type. Indexing `"updatedAt"` stops every view's history
-   upsert from being a HOT update, so it is not in this release; add it in a
-   separate concurrent migration when projected reads are ready.
-5. **Enable projected reads gradually.** Set `SOUP_SOURCE_ITEMS_ENABLED=true` for
+4. **Enable projected reads gradually.** Set `SOUP_SOURCE_ITEMS_ENABLED=true` for
    a document storage canary and restart it. Watch soup latency and errors,
    write latency on the item and grant tables, lock waits and replication lag
    before expanding.
@@ -87,9 +83,9 @@ For a read regression, set `SOUP_SOURCE_ITEMS_ENABLED=false` and restart.
 Drift can only come from disabling the triggers or writing `source_items` by
 hand; the backfill repairs it and the audit confirms it.
 
-Verify `source_items_read` and `idx_document_owner_updated_live` (and the history
-index from step 4) have `pg_index.indisready` and `pg_index.indisvalid` true
-before enabling reads. An interrupted concurrent build can leave an invalid
+Verify `source_items_read`, `idx_document_owner_updated_live` and
+`idx_user_history_user_type_updated` have `pg_index.indisready` and
+`pg_index.indisvalid` true before enabling reads. An interrupted concurrent build can leave an invalid
 index that `IF NOT EXISTS` skips: drop only that index with
 `DROP INDEX CONCURRENTLY`, outside a transaction, then rerun the statement.
 
