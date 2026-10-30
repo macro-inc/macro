@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
@@ -11,18 +12,26 @@ export function showTaskCreatedToast(
   openTask: TaskComposerHost['openTask']
 ) {
   const task = { id: documentId, optimisticSnapshot };
-  toast.success('Task created', {
+  const open = (newSplit: boolean) => {
+    if (toastId !== undefined) toast.dismiss(toastId);
+    openTask(task, { newSplit, referredFrom: null });
+  };
+  const toastId = toast.success('Task created', {
     actions: [
       {
         label: 'Open',
         icon: ArrowSquareOutIcon,
-        onClick: () => openTask(task, { newSplit: false, referredFrom: null }),
+        onClick: () => open(false),
       },
-      {
-        label: 'Open (New Split)',
-        icon: SplitIcon,
-        onClick: () => openTask(task, { newSplit: true, referredFrom: null }),
-      },
+      ...(!isTouchDevice()
+        ? [
+            {
+              label: 'Open (New Split)',
+              icon: SplitIcon,
+              onClick: () => open(true),
+            },
+          ]
+        : []),
     ],
   });
 

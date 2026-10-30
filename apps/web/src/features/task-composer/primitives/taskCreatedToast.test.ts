@@ -1,10 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { showTaskCreatedToast } from './taskCreatedToast';
 
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: vi.fn(), failure: vi.fn() },
+  toast: { success: vi.fn(), failure: vi.fn(), dismiss: vi.fn() },
 }));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: vi.fn() }));
 
 const writeText = vi.fn();
 const openTask = vi.fn();
@@ -35,6 +37,7 @@ it('announces the task while the clipboard write is still pending', () => {
 
 it('opens the created task from the toast and copies its link', () => {
   writeText.mockResolvedValue(undefined);
+  vi.mocked(toast.success).mockReturnValue(7);
 
   showTaskCreatedToast('task-1', undefined, openTask);
 
@@ -47,6 +50,45 @@ it('opens the created task from the toast and copies its link', () => {
     { id: 'task-1', optimisticSnapshot: undefined },
     { newSplit: false, referredFrom: null }
   );
+  expect(toast.dismiss).toHaveBeenCalledWith(7);
+  expect(vi.mocked(toast.dismiss).mock.invocationCallOrder[0]).toBeLessThan(
+    openTask.mock.invocationCallOrder[0]
+  );
+});
+
+it('offers a new split on desktop and dismisses the toast before opening it', () => {
+  writeText.mockResolvedValue(undefined);
+  vi.mocked(isTouchDevice).mockReturnValue(false);
+  vi.mocked(toast.success).mockReturnValue(7);
+
+  showTaskCreatedToast('task-1', undefined, openTask);
+
+  const [, options] = vi.mocked(toast.success).mock.calls[0];
+  expect(options?.actions?.map((action) => action.label)).toEqual([
+    'Open',
+    'Open (New Split)',
+  ]);
+  options?.actions
+    ?.find((action) => action.label === 'Open (New Split)')
+    ?.onClick();
+  expect(toast.dismiss).toHaveBeenCalledWith(7);
+  expect(openTask).toHaveBeenCalledWith(
+    { id: 'task-1', optimisticSnapshot: undefined },
+    { newSplit: true, referredFrom: null }
+  );
+  expect(vi.mocked(toast.dismiss).mock.invocationCallOrder[0]).toBeLessThan(
+    openTask.mock.invocationCallOrder[0]
+  );
+});
+
+it('leaves out the new split action on touch devices', () => {
+  writeText.mockResolvedValue(undefined);
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+
+  showTaskCreatedToast('task-1', undefined, openTask);
+
+  const [, options] = vi.mocked(toast.success).mock.calls[0];
+  expect(options?.actions?.map((action) => action.label)).toEqual(['Open']);
 });
 
 it('keeps the task toast when the clipboard denies the write', async () => {

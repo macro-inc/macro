@@ -161,6 +161,11 @@ Block formatting passes a forward copy of the selection to Lexical's
 `$setBlocksType` so backward selections include their first paragraph and keep
 the editor's actual selection direction. The Markdown core browser suite's
 `quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
+The same suite checks multi-paragraph plain-text, HTML, and Lexical pastes into
+empty quotes and selections within a quote on desktop, tablet, and phone.
+Selections across adjacent quotes stay quoted; ranges containing unquoted blocks
+retain normal paste behavior.
+Keep pasted paragraphs quoted through the shared clipboard insertion command.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -825,7 +830,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 ### Creation choices and notifications
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
-- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button.
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Sidebar tag dragging

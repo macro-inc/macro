@@ -610,6 +610,12 @@ the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
 
+After creation, the `Task created` toast shows an `Open` action. Touch devices
+omit `Open (New Split)`; desktop keeps both actions. Either action immediately dismisses the toast before opening
+the task. Verify the toast at phone and tablet widths with touch
+emulation: the message and action fit without clipping, and `Open` visits the
+created task in place.
+
 1. Click the `Task` button (or `Create` → `Task T`, or keyboard `c` then `t`).
 2. A dialog opens with the title contenteditable focused (placeholder `New task`), plus
    `Add description...`, and property buttons: `Not Started` (status), `Priority`, assignee
@@ -629,9 +635,10 @@ the centered composer dialog. Both layouts are views in
 3. `type_text` the title, then press **Ctrl+Enter** to create, or tap `Create Task` on
    touch (the button enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
-   Creating shows a `Task created` toast with `Open` and `Open (New Split)` as
-   soon as the server returns, then copies the task link in the background. A
-   denied or prompted clipboard write never delays or replaces that toast.
+   Creating shows a `Task created` toast with `Open` (and `Open (New Split)` on
+   desktop) as soon as the server returns, then copies the task link in the
+   background. A denied or prompted clipboard write never delays or replaces
+   that toast.
 
 The property row adapts when the launching pane supplies a task-composer preset.
 The app shell's creation-context provider snapshots the focused pane's preset
