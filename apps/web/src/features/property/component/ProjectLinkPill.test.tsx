@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useProperty } from '../core/context';
@@ -106,6 +112,48 @@ it('stays a plain pill when there is no project to open', () => {
   renderPill({});
   expect(screen.getByText('Plain pill')).toBeTruthy();
   expect(screen.queryByRole('button')).toBeNull();
+});
+
+it('returns focus to the caret when the first project replaces the pill', async () => {
+  const [property, setProperty] = createSignal<EntityProperty>({
+    ...project,
+    value: [],
+  });
+  const EmptyPill = () => {
+    const ctx = useProperty();
+    return (
+      <button
+        type="button"
+        onClick={(event) => ctx.openEditor(event.currentTarget)}
+      >
+        Set project
+      </button>
+    );
+  };
+  const ClosePicker = () => {
+    const ctx = useProperty();
+    return (
+      <button type="button" onClick={() => ctx.closeEditor()}>
+        Close picker
+      </button>
+    );
+  };
+  render(() => (
+    <Root property={property()} canEdit>
+      <ProjectLinkPill property={property()} fallback={<EmptyPill />} />
+      <ClosePicker />
+    </Root>
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Set project' }));
+  setProperty(project);
+  fireEvent.click(screen.getByText('Close picker'));
+
+  await waitFor(() =>
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      'Change project'
+    )
+  );
 });
 
 it('keeps the caret mounted while a picked project loads', () => {

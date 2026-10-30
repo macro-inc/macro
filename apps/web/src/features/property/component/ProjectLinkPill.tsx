@@ -15,7 +15,8 @@ import { getEntityValues } from '../utils';
  * A task's project as a split pill: the name opens the project and the caret
  * changes it. An empty or unavailable project stays the plain `fallback` pill.
  * A project still loading keeps the split, so a pick doesn't remount the caret
- * that takes focus back when the picker closes.
+ * that takes focus back when the picker closes. The name counts as a row action
+ * so that focus returns to the caret when the first project replaces the pill.
  */
 export function ProjectLinkPill(props: {
   property: PropertyValue;
@@ -49,6 +50,7 @@ export function ProjectLinkPill(props: {
         class={cn('min-w-0 max-w-full border-0', props.class)}
       >
         <ButtonGroup.Button
+          data-property-row-action
           aria-label={t('entityActions.openProjectNamed', { name: name() })}
           class="group/project-link min-w-0 shrink justify-start"
           onClick={open}
