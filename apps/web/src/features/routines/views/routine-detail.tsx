@@ -206,6 +206,18 @@ export function RoutineDetailView(props: {
                     failed={Boolean(autosave.error())}
                   />
                 </Show>
+                <Show when={props.onCompose}>
+                  {(compose) => (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => compose()()}
+                    >
+                      <SparkleIcon class="size-3.5" />
+                      Compose with agent
+                    </Button>
+                  )}
+                </Show>
                 <RoutineRunButton
                   enabled={isActive()}
                   runDisabled={runDisabled() || needsEvent()}
@@ -410,30 +422,16 @@ export function RoutineDetailView(props: {
           stepsAside={
             <Show when={state()}>
               {(draft) => (
-                <>
-                  <RoutineStepsSummary
-                    steps={draftSteps(draft())}
-                    triggers={draft().triggers ?? []}
-                    lastRun={latestStepRun(
-                      props.source.history(),
-                      routine().revision
-                    )}
-                    showRun={showRun()}
-                    onShowRun={setShowRun}
-                  />
-                  <Show when={isOwned() && props.onCompose}>
-                    {(compose) => (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => compose()()}
-                      >
-                        <SparkleIcon class="size-3.5" />
-                        Compose with agent
-                      </Button>
-                    )}
-                  </Show>
-                </>
+                <RoutineStepsSummary
+                  steps={draftSteps(draft())}
+                  triggers={draft().triggers ?? []}
+                  lastRun={latestStepRun(
+                    props.source.history(),
+                    routine().revision
+                  )}
+                  showRun={showRun()}
+                  onShowRun={setShowRun}
+                />
               )}
             </Show>
           }

@@ -2103,7 +2103,7 @@ tool steps, route with `if`/`choose` decisions (one classifier call), keep to
 one agent step per run, resolve every id before writing, and send the complete
 configuration, since an update replaces name, triggers, steps and required apps.
 GitHub triggers are set on the routine's page, not through these tools.
-**Compose with agent** on a routine's page (beside the Steps heading) opens a
+**Compose with agent** in a routine's top bar opens a
 new conversation in a split with the skill and the routine already mentioned,
 waiting for what to change.
 

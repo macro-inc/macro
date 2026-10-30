@@ -78,7 +78,8 @@ function RoutineSection(props: {
 }) {
   return (
     <section aria-label={props.label} class="grid min-w-0 gap-3">
-      <div class="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1 px-6 @max-[600px]/routine:px-1">
+      {/* Flush with the cards' edge and the title above, one left line. */}
+      <div class="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
         <h2 class="text-sm font-medium text-ink-muted">{props.label}</h2>
         <Show when={props.aside}>
           <span class="ml-auto flex min-w-0 items-center gap-2 text-xs text-ink-extra-muted">

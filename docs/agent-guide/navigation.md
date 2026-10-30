@@ -1219,8 +1219,9 @@ trigger runs it.
 A routine's top bar uses the task breadcrumb layout: **Routines → routine name**
 with its three-dot menu (**Duplicate**, **Share**, **Delete**)
 right after the name, then the **Overview** / **Runs** tabs (Runs with a count),
-and at the right the save state (**Saving…** / **Saved**), **Run now** with its
-**Run options** menu, and the details toggle. Overview is the routine as a page:
+and at the right the save state (**Saving…** / **Saved**), **Compose with
+agent**, **Run now** with its **Run options** menu, and the details toggle.
+Overview is the routine as a page:
 its icon, an editable title, an editable description (**Add a description…**;
 saves on blur or Enter, Escape discards, up to 1000 characters; a drafted
 routine starts with the sentence it was drafted from, a template's with the
@@ -1228,8 +1229,7 @@ template's description), then a line with the **Enabled** switch (disabled
 with a hover reason while a run is going or the routine can't run), **Owned by**
 and **Last run**. Below are labelled sections, each on a raised surface:
 **Trigger** (with **Next run** at its right) holds the trigger sentences above;
-**Steps** (with **Show last run**, the AI calls per run and **Compose with
-agent** at its right) holds
+**Steps** (with **Show last run** and the AI calls per run at its right) holds
 the steps (a single **Ask AI** step for routines without other steps; it holds
 the **Who** model or agent token and the instructions); **Connections**, shown
 when the routine has an **Ask AI** step or apps, lists its apps or **No
