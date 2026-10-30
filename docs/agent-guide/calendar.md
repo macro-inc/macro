@@ -249,10 +249,11 @@ backdrop, or Escape dismiss it.
 Desktop retains the centered dialog with inline dates, wrapping pills, and its
 Cancel footer; both layouts compose `EventFormParts` (`MobileEventForm` and
 `EventForm`), and the range rows compose `DateTimeRange` parts.
-Dismissing a changed event still asks before discarding the draft. An event
-created from Home's **+ New** → Event opens the calendar on it once it saves,
-with its details showing; events created inside the calendar stay where they
-were made.
+Dismissing a changed event by swipe, backdrop tap or Escape still asks before
+discarding the draft; Keep editing returns to the sheet with the edits intact,
+and the prompt stays away until the next attempt to close. An event created
+from Home's **+ New** → Event opens the calendar on it once it saves, with its
+details showing; events created inside the calendar stay where they were made.
 
 On phones, event details use inset round action buttons and a transparent RSVP
 footer. Answering a recurring invitation opens a rounded glass sheet: choose
