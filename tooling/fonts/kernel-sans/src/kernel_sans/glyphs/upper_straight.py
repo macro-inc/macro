@@ -111,8 +111,9 @@ def _vtrap(p, v, d1, d2):
 # (2400 vs 700 units^2 at 800) and sat above the wedge behind an 8-unit neck,
 # so it read as a hole punched through the join at text sizes. Depth p.trap,
 # anchored 0.6 of the depth below the crotch, opens the bite out of the wedge
-# itself: at 800 the narrowest white is 13-15 units (5-8 at the crotch) and
-# the wedge is under 24 units wide for 32-44 units (44-55 with no trap).
+# itself: at 800 the white's narrowest point is 13-19 units wide (5-8 with
+# the trap at the crotch), and it stays under 24 units wide for 15-44 units
+# against 29-55 with no trap.
 STEM_JOIN = 1.0  # depth, in p.trap
 STEM_JOIN_DROP = 0.6  # anchor below the crotch, in depths
 
