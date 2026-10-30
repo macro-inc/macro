@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -67,6 +68,11 @@ function ItemDragOverlay() {
     return getEntityIconType(data as EntityDragData);
   });
 
+  const additionalCount = () => {
+    const data = activeDraggable()?.data as EntityDragData | undefined;
+    return (data?.selection?.entities().length ?? 1) - 1;
+  };
+
   const centeredOnPointerStyle = createMemo(() => {
     const overlay = state?.active.overlay;
     const sensor = state?.active.sensor;
@@ -94,12 +100,11 @@ function ItemDragOverlay() {
             {activeDraggable()?.data.name}
           </TruncatedText>
         </div>
-        {/* TODO: when multiselect exists */}
-        {/* <Show when={activeDraggable()?.data.selectedItems.length > 1}>
-        <div class={`${TEXT_SIZE_CLASSES[size ?? 'sm']} text-ink-muted pl-2`}>
-          + {activeDraggable()?.data.selectedItems.length - 1} items
-        </div>
-      </Show> */}
+        <Show when={additionalCount() > 0}>
+          <div class="pl-6 text-xs text-ink-muted">
+            {t('entityActions.dragMoreItems', { count: additionalCount() })}
+          </div>
+        </Show>
       </div>
     </Layer>
   );

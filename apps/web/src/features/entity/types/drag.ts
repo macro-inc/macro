@@ -4,10 +4,19 @@ import type { EntityData } from './entity';
 
 export type EntityDragOperation = 'move' | 'copy';
 
+/** The selection a row belongs to while it is dragged. */
+export type EntityDragSelection = {
+  /** What the drag carries: the whole selection for a selected row, else the row. */
+  entities: Accessor<EntityData[]>;
+  /** Clears the list's selection if the dragged row is part of it. */
+  clear: () => void;
+};
+
 export type EntityDragData = EntityData & {
   dragType: 'entity';
   operation: Accessor<EntityDragOperation>;
   splitId?: string;
+  selection?: EntityDragSelection;
 };
 
 export type EntityDragEvent = DragEvent & {

@@ -11,7 +11,11 @@ import {
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
-import type { EntityData } from '@entity';
+import {
+  type EntityData,
+  type EntityDragSelection,
+  EntityDragSelectionContext,
+} from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { TreeTag } from '@property/tags/core/tag-tree';
 import { DroppedTagApplier } from '@property/tags/DroppedTagApplier';
@@ -70,6 +74,21 @@ export const SoupEntityContextMenu: FlowComponent<
   const menuEntities = () =>
     getSoupMenuEntities(props.entity, props.selectedEntities());
 
+  const dragSelection: EntityDragSelection = {
+    entities: menuEntities,
+    clear: () => {
+      const isSelected = props
+        .selectedEntities()
+        .some(({ id }) => id === props.entity.id);
+      if (isSelected) props.list.selection.clear();
+    },
+  };
+  const row = () => (
+    <EntityDragSelectionContext.Provider value={dragSelection}>
+      {props.children}
+    </EntityDragSelectionContext.Provider>
+  );
+
   const pickers = createSoupEntityMenuPickers({
     entity: () => props.entity,
     entities: menuEntities,
@@ -115,7 +134,7 @@ export const SoupEntityContextMenu: FlowComponent<
             }));
           }}
         >
-          {props.children}
+          {row()}
         </div>
       </Match>
       <Match when={true}>
@@ -133,7 +152,7 @@ export const SoupEntityContextMenu: FlowComponent<
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }
           >
-            {props.children}
+            {row()}
           </ContextMenuTrigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>

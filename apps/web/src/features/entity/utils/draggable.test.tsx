@@ -7,8 +7,9 @@ import {
 import { type Accessor, createSignal, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { EntityDragSelection } from '../types/drag';
 import type { ChannelEntity } from '../types/entity';
-import { createEntityDraggable } from './draggable';
+import { createEntityDraggable, EntityDragSelectionContext } from './draggable';
 
 vi.mock('@components/app/ItemDragAndDrop', () => ({
   useOptionalDragOperation: () => ({ isAltKey: () => false }),
@@ -24,7 +25,8 @@ const entity: ChannelEntity = {
 
 function setup(
   deferUntilInteraction?: Accessor<boolean>,
-  rowEntity: ChannelEntity = entity
+  rowEntity: ChannelEntity = entity,
+  selection?: EntityDragSelection
 ) {
   let state!: NonNullable<ReturnType<typeof useDragDropContext>>[0];
   let removeRow!: () => void;
@@ -50,7 +52,9 @@ function setup(
       <>
         <DragDropSensors />
         <Show when={mounted()}>
-          <Row />
+          <EntityDragSelectionContext.Provider value={selection}>
+            <Row />
+          </EntityDragSelectionContext.Provider>
         </Show>
       </>
     );
@@ -104,6 +108,22 @@ describe('createEntityDraggable', () => {
       expect('dragType' in row).toBe(false);
     }
   );
+
+  it('carries the selection its list provides', () => {
+    const other: ChannelEntity = { ...entity, id: 'other', name: 'Another' };
+    const selection = { entities: () => [entity, other], clear: vi.fn() };
+    const { state } = setup(undefined, entity, selection);
+
+    const data = state.draggables['row-split']!.data;
+
+    expect(data.selection.entities()).toEqual([entity, other]);
+  });
+
+  it('carries no selection outside a list', () => {
+    const { state } = setup();
+
+    expect(state.draggables['row-split']!.data.selection).toBeUndefined();
+  });
 
   it('does not register or measure opted-in rows until a primary press', () => {
     const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect');
