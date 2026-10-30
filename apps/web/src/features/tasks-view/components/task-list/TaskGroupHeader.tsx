@@ -23,15 +23,15 @@ const EMPTY_GROUP_PROPERTY_IDS: Partial<Record<TaskGroupBy, string>> = {
 
 export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]:
-    'bg-task/5 border-task/10 data-highlighted:bg-task/10 hover:bg-task/10',
+    'bg-task-status-not-started/5 border-task-status-not-started/10 data-highlighted:bg-task-status-not-started/10 hover:bg-task-status-not-started/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]:
-    'bg-alert/5 border-alert/10 data-highlighted:bg-alert/10 hover:bg-alert/10',
+    'bg-task-status-in-progress/5 border-task-status-in-progress/10 data-highlighted:bg-task-status-in-progress/10 hover:bg-task-status-in-progress/10',
   [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]:
-    'bg-note/5 border-note/10 data-highlighted:bg-note/10 hover:bg-note/10',
+    'bg-task-status-in-review/5 border-task-status-in-review/10 data-highlighted:bg-task-status-in-review/10 hover:bg-task-status-in-review/10',
   [PROPERTY_OPTION_IDS.STATUS.COMPLETED]:
-    'bg-accent/5 border-accent/10 data-highlighted:bg-accent/10 hover:bg-accent/10',
+    'bg-task-status-completed/5 border-task-status-completed/10 data-highlighted:bg-task-status-completed/10 hover:bg-task-status-completed/10',
   [PROPERTY_OPTION_IDS.STATUS.CANCELED]:
-    'bg-ink/5 border-ink/10 data-highlighted:bg-ink/10 hover:bg-ink/10',
+    'bg-task-status-canceled/5 border-task-status-canceled/10 data-highlighted:bg-task-status-canceled/10 hover:bg-task-status-canceled/10',
 };
 
 export function TaskGroupHeader(props: {

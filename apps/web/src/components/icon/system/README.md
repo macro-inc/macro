@@ -62,6 +62,10 @@ Urgent priority uses a filled rounded-square exclamation badge with the dedicate
 `priority-urgent` token, mapped to the theme's orange rather than warning or accent.
 Completed task status uses the filled check-circle through the shared property
 and task-status renderers. Empty priority uses a muted circled minus.
+Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
+`task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
+tokens for icons and group-header tints. Their defaults are muted gray, warning
+amber/yellow, violet, green, and muted gray respectively.
 
 Prefer one recognizable silhouette and only the detail needed to identify its
 action. Chat variants share one bubble, task variants one checked square,

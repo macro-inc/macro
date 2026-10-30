@@ -330,6 +330,9 @@ Macro Light uses `#F5F5F5` outside `#FCFCFC` content panels, white controls,
 The theme editor's **Status** section exposes **Priority Urgent** separately
 from **Warning**. It defaults to the theme's orange palette color; changing it
 recolors urgent-priority badges without changing in-progress task status.
+The separate **Task statuses** section exposes a color for Not Started, In Progress,
+In Review, Completed, and Canceled. Each color controls its task icons and matching
+group-header tints without changing the global warning, success, or accent colors.
 
 ### Theme mentions
 

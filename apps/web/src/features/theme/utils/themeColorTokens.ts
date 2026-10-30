@@ -109,6 +109,13 @@ export function getDefaultSemanticColorTokens(
     warning: tokenReference(mode === 'dark' ? 'amber' : 'yellow'),
     failure: tokenReference('red'),
     'priority-urgent': tokenReference('orange'),
+    'task-status-not-started': tokenReference('content-1'),
+    'task-status-in-progress': tokenReference(
+      mode === 'dark' ? 'amber' : 'yellow'
+    ),
+    'task-status-in-review': tokenReference('violet'),
+    'task-status-completed': tokenReference('green'),
+    'task-status-canceled': tokenReference('content-1'),
     chrome: tokenReference('surface-4'),
   };
 }

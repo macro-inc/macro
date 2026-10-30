@@ -158,6 +158,11 @@ body.tauri-ios {
   --invert-warning: var(--color-warning);
   --invert-failure: var(--color-failure);
   --invert-priority-urgent: var(--color-priority-urgent);
+  --invert-task-status-not-started: var(--color-task-status-not-started);
+  --invert-task-status-in-progress: var(--color-task-status-in-progress);
+  --invert-task-status-in-review: var(--color-task-status-in-review);
+  --invert-task-status-completed: var(--color-task-status-completed);
+  --invert-task-status-canceled: var(--color-task-status-canceled);
 }
 
 [data-invert] {
@@ -184,6 +189,11 @@ body.tauri-ios {
   --color-warning: color-mix(in oklch, var(--invert-warning) 20%, var(--invert-palette-target));
   --color-failure: color-mix(in oklch, var(--invert-failure) 20%, var(--invert-palette-target));
   --color-priority-urgent: color-mix(in oklch, var(--invert-priority-urgent) 20%, var(--invert-palette-target));
+  --color-task-status-not-started: color-mix(in oklch, var(--invert-task-status-not-started) 20%, var(--invert-palette-target));
+  --color-task-status-in-progress: color-mix(in oklch, var(--invert-task-status-in-progress) 20%, var(--invert-palette-target));
+  --color-task-status-in-review: color-mix(in oklch, var(--invert-task-status-in-review) 20%, var(--invert-palette-target));
+  --color-task-status-completed: color-mix(in oklch, var(--invert-task-status-completed) 20%, var(--invert-palette-target));
+  --color-task-status-canceled: color-mix(in oklch, var(--invert-task-status-canceled) 20%, var(--invert-palette-target));
   --color-accent-contrast: var(--invert-surface);
   --color-accent-contrast-muted: oklch(from var(--color-accent-contrast) l c h / 0.7);
   --theme-surface: initial;
@@ -414,6 +424,11 @@ body.tauri-ios {
   --color-warning: var(--color-amber);
   --color-failure: var(--color-red);
   --color-priority-urgent: var(--color-orange);
+  --color-task-status-not-started: var(--color-content-1);
+  --color-task-status-in-progress: var(--color-amber);
+  --color-task-status-in-review: var(--color-violet);
+  --color-task-status-completed: var(--color-green);
+  --color-task-status-canceled: var(--color-content-1);
   --color-chrome: color-mix(in oklch, var(--color-surface-3) 98%, var(--color-content-0));
 
   /* Generated compatibility tokens. */
@@ -639,6 +654,11 @@ body.tauri-ios {
 :root,
 [data-theme-light] {
   --color-priority-urgent: var(--color-orange);
+  --color-task-status-not-started: var(--color-content-1);
+  --color-task-status-in-progress: var(--color-amber);
+  --color-task-status-in-review: var(--color-violet);
+  --color-task-status-completed: var(--color-green);
+  --color-task-status-canceled: var(--color-content-1);
   /* Neutral borders. Focus, status, and glass edges stay independent. */
   --border-primary: oklch(1 0 0 / 16%);
   --border-secondary: oklch(1 0 0 / 12%);
@@ -716,6 +736,7 @@ body.tauri-ios {
 }
 
 [data-theme-light='true'] {
+  --color-task-status-in-progress: var(--color-yellow);
   /* Neutral borders. */
   --border-primary: oklch(0 0 0 / 16%);
   --border-secondary: oklch(0 0 0 / 12%);
