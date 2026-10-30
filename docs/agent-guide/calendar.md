@@ -468,7 +468,11 @@ icon button. Desktop `New` keeps its label.
 Touch devices keep the month selector and header controls without separate
 create or call buttons in the right island. Mobile header islands omit Search.
 The desktop sidebar's Search icon sits left of collapse and reveals event search
-above New. Its mini calendar remains navigable by date and month.
+above New. Its mini calendar browses months independently of the main grid:
+month arrows, the month picker, and keyboard focus changes do not move the main
+calendar. Selecting a day navigates the main calendar without closing the narrow
+layout's navigation overlay. Main calendar navigation updates the mini calendar's
+selected day and week highlight without resetting the month being browsed.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.

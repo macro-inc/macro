@@ -108,9 +108,10 @@ or **Unpin from title**. Pinning adds the property to the title row; unpinning k
 its saved value and the side-panel row. The title pill's hover card also offers
 **Unpin** as a filled icon-only button with a gap: beside the value in a row,
 or beside the key above a full-width divider in a column.
-Status, Priority, and Assignees are pinned by default, with Project when
-enabled. Unpinning a default preserves the other pins, and clearing all pins stays
-cleared after reopening. The empty Project placeholder can also be pinned or
+Status, Priority, Assignees, and Due Date are pinned by default, with Project when
+enabled. Defaults apply only when the task has no saved pin list; customized pins
+stay unchanged. Unpinning a default preserves the other pins, and clearing all pins
+stays cleared after reopening. The empty Project placeholder can also be pinned or
 unpinned without creating an assignment; its pin follows the real assignment when
 one is saved. Builtin task properties cannot be deleted from the title or side panel.
 
@@ -942,10 +943,11 @@ the server returns the new item ID. Use disposable tasks/folders for these check
 
 ## View and edit task properties
 
-An open task shows Status, Priority, and Assignees as property pills below its title. Task
-mentions and document references also show the same three pills in their hover-card preview,
-including properties that do not have a value yet. Click a preview pill to edit it without
-opening the task; the property picker keeps the preview open while you make a selection.
+An open task shows its pinned properties below the title, with Status, Priority,
+Assignees, and Due Date by default, plus Project when enabled. Task mentions and
+document references show Status, Priority, and Assignees in their hover-card preview,
+including properties that do not have a value yet. Click a preview pill to edit it
+without opening the task; the property picker keeps the preview open while you make a selection.
 Users with view or comment access see the same pills read-only.
 
 Each GitHub pull request linked to an open task shows a pill beside its property pills
