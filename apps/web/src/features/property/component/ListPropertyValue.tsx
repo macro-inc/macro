@@ -94,7 +94,7 @@ function ListPropertyCell(props: {
                 fallback={
                   <Property.Icon
                     property={props.property()}
-                    class="size-3 shrink-0 @max-[840px]/u-list:size-4"
+                    class="shrink-0 @max-[840px]/u-list:size-4"
                   />
                 }
               >
@@ -122,6 +122,7 @@ function ListPropertyCell(props: {
               </Switch>
               <Property.Text
                 property={props.property()}
+                hideIcon={props.property().specificEntityType === 'INITIATIVE'}
                 resolveSingleEntity={
                   props.property().specificEntityType === 'INITIATIVE'
                 }

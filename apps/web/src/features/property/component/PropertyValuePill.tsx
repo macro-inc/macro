@@ -54,10 +54,7 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                 <span class="inline-flex min-w-0 items-center gap-1">
                   <Switch
                     fallback={
-                      <Property.Icon
-                        property={property()}
-                        class="size-3 shrink-0"
-                      />
+                      <Property.Icon property={property()} class="shrink-0" />
                     }
                   >
                     <Match when={isMultiUserEntity()}>
@@ -69,6 +66,7 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                   </Switch>
                   <Property.Text
                     property={property()}
+                    hideIcon={property().specificEntityType === 'INITIATIVE'}
                     resolveSingleEntity={
                       props.showLabel ||
                       property().specificEntityType === 'INITIATIVE'
@@ -76,6 +74,7 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                     class="min-w-0 max-w-60"
                     fallback={
                       <Property.Empty
+                        propertyDefinitionId={property().propertyDefinitionId}
                         label={props.emptyLabel ?? property().displayName}
                       />
                     }

@@ -64,7 +64,9 @@ with 75% black in sRGB, giving a darker shade of the badge rather than a transpa
 cutout. The badge's dedicated `priority-urgent` token maps to the theme's orange
 rather than warning or accent.
 Completed task status uses the filled check-circle through the shared property
-and task-status renderers. Empty priority uses a muted circled minus.
+and task-status renderers. Empty priority uses three muted, hollow ascending bars.
+Empty assignees use the muted user-circle glyph; populated project properties use
+the regular stack glyph, while empty projects retain its dashed counterpart.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
 tokens for icons and group-header tints. Their defaults are muted gray, blended
@@ -72,8 +74,10 @@ amber, violet, green, and muted gray respectively. In Progress mixes amber with
 `content-0` in sRGB: 80% amber in dark mode and 50% in light mode, improving contrast
 without rotating amber toward a tinted foreground's hue. Authored overrides stay
 unchanged.
-Status property glyphs default to 16 px, including desktop and mobile edit menus;
-compact display callers can still set an explicit smaller size.
+Status and Urgent property glyphs default to 16 px, including property pills and
+desktop and mobile edit menus. Leading task-list status and priority controls use
+20 px glyphs with unchanged hit targets; compact display callers can still set an
+explicit smaller size.
 
 Prefer one recognizable silhouette and only the detail needed to identify its
 action. Chat variants share one bubble, task variants one checked square,

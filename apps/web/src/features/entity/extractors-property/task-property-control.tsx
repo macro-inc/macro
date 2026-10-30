@@ -89,18 +89,18 @@ export function TaskPropertyControl(props: {
                       fallback={
                         <PropertyEmptyIcon
                           propertyDefinitionId={definitionId()}
-                          class="size-4 text-ink-extra-muted"
+                          class="size-5 text-ink-extra-muted"
                         />
                       }
                     >
-                      <Property.Icon property={shown()} class="size-4" />
+                      <Property.Icon property={shown()} class="size-5" />
                     </Show>
                   }
                 >
                   <TaskStatusIcon
                     statusId={statusId()}
                     completed={props.entity.subType.is_completed}
-                    size="xs"
+                    class="size-5"
                   />
                 </Show>
               </Property.EditTrigger>

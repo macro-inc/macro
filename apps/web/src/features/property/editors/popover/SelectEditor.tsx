@@ -111,7 +111,7 @@ function SelectEditorBody() {
                   icon: (
                     <PropertyEmptyIcon
                       propertyDefinitionId={property.propertyDefinitionId}
-                      class="size-3.5 text-ink-extra-muted"
+                      class="size-4 text-ink-extra-muted"
                     />
                   ),
                   onClear: editor.clearOptions,

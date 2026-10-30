@@ -215,7 +215,7 @@ function KeyPropertiesRow(props: {
                           fallback={
                             <Property.Icon
                               property={shown()}
-                              class="size-3 shrink-0 @max-2xl/u-list:size-4"
+                              class="shrink-0 @max-2xl/u-list:size-4"
                             />
                           }
                         >
