@@ -129,7 +129,9 @@ the reads went through SSM port forwarding on the same in-VPC instance, with
 aws ssm start-session --target <bastion instance id> \
   --document-name AWS-StartPortForwardingSessionToRemoteHost \
   --parameters '{"host":["<prod vpc endpoint>"],"portNumber":["443"],"localPortNumber":["9210"]}'
-curl --connect-to <prod vpc endpoint>:443:localhost:9210 -u macrouser:… https://<prod vpc endpoint>/_cat/allocation?v
+# Pass credentials on stdin so the password never appears in the process list.
+printf 'user = "macrouser:%s"\n' "$PASSWORD" | \
+  curl -K - --connect-to <prod vpc endpoint>:443:localhost:9210 https://<prod vpc endpoint>/_cat/allocation?v
 #   …/_cat/indices?v&bytes=gb&s=store.size:desc&expand_wildcards=all
 #   …/_cat/shards?v&bytes=b
 #   …/<index>/_stats/segments,store,docs?include_segment_file_sizes=true&level=indices
@@ -146,8 +148,11 @@ curl --connect-to <prod vpc endpoint>:443:localhost:9210 -u macrouser:… https:
 | `chats_v2` | 6 × 2 | 4.4M | 0.4M | 43 GiB | 14 GiB |
 | `agent_sessions_v1` | 6 × 2 | 47K | 7K | 4 GiB | 1.6 GiB |
 | `channels_v2`, `call_records_v2`, `projects_v1` | 6 × 2 each | 515K | – | < 1 GiB | < 1 GiB |
+| 20 system indices (`.kibana*`, `.plugins-*`, `.opendistro*`, …) | 32 primaries × 2 | < 1K | – | < 1 GiB | < 1 GiB |
 
-Each node holds one full copy of every index (6 primaries, 3 copies, 3 nodes).
+The 7 application indices are 126 shard copies and the system indices are 96,
+which gives the 222 active shards, or 74 per node. Each node holds one full
+copy of every index (3 copies across 3 nodes).
 No superseded indices remain: there are no `documents_v1`, `chats_v1`,
 `call_records_v1` or `channels_v1` indices, and every alias points at the
 index listed above. `emails` is still on `emails_v1`. `helpers/constants.ts`
@@ -274,7 +279,8 @@ and later: 4 GB RAM covers up to 10 nodes and 5K shards, 8 GB covers 30 nodes
 and 15K shards. The older 1–10 data-node guidance named `m5.large`/`m6g.large`
 (8 GiB) as the minimum. Multi-AZ with Standby supports `m7g`.
 
-**Estimate:** old-gen live data is at most about 0.7 GiB. That's about 18% of
+**Estimate:** today's `r7g.large` masters have 16 GiB RAM and an 8 GiB heap, so
+a 9% old-gen peak is about 0.7 GiB of live data. That would be about 18% of
 the 4 GiB heap on an 8 GiB `m7g.large`. Peak master CPU stays about 27% on
 2 vCPU.
 
@@ -328,7 +334,7 @@ run-rate.
 | 1-yr PURI / AURI, data | 127.92 / 136.32 | As above, plus cash upfront | None | Marginal over NURI |
 | 3-yr NURI / PURI / AURI, data | 186.15 / 193.85 / 202.74 | High: growth and the turbopuffer decision make 3 years unlikely to fit | None | Reject for now |
 | Database Savings Plan, 1-yr no upfront (all 6 at today's types) | 77.96 data + 59.13 masters on `m7g` | Low; flexible across family, size and other database services | None for the term | Fallback if data nodes will change type |
-| Throughput 350 → 250 MiB/s | 19.20 | Medium: the next planned operation is a rewrite, which throttled at 250 before; read bursts reach 329 MiB/s | In-place both ways, 6 h apart | Reject until after the emails rewrite |
+| Throughput 350 → 250 MiB/s | 19.20 | Medium: the next planned operation is a rewrite, which throttled at 250 before; read bursts reach 329 MiB/s | Raising it back is in-place; an EBS change within 6 h of the last one is blue/green; dry-run a decrease | Reject until after the emails rewrite |
 | IOPS 4,200 → 3,000 | 0 (4,200 is the free baseline at 1,400 GiB) | n/a | n/a | No change |
 | Volume 1,400 → 1,024 GiB | 137.62 | **High**: 917 GiB is needed today for a rewrite, and the margin is gone in about 2 weeks of growth; a shrink is blue/green, copying about 1.5 TB | Another blue/green | **Reject** |
 | Volume 1,400 → 500 GiB (prior pass) | 329.40 | Impossible: 492 GiB already used per node | n/a | **Reject** |
@@ -402,9 +408,18 @@ emails reshard needs headroom more than anything else does.
        --dry-run --dry-run-mode Verbose
      ```
 
-     Expect `DeploymentType: DynamicUpdate` and no validation failures. If it
-     reports `Blue/Green`, stop and re-plan: a blue/green here copies about
-     1.5 TB and should run off-peak with the emails reshard already done.
+     A verbose dry run can return `pending` with a `DryRunId`. Poll until it
+     finishes:
+
+     ```sh
+     aws opensearch describe-dry-run-progress \
+       --domain-name macro-opensearch-prod --dry-run-id <id>
+     ```
+
+     Proceed only on `DryRunStatus: succeeded`, no `ValidationFailures`, and
+     `DeploymentType: DynamicUpdate`. If it reports `Blue/Green`, stop and
+     re-plan: a blue/green here copies about 1.5 TB and should run off-peak
+     with the emails reshard already done.
    - Window: off-peak, matching the domain's 02:00 UTC window.
      `pulumi preview --stack macro-inc/prod` should show only
      `dedicatedMasterType: "r7g.large.search" => "m7g.large.search"`.
@@ -415,8 +430,8 @@ emails reshard needs headroom more than anything else does.
      75%, and data-node `SearchLatency` and `IndexingLatency` match the prior
      week.
    - Rollback: revert this PR, or set `DedicatedMasterType` back to
-     `r7g.large.search`. Same in-place path, after the 6-hour gap AWS imposes
-     between changes.
+     `r7g.large.search`. It's the same in-place path, once the domain is
+     `Active` with no change in progress.
 3. **Reserved instances.** Buying them is a billing commitment, so finance
    signs off. Masters: 3× `m7g.large.search` 1-year no upfront, after two
    stable weeks. Data nodes: decide the capacity step first (out on
