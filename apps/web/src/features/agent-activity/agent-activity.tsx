@@ -1,6 +1,7 @@
 import type { AgentActivityData } from '@macro-inc/lexical-core';
 import { Show } from 'solid-js';
 import { ActivityLine } from './components/activity-line';
+import type { ActivityRowView } from './components/activity-rows';
 import { ActivitySummary } from './components/activity-summary';
 import { replyToTurn, segmentRows } from './core/live-reply';
 import { createCodeActivityRows } from './queries/code-activity';
@@ -43,4 +44,18 @@ function LiveActivity(props: AgentActivityData) {
     rows
   );
   return <ActivityLine rows={activity()} />;
+}
+
+const THINKING: ActivityRowView = {
+  id: 'thinking',
+  label: 'Thinking',
+  status: 'running',
+};
+
+/**
+ * A reply whose turn is running with no open run to show: the line a run
+ * uses, so the reply never reads as finished while the agent works.
+ */
+export function AgentThinking() {
+  return <ActivityLine rows={[THINKING]} />;
 }

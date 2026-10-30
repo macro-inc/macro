@@ -1,6 +1,7 @@
 import { createHeadlessEditor } from '@lexical/headless';
 import { $convertToMarkdownString } from '@lexical/markdown';
 import { $createParagraphNode, $getRoot } from 'lexical';
+import { PENDING_REPLY_TEXT } from '../constants';
 import { NodeReplacements, SupportedNodeTypes } from '../node-list';
 import {
   $createAgentActivityNode,
@@ -16,8 +17,7 @@ import { ALL_TRANSFORMERS } from '../transformers';
  */
 export const AGENT_SESSION_LINK_LABEL = 'Agent session';
 
-/** The spinner's caption while a chat agent's turn runs. */
-export const PENDING_REPLY_TEXT = 'Thinking…';
+export { PENDING_REPLY_TEXT };
 
 /**
  * One segment of an agent's reply, as a message shows it: a passage as the
