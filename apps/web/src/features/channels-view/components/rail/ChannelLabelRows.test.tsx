@@ -8,10 +8,7 @@ import {
   splitProps,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ChannelLabelMenuItems,
-  ChannelsSectionsMenu,
-} from './ChannelLabelRows';
+import { ChannelLabelMenuItems } from './ChannelLabelRows';
 
 const rail = vi.hoisted(() => ({
   channelTagsEnabled: (): boolean => false,
@@ -75,10 +72,8 @@ vi.mock('@kobalte/core/context-menu', () => ({
 }));
 
 let setEnabled: Setter<boolean>;
-let setLabelsAvailable: Setter<boolean>;
 beforeEach(() => {
   [rail.channelTagsEnabled, setEnabled] = createSignal(false);
-  [rail.labelsAvailable, setLabelsAvailable] = createSignal(true);
   vi.clearAllMocks();
   vi.stubGlobal('scrollTo', vi.fn());
 });
@@ -88,48 +83,6 @@ afterEach(() => {
 });
 
 describe('channel tag flag in rail menus', () => {
-  it('offers management only after labels load', async () => {
-    setEnabled(true);
-    setLabelsAvailable(false);
-    render(() => <ChannelsSectionsMenu />);
-    expect(
-      screen.queryByRole('button', { name: 'Manage sections' })
-    ).toBeNull();
-
-    setLabelsAvailable(true);
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Manage sections' }), {
-      key: 'ArrowDown',
-    });
-    expect(
-      await screen.findByRole('menuitem', { name: /Cached label/ })
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole('menuitem', { name: 'Personal section' })
-    ).toBeNull();
-
-    setLabelsAvailable(false);
-    expect(
-      screen.queryByRole('button', { name: 'Manage sections' })
-    ).toBeNull();
-  });
-
-  it('removes an open section menu when the flag turns off', async () => {
-    setEnabled(true);
-    render(() => <ChannelsSectionsMenu />);
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Manage sections' }), {
-      key: 'ArrowDown',
-    });
-    expect(
-      await screen.findByRole('menuitem', { name: /Cached label/ })
-    ).toBeTruthy();
-    setEnabled(false);
-    expect(screen.queryByRole('menu')).toBeNull();
-    expect(
-      screen.queryByRole('button', { name: 'Manage sections' })
-    ).toBeNull();
-    expect(rail.createLabel).not.toHaveBeenCalled();
-  });
-
   it('hides cached label actions when the flag changes without remounting', () => {
     const channel = {
       id: 'channel',

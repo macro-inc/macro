@@ -31,11 +31,7 @@ import type { ChannelsGroup } from '../../types';
 import { formatDetailedTimestamp } from '../../utils';
 import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
 import { ChannelFavoriteRow } from './ChannelFavoriteRows';
-import {
-  ChannelLabelMenuItems,
-  ChannelLabelRow,
-  ChannelsSectionsMenu,
-} from './ChannelLabelRows';
+import { ChannelLabelMenuItems, ChannelLabelRow } from './ChannelLabelRows';
 import {
   ChannelAvatar,
   ChannelCallIndicator,
@@ -315,7 +311,6 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             }
           />
         </div>
-        <ChannelsSectionsMenu />
       </ViewSidebar.Primary>
       <Show when={rail.channelTagsEnabled() && !rail.labelsAvailable()}>
         <div

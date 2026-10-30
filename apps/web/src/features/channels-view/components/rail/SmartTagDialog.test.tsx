@@ -38,8 +38,8 @@ vi.mock('@ui', async () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
   Surface: (props: ParentProps) => <div>{props.children}</div>,
-  RadioGroup: (await import('@app/components/ui/components/RadioGroup'))
-    .RadioGroup,
+  ToggleSwitch: (await import('@app/components/ui/components/ToggleSwitch'))
+    .ToggleSwitch,
   Input: (props: ComponentProps<'input'>) => <input {...props} />,
   Button: (props: ComponentProps<'button'>) => (
     <button type={props.type} disabled={props.disabled} onClick={props.onClick}>
@@ -85,7 +85,7 @@ describe('smart label dialog', () => {
     const onConfirm = vi.fn(async () => {});
     const result = promptSection({ canShare: true, onConfirm });
     expect(fetchPreview).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('radio', { name: 'Smart section' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Smart section' }));
     input('Section name', 'Support');
     input('Name contains', 'support');
     await screen.findByText('+7 more channels matched');
@@ -106,6 +106,13 @@ describe('smart label dialog', () => {
   it('preserves shared scope when creation starts from a shared channel menu', async () => {
     const onConfirm = vi.fn(async () => {});
     const result = promptSection({ scope: 'team', canShare: true, onConfirm });
+    expect(
+      (
+        screen.getByRole('switch', {
+          name: 'Shared with team',
+        }) as HTMLInputElement
+      ).checked
+    ).toBe(true);
     input('Section name', 'Shared group');
     fireEvent.submit(
       screen.getByRole('textbox', { name: 'Section name' }).closest('form')!
@@ -119,7 +126,7 @@ describe('smart label dialog', () => {
   it('refreshes smart matches in the selected visibility', async () => {
     fetchPreview.mockResolvedValue(ok({ channels: [], totalCount: 0 }));
     const result = promptSection({ canShare: true, onConfirm: async () => {} });
-    fireEvent.click(screen.getByRole('radio', { name: 'Smart section' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Smart section' }));
     input('Name contains', 'support');
     await waitFor(() =>
       expect(fetchPreview).toHaveBeenCalledWith(
@@ -128,7 +135,7 @@ describe('smart label dialog', () => {
         'personal'
       )
     );
-    fireEvent.click(screen.getByRole('radio', { name: 'Shared' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Shared with team' }));
     await waitFor(() =>
       expect(fetchPreview).toHaveBeenCalledWith(
         { attribute: 'name', contains: 'support' },
@@ -156,7 +163,7 @@ describe('smart label dialog', () => {
       canShare: true,
       onConfirm: async () => {},
     });
-    fireEvent.click(screen.getByRole('radio', { name: 'Smart section' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Smart section' }));
     input('Name contains', 'first');
     await waitFor(() => expect(fetchPreview).toHaveBeenCalledTimes(1));
     input('Name contains', 'second');

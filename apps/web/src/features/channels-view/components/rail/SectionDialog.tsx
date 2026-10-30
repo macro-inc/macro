@@ -11,8 +11,8 @@ import {
   type ManagedDialogProps,
   type OpenDialogOptions,
   openDialog,
-  RadioGroup,
   Surface,
+  ToggleSwitch,
 } from '@ui';
 import { type Accessor, createSignal, For, Show } from 'solid-js';
 
@@ -169,7 +169,7 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
       onOpenChange={(open) => {
         if (!saving()) props.onOpenChange(open);
       }}
-      class="w-[90%] max-w-100"
+      class="w-[min(36rem,90vw)]"
       visibleScrim
     >
       <Surface
@@ -201,54 +201,24 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
               onInput={(event) => setName(event.currentTarget.value)}
             />
             <Show when={!props.initial}>
-              <RadioGroup
-                aria-label={t('channelSections.sectionVisibility')}
-                value={scope()}
-                onChange={(value) => {
-                  if (
-                    value === 'personal' ||
-                    (value === 'team' && props.canShare)
-                  )
-                    setScope(value);
-                }}
+              <Show when={props.canShare}>
+                <ToggleSwitch
+                  label={t('channelSections.shared')}
+                  labelClass="text-sm text-ink"
+                  checked={scope() === 'team'}
+                  onChange={(checked) =>
+                    setScope(checked ? 'team' : 'personal')
+                  }
+                  disabled={saving()}
+                />
+              </Show>
+              <ToggleSwitch
+                label={t('channelSections.newSmartSection')}
+                labelClass="text-sm text-ink"
+                checked={kind() === 'smart'}
+                onChange={(checked) => setKind(checked ? 'smart' : 'manual')}
                 disabled={saving()}
-              >
-                <RadioGroup.Item value="personal">
-                  <RadioGroup.ItemControl />
-                  <RadioGroup.ItemLabel>
-                    {t('channelSections.personal')}
-                  </RadioGroup.ItemLabel>
-                </RadioGroup.Item>
-                <Show when={props.canShare}>
-                  <RadioGroup.Item value="team">
-                    <RadioGroup.ItemControl />
-                    <RadioGroup.ItemLabel>
-                      {t('channelSections.sharedShort')}
-                    </RadioGroup.ItemLabel>
-                  </RadioGroup.Item>
-                </Show>
-              </RadioGroup>
-              <RadioGroup
-                aria-label={t('channelSections.sectionKind')}
-                value={kind()}
-                onChange={(value) => {
-                  if (value === 'manual' || value === 'smart') setKind(value);
-                }}
-                disabled={saving()}
-              >
-                <RadioGroup.Item value="manual">
-                  <RadioGroup.ItemControl />
-                  <RadioGroup.ItemLabel>
-                    {t('channelSections.manualSection')}
-                  </RadioGroup.ItemLabel>
-                </RadioGroup.Item>
-                <RadioGroup.Item value="smart">
-                  <RadioGroup.ItemControl />
-                  <RadioGroup.ItemLabel>
-                    {t('channelSections.newSmartSection')}
-                  </RadioGroup.ItemLabel>
-                </RadioGroup.Item>
-              </RadioGroup>
+              />
             </Show>
             <Show when={kind() === 'smart'}>
               <label class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-ink-muted focus-within:text-ink">

@@ -8,14 +8,10 @@ import {
 } from '@core/component/ContextMenu';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ChannelEntity } from '@entity';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import CaretUpIcon from '@icon/system/regular/caret-up.svg';
 import ChecksIcon from '@icon/system/regular/checks.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
 import TagSimpleIcon from '@icon/system/regular/tag-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
@@ -178,83 +174,6 @@ function ChannelLabelActions(props: { label: ChannelLabel }) {
         </Dropdown.Item>
       </Dropdown.Group>
     </>
-  );
-}
-
-/** Manage existing sections; creation lives in the top New menu. */
-export function ChannelsSectionsMenu() {
-  const rail = useChannelsRail();
-  const setExpanded = (expanded: boolean) => {
-    for (const group of [
-      'favorites',
-      'team_channels',
-      'channels',
-      'direct_messages',
-    ] as const) {
-      if (rail.isGroupOpen(group) !== expanded) rail.toggleGroup(group);
-    }
-    for (const label of rail.labels()) {
-      if (rail.isLabelOpen(label.id) !== expanded) rail.toggleLabel(label.id);
-    }
-  };
-  return (
-    <Show when={rail.channelTagsEnabled() && rail.labelsAvailable()}>
-      <Dropdown placement="bottom-end">
-        <Dropdown.Trigger
-          aria-label={t('channelSections.manageSections')}
-          tooltip={t('channelSections.manageSections')}
-          as={ViewSidebar.Control}
-          variant="ghost"
-          size="icon-sm"
-        >
-          <SlidersIcon class="size-3.5" />
-        </Dropdown.Trigger>
-        <Dropdown.Content
-          class="min-w-56 max-h-[70vh] overflow-y-auto"
-          onCloseAutoFocus={(event) => {
-            if (document.querySelector('[role="dialog"]'))
-              event.preventDefault();
-          }}
-        >
-          <Show when={rail.labels().length > 0}>
-            <Dropdown.Group>
-              <Dropdown.GroupLabel>
-                {t('channelSections.sections')}
-              </Dropdown.GroupLabel>
-              <For each={rail.labels()}>
-                {(label) => (
-                  <Dropdown.Sub>
-                    <Dropdown.SubTrigger>
-                      <span class="min-w-0 flex-1 truncate">{label.name}</span>
-                      <span class="text-xs text-ink-extra-muted">
-                        {label.teamId
-                          ? t('channelSections.sharedShort')
-                          : t('channelSections.personal')}
-                      </span>
-                      <CaretRightIcon class="size-3.5 shrink-0" />
-                    </Dropdown.SubTrigger>
-                    <Dropdown.SubContent class="min-w-48">
-                      <ChannelLabelActions label={label} />
-                    </Dropdown.SubContent>
-                  </Dropdown.Sub>
-                )}
-              </For>
-            </Dropdown.Group>
-          </Show>
-          <Dropdown.Separator />
-          <Dropdown.Group>
-            <Dropdown.Item onSelect={() => setExpanded(true)}>
-              <CaretDownIcon class="size-3.5 text-ink-muted" />
-              {t('channelSections.expandAllSections')}
-            </Dropdown.Item>
-            <Dropdown.Item onSelect={() => setExpanded(false)}>
-              <CaretUpIcon class="size-3.5 text-ink-muted" />
-              {t('channelSections.collapseAllSections')}
-            </Dropdown.Item>
-          </Dropdown.Group>
-        </Dropdown.Content>
-      </Dropdown>
-    </Show>
   );
 }
 

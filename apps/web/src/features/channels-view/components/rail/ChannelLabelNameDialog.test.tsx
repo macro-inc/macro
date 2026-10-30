@@ -17,8 +17,8 @@ vi.mock('@ui', async () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
   Surface: (props: ParentProps) => <div>{props.children}</div>,
-  RadioGroup: (await import('@app/components/ui/components/RadioGroup'))
-    .RadioGroup,
+  ToggleSwitch: (await import('@app/components/ui/components/ToggleSwitch'))
+    .ToggleSwitch,
   Input: (props: ComponentProps<'input'>) => <input {...props} />,
   Button: (props: ComponentProps<'button'>) => (
     <button type={props.type} disabled={props.disabled} onClick={props.onClick}>
@@ -69,7 +69,14 @@ describe('label naming', () => {
     expect(
       screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')
     ).toBe(true);
-    expect(screen.queryByRole('radio', { name: 'Shared' })).toBeNull();
+    expect(
+      screen.queryByRole('switch', { name: 'Shared with team' })
+    ).toBeNull();
+    expect(
+      screen
+        .getByRole('switch', { name: 'Smart section' })
+        .hasAttribute('disabled')
+    ).toBe(true);
     expect(screen.getByRole('dialog', { name: 'New section' })).toBeTruthy();
     finish();
     await result;
@@ -105,7 +112,7 @@ describe('label naming', () => {
     render(() => <ImperativeDialogHost />);
     const onConfirm = vi.fn(async () => {});
     const create = promptSection({ canShare: true, onConfirm });
-    fireEvent.click(screen.getByRole('radio', { name: 'Shared' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Shared with team' }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Section name' }), {
       target: { value: 'Team updates' },
     });
@@ -122,8 +129,10 @@ describe('label naming', () => {
       initial: { name: 'Team updates' },
       onConfirm,
     });
-    expect(screen.queryByRole('radio', { name: 'Shared' })).toBeNull();
-    expect(screen.queryByRole('radio', { name: 'Smart section' })).toBeNull();
+    expect(
+      screen.queryByRole('switch', { name: 'Shared with team' })
+    ).toBeNull();
+    expect(screen.queryByRole('switch', { name: 'Smart section' })).toBeNull();
     fireEvent.input(screen.getByRole('textbox', { name: 'Section name' }), {
       target: { value: 'Project updates' },
     });
