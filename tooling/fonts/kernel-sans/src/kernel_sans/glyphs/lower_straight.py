@@ -17,7 +17,6 @@ from ..geom import (
     above,
     below,
     chamfer,
-    column,
     crotch_trap,
     dot,
     half_plane,
@@ -77,10 +76,10 @@ def _shoulder(p, xl, counter, top=None):
     return a, xr, yc, crotch, obox, ibox
 
 
-def _arch_through(p, xl, xr, yc, out_pt, join_in):
+def _arch_through(p, xl, xr, yc, out_pt, join_in, x_from):
     """parts.arch with the outer curve passing through out_pt instead of
-    meeting the stem edge at a fixed height (the second shoulder of m).
-    Returns (arch, outer_box)."""
+    meeting the stem edge at a fixed height (the second shoulder of m),
+    kept right of x_from. Returns (arch, outer_box)."""
     top = P.XH + P.OS * 0.8
     ry_o = top - yc
     cx_o = solve_cx(xr, out_pt[0], out_pt[1], yc, ry_o, p.sq)
@@ -92,7 +91,7 @@ def _arch_through(p, xl, xr, yc, out_pt, join_in):
     ring = (
         (squircle(*obox, n=p.sq) - squircle(*ibox, n=p.sq_in))
         & above(yc)
-        & right_of(xl - 1)
+        & right_of(x_from)
     )
     return ring, obox
 
@@ -313,14 +312,17 @@ def m(p):
     # join as the first; its outer curve is aimed at a point on the first
     # shoulder 0.62 stem left of the middle stem's right edge, so the two
     # meet in a shallow valley at the same place at every weight.
+    # The arch starts 0.85 stem left of the middle stem's right edge, so its
+    # outer curve fills that valley in one piece (the counter's part left of
+    # the middle stem lies inside the first arch and the stem).
     xv = x1 - s * 0.62
-    a2, obox2 = _arch_through(p, x1, x2, yc, (xv, _sq_y(obox1, p.sq, xv)), crotch)
-    valley = squircle(*obox2, n=p.sq) & column(x1 - s * 0.85, x1) & above(yc)
+    a2, _ = _arch_through(
+        p, x1, x2, yc, (xv, _sq_y(obox1, p.sq, xv)), crotch, x1 - s * 0.85
+    )
     shape = (
         rect(0, 0, s, P.XH, nw=p.cut)
         + a1
         + rect(x1 - s, 0, x1, yc)
-        + valley
         + a2
         + rect(x2 - s, 0, x2, yc)
     )

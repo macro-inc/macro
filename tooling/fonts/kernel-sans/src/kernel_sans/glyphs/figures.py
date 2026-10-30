@@ -1382,7 +1382,7 @@ def greaterequal(p):
 def notequal(p):
     cx, cy = _cx(p), P.AXIS
     off = _equal_off(p)
-    L = off + p.w(150, 0.3)
+    L = off + p.w(150, 0.15)
     run = 2 * L / math.tan(math.radians(62))
     sh = (
         _minus(p, cx, cy + off)

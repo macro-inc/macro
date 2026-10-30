@@ -306,7 +306,7 @@ def W(p):
 @glyph("M", 0x004D)
 def M(p):
     s = p.cstem
-    w = p.w(710, 1.3)
+    w = p.w(710, 1.5)
     sm = s * 0.92  # vertical sides
     td = s * 0.93  # diagonals
     fv = s * 0.8  # flat vertex on the baseline
@@ -480,7 +480,7 @@ def Z(p):
 def AE(p):
     s = p.cstem
     h = p.chair
-    xs = p.w(380, 1.4)  # left edge of the E stem
+    xs = p.w(440, 1.0)  # left edge of the E stem
     # The A's thin up-stroke runs from the baseline at x = 0 into the E stem,
     # crossing the stem's left edge clearly below the top arm (an apex crotch
     # like A's); the top arm caps it like A's flat apex.
