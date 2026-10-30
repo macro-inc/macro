@@ -97,6 +97,9 @@ provider copy before choosing an explicit resend; a resend in flight shows as
 the send button's pending state. Switching the sender
 inbox copies the draft and attachments into the destination; wait for completion
 before sending. If the copy is interrupted, use retry or keep the original.
+A draft the provider could not save can still switch From, which moves it to an
+inbox that may accept it; a draft with an unfinished move or a conflict stays in
+its inbox until that is resolved.
 A draft opened from Drafts then shows its thread in the destination inbox,
 never the not-found page; a draft in compose stays open there. Keep editing
 after the switch and check that no "This draft changed while saving" notice
@@ -606,6 +609,15 @@ inbox, saving, and reopening the draft. Send must fetch the original files from
 the receiving inbox while using the selected From inbox for delivery. A scheduled
 cross-inbox forward must not download a source whose inbox access was revoked
 after saving.
+Switch one message's composer between Reply and Forward on Gmail and Outlook.
+A reply sends without the forwarded message, including after a forward from that
+composer failed to send. A reply showing its quoted text sends the forwarded
+message once switched to Forward. A saved forward reopened from its thread, its
+local copy, or Undo still reads **Forwarding** with a `Forward — @mention…`
+placeholder: Forward keeps its recipients, and Reply turns it into a reply
+without the forwarded message. A reply quoting a message that was itself
+forwarded stays a reply. Collapsed content is named: **Show forwarded message**
+on a forward, **Show quoted text** on a reply.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 In a long thread, scroll away from the bottom while a draft save is pending.

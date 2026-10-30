@@ -26,6 +26,7 @@ import type {
 } from '../../email-message/core/email-message';
 import {
   operationBlocksEditing,
+  operationBlocksInboxSwitch,
   operationBlocksSending,
   operationSending,
 } from '../../email-message/core/message-operation';
@@ -497,6 +498,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const deliveryBlocked = () =>
     operationSource?.needsReload?.() ||
     operationBlocksSending(currentOperation());
+  const inboxSwitchBlocked = () =>
+    operationSource?.needsReload?.() ||
+    operationBlocksInboxSwitch(currentOperation());
   const operationBlocked = () =>
     operationSource?.needsReload?.() ||
     operationBlocksEditing(currentOperation());
@@ -1300,7 +1304,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     if (
       sendLocked() ||
       restoring() ||
-      (!draftTransfer?.pending() && deliveryBlocked()) ||
+      (!draftTransfer?.pending() && inboxSwitchBlocked()) ||
       submitting() ||
       discarding() ||
       movingInbox() ||
