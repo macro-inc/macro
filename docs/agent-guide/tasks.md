@@ -92,7 +92,7 @@ and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
 Desktop task-list columns place Project before Assignees; mobile property order is unchanged.
-Created by uses a compact icon-only column, with avatars aligned toward the 64px
+Created by uses a compact icon-only column, with avatars aligned toward the 40px
 Updated column and no visible header. Owner names and the column label stay
 accessible; names remain available on hover. Its narrow-container visibility is unchanged.
 The project pill beneath a task title shows the project icon and name without

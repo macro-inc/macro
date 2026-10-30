@@ -13,7 +13,7 @@
 
 @container u-list (min-width: 1221px) {
   .task-grid-icon-creator {
-    --task-col-timestamp: 4rem;
+    --task-col-timestamp: 2.5rem;
   }
 }
 
