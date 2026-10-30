@@ -110,6 +110,7 @@ function programDraft(
     dayOfMonth: parsed.dayOfMonth,
     target: agent?.target ?? { kind: 'model', model: DEFAULT_MODEL },
     runVisibility: schedule.run_visibility,
+    description: schedule.description ?? '',
     apps: programApps(schedule.task),
     triggers,
     steps,
@@ -145,6 +146,7 @@ export function draftFromSchedule(
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
     runVisibility: schedule.run_visibility,
+    description: schedule.description ?? '',
     apps: task.mcp_servers ?? [],
     timezone: trigger?.timezone,
     triggers,
@@ -217,7 +219,19 @@ export function draftToCreateBody(draft: ScheduleDraft): CreateScheduledAction {
     task: buildTask(draft),
     enabled: draft.enabled ?? true,
     run_visibility: draft.runVisibility ?? DEFAULT_RUN_VISIBILITY,
+    ...(draft.description?.trim()
+      ? { description: draft.description.trim() }
+      : {}),
   };
+}
+
+/** An edited description; otherwise the stored one stays as it is. */
+function descriptionField(draft: ScheduleDraft, previous: ScheduledAction) {
+  const description = draft.description?.trim();
+  return description === undefined ||
+    description === (previous.description ?? '')
+    ? {}
+    : { description };
 }
 
 /** Keep the stored task when the edited steps write the same program. */
@@ -264,6 +278,7 @@ function programUpdateBody(
     kind: previous.kind,
     task: programTask(draft, previous),
     run_visibility: draft.runVisibility ?? previous.run_visibility,
+    ...descriptionField(draft, previous),
   };
 }
 
@@ -310,6 +325,7 @@ export function draftToUpdateBody(
       kind: previous.kind,
       task,
       run_visibility: runVisibility,
+      ...descriptionField(draft, previous),
     };
   if (!trigger) return;
   const parsed = parseCron(trigger.schedule);
@@ -333,6 +349,7 @@ export function draftToUpdateBody(
     kind: previous.kind,
     task,
     run_visibility: runVisibility,
+    ...descriptionField(draft, previous),
   };
 }
 
@@ -348,6 +365,7 @@ export function scheduleToDuplicateBody(
     trigger,
     task: schedule.task,
     run_visibility: schedule.run_visibility,
+    ...(schedule.description ? { description: schedule.description } : {}),
   };
 }
 

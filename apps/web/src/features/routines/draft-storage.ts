@@ -23,6 +23,7 @@ const draftFields = {
   // Older clients saved routine activation with the draft.
   enabled: z.boolean().optional(),
   runVisibility: z.enum(['listed', 'unlisted']).optional(),
+  description: z.string().optional(),
   // Drafts saved before routines took apps have none.
   apps: z
     .array(z.strictObject({ app_slug: z.string(), server_name: z.string() }))

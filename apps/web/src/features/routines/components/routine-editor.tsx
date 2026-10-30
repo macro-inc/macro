@@ -7,6 +7,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { ComposerSurface, cn, TabSelector } from '@ui';
 import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';
+import { RoutineDescription } from './routine-description';
 
 /**
  * The raised card a page section or step sits on: the composer surface
@@ -255,6 +256,24 @@ export function RoutineEditor(props: {
                         />
                       </Show>
                     </div>
+                    <Show
+                      when={!props.disabled}
+                      fallback={
+                        <Show when={props.draft.description}>
+                          <p class="whitespace-pre-wrap text-base text-ink-muted">
+                            {props.draft.description}
+                          </p>
+                        </Show>
+                      }
+                    >
+                      <RoutineDescription
+                        class="-mt-1.5"
+                        value={props.draft.description ?? ''}
+                        onChange={(description) =>
+                          props.onChange((draft) => ({ ...draft, description }))
+                        }
+                      />
+                    </Show>
                     <Show when={props.meta}>
                       <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-muted">
                         {props.meta}

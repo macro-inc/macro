@@ -231,6 +231,7 @@ export function createTemplateActivation(args: {
       // A step left without its destination can't run; it starts off.
       enabled: !cleared,
       run_visibility: DEFAULT_RUN_VISIBILITY,
+      ...(template.description ? { description: template.description } : {}),
     };
   };
 

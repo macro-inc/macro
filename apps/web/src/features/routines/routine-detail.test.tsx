@@ -921,6 +921,27 @@ describe('routine editor triggers', () => {
     });
   });
 
+  it('saves a description typed under the title, on blur', async () => {
+    render(() => <Routine />);
+    const description = screen.getByRole('textbox', {
+      name: 'Routine description',
+    });
+    fireEvent.input(description, {
+      target: { value: '  Sum up my day before standup.  ' },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+    fireEvent.blur(description);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: cron.task,
+        description: 'Sum up my day before standup.',
+      }),
+    });
+  });
+
   it('cancels pending saves when the editor unmounts', async () => {
     const { unmount } = render(() => <Routine />);
     mocks.changePrompt('Unsaved');

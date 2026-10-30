@@ -219,7 +219,12 @@ export function templateDraft(
     }))
     .exhaustive();
   return withNewDraftSteps(
-    { ...base, name: template.title, triggers: plan.triggers },
+    {
+      ...base,
+      name: template.title,
+      description: template.description,
+      triggers: plan.triggers,
+    },
     plan.steps
   );
 }

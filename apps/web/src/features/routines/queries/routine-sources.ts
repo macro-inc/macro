@@ -49,6 +49,7 @@ function toRoutine(
       schedule.trigger,
       schedule.task,
       schedule.run_visibility,
+      schedule.description,
     ]),
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,

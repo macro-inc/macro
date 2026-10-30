@@ -1218,7 +1218,10 @@ with its three-dot menu (**Duplicate**, **Share as template…**, **Delete**)
 right after the name, then the **Overview** / **Runs** tabs (Runs with a count),
 and at the right the save state (**Saving…** / **Saved**), **Run now** with its
 **Run options** menu, and the details toggle. Overview is the routine as a page:
-its icon, an editable title, then a line with the **Enabled** switch (disabled
+its icon, an editable title, an editable description (**Add a description…**;
+saves on blur or Enter, Escape discards, up to 1000 characters; a drafted
+routine starts with the sentence it was drafted from, a template's with the
+template's description), then a line with the **Enabled** switch (disabled
 with a hover reason while a run is going or the routine can't run), **Owned by**
 and **Last run**. Below are labelled sections, each on a raised surface:
 **Trigger** (with **Next run** at its right) holds the trigger sentences above;

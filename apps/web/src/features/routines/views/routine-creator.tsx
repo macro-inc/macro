@@ -71,7 +71,10 @@ export function RoutineCreatorView(props: {
   /** The description the current draft was drafted from. */
   const [described, setDescribed] = createSignal<string>();
   const begin = (next: ScheduleDraft, description?: string) => {
-    replace(next);
+    // A drafted routine is described by what was asked for.
+    replace(
+      description?.trim() ? { ...next, description: description.trim() } : next
+    );
     setDescribed(description);
     setStage('edit');
   };
