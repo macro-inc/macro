@@ -3,38 +3,54 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 
 const CURRENT_PROFILE = 'soup-mail-v5';
 const LEGACY_PROFILE = 'soup-mail-v2';
-let nativeProfile: Promise<string> | undefined;
+
+type MailCacheProfile = {
+  profile: typeof CURRENT_PROFILE | typeof LEGACY_PROFILE;
+  outcome:
+    | 'browser'
+    | 'native_supported'
+    | 'native_unsupported'
+    | 'native_lookup_failed'
+    | 'native_lookup_timeout';
+};
+
+let nativeProfile: Promise<MailCacheProfile> | undefined;
 
 /** Negotiate against the installed engine, including when JS arrived by OTA. */
-export function mailCacheProfile(): Promise<string> {
-  if (!isTauri()) return Promise.resolve(CURRENT_PROFILE);
+export function mailCacheProfile(): Promise<MailCacheProfile> {
+  if (!isTauri()) {
+    return Promise.resolve({ profile: CURRENT_PROFILE, outcome: 'browser' });
+  }
   nativeProfile ??= installedNativeProfile();
   return nativeProfile;
 }
 
-async function installedNativeProfile(): Promise<string> {
+async function installedNativeProfile(): Promise<MailCacheProfile> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const { nativeBuild } = await Promise.race([
+    const info = await Promise.race([
       invoke<{ nativeBuild: number }>('get_bundle_debug_info'),
-      new Promise<never>((_, reject) => {
-        timeout = setTimeout(
-          () => reject(new Error('Native Mail capability discovery timed out')),
-          1500
-        );
+      new Promise<null>((resolve) => {
+        timeout = setTimeout(() => resolve(null), 1500);
       }),
     ]);
+    if (info === null) {
+      return { profile: LEGACY_PROFILE, outcome: 'native_lookup_timeout' };
+    }
     const platform = getNativeMobilePlatform();
     const minimum =
       platform === 'ios' ? 193 : platform === 'android' ? 20 : null;
-    return minimum !== null &&
-      Number.isInteger(nativeBuild) &&
-      nativeBuild >= minimum
-      ? CURRENT_PROFILE
-      : LEGACY_PROFILE;
+    if (
+      minimum !== null &&
+      Number.isInteger(info.nativeBuild) &&
+      info.nativeBuild >= minimum
+    ) {
+      return { profile: CURRENT_PROFILE, outcome: 'native_supported' };
+    }
+    return { profile: LEGACY_PROFILE, outcome: 'native_unsupported' };
   } catch {
     // Older engines may not expose build information. Never infer support from JS.
-    return LEGACY_PROFILE;
+    return { profile: LEGACY_PROFILE, outcome: 'native_lookup_failed' };
   } finally {
     clearTimeout(timeout);
   }

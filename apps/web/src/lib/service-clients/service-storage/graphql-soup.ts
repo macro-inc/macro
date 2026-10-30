@@ -332,12 +332,15 @@ export async function dssGraphqlFetch(
       const traceHeaders: Record<string, string> = {};
       span.injectTraceHeaders(traceHeaders);
       const requestInit = graphqlSoupTransportRequest(init);
+      const mail = await mailCacheProfile();
+      span.setAttr('mail.cache_profile', mail.profile);
+      span.setAttr('mail.cache_profile_outcome', mail.outcome);
       // Links this request, and a queued mutation attempt above it, to the
       // server's request and `graphql.execute` spans.
       const transportInit: RequestInit = {
         ...requestInit,
         headers: mergeHeaders(requestInit?.headers, traceHeaders, {
-          'x-macro-mail-cache-profile': await mailCacheProfile(),
+          'x-macro-mail-cache-profile': mail.profile,
         }),
       };
       span.event('request_dispatch');
@@ -420,9 +423,13 @@ function createGraphqlSoupWebSocketClient(
   });
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
-    connectionParams: async () => ({
-      mailCacheProfile: await mailCacheProfile(),
-    }),
+    connectionParams: () =>
+      Telemetry.span('graphql.websocket.connection_params', async (span) => {
+        const mail = await mailCacheProfile();
+        span.setAttr('mail.cache_profile', mail.profile);
+        span.setAttr('mail.cache_profile_outcome', mail.outcome);
+        return { mailCacheProfile: mail.profile };
+      }),
     // Session cookies live in the native HTTP client's jar, which the WebView's
     // own WebSocket cannot send; the native socket forwards them.
     webSocketImpl:

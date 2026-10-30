@@ -402,6 +402,9 @@ queue admission. Browsers advertise v5; native clients do so only after verifyin
 installed iOS build 193 or Android build 20 (unknown/desktop builds retain v2).
 Native discovery falls back to v2 after 1.5 seconds and retains that result for
 the session, so unavailable IPC cannot indefinitely delay GraphQL requests.
+The HTTP transport and WebSocket connection-parameter spans record the selected
+profile and whether discovery used the browser, a supported/unsupported native
+build, failed, or timed out; they do not include native error text.
 Current engines treat v2 capsules as incomplete and use the network for Mail lists.
 Deploy the backend (including its CORS capability header) before the new frontend.
 The backend can deploy before store releases; native v5 offline behavior still
