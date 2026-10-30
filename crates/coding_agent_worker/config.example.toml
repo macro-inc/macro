@@ -1,30 +1,22 @@
-# Everything an agent harness daemon needs to serve one harness's sessions.
+# This machine's macrod config. The TUI and `macrod service` both read
+# ~/.macrod/macrod.toml unless given `--config <path>`.
 #
 # This example omits credentials, so `macrod` starts in Quickstart. Pairing
 # shows a code for approval in the web app, then adds a `[credentials]` table
 # containing a bearer token to this file. Keep the resulting config private.
+#
+# The runtime's name, ownership (private or team), and permission bypass are
+# not set here: change them on the web at Settings → Agents → Runtimes.
 
-[macro]
-# Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
-# gateway the daemon connects to on startup.
-api_url = "http://localhost:50009/agent-harness"
-# Base URL of the storage service (harness pairing + live event stream).
-storage_url = "http://localhost:50009/dss"
-# Optional: base URL of the Macro web app, used only to print the pairing
-# link. Defaults to https://macro.com/app.
-web_url = "http://localhost:3000/app"
-
-[identity]
-# Optional: the harness name pairing requests; the approving user may rename
-# it. Defaults to this machine's hostname.
-name = "erics-macbook"
-# Optional: "private" (default) or "team". Team harnesses can run agents any
-# of your teammates create. The approval dialog arrives preselected to this.
-scope = "private"
-# Allow agents to bypass tool permissions, subject to web confirmation.
-# When enabled, agents can run commands and edit files without approval.
-# Changes apply at the next pairing.
-allow_permission_bypass = false
+# Optional development overrides. Every key defaults to production.
+# [macro]
+# # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
+# # gateway the daemon connects to on startup.
+# api_url = "http://localhost:50009/agent-harness"
+# # Base URL of the storage service (harness pairing + live event stream).
+# storage_url = "http://localhost:50009/dss"
+# # Base URL of the Macro web app, used for the pairing and settings links.
+# web_url = "http://localhost:3000/app"
 
 [harness]
 command = "hermes"
@@ -42,7 +34,7 @@ repo_url = "https://github.com/macro-inc/macro"
 
 # Optional defaults for the one native Herdr configuration (also editable in the TUI).
 # [herdr]
-# model = "sonnet"            # Omit to use the installed agent's default.
+# model = "sonnet"            # Launch fallback; Macro picks each agent's model.
 # arguments = []              # Native CLI arguments, one word per element.
 # storage_path = "/path/to/agents" # Omit for ~/.macrod/herdr/<harness-id>.
 # focus = true               # false opens new sessions in the background.

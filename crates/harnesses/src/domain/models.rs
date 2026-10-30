@@ -163,6 +163,19 @@ pub struct ApprovePairingRequest {
     pub team_id: Option<Uuid>,
 }
 
+/// Request to change a registered harness. Omitted fields stay as they are.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct PatchHarnessRequest {
+    /// New display name.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Whether agents may bypass ACP permission requests on this harness.
+    /// Live sessions pick the change up at their next turn.
+    #[serde(default)]
+    pub allow_permission_bypass: Option<bool>,
+}
+
 /// Request to claim an approved pairing's credential.
 ///
 /// The daemon serializes this, so both derives are used.

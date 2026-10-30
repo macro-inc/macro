@@ -70,7 +70,7 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
   </Step>
 
   <Step title="Run macrod">
-    Open a terminal in the folder where `macrod` should keep its configuration and run:
+    Open a terminal and run:
 
     ```bash
     macrod
@@ -80,11 +80,7 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
 
     On first launch, **Quickstart** lists the agents available on your machine. Select one, or choose **Custom command** to enter an ACP launch command.
 
-    Set **Workspace** to the directory your agent should work in. Choose **Private** for your own runtime that only you can kick off, or **Team** to let teammates use your agent. If you run team mode, anyone can create agent sessions that run on your computer. By default, you'll be asked for permission requests based on the harness you run, such as for accessing files outside of your workspace; if you enable **Full Access** these prompts will automatically be approved.
-
-    <Frame caption="Configure your agent, workspace, and access before generating a pairing code.">
-      ![The macrod Quickstart configuration screen showing discovered agents, workspace, access, Full Access off, and the Create and pair button](/images/macrod-quickstart-example.png)
-    </Frame>
+    Set **Workspace** to the directory your agent should work in. Everything else about the runtime is managed in Macro.
 
     Select **Create and pair** to generate your device code.
 
@@ -102,9 +98,9 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
       ![The macrod terminal with a device code and approval link in the Pair macrod panel](/images/macrod-pairing-example.png)
     </Frame>
 
-    Check that the code and computer match your terminal. Review the runtime name, **Private** or **Team** access, and permissions, then click **Approve**.
+    Check that the code and computer match your terminal, review the runtime's settings, then click **Approve**.
 
-    `macrod` connects automatically after approval. It saves your configuration and credential in `macrod.toml` in the directory where you started it. Keep this file private; do not commit it to a repository.
+    `macrod` connects automatically after approval. It saves your agent, workspace, and credential in `~/.macrod/macrod.toml` (`%USERPROFILE%\.macrod\macrod.toml` on Windows). Keep this file private; do not commit it to a repository.
   </Step>
 </Steps>
 
@@ -118,7 +114,7 @@ Review sharing and channel access, then save the agent. @mention it in a channel
 
 Leave `macrod` running and your computer awake while you use the runtime. Its terminal shows your sessions, configuration, and logs. You can also check the runtime in **Settings → Runtimes**.
 
-To reconnect later, run `macrod` from the same directory so it loads your saved configuration. If you revoke the runtime, pair it again before using it.
+To reconnect later, run `macrod` again; it loads `~/.macrod/macrod.toml` from any directory. If you revoke the runtime, pair it again before using it. Only one `macrod` can run with a given configuration at a time.
 
 ## Update macrod
 

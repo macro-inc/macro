@@ -92,8 +92,6 @@ export function createLocalRuntimeSetup(caps: SetupCapabilities) {
       await caps.startDaemon({
         agent: agent.id,
         workspace: choices.workspace?.trim() || undefined,
-        scope: 'private',
-        allowPermissionBypass: choices.fullAccess,
       });
       return await caps.waitForRunning((phase) =>
         setState({ kind: 'running', step: 'connect', phase })
@@ -126,6 +124,9 @@ export function createLocalRuntimeSetup(caps: SetupCapabilities) {
   ): Promise<ReadyAgent> => {
     const harnessId = status.harnessId;
     if (!harnessId) throw new Error('This computer is not connected yet.');
+    // Bypass is a setting on the runtime itself; an agent can only choose it
+    // once the runtime allows it.
+    if (choices.fullAccess) await caps.allowPermissionBypass(harnessId);
     const existing = (await caps.listAgents()).find(
       (agent) => agent.harnessId === harnessId
     );

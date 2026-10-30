@@ -10,8 +10,13 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 ## Start here
 
 - `src/main.rs`: module list and the composition root's CLI entrypoint.
-- `src/config.rs`: `macrod.toml` — the daemon's one input (see
-  `config.example.toml`, `default.macrod.toml`).
+- `src/config.rs`: `macrod.toml` — the daemon's one input, machine-local only
+  (see `config.example.toml`, `default.macrod.toml`). The TUI and
+  `macrod service` share `~/.macrod/macrod.toml` (`--config` overrides it),
+  locked by `<config>.lock` while running. A TUI started without `--config`
+  moves a legacy `./macrod.toml` there. Name, ownership, and permission bypass
+  live on the web (Settings → Agents → Runtimes); `[macro]` is a dev override
+  that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge
@@ -67,8 +72,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 
 ## Recipes
 
-- Add a config field: `src/config.rs` → `config.example.toml` →
-  `default.macrod.toml` → the TUI config form (`src/tui/config_form/`).
+- Add a config field (machine-local only: commands, paths, local launch
+  defaults; runtime behaviour a Macro user controls belongs on the web harness
+  row, and never put a launch command on the web): `src/config.rs` →
+  `config.example.toml` → `default.macrod.toml` → the TUI config form
+  (`src/tui/config_form/`).
 - Handle a new trigger kind: `src/trigger.rs` → `src/dispatch.rs` → its tests.
 - Add/change a native herdr control (command, model picker): `src/herdr/controls/`
   → `README.md` (native controls section) → `src/herdr/acp_agent/`.
@@ -81,8 +89,8 @@ external chat replies depend on it. Direct session controls still mint IDs.
 ## Checks
 
 - `cargo test -p coding_agent_worker` (`SQLX_OFFLINE` unset).
-- `just run` (from this directory) to run the daemon against `macrod.toml` at
-  the repo root.
+- `just run` (from this directory) to run the daemon with
+  `--config <repo root>/macrod.toml`, keeping dev off `~/.macrod/macrod.toml`.
 - Self-update end to end (Linux/macOS): `e2e/build_releases.sh /tmp/rel
   v2000.1.1.1 v2000.1.1.2`, then `python3 e2e/update_e2e.py --releases /tmp/rel
   --v1 v2000.1.1.1 --v2 v2000.1.1.2`, and `e2e/installer_test.sh /tmp/rel

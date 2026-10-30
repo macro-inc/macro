@@ -2,17 +2,6 @@ use super::*;
 use crate::config::HarnessScope;
 use harness_id::HarnessId;
 
-fn setup_options(workspace: &Path) -> ServiceOptions {
-    ServiceOptions {
-        config: None,
-        agent: Some("custom".to_owned()),
-        workspace: Some(workspace.to_owned()),
-        name: Some("Desk".to_owned()),
-        scope: Some(ServiceScope::Team),
-        allow_permission_bypass: Some(true),
-    }
-}
-
 #[test]
 fn creates_a_config_from_setup_flags() {
     let directory = tempfile::tempdir().expect("temp dir");
@@ -22,16 +11,22 @@ fn creates_a_config_from_setup_flags() {
     let workspace = directory.path().join("workspace");
     let agent = agent_catalog::custom("hermes acp").expect("custom agent");
 
-    configure(&path, &setup_options(&workspace), Some(agent)).expect("configure");
+    configure(
+        &path,
+        &ServiceOptions {
+            config: None,
+            agent: Some("custom".to_owned()),
+            workspace: Some(workspace.clone()),
+        },
+        Some(agent),
+    )
+    .expect("configure");
 
     let config = Config::load(&path).expect("load created config");
     assert_eq!(config.harness.command, "hermes");
     assert_eq!(config.harness.args, ["acp"]);
     assert_eq!(config.workspace.path, workspace);
     assert!(workspace.is_dir());
-    assert_eq!(config.identity.name.as_deref(), Some("Desk"));
-    assert_eq!(config.identity.scope, IdentityScope::Team);
-    assert!(config.identity.allow_permission_bypass);
     assert!(config.credentials.is_none());
 }
 
@@ -41,7 +36,16 @@ fn reconfigures_without_dropping_credentials() {
     let path = directory.path().join("macrod.toml");
     let workspace = directory.path().join("workspace");
     let agent = agent_catalog::custom("hermes acp").expect("custom agent");
-    configure(&path, &setup_options(&workspace), Some(agent)).expect("configure");
+    configure(
+        &path,
+        &ServiceOptions {
+            config: None,
+            agent: Some("custom".to_owned()),
+            workspace: Some(workspace),
+        },
+        Some(agent),
+    )
+    .expect("configure");
 
     let credentials = HarnessCredentials {
         harness_id: HarnessId::TEST_A,
@@ -60,9 +64,6 @@ fn reconfigures_without_dropping_credentials() {
             config: None,
             agent: None,
             workspace: Some(moved.clone()),
-            name: None,
-            scope: Some(ServiceScope::Private),
-            allow_permission_bypass: None,
         },
         None,
     )
@@ -71,10 +72,8 @@ fn reconfigures_without_dropping_credentials() {
     let config = Config::load(&path).expect("load edited config");
     assert_eq!(config.credentials, Some(credentials));
     assert_eq!(config.workspace.path, moved);
-    assert_eq!(config.identity.scope, IdentityScope::Private);
     // Untouched settings survive the edit.
-    assert_eq!(config.identity.name.as_deref(), Some("Desk"));
-    assert!(config.identity.allow_permission_bypass);
+    assert_eq!(config.harness.command, "hermes");
 }
 
 #[test]
@@ -87,9 +86,6 @@ fn creating_a_config_requires_an_agent() {
             config: None,
             agent: None,
             workspace: Some(directory.path().to_owned()),
-            name: None,
-            scope: None,
-            allow_permission_bypass: None,
         },
         None,
     )

@@ -16,6 +16,12 @@ export type ApproveHarnessPairingParams = {
   teamId?: string;
 };
 
+export type PatchHarnessParams = {
+  harnessId: string;
+  name?: string;
+  allowPermissionBypass?: boolean;
+};
+
 export type DeleteHarnessParams = {
   harnessId: string;
 };
@@ -98,21 +104,40 @@ export function useApproveHarnessPairingMutation() {
 export function useApproveOwnHarnessPairingMutation() {
   return useMutation(() => ({
     gcTime: 0,
-    mutationFn: async (code: string) => {
-      const pairing = await throwOnErr(() =>
-        storageServiceClient.getHarnessPairing({ code })
-      );
-      return await throwOnErr(() =>
+    // Approved as a private runtime that prompts; setup turns bypass on
+    // through the runtime's web setting when the user chose Full Access.
+    mutationFn: async (code: string) =>
+      await throwOnErr(() =>
         storageServiceClient.approveHarnessPairing({
           code,
-          allow_permission_bypass:
-            pairing.requested_allow_permission_bypass ?? false,
+          allow_permission_bypass: false,
         })
-      );
-    },
+      ),
     onSuccess: async () => await invalidateHarnesses(),
     onError: (error) =>
       console.error('failed to approve local harness pairing', error),
+  }));
+}
+
+export async function patchHarness(vars: PatchHarnessParams) {
+  const updated = await throwOnErr(() =>
+    storageServiceClient.patchHarness({
+      harness_id: vars.harnessId,
+      name: vars.name,
+      allow_permission_bypass: vars.allowPermissionBypass,
+    })
+  );
+  queryClient.setQueryData<Harness[]>(harnessKeys.list.queryKey, (current) =>
+    current?.map((harness) => (harness.id === updated.id ? updated : harness))
+  );
+  return updated;
+}
+
+export function usePatchHarnessMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: patchHarness,
+    onError: (error) => console.error('failed to change harness', error),
   }));
 }
 

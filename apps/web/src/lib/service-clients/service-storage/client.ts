@@ -140,6 +140,7 @@ import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutO
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
+import type { PatchHarnessRequest } from './generated/schemas/patchHarnessRequest';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
@@ -845,6 +846,16 @@ export const storageServiceClient = {
           body: JSON.stringify(request),
         }
       )
+    ).map((result) => result);
+  },
+
+  async patchHarness(args: { harness_id: string } & PatchHarnessRequest) {
+    const { harness_id, ...request } = args;
+    return (
+      await dssFetch<Harness>(`/harnesses/${harness_id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(request),
+      })
     ).map((result) => result);
   },
 

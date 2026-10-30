@@ -6,7 +6,6 @@
 
 use harnesses::domain::models::{
     ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing, HarnessOwner,
-    RequestedHarnessScope,
 };
 use reqwest::StatusCode;
 use rootcause::prelude::ResultExt as _;
@@ -44,27 +43,17 @@ impl PairingClient {
         }
     }
 
-    /// Open a pairing using the config's identity.
-    pub async fn start(&self, config: &Config) -> rootcause::Result<CreatedPairing> {
-        let name = config
-            .identity
-            .name
-            .clone()
-            .or_else(local_hostname)
-            .unwrap_or_else(|| "macrod".to_owned());
-        let scope = match config.identity.scope {
-            crate::config::IdentityScope::Private => RequestedHarnessScope::Private,
-            crate::config::IdentityScope::Team => RequestedHarnessScope::Team,
-        };
-
+    /// Open a pairing named after this machine. Ownership, permission bypass,
+    /// and the final name are the approving user's choice on the web.
+    pub async fn start(&self) -> rootcause::Result<CreatedPairing> {
         let response = self
             .http
             .post(format!("{}/harness-pairings", self.base))
             .json(&CreatePairingRequest {
-                allow_permission_bypass: Some(config.identity.allow_permission_bypass),
-                name,
+                allow_permission_bypass: None,
+                name: machine_name(),
                 host: Some(host_info()),
-                scope: Some(scope),
+                scope: None,
             })
             .send()
             .await
@@ -125,6 +114,12 @@ fn credentials_from(claimed: ClaimedPairing) -> HarnessCredentials {
         token: claimed.token,
         scope,
     }
+}
+
+/// This machine's hostname, or `macrod` when it has none: the name a pairing
+/// requests and the panel shows before the server's name is known.
+pub fn machine_name() -> String {
+    local_hostname().unwrap_or_else(|| "macrod".to_owned())
 }
 
 fn local_hostname() -> Option<String> {

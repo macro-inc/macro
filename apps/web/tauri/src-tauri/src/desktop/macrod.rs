@@ -323,14 +323,14 @@ pub(crate) async fn macrod_inspect(app: AppHandle) -> Result<serde_json::Value, 
 }
 
 /// Setup choices for a first-time (or re-) configuration. All optional: a
-/// plain restart of an already configured daemon passes none of them.
+/// plain restart of an already configured daemon passes none of them. The
+/// runtime's name, ownership, and permission bypass are set on the web, not
+/// here; fields an older web bundle still sends are ignored.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MacrodStartOptions {
     agent: Option<String>,
     workspace: Option<String>,
-    scope: Option<String>,
-    allow_permission_bypass: Option<bool>,
 }
 
 /// Start (or restart) the supervised daemon and remember to auto-start it on
@@ -370,15 +370,6 @@ fn launch(
     }
     if let Some(workspace) = &options.workspace {
         command.args(["--workspace", workspace]);
-    }
-    if let Some(scope) = &options.scope {
-        command.args(["--scope", scope]);
-    }
-    if let Some(allowed) = options.allow_permission_bypass {
-        command.args([
-            "--allow-permission-bypass",
-            if allowed { "true" } else { "false" },
-        ]);
     }
     command
         .stdin(Stdio::piped())

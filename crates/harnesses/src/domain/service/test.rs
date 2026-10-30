@@ -54,6 +54,7 @@ struct Calls {
     approved: Vec<(String, NewHarness)>,
     claimed: Vec<Uuid>,
     deleted: Vec<HarnessId>,
+    updated: Vec<(HarnessId, HarnessChanges)>,
     team_lookups: Vec<(String, Uuid)>,
 }
 
@@ -141,6 +142,25 @@ impl HarnessRepo for FakeRepo {
 
     async fn get_harness(&self, _harness_id: HarnessId) -> Result<Option<Harness>, Self::Err> {
         Ok(self.harness.clone())
+    }
+
+    async fn update_harness(
+        &self,
+        harness_id: HarnessId,
+        changes: HarnessChanges,
+    ) -> Result<Option<Harness>, Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .updated
+            .push((harness_id, changes.clone()));
+        Ok(self.harness.clone().map(|harness| Harness {
+            name: changes.name.unwrap_or(harness.name),
+            allow_permission_bypass: changes
+                .allow_permission_bypass
+                .unwrap_or(harness.allow_permission_bypass),
+            ..harness
+        }))
     }
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {
@@ -642,7 +662,7 @@ async fn pairing_creation_preserves_the_daemons_permission_ceiling() {
 }
 
 #[tokio::test]
-async fn approval_requires_daemon_consent_when_the_daemon_names_a_ceiling() {
+async fn approval_decides_bypass_whatever_the_daemon_requested() {
     for requested in [None, Some(false), Some(true)] {
         for approved in [false, true] {
             let mut pairing = pending_pairing();
@@ -665,14 +685,143 @@ async fn approval_requires_daemon_consent_when_the_daemon_names_a_ceiling() {
                     },
                 )
                 .await;
-            let calls = repo.calls.lock().unwrap();
-            if requested == Some(false) && approved {
-                assert!(matches!(result, Err(HarnessError::BadRequest(_))));
-                assert!(calls.approved.is_empty());
-            } else {
-                result.unwrap();
-                assert_eq!(calls.approved[0].1.allow_permission_bypass, approved);
-            }
+            result.unwrap();
+            assert_eq!(
+                repo.calls.lock().unwrap().approved[0]
+                    .1
+                    .allow_permission_bypass,
+                approved
+            );
         }
     }
+}
+
+#[tokio::test]
+async fn a_manager_changes_bypass_and_name_on_the_web() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let updated = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: Some("  studio  ".to_owned()),
+                allow_permission_bypass: Some(true),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(updated.allow_permission_bypass);
+    assert_eq!(updated.name, "studio");
+    assert_eq!(
+        repo.calls.lock().unwrap().updated,
+        [(
+            HarnessId::TEST_A,
+            HarnessChanges {
+                name: Some("studio".to_owned()),
+                allow_permission_bypass: Some(true),
+            }
+        )]
+    );
+}
+
+#[tokio::test]
+async fn an_empty_patch_writes_nothing() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let unchanged = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(unchanged.name, "erics-macbook");
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+#[tokio::test]
+async fn a_patch_rejects_a_blank_name() {
+    let repo = FakeRepo {
+        harness: Some(harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })),
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: Some("   ".to_owned()),
+                allow_permission_bypass: None,
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::BadRequest(_))));
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+#[tokio::test]
+async fn only_a_harness_manager_may_patch() {
+    for (owner, caller_id, allowed) in [
+        (
+            HarnessOwner::User {
+                user_id: OWNER_ID.to_owned(),
+            },
+            MEMBER_ID,
+            false,
+        ),
+        (HarnessOwner::Team { team_id: TEAM_ID }, MEMBER_ID, false),
+        (HarnessOwner::Team { team_id: TEAM_ID }, OWNER_ID, true),
+    ] {
+        let repo = FakeRepo {
+            harness: Some(harness(owner.clone())),
+            ..FakeRepo::default()
+        };
+        let result = service(repo.clone())
+            .patch_harness(
+                caller(caller_id),
+                HarnessId::TEST_A,
+                PatchHarnessRequest {
+                    name: None,
+                    allow_permission_bypass: Some(true),
+                },
+            )
+            .await;
+
+        if allowed {
+            assert!(result.unwrap().allow_permission_bypass, "{owner:?}");
+        } else {
+            assert!(
+                matches!(result, Err(HarnessError::Unauthorized)),
+                "{owner:?} by {caller_id}"
+            );
+            assert!(repo.calls.lock().unwrap().updated.is_empty());
+        }
+    }
+
+    let result = service(FakeRepo::default())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                name: None,
+                allow_permission_bypass: Some(false),
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }

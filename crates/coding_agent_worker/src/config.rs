@@ -1,9 +1,13 @@
-//! The daemon's one input: a TOML file describing the Macro deployment it
-//! streams from and the harness it runs. See
+//! The daemon's one input: `macrod.toml`, this machine's local config - the
+//! harness it runs, its workspace, native Herdr defaults, and the pairing
+//! credential. The TUI and `macrod service` share one file,
+//! `~/.macrod/macrod.toml` ([`default_config_path`]). See
 //! `config.example.toml` at the crate root.
 //!
-//! Pairing (press `p` in the control panel) adds the harness credential to
-//! this file. Treat it as sensitive because that credential is a bearer token.
+//! Runtime settings - the name, ownership, and permission bypass - live on the
+//! web at Settings → Agents → Runtimes, not here. Pairing (press `p` in the
+//! control panel) adds the harness credential to this file. Treat it as
+//! sensitive because that credential is a bearer token.
 
 use harness_id::HarnessId;
 use serde::{Deserialize, Serialize};
@@ -13,24 +17,36 @@ use std::path::{Path, PathBuf};
 #[cfg(test)]
 mod test;
 
+mod environment {
+    macro_env_var::maybe_env_var! {
+        pub struct Home;
+    }
+    // Windows usually sets no `HOME`; this is its home directory.
+    macro_env_var::maybe_env_var! {
+        pub struct Userprofile;
+    }
+}
+
 /// Everything the daemon needs, parsed from one TOML file.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// The Macro deployment this harness's sessions live in.
-    #[serde(rename = "macro")]
+    /// The Macro deployment this harness's sessions live in: production
+    /// unless the file overrides it for development.
+    #[serde(rename = "macro", default)]
     pub macro_api: MacroApi,
-    /// How this daemon introduces itself when pairing.
-    #[serde(default)]
-    pub identity: Identity,
     /// The approved harness credential, absent until pairing completes.
     #[serde(default)]
     pub credentials: Option<HarnessCredentials>,
-    /// Unused: kept so existing configs that still declare a webhook listener
-    /// continue to parse. The daemon listens over SSE and no longer serves HTTP.
+    /// Ignored: runtime settings that moved to the web. Accepted so older
+    /// configs still parse; [`Config::load`] warns about it.
+    #[serde(default)]
+    identity: Option<toml::Table>,
+    /// Ignored: the webhook listener the daemon no longer runs. Accepted so
+    /// older configs still parse. The daemon listens over SSE.
     #[serde(default)]
     #[expect(dead_code, reason = "accepted only so existing configs still parse")]
-    server: Option<LegacyServer>,
+    server: Option<toml::Table>,
     /// The harness process shared by every session.
     pub harness: Harness,
     /// The workspace every session runs against.
@@ -61,7 +77,8 @@ impl Default for UpdateSettings {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HerdrSettings {
-    /// Native model ID; absent uses the CLI's configured default.
+    /// Native model ID; absent uses the CLI's configured default. Only the
+    /// native CLI's launch fallback: Macro picks each agent's model.
     pub model: Option<String>,
     /// Extra native CLI arguments, already split into words.
     pub arguments: Vec<String>,
@@ -82,10 +99,8 @@ impl Default for HerdrSettings {
     }
 }
 
-/// Whether the approved harness is private to its owner or shared with a team.
-///
-/// This can differ from [`Identity::scope`], which remains the requested scope
-/// for the next pairing.
+/// Whether the approved harness is private to its owner or shared with a team,
+/// as recorded when pairing completed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HarnessScope {
@@ -116,9 +131,10 @@ impl HarnessCredentials {
     }
 }
 
-/// The Macro deployment this harness's sessions live in.
+/// The Macro deployment this harness's sessions live in. Every field defaults
+/// to production; values in the file are development overrides.
 #[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct MacroApi {
     /// Base URL of the agent-harness service, e.g.
     /// `http://localhost:50009/agent-harness`. Sessions are created and
@@ -127,9 +143,18 @@ pub struct MacroApi {
     /// Base URL of the storage service, e.g. `http://localhost:50009/dss`.
     /// Hosts harness pairing and `GET /webhook/events/stream`.
     pub storage_url: String,
-    /// Base URL of the Macro web app, used only to print the pairing link.
-    #[serde(default = "default_web_url")]
+    /// Base URL of the Macro web app, used for the pairing and settings links.
     pub web_url: String,
+}
+
+impl Default for MacroApi {
+    fn default() -> Self {
+        Self {
+            api_url: "https://gateway.macro.com/agent-harness".to_owned(),
+            storage_url: "https://gateway.macro.com/dss".to_owned(),
+            web_url: "https://macro.com/app".to_owned(),
+        }
+    }
 }
 
 impl MacroApi {
@@ -145,53 +170,15 @@ impl MacroApi {
 
     /// The settings-page URL where a pairing code is approved.
     pub fn pairing_approval_url(&self, code: &str) -> String {
-        let base = self.web_url.trim_end_matches('/');
-        format!("{base}/settings/harness?pair={code}")
+        format!("{}?pair={code}", self.settings_url())
     }
-}
 
-/// How this daemon introduces itself when pairing.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Identity {
-    /// Whether the next pairing may enable permission bypass. Requires web approval.
-    #[serde(default)]
-    pub allow_permission_bypass: bool,
-    /// Requested harness display name; the approving user may rename it.
-    /// Defaults to this machine's hostname.
-    #[serde(default)]
-    pub name: Option<String>,
-    /// Whether the harness should be private to the approving user or shared
-    /// with their team. Advisory: the approval dialog arrives preselected to
-    /// this, and the approving user has the final say.
-    #[serde(default)]
-    pub scope: IdentityScope,
-}
-
-/// The ownership scope this daemon's pairing asks for.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum IdentityScope {
-    /// Only the approving user can run agents on this harness.
-    #[default]
-    Private,
-    /// Any of the approving user's teammates can bind agents to it.
-    Team,
-}
-
-/// Historical `[server]` table from when the daemon received signed webhooks.
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct LegacyServer {
-    #[serde(default)]
-    #[expect(dead_code, reason = "accepted only so existing configs still parse")]
-    port: Option<u16>,
-    #[serde(default)]
-    #[expect(dead_code, reason = "accepted only so existing configs still parse")]
-    public_url: Option<String>,
-    #[serde(default)]
-    #[expect(dead_code, reason = "accepted only so existing configs still parse")]
-    signing_secret: Option<String>,
+    /// The settings page where runtimes are renamed, shared, and granted
+    /// permission bypass.
+    pub fn settings_url(&self) -> String {
+        let base = self.web_url.trim_end_matches('/');
+        format!("{base}/settings/harness")
+    }
 }
 
 /// The harness process shared by every session. Generic on purpose: any binary
@@ -230,10 +217,6 @@ pub struct Workspace {
     pub repo_url: Option<String>,
 }
 
-fn default_web_url() -> String {
-    "https://macro.com/app".to_owned()
-}
-
 /// Why a config failed to load.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -264,9 +247,144 @@ impl Config {
             path: path.to_owned(),
             source,
         })?;
-        toml::from_str(&raw).map_err(|source| ConfigError::Parse {
+        let config: Self = toml::from_str(&raw).map_err(|source| ConfigError::Parse {
             path: path.to_owned(),
             source,
-        })
+        })?;
+        if let Some(identity) = &config.identity {
+            let keys = identity
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join(", ");
+            tracing::warn!(
+                path = %path.display(),
+                ignored_keys = %keys,
+                "ignoring the [identity] table in macrod.toml: a runtime's name, ownership, and \
+                 permission bypass are now set on the web at Settings → Agents → Runtimes"
+            );
+        }
+        Ok(config)
+    }
+}
+
+/// The one config location shared by the TUI and `macrod service`:
+/// `~/.macrod/macrod.toml` (`%USERPROFILE%\.macrod\macrod.toml` on Windows),
+/// next to adapter installs and Herdr storage.
+pub fn default_config_path() -> Option<PathBuf> {
+    let home = environment::Home::new();
+    let user_profile = environment::Userprofile::new();
+    config_path_in_home(
+        home.as_ref().and_then(|home| home.value()),
+        user_profile.as_ref().and_then(|profile| profile.value()),
+    )
+}
+
+/// `HOME` wins; `USERPROFILE` is the fallback Windows needs.
+fn config_path_in_home(home: Option<&str>, user_profile: Option<&str>) -> Option<PathBuf> {
+    [home, user_profile]
+        .into_iter()
+        .flatten()
+        .find(|directory| !directory.is_empty())
+        .map(|home| PathBuf::from(home).join(".macrod").join("macrod.toml"))
+}
+
+/// Move a config left in the working directory by an older release
+/// (`./macrod.toml`, plus its sibling `macrod.webhook-state.json`) to
+/// `target`, the default location.
+///
+/// When both exist, `target` wins and the working-directory copy is left alone.
+pub fn adopt_working_directory_config(target: &Path, legacy: &Path) -> std::io::Result<()> {
+    if !legacy.exists() {
+        return Ok(());
+    }
+    if target.exists() {
+        tracing::warn!(
+            ignored = %legacy.display(),
+            config = %target.display(),
+            "ignoring the macrod.toml in the working directory; using the default config"
+        );
+        return Ok(());
+    }
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    move_file(legacy, target)?;
+    let legacy_state = legacy.with_extension("webhook-state.json");
+    if legacy_state.exists() {
+        move_file(&legacy_state, &target.with_extension("webhook-state.json"))?;
+    }
+    tracing::info!(
+        from = %legacy.display(),
+        to = %target.display(),
+        "moved macrod.toml from the working directory to the default config location"
+    );
+    Ok(())
+}
+
+/// Rename, or copy and remove when the two paths are on different filesystems.
+fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    if std::fs::rename(from, to).is_ok() {
+        return Ok(());
+    }
+    std::fs::copy(from, to)?;
+    std::fs::remove_file(from)
+}
+
+/// An exclusive hold on one config: one macrod serves one harness.
+/// Released when dropped or when the process exits.
+#[derive(Debug)]
+pub struct ConfigLock {
+    _file: std::fs::File,
+}
+
+/// Why a config could not be locked.
+#[derive(Debug, thiserror::Error)]
+pub enum LockError {
+    /// Another process holds the lock.
+    #[error("another macrod is already running with {}", path.display())]
+    Held {
+        /// The config being served.
+        path: PathBuf,
+    },
+    /// The lock file could not be opened or locked.
+    #[error("could not lock {}", path.display())]
+    Io {
+        /// The lock file.
+        path: PathBuf,
+        /// What opening or locking it returned.
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+/// Take the advisory lock `<config>.lock` beside `config`, failing fast when
+/// another macrod already holds it.
+pub fn lock(config: &Path) -> Result<ConfigLock, LockError> {
+    let mut name = config.as_os_str().to_owned();
+    name.push(".lock");
+    let lock_path = PathBuf::from(name);
+    let io_error = |source| LockError::Io {
+        path: lock_path.clone(),
+        source,
+    };
+    if let Some(parent) = lock_path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent).map_err(io_error)?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .map_err(io_error)?;
+    match file.try_lock() {
+        Ok(()) => Ok(ConfigLock { _file: file }),
+        Err(std::fs::TryLockError::WouldBlock) => Err(LockError::Held {
+            path: config.to_owned(),
+        }),
+        Err(std::fs::TryLockError::Error(source)) => Err(io_error(source)),
     }
 }

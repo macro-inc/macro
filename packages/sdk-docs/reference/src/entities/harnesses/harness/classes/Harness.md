@@ -10,6 +10,7 @@ A registered host for coding agents.
 
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-allowpermissionbypass"></a> `allowPermissionBypass` | `readonly` | () => `Promise`\<`NonNullable`\<`boolean` \| `undefined`\> \| `undefined`\> | Whether agents here may bypass permission prompts. | - |
 | <a id="property-connected"></a> `connected` | `readonly` | () => `Promise`\<`boolean`\> | Whether the host is connected. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-kind"></a> `kind` | `readonly` | () => `Promise`\<`string`\> | Runtime kind. | - |
@@ -22,6 +23,43 @@ A registered host for coding agents.
 > **delete**(): `Promise`\<`void`\>
 
 Remove the host.
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### rename()
+
+> **rename**(`name`): `Promise`\<`void`\>
+
+Rename the host.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `name` | `string` |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### setPermissionBypass()
+
+> **setPermissionBypass**(`allowed`): `Promise`\<`void`\>
+
+Allow or forbid agents here to bypass permission prompts. Live sessions
+pick the change up at their next turn.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `allowed` | `boolean` |
 
 #### Returns
 

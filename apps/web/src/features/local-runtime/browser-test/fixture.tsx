@@ -74,6 +74,7 @@ const capabilities: SetupCapabilities = {
     }
     return RUNNING;
   },
+  allowPermissionBypass: async () => {},
   listAgents: async () => [],
   loadModels: async () => ({
     status: 'available',
