@@ -40,14 +40,14 @@ def n(p):
 
 @glyph("o", 0x006F)
 def o(p):
-    w = p.w(486, 1.0)
+    w = p.w(486, 0.6)
     shape = ring(0, -P.OS, w, P.XH + P.OS, p.stem * 1.04, p.hair, n=p.sq, n_in=p.sq_in)
     return G(shape, l=p.sbr, r=p.sbr)
 
 
 @glyph("c", 0x0063)
 def c(p):
-    w = p.w(460, 0.9)
+    w = p.w(460, 0.55)
     shape = open_bowl(
         p,
         0,
@@ -78,7 +78,7 @@ def H(p):
 
 @glyph("O", 0x004F)
 def O(p):
-    w = p.w(650, 1.1)
+    w = p.w(650, 0.65)
     shape = ring(
         0,
         -P.COS,

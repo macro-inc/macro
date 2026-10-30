@@ -40,7 +40,9 @@ LEFT = {
     "p_qr": "quoteright quotedblright",
     "p_ql": "quoteleft quotedblleft",
     "p_qs": "quotesingle quotedbl",
-    "p_dash": "hyphen endash emdash",
+    "p_dash": "hyphen endash emdash hyphen.case endash.case emdash.case",
+    "p_open": "parenleft bracketleft braceleft parenleft.case bracketleft.case braceleft.case",
+    "l_n": "n h m l i d a u",
     "f_7": "seven",
 }
 
@@ -65,15 +67,42 @@ RIGHT = {
     "p_qr": "quoteright quotedblright",
     "p_ql": "quoteleft quotedblleft",
     "p_qs": "quotesingle quotedbl",
-    "p_dash": "hyphen endash emdash",
+    "p_dash": "hyphen endash emdash hyphen.case endash.case emdash.case",
     "f_1": "one",
     "f_4": "four",
 }
 
 # Classes whose sides are already balanced by sidebearings. A pair made only
 # of these and punctuation is never kerned.
-REGULAR = {"L_O", "L_C", "l_o", "l_e", "R_O", "r_o", "r_a", "r_u", "r_s", "r_z"}
-PUNCT = {"p_dot", "p_qr", "p_ql", "p_qs", "p_dash"}
+REGULAR = {
+    "L_O",
+    "L_C",
+    "l_o",
+    "l_e",
+    "l_n",
+    "R_O",
+    "r_o",
+    "r_a",
+    "r_u",
+    "r_s",
+    "r_z",
+}
+PUNCT = {"p_dot", "p_qr", "p_ql", "p_qs", "p_dash", "p_open"}
+FIGURES = set("zero one two three four five six seven eight nine".split())
+# Glyph names spaced by their own extent rather than a letter band.
+PUNCT_PREFIXES = ("quote", "hyphen", "endash", "emdash", "paren", "bracket", "brace")
+
+# Figure classes are open on one side only next to a few neighbours; pairing
+# them with every class kerns ordinary strings like T1 or 2,450.
+ONLY_WITH = {"f_1": {"f_7", "p_dot"}, "f_4": {"f_7"}}
+
+# Pairs allowed to kern apart, with their ceiling (j's tail under a bracket).
+POSITIVE = {("p_open", "r_j"): 40}
+
+# Overhanging capitals against round ones close up less than the measure
+# says; cap them at this fraction of the H|H gap.
+ROUND_CAP = {("L_T", "R_O"), ("L_O", "R_T"), ("L_L", "R_O")}
+ROUND_CAP_FRACTION = 0.18
 
 STEP = 10  # sampling interval in font units
 FACTOR = 0.5  # fraction of the white-area difference that is corrected
@@ -92,7 +121,30 @@ TWEAKS = {
     # A next to a period or comma reads fine unkerned.
     ("L_A", "p_dot"): 0,
     ("p_dot", "R_A"): 0,
+    # The dot's short zone only sees the foot of a diagonal.
+    ("p_dot", "r_v"): 0,
+    ("p_dot", "R_V"): 0,
+    ("p_dot", "R_W"): 0,
+    ("p_dot", "R_T"): 0.5,
+    ("p_dot", "R_Y"): 0.5,
+    ("L_C", "R_T"): 0,
+    ("L_F", "R_O"): 0.5,
+    ("f_7", "f_1"): 0.4,
 }
+
+
+def fixed_pairs(p):
+    """Pairs the outline measure can't see: an apostrophe sits in the
+    x-height band only at its tip, so contractions (it's, we're, don't) are
+    set from the sidebearings."""
+    sb = p.sb
+    return {
+        ("p_qr", "r_s"): -0.6 * sb,
+        ("p_qr", "r_o"): -0.5 * sb,
+        ("p_qr", "r_a"): -0.5 * sb,
+        ("p_qr", "r_u"): -0.25 * sb,
+        ("l_n", "p_qr"): -0.25 * sb,
+    }
 
 
 def _split(spec):
@@ -103,8 +155,9 @@ def _is_lower(name):
     base = name.split(".")[0]
     return (
         base[:1].islower()
+        and base not in FIGURES
         and base not in ("period", "comma", "ellipsis")
-        and not base.startswith(("quote", "hyphen", "endash", "emdash"))
+        and not base.startswith(PUNCT_PREFIXES)
     )
 
 
@@ -135,19 +188,17 @@ def _zone(name, b):
     """Vertical zone a glyph is spaced in: its x-height or cap-height band for
     letters, its own extent for punctuation."""
     base = name.split(".")[0]
-    if base in ("period", "comma", "ellipsis") or base.startswith(
-        ("quote", "hyphen", "endash", "emdash")
-    ):
+    if base in ("period", "comma", "ellipsis") or base.startswith(PUNCT_PREFIXES):
         return (b[1], b[3])
     return (0, P.XH) if _is_lower(name) else (0, P.CAP)
 
 
 def _reference(name):
     base = name.split(".")[0]
-    if base in ("period", "comma", "ellipsis") or base.startswith(
-        ("quote", "hyphen", "endash", "emdash")
-    ):
+    if base in ("period", "comma", "ellipsis") or base.startswith(PUNCT_PREFIXES):
         return name
+    if base in FIGURES:
+        return "zero"
     return "n" if _is_lower(name) else "H"
 
 
@@ -225,6 +276,7 @@ def pair_values(drawn, p):
     """{(left class, right class): value} for this weight."""
     prof = _Profiles(drawn)
     values = {}
+    hh = _closest(prof, "H", "H", 0, P.CAP) if "H" in drawn else None
     for lc, lspec in LEFT.items():
         lrep = next((g for g in _split(lspec) if g in drawn), None)
         if lrep is None:
@@ -233,15 +285,29 @@ def pair_values(drawn, p):
             # Only pairs with at least one open or diagonal side get kerned.
             if lc in REGULAR | PUNCT and rc in REGULAR | PUNCT:
                 continue
+            if rc in ONLY_WITH and lc not in ONLY_WITH[rc]:
+                continue
+            # Opening brackets only kern apart, to keep j's tail clear.
+            if lc == "p_open" and (lc, rc) not in POSITIVE:
+                continue
             rrep = next((g for g in _split(rspec) if g in drawn), None)
             if rrep is None:
                 continue
             k = measure(prof, lrep, rrep) * TWEAKS.get((lc, rc), 1.0)
+            if (lc, rc) in ROUND_CAP and hh:
+                k = max(k, -ROUND_CAP_FRACTION * hh)
             hi = 0 if (lc in PUNCT or rc in PUNCT) else LIMITS[1]
+            hi = POSITIVE.get((lc, rc), hi)
             k = max(LIMITS[0], min(hi, k))
             k = int(round(k / 5.0) * 5)
             if abs(k) >= MIN_KERN:
                 values[(lc, rc)] = k
+    for pair, v in fixed_pairs(p).items():
+        lc, rc = pair
+        if any(g in drawn for g in _split(LEFT[lc])) and any(
+            g in drawn for g in _split(RIGHT[rc])
+        ):
+            values[pair] = int(round(v / 5.0) * 5)
     return values
 
 

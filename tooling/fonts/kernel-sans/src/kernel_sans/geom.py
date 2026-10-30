@@ -386,25 +386,29 @@ def stem_trap(x, y, depth, side="right", up=True):
 
 def crotch_trap(v, d1, d2, depth, mouth=0.6):
     """Ink trap to SUBTRACT at the inner vertex of two straight edges, as in
-    v w y A V W M N K k and the figures.
+    v w y A V W and the figures' diagonal joins.
 
     v is the vertex where the two edges meet (the tip of the white wedge);
     d1 and d2 are the directions of the two edges going away from v along
-    the white wedge. The trap continues the wedge `depth` into the black and
-    opens `mouth * depth` wide where it crosses the edges, which keeps it a
-    short, open notch rather than a slit. Use depth = p.trap for vertices (stem
-    shoulders use stem_trap with 1.3 * p.trap)."""
+    the white wedge. The trap carries the wedge `depth` into the black and
+    ends in a flat floor `mouth * depth * 0.83` wide, so it blunts the vertex
+    like stem_trap does instead of sharpening it into a slit. Use depth =
+    p.trap. Where a stroke leaves a straight stem (M N K k, the flag of 1),
+    use stem_trap along the stem edge instead."""
     if depth < 1:
         return Shape()
     u1 = _unit(d1)
     u2 = _unit(d2)
     bis = _unit((u1[0] + u2[0], u1[1] + u2[1]))
-    half = math.acos(max(-1.0, min(1.0, u1[0] * u2[0] + u1[1] * u2[1]))) / 2
-    m = min(2.5 * depth, (mouth * depth / 2) / max(math.sin(half), 0.05))
+    nrm = (-bis[1], bis[0])
+    side = 1 if nrm[0] * u1[0] + nrm[1] * u1[1] >= 0 else -1
+    half = mouth * depth * 0.4167
     tip = (v[0] - bis[0] * depth, v[1] - bis[1] * depth)
-    a = (v[0] + u1[0] * m, v[1] + u1[1] * m)
-    b = (v[0] + u2[0] * m, v[1] + u2[1] * m)
-    return poly([a, tip, b])
+    fa = (tip[0] + nrm[0] * half * side, tip[1] + nrm[1] * half * side)
+    fb = (tip[0] - nrm[0] * half * side, tip[1] - nrm[1] * half * side)
+    a = (v[0] + u1[0] * 1.2 * depth, v[1] + u1[1] * 1.2 * depth)
+    b = (v[0] + u2[0] * 1.2 * depth, v[1] + u2[1] * 1.2 * depth)
+    return poly([a, fa, fb, b])
 
 
 def _unit(d):

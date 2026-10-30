@@ -29,14 +29,18 @@ wins; note the exception in a comment.
   the stem, R with a straight leg from the bowl, G with a bar and no spur,
   M with vertical sides, J sitting on the baseline, 1 without a base.
 - Widths are written at Regular and widened with weight through
-  `p.w(regular_width, k)` (k ≈ 1 for two-stem letters, ≈ 0.5 for one stem).
+  `p.w(regular_width, k)`: k ≈ 1 for straight two-stem letters, ≈ 0.6 for
+  rounds (o e c s, O C G Q D, 0 6 8 9), ≈ 0.5 for one stem. Heavier weights
+  should gain colour, not much width (Inter grows about 6% from Light to
+  ExtraBold).
 
 ## The cyber details
 
 1. **Squircle curves.** Every round contour is a superellipse (`squircle`,
    `ring`, `parts.bowl`, `parts.open_bowl`, `parts.arch`). Outer contours use
-   `p.sq` (3.0), counters `p.sq_in` (2.7). Capitals and figures use
-   `p.sq * 0.92` and `p.sq_in * 0.95`. Never use a circle (n = 2).
+   `p.sq` (3.0), counters the squarer `p.sq_in` (3.4) so the stroke stays even
+   at the corners. Capitals and figures use `p.sq * 0.92` and
+   `p.sq_in * 0.95`. Never use a circle (n = 2).
 2. **45° chamfers at free stroke ends.** Leg `p.cut` (lowercase) or `p.ccut`
    (capitals, figures).
    - A stem's free top gets one chamfer on the glyph's outer side: a left or
@@ -54,13 +58,16 @@ wins; note the exception in a comment.
    and leg), and the inner vertices of v w y V W M N A and the figures.
    - Where a curve leaves a stem (shoulders, bowls): `geom.stem_trap`, depth
      `1.3 * p.trap`.
-   - At the inner vertex of two straight edges: `geom.crotch_trap`, depth
-     `p.trap`, opening at least half its depth wide. Never a long slit or a
-     needle cut.
-   `p.trap` is about 6 at Light, 12 at Regular and 37 at ExtraBold. Traps
+   - Where a straight stroke leaves a stem (M N Æ K k, the flag of 1, the
+     diagonal of 4): `geom.stem_trap` along the stem edge, like n.
+   - At the inner vertex of two diagonals (v w y A V W Y, the figures):
+     `geom.crotch_trap`, depth `p.trap`, which ends in a flat floor and
+     blunts the vertex. Never a long slit or a needle cut, and no trap at
+     crotches wider than about 70 degrees.
+   `p.trap` is about 6 at Light, 12 at Regular and 41 at ExtraBold. Traps
    must open into the white cleanly and never leave slivers.
 4. **Square dots.** Dots of i, j, and punctuation are squares of side `p.dot`
-   (0.8 × stem + 36) with `nw` + `se` chamfers of 0.22 × side (`geom.dot`).
+   (0.8 × stem + 44) with `nw` + `se` chamfers of 0.22 × side (`geom.dot`).
    Accent dots use the same side or very nearly. The i dot's top sits at the
    ascender (760); comma, quote and semicolon tails grow from the same square.
 

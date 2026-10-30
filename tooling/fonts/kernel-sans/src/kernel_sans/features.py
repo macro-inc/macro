@@ -42,6 +42,23 @@ def feature_code(drawn, p):
     out = ["languagesystem DFLT dflt;", "languagesystem latn dflt;", ""]
     out.append(kerning.feature_code(drawn, p))
 
+    # Single substitutions come first, so stylistic sets and tnum apply
+    # before ligatures and contextual forms see the glyphs (with ss02 on,
+    # "f l" stays two glyphs because l is already l.ss02).
+    sets = {}
+    for n in sorted(names):
+        parts = n.split(".")
+        if "tf" in parts[1:]:
+            base = ".".join(x for i, x in enumerate(parts) if not (i and x == "tf"))
+            if base in names:
+                sets.setdefault("tnum", []).append((base, n))
+        m = re.match(r"^(.+)\.(ss\d\d|zero|case)$", n)
+        if m and m.group(1) in names:
+            sets.setdefault(m.group(2), []).append((m.group(1), n))
+    # tnum first, so zero then finds the tabular zero to slash.
+    for tag in sorted(sets, key=lambda t: (t != "tnum", t)):
+        out.append(_sub_feature(tag, sets[tag], STYLISTIC_SET_NAMES.get(tag)))
+
     liga = []
     for n in sorted(names):
         base = n.split(".")[0]
@@ -66,18 +83,4 @@ def feature_code(drawn, p):
             f"  sub [{' '.join(figs)}] colon' [{' '.join(figs)}] by colon.case;\n"
             "} calt;"
         )
-
-    sets = {}
-    for n in sorted(names):
-        parts = n.split(".")
-        if "tf" in parts[1:]:
-            base = ".".join(x for i, x in enumerate(parts) if not (i and x == "tf"))
-            if base in names:
-                sets.setdefault("tnum", []).append((base, n))
-        m = re.match(r"^(.+)\.(ss\d\d|zero|case)$", n)
-        if m and m.group(1) in names:
-            sets.setdefault(m.group(2), []).append((m.group(1), n))
-    # tnum first, so zero then finds the tabular zero to slash.
-    for tag in sorted(sets, key=lambda t: (t != "tnum", t)):
-        out.append(_sub_feature(tag, sets[tag], STYLISTIC_SET_NAMES.get(tag)))
     return "\n\n".join(x for x in out if x) + "\n"

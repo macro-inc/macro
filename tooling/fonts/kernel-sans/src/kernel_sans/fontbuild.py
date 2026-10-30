@@ -13,23 +13,32 @@ from .glyphs import REGISTRY
 
 
 class _RoundPen:
-    """Rounds coordinates to integers before passing them on."""
+    """Rounds coordinates to integers before passing them on, dropping
+    segments that rounding collapses to a point."""
 
     def __init__(self, pen):
         self.pen = pen
+        self.cur = None
 
     @staticmethod
     def _r(pt):
         return (round(pt[0]), round(pt[1]))
 
     def moveTo(self, pt):
-        self.pen.moveTo(self._r(pt))
+        self.cur = self._r(pt)
+        self.pen.moveTo(self.cur)
 
     def lineTo(self, pt):
-        self.pen.lineTo(self._r(pt))
+        pt = self._r(pt)
+        if pt != self.cur:
+            self.pen.lineTo(pt)
+            self.cur = pt
 
     def curveTo(self, *pts):
-        self.pen.curveTo(*[self._r(p) for p in pts])
+        pts = [self._r(p) for p in pts]
+        if any(p != self.cur for p in pts):
+            self.pen.curveTo(*pts)
+            self.cur = pts[-1]
 
     def qCurveTo(self, *pts):
         self.pen.qCurveTo(*[self._r(p) if p is not None else None for p in pts])

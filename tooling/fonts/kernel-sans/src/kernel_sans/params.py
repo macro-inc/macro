@@ -38,7 +38,7 @@ WEIGHTS = {
 
 # Lowercase stem per weight class. Everything else derives from the stem, so the
 # outlines stay linear in it and a variable font can interpolate the statics.
-STEMS = {300: 64, 400: 82, 500: 98, 600: 115, 700: 133, 800: 152}
+STEMS = {300: 64, 400: 82, 500: 98, 600: 117, 700: 139, 800: 162}
 REGULAR_STEM = STEMS[400]
 
 
@@ -105,13 +105,14 @@ def params(wght):
         ccut=round(0.36 * cs, 1),
         trap=max(0.0, (s - 48) * 0.36),
         sq=3.0,
-        sq_in=2.7,
+        # Counters squarer than outers keep round strokes even at the corners.
+        sq_in=3.4,
         # Spacing tightens as weight rises, like Inter.
         sb=70 - 0.2 * grow,
         sbr=53 - 0.15 * grow,
-        csb=86 - 0.3 * grow,
+        csb=76 - 0.3 * grow,
         csbr=60 - 0.2 * grow,
         grow=grow,
         # Tracks Inter's dot area across weights.
-        dot=0.8 * s + 36,
+        dot=0.8 * s + 44,
     )
