@@ -1,5 +1,5 @@
 import { useUserId } from '@core/context/user';
-import { getDisplayName, tryMacroId } from '@core/user';
+import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import {
   useChannelAccessRequestQuery,
   useResolveChannelAccessRequestMutation,
@@ -83,6 +83,10 @@ function AccessRequestActivity(props: {
   );
   const participants = useChannelParticipantsQuery(() => props.channelId);
   const resolve = useResolveChannelAccessRequestMutation();
+  const requesterEmail = () => {
+    const id = tryMacroId(props.event.actorId);
+    return id ? macroIdToEmail(id) : undefined;
+  };
   const isParticipant = () =>
     !participants.isPending &&
     (participants.data ?? []).some(
@@ -117,6 +121,7 @@ function AccessRequestActivity(props: {
       eventId={props.event.id}
       occurredAt={props.event.occurredAt}
       requesterName={name(props.event.actorId)}
+      requesterEmail={requesterEmail()}
       outcome={outcome()}
       busy={resolve.isPending}
       onApprove={() => answer('approve')}

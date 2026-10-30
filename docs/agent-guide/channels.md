@@ -848,8 +848,11 @@ open to everyone, and direct messages offer no request. Sending shows **Request
 sent** with **Withdraw request**. After withdrawing, asking again waits a
 minute; after a denial it waits 24 hours, and the panel shows when.
 
-The request appears in the channel timeline as "<name> asked to join the
-channel" with **Approve** and **Deny** for any participant. Every participant
+The request appears in the channel timeline as "<name> (<account email>) asked
+to join the channel" with **Approve** and **Deny** for any participant. The name
+and full account email wrap at phone widths so reviewers can identify the
+requester before answering. If the display name already is the email, it appears
+only once. Every participant
 also gets a **Requests to join** notification (turn it off under notification
 settings) that opens the channel and marks it unread. The first answer wins: the
 row then shows **Approved by** or **Denied by** for everyone, a withdrawn request
@@ -860,7 +863,8 @@ the denied view is taken into the channel when the approval arrives.
 
 Verify with two accounts: ask from a non-member, approve or deny from a member
 in another tab, and check the row, the requester's view, and the member's inbox
-update without reloading. Check the panel and the row's buttons at phone width.
+update without reloading. Check the panel, full requester email, and the row's
+buttons at phone width.
 Use a copied `/app/channels/<id>` link for a private channel absent from the
 requester's channel list. The Chat workspace must offer **Ask to join** there
 and open the conversation after approval. A transient loading failure still

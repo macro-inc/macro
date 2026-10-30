@@ -1,7 +1,7 @@
 import { formatDate, formatEmailDate } from '@core/util/date';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import { Button } from '@ui';
-import { Match, Switch } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 
 /** What participants can see and do about a request to join. */
 export type AccessRequestOutcome =
@@ -17,6 +17,7 @@ export function AccessRequestActivityRow(props: {
   eventId: string;
   occurredAt: string;
   requesterName: string;
+  requesterEmail: string | undefined;
   outcome: AccessRequestOutcome;
   busy: boolean;
   onApprove: () => void;
@@ -34,9 +35,17 @@ export function AccessRequestActivityRow(props: {
         <UserPlusIcon class="size-4.5 text-accent" />
       </span>
       <div class="min-w-0 flex-1 flex flex-col gap-1.5">
-        <div class="min-h-6 flex items-center gap-2">
-          <span class="min-w-0 truncate">
+        <div class="min-h-6 flex items-baseline gap-2">
+          <span class="min-w-0 break-words">
             <span class="font-medium text-ink">{props.requesterName}</span>{' '}
+            <Show
+              when={
+                props.requesterEmail &&
+                props.requesterEmail !== props.requesterName
+              }
+            >
+              <span>({props.requesterEmail})</span>{' '}
+            </Show>
             asked to join the channel
           </span>
           <time
