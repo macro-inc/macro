@@ -74,21 +74,28 @@ const leafOf = (path: string) => {
 };
 
 describe('crm tab search params', () => {
-  it.each(['active', 'people', 'hidden', 'list:favorites'])(
-    'keeps the %s tab through the URL',
-    (tab) => {
-      const params = crmSearchCodec.serialize({ tab });
-      if (tab === 'active') {
-        expect(params).toBeUndefined();
-      } else {
-        expect(params).toEqual({ tab: [tab] });
-      }
-      expect(crmSearchCodec.parse(params)).toEqual({
-        value: { tab },
-        valid: true,
-      });
+  it.each([
+    'active',
+    'people',
+    'tasks',
+    'email',
+    'notes',
+    'calls',
+    'hidden',
+    pipelineTab(pipelineId),
+    'list:favorites',
+  ])('keeps the %s tab through the URL', (tab) => {
+    const params = crmSearchCodec.serialize({ tab });
+    if (tab === 'active') {
+      expect(params).toBeUndefined();
+    } else {
+      expect(params).toEqual({ tab: [tab] });
     }
-  );
+    expect(crmSearchCodec.parse(params)).toEqual({
+      value: { tab },
+      valid: true,
+    });
+  });
 });
 
 describe('record and pipeline URLs', () => {

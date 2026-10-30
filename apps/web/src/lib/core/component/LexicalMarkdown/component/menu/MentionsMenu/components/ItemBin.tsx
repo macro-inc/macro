@@ -1,4 +1,4 @@
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import { cn } from '@ui';
 import type { Accessor, ParentProps } from 'solid-js';
 import { Show } from 'solid-js';

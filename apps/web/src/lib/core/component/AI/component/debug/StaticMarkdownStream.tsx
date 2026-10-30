@@ -4,9 +4,9 @@ import {
 } from '@core/component/AI/util/stream';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
-import PlayIcon from '@phosphor-icons/core/regular/play.svg?component-solid';
-import StopIcon from '@phosphor-icons/core/regular/stop.svg?component-solid';
-import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import PlayIcon from '@icon/system/regular/play.svg?component-solid';
+import StopIcon from '@icon/system/regular/stop.svg?component-solid';
+import TrashIcon from '@icon/system/regular/trash.svg?component-solid';
 import type { ChatStream } from '@service-cognition/generated/schemas';
 import {
   type ChatStreamController,
@@ -198,25 +198,25 @@ export default function StaticMarkdownStreamDebug() {
           </div>
           <div class="flex items-center gap-2">
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
               onClick={startStream}
               disabled={isStreaming()}
             >
-              <PlayIcon />
+              <PlayIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Stream
             </Button>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={stopRun}
               disabled={!isStreaming()}
             >
-              <StopIcon />
+              <StopIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Stop
             </Button>
             <Button variant="ghost" size="sm" onClick={resetOutput}>
-              <TrashIcon />
+              <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Reset
             </Button>
           </div>

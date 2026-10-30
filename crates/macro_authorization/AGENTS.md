@@ -48,7 +48,18 @@ by policy.
 
 - `cargo test -p macro_authorization` (`SQLX_OFFLINE` unset).
 
-`authorize_identity` retains signed agent attribution on user authentication. It
+`ValidatedIdentity` contains identity facts; `ValidatedCredential` and
+`MacroUserAuthentication` additionally carry `CredentialOrigin` (session, Macro API
+JWT, user API key, or the acting user of a bot, harness or internal caller), set
+where the credential is verified. Every `JwtValidator` implements
+`validate_credential` (`validate` derives from it) and every
+`MacroAuthorizationService` implements `authorize_identity`; neither has a default
+that assumes a session. Session-only fakes use `ValidatedCredential::session`. The
+production `MacroAuthJwtValidator` derives origin from the verified token enum in
+one decode.
+Personal-session-only capabilities match `origin == Session` (and no agent
+attribution) instead of sniffing request headers. `authorize_identity` retains
+verified origin and signed agent attribution on user authentication. It
 does not turn a user credential into bot authority or change endpoint policies.
 
 ## Gotchas
@@ -59,6 +70,11 @@ does not turn a user credential into bot authority or change endpoint policies.
 - Cookies are ambient and only considered when no explicit credential is
   present; an explicit credential always wins over a cookie.
 - A valid principal not admitted by the chosen policy is a 403, not a 401.
+- `mark_harness_token_used` runs on every harness-authenticated request. It
+  writes `last_used_at` at most once a minute and skips a row another request
+  is already updating. Don't make it a plain per-request `UPDATE`: one busy
+  token would then queue its requests on the row lock, each holding a pool
+  connection.
 
 ## Related
 

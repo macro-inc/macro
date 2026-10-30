@@ -113,7 +113,7 @@ rg -l 'declare_topics!' crates services | xargs rg -l '<XMacroEvent>'
 | Realtime Soup, `crates/soup_realtime/src/inbound/kafka_consumer.rs` | Patches for every Soup item the event changes, including items reached through the event (entities shared into a channel) | No patch means no realtime update; the channel-shared case was missed once |
 | Activity, `services/document_storage_service/src/service/activity.rs` and the owning domain's activity mapping | Map the variant to an activity row | No activity entry |
 | Search, `services/search_processing_service/src/inbound/kafka_consumer.rs` | Index or delete | Stale search results |
-| Routines and scheduled actions, `services/scheduled_action/src/inbound/kafka_consumer.rs` | Trigger filter support | Routine never fires |
+| Routines and scheduled actions, `crates/scheduled_action/src/inbound/kafka_consumer.rs` | Trigger filter support | Routine never fires |
 | Agent triggers, `crates/agent_trigger/src/domain/sources.rs` | Trigger input, when the event should start an agent | No agent session |
 
 Adding a **new topic** to an existing consumer means adding its `XMacroEvent` to

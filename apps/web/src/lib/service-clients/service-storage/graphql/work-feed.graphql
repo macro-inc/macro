@@ -50,6 +50,10 @@ query WorkFeed($input: WorkFeedInput) {
 				...WorkFeedEntryFields
 			}
 			nextCursor
+			nextPosition {
+				sortAt
+				entityId
+			}
 		}
 	}
 }

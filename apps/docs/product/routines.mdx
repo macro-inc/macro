@@ -1,0 +1,58 @@
+---
+title: "Routines"
+icon: "clock"
+description: "Run an agent on a schedule or when activity happens in your workspace."
+---
+
+A routine is a saved prompt that an [agent](/product/agents) runs on a schedule or in response to workspace activity.
+
+> To create a routine use shortcut <kbd>c</kbd> \+ <kbd>u</kbd>.
+
+## Creating a routine
+
+1. Press <kbd>c</kbd> \+ <kbd>u</kbd>, or open **Routines** in the Agents sidebar and click **Create Routine**.
+2. Enter a name and instructions. Instructions support @mentions.
+3. Select the model or agent from the first chip below the prompt.
+4. Click **Add trigger**. A routine runs when any of its triggers fires.
+5. Click **Create routine**. **Start enabled** is on by default.
+
+## Triggers
+
+### Scheduled
+
+**Add trigger → Scheduled** supports **Hourly**, **Daily**, **Weekly**, **Monthly**, and **Custom** (cron). Schedules can also be typed in plain English, for example **every weekday at 9am**.
+
+**Run once** runs the routine one time, for example **tomorrow 9am** or **in 2 hours**.
+
+Recurring schedules use the time zone they were created in. One-time runs use your browser's local time.
+
+### Activity
+
+- **Channels**: channel created, message sent, or you are @mentioned
+- **Documents**: document created or deleted
+- **Tasks**: task created, status changed, priority changed, or any property changed
+- **Email**: new email received. Spam, trash, and drafts are excluded.
+
+Message, mention, deletion, and task triggers can be scoped to specific channels, documents, or tasks, or to everything you have access to. Changes made by agents and bots do not fire triggers.
+
+Click a trigger chip to edit it. Choose **Remove trigger** to delete it.
+
+## Managing routines
+
+**Routines** in the Agents sidebar lists your routines with creator, status, model, and **Enabled** toggle. Press <kbd>cmd</kbd>\+<kbd>f</kbd> to search by name, creator, or model.
+
+**Overview** shows a routine's instructions, model, triggers, and next scheduled run. Changes save automatically. **Run now** runs the routine immediately, including when it is disabled.
+
+**Run options** enables or disables the routine and copies its prompt. The menu next to the routine name duplicates or deletes it.
+
+## Run history
+
+**Run History** lists past runs with outcome, duration, and start time. Click a run to open its agent conversation. A notification appears on [Home](/product/home) when a run finishes.
+
+## Privacy
+
+Routines are visible only to their creator. Runs use the creator's permissions.
+
+## MCP
+
+Agents and [MCP clients](/AI/mcp/overview) manage routines with [`CreateRoutine`](/AI/mcp/tools/create-routine), [`ListRoutines`](/AI/mcp/tools/list-routines), [`ReadRoutine`](/AI/mcp/tools/read-routine), and [`UpdateRoutine`](/AI/mcp/tools/update-routine). Example prompts are in [Agent recipes](/AI/recipes).

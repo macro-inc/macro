@@ -28,6 +28,7 @@ fn harness(stage: Option<DraftStage>) -> Harness {
     let prepared = PreparedDraft {
         reply_to: None,
         request: SendRequest {
+            message_id: None,
             message: serde_json::from_value(
                 serde_json::json!({"db_id":message,"link_id":link,"subject":"Saved locally"}),
             )

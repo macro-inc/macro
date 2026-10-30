@@ -69,7 +69,6 @@ fn one_provider_connection_does_not_enable_another_provider() {
     };
     assert!(connections.available("cursor", None));
     assert!(!connections.available("codex-cloud", None));
-    assert!(!connections.available("claude-cloud", None));
     assert!(!connections.available("unknown-runtime", None));
     assert!(connections.available("in-memory", None));
     assert!(connections.available("macro-inmem", None));

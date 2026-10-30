@@ -99,6 +99,19 @@ export class DocumentNamespace {
     return Document.create(this.client, opts);
   }
 
+  /** Create a native Canvas with shared content ready for reading and editing. */
+  async createCanvas(opts: {
+    name: string;
+    project?: Project;
+  }): Promise<Document> {
+    const result = unwrap(
+      await this.client.storage.createCanvasHandler({
+        body: { documentName: opts.name, projectId: opts.project?.id },
+      }),
+    );
+    return Document.byId(this.client, result.documentId);
+  }
+
   /** Create a snippet: a reusable markdown document. */
   createSnippet(opts: {
     name: string;

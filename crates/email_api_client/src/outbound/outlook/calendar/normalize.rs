@@ -102,11 +102,22 @@ fn attendees(value: &Value) -> Vec<CalendarAttendee> {
         .flatten()
         .filter_map(|v| {
             let address = v["emailAddress"]["address"].as_str()?;
+            let is_organizer = organizer.is_some_and(|o| o.eq_ignore_ascii_case(address));
+            // Graph lists a meeting's organizer as an attendee who has not
+            // answered ("none"), as when Macro creates the event. They hold
+            // the meeting, as the row added below for an unlisted organizer
+            // and Google's organizer row say.
+            let response_status = match v["status"]["response"].as_str() {
+                None | Some("none" | "notResponded") if is_organizer => {
+                    AttendeeResponseStatus::Accepted
+                }
+                status => response(status),
+            };
             Some(CalendarAttendee {
                 email: address.to_ascii_lowercase(),
                 display_name: v["emailAddress"]["name"].as_str().map(str::to_owned),
-                response_status: response(v["status"]["response"].as_str()),
-                is_organizer: organizer.is_some_and(|o| o.eq_ignore_ascii_case(address)),
+                response_status,
+                is_organizer,
                 is_optional: v["type"].as_str() == Some("optional"),
                 is_self: false,
                 comment: None,
@@ -235,6 +246,9 @@ pub(super) fn projection(
         is_read_only: target.is_read_only,
         attendees: attendees(&master),
         reminders,
+        guest_policy: GuestPolicy::default(),
+        is_snapshot: false,
+        viewer_can: ViewerCapabilities::NONE,
         created_at: created,
         updated_at: updated,
     };

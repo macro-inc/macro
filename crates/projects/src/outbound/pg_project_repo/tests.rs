@@ -15,7 +15,10 @@ use models_permissions::share_permission::{
 use sqlx::{PgPool, Pool, Postgres, Row};
 
 use super::PgProjectRepo;
-use crate::domain::models::{CreateProjectArgs, EditProjectArgs, UploadFolderRepoArgs};
+use crate::domain::models::{
+    CreateProjectArgs, EditProjectArgs, ProjectItemKind, ProjectTree, ProjectTreeFolder,
+    ProjectTreeItem, UploadFolderRepoArgs,
+};
 use crate::domain::ports::ProjectRepo;
 
 #[derive(Clone)]
@@ -345,6 +348,32 @@ async fn reads_share_permissions_and_bumps_modified_timestamp(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
+async fn create_keeps_the_last_edit_time_it_is_given(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = test_repo(pool.clone());
+    let project = repo
+        .create_project(CreateProjectArgs {
+            owner: project_owner(),
+            name: "Imported".to_owned(),
+            parent_id: Some(ROOT_ID.to_owned()),
+            share_permission: SharePermissionV2::new_project_share_permission(None),
+            updated_at: Some(chrono::DateTime::UNIX_EPOCH),
+        })
+        .await?;
+
+    let updated_at = sqlx::query_scalar!(
+        r#"SELECT "updatedAt"::text AS "updated_at!" FROM "Project" WHERE id = $1"#,
+        project.id,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(updated_at, "1970-01-01 00:00:00");
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
 async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = test_repo(pool.clone());
     let permission = SharePermissionV2::new_project_share_permission(None);
@@ -354,6 +383,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
             name: "Created".to_owned(),
             parent_id: Some(ROOT_ID.to_owned()),
             share_permission: permission.clone(),
+            updated_at: None,
         })
         .await?;
 
@@ -394,6 +424,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
             name: "Must roll back".to_owned(),
             parent_id: Some("missing-parent".to_owned()),
             share_permission: permission,
+            updated_at: None,
         })
         .await
         .is_err()
@@ -454,6 +485,7 @@ async fn unsponsored_bot_owner_leaves_no_project_rows(pool: Pool<Postgres>) -> a
         name: "Bot project".to_owned(),
         parent_id: None,
         share_permission: SharePermissionV2::new_project_share_permission(None),
+        updated_at: None,
     };
     let before = ownership_row_counts(&pool).await;
 
@@ -494,6 +526,7 @@ async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> any
             name: "Team project".to_owned(),
             parent_id: None,
             share_permission: permission,
+            updated_at: None,
         })
         .await?;
 
@@ -1121,50 +1154,53 @@ async fn mark_uploaded_is_recursive_and_rejects_missing_root(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("projects_test_data"))
 )]
-async fn project_writes_maintain_source_items_without_triggers(
+async fn project_tree_lists_live_descendants_parents_first(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = test_repo(pool.clone());
-    let project = repo
-        .create_project(CreateProjectArgs {
-            owner: project_owner(),
-            name: "Projected project".to_owned(),
-            parent_id: None,
-            share_permission: SharePermissionV2::new_project_share_permission(None),
-        })
+    let repo = test_repo(pool);
+
+    let tree = repo.get_project_tree(ROOT_ID, 10).await?;
+
+    assert_eq!(
+        tree.folders,
+        vec![
+            ProjectTreeFolder {
+                id: CHILD_ID.to_string(),
+                parent_id: ROOT_ID.to_string(),
+                name: "First child".to_string(),
+            },
+            ProjectTreeFolder {
+                id: "10000000-0000-0000-0000-000000000003".to_string(),
+                parent_id: CHILD_ID.to_string(),
+                name: "Grandchild".to_string(),
+            },
+        ]
+    );
+    assert_eq!(
+        tree.items,
+        vec![
+            ProjectTreeItem {
+                kind: ProjectItemKind::Document,
+                id: DOCUMENT_ID.to_string(),
+                project_id: ROOT_ID.to_string(),
+                name: "Document".to_string(),
+            },
+            ProjectTreeItem {
+                kind: ProjectItemKind::Chat,
+                id: CHAT_ID.to_string(),
+                project_id: ROOT_ID.to_string(),
+                name: "Chat".to_string(),
+            },
+        ]
+    );
+
+    let capped = repo.get_project_tree(ROOT_ID, 1).await?;
+    assert_eq!(capped.folders.len(), 1);
+    assert_eq!(capped.items.len(), 2);
+
+    let leaf = repo
+        .get_project_tree("10000000-0000-0000-0000-000000000003", 10)
         .await?;
-    let id = &project.id;
-    assert_eq!(
-        sqlx::query_scalar!("SELECT grants FROM source_items WHERE entity_id = $1", id)
-            .fetch_one(&pool)
-            .await?,
-        1
-    );
-    repo.update_project_modified(id).await?;
-    let current = sqlx::query_scalar!(
-        r#"SELECT bool_and(s.sort_ts IS NOT DISTINCT FROM p."updatedAt")
-           FROM source_items s JOIN "Project" p ON p.id = s.entity_id
-           WHERE s.entity_type = 'project' AND s.entity_id = $1"#,
-        id,
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(current, Some(true));
-    repo.soft_delete_project(id).await?;
-    assert!(
-        sqlx::query_scalar!(
-            "SELECT sort_ts IS NULL AS \"deleted!\" FROM source_items WHERE entity_id = $1",
-            id
-        )
-        .fetch_one(&pool)
-        .await?
-    );
-    repo.purge_deleted_project_tree(id).await?;
-    assert_eq!(
-        sqlx::query_scalar!("SELECT count(*) FROM source_items WHERE entity_id = $1", id)
-            .fetch_one(&pool)
-            .await?,
-        Some(0)
-    );
+    assert_eq!(leaf, ProjectTree::default());
     Ok(())
 }

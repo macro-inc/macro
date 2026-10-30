@@ -10,7 +10,7 @@ Internal scheduled notification cleanup. The owning notification domain enforces
 - `src/main.rs`: one-connection pool, retained telemetry provider, post-invocation
   flush. Close handler spans before flushing; never shut down warm providers.
 - `src/handler.rs`: explicit dry-run default, invocation deadline and request ID.
-- `infra/stacks/notification-service/retention.ts`: disabled schedule, pinned
+- `infra/stacks/notification-service/retention.ts`: configurable schedule, pinned
   Datadog extension, scoped key access and nonduplicated log forwarding.
 
 ## Checks
@@ -26,7 +26,8 @@ Internal scheduled notification cleanup. The owning notification domain enforces
   of already-committed deletion. Flush time comes from reserved handler headroom.
 - Unit tests cannot prove the deployed extension exported traces. Verify an
   explicitly approved dry run in Datadog before production cleanup.
-- The schedule stays disabled until the rollout is explicitly approved.
+- Dev and prod stack configs enable scheduled deletion every hour;
+  deployment still needs explicit approval and the runbook's rollout checks.
 
 ## Related
 

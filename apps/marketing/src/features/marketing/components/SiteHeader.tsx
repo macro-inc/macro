@@ -1,4 +1,4 @@
-import CaretDown from '@phosphor/caret-down.svg';
+import X from '@phosphor/x.svg';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import {
   DEMO_BOOKING_URL,
@@ -115,12 +115,15 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
           ) {
             const links = menu.querySelectorAll<HTMLAnchorElement>('nav a');
             const last = links[links.length - 1];
-            if (event.shiftKey && document.activeElement === trigger) {
+            if (
+              event.shiftKey &&
+              document.activeElement === (menuOpener ?? trigger)
+            ) {
               event.preventDefault();
               last?.focus();
             } else if (!event.shiftKey && document.activeElement === last) {
               event.preventDefault();
-              trigger.focus();
+              (menuOpener ?? trigger).focus();
             }
           }
         }}
@@ -129,7 +132,7 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
           ref={trigger}
           href="/"
           target="_self"
-          class="site-menu-trigger"
+          class="site-menu-trigger site-menu-home"
           aria-label="Macro home"
           aria-expanded={open()}
           aria-controls="site-main-navigation"
@@ -151,7 +154,7 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
         </a>
         <button
           type="button"
-          class="site-menu-toggle"
+          class="site-menu-trigger site-menu-toggle"
           aria-label={open() ? 'Close navigation' : 'Open navigation'}
           aria-expanded={open()}
           aria-controls="site-main-navigation"
@@ -161,7 +164,18 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
             else openMenu();
           }}
         >
-          <CaretDown aria-hidden="true" />
+          <Show
+            when={open()}
+            fallback={
+              <span class="site-menu-mark" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+            }
+          >
+            <X aria-hidden="true" />
+          </Show>
         </button>
         <nav
           id="site-main-navigation"

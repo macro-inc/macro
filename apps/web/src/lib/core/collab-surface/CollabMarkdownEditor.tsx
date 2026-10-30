@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { CollabProvider } from '@core/component/LexicalMarkdown/collaboration/CollabProvider';
 import {
   getErrorDescription,
@@ -20,8 +21,8 @@ import {
   initializeEditorEmpty,
 } from '@core/component/LexicalMarkdown/utils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { createPeerIdValidator } from '@macro-inc/lexical-core';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
@@ -245,8 +246,8 @@ export function CollabMarkdownEditor(props: CollabMarkdownEditorProps) {
             <div class="absolute inset-0 flex flex-col gap-2 pointer-events-none">
               {props.loadingFallback ?? (
                 <>
-                  <div class="h-4 w-2/3 animate-pulse rounded bg-ink/10" />
-                  <div class="h-4 w-1/2 animate-pulse rounded bg-ink/10" />
+                  <ListSkeleton.Bar class="h-3 w-2/3" />
+                  <ListSkeleton.Bar class="h-3 w-1/2" />
                 </>
               )}
             </div>

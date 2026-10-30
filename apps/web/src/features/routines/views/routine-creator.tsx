@@ -1,14 +1,15 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import ClockIcon from '@phosphor/clock.svg';
-import XIcon from '@phosphor/x.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, EntityComposer, ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
+import { RoutineRunVisibility } from '../components/routine-run-visibility';
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import type {
   RoutineCreatorSource,
   RoutineDraftStorage,
 } from '../context/routine-sources';
-import { validateRoutineDraft } from '../core/routine-draft';
+import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import { createRoutineComposer } from '../primitives/routine-composer';
 
 export function RoutineCreatorView(props: {
@@ -19,12 +20,13 @@ export function RoutineCreatorView(props: {
   onCreated(id: string): void;
   onClose(): void;
 }) {
-  const { draft, change, attempted, submitError, create } =
+  const { draft, change, attempted, formError, submitError, create } =
     createRoutineComposer(
       props.source,
       props.storage,
       props.defaultModel,
-      props.onCreated
+      props.onCreated,
+      props.slots.createConnectedApps()
     );
   return (
     <EntityComposer.Root
@@ -40,12 +42,12 @@ export function RoutineCreatorView(props: {
         <ClockIcon class="ml-2 size-4 text-ink-muted" />
         <span class="flex-1 px-1 text-sm text-ink-muted">New routine</span>
         <Button
-          size="icon-composer"
+          size="icon-md"
           variant="ghost"
           aria-label="Close routine composer"
           onClick={() => props.onClose()}
         >
-          <XIcon />
+          <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </EntityComposer.Header>
       <div class="min-h-0 overflow-y-auto px-2">
@@ -85,9 +87,19 @@ export function RoutineCreatorView(props: {
                 change((draft) => ({ ...draft, triggers }))
               }
             />
+            <RoutineRunVisibility
+              value={draft().runVisibility ?? DEFAULT_RUN_VISIBILITY}
+              onChange={(runVisibility) =>
+                change((draft) => ({ ...draft, runVisibility }))
+              }
+            />
+            <props.slots.Apps
+              apps={draft().apps}
+              onChange={(apps) => change((draft) => ({ ...draft, apps }))}
+            />
           </EntityComposer.Properties>
         </fieldset>
-        <Show when={attempted() && validateRoutineDraft(draft(), true)}>
+        <Show when={attempted() && formError()}>
           {(message) => (
             <p role="alert" class="mt-3 text-xs text-failure">
               {message()}

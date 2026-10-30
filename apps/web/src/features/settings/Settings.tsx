@@ -1,5 +1,6 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import {
   useParams,
   useNavigate as useSplitNavigate,
@@ -39,6 +40,7 @@ import {
 } from './core/settings-search';
 import { SettingsTabContent } from './SettingsTabContent';
 import { TeamSidebarAction } from './TeamSidebarAction';
+import { useTeamSettingsGroups } from './teamSettingsGroups';
 
 export function SettingsPanelComponentWrapper() {
   const params = useParams<{ tab?: string }>();
@@ -84,7 +86,11 @@ type SettingsPanelProps = {
 export function SettingsPanel(props: SettingsPanelProps) {
   const { closeSettings, activeTabId, selectTab } = useSettingsState();
   const splitNavigate = useSplitNavigate();
-  const { groups, searchGroups, flatTabs } = useSettingsTabs();
+  const { groups, searchGroups } = useSettingsTabs();
+  const navGroups = useTeamSettingsGroups(groups);
+  // Hotkeys and touch pills follow the visible nav, which hides team pages
+  // from people without a team.
+  const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
   const signatures = useFeatureFlag(enableEmailSignatures);
 
   const activeNavigationTab = activeTabId;
@@ -125,7 +131,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Register Escape key to close settings
   registerHotkey({
     keyDownHandler: handleEscapeKey,
-    description: 'Close settings',
+    description: () => t('settingsNav.closeSettings'),
     scopeId: settingsHotkeyScope,
     hotkey: 'escape',
   });
@@ -142,7 +148,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   // Helper to navigate to a tab by index
   function navigateToTabIndex(index: number): boolean {
-    const tabs = flatTabs();
+    const tabs = navTabs();
     if (index >= 0 && index < tabs.length) {
       const tab = tabs[index];
       if (tab) {
@@ -160,7 +166,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
       return navigateToTabIndex(keyNum - 1);
     }
     registerHotkey({
-      description: `Go to settings tab ${keyNum}`,
+      description: () => t('settingsNav.goToTab', { number: keyNum }),
       hotkey: `${keyNum}` as ValidHotkey,
       keyDownHandler: handleNumberKey,
       scopeId: settingsHotkeyScope,
@@ -169,14 +175,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
   }
 
   const handleTabChange = (value: string) => {
-    if (flatTabs().some((tab) => tab.tab === value)) {
+    if (navTabs().some((tab) => tab.tab === value)) {
       selectRoutedTab(value as SettingsTab);
     }
   };
 
   // Tab list for the touch pill strip.
   const tabItems = () =>
-    flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }));
+    navTabs().map((tab) => ({ value: tab.tab, label: tab.label }));
 
   const content = () => (
     <Show when={activeTabId()}>
@@ -241,7 +247,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             >
               <ViewShell.Aside>
                 <SettingsSidebar
-                  groups={groups()}
+                  groups={navGroups()}
                   results={searchResults()}
                   selectedResultId={
                     searchSelection()?.tab === activeTabId()

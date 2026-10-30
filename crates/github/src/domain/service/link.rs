@@ -13,8 +13,9 @@ use crate::domain::{
         GithubGrantLinkOutcome, GithubLink, GithubLinkStatus, GithubMergeMethod,
         GithubMergeOutcome, GithubMergeRejection, GithubPullRequestMergeabilityEntry,
         GithubPullRequestMergeabilityRequest, GithubPullRequestNumber, GithubPullRequestRef,
-        MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+        GithubStateOutcome, MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
         SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
+        SetGithubPullRequestStateRequest, SetGithubPullRequestStateResponse,
     },
     ports::{Auth, GithubLinkService, GithubOauth, GithubRepo},
 };
@@ -152,9 +153,10 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
         }
     }
 
-    /// The pull request as GitHub reports it after a merge or draft change,
-    /// written back to its foreign entities so the app shows the change
-    /// before the webhook arrives. Best-effort: the change already happened.
+    /// The pull request as GitHub reports it after a merge, a draft change, or
+    /// a close or reopen, written back to its foreign entities so the app
+    /// shows the change before the webhook arrives. Best-effort: the change
+    /// already happened.
     async fn refresh_changed_pull_request(
         &self,
         access_token: &GithubAccessToken,
@@ -351,6 +353,43 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
 
         Ok(SetGithubPullRequestDraftResponse {
             draft,
+            pull_request,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn set_pull_request_state(
+        &self,
+        macro_user_id: &MacroUserId<Lowercase<'static>>,
+        request: SetGithubPullRequestStateRequest,
+    ) -> Result<SetGithubPullRequestStateResponse, GithubError> {
+        let access_token = self.validated_access_token(macro_user_id).await?;
+
+        let outcome = self
+            .oauth
+            .set_pull_request_state(
+                access_token.as_str(),
+                &request.owner,
+                &request.repo,
+                request.number,
+                request.state,
+            )
+            .await
+            .map_err(|error| GithubError::Internal(error.into()))?;
+
+        let state = match outcome {
+            GithubStateOutcome::Changed { state } => state,
+            GithubStateOutcome::Rejected { rejection, message } => {
+                return Err(GithubError::PullRequestUpdateRejected { rejection, message });
+            }
+        };
+
+        let pull_request = self
+            .refresh_changed_pull_request(&access_token, request.to_reference())
+            .await;
+
+        Ok(SetGithubPullRequestStateResponse {
+            state,
             pull_request,
         })
     }

@@ -1,11 +1,9 @@
-import DownloadIcon from '@phosphor-icons/core/regular/download-simple.svg?component-solid';
-import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
+import DownloadIcon from '@icon/system/regular/download-simple.svg?component-solid';
 import { ToggleSwitch } from '@ui';
-import { lazy, Show, Suspense } from 'solid-js';
+import { Show } from 'solid-js';
 
-import { SettingsButton as Button, SettingsSurface } from '../primitives';
-
-const SignatureEditor = lazy(() => import('../SignatureEditor'));
+import { SettingsButton as Button } from '../primitives';
+import { SignatureWorkspace } from './signature-workspace';
 
 export function SignatureForm(props: {
   email: string;
@@ -26,7 +24,9 @@ export function SignatureForm(props: {
   mobile: boolean;
 }) {
   return (
-    <SettingsSurface class="@container/signature flex flex-col gap-4 rounded-2xl border border-edge-muted p-4">
+    // A row of the Signatures card on desktop, divided like the card's other
+    // lists; touch keeps its boxed signatures.
+    <div class="@container/signature flex flex-col gap-4 touch:rounded-2xl touch:border touch:border-edge-muted touch:p-4 not-touch:not-first:border-t not-touch:not-first:border-edge-divider not-touch:not-first:pt-4 not-touch:not-last:pb-2">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <h3 class="text-base font-medium break-all">{props.email}</h3>
@@ -40,7 +40,6 @@ export function SignatureForm(props: {
               class="shrink-0"
               variant="ghost"
               size="md"
-              depth={3}
               disabled={props.pending || props.importing}
               onClick={() => onImport()()}
             >
@@ -50,33 +49,14 @@ export function SignatureForm(props: {
           )}
         </Show>
       </div>
-      {/* Editing (Quill) is desktop-only; on mobile the section still offers
-          the replies/forwards toggle and Remove, with a pointer to desktop. */}
-      <Show
-        when={!props.mobile}
-        fallback={
-          <div class="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-edge-muted px-3 py-6 text-center">
-            <SignatureIcon class="size-5 text-ink-muted" />
-            <p class="text-sm text-ink-muted">
-              Update your signature on desktop.
-            </p>
-          </div>
-        }
-      >
-        <Suspense
-          fallback={
-            <div class="h-44 animate-pulse rounded-lg border-1 border-ink/10" />
-          }
-        >
-          <SignatureEditor
-            label={`Signature for ${props.email}`}
-            value={props.value}
-            disabled={props.pending || props.importing}
-            onInput={props.onInput}
-            onReady={props.onReady}
-          />
-        </Suspense>
-      </Show>
+      <SignatureWorkspace
+        email={props.email}
+        value={props.value}
+        disabled={props.pending || !!props.importing}
+        onInput={props.onInput}
+        onReady={props.onReady}
+        mobile={props.mobile}
+      />
       {/* Stacks on narrow screens so the toggle label and buttons never
           crowd each other onto wrapped lines. */}
       <div class="flex flex-col gap-3 @[520px]/signature:flex-row @[520px]/signature:items-center @[520px]/signature:justify-between">
@@ -92,9 +72,8 @@ export function SignatureForm(props: {
         />
         <div class="flex items-center justify-end gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="md"
-            depth={3}
             disabled={!props.hasContent || props.pending || props.importing}
             onClick={props.onClear}
           >
@@ -102,9 +81,8 @@ export function SignatureForm(props: {
           </Button>
           <Show when={!props.mobile}>
             <Button
-              variant="cta"
+              variant="primary"
               size="md"
-              depth={3}
               disabled={!props.dirty || props.pending || props.importing}
               onClick={props.onSave}
             >
@@ -116,6 +94,6 @@ export function SignatureForm(props: {
       <Show when={props.error}>
         {(msg) => <p class="text-right text-sm text-failure-ink">{msg()}</p>}
       </Show>
-    </SettingsSurface>
+    </div>
   );
 }

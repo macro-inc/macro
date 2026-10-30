@@ -1294,6 +1294,16 @@ where
         self.0.thread_id.map(|id| ID(id.to_string()))
     }
 
+    /// Who started the session.
+    async fn source(&self) -> graphql_soup_filter_input::GraphqlAgentSessionSource {
+        self.0.source.into()
+    }
+
+    /// Where the session is shown.
+    async fn visibility(&self) -> graphql_soup_filter_input::GraphqlAgentSessionVisibility {
+        self.0.visibility.into()
+    }
+
     /// The session's last known status: `no_messages`, `disconnected`, or the
     /// wire name of the most recent system event (for example `session/end`).
     async fn status(&self) -> &str {

@@ -208,9 +208,17 @@ consumer matches on `notification_metadata.tag`.
 5. Settings: if blockable, add an entry to `NOTIFICATION_EVENT_GROUPS` in
    `apps/web/src/features/notifications/notification-event-catalog.ts`. It must
    match `BLOCKABLE_NOTIFICATIONS`; no test checks that.
-6. Mobile push taps carry only the notification id; the app loads the
-   notification and routes through `notification-navigation.ts`, so step 3 covers
-   phones too.
+6. Mobile push taps retain the notification id for authenticated lookup through
+   `notification-navigation.ts`. iOS channel pushes also carry typed `navigation`
+   data (channel, message, and nullable thread-root IDs) plus a per-recipient
+   `recipientId`, allowing a matching signed-in account to open the destination
+   before notification hydration. Add channel destinations in
+   `crates/model_notifications/src/metadata/channel_push.rs` and the metadata's
+   `NotificationExtIos` implementation; regenerate the service OpenAPI and the
+   web push validators with `scripts/generate-api-schema.ts`. Older pushes and
+   other notification kinds still follow the lookup path, so step 3 covers
+   phones too. Never infer a root from an absent thread ID: the direct payload
+   requires `threadId: null` for a known top-level message.
 
 Mark done and mute act on the notification's entity, so an existing entity type
 needs nothing more. Copy `.otherwise` arms rather than throwing: older tabs ignore

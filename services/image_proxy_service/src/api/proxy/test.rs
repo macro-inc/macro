@@ -139,6 +139,24 @@ fn test_is_retryable_without_ua() {
     assert!(!ProxyError::InvalidScheme.is_retryable_without_ua());
 }
 
+#[test]
+fn test_upstream_refusals_are_not_found() {
+    for status in [
+        StatusCode::FORBIDDEN,
+        StatusCode::NOT_FOUND,
+        StatusCode::TOO_MANY_REQUESTS,
+    ] {
+        let response = ProxyError::UpstreamStatus(status).into_response();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND, "{status}");
+    }
+}
+
+#[test]
+fn test_upstream_server_errors_are_bad_gateway() {
+    let response = ProxyError::UpstreamStatus(StatusCode::INTERNAL_SERVER_ERROR).into_response();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+}
+
 fn response_with_status_and_location(status: u16, location: Option<&str>) -> reqwest::Response {
     let mut builder = axum::http::Response::builder().status(status);
     if let Some(location) = location {

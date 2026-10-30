@@ -14,7 +14,9 @@ session that results.
 - `src/domain/sources.rs`: the trigger sources (explicit mention, implicit
   reply, task/project assignment).
 - `src/domain/context.rs`: structured context assembled for the agent
-  prompt (thread history, people, discussion).
+  prompt (thread history, people, discussion). Message attachments travel on
+  each `ContextMessage` so the prompt XML and ACP file links can see files
+  that were not on the mentioning message.
 - `src/domain/task_assignment.rs` / `src/domain/project_assignment.rs`:
   non-message trigger paths.
 - `src/outbound/fast_model_judge.rs`: the Haiku-class implicit-trigger

@@ -1,11 +1,12 @@
-import CaretDown from '@phosphor/caret-down.svg';
-import Database from '@phosphor/database.svg';
-import Plus from '@phosphor/plus.svg';
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Database from '@icon/system/regular/database.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { Button, cn } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { QuestionTypeId } from '../../core/question-types';
 import { QuestionTypeIcon } from '../question-type-icon';
-import { DraftInput, DraftTextarea } from './draft-input';
+import { DraftTextarea } from './draft-input';
 
 /** Holds the editor's layout while its shared document opens. */
 export function BuilderSkeleton() {
@@ -20,13 +21,11 @@ export function BuilderSkeleton() {
         aria-hidden="true"
         class="mx-auto flex w-full max-w-3xl flex-col gap-6 pt-12 px-6"
       >
-        <div class="h-8 w-2/5 rounded bg-hover motion-safe:animate-pulse" />
-        <div class="h-5 w-1/4 rounded bg-hover motion-safe:animate-pulse" />
-        <div class="h-5 w-3/5 rounded bg-hover motion-safe:animate-pulse" />
+        <ListSkeleton.Bar class="h-8 w-2/5 rounded-lg" />
+        <ListSkeleton.Bar class="h-4 w-1/4" />
+        <ListSkeleton.Bar class="h-4 w-3/5" />
         <For each={[0, 1]}>
-          {() => (
-            <div class="h-56 rounded-xl border border-edge-muted bg-surface motion-safe:animate-pulse" />
-          )}
+          {() => <ListSkeleton.Bar class="h-56 w-full rounded-xl" />}
         </For>
       </div>
     </div>
@@ -79,11 +78,13 @@ export function TitleCard(props: {
   return (
     <section aria-label="Form details" class="flex min-w-0 flex-col">
       <div class="flex min-w-0 flex-col">
-        <DraftInput
+        <DraftTextarea
+          singleLine
           aria-label="Form name"
           value={props.name}
           maxlength={200}
-          class="h-8 w-full border-0 bg-transparent p-0 text-2xl font-semibold text-ink outline-none aria-invalid:text-failure"
+          rows={1}
+          class="w-full resize-none border-0 bg-transparent p-0 text-2xl leading-8 font-semibold text-ink outline-none field-sizing-content aria-invalid:text-failure"
           onCommit={props.onName}
         />
         <div class="mt-3 mb-6 flex flex-wrap items-center gap-2 text-sm">
@@ -148,7 +149,7 @@ export function HiddenColumns(props: {
                   </span>
                   <span class="text-xs text-ink-muted">{column.label}</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => props.onAdd(column.id)}
                   >
@@ -185,7 +186,7 @@ export function ConversionNotice(props: {
         answer that fits, and the current column keeps all of them.
       </p>
       <div class="flex gap-2">
-        <Button size="sm" variant="strong" onClick={props.onConvert}>
+        <Button size="sm" variant="secondary" onClick={props.onConvert}>
           Convert into a new question
         </Button>
         <Button size="sm" variant="ghost" onClick={props.onDismiss}>

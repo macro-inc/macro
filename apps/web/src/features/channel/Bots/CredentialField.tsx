@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
@@ -37,14 +37,20 @@ export function CredentialField(props: {
           onClick={(event) => event.currentTarget.select()}
         />
         <Button
+          aria-label={`Copy ${props.label.toLowerCase()}`}
+          tooltip={`Copy ${props.label.toLowerCase()}`}
           type="button"
           variant={copied() ? 'success' : 'ghost'}
           size="sm"
-          label={`Copy ${props.label.toLowerCase()}`}
           onClick={copy}
         >
-          <Show when={copied()} fallback={<CopyIcon />}>
-            <CheckIcon />
+          <Show
+            when={copied()}
+            fallback={
+              <CopyIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+            }
+          >
+            <CheckIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Copied
           </Show>
         </Button>

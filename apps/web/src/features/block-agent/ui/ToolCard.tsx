@@ -7,9 +7,9 @@
  * and the `Tool` card idiom.
  */
 
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Wrench from '@icon/system/regular/wrench.svg';
 import { Collapsible } from '@kobalte/core/collapsible';
-import CaretRight from '@phosphor/caret-right.svg';
-import Wrench from '@phosphor/wrench.svg';
 import { Tooltip } from '@ui/components/Tooltip';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';

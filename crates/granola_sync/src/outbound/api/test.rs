@@ -83,17 +83,14 @@ fn transcript_timing_is_relative_to_observed_audio_and_speakers_are_not_guessed(
     );
 }
 
-#[test]
-fn provider_ids_reject_path_injection() {
-    assert!(NoteId::try_from("not_123456789abcde".to_owned()).is_ok());
-    for id in [
-        "../webhook-endpoints",
-        "not_123456789abcd/",
-        "",
-        "not_short",
-    ] {
-        assert!(NoteId::try_from(id.to_owned()).is_err());
-    }
+#[tokio::test]
+async fn provider_ids_cannot_change_the_request_path() {
+    let proxy = FakeProxy::new(vec![(200, meeting_json())]);
+    let adapter = GranolaApi(proxy.clone());
+    let id = NoteId("../webhook-endpoints?x=1#".into());
+    // The fetched note has a different ID, so the import is rejected.
+    assert!(adapter.meeting(&connection(), &id).await.is_err());
+    assert!(proxy.urls.lock().unwrap()[0].ends_with("/notes/..%2Fwebhook-endpoints%3Fx%3D1%23"));
 }
 
 struct FakeProxy {
@@ -109,8 +106,9 @@ impl FakeProxy {
                     .into_iter()
                     .map(
                         |(status, body)| pipedream_mcp::domain::ports::ProxyResponse {
-                            status,
-                            body,
+                            status: http::StatusCode::from_u16(status).unwrap(),
+                            headers: http::HeaderMap::new(),
+                            body: body.to_string(),
                         },
                     )
                     .collect(),
@@ -119,13 +117,14 @@ impl FakeProxy {
         })
     }
 }
-impl ApiProxy for FakeProxy {
+impl ConnectedAppProxy for FakeProxy {
     async fn proxy(
         &self,
         connection: &PipedreamConnection,
-        _method: ProxyMethod,
+        _method: http::Method,
         url: &str,
-        _body: Option<Value>,
+        _headers: &http::HeaderMap,
+        _body: Option<&Value>,
     ) -> anyhow::Result<pipedream_mcp::domain::ports::ProxyResponse> {
         assert_eq!(connection.app_slug, "granola");
         assert_eq!(connection.account_id, "apn_account");
@@ -158,10 +157,7 @@ async fn pagination_fetches_all_text_and_encodes_opaque_cursors() {
     ]);
     let adapter = GranolaApi(proxy.clone());
     let call = adapter
-        .meeting(
-            &connection(),
-            &"not_123456789abcde".to_owned().try_into().unwrap(),
-        )
+        .meeting(&connection(), &NoteId("not_123456789abcde".into()))
         .await
         .unwrap()
         .unwrap();
@@ -185,10 +181,7 @@ async fn failed_later_pages_never_commit_partial_transcripts() {
         let adapter = GranolaApi(proxy);
         assert!(
             adapter
-                .meeting(
-                    &connection(),
-                    &"not_123456789abcde".to_owned().try_into().unwrap()
-                )
+                .meeting(&connection(), &NoteId("not_123456789abcde".into()))
                 .await
                 .is_err()
         );
@@ -202,10 +195,7 @@ async fn absent_transcript_still_imports_a_meeting() {
         (404, Value::Null),
     ]));
     let meeting = adapter
-        .meeting(
-            &connection(),
-            &"not_123456789abcde".to_owned().try_into().unwrap(),
-        )
+        .meeting(&connection(), &NoteId("not_123456789abcde".into()))
         .await
         .unwrap()
         .unwrap();

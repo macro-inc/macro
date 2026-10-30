@@ -2,6 +2,7 @@
 
 mod access_request_delivery;
 mod android;
+mod ios_navigation;
 mod status_updates;
 
 use crate::domain::models::apple::APNSPushNotification;

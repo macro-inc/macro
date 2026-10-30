@@ -22,7 +22,7 @@ pub enum SendMobileWelcomeEmailError {
     #[error("Email is blocked")]
     EmailBlocked,
 
-    #[error("Please use your work email")]
+    #[error("Please use your work email or Gmail")]
     PersonalEmail,
 
     #[error("Internal error")]
@@ -172,11 +172,17 @@ pub async fn handler(
     Ok(Json(SendMobileWelcomeEmailResponse { sent: true }))
 }
 
+/// Gmail domains accepted despite being generic: Macro connects Gmail inboxes,
+/// so a Gmail lead can finish signing up on desktop.
+const ALLOWED_PERSONAL_DOMAINS: &[&str] = &["gmail.com", "googlemail.com"];
+
 fn is_personal_email(email: &str) -> bool {
-    email
-        .trim()
-        .rsplit_once('@')
-        .is_some_and(|(_, domain)| generic_email_domains::is_generic_email_domain(domain))
+    email.trim().rsplit_once('@').is_some_and(|(_, domain)| {
+        generic_email_domains::is_generic_email_domain(domain)
+            && !ALLOWED_PERSONAL_DOMAINS
+                .iter()
+                .any(|allowed| domain.eq_ignore_ascii_case(allowed))
+    })
 }
 
 /// Desktop signup page. The local frontend origin has no `/app` prefix.
@@ -260,10 +266,12 @@ mod tests {
     }
 
     #[test]
-    fn personal_email_providers_are_rejected() {
-        assert!(is_personal_email("someone@gmail.com"));
-        assert!(is_personal_email(" Someone@GMAIL.com "));
+    fn personal_email_providers_other_than_gmail_are_rejected() {
+        assert!(!is_personal_email("someone@gmail.com"));
+        assert!(!is_personal_email(" Someone@GMAIL.com "));
+        assert!(!is_personal_email("someone@googlemail.com"));
         assert!(is_personal_email("someone@icloud.com"));
+        assert!(is_personal_email(" Someone@Yahoo.com "));
         assert!(!is_personal_email("someone@macro.com"));
         assert!(!is_personal_email("someone@acme.co"));
     }

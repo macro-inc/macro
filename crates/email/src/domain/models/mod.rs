@@ -32,8 +32,8 @@ pub use draft::{
 pub use email_filter::{EmailFilter, UpsertEmailFilterInput};
 pub use error::EmailErr;
 pub use label::{
-    Label, LabelListVisibility, LabelType, LinkLabel, MessageLabel, MessageListVisibility,
-    UpdateThreadLabelsResult,
+    Label, LabelListVisibility, LabelType, LinkLabel, MAX_BULK_ARCHIVE_THREADS, MessageLabel,
+    MessageListVisibility, SetThreadsArchivedResult, StagedLabelChange, UpdateThreadLabelsResult,
 };
 pub use link::{
     EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, ResolvedSendingInbox,
@@ -43,7 +43,7 @@ pub use mail_projection::{
     EmailDraftAggregate, EmailDraftEntry, EmailPreview, EmailThreadDraftState,
     EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
 };
-pub use message::{Message, MessageRow, SimpleMessage};
+pub use message::{Message, MessageRow, ScheduledSend, ScheduledSendStatus, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};
 pub use preview::{
     EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery,

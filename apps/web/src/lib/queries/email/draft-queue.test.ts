@@ -419,8 +419,50 @@ it('does not reopen unsynced content over an authoritative sent record', async (
   const { draftResult } = await setup();
   const cached = draftResult();
   cached.records[0].record.isDraft = false;
+  cached.records[0].record.isSent = true;
   vi.mocked(readLocalDraft).mockResolvedValue(workingCopy('failed'));
   mocks.readRecordsByKeys.mockResolvedValue(cached);
   expect((await readEmailDraft(serverId))?.draft).toBeUndefined();
   expect(restoreLocalAttachments).not.toHaveBeenCalled();
+});
+
+it('reads a restored generation over an older accepted cache record', async () => {
+  const { draftResult } = await setup();
+  const cached = draftResult();
+  cached.records[0].record.isDraft = false;
+  cached.records[0].record.isSent = false;
+  cached.records[0].record.draftGeneration = 1;
+  const local = workingCopy('dirty');
+  local.content.draft_generation = 2;
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockResolvedValue(cached);
+  expect(await readEmailDraft(serverId)).toMatchObject({ local });
+  expect(localDraftMessage).toHaveBeenCalledWith(local);
+  expect(restoreLocalAttachments).toHaveBeenCalledWith(local);
+});
+
+it('keeps a newer server send authoritative over a restored working copy', async () => {
+  const { draftResult } = await setup();
+  const cached = draftResult();
+  cached.records[0].record.isDraft = false;
+  cached.records[0].record.isSent = true;
+  cached.records[0].record.draftGeneration = 3;
+  const local = workingCopy('dirty');
+  local.content.draft_generation = 2;
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockResolvedValue(cached);
+  expect((await readEmailDraft(serverId))?.draft).toBeUndefined();
+  expect(restoreLocalAttachments).not.toHaveBeenCalled();
+});
+
+it('returns the working copy when cache initialization fails during the status read', async () => {
+  await setup();
+  const local = workingCopy('dirty');
+  vi.mocked(readLocalDraft).mockResolvedValue(local);
+  mocks.readRecordsByKeys.mockRejectedValue(
+    new Error('cache bootstrap failed')
+  );
+  expect(await readEmailDraft(serverId, { attachments: false })).toMatchObject({
+    local,
+  });
 });

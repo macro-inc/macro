@@ -9,6 +9,7 @@ import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-ho
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
   SplitHeaderLeft,
@@ -18,18 +19,19 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import ListIcon from '@phosphor/list.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import ListIcon from '@icon/system/regular/list.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Button, cn } from '@ui';
+import { Button, ButtonGroup, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   createMemo,
   createSignal,
+  type JSX,
   Match,
   onCleanup,
   Show,
@@ -37,6 +39,7 @@ import {
 } from 'solid-js';
 import { CALENDAR_TOUR } from '../tour';
 import {
+  CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
   CalendarCreateEventItem,
 } from './CalendarCreateItems';
@@ -76,9 +79,12 @@ function createLocalToday() {
   return today;
 }
 
-export function Header(props: { presentation: 'workspace' | 'preview' }) {
+export function Header(props: {
+  presentation: 'workspace' | 'preview';
+  leading?: JSX.Element;
+}) {
   const panel = useSplitPanelOrThrow();
-  // PreviewFrame owns its own top bar and may sit inside another view shell.
+  // Inline previews use the host's shell, not Calendar's sidebar state.
   const shell = props.presentation === 'workspace' ? useViewShell() : undefined;
   const calendarPager = useCalendarPager();
   const calendarView = useCalendarView();
@@ -88,21 +94,20 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
     headerElement()?.closest<HTMLElement>('[data-view-shell-main]')
   );
   // Measure the parent pane so toolbar content cannot affect its own breakpoint.
-  // A docked sidebar owns New and hides the navigation toggle, so its toolbar
-  // fits sooner. Avoid wrapping just before the sidebar collapses and unwraps it.
+  // A docked sidebar hides the navigation toggle, so its toolbar fits sooner.
   const hasDockedSidebar = () =>
     !!shell && !shell.aside.isCollapsed() && !shell.aside.isOverlay();
   const breakpoints = createSizeBreakpoints(
     () => paneSize.width ?? 0,
     () => ({
-      fullHeader: { min: hasDockedSidebar() ? 480 : 600 },
+      fullHeader: { min: hasDockedSidebar() ? 580 : 600 },
       inlineSearch: { min: 1040 },
       labeledNew: { min: 360 },
       labeledToday: { min: 304 },
     })
   );
   const isCompactHeader = () => !breakpoints.fullHeader();
-  const searchOverlaysTitle = () => !breakpoints.inlineSearch();
+  const searchOverlaysControls = () => !breakpoints.inlineSearch();
   const today = createLocalToday();
   const [searchExpanded, setSearchExpandedInternal] = createSignal(false);
   const [searchPopupReady, setSearchPopupReady] = createSignal(false);
@@ -155,19 +160,17 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
   );
   const isNarrow = () => shell?.aside.isCollapsed() ?? true;
   const showBookingLinks = () => isMobile() || !shell?.breakpoints.narrow?.();
-  const showHeaderCreate = () =>
-    isCompactHeader() ||
-    (shell?.aside.isCollapsed() && !shell?.aside.isOverlay());
-  const usesSplitHeader = () =>
-    props.presentation === 'preview' || isTouchDevice();
+  const usesSplitHeader = () => isTouchDevice();
   const createItems = () => (
     <>
       <CalendarCreateEventItem />
       <CalendarCreateCallItem />
+      <CalendarCreateBookingLinkItem />
     </>
   );
   const headerCreateMenu = () => (
     <CalendarCreateMenu
+      presentation={!isTouchDevice() ? 'toolbar' : undefined}
       size={breakpoints.labeledNew() ? 'md' : 'icon-md'}
       label="New"
       class={cn(
@@ -189,54 +192,80 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
     </CalendarCreateMenu>
   );
 
-  const previous = () => (
-    <Button
-      variant="ghost"
-      size="icon-lg"
-      class="border-transparent bg-transparent"
-      label={`Previous ${periodLabel()}`}
-      hotkey={TOKENS.calendar.period.previous}
-      onClick={calendarPager.previousPeriod}
-    >
-      <CaretLeftIcon class="size-5" />
-    </Button>
-  );
-  const next = () => (
-    <Button
-      variant="ghost"
-      size="icon-lg"
-      class="border-transparent bg-transparent"
-      label={`Next ${periodLabel()}`}
-      hotkey={TOKENS.calendar.period.next}
-      onClick={calendarPager.nextPeriod}
-    >
-      <CaretRightIcon class="size-5" />
-    </Button>
-  );
-  const todayButton = (mobile: boolean) => (
-    <Button
-      variant={mobile ? 'ghost' : 'outline'}
-      size={mobile ? 'icon-lg' : 'lg'}
-      class={cn(
-        mobile && 'relative',
-        !mobile && 'border-edge-button bg-transparent px-3 text-sm'
-      )}
-      label="Go to today"
-      hotkey={TOKENS.calendar.period.today}
-      onClick={calendarPager.navigateToToday}
-    >
-      <Show when={mobile} fallback="Today">
-        <CalendarBlankIcon aria-hidden="true" />
-        <span
-          aria-hidden="true"
-          class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-[10px] font-bold leading-none"
-        >
-          {today().getDate()}
-        </span>
-      </Show>
-    </Button>
-  );
-
+  const previous = (compact = false) => {
+    const Control = compact ? ButtonGroup.Button : Button;
+    return (
+      <Control
+        aria-label={`Previous ${periodLabel()}`}
+        tooltip={{
+          content: `Previous ${periodLabel()}`,
+          hotkey: TOKENS.calendar.period.previous,
+        }}
+        variant="ghost"
+        size={compact ? 'icon-sm' : 'icon-lg'}
+        class="border-transparent bg-transparent"
+        onClick={calendarPager.previousPeriod}
+      >
+        <CaretLeftIcon class={compact ? 'size-4' : 'size-5'} />
+      </Control>
+    );
+  };
+  const next = (compact = false) => {
+    const Control = compact ? ButtonGroup.Button : Button;
+    return (
+      <Control
+        aria-label={`Next ${periodLabel()}`}
+        tooltip={{
+          content: `Next ${periodLabel()}`,
+          hotkey: TOKENS.calendar.period.next,
+        }}
+        variant="ghost"
+        size={compact ? 'icon-sm' : 'icon-lg'}
+        class="border-transparent bg-transparent"
+        onClick={calendarPager.nextPeriod}
+      >
+        <CaretRightIcon class={compact ? 'size-4' : 'size-5'} />
+      </Control>
+    );
+  };
+  const todayButton = (mobile: boolean, compact = false) => {
+    const Control = compact ? ButtonGroup.Button : Button;
+    const size = () => {
+      if (compact) return mobile ? 'icon-sm' : 'sm';
+      return mobile ? 'icon-lg' : 'lg';
+    };
+    return (
+      <Control
+        aria-label="Go to today"
+        tooltip={{
+          content: 'Go to today',
+          hotkey: TOKENS.calendar.period.today,
+        }}
+        variant={mobile || compact ? 'ghost' : 'secondary'}
+        size={size()}
+        class={cn(
+          mobile && 'relative',
+          !mobile && 'bg-transparent text-sm',
+          !mobile && (compact ? 'px-2' : 'px-3'),
+          !mobile && !compact && 'border-edge-button'
+        )}
+        onClick={calendarPager.navigateToToday}
+      >
+        <Show when={mobile} fallback="Today">
+          <CalendarBlankIcon
+            class="size-4 touch:size-6 shrink-0 pointer-events-none"
+            aria-hidden="true"
+          />
+          <span
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-[10px] font-bold leading-none"
+          >
+            {today().getDate()}
+          </span>
+        </Show>
+      </Control>
+    );
+  };
   return (
     <Switch>
       <Match when={usesSplitHeader()}>
@@ -244,10 +273,11 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
           <HeaderIsland class="min-w-0 shrink px-1">
             <Show when={!isMobile() && shell?.aside.isCollapsed()}>
               <Button
+                aria-label="Show calendar navigation"
+                tooltip="Show calendar navigation"
                 variant="ghost"
                 size="icon-sm"
                 class="shrink-0"
-                label="Show calendar navigation"
                 ref={tourTarget(CALENDAR_TOUR.sidebarToggle)}
                 aria-expanded={shell?.aside.isOverlay() ?? false}
                 onClick={() => shell?.aside.expand()}
@@ -302,53 +332,81 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
       <Match when={!usesSplitHeader()}>
         <ViewShell.TopBar
           ref={setHeaderElement}
-          class="@container/calendar-toolbar h-auto min-h-12 flex-wrap gap-x-2 gap-y-2 py-2"
+          class="@container/calendar-toolbar h-auto min-h-12 flex-wrap gap-x-2 gap-y-2 py-2 [--view-search-height:2rem]"
         >
           <div class="relative flex min-w-0 flex-1 items-center gap-2">
-            <h1
-              class="min-w-0 truncate text-[clamp(1rem,calc(0.75rem+1cqw),1.5rem)] font-semibold leading-tight tracking-[-0.03em] text-ink transition-opacity duration-150 motion-reduce:transition-none"
-              classList={{
-                'opacity-0': searchOverlaysTitle() && searchExpanded(),
-              }}
-            >
+            {props.leading}
+            <h1 class="min-w-0 truncate px-1 text-sm font-semibold text-ink">
               {dateTitle()}
             </h1>
+          </div>
+          <div
+            class={cn(
+              'relative flex shrink-0 items-center justify-end gap-2',
+              isCompactHeader() && 'basis-full'
+            )}
+            data-calendar-period-controls=""
+            ref={tourTarget(CALENDAR_TOUR.period)}
+            onClick={() => setSearchExpanded(false)}
+          >
+            <div
+              class="flex items-center gap-2"
+              classList={{
+                invisible: searchOverlaysControls() && searchExpanded(),
+                'pointer-events-none':
+                  searchOverlaysControls() && searchExpanded(),
+              }}
+            >
+              <Show when={showBookingLinks()}>
+                <CalendarSchedulingActions compact />
+              </Show>
+              <HeaderActionGroup label="Calendar navigation">
+                {todayButton(!breakpoints.labeledToday(), true)}
+                {previous(true)}
+                {next(true)}
+              </HeaderActionGroup>
+              <HeaderActionGroup label="Calendar view">
+                <PeriodSelector isNarrow={isNarrow()} compact grouped />
+              </HeaderActionGroup>
+              {headerCreateMenu()}
+            </div>
             <div
               onTransitionEnd={handleSearchTransitionEnd}
+              onClick={(event) => event.stopPropagation()}
               class={cn(
-                'ml-auto h-10 shrink-0',
-                searchOverlaysTitle()
-                  ? 'w-10'
+                'h-8 shrink-0',
+                searchOverlaysControls()
+                  ? 'w-8'
                   : 'transition-[width] duration-200 ease-out motion-reduce:transition-none'
               )}
               style={
-                searchOverlaysTitle()
+                searchOverlaysControls()
                   ? undefined
                   : {
                       width: searchExpanded()
                         ? 'clamp(22rem, 40cqw, 28rem)'
-                        : '2.5rem',
+                        : '2rem',
                     }
               }
             >
               <div
                 onTransitionEnd={handleSearchTransitionEnd}
                 class={cn(
-                  'h-10',
-                  searchOverlaysTitle() &&
+                  'h-8',
+                  searchOverlaysControls() &&
                     'absolute right-0 top-0 transition-[width] duration-200 ease-out motion-reduce:transition-none'
                 )}
                 style={
-                  searchOverlaysTitle()
+                  searchOverlaysControls()
                     ? {
-                        width: searchExpanded() ? 'min(100%, 28rem)' : '2.5rem',
+                        width: searchExpanded() ? 'min(100%, 28rem)' : '2rem',
                       }
                     : undefined
                 }
               >
                 <CalendarSearch
                   inline
-                  compact={searchOverlaysTitle()}
+                  compact={searchOverlaysControls()}
                   expanded={searchExpanded()}
                   popupReady={searchPopupReady()}
                   onExpand={() => setSearchExpanded(true)}
@@ -356,28 +414,6 @@ export function Header(props: { presentation: 'workspace' | 'preview' }) {
                 />
               </div>
             </div>
-          </div>
-          <div
-            class={cn(
-              'flex shrink-0 items-center justify-end gap-1',
-              isCompactHeader() ? 'basis-full' : 'ml-4'
-            )}
-            data-calendar-period-controls=""
-            ref={tourTarget(CALENDAR_TOUR.period)}
-            onClick={() => setSearchExpanded(false)}
-          >
-            <Show when={showHeaderCreate()}>
-              <div classList={{ 'mr-auto': isCompactHeader() }}>
-                {headerCreateMenu()}
-              </div>
-            </Show>
-            <Show when={showBookingLinks()}>
-              <CalendarSchedulingActions />
-            </Show>
-            {todayButton(!breakpoints.labeledToday())}
-            <PeriodSelector isNarrow={isNarrow()} />
-            {previous()}
-            {next()}
           </div>
         </ViewShell.TopBar>
       </Match>

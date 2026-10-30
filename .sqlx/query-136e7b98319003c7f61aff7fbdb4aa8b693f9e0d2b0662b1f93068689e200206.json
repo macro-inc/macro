@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT team.id, team.name FROM team\n            JOIN team_user member ON member.team_id = team.id WHERE member.user_id = $1\n            ORDER BY team.name, team.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "136e7b98319003c7f61aff7fbdb4aa8b693f9e0d2b0662b1f93068689e200206"
+}

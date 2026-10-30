@@ -1,5 +1,12 @@
 import { $createLinkNode } from '@lexical/link';
 import {
+  $createListItemNode,
+  $isListNode,
+  INSERT_ORDERED_LIST_COMMAND,
+  INSERT_UNORDERED_LIST_COMMAND,
+  registerList,
+} from '@lexical/list';
+import {
   $createTableNode,
   $createTableRowNode,
   $isTableNode,
@@ -13,6 +20,10 @@ import {
   $isImageNode,
 } from '@macro-inc/lexical-core/nodes/ImageNode';
 import {
+  $isTaskListNode,
+  TaskListNode,
+} from '@macro-inc/lexical-core/nodes/TaskListNode';
+import {
   $createVideoNode,
   $isVideoNode,
 } from '@macro-inc/lexical-core/nodes/VideoNode';
@@ -23,6 +34,7 @@ import {
   $getCell,
   buildTable,
   createTableTestEditor,
+  placeCaret,
   textGrid,
 } from './tableTestUtils';
 
@@ -152,6 +164,57 @@ describe('table cell allowed content', () => {
       expect(video?.getUrl()).toBe('https://example.com/clip.mp4');
     });
   });
+
+  it.each(['bullet', 'number', 'check'] as const)(
+    'keeps a %s list appended to a table cell',
+    async (listType) => {
+      const editor = createTableEditor();
+      await buildTable(editor, textGrid([['hello']]));
+
+      await new Promise<void>((resolve) => {
+        editor.update(
+          () => {
+            const list = new TaskListNode(listType);
+            const item = $createListItemNode();
+            item.append($createTextNode('item'));
+            list.append(item);
+            $getCell(0, 0).append(list);
+          },
+          { onUpdate: () => resolve() }
+        );
+      });
+
+      editor.read(() => {
+        const list = $getCell(0, 0).getChildren().find($isTaskListNode);
+        expect(list).toBeDefined();
+        expect(list?.getListType()).toBe(listType);
+        expect(list?.getTextContent()).toBe('item');
+      });
+    }
+  );
+
+  it.each([
+    ['bullet', INSERT_UNORDERED_LIST_COMMAND],
+    ['number', INSERT_ORDERED_LIST_COMMAND],
+  ] as const)(
+    'keeps cell text when converting a paragraph to a %s list',
+    async (listType, command) => {
+      const editor = createTableEditor();
+      registerList(editor);
+      await buildTable(editor, textGrid([['keep me']]));
+      await placeCaret(editor, 'keep me');
+
+      editor.dispatchCommand(command, undefined);
+      await Promise.resolve();
+
+      editor.read(() => {
+        const list = $getCell(0, 0).getChildren().find($isListNode);
+        expect(list).toBeDefined();
+        expect(list?.getListType()).toBe(listType);
+        expect($getCell(0, 0).getTextContent()).toBe('keep me');
+      });
+    }
+  );
 
   it('still strips nested tables from cells', async () => {
     const editor = createTableEditor();

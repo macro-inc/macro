@@ -59,10 +59,33 @@ export const hasLinkFilters = (filters: ReviewsFilterSelection) =>
 /** The origin filter option for pull requests nothing identifies. */
 export const UNKNOWN_ORIGIN = 'unknown';
 
+const SORT_ORDER: Record<
+  ReviewsSortId,
+  { timestamp: 'updatedAt' | 'createdAt'; descending: boolean }
+> = {
+  priority: { timestamp: 'updatedAt', descending: true },
+  recently_updated: { timestamp: 'updatedAt', descending: true },
+  least_recently_updated: { timestamp: 'updatedAt', descending: false },
+  newest: { timestamp: 'createdAt', descending: true },
+  oldest: { timestamp: 'createdAt', descending: false },
+};
+
+const timestampMs = (value: unknown) => {
+  const ms =
+    typeof value === 'string' || typeof value === 'number'
+      ? new Date(value).getTime()
+      : Number.NaN;
+  return Number.isNaN(ms) ? Number.NEGATIVE_INFINITY : ms;
+};
+
 /**
  * Priority and linked-to filters, and the priority sort, which read each pull
  * request's links. Rows whose links have not loaded yet are held back while
  * a link filter is active, since they cannot be matched.
+ *
+ * Rows are re-sorted by their current timestamp: the local cache keeps a pull
+ * request at its fetched position after a live update changes its
+ * `updatedAt`, which would split the list's date headings.
  */
 export function applyReviewLinks(
   reviews: readonly GithubPullRequestEntity[],
@@ -92,10 +115,19 @@ export function applyReviewLinks(
       );
     });
   }
+  const order = SORT_ORDER[sort];
+  const time = (review: GithubPullRequestEntity) =>
+    timestampMs(review[order.timestamp]);
+  result.sort((a, b) => {
+    const [first, second] = order.descending
+      ? [time(b), time(a)]
+      : [time(a), time(b)];
+    return first === second ? 0 : first < second ? -1 : 1;
+  });
   if (sort === 'priority') {
     const priority = (review: GithubPullRequestEntity): PrPriorityId =>
       linksFor(review)?.priority.id ?? 'none';
-    // Array sort is stable, so equal priorities keep the server's recency order.
+    // Array sort is stable, so equal priorities keep their recency order.
     result.sort((a, b) => comparePriority(priority(a), priority(b)));
   }
   return result;

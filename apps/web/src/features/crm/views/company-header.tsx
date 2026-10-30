@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import {
@@ -5,8 +6,8 @@ import {
   formatDateAndTime,
   formatRelativeTimestamp,
 } from '@entity';
-import ClockIcon from '@phosphor/clock.svg';
-import GlobeIcon from '@phosphor/globe.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
@@ -82,7 +83,10 @@ export function CompanyHeader(props: { company?: CrmCompanyEntity }) {
           <EntityIcon targetType="crm_company" size="fill" />
         </div>
         <h1 class="min-w-0 flex-1 text-2xl font-semibold">
-          <Show when={props.company} fallback={'Loading company…'}>
+          <Show
+            when={props.company}
+            fallback={<ListSkeleton.Bar class="h-6 w-48" />}
+          >
             {(company) => <TitleEditor company={company()} />}
           </Show>
         </h1>

@@ -24,6 +24,9 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 const cleanups: Array<() => void> = [];
 
 beforeEach(() => {
+  vi.useFakeTimers({
+    toFake: ['requestAnimationFrame', 'cancelAnimationFrame'],
+  });
   const original = Object.getOwnPropertyDescriptor(
     Range.prototype,
     'getBoundingClientRect'
@@ -53,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const cleanup of cleanups.splice(0)) cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -135,6 +139,7 @@ function setup(initialText = '', initialQuote = false) {
 }
 
 async function flushMeasurements() {
+  vi.advanceTimersToNextFrame();
   // Includes the second measurement after the layout reacts to wrapping.
   await Promise.resolve();
   await Promise.resolve();
@@ -142,6 +147,26 @@ async function flushMeasurements() {
 }
 
 describe('composer layout', () => {
+  it('coalesces resize measurements outside observer delivery while keeping edits immediate', async () => {
+    const input = setup('a'.repeat(30));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(true);
+    const measure = vi.mocked(Range.prototype.getBoundingClientRect);
+    measure.mockClear();
+    input.resize(320);
+    input.resize(300);
+    await Promise.resolve();
+    expect(measure).not.toHaveBeenCalled();
+    expect(input.isCompact()).toBe(true);
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(false);
+
+    input.setText('short');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(input.isCompact()).toBe(true);
+  });
+
   it('expands for wrapped text without newlines and stays expanded at the wider layout', async () => {
     const input = setup();
     await flushMeasurements();

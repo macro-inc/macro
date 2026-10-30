@@ -98,6 +98,8 @@ pub trait SearchQueryConfig {
     const TITLE_KEY: &'static str;
     /// Content field
     const CONTENT_KEY: &'static str = "content";
+    /// Fields searched for each content term; highlights still use `CONTENT_KEY`.
+    const CONTENT_FIELDS: &'static [&'static str] = &[Self::CONTENT_KEY];
     /// The entity index for the search query
     const ENTITY_INDEX: OpenSearchEntityType;
 }
@@ -282,9 +284,9 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let terms: Cow<'_, [&str]> =
             Cow::Owned(self.terms.iter().map(|t| t.as_str()).collect::<Vec<&str>>());
 
-        let must_array = vec![generate_terms_must_query(
+        let must_array = vec![super::query::generate_terms_must_query_for_fields(
             query_key,
-            T::CONTENT_KEY,
+            T::CONTENT_FIELDS,
             terms,
             self.term_combine,
         )];

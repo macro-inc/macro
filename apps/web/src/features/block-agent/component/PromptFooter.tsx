@@ -1,18 +1,26 @@
 import { formatDate } from '@core/util/date';
+import { openInNewSplitForMention } from '@core/util/openInNewSplit';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { Show } from 'solid-js';
 import type { PromptOrigin } from '../state/prompt-origin';
 
 /**
  * A quiet line under a prompt: where it came from, when the harness delivered
  * it from elsewhere, and when it was posted - `via @mention in #eng · 2:02 PM`,
- * or just `2:02 PM`. Clicking the origin goes to that place.
+ * or just `2:02 PM`. Clicking the origin goes to that place; Shift-click opens
+ * it in a new split.
  */
 export function PromptFooter(props: {
   origin: PromptOrigin | undefined;
   /** RFC 3339; absent until the log confirms the prompt. */
   postedAt: string | undefined;
-  onOpen?: () => void;
+  onOpen?: (options: { newSplit: boolean }) => void;
 }) {
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) =>
+    props.onOpen?.({
+      newSplit: openInNewSplitForMention(event.shiftKey, false),
+    })
+  );
   const originText = (origin: PromptOrigin) => (
     <>
       {origin.lead}
@@ -45,16 +53,14 @@ export function PromptFooter(props: {
               </span>
             }
           >
-            {(open) => (
-              <button
-                type="button"
-                title={label(origin())}
-                onClick={() => open()()}
-                class="min-w-0 truncate rounded px-1 text-left underline decoration-dotted underline-offset-2 not-touch:hover:bg-hover not-touch:hover:text-ink"
-              >
-                {originText(origin())}
-              </button>
-            )}
+            <button
+              type="button"
+              title={label(origin())}
+              {...navHandlers}
+              class="min-w-0 truncate rounded px-1 text-left underline decoration-dotted underline-offset-2 not-touch:hover:bg-hover not-touch:hover:text-ink"
+            >
+              {originText(origin())}
+            </button>
           </Show>
         )}
       </Show>

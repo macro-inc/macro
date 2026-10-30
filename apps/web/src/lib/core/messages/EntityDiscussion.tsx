@@ -22,7 +22,10 @@ import {
   EntityConversation,
   EntityConversationComposer,
 } from './EntityConversation';
-import { scrollToRenderedTarget } from './scroll-to-rendered-target';
+import {
+  scrollToRenderedTarget,
+  USER_SCROLL_EVENTS,
+} from './scroll-to-rendered-target';
 
 function MobileMessageComposer(props: {
   parent: MessageParent;
@@ -56,6 +59,8 @@ export function EntityDiscussion(props: {
   label?: string;
   /** Override the URL target; null leaves this discussion untargeted. */
   targetId?: string | null;
+  /** Defer scrolling while the host is still laying out content above the discussion. */
+  scrollReady?: boolean;
   /**
    * On touch devices, move the composer to the floating accessory region and
    * show the conversation only once it has roots, as the editor page does.
@@ -96,11 +101,38 @@ export function EntityDiscussion(props: {
   };
   let scrolledKey: string | undefined;
   createEffect(
-    on(scrollRequest, (request) => {
-      if (!request || !container || request.key === scrolledKey) return;
-      scrolledKey = request.key;
-      onCleanup(scrollToRenderedTarget(container, request.commentId));
-    })
+    on(
+      [scrollRequest, () => props.scrollReady !== false],
+      ([request, ready]) => {
+        if (!request || !container || request.key === scrolledKey) return;
+        const onSettled = () => {
+          scrolledKey = request.key;
+        };
+        if (!ready) {
+          // A reader can take over even before the editor is ready to scroll.
+          const stopWaiting = () => {
+            clearTimeout(timer);
+            for (const type of USER_SCROLL_EVENTS)
+              window.removeEventListener(type, settleWaiting, true);
+          };
+          const settleWaiting = () => {
+            onSettled();
+            stopWaiting();
+          };
+          const timer = setTimeout(settleWaiting, 10_000);
+          for (const type of USER_SCROLL_EVENTS)
+            window.addEventListener(type, settleWaiting, {
+              capture: true,
+              passive: true,
+            });
+          onCleanup(stopWaiting);
+          return;
+        }
+        onCleanup(
+          scrollToRenderedTarget(container, request.commentId, { onSettled })
+        );
+      }
+    )
   );
   return (
     <>

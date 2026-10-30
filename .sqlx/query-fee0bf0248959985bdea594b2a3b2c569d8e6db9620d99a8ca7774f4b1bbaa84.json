@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id AS document_id, name FROM \"Document\"\n            WHERE owner = $1 AND \"fileType\" = 'md' AND \"deletedAt\" IS NULL\n              AND name ILIKE '%' || $2 || '%'\n            ORDER BY \"updatedAt\" DESC, id LIMIT 30\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "fee0bf0248959985bdea594b2a3b2c569d8e6db9620d99a8ca7774f4b1bbaa84"
+}

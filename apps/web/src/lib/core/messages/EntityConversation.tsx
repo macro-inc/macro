@@ -5,8 +5,8 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
-import CaretDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { useMessageLink } from '@queries/messages/document-messages';
 import {
   newMessageId,

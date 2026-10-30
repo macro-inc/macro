@@ -10,6 +10,7 @@ import {
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { GroupByField } from '@queries/soup/grouped/types';
 import type { SoupAstBody, SoupAstItemsQueryArgs } from '@queries/soup/items';
+import { match } from 'ts-pattern';
 import {
   EMPTY_TASK_FACET_CONTEXT,
   TASK_FACETS,
@@ -118,13 +119,19 @@ export type BuildTaskQueryOptions = {
   crm?: TaskCrmScope;
   /** Only tasks whose name contains this text, case-insensitively. */
   nameContains?: string;
-  /** Board Project columns use the initiative property, not legacy folders. */
+  /** Board Project columns use explicit property grouping for column editing. */
   board?: boolean;
 };
 
 /** The Soup CRM association naming the record. */
 export const taskCrmAssociation = (crm: TaskCrmScope) =>
-  crm.type === 'company' ? { company: crm.id } : { contact: crm.id };
+  match(crm)
+    .with({ type: 'activity' }, () => 'activity' as const)
+    .with({ type: 'company' }, ({ id }) => ({ company: id }))
+    .with({ type: 'contact' }, ({ id }) => ({ contact: id }))
+    .exhaustive(() => {
+      throw new Error('Unsupported CRM task scope');
+    });
 
 /** Builds the concrete Soup AST used only by the production Tasks view. */
 export function buildTaskQuery(
@@ -137,11 +144,10 @@ export function buildTaskQuery(
 
   if (primarySort?.reversed) sortDirection = 'asc';
 
-  const compiledFacets = compileFacets(
-    options.facets,
-    TASK_FACETS,
-    options.facetContext ?? EMPTY_TASK_FACET_CONTEXT
-  );
+  const compiledFacets = compileFacets(options.facets, TASK_FACETS, {
+    ...(options.facetContext ?? EMPTY_TASK_FACET_CONTEXT),
+    viewerId: options.userId,
+  });
 
   const properties = propertyScope(
     options.tab,

@@ -1,4 +1,4 @@
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Button } from '@ui';
 import { For } from 'solid-js';
 import type { TeamInvite } from '../context/onboarding-context';
@@ -49,7 +49,7 @@ export function InvitesPanel(props: {
               {invite.invitedBy} invited you to their team
             </span>
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               class="ml-auto shrink-0"
               disabled={props.joining}

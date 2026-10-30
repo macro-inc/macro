@@ -100,6 +100,7 @@ describe('buildAgentRoster', () => {
       connected: false,
     });
     expect(saved[2]?.unavailableReason).toBe('Its runtime is disconnected');
+    expect(saved[2]?.connectLabel).toBe('Reconnect runtime');
     expect(saved[3]?.runtime.label).toBe('Disconnected runtime');
   });
 
@@ -125,7 +126,6 @@ describe('rosterForAgentPicker and kindForBot', () => {
       persisted({ harness: 'cursor' }),
       persisted({ harness: 'macrod' }),
       persisted({ harness: 'sandbox' }),
-      persisted({ harness: 'claude-cloud' }),
       persisted({ harness: 'codex-cloud' }),
       persisted({ harness: 'future-runtime' }),
       persisted({
@@ -154,14 +154,13 @@ describe('rosterForAgentPicker and kindForBot', () => {
       'bot-cursor',
       'bot-macrod',
       'bot-sandbox',
-      'bot-claude-cloud',
       'bot-codex-cloud',
       'bot-future-runtime',
       'saved-macro-name',
     ]);
   });
 
-  it.each(['claude-cloud', 'codex-cloud', 'future-runtime'])(
+  it.each(['codex-cloud', 'future-runtime'])(
     'does not block an agent just because its runtime is %s',
     (harness) => {
       const agent = roster.find((entry) => entry.harness === harness);

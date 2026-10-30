@@ -13,6 +13,15 @@ pub(crate) const MICROSOFT_LOGIN_BASE_URL: &str = "https://login.microsoftonline
 /// Mail and address-book consent. Calendar access is requested only by calendar entry points.
 pub const MICROSOFT_SCOPES: &str = "openid email offline_access profile User.Read Mail.ReadWrite Mail.Send MailboxSettings.ReadWrite Contacts.Read";
 
+/// The delegated scopes a consent request asks for.
+pub(crate) fn consent_scopes(calendar: bool) -> String {
+    if calendar {
+        format!("{MICROSOFT_SCOPES} Calendars.ReadWrite")
+    } else {
+        MICROSOFT_SCOPES.to_owned()
+    }
+}
+
 #[derive(serde::Serialize)]
 struct MicrosoftTokenExchangeRequest<'a> {
     client_id: &'a str,
@@ -113,6 +122,39 @@ pub(crate) fn construct_authorize_url(
         .append_pair("scope", MICROSOFT_SCOPES)
         .append_pair("state", state)
         .append_pair("prompt", "select_account");
+
+    Ok(url.to_string())
+}
+
+/// The tenant-wide admin-consent page for `tenant_id`.
+///
+/// Admin consent is a directory operation, so the `common` audience is not
+/// accepted there: a multi-tenant app asks `organizations` and lets the
+/// administrator pick their directory. A fixed tenant or `organizations` is
+/// used as configured. On success Microsoft returns to `redirect_uri` with
+/// `admin_consent=True&tenant={id}&state={state}`.
+pub(crate) fn construct_admin_consent_url(
+    client_id: &str,
+    tenant_id: &str,
+    redirect_uri: &str,
+    state: &str,
+    calendar: bool,
+) -> anyhow::Result<String> {
+    let tenant = match tenant_id {
+        "common" | "consumers" => "organizations",
+        tenant => tenant,
+    };
+    let mut url =
+        Url::parse(MICROSOFT_LOGIN_BASE_URL).context("invalid Microsoft OAuth base URL")?;
+    url.path_segments_mut()
+        .expect("Microsoft OAuth base URL must support path segments")
+        .pop_if_empty()
+        .extend([tenant, "v2.0", "adminconsent"]);
+    url.query_pairs_mut()
+        .append_pair("client_id", client_id)
+        .append_pair("redirect_uri", redirect_uri)
+        .append_pair("scope", &consent_scopes(calendar))
+        .append_pair("state", state);
 
     Ok(url.to_string())
 }

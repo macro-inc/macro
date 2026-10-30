@@ -1,3 +1,4 @@
+use super::meeting_uid::exchange_uid;
 use super::*;
 use crate::domain::invitations::{
     CalendarInvitationRepository, CalendarInvitationResolver, CalendarInvitationService,
@@ -23,9 +24,18 @@ fn identity(link: Uuid) -> InvitationIdentity {
     }
 }
 async fn event(pool: &PgPool, repo: &PgCalendarRepository, viewer: &str, link: Uuid) -> Uuid {
+    event_with_uid(pool, repo, viewer, link, "invite-uid").await
+}
+async fn event_with_uid(
+    pool: &PgPool,
+    repo: &PgCalendarRepository,
+    viewer: &str,
+    link: Uuid,
+    uid: &str,
+) -> Uuid {
     persist_complete_grant(pool, link, 1).await;
     let provider = provider_ids(repo, link).await;
-    let mut upsert = timed_upsert(viewer, link, provider, "invite-uid", "Review", 1);
+    let mut upsert = timed_upsert(viewer, link, provider, uid, "Review", 1);
     upsert.event.is_read_only = false;
     upsert.event.recurrence_lines.clear();
     upsert.occurrences.truncate(1);
@@ -94,6 +104,110 @@ async fn invitation_accounts_are_authorized_and_ambiguity_never_guesses(pool: Pg
             ..
         }
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_outlook_inbox_answers_through_its_own_copy_of_a_google_meeting(pool: PgPool) {
+    let viewer = "macro|invite-outlook@example.com";
+    insert_user(&pool, viewer).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let google = insert_link(&pool, viewer).await;
+    let outlook = insert_link(&pool, viewer).await;
+    // Exchange stores the copy it imports from the invitation under its own
+    // UID, which wraps the invitation's.
+    let outlook_event =
+        event_with_uid(&pool, &repo, viewer, outlook, &exchange_uid("invite-uid")).await;
+    let outlook_email = sqlx::query_scalar!(
+        "SELECT email_address FROM email_links WHERE id = $1",
+        outlook
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let resolver = CalendarInvitationResolver::new(repo.clone());
+    let only_outlook = resolver
+        .resolve(viewer, &[identity(outlook)])
+        .await
+        .unwrap();
+    assert!(
+        matches!(&only_outlook[0], InvitationResolution::Resolved {
+            event, responding_email, can_respond: true, ..
+        } if event.id == outlook_event && responding_email == &outlook_email),
+        "{only_outlook:?}"
+    );
+
+    // With a Google copy on another inbox, the Outlook inbox's card still
+    // answers as itself, and a card from neither inbox does not guess.
+    event(&pool, &repo, viewer, google).await;
+    let result = resolver
+        .resolve(viewer, &[identity(outlook), identity(Uuid::nil())])
+        .await
+        .unwrap();
+    assert!(
+        matches!(&result[0], InvitationResolution::Resolved {
+            event, responding_email, ..
+        } if event.id == outlook_event && responding_email == &outlook_email),
+        "{result:?}"
+    );
+    assert!(
+        matches!(result[1], InvitationResolution::Ambiguous),
+        "{result:?}"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_receiving_inbox_keeps_its_copy_past_the_candidate_limit(pool: PgPool) {
+    let viewer = "macro|invite-many@example.com";
+    insert_user(&pool, viewer).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    for _ in 0..16 {
+        let link = insert_link(&pool, viewer).await;
+        event(&pool, &repo, viewer, link).await;
+    }
+    // Created last, its copy sorts after the 16 others.
+    let receiving = insert_link(&pool, viewer).await;
+    let received = event(&pool, &repo, viewer, receiving).await;
+    let result = CalendarInvitationResolver::new(repo)
+        .resolve(viewer, &[identity(receiving)])
+        .await
+        .unwrap();
+    assert!(
+        matches!(&result[0], InvitationResolution::Resolved { event, .. } if event.id == received),
+        "{result:?}"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn copies_without_the_requested_occurrence_leave_room_for_one_with_it(pool: PgPool) {
+    let viewer = "macro|invite-instance@example.com";
+    insert_user(&pool, viewer).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    for _ in 0..16 {
+        let link = insert_link(&pool, viewer).await;
+        event(&pool, &repo, viewer, link).await;
+    }
+    // Created last, and the only copy holding the second occurrence.
+    let link = insert_link(&pool, viewer).await;
+    persist_complete_grant(&pool, link, 1).await;
+    let provider = provider_ids(&repo, link).await;
+    let mut upsert = timed_upsert(viewer, link, provider, "invite-uid", "Review", 1);
+    upsert.event.is_read_only = false;
+    upsert.event.recurrence_lines.clear();
+    upsert.occurrences.remove(0);
+    upsert.occurrences.truncate(1);
+    let requested = upsert.occurrences[0].occurrence_key.clone();
+    let holding = repo.upsert_event_fixture(upsert).await.unwrap();
+    let mut identity = identity(Uuid::nil());
+    identity.occurrence_key = Some(requested.clone());
+    let result = CalendarInvitationResolver::new(repo)
+        .resolve(viewer, &[identity])
+        .await
+        .unwrap();
+    assert!(
+        matches!(&result[0], InvitationResolution::Resolved { event, occurrence, .. }
+            if event.id == holding && occurrence.occurrence_key == requested),
+        "{result:?}"
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

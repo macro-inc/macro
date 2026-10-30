@@ -60,7 +60,7 @@ vi.mock('@notifications', () => ({
   setDoneOverride: vi.fn(),
 }));
 vi.mock(
-  '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid',
+  '@icon/system/regular/arrow-counter-clockwise.svg?component-solid',
   () => ({ default: () => null })
 );
 vi.mock('@queries/email/thread', () => ({

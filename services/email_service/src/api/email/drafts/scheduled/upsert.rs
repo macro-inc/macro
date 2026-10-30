@@ -1,6 +1,6 @@
 use crate::api::context::{ApiContext, AuthorizationService, EmailSvc};
 use axum::Json;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum_extra::extract::Cached;
@@ -8,6 +8,7 @@ use email::domain::{
     models::EmailErr,
     scheduled::{EmailSchedulingService, ScheduleChange},
 };
+use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
@@ -66,7 +67,7 @@ pub struct UpsertScheduledResponse {
 #[utoipa::path(
     put, tag = "Draft Scheduling", path = "/email/drafts/scheduled/{id}",
     operation_id = "upsert_scheduled_message",
-    params(("id" = Uuid, Path, description = "The ID of the draft message to schedule")),
+    params(DraftEditPrecondition, ("id" = Uuid, Path, description = "The ID of the draft message to schedule")),
     request_body = UpsertScheduledRequest,
     responses(
         (status = 200, body = UpsertScheduledResponse),
@@ -79,6 +80,7 @@ pub struct UpsertScheduledResponse {
 )]
 #[tracing::instrument(skip(ctx, authorization, link), err)]
 pub async fn handler(
+    Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,
     Cached(authorization): Cached<
         MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
@@ -95,6 +97,7 @@ pub async fn handler(
             draft_id,
             ScheduleChange::Set(request.send_time),
             request.include_signature,
+            precondition.draft_generation,
         )
         .await?;
     Ok(Json(UpsertScheduledResponse {

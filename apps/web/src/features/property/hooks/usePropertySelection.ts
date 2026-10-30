@@ -5,7 +5,8 @@ import type { PropertyDefinitionDomain } from '../types';
 export function usePropertySelection(
   existingPropertyIds: () => string[],
   availableProperties: Accessor<PropertyDefinitionDomain[]>,
-  searchQuery?: () => string
+  searchQuery?: () => string,
+  includeProject: Accessor<boolean> = () => false
 ) {
   const [selectedPropertyIds, setSelectedPropertyIds] = createSignal<
     Set<string>
@@ -27,8 +28,8 @@ export function usePropertySelection(
         // Tag definitions are managed through the dedicated Tags UI, never the
         // generic property pickers.
         property.valueType !== 'TAG' &&
-        // A task always lists Project, and nothing else can carry it.
-        property.id !== SYSTEM_PROPERTY_IDS.PROJECT
+        // Entity panels show Project separately; explicit draft catalogs can include it.
+        (property.id !== SYSTEM_PROPERTY_IDS.PROJECT || includeProject())
     );
 
     // Then apply search filter

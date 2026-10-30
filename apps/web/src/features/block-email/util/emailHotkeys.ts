@@ -94,17 +94,34 @@ export function registerEmailHotkeys(
     displayPriority: 5,
   });
   registerHotkey({
-    hotkey: 'arrowup',
+    hotkey: ['arrowup', 'p'],
     scopeId,
     description: 'Previous message',
     keyDownHandler: handlers.navigateToPreviousMessage,
     hotkeyToken: TOKENS.email.previousMessage,
   });
   registerHotkey({
-    hotkey: 'arrowdown',
+    hotkey: ['arrowdown', 'n'],
     scopeId,
     description: 'Next message',
     keyDownHandler: handlers.navigateToNextMessage,
     hotkeyToken: TOKENS.email.nextMessage,
+  });
+
+  registerHotkey({
+    hotkey: 'o',
+    scopeId,
+    description: 'Expand or collapse message',
+    keyDownHandler: handlers.expandFocusedMessage,
+    hotkeyToken: TOKENS.email.expandMessage,
+    displayPriority: 6,
+  });
+  registerHotkey({
+    hotkey: 'shift+o',
+    scopeId,
+    description: 'Expand all messages',
+    keyDownHandler: handlers.expandAllMessages,
+    hotkeyToken: TOKENS.email.expandAllMessages,
+    displayPriority: 6,
   });
 }

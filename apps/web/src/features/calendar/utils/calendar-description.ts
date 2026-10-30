@@ -1,4 +1,5 @@
 import { editorIsEmpty } from '@core/component/LexicalMarkdown/utils';
+import { convertBookingLinkMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertBookingLinkMentionsToLinks';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
 import { getWebOrigin } from '@core/util/webOrigin';
 import { $generateHtmlFromNodes } from '@lexical/html';
@@ -58,6 +59,31 @@ export function calendarDescriptionToEditorHtml(raw: string): string {
 }
 
 /**
+ * The description as plain text, as an `.ics` export carries it: one line per
+ * paragraph, line break and list item, and a link's address after its text
+ * when the text does not already show it.
+ */
+export function calendarDescriptionText(raw: string): string {
+  const safe = sanitizeCalendarDescription(raw);
+  if (!safe) return '';
+  const doc = parseHtml(safe);
+  for (const anchor of doc.body.querySelectorAll('a[href]')) {
+    const href = anchor.getAttribute('href') ?? '';
+    const text = anchor.textContent?.trim() ?? '';
+    if (text !== href) anchor.append(text ? ` (${href})` : href);
+  }
+  for (const lineBreak of doc.body.querySelectorAll('br')) {
+    lineBreak.replaceWith('\n');
+  }
+  for (const item of doc.body.querySelectorAll('li')) item.prepend('- ');
+  for (const block of doc.body.querySelectorAll('p, li')) block.append('\n');
+  return (doc.body.textContent ?? '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
  * The description to store for the editor's current content. Document
  * mentions become plain Macro links, every other mention keeps only its
  * display text, and an empty editor is an empty description.
@@ -66,6 +92,7 @@ export function exportCalendarDescription(editor: LexicalEditor): string {
   if (editorIsEmpty(editor)) return '';
   const doc = parseHtml(editor.read(() => $generateHtmlFromNodes(editor)));
   convertDocumentMentionsToLinks(doc.body);
+  convertBookingLinkMentionsToLinks(doc.body);
   sanitizeDocument(doc, false);
   return doc.body.innerHTML;
 }

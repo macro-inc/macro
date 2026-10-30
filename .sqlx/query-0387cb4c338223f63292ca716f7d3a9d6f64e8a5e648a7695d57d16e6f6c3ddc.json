@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO whatsapp_store_value (account_id, store, key, nonce, value)\n            SELECT $1, $2, entry.key, entry.nonce, entry.value\n            FROM UNNEST($3::text[], $4::bytea[], $5::bytea[]) AS entry(key, nonce, value)\n            ON CONFLICT (account_id, store, key) DO UPDATE SET\n                nonce = EXCLUDED.nonce,\n                value = EXCLUDED.value,\n                updated_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray",
+        "ByteaArray",
+        "ByteaArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0387cb4c338223f63292ca716f7d3a9d6f64e8a5e648a7695d57d16e6f6c3ddc"
+}

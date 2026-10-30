@@ -65,25 +65,19 @@ fn narrower_scopes_from_earlier_settings_are_widened() {
 #[test]
 fn failed_setups_wait_for_the_retry_delay_but_reconnects_restart_at_once() {
     let now = chrono::Utc::now();
-    let failed = |error: &str, age: chrono::Duration| SyncState {
+    let failed = |issue: SyncIssue, age: chrono::Duration| SyncState {
         enabled: false,
         has_endpoint: false,
         started_at: now - age,
-        last_error: Some(error.into()),
+        last_error: Some(issue),
         ..state("a", "apn_a")
     };
     let accounts = [(user("a"), "apn_a".into())];
-    let recent = failed(
-        "Could not register Granola webhook",
-        chrono::Duration::minutes(5),
-    );
+    let recent = failed(SyncIssue::SetupFailed, chrono::Duration::minutes(5));
     assert!(plan(&accounts, &[recent], now).start.is_empty());
-    let old = failed(
-        "Could not register Granola webhook",
-        chrono::Duration::hours(2),
-    );
+    let old = failed(SyncIssue::SetupFailed, chrono::Duration::hours(2));
     assert_eq!(plan(&accounts, &[old], now).start.len(), 1);
-    let stopped = failed(STOPPED, chrono::Duration::minutes(1));
+    let stopped = failed(SyncIssue::Stopped, chrono::Duration::minutes(1));
     assert_eq!(plan(&accounts, &[stopped], now).start.len(), 1);
 }
 

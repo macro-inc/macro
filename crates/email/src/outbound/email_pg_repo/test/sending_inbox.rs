@@ -56,6 +56,8 @@ fn reply_to(replying_to_id: Uuid) -> SendingInboxRequest<'static> {
 
 fn reply_input(replying_to_id: Uuid) -> CreateDraftInput {
     CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: 0,
         db_id: None,
         provider_id: None,
         replying_to_id: Some(replying_to_id),

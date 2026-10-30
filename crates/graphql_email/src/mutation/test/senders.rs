@@ -44,16 +44,21 @@ async fn send_returns_confirmed_identity_without_fallible_post_commit_hydration(
     });
     let draft_id = Uuid::now_v7();
     let inbox_id = Uuid::now_v7();
-    let response = schema(service.clone()).execute(format!(
-        r#"mutation {{ sendEmailMessage(input: {{ draft: {{
-            draftId: "{draft_id}", linkId: "{inbox_id}", subject: "Alias", senderEmail: "resident@example.com"
-        }}, includeSignature: false }}) {{ messageId threadId linkId }} }}"#
-    )).await;
+    let response = schema(service.clone()).execute(
+        async_graphql::Request::new(
+            "mutation LegacySend($input: SendEmailMessageInput!) { sendEmailMessage(input: $input) { messageId threadId linkId sendTime } }",
+        ).variables(async_graphql::Variables::from_json(serde_json::json!({
+            "input": {"draft": {
+                "draftId": draft_id.to_string(), "linkId": inbox_id.to_string(),
+                "subject": "Alias", "senderEmail": "resident@example.com"
+            }, "includeSignature": false}
+        }))),
+    ).await;
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     assert_eq!(
         response.data.into_json().unwrap()["sendEmailMessage"],
         serde_json::json!({
-            "messageId": draft_id.to_string(), "threadId": TEST_THREAD_ID.to_string(), "linkId": inbox_id.to_string(),
+            "messageId": draft_id.to_string(), "threadId": TEST_THREAD_ID.to_string(), "linkId": inbox_id.to_string(), "sendTime": null,
         })
     );
     assert_eq!(

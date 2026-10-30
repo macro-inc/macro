@@ -14,6 +14,53 @@ use agent_client_protocol::schema::v1::ToolKind;
 use serde_json::{Value, json};
 
 #[test]
+fn code_activity_survives_native_and_mcp_json_output() {
+    let receipt = json!({
+        "executionId": "019a0000-0000-7000-8000-000000000001",
+        "status": "succeeded",
+        "activity": [{"id": 1, "label": "Search documents", "status": "completed"}]
+    });
+    for (namespace, output) in [
+        ("macro", receipt.clone()),
+        (
+            "claudeCode",
+            json!([{"type": "text", "text": receipt.to_string()}]),
+        ),
+    ] {
+        let frames = [
+            json!({"direction": "to_runtime", "content": {
+                "type": "acp", "jsonrpc": "2.0", "id": "prompt-1", "method": "session/prompt",
+                "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "Find documents"}]}
+            }}),
+            json!({"direction": "to_server", "content": {
+                "type": "acp", "jsonrpc": "2.0", "method": "session/update",
+                "params": {"sessionId": "s1", "update": {
+                    "sessionUpdate": "tool_call", "toolCallId": "code-1", "title": "Execute code",
+                    "kind": "execute", "status": "completed", "rawInput": {}, "rawOutput": output,
+                    "_meta": {(namespace): {"toolName": "mcp__macro_internal__ExecuteCode"}}
+                }}
+            }}),
+            json!({"direction": "to_server", "content": {
+                "type": "acp", "jsonrpc": "2.0", "id": "prompt-1", "result": {"stopReason": "end_turn"}
+            }}),
+        ];
+        let recording = frames
+            .iter()
+            .map(Value::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        let messages = fold(parse_log(&recording));
+        let agent = messages
+            .iter()
+            .find(|message| message.author == crate::domain::model::Author::Agent)
+            .unwrap();
+        let segments = crate::domain::model::segments(&agent.parts, agent.stop.is_some());
+        assert_eq!(segments[0].rows[0].label, "Search documents", "{namespace}");
+        assert_eq!(segments[0].rows[0].id, "code-1:1");
+    }
+}
+
+#[test]
 fn macro_mcp_calls_fold_to_macro_and_user_tool_details() {
     let messages = fold(parse_log(MACRO_MCP));
     let agent = messages

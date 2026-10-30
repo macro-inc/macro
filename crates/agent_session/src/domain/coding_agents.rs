@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::model::AgentSessionId;
+use super::model::{AgentSessionId, SessionSource, SessionVisibility};
 use super::routines::{
     PrepareRoutineSession, PromptRoutineSession, RoutineSessionAction, RoutineSessionError,
     RoutineSessions, ValidateRoutineSession,
@@ -223,8 +223,11 @@ impl<Directory: CodingAgentDirectory, Sessions: RoutineSessions>
                         owner: command.user_id.clone(),
                         bot_id,
                         model: None,
+                        mcp_servers: Vec::new(),
                     },
                     session_id,
+                    source: SessionSource::Agent,
+                    visibility: SessionVisibility::Listed,
                 })
                 .await
                 .map_err(failed)?;

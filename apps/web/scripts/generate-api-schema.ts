@@ -14,11 +14,11 @@ import { type Service, services } from "./services";
 const elapsed = (start: number) =>
 	`${((performance.now() - start) / 1000).toFixed(1)}s`;
 
-// Map service names to Rust crate names
+// Map API names to their OpenAPI binary prefixes (several share the harness crate).
 const serviceToCrate: Record<string, string> = {
 	"cloud-storage": "document_storage_service",
 	"properties-service": "properties_service",
-	"document-cognition": "document_cognition_service",
+	"document-cognition": "agent_harness_cognition",
 	"auth-service": "authentication_service",
 	"notification-service": "notification_service",
 	"static-files": "static_file_service",
@@ -174,6 +174,10 @@ const processService = async (
 		stepStart = performance.now();
 		await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
 		console.log(`[${service.name}] Orval finished (${elapsed(stepStart)})`);
+
+		if (service.name === "notification-service") {
+			await $`bun ${path.resolve(import.meta.dirname, "generate-push-schema.ts")}`;
+		}
 
 		// Orval bug workaround: with input.filters, excluded schemas are not
 		// generated, but the schemas barrel still re-exports them. Drop barrel

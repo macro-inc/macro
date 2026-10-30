@@ -1,11 +1,11 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fireAndForget } from '@core/util/fireAndForget';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils/focus';
 import { Surface } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';
@@ -324,7 +324,7 @@ export const DateSelector = (props: DateSelectorProps) => {
 
       <DateSelectorPortalWrapper disabled={props.disablePortal}>
         <Combobox.Content
-          class="rounded-xl size-auto z-action-menu menu-open-animation glass w-full max-w-70 text-ink bg-menu-glass"
+          class="menu-surface size-auto z-action-menu menu-open-animation w-full max-w-70"
           as={Surface}
           depth={3}
           on:keydown={handleKeyDown}

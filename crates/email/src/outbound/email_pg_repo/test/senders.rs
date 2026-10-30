@@ -1,5 +1,6 @@
 use super::*;
 
+mod durable;
 mod send_window;
 use crate::domain::{
     models::{ContactInfo, CreateDraftInput, EmailErr, Link},
@@ -31,6 +32,8 @@ fn actor() -> MacroUserIdStr<'static> {
 
 fn draft() -> CreateDraftInput {
     CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: 0,
         sender_email: Some(EmailStr::try_from("resident@test.com".to_owned()).unwrap()),
         db_id: Some(macro_uuid::generate_uuid_v7()),
         provider_id: None,

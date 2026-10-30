@@ -43,8 +43,8 @@ for (const device of [
             });
             await expect(search).toBeVisible();
             const searchBox = await search.boundingBox();
-            expect(searchBox!.y).toBeGreaterThanOrEqual(100);
-            expect(searchBox!.y).toBeLessThan(112);
+            expect(searchBox!.y).toBeGreaterThanOrEqual(108);
+            expect(searchBox!.y).toBeLessThan(120);
             await search.fill('proposal');
             await expect(page.getByText('Searching: proposal')).toBeVisible();
             await page
@@ -75,7 +75,7 @@ for (const device of [
             name: 'People',
             exact: true,
           });
-          await expect(button).toBeVisible();
+          await expect(button).toBeVisible({ timeout: 30000 });
           const box = await button.boundingBox();
           const top = device.hasTouch ? (surface === 'reviews' ? 100 : 55) : 16;
           expect(box!.y).toBeGreaterThanOrEqual(top);

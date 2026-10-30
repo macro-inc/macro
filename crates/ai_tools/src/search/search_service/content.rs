@@ -161,6 +161,7 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
             filters: content_filters(&self.entity_types, &self.agent_session_ids, base_filters),
             search_on: models_search::SearchOn::Content,
             include_crm: false,
+            calendar_event_scope: Default::default(),
             collapse: None,
         };
 

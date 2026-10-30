@@ -17,6 +17,8 @@ import {
   createSignal,
   For,
   on,
+  onCleanup,
+  onMount,
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -95,6 +97,7 @@ import { createGoalSeek } from '../primitives/create-goal-seek';
 import { createGridController } from '../primitives/create-grid-controller';
 import { createRangeMove } from '../primitives/create-range-move';
 import { createSheetActions } from '../primitives/create-sheet-actions';
+import type { SpreadsheetDownloadFormat } from '../primitives/create-spreadsheet-download';
 import type { SpreadsheetStore } from '../primitives/create-spreadsheet-store';
 import { createTableActions } from '../primitives/create-table-actions';
 import { createWorkbookActions } from '../primitives/create-workbook-actions';
@@ -113,6 +116,13 @@ export function SpreadsheetEditor(props: {
   ownsClipboard?: (event: ClipboardEvent) => boolean;
   onExport: (content: string) => void;
   onExportXlsx: (bytes: Uint8Array) => void;
+  /**
+   * Hands the toolbar's downloads to actions outside it, such as the file
+   * menu. The function returns false while the sheet can't be exported yet.
+   */
+  onDownloadReady?: (
+    download: (format: SpreadsheetDownloadFormat) => boolean
+  ) => void;
 }) {
   let gridElement: HTMLDivElement | undefined;
   let editorElement!: HTMLElement;
@@ -536,6 +546,17 @@ export function SpreadsheetEditor(props: {
         editor.setSelectionRange(editor.value.length, editor.value.length);
     } else focusGrid();
   };
+  const canExport = () =>
+    props.store.ready() &&
+    !calculation.busy() &&
+    !calculation.error() &&
+    !grid.editing() &&
+    !workbookActions.busy();
+  props.onDownloadReady?.((format) => {
+    if (!canExport()) return false;
+    command(format === 'xlsx' ? 'export-xlsx' : 'export-csv');
+    return true;
+  });
   const menuCommand = (action: SpreadsheetCommand) => {
     // Create a new focus owner only after the menu's focus trap has closed.
     if (
@@ -852,21 +873,38 @@ export function SpreadsheetEditor(props: {
     }
   }
 
+  // Capture so formula-bar / toolbar inputs that stopPropagation cannot open
+  // the browser find dialog; always route Cmd/Ctrl+F to the sheet find bar.
+  onMount(() => {
+    const onFindShortcut = (event: KeyboardEvent) => {
+      if (
+        !(event.metaKey || event.ctrlKey) ||
+        event.altKey ||
+        event.code !== 'KeyF'
+      )
+        return;
+      event.preventDefault();
+      event.stopPropagation();
+      command('find');
+      queueMicrotask(() => {
+        const input = editorElement.querySelector<HTMLInputElement>(
+          '[aria-label="Find in sheet"]'
+        );
+        input?.focus();
+        input?.select();
+      });
+    };
+    editorElement.addEventListener('keydown', onFindShortcut, true);
+    onCleanup(() =>
+      editorElement.removeEventListener('keydown', onFindShortcut, true)
+    );
+  });
+
   return (
     <section
       ref={editorElement}
       class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-panel text-ink"
       aria-label={`${props.name} spreadsheet`}
-      onKeyDown={(event) => {
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          event.key.toLowerCase() === 'f'
-        ) {
-          event.preventDefault();
-          event.stopPropagation();
-          command('find');
-        }
-      }}
     >
       <SpreadsheetDialog
         open={!!resize()}
@@ -910,7 +948,7 @@ export function SpreadsheetEditor(props: {
             >
               Cancel
             </Button>
-            <Button type="submit" variant="strong">
+            <Button type="submit" variant="secondary">
               Apply
             </Button>
           </div>
@@ -934,8 +972,10 @@ export function SpreadsheetEditor(props: {
           >
             <span>Calculation is unavailable: {error()}</span>
             <Button
+              variant="ghost"
+              aria-label="Retry calculation"
+              tooltip="Retry calculation"
               size="sm"
-              label="Retry calculation"
               onClick={() => {
                 calculation.retry();
               }}
@@ -1305,9 +1345,11 @@ export function SpreadsheetEditor(props: {
           when={editable() && props.store.rowCount() < SPREADSHEET_MAX_ROWS}
         >
           <Button
+            variant="ghost"
+            aria-label={`Add ${Math.min(100, SPREADSHEET_MAX_ROWS - props.store.rowCount())} rows`}
+            tooltip={`Add ${Math.min(100, SPREADSHEET_MAX_ROWS - props.store.rowCount())} rows`}
             size="sm"
             class="max-sm:hidden touch:min-h-[44px]"
-            label={`Add ${Math.min(100, SPREADSHEET_MAX_ROWS - props.store.rowCount())} rows`}
             onClick={() => {
               grid.commit();
               props.store.appendRows(100);
@@ -1323,9 +1365,11 @@ export function SpreadsheetEditor(props: {
           }
         >
           <Button
+            variant="ghost"
+            aria-label="Add 26 columns"
+            tooltip="Add 26 columns"
             size="sm"
             class="max-sm:hidden touch:min-h-[44px]"
-            label="Add 26 columns"
             onClick={() => {
               grid.commit();
               props.store.appendColumns(26);
@@ -1427,13 +1471,7 @@ export function SpreadsheetEditor(props: {
             readonly={
               !editable() || actions.pending() || !!workbookActions.busy()
             }
-            canExport={
-              props.store.ready() &&
-              !calculation.busy() &&
-              !calculation.error() &&
-              !grid.editing() &&
-              !workbookActions.busy()
-            }
+            canExport={canExport()}
             onCommand={menuCommand}
             onRestoreFocus={restoreEditorFocus}
           />

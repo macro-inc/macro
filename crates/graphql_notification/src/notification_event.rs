@@ -1,5 +1,12 @@
 //! Typed GraphQL output models for realtime notification event metadata.
 
+mod external_chat;
+use external_chat::GraphqlExternalChatMessageMetadata;
+
+/// Schema-only stub for released clients; remove after 2026-11-30.
+mod whatsapp_group_stub;
+use whatsapp_group_stub::GraphqlWhatsappGroupMessageMetadata;
+
 /// Project discussion notification metadata.
 mod initiative_discussion;
 pub use initiative_discussion::GraphqlInitiativeDiscussionMetadata;
@@ -7,6 +14,10 @@ pub use initiative_discussion::GraphqlInitiativeDiscussionMetadata;
 /// CRM company and contact discussion notification metadata.
 mod crm_discussion;
 pub use crm_discussion::GraphqlCrmDiscussionMetadata;
+
+/// Request to join a channel-shared calendar event notification metadata.
+mod calendar_join_request;
+pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
 
 use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
@@ -1234,6 +1245,8 @@ impl GraphqlAgentSessionMentionedMetadata {
 /// Typed GraphQL union containing every supported notification event payload.
 #[derive(Union)]
 pub enum GraphqlNotifEvent {
+    /// A new live external chat message.
+    ExternalChatMessage(GraphqlExternalChatMessageMetadata),
     /// Shared access workflow.
     EntityAccessGranted(GraphqlEntityAccessGrantedMetadata),
     /// Shared access workflow.
@@ -1294,11 +1307,18 @@ pub enum GraphqlNotifEvent {
     AgentSessionWaitingForInput(GraphqlAgentSessionWaitingForInputMetadata),
     /// Agent session mention metadata.
     AgentSessionMentioned(GraphqlAgentSessionMentionedMetadata),
+    /// Calendar event join request metadata.
+    CalendarEventJoinRequest(GraphqlCalendarEventJoinRequestMetadata),
+    /// Schema-only stub for released clients. Never returned.
+    WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
 }
 
 impl From<NotifEvent> for GraphqlNotifEvent {
     fn from(value: NotifEvent) -> Self {
         match value {
+            NotifEvent::ExternalChatMessage(metadata) => {
+                Self::ExternalChatMessage(GraphqlExternalChatMessageMetadata(metadata))
+            }
             NotifEvent::ChannelMention(metadata) => {
                 Self::ChannelMention(GraphqlChannelMentionMetadata(metadata))
             }
@@ -1326,6 +1346,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
                 Self::InitiativeDiscussion(metadata.into())
             }
             NotifEvent::CrmDiscussion(metadata) => Self::CrmDiscussion(metadata.into()),
+            NotifEvent::CalendarEventJoinRequest(metadata) => {
+                Self::CalendarEventJoinRequest(metadata.into())
+            }
             NotifEvent::ChannelInvite(metadata) => {
                 Self::ChannelInvite(GraphqlChannelInviteMetadata(metadata))
             }

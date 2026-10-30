@@ -1,6 +1,7 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { FileDownloadHeader } from '@components/app/FileDownloadHeader';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -10,10 +11,12 @@ import {
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { getPermissions } from '@core/component/SharePermissions';
+import type { FileDownloadController } from '@core/util/createFileDownload';
 import { buildEntityData } from '@entity';
 import { useItemRawName } from '@queries/preview';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
+import { Show } from 'solid-js';
 
 export function FileDetailBreadcrumbItem(props: {
   value: string;
@@ -24,6 +27,7 @@ export function FileDetailBreadcrumbItem(props: {
   blockType: BlockName | BlockAlias;
   fallbackName?: string;
   operations?: FileOperation[];
+  download?: FileDownloadController;
   onClose: () => void;
   onDuplicate: (id: string, name: string) => void;
 }) {
@@ -62,51 +66,56 @@ export function FileDetailBreadcrumbItem(props: {
   });
 
   return (
-    <ViewBreadcrumbs.Item
-      value={props.value}
-      metadata={props.metadata}
-      order={props.order}
-    >
-      {(item) => (
-        <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-          <DocumentTitleHoverCard
-            documentId={documentId()}
-            name={documentName()}
-            ownerId={props.documentMetadata.owner}
-            createdAt={props.documentMetadata.createdAt}
-            updatedAt={props.documentMetadata.updatedAt}
-          >
-            <ViewBreadcrumbs.Button
-              class="gap-1.5"
-              isActive={item.isActive()}
-              onClick={item.onSelect}
-            >
-              <EntityIcon
-                targetType={
-                  props.blockType === 'unknown'
-                    ? (props.documentMetadata.fileType ?? props.blockType)
-                    : props.blockType
-                }
-                size="xs"
-                class="shrink-0"
-              />
-              <span class="truncate">{documentName()}</span>
-            </ViewBreadcrumbs.Button>
-          </DocumentTitleHoverCard>
-          <div class="shrink-0">
-            <SplitFileMenu
-              id={documentId()}
-              itemType="document"
+    <>
+      <Show when={props.download}>
+        {(download) => <FileDownloadHeader download={download()} />}
+      </Show>
+      <ViewBreadcrumbs.Item
+        value={props.value}
+        metadata={props.metadata}
+        order={props.order}
+      >
+        {(item) => (
+          <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
+            <DocumentTitleHoverCard
+              documentId={documentId()}
               name={documentName()}
-              ops={fileOperations()}
-              entityKind={props.blockType}
-              permissions={getPermissions(props.userAccessLevel)}
-              onDuplicate={(id) => props.onDuplicate(id, documentName())}
-              onDelete={props.onClose}
-            />
+              ownerId={props.documentMetadata.owner}
+              createdAt={props.documentMetadata.createdAt}
+              updatedAt={props.documentMetadata.updatedAt}
+            >
+              <ViewBreadcrumbs.Button
+                class="gap-1.5"
+                isActive={item.isActive()}
+                onClick={item.onSelect}
+              >
+                <EntityIcon
+                  targetType={
+                    props.blockType === 'unknown'
+                      ? (props.documentMetadata.fileType ?? props.blockType)
+                      : props.blockType
+                  }
+                  size="xs"
+                  class="shrink-0"
+                />
+                <span class="truncate">{documentName()}</span>
+              </ViewBreadcrumbs.Button>
+            </DocumentTitleHoverCard>
+            <div class="shrink-0">
+              <SplitFileMenu
+                id={documentId()}
+                itemType="document"
+                name={documentName()}
+                ops={fileOperations()}
+                entityKind={props.blockType}
+                permissions={getPermissions(props.userAccessLevel)}
+                onDuplicate={(id) => props.onDuplicate(id, documentName())}
+                onDelete={props.onClose}
+              />
+            </div>
           </div>
-        </div>
-      )}
-    </ViewBreadcrumbs.Item>
+        )}
+      </ViewBreadcrumbs.Item>
+    </>
   );
 }

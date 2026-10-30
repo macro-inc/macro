@@ -34,6 +34,8 @@ invites, and the colleague-joined email.
 
 ## Recipes
 
+- DM message emails include a stable message ID in the rate-limit key, so retries are suppressed without dropping subsequent messages. Ordinary channel invitations retain their sender/channel limit.
+
 - Add a new invite email: new metadata type in `src/<name>.rs` deriving
   `Template` → `templates/<name>.html` → `pub use` it from `src/lib.rs`.
 - Change an email's markup: `templates/<name>.html` → preview with
@@ -43,6 +45,24 @@ invites, and the colleague-joined email.
 ## Checks
 
 - `cargo test -p invite_email`.
+
+## Gotchas
+
+- The team invite email promises what joining gives (`InviteePlan`). The
+  sender, `teams`' `invite_users_to_team`, derives it the way `join_team`
+  grants entitlements: Pro only from an enterprise team or one with a
+  subscription. Never let the copy promise more than the join grants.
+- `InviteToTeamMetadata.reminder` marks the reminder emails `teams` sends for
+  unanswered invites; it only prefixes the subject with "Reminder:". A
+  reminder shares the invite's rate-limit bucket (one email per invite per
+  hour), so reminders must stay more than an hour apart. Manual resends wait
+  out the same window: `teams` reads it from
+  `InviteToTeamMetadata::rate_limit_config()` (`invite_resend_interval`), and
+  the web app's **Resend** mirrors it in `teamInviteResend.ts`.
+- Metadata is queued and stored as JSON, and the notification service
+  publishes it in its OpenAPI spec. A new field needs `#[serde(default)]` so
+  payloads queued before a deploy still deserialize, and a regenerated web
+  client (`bun run gen-api notification-service` in `apps/web`).
 
 ## Related
 

@@ -86,6 +86,22 @@ with outcome fields (`edit.mode`, `edit.ops_total`, `edit.blocked`,
 `edit.flush`. On the agent side, `crates/agent_session/src/domain/session/telemetry.rs`
 emits `invoke_agent` and `execute_tool` and propagates into the ACP agent.
 
+**GraphQL mutation queue (web → DSS `graphql.execute` → resolver).**
+`apps/web/src/lib/graphql-cache/exchange/mutation-queue-telemetry.ts` opens a
+`graphql.mutation_queue.attempt` span per claimed attempt that actually sends
+(`mutation_queue.item_id`, operation name, attempt count, queue depth, oldest
+item age, auth/online/websocket state, `mutation_queue.outcome`,
+`mutation_queue.failure`, `graphql.error.code`). Ages come from the durable
+enqueue time (`enqueuedAtMs`), so they survive reloads; when it is missing or
+skewed, `mutation_queue.age_known` is false and the age is omitted rather than
+zero. The runner sends inside it, so
+`dssGraphqlFetch` injects `traceparent` and the DSS `graphql.execute` span and
+the instrumented resolvers (`crates/graphql_entity_mutation`,
+`graphql_properties`, `graphql_notification`) join the same trace. A loop that
+can repeat forever reports counters instead of lines: each item logs a failure
+class once, and `graphql.mutation_queue.summary` flushes counters every five
+minutes only when something non-routine happened.
+
 ## Verify
 
 Run the flow on the local stack and find its trace (see the `live-debug`

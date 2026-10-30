@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH due AS (\n                SELECT ti.id\n                FROM team_invite ti\n                JOIN team t ON t.id = ti.team_id\n                WHERE ti.created_at > NOW() - INTERVAL '14 days'\n                  AND (\n                      (ti.reminders_sent = 0 AND ti.last_sent_at <= NOW() - INTERVAL '3 days')\n                      OR (ti.reminders_sent = 1 AND ti.last_sent_at <= NOW() - INTERVAL '4 days')\n                  )\n                  AND (t.enterprise OR t.paying OR t.subscription_id IS NULL)\n                  AND EXISTS (\n                      SELECT 1 FROM team_user tu\n                      WHERE tu.team_id = ti.team_id AND tu.user_id = ti.invited_by\n                  )\n                  AND NOT EXISTS (\n                      SELECT 1 FROM team_user tu\n                      WHERE tu.team_id = ti.team_id AND tu.user_id = 'macro|' || ti.email\n                  )\n                ORDER BY ti.created_at\n                LIMIT $1\n                FOR UPDATE OF ti SKIP LOCKED\n            )\n            UPDATE team_invite ti\n            SET reminders_sent = ti.reminders_sent + 1,\n                last_sent_at = NOW()\n            FROM due, team t\n            WHERE ti.id = due.id AND t.id = ti.team_id\n            RETURNING\n                ti.id,\n                ti.team_id,\n                t.name AS team_name,\n                ti.email,\n                ti.invited_by,\n                ti.reminders_sent,\n                t.enterprise,\n                t.paying,\n                t.subscription_id IS NOT NULL AS \"has_subscription!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "team_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "invited_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "reminders_sent",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 6,
+        "name": "enterprise",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "paying",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "has_subscription!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "24fac9cdfa3f780c4ca0454b7ac500ea58384a4e6fd0ae0ca389f61550d3aabb"
+}

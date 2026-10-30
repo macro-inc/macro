@@ -64,6 +64,13 @@ fn swagger_ui() -> Router {
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
+    let notes = calendar_events::inbound::notes_router::notes_router(
+        calendar_events::inbound::notes_router::NotesRouterState::new(
+            state.calendar_notes.clone(),
+            state.note_access.clone(),
+            state.authorization_state.clone(),
+        ),
+    );
     let team_settings = calendar_events::inbound::team_router::team_calendar_settings_router(
         calendar_events::inbound::team_router::CalendarTeamRouterState::new(
             state.calendar_team_service.clone(),
@@ -74,6 +81,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
     // provider write would never be reflected locally.
     if state.config.calendar_sync_enabled {
         calendar_watch::router()
+            .merge(notes)
             .merge(team_settings)
             .nest(
                 "/scheduling",
@@ -96,6 +104,6 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 state.authorization_state.clone(),
             )))
     } else {
-        calendar_watch::router().merge(team_settings)
+        calendar_watch::router().merge(team_settings).merge(notes)
     }
 }

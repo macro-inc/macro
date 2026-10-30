@@ -17,15 +17,18 @@ import {
   Show,
 } from 'solid-js';
 import { match } from 'ts-pattern';
+import { SessionEventRow } from '../components/session-event-row';
 import { useAgentSession } from '../context/AgentSessionContext';
 import type { AgentMessageTarget } from '../core/search-location';
 import { isLiveTurn, liveTurnMessage } from '../state/live-turn';
+import { timelineNotifications } from '../state/session-notifications';
 import { WorkingLine } from '../ui/WorkingLine';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
 export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
-  const { messages, quoteSelection, sessionId, turn } = useAgentSession();
+  const { messages, metadata, quoteSelection, sessionId, turn, userId } =
+    useAgentSession();
   // At most one turn runs, and the fold's `turn` is the one word on whether
   // it does - so which message shimmers is decided here, once, not by each
   // message from its own `stop` (see `state/live-turn`). A speculated stop
@@ -70,10 +73,33 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
     match(turn())
       .with('starting', () => 'Sending')
       .otherwise(() => 'Working');
-  const keys = createMemo(() => [
-    ...messageById().keys(),
-    ...(showsWorking() ? [workingKey()] : []),
-  ]);
+  const eventsById = createMemo(
+    () =>
+      new Map(
+        timelineNotifications(messages(), metadata()?.notifications ?? []).map(
+          (event) => [`notification:${event.id}`, event]
+        )
+      )
+  );
+  const keys = createMemo(() => {
+    const rows = [
+      ...[...messageById()].map(([key, message]) => ({
+        key,
+        turn: message.turn,
+        event: false,
+      })),
+      ...[...eventsById()].map(([key, event]) => ({
+        key,
+        turn: event.turn,
+        event: true,
+      })),
+    ];
+    rows.sort((a, b) => a.turn - b.turn || Number(b.event) - Number(a.event));
+    return [
+      ...rows.map((row) => row.key),
+      ...(showsWorking() ? [workingKey()] : []),
+    ];
+  });
   let positionedTarget: AgentMessageTarget | undefined;
   // Navigation is an external effect. Wait for both log hydration and the
   // virtual list's layout; subsequent live folds must not repeat the jump.
@@ -148,6 +174,13 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
               </div>
             }
           >
+            <Show when={eventsById().get(id)}>
+              {(event) => (
+                <div class="macro-message-width mx-auto px-4 pb-2 min-w-0">
+                  <SessionEventRow event={event()} viewerId={userId()} />
+                </div>
+              )}
+            </Show>
             <Show when={messageById().get(id)}>
               {(message) => (
                 <div
@@ -169,11 +202,10 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
       </ThreadList>
       <ScrollToBottomOverlay
         scrollState={scrollState}
-        onScrollToBottom={() => {
+        onScrollToBottom={(behavior) => {
           setHighlightedId(undefined);
-          navigation()?.scrollToLatest();
+          navigation()?.scrollToLatest(behavior);
         }}
-        class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
       />
       <ReplyToSelection container={transcriptEl()} onReply={quoteSelection} />
     </div>

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
+use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, InboxChanges, TokenFreshness};
 
@@ -34,11 +34,11 @@ impl MailboxSyncClient for SyncClient {
 fn service(
     repository: SyncClient,
     calls: &super::super::test_support::CallLog,
-) -> EmailApiClientServiceImpl<SyncClient, FakeTokenSource, FakeRateLimiter> {
+) -> EmailApiClientServiceImpl<SyncClient, FakeTokenSource, FakeGate> {
     EmailApiClientServiceImpl::new(
         repository,
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     )
 }
 
@@ -56,8 +56,9 @@ async fn get_thread_count_uses_profile_quota_and_forwards_link_id() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(link_id, ApiOperationKind::GetProfile),
+            Call::Acquire(link_id, ApiOperationKind::GetProfile),
             Call::Token(link_id, TokenFreshness::Cached),
+            Call::Finish(link_id, None),
         ]
     );
 }
@@ -79,8 +80,9 @@ async fn list_changes_uses_changes_quota_and_forwards_cursor() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(link_id, ApiOperationKind::ListChanges),
+            Call::Acquire(link_id, ApiOperationKind::ListChanges),
             Call::Token(link_id, TokenFreshness::Cached),
+            Call::Finish(link_id, None),
         ]
     );
 }

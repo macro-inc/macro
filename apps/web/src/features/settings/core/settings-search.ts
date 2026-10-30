@@ -15,6 +15,8 @@ type Setting = {
 export type SettingsSearchResult = Setting & {
   id: string;
   page: SettingsTabItem;
+  /** The nav group holding the page, so `General` reads as `Team · General`. */
+  group: string;
 };
 
 // Targets are the visible SettingsSection/SettingsRow labels, not DOM selectors.
@@ -22,15 +24,15 @@ export type SettingsSearchResult = Setting & {
 const SETTINGS: Setting[] = [
   {
     tab: 'CRM',
-    title: 'Deal stages',
-    target: 'Deal stages',
-    keywords: 'pipeline reorder status closed stages sales',
+    title: 'Stages',
+    target: 'Stages',
+    keywords: 'company deal pipeline reorder rename status sales',
   },
   {
     tab: 'CRM',
-    title: 'Enable CRM',
-    target: 'General',
-    keywords: 'disable customers contacts companies team',
+    title: 'Team CRM',
+    target: 'Team CRM',
+    keywords: 'enable disable customers contacts companies team',
   },
   {
     tab: 'Shortcuts',
@@ -79,6 +81,12 @@ const SETTINGS: Setting[] = [
       'google gmail connect accounts visibility show hide color colour subcalendar',
   },
   {
+    tab: 'Calendar',
+    title: 'Next meeting countdown',
+    target: 'Next meeting countdown',
+    keywords: 'sidebar badge upcoming meeting minutes now timer hide',
+  },
+  {
     tab: 'Agents',
     title: 'Team agents',
     target: 'Team agents',
@@ -94,6 +102,12 @@ const SETTINGS: Setting[] = [
     tab: 'Harness',
     title: 'Agent runtimes and credentials',
     keywords: 'cursor harness runtime api key provider pairing daemon',
+  },
+  {
+    tab: 'Harness',
+    title: 'Run agents on this computer',
+    keywords:
+      'local runtime macrod this computer machine claude code codex desktop daemon',
   },
   {
     tab: 'Account',
@@ -124,6 +138,15 @@ const SETTINGS: Setting[] = [
     title: 'Monochrome icons',
     target: 'Monochrome icons',
     keywords: 'color colourful sidebar',
+  },
+  {
+    tab: 'Appearance',
+    title: 'Interface language',
+    target: 'Language',
+    // The word for "language" in each interface language, so people can find
+    // it in their own.
+    keywords:
+      'translate translation locale team personal sprache langue idioma lingua taal språk sprog kieli język язык 言語 언어 语言 語言 भाषा bahasa ngôn ngữ ภาษา',
   },
   {
     tab: 'Appearance',
@@ -174,25 +197,29 @@ const SETTINGS: Setting[] = [
     keywords: 'workspace slug rename',
   },
   {
-    tab: 'Team',
-    title: 'Members',
-    target: 'Members',
-    keywords: 'invite users role permissions remove workspace team',
+    tab: 'Team Members',
+    title: 'Invite people',
+    keywords: 'invite add teammates coworkers colleagues email join team',
   },
   {
-    tab: 'Team',
+    tab: 'Team Members',
+    title: 'Member roles',
+    keywords: 'admin owner permissions remove users team',
+  },
+  {
+    tab: 'Team Members',
     title: 'Pending invites',
     target: 'Pending invites',
-    keywords: 'invitations cancel resend',
+    keywords: 'invitations cancel resend copy link team',
   },
   {
-    tab: 'Team',
+    tab: 'Team Members',
     title: 'Auto-join on domain',
     target: 'Auto-join on domain',
     keywords: 'email workspace membership automatic',
   },
   {
-    tab: 'Team',
+    tab: 'Team Members',
     title: 'Members can invite',
     target: 'Members can invite',
     keywords: 'permissions invitation',
@@ -202,12 +229,6 @@ const SETTINGS: Setting[] = [
     title: 'Default link sharing',
     target: 'Default link sharing',
     keywords: 'access public private permission',
-  },
-  {
-    tab: 'Team',
-    title: 'Team GitHub connection',
-    target: 'Connections',
-    keywords: 'repository app install integration',
   },
   {
     tab: 'Tags',
@@ -221,16 +242,78 @@ const SETTINGS: Setting[] = [
     target: 'Team',
     keywords: 'shared label workspace category',
   },
+  // Integrations rows are targeted by name.
   {
     tab: 'Connected',
-    title: 'GitHub account',
-    target: 'Accounts',
-    keywords: 'connect integration repository pull request',
+    title: 'Gmail',
+    target: 'Gmail',
+    keywords: 'email google workspace inbox calendar connect account',
   },
   {
-    tab: 'Connections',
+    tab: 'Connected',
+    title: 'Outlook',
+    target: 'Outlook',
+    keywords: 'email microsoft 365 inbox calendar connect account',
+  },
+  {
+    tab: 'Connected',
+    title: 'GitHub',
+    target: 'GitHub',
+    keywords:
+      'connect integration repository pull request code app install team',
+  },
+  {
+    tab: 'Connected',
+    title: 'Slack',
+    target: 'Slack',
+    keywords: 'chat messages channels agent tools mcp connect',
+  },
+  {
+    tab: 'Connected',
+    title: 'Import from Slack',
+    target: 'Slack',
+    keywords: 'slack export channels messages history team',
+  },
+  {
+    tab: 'Connected',
+    title: 'Linear',
+    target: 'Linear',
+    keywords: 'issues tasks projects agent tools mcp connect import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Notion',
+    target: 'Notion',
+    keywords: 'pages wikis docs agent tools mcp connect import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Granola',
+    target: 'Granola',
+    keywords: 'meetings notes transcripts calls import',
+  },
+  {
+    tab: 'Connected',
+    title: 'Claude Code, Codex, and ChatGPT',
+    target: 'Claude Code, Codex, and ChatGPT',
+    keywords: 'ai apps mcp ide setup',
+  },
+  {
+    tab: 'Connected',
+    title: 'Coding agents on your computer',
+    target: 'Coding agents on your computer',
+    keywords: 'local harness hermes openclaw desktop stream sessions',
+  },
+  {
+    tab: 'Connected',
+    title: 'Custom MCP server',
+    keywords: 'add mcp server url integration',
+  },
+  {
+    tab: 'Connected',
     title: 'Agent apps and tools',
-    keywords: 'mcp integration connect external services',
+    keywords:
+      'mcp integration connect external services catalog airtable trello jira asana google drive dropbox',
   },
   {
     tab: 'Agent',
@@ -249,18 +332,22 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Mobile App',
-    title: 'Get the mobile app',
-    keywords: 'download phone ios android qr code',
+    title: 'Mobile app version and download',
+    keywords: 'download phone ios android qr code version build bundle',
   },
 ];
 
+/**
+ * Lowercased words with Latin accents stripped. Any script counts, so a label
+ * in the interface language (German, Japanese, Hindi) is searchable too.
+ */
 function words(value: string): string[] {
   return (
     value
       .toLowerCase()
       .normalize('NFKD')
       .replace(/[\u0300-\u036f]/g, '')
-      .match(/[a-z0-9]+/g) ?? []
+      .match(/[\p{L}\p{M}\p{N}]+/gu) ?? []
   );
 }
 
@@ -301,14 +388,17 @@ export function searchSettings(
 ): SettingsSearchResult[] {
   const tokens = words(query);
   if (!tokens.length) return [];
-  const pages = groups.flatMap((group) => group.items);
-  const entries = pages.flatMap((page) => [
+  const pages = groups.flatMap((group) =>
+    group.items.map((page) => ({ page, group: group.label }))
+  );
+  const entries = pages.flatMap(({ page, group }) => [
     {
       id: page.tab,
       tab: page.tab,
       title: page.label,
       keywords: page.keywords.join(' '),
       page,
+      group,
     },
     ...SETTINGS.filter(
       (setting) =>
@@ -320,12 +410,16 @@ export function searchSettings(
       target: settingsTarget(setting.target),
       id: `${page.tab}:${setting.title}`,
       page,
+      group,
     })),
   ]);
   return entries
     .map((entry) => {
       const titleWords = words(entry.title);
-      const otherWords = words(`${entry.keywords} ${entry.page.label}`);
+      // The English label keeps English searches working in any language.
+      const otherWords = words(
+        `${entry.keywords} ${entry.page.label} ${entry.page.englishLabel}`
+      );
       const scores = tokens.map((token) =>
         Math.max(
           0,

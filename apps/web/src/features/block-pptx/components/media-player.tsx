@@ -5,8 +5,8 @@
  */
 
 import type { MediaOutline } from '@core/pptx-engine/types';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import Play from '@phosphor-fill/play-fill.svg';
+import Play from '@icon/system/fill/play-fill.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import { createResource, createSignal, Match, Show, Switch } from 'solid-js';
 import { playableUrl } from '../core/media';
 import type { MediaUrls } from '../primitives/create-media-urls';

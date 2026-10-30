@@ -73,10 +73,16 @@ impl NpmAdapter {
     /// version in the path is what makes an existing installation trustworthy
     /// without inspecting it.
     fn bin_path(&self) -> PathBuf {
+        // npm writes a `.cmd` shim on Windows; the extensionless file beside
+        // it is a shell script Windows cannot launch.
+        #[cfg(windows)]
+        let bin = format!("{}.cmd", self.bin);
+        #[cfg(not(windows))]
+        let bin = self.bin;
         Path::new(self.package)
             .join("node_modules")
             .join(".bin")
-            .join(self.bin)
+            .join(bin)
     }
 }
 
@@ -102,7 +108,7 @@ impl AdapterInstall {
         if self.is_installed() {
             return Ok(());
         }
-        let output = tokio::process::Command::new("npm")
+        let output = tokio::process::Command::new(crate::executable::launchable(Path::new("npm")))
             .args(["install", "--no-audit", "--no-fund", "--loglevel=error"])
             .arg("--prefix")
             .arg(&self.prefix)

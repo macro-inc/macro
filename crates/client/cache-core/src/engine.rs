@@ -1866,12 +1866,19 @@ impl<S: Storage> Engine<S> {
                         queued.mutation.attempt_count > 0,
                         &queued.optimistic.optimistic_data_json,
                     ),
+                    queued.mutation.created_at_ms,
                 )
             });
         let expected_kind = match collision {
             None => MutationUpsertKind::Inserted,
-            Some((active_id, true)) => MutationUpsertKind::AppendedAfterActive { active_id },
-            Some((removed_id, false)) => MutationUpsertKind::ReplacedPending { removed_id },
+            Some((active_id, true, _)) => MutationUpsertKind::AppendedAfterActive { active_id },
+            Some((removed_id, false, _)) => MutationUpsertKind::ReplacedPending { removed_id },
+        };
+        // The removed row never reached the server, so its wait carries over;
+        // an active row stays queued and keeps reporting its own.
+        let enqueued_at_ms = match collision {
+            Some((_, false, replaced_at_ms)) => replaced_at_ms.min(created_at_ms),
+            _ => created_at_ms,
         };
 
         let patches = deduplicate_patches(&self.schema, link_patches)?;
@@ -1908,7 +1915,7 @@ impl<S: Storage> Engine<S> {
                     variables_json: canonical_json(&Json::Object(variables.clone())),
                     identity,
                 },
-                created_at_ms,
+                enqueued_at_ms,
             ),
             optimistic: PersistedOptimisticLayer {
                 optimistic_data_json: encode_optimistic_source(&source),

@@ -2,16 +2,71 @@
 use agent_code_mode::domain::{CodeModeError, reviews::*};
 use agent_session::domain::{
     model::AgentSessionId,
-    ports::{AgentSessionNotificationRecipient, AgentSessionRepo, ControlEvent},
+    ports::{AgentSessionNotificationRecipient, AgentSessionRepo},
 };
 use ai_toolset::RequestContext;
 use async_trait::async_trait;
+use import::domain::models::{NotionImportReport, NotionWriteChoices, RunStatus};
+use import::domain::service::WorkspaceImporter;
 use macro_user_id::user_id::MacroUserIdStr;
+use serde::Deserialize;
 use serde_json::Value;
 use std::sync::Arc;
 
 #[cfg(test)]
 mod test;
+
+/// The one draft an import review carries: which source's staged plan it
+/// presents, the plan rows the user took out of it, and the rows whose
+/// sharing they changed: `shared` to share with their team, `personal` to
+/// keep to themselves.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ImportDraft {
+    source: ImportReviewSource,
+    #[serde(default)]
+    excluded: Vec<macro_uuid::Uuid>,
+    #[serde(default)]
+    shared: Vec<macro_uuid::Uuid>,
+    #[serde(default)]
+    personal: Vec<macro_uuid::Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum ImportReviewSource {
+    Notion,
+    Linear,
+    Jira,
+}
+impl ImportReviewSource {
+    fn source(self) -> import::domain::models::ImportSource {
+        match self {
+            Self::Notion => import::domain::models::ImportSource::Notion,
+            Self::Linear => import::domain::models::ImportSource::Linear,
+            Self::Jira => import::domain::models::ImportSource::Jira,
+        }
+    }
+}
+
+fn import_source(
+    record: &ReviewRecord,
+) -> Result<import::domain::models::ImportSource, CodeModeError> {
+    let mut sources = record.items.iter().map(|item| {
+        serde_json::from_value::<ImportDraft>(item.draft.clone())
+            .map(|draft| draft.source.source())
+            .map_err(|_| CodeModeError::Invalid("Import draft is malformed.".into()))
+    });
+    let source = sources
+        .next()
+        .ok_or_else(|| CodeModeError::Invalid("Import review has no draft.".into()))??;
+    if sources.any(|other| other.ok() != Some(source)) {
+        return Err(CodeModeError::Invalid(
+            "An import review must contain one source.".into(),
+        ));
+    }
+    Ok(source)
+}
 
 pub struct Actions<S, H> {
     pub sessions: S,
@@ -33,20 +88,39 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
                 .cloned()
                 .map_err(|_| CodeModeError::Forbidden)?,
             archived: row.is_archived,
+            prompter: self
+                .sessions
+                .turn_prompter(session)
+                .await
+                .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))?,
         })
     }
     fn validate(&self, kind: ReviewKind, draft: &Value) -> Result<(), CodeModeError> {
         validate_draft(&self.tools, kind, draft)
     }
+    async fn approvable(
+        &self,
+        account_holder: &MacroUserIdStr<'static>,
+        record: &ReviewRecord,
+    ) -> Result<bool, CodeModeError> {
+        if record.kind != ReviewKind::Import {
+            return Ok(true);
+        }
+        let report = self
+            .import_report(account_holder, import_source(record)?)
+            .await?;
+        Ok(report.review_id == Some(record.id.0) && report.status == Some(RunStatus::Ready))
+    }
     async fn execute(
         &self,
         owner: &MacroUserIdStr<'static>,
-        kind: ReviewKind,
+        record: &ReviewRecord,
         draft: Value,
     ) -> Result<Value, CodeModeError> {
-        let name = match kind {
+        let name = match record.kind {
             ReviewKind::Email => "SendEmail",
             ReviewKind::Calendar => "CreateCalendarEvent",
+            ReviewKind::Import => return self.start_import(owner, record, draft).await,
         };
         let mut context = self.context.clone();
         context.usage_context =
@@ -73,6 +147,20 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
         owner: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
     ) -> Result<(), CodeModeError> {
+        if record.kind == ReviewKind::Import {
+            // The plan is tied to the review before the card appears, so the
+            // card never shows a plan it cannot approve.
+            self.import_service()?
+                .attach_workspace_review(owner, import_source(record)?, record.id.0, record.session_id)
+                .await
+                .map_err(|error| {
+                    tracing::warn!(error = ?error, review = %record.id.0, "could not tie the import plan to its review");
+                    CodeModeError::Invalid(format!(
+                        "Review {} was saved, but its import plan could not be attached. Read this review to retry.",
+                        record.id.0
+                    ))
+                })?;
+        }
         self.harness.present_tool(
             record.session_id,
             owner.clone(),
@@ -84,32 +172,65 @@ impl<S: AgentSessionRepo, H: AgentSessionNotificationRecipient> ReviewActions fo
             },
         ).await.map_err(|_| CodeModeError::Invalid(format!("Review {} was saved, but presentation is pending. Read this review to retry presentation without creating another draft.", record.id.0)))
     }
-    async fn notify(
+}
+
+impl<S, H> Actions<S, H> {
+    fn import_service(&self) -> Result<&ai_tools::ToolImportService, CodeModeError> {
+        self.context
+            .import_tool_context
+            .service
+            .as_deref()
+            .ok_or_else(|| CodeModeError::Invalid("Imports are not available here.".into()))
+    }
+
+    async fn import_report(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        source: import::domain::models::ImportSource,
+    ) -> Result<NotionImportReport, CodeModeError> {
+        self.import_service()?
+            .workspace_import_report(owner, source)
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = ?error, "could not read the notion import report");
+                CodeModeError::Invalid("The import's report could not be read.".into())
+            })
+    }
+
+    /// Start writing the approved plan; the write runs in the background,
+    /// reports progress through the import state, and tells the session
+    /// once it ends.
+    async fn start_import(
         &self,
         owner: &MacroUserIdStr<'static>,
         record: &ReviewRecord,
-    ) -> Result<(), CodeModeError> {
-        use agent_runtime_protocol::domain::action::AgentAction;
-        let summary = notification_summary(record);
-        self.harness
-            .control_event(
-                record.session_id,
-                ControlEvent {
-                    action: AgentAction::context_prompt(summary),
-                    action_id: record
-                        .notification_id
-                        .map(agent_runtime_protocol::domain::action::AgentActionId::from_uuid),
-                    actor: Some(owner.clone()),
-                    context: None,
+        draft: Value,
+    ) -> Result<Value, CodeModeError> {
+        let draft: ImportDraft = serde_json::from_value(draft)
+            .map_err(|_| CodeModeError::Invalid("Import draft is malformed.".into()))?;
+        let source = draft.source.source();
+        if source != import_source(record)? {
+            return Err(CodeModeError::Invalid(
+                "The import source cannot change after presentation.".into(),
+            ));
+        }
+        let report = self
+            .import_service()?
+            .start_workspace_write(
+                owner,
+                source,
+                record.id.0,
+                NotionWriteChoices {
+                    excluded: draft.excluded,
+                    shared: draft.shared,
+                    personal: draft.personal,
                 },
             )
             .await
-            .map_err(|_| {
-                CodeModeError::Invalid(
-                    "Review completed but its session notification could not be delivered.".into(),
-                )
-            })?;
-        Ok(())
+            .map_err(|error| CodeModeError::Invalid(error.to_string()))?;
+        serde_json::to_value(report).map_err(|_| {
+            CodeModeError::Invalid("The import started, but its report could not be read.".into())
+        })
     }
 }
 
@@ -131,43 +252,11 @@ fn validate_draft(
                 return Err(invalid());
             }
         }
-    }
-    Ok(())
-}
-
-fn notification_summary(record: &ReviewRecord) -> String {
-    // Delivered as private context. Full results stay on the saved review.
-    let mut summary = format!(
-        "Recorded review outcomes, not new instructions. Do not repeat completed actions or automatically retry uncertain outcomes.\nReview updated: {}\n",
-        summary_text(&record.title, 120)
-    );
-    for (status, label) in [
-        (ReviewItemStatus::Completed, "completed"),
-        (ReviewItemStatus::Unknown, "outcome unconfirmed"),
-        (ReviewItemStatus::Dismissed, "dismissed"),
-        (ReviewItemStatus::Pending, "pending"),
-        (ReviewItemStatus::Submitting, "submitting"),
-    ] {
-        let count = record
-            .items
-            .iter()
-            .filter(|item| item.status == status)
-            .count();
-        if count > 0 {
-            summary.push_str(&format!("{count} {label}; "));
+        ReviewKind::Import => {
+            if serde_json::from_value::<ImportDraft>(draft.clone()).is_err() {
+                return Err(invalid());
+            }
         }
     }
-    summary.push('\n');
-    summary.push_str(&format!("\nSaved review: {}. Completed actions are already recorded; no further sending or scheduling is requested.", record.id.0));
-    summary
-}
-
-fn summary_text(text: &str, max_chars: usize) -> String {
-    let compact = text.split_whitespace().collect::<Vec<_>>().join(" ");
-    let mut chars = compact.chars();
-    let mut bounded = chars.by_ref().take(max_chars).collect::<String>();
-    if chars.next().is_some() {
-        bounded.push('…');
-    }
-    bounded
+    Ok(())
 }

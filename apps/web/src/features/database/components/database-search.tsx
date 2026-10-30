@@ -1,6 +1,7 @@
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
-import { Button } from '@ui/components/Button';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
+import { ButtonGroup } from '@ui';
 import { InputGroup } from '@ui/components/InputGroup';
 import {
   createMemo,
@@ -68,19 +69,20 @@ export function DatabaseSearch(props: {
     <Show
       when={props.isOpen}
       fallback={
-        <Button
-          ref={searchButton}
-          type="button"
-          variant="ghost"
-          size="md"
-          square
-          label="Search"
-          aria-keyshortcuts="Control+F Meta+F"
-          tooltip="Search every table"
-          onClick={() => props.onOpen()}
-        >
-          <MagnifyingGlassIcon class="size-3.5" />
-        </Button>
+        <HeaderActionGroup label="Search">
+          <ButtonGroup.Button
+            aria-label="Search"
+            ref={searchButton}
+            type="button"
+            variant="ghost"
+            size="icon-md"
+            aria-keyshortcuts="Control+F Meta+F"
+            tooltip="Search every table"
+            onClick={() => props.onOpen()}
+          >
+            <MagnifyingGlassIcon class="size-4 touch:size-3.5" />
+          </ButtonGroup.Button>
+        </HeaderActionGroup>
       }
     >
       <div
@@ -135,9 +137,12 @@ export function DatabaseSearch(props: {
           />
           <InputGroup.Addon align="inline-end">
             <InputGroup.Button
+              aria-label={props.term ? 'Clear search' : 'Close search'}
+              tooltip={{
+                content: props.term ? 'Clear search' : 'Close search',
+                disabled: true,
+              }}
               size="icon-xs"
-              label={props.term ? 'Clear search' : 'Close search'}
-              tooltipDisabled
               onClick={() => {
                 if (props.term) changeTerm('');
                 else closeAndRestore();

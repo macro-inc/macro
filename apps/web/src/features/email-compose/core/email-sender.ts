@@ -10,6 +10,7 @@ export type SenderInbox = {
   email_address: string;
   displayName?: string;
   photo_url?: string | null;
+  provider?: 'GMAIL' | 'OUTLOOK';
   /** null means this inbox's provider lookup failed; undefined is not loaded. */
   sendAs?: readonly EmailSenderAddress[] | null;
 };
@@ -18,6 +19,7 @@ export type FromInboxOption = EmailSenderAddress & {
   id: string;
   inboxId: string;
   photo_url?: string | null;
+  provider?: 'GMAIL' | 'OUTLOOK';
   isAlias: boolean;
 };
 
@@ -43,6 +45,7 @@ export function fromInboxOptions(
           email_address: inbox.email_address,
           displayName: inbox.displayName,
           photo_url: inbox.photo_url,
+          provider: inbox.provider,
           isAlias: false,
         },
         ...aliases.map((alias) => ({
@@ -50,6 +53,7 @@ export function fromInboxOptions(
           id: `${inbox.id}:${alias.email_address.toLowerCase()}`,
           inboxId: inbox.id,
           photo_url: inbox.photo_url,
+          provider: inbox.provider,
           isAlias: true,
         })),
       ];

@@ -26,6 +26,7 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
     #[cfg(target_os = "android")]
     let builder = builder
         .invoke_handler(tauri::generate_handler![
+            android::configure_tracing,
             android::get_voip_token,
             android::end_active_call,
             android::get_pending_answered_call,
@@ -43,7 +44,9 @@ pub fn init<R: tauri::Runtime>() -> tauri::plugin::TauriPlugin<R> {
             android::set_call_drawer_channel_title,
             android::set_call_drawer_theme,
             android::set_participant_display_name,
-            android::switch_camera
+            android::switch_camera,
+            android::can_use_full_screen_intent,
+            android::open_full_screen_intent_settings
         ])
         .js_init_script(include_str!("android-init.js"));
     builder

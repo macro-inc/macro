@@ -198,7 +198,7 @@ export function PipedreamAiProvider(props: {
       icon={providerIcon(props.provider)}
       description={copy.outcome}
       onBack={view.closeProvider}
-      backLabel="Connections"
+      backLabel="Integrations"
     >
       <SettingsSection title="Macro AI">
         <SettingsCard>

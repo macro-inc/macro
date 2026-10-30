@@ -55,6 +55,12 @@ export const PASTE_TAG = 'paste';
 export const COLLABORATION_TAG = 'collaboration';
 
 /**
+ * Indicates that the update puts this peer's own selection back after a
+ * remote change, rather than the person moving it
+ */
+export const COLLAB_SELECTION_TAG = 'collab-selection';
+
+/**
  * Indicates that the update should skip collaborative sync
  */
 export const SKIP_COLLAB_TAG = 'skip-collab';

@@ -17,6 +17,7 @@ use std::error::Error;
 use std::fmt;
 use std::net::IpAddr;
 use std::sync::Arc;
+use tracing::Level;
 use url::Url;
 use utoipa::ToSchema;
 
@@ -135,6 +136,9 @@ impl IntoResponse for ProxyError {
             | Self::DnsLookupFailed(_) => StatusCode::BAD_REQUEST,
             Self::PrivateIp => StatusCode::FORBIDDEN,
             Self::UpstreamTimeout(_) => StatusCode::GATEWAY_TIMEOUT,
+            // Hosts refuse hotlinking or have dropped the image; neither is
+            // a gateway failure.
+            Self::UpstreamStatus(status) if status.is_client_error() => StatusCode::NOT_FOUND,
             Self::UpstreamConnect(_)
             | Self::UpstreamRedirect(_)
             | Self::UpstreamNetwork(_)
@@ -160,8 +164,10 @@ pub struct ProxyParams {
         (status = 401, description = "Unauthorized", body = ErrorResponse),
     ),
 )]
+// WARN: every refusal here is the URL's or its host's doing. A response that
+// fails to build is ours, and logs at ERROR where it happens.
 #[tracing::instrument(
-    err(Debug),
+    err(level = Level::WARN, Debug),
     skip(user, http_client),
     fields(actor = %user.acting_entity())
 )]

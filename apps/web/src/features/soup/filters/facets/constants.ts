@@ -189,6 +189,25 @@ export const FILTER_TARGETS = {
     projectId: { backend: 'pid' },
   },
 
+  // if — initiatives (task projects). Opt-in server-side: a query that says
+  // nothing about them gets none, so this is not an entity target and
+  // `confine` never nil-fills it; any literal here, a notification state
+  // included, is what opts them in.
+  if: {
+    initiativeId: { backend: 'id' },
+    initiativeSeen: {
+      backend: 'ns',
+      notification: 'seen',
+      domain: [true, false],
+    },
+    initiativeDone: {
+      backend: 'ns',
+      notification: 'done',
+      domain: [true, false],
+    },
+    includeInitiatives: { backend: 'inc', compile: 'unit' },
+  },
+
   // callf — calls
   callf: {
     callId: { backend: 'CallId' },
@@ -241,6 +260,8 @@ export const FILTER_TARGETS = {
   asf: {
     agentSessionId: { backend: 'id' },
     agentSessionOwnerId: { backend: 'o' },
+    agentSessionSource: { backend: 'src' },
+    agentSessionVisibility: { backend: 'vis' },
     includeAgentSessions: { backend: 'inc', compile: 'unit' },
   },
 
@@ -336,6 +357,14 @@ type FilterTargetsMeta = {
     projectId: string[];
   };
 
+  // if — initiatives (task projects)
+  if: {
+    initiativeId: string[];
+    initiativeSeen: boolean;
+    initiativeDone: boolean;
+    includeInitiatives: boolean;
+  };
+
   // callf — calls
   callf: {
     callId: string[];
@@ -389,6 +418,8 @@ type FilterTargetsMeta = {
   asf: {
     agentSessionId: string[];
     agentSessionOwnerId: string[];
+    agentSessionSource: ('user' | 'agent' | 'routine')[];
+    agentSessionVisibility: ('listed' | 'unlisted' | 'hidden')[];
     includeAgentSessions: boolean;
   };
 
@@ -420,6 +451,7 @@ export const TARGETS: Target[] = [
   'cthf',
   'cf',
   'pf',
+  'if',
   'callf',
   'fef',
   'ghprf',
@@ -434,7 +466,7 @@ export type FieldKey = {
   [T in Target]: FieldsForTarget<T>;
 }[Target];
 
-export type EntityTarget = Exclude<Target, 'propf' | 'ghprf'>;
+export type EntityTarget = Exclude<Target, 'propf' | 'ghprf' | 'if'>;
 
 export const ENTITY_TARGETS: EntityTarget[] = [
   'df',

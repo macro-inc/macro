@@ -1,4 +1,4 @@
-import SparkleIcon from '@phosphor/sparkle.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { cn } from '@ui';
 
 const kind = {

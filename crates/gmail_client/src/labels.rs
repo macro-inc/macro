@@ -1,7 +1,7 @@
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
-use models_email::gmail::ModifyLabelsRequest;
 use models_email::gmail::labels::{GmailLabel, GmailLabelsResponse};
+use models_email::gmail::{BatchModifyLabelsRequest, ModifyLabelsRequest};
 
 /// Modifies the labels for a specific message in Gmail.
 #[tracing::instrument(
@@ -27,6 +27,41 @@ pub async fn modify_message_labels(
     let response = client
         .inner
         .post(url)
+        .bearer_auth(access_token)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(GmailApiHttpError::transport)?;
+
+    if !response.status().is_success() {
+        return Err(unsuccessful_response(response).await);
+    }
+
+    Ok(())
+}
+
+/// Modifies the labels of many messages in one request. Gmail ignores ids
+/// that don't name a message in the mailbox instead of failing the request.
+#[tracing::instrument(
+    skip(client, access_token, provider_message_ids),
+    fields(message_count = provider_message_ids.len()),
+    err
+)]
+pub async fn batch_modify_message_labels(
+    client: &GmailClient,
+    access_token: &str,
+    provider_message_ids: &[String],
+    label_ids_to_add: &[String],
+    label_ids_to_remove: &[String],
+) -> Result<(), GmailApiHttpError> {
+    let payload = BatchModifyLabelsRequest {
+        ids: provider_message_ids.to_vec(),
+        add_label_ids: label_ids_to_add.to_vec(),
+        remove_label_ids: label_ids_to_remove.to_vec(),
+    };
+    let response = client
+        .inner
+        .post(format!("{}/users/me/messages/batchModify", client.base_url))
         .bearer_auth(access_token)
         .json(&payload)
         .send()

@@ -9,11 +9,14 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rand::RngCore;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::Semaphore;
@@ -33,7 +36,7 @@ pub struct AgentIdentity {
     pub owner: MacroUserIdStr<'static>,
 }
 /// Public state of one preview; contains no credentials.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preview {
     /// Opaque routing ID, not an authorization credential.
@@ -48,7 +51,7 @@ pub struct Preview {
     pub expires_at: u64,
 }
 /// Preview lifecycle visible in the session UI.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PreviewStatus {
     /// Waiting for SSH and a reachable HTTP server.
@@ -181,33 +184,14 @@ pub struct Launch {
     /// One-use, 30-second ticket. Do not log it.
     pub ticket: String,
 }
-struct Credential {
-    preview: PreviewId,
-    /// Absent on an SSH token: it authenticates the agent's tunnel, not a viewer.
-    user: Option<MacroUserIdStr<'static>>,
-    expires: Instant,
-}
-/// Per-owner creation pacing. Traffic itself is unmetered: a shared dev server
-/// moves tens of MB per cold load, and every ceiling we tried severed it.
-struct AccountBudget {
-    last_created: Instant,
-}
-struct Registry {
-    sessions: HashMap<AgentSessionId, Arc<Lease>>,
-    accounts: HashMap<MacroUserIdStr<'static>, AccountBudget>,
-    ssh_tokens: HashMap<[u8; 32], Credential>,
-    tickets: HashMap<[u8; 32], Credential>,
-    browsers: HashMap<[u8; 32], Credential>,
-    watchers: HashMap<AgentSessionId, HashMap<MacroUserIdStr<'static>, Instant>>,
-}
 /// Live lease, with cancellation and stream slots shared by every request/upgrade.
 pub struct Lease {
     preview: Mutex<Preview>,
-    owner: MacroUserIdStr<'static>,
     port: u16,
     expires: Instant,
     activity: Mutex<Instant>,
     tunnel: Mutex<Option<Arc<dyn Tunnel>>>,
+    pending_cleanup: AtomicBool,
     /// Cancellation closes existing HTTP and WebSocket traffic on revocation.
     pub cancel: CancellationToken,
     /// Total HTTP streams, held until response completion.
@@ -242,129 +226,153 @@ impl Lease {
             .ok_or(PreviewError::Offline)
     }
 }
-/// Core use cases; holds ephemeral leases because an SSH transport cannot survive a restart.
+/// Core use cases. Durable metadata is shared; only SSH transports live locally.
 #[derive(Clone)]
 pub struct PreviewService {
     settings: Arc<Settings>,
     authority: Arc<dyn Authority>,
     events: Arc<dyn Events>,
-    registry: Arc<Mutex<Registry>>,
+    repository: Arc<dyn super::storage::PreviewRepository>,
+    replica: uuid::Uuid,
+    peers: Arc<dyn super::ports::PeerConnector>,
+    lifecycle: Arc<tokio::sync::Mutex<()>>,
+    peer_slots: Arc<Semaphore>,
+    peer_upgrades: Arc<Semaphore>,
+    leases: Arc<Mutex<HashMap<AgentSessionId, Arc<Lease>>>>,
 }
+use super::storage::{CredentialKind, StoredCredential, StoredPreview};
 impl PreviewService {
-    /// Wire authority and notifications around a single-replica registry.
+    /// Compose a replica with shared ownership and credential persistence.
     pub fn new(
         settings: Settings,
         authority: Arc<dyn Authority>,
         events: Arc<dyn Events>,
+        repository: Arc<dyn super::storage::PreviewRepository>,
+        replica: uuid::Uuid,
+        peers: Arc<dyn super::ports::PeerConnector>,
     ) -> Result<Self, PreviewError> {
         settings.validate()?;
         Ok(Self {
             settings: Arc::new(settings),
             authority,
             events,
-            registry: Arc::new(Mutex::new(Registry {
-                sessions: HashMap::new(),
-                accounts: HashMap::new(),
-                ssh_tokens: HashMap::new(),
-                tickets: HashMap::new(),
-                browsers: HashMap::new(),
-                watchers: HashMap::new(),
-            })),
+            repository,
+            replica,
+            peers,
+            lifecycle: Arc::new(tokio::sync::Mutex::new(())),
+            peer_slots: Arc::new(Semaphore::new(1024)),
+            peer_upgrades: Arc::new(Semaphore::new(128)),
+            leases: Arc::new(Mutex::new(HashMap::new())),
         })
     }
-    /// Deployment settings for the transport adapters.
+    /// Deployment settings for transport adapters.
     pub fn settings(&self) -> &Settings {
         &self.settings
     }
-    /// Authenticate the existing agent session credential.
+    /// Publish a server-configured peer endpoint. Never accepts request input.
+    #[tracing::instrument(skip_all, fields(replica = %self.replica), err)]
+    pub async fn heartbeat(&self, address: std::net::SocketAddr) -> Result<(), PreviewError> {
+        validate_peer(address)?;
+        for preview in self
+            .repository
+            .heartbeat(self.replica, address, 45.0)
+            .await?
+        {
+            self.publish(&preview).await;
+        }
+        Ok(())
+    }
+    /// Resolve an SSH owner using only the shared registry. None means local.
+    #[tracing::instrument(skip_all, fields(preview_id = %id), err)]
+    pub async fn destination(
+        &self,
+        id: &PreviewId,
+    ) -> Result<Option<std::net::SocketAddr>, PreviewError> {
+        let (replica, address) = self.repository.destination(id).await?;
+        validate_peer(address)?;
+        Ok((replica != self.replica).then_some(address))
+    }
+    /// Open one direct hop; even forged hop markers can only cause refusal, never bypass auth.
+    #[tracing::instrument(skip_all, fields(preview_id = %id), err)]
+    pub async fn peer_stream(
+        &self,
+        id: &PreviewId,
+        forwarded: bool,
+        upgrade: bool,
+    ) -> Result<Option<super::ports::PeerConnection>, PreviewError> {
+        if let Some(address) = self.destination(id).await? {
+            if forwarded {
+                return Err(PreviewError::Offline);
+            }
+            let permit = Arc::new(
+                self.peer_slots
+                    .clone()
+                    .try_acquire_owned()
+                    .map_err(|_| PreviewError::Limited)?,
+            );
+            let upgrade_permit = if upgrade {
+                Some(
+                    self.peer_upgrades
+                        .clone()
+                        .try_acquire_owned()
+                        .map_err(|_| PreviewError::Limited)?,
+                )
+            } else {
+                None
+            };
+            let stream = self.peers.connect(address).await?;
+            return Ok(Some(super::ports::PeerConnection {
+                stream,
+                permit,
+                upgrade_permit,
+            }));
+        }
+        Ok(None)
+    }
+    /// Authenticate the existing agent-session credential.
     pub async fn agent(&self, token: &str) -> Result<AgentIdentity, PreviewError> {
         self.authority.agent(token).await
     }
-    /// Create one lease per session, replacing and closing any previous tunnel.
+    /// Replace one session preview. The new ID fences every previous transport.
+    #[tracing::instrument(skip_all, fields(session_id = %identity.session), err)]
     pub async fn share(&self, identity: AgentIdentity, port: u16) -> Result<Share, PreviewError> {
         if port == 0 {
             return Err(PreviewError::Invalid);
         }
         self.authority.active(identity.session).await?;
+        let lifecycle = self.lifecycle.lock().await;
         let id = PreviewId::generate();
-        // OpenSSH rejects usernames beginning with '-', which URL-safe base64 can emit.
         let token = format!("preview_{}", random());
         let preview = Preview {
             id: id.clone(),
             agent_session_id: identity.session,
             url: self.settings.origin(&id),
             status: PreviewStatus::Starting,
-            expires_at: (SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                + LEASE)
-                .as_millis() as u64,
+            expires_at: (now_ms() + LEASE.as_millis() as i64) as u64,
         };
-        {
-            let mut registry = self.registry.lock().expect("registry mutex");
-            if registry.accounts.len() >= 1000 && !registry.accounts.contains_key(&identity.owner) {
-                return Err(PreviewError::Limited);
-            }
-            let account = registry
-                .accounts
-                .entry(identity.owner.clone())
-                .or_insert_with(|| AccountBudget {
-                    last_created: Instant::now() - TOKEN_TTL,
-                });
-            if account.last_created.elapsed() < Duration::from_secs(10) {
-                return Err(PreviewError::Limited);
-            }
-            account.last_created = Instant::now();
-        }
-        let lease = Arc::new(Lease {
-            preview: Mutex::new(preview.clone()),
-            owner: identity.owner,
-            port,
-            expires: Instant::now() + LEASE,
-            activity: Mutex::new(Instant::now()),
-            tunnel: Mutex::new(None),
-            cancel: CancellationToken::new(),
-            // Large enough for a Vite cold load's module fan-out; the HTTP
-            // inbound queues on this semaphore instead of rejecting, so the
-            // number bounds file descriptors rather than aborting the page.
-            requests: Arc::new(Semaphore::new(4096)),
-            upgrades: Arc::new(Semaphore::new(8)),
-        });
-        let old = {
-            let mut registry = self.registry.lock().expect("registry mutex");
-            if registry.sessions.len() >= 1000 && !registry.sessions.contains_key(&identity.session)
-            {
-                return Err(PreviewError::Limited);
-            }
-            if registry
-                .sessions
-                .values()
-                .filter(|l| {
-                    l.owner == lease.owner
-                        && l.live()
-                        && l.preview().agent_session_id != identity.session
-                })
-                .count()
-                >= 5
-            {
-                return Err(PreviewError::Limited);
-            }
-            if let Some(previous) = registry.sessions.get(&identity.session) {
-                let old_id = previous.preview().id;
-                registry.ssh_tokens.retain(|_, c| c.preview != old_id);
-                registry.tickets.retain(|_, c| c.preview != old_id);
-                registry.browsers.retain(|_, c| c.preview != old_id);
-            }
-            registry.ssh_tokens.insert(
-                digest(&token),
-                Credential {
+        self.repository
+            .create(
+                StoredPreview {
+                    preview: preview.clone(),
+                    user: identity.owner,
+                    port,
+                    replica: None,
+                },
+                StoredCredential {
+                    hash: digest(&token),
                     preview: id,
                     user: None,
-                    expires: Instant::now() + TOKEN_TTL,
+                    expires: now_ms() + TOKEN_TTL.as_millis() as i64,
                 },
-            );
-            registry.sessions.insert(identity.session, lease)
-        };
+                super::storage::CreationLimits::PREVIEW,
+            )
+            .await?;
+        let old = self
+            .leases
+            .lock()
+            .expect("leases mutex")
+            .remove(&identity.session);
+        drop(lifecycle);
         if let Some(old) = old {
             self.finish(&old, PreviewStatus::Stopped).await;
         }
@@ -375,42 +383,51 @@ impl PreviewService {
             port,
         })
     }
-    /// Resolve a session's state only with an entity view receipt.
-    pub fn get(
+    /// Read shared state after an entity view receipt, and register a notification watcher.
+    pub async fn get(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<Option<Preview>, PreviewError> {
         let session = session_id(&receipt)?;
-        let mut registry = self.registry.lock().expect("registry mutex");
-        if let Some(user) = receipt.acting_user_id()
-            && (registry.watchers.len() < 4096 || registry.watchers.contains_key(&session))
-        {
-            let watchers = registry.watchers.entry(session).or_default();
-            if watchers.len() < 256 || watchers.contains_key(user) {
-                watchers.insert(user.clone(), Instant::now());
-            }
+        if let Some(user) = receipt.acting_user_id() {
+            self.repository
+                .watch(
+                    session,
+                    user,
+                    super::storage::WatchLimits {
+                        sessions: 4096,
+                        viewers: 256,
+                        expires: now_ms() + 300000,
+                    },
+                )
+                .await?;
         }
-        Ok(registry.sessions.get(&session).map(|l| l.preview()))
+        Ok(self.repository.session(session).await?.map(|p| p.preview))
     }
-    /// Stop requires entity edit permission; viewing never grants control.
+    /// Entity edit permission stops the shared generation on any replica.
+    #[tracing::instrument(skip_all, err)]
     pub async fn stop(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<(), PreviewError> {
-        let lease = self
-            .registry
-            .lock()
-            .expect("registry mutex")
-            .sessions
-            .get(&session_id(&receipt)?)
-            .cloned();
-        if let Some(lease) = lease {
-            self.finish(&lease, PreviewStatus::Stopped).await;
+        if let Some(stored) = self.repository.stop(session_id(&receipt)?).await? {
+            let local = self
+                .leases
+                .lock()
+                .expect("leases mutex")
+                .get(&stored.preview.agent_session_id)
+                .cloned();
+            if let Some(lease) = local
+                && lease.preview().id == stored.preview.id
+            {
+                self.finish(&lease, PreviewStatus::Stopped).await;
+            }
+            self.publish(&stored.preview).await;
         }
         Ok(())
     }
-    /// Mint a browser ticket after entity access was checked by the standard extractor.
-    pub fn launch(
+    /// Mint a shared, one-use, host-bound browser ticket after entity authorization.
+    pub async fn launch(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<Launch, PreviewError> {
@@ -418,51 +435,72 @@ impl PreviewService {
             .get_authenticated_user()
             .map_err(|_| PreviewError::Denied)?
             .clone();
-        let mut registry = self.registry.lock().expect("registry mutex");
-        let lease = registry
-            .sessions
-            .get(&session_id(&receipt)?)
-            .cloned()
+        let stored = self
+            .repository
+            .session(session_id(&receipt)?)
+            .await?
             .ok_or(PreviewError::Offline)?;
-        if !lease.live() || lease.preview().status != PreviewStatus::Ready {
+        if stored.preview.status != PreviewStatus::Ready {
             return Err(PreviewError::Offline);
         }
-        registry.tickets.retain(|_, c| c.expires > Instant::now());
-        if registry.tickets.len() >= 4096 {
-            return Err(PreviewError::Limited);
-        }
         let ticket = random();
-        let preview = lease.preview();
-        registry.tickets.insert(
-            digest(&ticket),
-            Credential {
-                preview: preview.id,
-                user: Some(user),
-                expires: Instant::now() + TICKET_TTL,
-            },
-        );
+        self.repository
+            .credential(
+                CredentialKind::Ticket,
+                StoredCredential {
+                    hash: digest(&ticket),
+                    preview: stored.preview.id,
+                    user: Some(user),
+                    expires: now_ms() + TICKET_TTL.as_millis() as i64,
+                },
+                4096,
+            )
+            .await?;
         Ok(Launch {
-            action: format!("{}/.macro-preview/auth", preview.url),
+            action: format!("{}/.macro-preview/auth", stored.preview.url),
             ticket,
         })
     }
-    /// Redeem an SSH token exactly once; it is scoped to a single lease.
-    pub fn authenticate_ssh(&self, token: &str) -> Result<Arc<Lease>, PreviewError> {
-        let mut registry = self.registry.lock().expect("registry mutex");
-        let credential = registry
-            .ssh_tokens
-            .remove(&digest(token))
-            .ok_or(PreviewError::Denied)?;
-        if credential.expires <= Instant::now() {
-            return Err(PreviewError::Denied);
+    /// Atomically consume SSH credentials and assign ownership to this accepting replica.
+    #[tracing::instrument(skip_all, fields(replica = %self.replica, preview_id = tracing::field::Empty), err)]
+    pub async fn authenticate_ssh(&self, token: &str) -> Result<Arc<Lease>, PreviewError> {
+        let lifecycle = self.lifecycle.lock().await;
+        let stored = self.repository.claim(digest(token), self.replica).await?;
+        tracing::Span::current().record("preview_id", tracing::field::display(&stored.preview.id));
+        let remaining = stored.preview.expires_at.saturating_sub(now_ms() as u64);
+        let session = stored.preview.agent_session_id;
+        let lease = Arc::new(Lease {
+            preview: Mutex::new(stored.preview),
+            port: stored.port,
+            expires: Instant::now() + Duration::from_millis(remaining),
+            activity: Mutex::new(Instant::now()),
+            tunnel: Mutex::new(None),
+            pending_cleanup: AtomicBool::new(false),
+            cancel: CancellationToken::new(),
+            requests: Arc::new(Semaphore::new(4096)),
+            upgrades: Arc::new(Semaphore::new(8)),
+        });
+        let old = self
+            .leases
+            .lock()
+            .expect("leases mutex")
+            .insert(session, lease.clone());
+        drop(lifecycle);
+        if let Some(old) = old {
+            self.finish(&old, PreviewStatus::Offline).await;
         }
-        let lease = find(&registry, &credential.preview)?;
-        if !lease.live() {
-            return Err(PreviewError::Denied);
+        if let Err(error) = self.authority.active(session).await {
+            self.finish(&lease, PreviewStatus::Offline).await;
+            return Err(error);
+        }
+        // A replacement/stop racing the SSH handshake cannot install a live obsolete lease.
+        if self.repository.preview(&lease.preview().id).await.is_err() {
+            self.finish(&lease, PreviewStatus::Offline).await;
+            return Err(PreviewError::Offline);
         }
         Ok(lease)
     }
-    /// Accept exactly one logical reverse forward. No TCP listener is created.
+    /// Accept one logical reverse forward, never an arbitrary socket destination.
     pub fn register(
         &self,
         lease: &Arc<Lease>,
@@ -474,17 +512,32 @@ impl PreviewService {
             return Err(PreviewError::Denied);
         }
         let mut current = lease.tunnel.lock().expect("tunnel mutex");
-        if current.is_some() {
+        if current.is_some() || !lease.live() {
             return Err(PreviewError::Denied);
         }
         *current = Some(tunnel);
         Ok(())
     }
-    /// Mark ready only after receiving a real HTTP response through the tunnel.
+    /// Publish readiness only if this generation is still owned and live.
     pub async fn ready(&self, lease: &Arc<Lease>) {
+        if !lease.live() || lease.preview().status != PreviewStatus::Starting {
+            return;
+        }
+        if !matches!(
+            self.repository
+                .status(&lease.preview().id, self.replica, PreviewStatus::Ready)
+                .await,
+            Ok(true)
+        ) {
+            self.finish(lease, PreviewStatus::Offline).await;
+            return;
+        }
+        if lease.cancel.is_cancelled() {
+            return;
+        }
         let preview = {
             let mut preview = lease.preview.lock().expect("preview mutex");
-            if preview.status != PreviewStatus::Starting || !lease.live() {
+            if !lease.live() || preview.status != PreviewStatus::Starting {
                 return;
             }
             preview.status = PreviewStatus::Ready;
@@ -492,85 +545,82 @@ impl PreviewService {
         };
         self.publish(&preview).await;
     }
-    /// Mark disconnected/expired and cancel all current traffic.
+    /// Close local transports unconditionally; shared cleanup matches generation and replica.
     pub async fn finish(&self, lease: &Arc<Lease>, status: PreviewStatus) {
-        if lease.cancel.is_cancelled() {
-            return;
-        }
-        lease.cancel.cancel();
         let preview = {
             let mut preview = lease.preview.lock().expect("preview mutex");
-            preview.status = status;
+            lease.pending_cleanup.store(true, Ordering::SeqCst);
+            if !lease.cancel.is_cancelled() {
+                preview.status = status;
+                lease.cancel.cancel();
+            }
             preview.clone()
         };
         let tunnel = lease.tunnel.lock().expect("tunnel mutex").take();
         if let Some(tunnel) = tunnel {
             tunnel.close().await;
         }
-        self.publish(&preview).await;
-    }
-    /// Exchange a host-bound, one-use ticket for a host-only browser credential.
-    pub async fn redeem(&self, id: &PreviewId, ticket: &str) -> Result<String, PreviewError> {
-        let credential = {
-            let mut registry = self.registry.lock().expect("registry mutex");
-            let credential = registry
-                .tickets
-                .get(&digest(ticket))
-                .ok_or(PreviewError::Denied)?;
-            if &credential.preview != id || credential.expires <= Instant::now() {
-                return Err(PreviewError::Denied);
+        match self
+            .repository
+            .status(&preview.id, self.replica, preview.status)
+            .await
+        {
+            Ok(changed) => {
+                lease.pending_cleanup.store(false, Ordering::SeqCst);
+                if changed {
+                    self.publish(&preview).await;
+                }
             }
-            registry
-                .tickets
-                .remove(&digest(ticket))
-                .ok_or(PreviewError::Denied)?
-        };
-        // A ticket is only ever minted for an authenticated viewer.
+            Err(error) => tracing::warn!(?error, "preview finish persistence failed"),
+        }
+    }
+    /// Consume a shared ticket exactly once, after matching its preview origin.
+    #[tracing::instrument(skip_all, fields(preview_id = %id), err)]
+    pub async fn redeem(&self, id: &PreviewId, ticket: &str) -> Result<String, PreviewError> {
+        let credential = self
+            .repository
+            .authenticate(CredentialKind::Ticket, id, digest(ticket), true)
+            .await?;
         let user = credential.user.ok_or(PreviewError::Denied)?;
-        let lease = self.by_id(id)?;
+        let stored = self.repository.preview(id).await?;
         self.authority
-            .viewer(lease.preview().agent_session_id, &user)
+            .viewer(stored.preview.agent_session_id, &user)
             .await?;
         let cookie = random();
-        let mut registry = self.registry.lock().expect("registry mutex");
-        registry.browsers.retain(|_, c| c.expires > Instant::now());
-        if registry.browsers.len() >= 8192 {
-            return Err(PreviewError::Limited);
-        }
-        registry.browsers.insert(
-            digest(&cookie),
-            Credential {
-                preview: id.clone(),
-                user: Some(user),
-                expires: lease.expires,
-            },
-        );
+        self.repository
+            .credential(
+                CredentialKind::Browser,
+                StoredCredential {
+                    hash: digest(&cookie),
+                    preview: id.clone(),
+                    user: Some(user),
+                    expires: stored.preview.expires_at as i64,
+                },
+                8192,
+            )
+            .await?;
         Ok(cookie)
     }
-    /// Authenticate every HTTP request. WebSockets call this periodically too.
+    /// Recheck credentials, entity access, and the shared generation on every request/upgrade.
+    #[tracing::instrument(skip_all, fields(preview_id = %id), err)]
     pub async fn viewer(
         &self,
         id: &PreviewId,
         cookie: &str,
         activity: bool,
     ) -> Result<Arc<Lease>, PreviewError> {
-        let (lease, user) = {
-            let registry = self.registry.lock().expect("registry mutex");
-            let credential = registry
-                .browsers
-                .get(&digest(cookie))
-                .ok_or(PreviewError::Denied)?;
-            if &credential.preview != id || credential.expires <= Instant::now() {
-                return Err(PreviewError::Denied);
-            }
-            let user = credential.user.clone().ok_or(PreviewError::Denied)?;
-            (find(&registry, id)?, user)
-        };
-        if !lease.live() {
+        let credential = self
+            .repository
+            .authenticate(CredentialKind::Browser, id, digest(cookie), false)
+            .await?;
+        let user = credential.user.ok_or(PreviewError::Denied)?;
+        let stored = self.repository.preview(id).await?;
+        if stored.replica != Some(self.replica) {
             return Err(PreviewError::Offline);
         }
+        let lease = self.by_id(id)?;
         self.authority
-            .viewer(lease.preview().agent_session_id, &user)
+            .viewer(stored.preview.agent_session_id, &user)
             .await?;
         if activity {
             *lease.activity.lock().expect("activity mutex") = Instant::now();
@@ -578,25 +628,38 @@ impl PreviewService {
         Ok(lease)
     }
     fn by_id(&self, id: &PreviewId) -> Result<Arc<Lease>, PreviewError> {
-        let lease = find(&self.registry.lock().expect("registry mutex"), id)?;
-        if !lease.live() {
-            return Err(PreviewError::Offline);
-        }
-        Ok(lease)
-    }
-    /// Expire leases, including agent-session revocation, and reclaim bounded state.
-    pub async fn sweep(&self) {
-        let leases: Vec<_> = self
-            .registry
+        self.leases
             .lock()
-            .expect("registry mutex")
-            .sessions
+            .expect("leases mutex")
+            .values()
+            .find(|l| &l.preview().id == id && l.live())
+            .cloned()
+            .ok_or(PreviewError::Offline)
+    }
+    /// Check shared revocation and ownership, expire idle tunnels and reclaim state.
+    pub async fn sweep(&self) {
+        match self.repository.sweep().await {
+            Ok(transitions) => {
+                for preview in transitions {
+                    self.publish(&preview).await;
+                }
+            }
+            Err(error) => tracing::warn!(?error, "preview sweep failed"),
+        }
+        let leases: Vec<_> = self
+            .leases
+            .lock()
+            .expect("leases mutex")
             .values()
             .cloned()
             .collect();
         for lease in leases {
+            if lease.cancel.is_cancelled() && lease.pending_cleanup.load(Ordering::SeqCst) {
+                self.finish(&lease, lease.preview().status).await;
+            }
             if !lease.cancel.is_cancelled()
                 && (!lease.live()
+                    || self.repository.preview(&lease.preview().id).await.is_err()
                     || self
                         .authority
                         .active(lease.preview().agent_session_id)
@@ -606,38 +669,27 @@ impl PreviewService {
                 self.finish(&lease, PreviewStatus::Expired).await;
             }
         }
-        let mut registry = self.registry.lock().expect("registry mutex");
-        registry
-            .ssh_tokens
-            .retain(|_, c| c.expires > Instant::now());
-        registry.tickets.retain(|_, c| c.expires > Instant::now());
-        registry.browsers.retain(|_, c| c.expires > Instant::now());
-        registry
-            .sessions
-            .retain(|_, l| Instant::now() < l.expires + Duration::from_secs(300));
-        registry
-            .accounts
-            .retain(|_, a| a.last_created.elapsed() < LEASE + LEASE);
-        registry.watchers.retain(|_, users| {
-            users.retain(|_, time| time.elapsed() < Duration::from_secs(300));
-            !users.is_empty()
-        });
+        self.leases
+            .lock()
+            .expect("leases mutex")
+            .retain(|_, l| !l.cancel.is_cancelled() || l.pending_cleanup.load(Ordering::SeqCst));
     }
     async fn publish(&self, preview: &Preview) {
-        let candidates = {
-            let registry = self.registry.lock().expect("registry mutex");
-            let mut users: Vec<MacroUserIdStr<'static>> = registry
-                .watchers
-                .get(&preview.agent_session_id)
-                .map(|w| w.keys().cloned().collect())
-                .unwrap_or_default();
-            if let Some(lease) = registry.sessions.get(&preview.agent_session_id) {
-                users.push(lease.owner.clone());
-            }
-            users.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
-            users.dedup();
-            users
+        // Never publish a stale generation/status after an awaited mutation or cleanup.
+        let Ok(Some(current)) = self.repository.session(preview.agent_session_id).await else {
+            return;
         };
+        if current.preview.id != preview.id || current.preview.status != preview.status {
+            return;
+        }
+        let mut candidates = self
+            .repository
+            .watchers(preview.agent_session_id, 256)
+            .await
+            .unwrap_or_default();
+        candidates.push(current.user);
+        candidates.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+        candidates.dedup();
         let mut viewers = Vec::new();
         for user in candidates {
             if self
@@ -649,14 +701,22 @@ impl PreviewService {
                 viewers.push(user);
             }
         }
-        let _ = self
-            .events
-            .changed(preview, &viewers)
-            .await
-            .inspect_err(|error| tracing::warn!(error = ?error, "preview notification failed"));
+        if let Err(error) = self.events.changed(preview, &viewers).await {
+            tracing::warn!(?error, "preview notification failed");
+        }
     }
 }
-/// The agent session a receipt authorizes, rejecting receipts for anything else.
+/// Reject public, unspecified, multicast, and link-local peer targets (including metadata endpoints).
+fn validate_peer(address: std::net::SocketAddr) -> Result<(), PreviewError> {
+    let allowed = match address.ip() {
+        std::net::IpAddr::V4(ip) => ip.is_private() || ip.is_loopback(),
+        std::net::IpAddr::V6(ip) => ip.is_unique_local() || ip.is_loopback(),
+    };
+    if !allowed || address.port() == 0 {
+        return Err(PreviewError::Invalid);
+    }
+    Ok(())
+}
 fn session_id<T: RequiredPermission>(
     receipt: &EntityAccessReceipt<T>,
 ) -> Result<AgentSessionId, PreviewError> {
@@ -666,13 +726,11 @@ fn session_id<T: RequiredPermission>(
     }
     entity.entity_id.parse().map_err(|_| PreviewError::Denied)
 }
-fn find(registry: &Registry, id: &PreviewId) -> Result<Arc<Lease>, PreviewError> {
-    registry
-        .sessions
-        .values()
-        .find(|l| &l.preview().id == id)
-        .cloned()
-        .ok_or(PreviewError::Offline)
+fn now_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
 }
 fn random() -> String {
     let mut bytes = [0u8; 32];
@@ -682,6 +740,5 @@ fn random() -> String {
 fn digest(value: &str) -> [u8; 32] {
     Sha256::digest(value.as_bytes()).into()
 }
-
 #[cfg(test)]
 mod test;

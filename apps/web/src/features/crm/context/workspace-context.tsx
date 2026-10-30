@@ -43,7 +43,12 @@ export type CrmWorkspace = {
     focus(): void;
     captureEntryState(): void;
     openCompany(entity: EntityData, newSplit: boolean): void;
-    openSettings(): void;
+    /** CRM settings, shown in the workspace over its list or record. */
+    settings: {
+      isOpen: Accessor<boolean>;
+      open(): void;
+      close(): void;
+    };
     openTeamSettings(): void;
     record: CrmRecordNavigation;
   };

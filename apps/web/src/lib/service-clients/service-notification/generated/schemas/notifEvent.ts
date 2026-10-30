@@ -23,6 +23,8 @@ import type { NotifEventOneOfOneone } from './notifEventOneOfOneone';
 import type { NotifEventOneOfOneseven } from './notifEventOneOfOneseven';
 import type { NotifEventOneOfOnethree } from './notifEventOneOfOnethree';
 import type { NotifEventOneOfSeven } from './notifEventOneOfSeven';
+import type { NotifEventOneOfSixone } from './notifEventOneOfSixone';
+import type { NotifEventOneOfSixthree } from './notifEventOneOfSixthree';
 import type { NotifEventOneOfThree } from './notifEventOneOfThree';
 import type { NotifEventOneOfThreefive } from './notifEventOneOfThreefive';
 import type { NotifEventOneOfThreenine } from './notifEventOneOfThreenine';
@@ -73,4 +75,6 @@ export type NotifEvent =
   | NotifEventOneOfFivethree
   | NotifEventOneOfFivefive
   | NotifEventOneOfFiveseven
-  | NotifEventOneOfFivenine;
+  | NotifEventOneOfFivenine
+  | NotifEventOneOfSixone
+  | NotifEventOneOfSixthree;

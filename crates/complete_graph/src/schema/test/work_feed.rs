@@ -224,10 +224,12 @@ async fn work_feed_pages_hydrated_stacked_entries_for_the_viewer() {
             harness
                 .request(
                     r#"{ user { workFeed(input: {
-                        scope: { mode: ATTENTION, types: [DOCUMENT, CHANNEL_THREAD] },
+                        scope: { mode: ATTENTION, types: [DOCUMENT, TASK, CHANNEL_THREAD] },
+                        state: UNSEEN,
                         limit: 10
                     }) {
                         nextCursor
+                        nextPosition { sortAt entityId }
                         entries {
                             sortAt touchedAt revision primaryReason primaryStackIndex
                             item {
@@ -276,6 +278,11 @@ async fn work_feed_pages_hydrated_stacked_entries_for_the_viewer() {
 
     let position = WorkFeedPosition::decode(page["nextCursor"].as_str().unwrap()).unwrap();
     assert_eq!(position.entity_id, DOC_ID.to_string());
+    assert_eq!(page["nextPosition"]["entityId"], DOC_ID.to_string());
+    assert_eq!(
+        page["nextPosition"]["sortAt"],
+        position.sort_at.to_rfc3339()
+    );
 
     let pages = service.pages.lock().unwrap();
     let (viewer, query) = &pages[0];
@@ -283,8 +290,13 @@ async fn work_feed_pages_hydrated_stacked_entries_for_the_viewer() {
     assert_eq!(query.scope.mode, WorkFeedMode::Attention);
     assert_eq!(
         query.scope.types,
-        vec![WorkFeedItemType::Document, WorkFeedItemType::ChannelThread]
+        vec![
+            WorkFeedItemType::Document,
+            WorkFeedItemType::Task,
+            WorkFeedItemType::ChannelThread
+        ]
     );
+    assert_eq!(query.state, Some(WorkFeedItemState::Unseen));
     assert_eq!(query.limit, 10);
 }
 

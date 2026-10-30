@@ -505,6 +505,14 @@ fn a_tables_rows_compile_to_the_database_row_partition() {
         )
     );
 
+    let mut all_rows = excluded_deferred_partitions();
+    all_rows.database_row_filter = Some(Arc::new(Expr::val(DatabaseRowLiteral::Include)));
+    assert_eq!(rows_partition(&all_rows), PredicateExpr::All);
+    assert_eq!(
+        check_soup_flat_v3(&all_rows, request()),
+        Eligibility::Unsupported(UnsupportedReason::Partition("database_row"))
+    );
+
     let without_rows = excluded_deferred_partitions();
     assert_eq!(rows_partition(&without_rows), PredicateExpr::None);
 

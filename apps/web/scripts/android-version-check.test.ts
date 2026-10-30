@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { checkAndroidVersion } from './android-version-check.mjs';
+import {
+  checkAndroidFloorKept,
+  checkAndroidVersion,
+} from './android-version-check.mjs';
 
 const nativeConfig = 'apps/web/tauri/src-tauri/tauri.android.conf.json';
 let cwd: string;
@@ -26,6 +29,13 @@ function version(code: number) {
   write(
     nativeConfig,
     JSON.stringify({ bundle: { android: { versionCode: code } } })
+  );
+}
+
+function floor(android: number) {
+  write(
+    'apps/web/min-native-build.json',
+    JSON.stringify({ android, ios: 191 })
   );
 }
 
@@ -56,6 +66,7 @@ beforeEach(() => {
   git('config', 'user.name', 'Release test');
   git('config', 'user.email', 'release@example.com');
   version(1);
+  floor(1);
   write('apps/web/tauri/src-tauri/src/lib.rs', '// native');
   commit();
 });
@@ -94,6 +105,36 @@ describe('PR Android version enforcement', () => {
     commit();
     expect(checkAndroidVersion({ cwd, base })).toContain('from 1 to 2');
   });
+
+  it('accepts a bump that raises the Android floor to the new version code', () => {
+    const base = git('rev-parse', 'HEAD');
+    write('apps/web/tauri/src-tauri/src/lib.rs', '// changed');
+    version(2);
+    floor(2);
+    commit();
+    expect(checkAndroidVersion({ cwd, base })).toContain(
+      'raising the Android native build floor to 2'
+    );
+  });
+
+  it.each([
+    ['above', 5],
+    ['below', 2],
+  ])(
+    'rejects an Android floor %s the new version code that the base did not have',
+    (_, android) => {
+      version(2);
+      commit();
+      const base = git('rev-parse', 'HEAD');
+      write('apps/web/tauri/src-tauri/src/lib.rs', '// changed');
+      version(4);
+      floor(android);
+      commit();
+      expect(() => checkAndroidVersion({ cwd, base })).toThrow(
+        /expected the new versionCode 4.*or 1, unchanged/
+      );
+    }
+  );
 
   it.each([0, 1.5, 2_100_000_001])(
     'rejects invalid version code %s',
@@ -144,6 +185,28 @@ describe('PR Android version enforcement', () => {
     expect(checkAndroidVersion({ cwd, base })).toContain('No Android native changes');
   });
 
+  it('lets a PR without native changes raise the Android floor to a released version code', () => {
+    version(3);
+    commit();
+    const base = git('rev-parse', 'HEAD');
+    floor(3);
+    commit();
+    expect(checkAndroidVersion({ cwd, base })).toContain(
+      'No Android native changes'
+    );
+  });
+
+  it('rejects a PR without native changes that raises the Android floor past the base version code', () => {
+    version(3);
+    commit();
+    const base = git('rev-parse', 'HEAD');
+    floor(4);
+    commit();
+    expect(() => checkAndroidVersion({ cwd, base })).toThrow(
+      /floor to 4, above the base branch's versionCode 3/
+    );
+  });
+
   it.each([
     'apps/web/tauri/src-tauri/gen/apple/project.yml',
     'apps/web/tauri/src-tauri/Info.ios.plist',
@@ -151,6 +214,7 @@ describe('PR Android version enforcement', () => {
     'apps/web/tauri/src-tauri/icons/macos/Macro.icon/icon.json',
     'apps/web/tauri/src-tauri/tauri.macos.conf.json',
     'apps/web/tauri/src-tauri/src/linux_notification.rs',
+    'apps/web/tauri/src-tauri/README.md',
     'apps/web/tauri/desktop-release.json',
   ])('ignores the iOS/desktop-only path %s', (path) => {
     const base = git('rev-parse', 'HEAD');
@@ -197,8 +261,31 @@ describe('PR Android version enforcement', () => {
     );
   });
 
+  it('rejects a raised Android floor on a PR that skips the release', () => {
+    const base = git('rev-parse', 'HEAD');
+    write('apps/web/tauri/src-tauri/src/lib.rs', '// changed');
+    version(2);
+    floor(2);
+    commit();
+    expect(() => checkAndroidFloorKept({ cwd, base })).toThrow(
+      /raises the Android native build floor from 1 to 2/
+    );
+  });
+
+  it('lets a PR that skips the release keep or lower the Android floor', () => {
+    floor(3);
+    commit();
+    const base = git('rev-parse', 'HEAD');
+    write('apps/web/tauri/src-tauri/src/lib.rs', '// changed');
+    version(2);
+    commit();
+    expect(checkAndroidFloorKept({ cwd, base })).toContain('Android native build floor 3');
+    floor(2);
+    commit();
+    expect(checkAndroidFloorKept({ cwd, base })).toContain('Android native build floor 2');
+  });
+
   it('fails closed if the base commit is unavailable', () => {
     expect(() => checkAndroidVersion({ cwd, base: 'missing-base' })).toThrow();
   });
 });
-

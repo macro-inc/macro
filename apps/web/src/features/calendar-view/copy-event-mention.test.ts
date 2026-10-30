@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CalendarEvent } from '../calendar/types';
+import {
+  type CalendarEvent,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
+} from '../calendar/types';
 import {
   copyCalendarEventMention,
   copyCalendarEventMentionTarget,
@@ -28,6 +32,8 @@ describe('copyCalendarEventMentionTarget', () => {
       teamProjection: { ownerId: 'alice', kind: 'busy' },
       isCancelled: false,
       isReadOnly: true,
+      guestPolicy: DEFAULT_GUEST_POLICY,
+      viewerCan: NO_VIEWER_CAPABILITIES,
       attendees: [],
       recurrenceLines: [],
       sourceCalendarIds: [],

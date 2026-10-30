@@ -9,6 +9,7 @@ import type { AgentSessionEntity, EmailEntity } from '@entity';
 import type { HistoryItem as Item } from '@queries/history/history';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import type { DocumentMentionMetadata } from '@service-notification/client';
+import type { ExternalChatProvider } from '@service-storage/generated/schemas/externalChatProvider';
 import type { UploadSuccess } from '@service-storage/util/upload';
 import type { LexicalEditor } from 'lexical';
 import { v7 } from 'uuid';
@@ -381,7 +382,36 @@ export type GroupMentionItem = {
 };
 
 /**
- * MentionItem = QuickAccessItem + Date + Group.
+ * Booking link mention item for sharing scheduling links.
+ */
+export type BookingLinkMentionItem = {
+  kind: 'bookingLink';
+  id: string;
+  data: {
+    profileId: string;
+    slug: string;
+    title: string;
+    durationMinutes: number;
+    owner: string;
+  };
+};
+
+/** A calendar event found by unified search, mentioned the way Copy event copies it. */
+export type CalendarEventMentionItem = {
+  kind: 'calendarEvent';
+  id: string;
+  data: {
+    eventId: string;
+    title: string;
+    /** Pins one instance of a recurring series; absent for a single event. */
+    occurrenceKey?: string;
+    /** When the mentioned instance starts, for the menu row. */
+    when?: string;
+  };
+};
+
+/**
+ * MentionItem = QuickAccessItem + Date + Group + BookingLink + CalendarEvent.
  * Used in MentionsMenu to unify all mentionable item types.
  */
 export type AgentSessionMentionItem = Omit<
@@ -389,11 +419,21 @@ export type AgentSessionMentionItem = Omit<
   'kind'
 > & { kind: 'agentSession' };
 
+/** An external chat in Macro; not a Soup entity, so it has its own kind. */
+export type ExternalChatMentionItem = {
+  kind: 'externalChat';
+  id: string;
+  data: { id: string; name: string; provider: ExternalChatProvider };
+};
+
 export type MentionItem =
   | QuickAccessItem
   | DateMentionItem
   | GroupMentionItem
-  | AgentSessionMentionItem;
+  | AgentSessionMentionItem
+  | BookingLinkMentionItem
+  | CalendarEventMentionItem
+  | ExternalChatMentionItem;
 
 /**
  * Type guard for DateMentionItem.

@@ -1,5 +1,5 @@
 import { QueryClient, useQuery } from '@tanstack/solid-query';
-import { createRoot, createSignal, onCleanup } from 'solid-js';
+import { createComputed, createRoot, createSignal, onCleanup } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const fixture = vi.hoisted(() => ({
@@ -12,6 +12,7 @@ const fixture = vi.hoisted(() => ({
   projectsEnabled: undefined as (() => boolean | undefined) | undefined,
   projectMounts: 0,
   projectDisposals: 0,
+  projectIdReads: 0,
   userIcons: 0,
   flagMounts: 0,
 }));
@@ -30,9 +31,13 @@ vi.mock('@core/constant/featureFlags', () => ({
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('../../projects/queries/project-identity', () => ({
-  useProjectIdentityQuery: () => {
+  useProjectIdentityQuery: (id: () => string) => {
     fixture.projectMounts++;
     onCleanup(() => fixture.projectDisposals++);
+    createComputed(() => {
+      id();
+      fixture.projectIdReads++;
+    });
     return {
       isError: false,
       isPending: false,
@@ -93,6 +98,7 @@ afterEach(() => {
   fixture.projectsEnabled = undefined;
   fixture.projectMounts = 0;
   fixture.projectDisposals = 0;
+  fixture.projectIdReads = 0;
   fixture.userIcons = 0;
   fixture.flagMounts = 0;
 });
@@ -148,6 +154,28 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     expect(display.nativeProjectId()).toBeUndefined();
     expect(display.blockOrFileType()).toBeNull();
     expect(display.name()).toBe('Project');
+  });
+
+  it('keeps one project read while the property value re-emits the same project', () => {
+    fixture.projectsEnabled = () => true;
+    const [reference, setReference] = createSignal({
+      entity_id: 'entity-1',
+      entity_type: 'INITIATIVE' as const,
+    });
+    const display = createRoot((dispose) => {
+      disposals.push(dispose);
+      return usePropertyEntityDisplay(
+        () => reference().entity_id,
+        () => reference().entity_type
+      );
+    });
+
+    setReference({ entity_id: 'entity-1', entity_type: 'INITIATIVE' });
+
+    expect(fixture.flagMounts).toBe(1);
+    expect(fixture.projectMounts).toBe(1);
+    expect(fixture.projectIdReads).toBe(1);
+    expect(display.name()).toBe('Launch');
   });
 
   it('keeps the generic project label, without fetching, until the rollout enables it', () => {
@@ -252,6 +280,24 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
 });
 
 describe('usePropertyEntityDisplay CRM references', () => {
+  it.each(['COMPANY', 'CONTACT'] as const)(
+    'tracks authorized preview access for %s without resubscribing',
+    (type) => {
+      const [preview, setPreview] = createSignal<unknown>({ loading: true });
+      fixture.preview = preview;
+      const display = setup(type);
+      expect(display.hasPreviewAccess()).toBe(false);
+      setPreview({ loading: false, access: 'access', name: 'Example record' });
+      expect(display.hasPreviewAccess()).toBe(true);
+      setPreview({ loading: false, access: 'no_access' });
+      expect(display.hasPreviewAccess()).toBe(false);
+      setPreview({ loading: false, access: 'does_not_exist' });
+      expect(display.hasPreviewAccess()).toBe(false);
+      setPreview({ loading: false, access: 'access', name: 'Restored record' });
+      expect(display.hasPreviewAccess()).toBe(true);
+      expect(fixture.previewMounts).toBe(1);
+    }
+  );
   it.each([
     ['COMPANY', 'Acme', 'company'],
     ['CONTACT', 'Ada Lovelace', 'contact'],

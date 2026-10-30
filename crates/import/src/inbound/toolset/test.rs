@@ -15,14 +15,18 @@ fn row(source: ImportSource, status: ImportStatus) -> ImportEntity {
         user_id: user().as_ref().to_string(),
         team_id: None,
         source,
+        kind: source.default_kind(),
         foreign_id: "ENG-1".into(),
+        parent_id: None,
+        review_id: None,
         status,
-        initiator: Initiator::Onboarding,
+        initiator: Initiator::Chat,
         metadata: serde_json::json!({"title": "T"}),
         entity_id: matches!(status, ImportStatus::Imported).then(|| "doc-1".to_string()),
         entity_type: matches!(status, ImportStatus::Imported)
             .then(|| source.entity_type().to_string()),
         last_error: None,
+        waiting_on: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     }
@@ -103,54 +107,20 @@ impl NotionPageImporter for MockStager {
     }
 }
 
-fn contexts(
-    policy: ToolPolicy,
-) -> (
+fn contexts() -> (
     ServiceContext<ImportToolContext<MockStager>>,
     RequestContext,
     Arc<MockStager>,
 ) {
     let stager = Arc::new(MockStager::default());
-    let context = ImportToolContext {
-        service: Some(stager.clone()),
-        policy,
-    };
+    let context = ImportToolContext::wired(stager.clone());
     (ServiceContext(context), RequestContext::new(user()), stager)
 }
 
 #[tokio::test]
-async fn gather_policy_locks_source_and_initiator() {
-    let (service_context, request_context, stager) =
-        contexts(ToolPolicy::gather(ImportSource::Linear));
+async fn staging_records_the_chat_initiator() {
+    let (service_context, request_context, stager) = contexts();
 
-    // Wrong source is refused before touching the service.
-    let err = CreateImportEntity {
-        source: ImportSource::Notion,
-        foreign_id: "https://notion.so/x".into(),
-        status: CreateImportStatus::Staged,
-        metadata: serde_json::json!({"title": "T"}),
-        entity_id: None,
-    }
-    .call(service_context.clone(), request_context.clone())
-    .await
-    .expect_err("forced source must reject other sources");
-    assert!(err.description.contains("only stages linear"), "{err:?}");
-    assert!(stager.staged_calls.lock().unwrap().is_empty());
-
-    // status=imported is refused under a staging-only policy.
-    let err = CreateImportEntity {
-        source: ImportSource::Linear,
-        foreign_id: "ENG-1".into(),
-        status: CreateImportStatus::Imported,
-        metadata: serde_json::json!({"title": "T"}),
-        entity_id: Some("doc-1".into()),
-    }
-    .call(service_context.clone(), request_context.clone())
-    .await
-    .expect_err("staging-only policy must reject imported writes");
-    assert!(err.description.contains("only stage"), "{err:?}");
-
-    // The right source stages with the locked initiator.
     let response = CreateImportEntity {
         source: ImportSource::Linear,
         foreign_id: "ENG-1".into(),
@@ -161,20 +131,17 @@ async fn gather_policy_locks_source_and_initiator() {
     .call(service_context, request_context)
     .await
     .expect("staging succeeds");
+
     assert_eq!(response.outcome, "staged");
     assert_eq!(
         stager.staged_calls.lock().unwrap().as_slice(),
-        &[(
-            Initiator::Onboarding,
-            ImportSource::Linear,
-            "ENG-1".to_string()
-        )]
+        &[(Initiator::Chat, ImportSource::Linear, "ENG-1".to_string())]
     );
 }
 
 #[tokio::test]
-async fn chat_policy_requires_entity_id_for_imported_writes() {
-    let (service_context, request_context, _) = contexts(ToolPolicy::chat());
+async fn imported_writes_require_an_entity_id() {
+    let (service_context, request_context, _) = contexts();
     let err = CreateImportEntity {
         source: ImportSource::Linear,
         foreign_id: "ENG-1".into(),
@@ -201,10 +168,7 @@ async fn teammate_dedup_response_tells_the_agent_not_to_duplicate() {
         }),
         ..Default::default()
     });
-    let context = ImportToolContext {
-        service: Some(stager),
-        policy: ToolPolicy::chat(),
-    };
+    let context = ImportToolContext::wired(stager);
     let response = CreateImportEntity {
         source: ImportSource::Linear,
         foreign_id: "ENG-1".into(),
@@ -222,7 +186,7 @@ async fn teammate_dedup_response_tells_the_agent_not_to_duplicate() {
 
 #[tokio::test]
 async fn import_notion_page_runs_the_workflow_and_returns_the_document() {
-    let (service_context, request_context, stager) = contexts(ToolPolicy::chat());
+    let (service_context, request_context, stager) = contexts();
     let page_url = "https://app.notion.com/p/4d005e63b2fd4d079df4e376e35b7519";
 
     let response = ImportNotionPage {
@@ -243,7 +207,7 @@ async fn import_notion_page_runs_the_workflow_and_returns_the_document() {
 
 #[tokio::test]
 async fn import_notion_page_requires_a_page_url() {
-    let (service_context, request_context, stager) = contexts(ToolPolicy::chat());
+    let (service_context, request_context, stager) = contexts();
 
     let error = ImportNotionPage {
         page_url: "  ".to_string(),
@@ -258,7 +222,7 @@ async fn import_notion_page_requires_a_page_url() {
 
 #[tokio::test]
 async fn delete_reports_non_discardable_status() {
-    let (service_context, request_context, _) = contexts(ToolPolicy::chat());
+    let (service_context, request_context, _) = contexts();
     let err = DeleteImportEntity { id: Uuid::nil() }
         .call(service_context, request_context)
         .await

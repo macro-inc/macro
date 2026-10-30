@@ -26,11 +26,15 @@ const mocks = vi.hoisted(() => ({
 const [authenticated, setAuthenticated] = createSignal<boolean | undefined>(
   true
 );
+const [locationReady, setLocationReady] = createSignal(true);
 vi.mock('@core/context/user', () => ({
   useIsAuthenticated: () => authenticated,
 }));
 
-beforeEach(() => setAuthenticated(true));
+beforeEach(() => {
+  setAuthenticated(true);
+  setLocationReady(true);
+});
 
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
@@ -40,6 +44,15 @@ vi.mock('../context/markdown-document-context', () => ({
   useMarkdownDocument: () => ({
     documentId: () => 'document',
     kind: () => 'task',
+    state: {
+      editor: {
+        md: {
+          get locationReady() {
+            return locationReady();
+          },
+        },
+      },
+    },
     permissions: {
       canComment: () => true,
       isOwner: () => false,
@@ -203,6 +216,7 @@ describe('scrolling to a linked Discussion message', () => {
 
   afterEach(() => {
     scrollIntoView.mockReset();
+    vi.useRealTimers();
   });
 
   const navigate = (id: string) =>
@@ -221,6 +235,69 @@ describe('scrolling to a linked Discussion message', () => {
 
     expect(scrolledIds()).toEqual(['m2']);
   });
+
+  it('loads the linked discussion but waits for the document before scrolling', async () => {
+    setLocationReady(false);
+    setCommentId('m2');
+    setup();
+    expect(mocks.conversation).toHaveBeenCalledWith(
+      expect.objectContaining({ targetId: 'm2' })
+    );
+
+    setRenderedMessageIds(['m1', 'm2']);
+    await flushMutations();
+    expect(scrolledIds()).toEqual([]);
+
+    setLocationReady(true);
+    expect(scrolledIds()).toEqual(['m2']);
+
+    setRenderedMessageIds(['m1', 'm2', 'm3']);
+    await flushMutations();
+    expect(scrolledIds()).toEqual(['m2']);
+  });
+
+  it('resumes a pending navigation after the editor temporarily becomes unready', async () => {
+    setCommentId('m2');
+    setup();
+    setLocationReady(false);
+    setLocationReady(true);
+
+    setRenderedMessageIds(['m2']);
+    await flushMutations();
+    expect(scrolledIds()).toEqual(['m2']);
+  });
+
+  it('expires a navigation when the editor never becomes ready', () => {
+    vi.useFakeTimers();
+    setLocationReady(false);
+    setCommentId('m2');
+    setRenderedMessageIds(['m2']);
+    setup();
+
+    vi.advanceTimersByTime(10_000);
+    setLocationReady(true);
+    expect(scrolledIds()).toEqual([]);
+
+    navigate('m2');
+    expect(scrolledIds()).toEqual(['m2']);
+  });
+
+  it.each(['wheel', 'touchmove', 'keydown', 'pointerdown'])(
+    'lets %s cancel a navigation while the editor is still loading',
+    async (type) => {
+      setLocationReady(false);
+      setCommentId('m2');
+      setup();
+      window.dispatchEvent(new Event(type));
+      setRenderedMessageIds(['m2']);
+      setLocationReady(true);
+      await flushMutations();
+      expect(scrolledIds()).toEqual([]);
+
+      navigate('m2');
+      expect(scrolledIds()).toEqual(['m2']);
+    }
+  );
 
   it('leaves margin comment links to the margin without targeting Discussion', async () => {
     mocks.anchor = { type: 'markdown', mark_id: 'mark' };

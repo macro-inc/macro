@@ -26,6 +26,12 @@ Returns the pre-processed document to be uses in the cognition service.
 ## POST /snapshot/markdown
 Accepts `{ "markdown": "..." }` and returns an `application/octet-stream` Loro snapshot equivalent to the markdown block migration path.
 
+## POST /snapshot/notion
+Accepts `{ "markdown": "...", "links": { "pages": { "<notion id>": { "documentId", "name" } }, "users": { "<notion id>": { "userId", "email" } } } }`
+with a page in Notion's enhanced markdown and returns `{ "snapshot": "<base64 Loro snapshot>", "markdown": "<Macro markdown>" }`.
+Notion ids are dashless and lowercase. Mapped page and people references become document and user mentions;
+the rest degrade to links or text (`packages/lexical-core/notion/`). Deploy this endpoint before the import backend that calls it.
+
 ## POST /image-markdown
 Accepts `{ "staticFileId": "<uuid>", "url": "https://...", "width": 1536, "height": 1024 }`
 and returns `{ "markdown": "..." }` built from the shared Lexical image node.

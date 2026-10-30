@@ -152,6 +152,15 @@ pub struct VerifiedRingToken {
     pub room: Option<String>,
 }
 
+/// An RTC room that currently exists on the provider.
+#[derive(Debug, Clone)]
+pub struct RtcRoom {
+    /// The room name; Macro names rooms after their call id.
+    pub name: String,
+    /// When the provider created the room.
+    pub created_at: DateTime<Utc>,
+}
+
 /// Response for the leave/end call operation.
 #[derive(Debug, serde::Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -546,8 +555,8 @@ pub struct CallRecord {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallRecordSource {
-    /// Provider slug, e.g. `granola`.
-    pub provider: String,
+    /// Provider that supplied the call.
+    pub provider: crate::domain::records::CallProvider,
     /// Link to the call in the provider's app, if it has one.
     pub external_url: Option<String>,
 }

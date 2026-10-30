@@ -1,4 +1,4 @@
-import { createProjectDetailQuery } from '@app/features/projects/queries/project-identity';
+import { createProjectIdentityQuery } from '@app/features/projects/queries/project-identity';
 import type { FacetSelection, SortSelection } from '@app/features/soup';
 import { sortItems } from '@app/features/soup/collection/transforms';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
@@ -104,12 +104,12 @@ export function createTaskBoardQueries(options: {
   });
 
   const projects = mapArray(projectIds, (id) =>
-    createProjectDetailQuery(getGraphqlSoupClient, options.userId, () => id)
+    createProjectIdentityQuery(getGraphqlSoupClient, options.userId, () => id)
   );
 
   const projectMap = createMemo(() => {
     const entries = projects().flatMap((query) => {
-      const project = query.isSuccess ? query.data?.project : undefined;
+      const project = query.isSuccess ? query.data : undefined;
 
       return project ? [[project.id, project] as const] : [];
     });

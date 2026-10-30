@@ -46,7 +46,7 @@ const detail: FormCollaboration['detail'] = {
 };
 
 describe('publicationMessage', () => {
-  it('names the affected question and uses screener wording', () => {
+  it('names the affected question and uses gate wording', () => {
     expect(
       publicationMessage({
         detail,
@@ -55,7 +55,7 @@ describe('publicationMessage', () => {
           problem: { kind: 'gateNamesLaterColumn', column: 'column' },
         },
       })
-    ).toBe('“Name” must come before the screener that checks it.');
+    ).toBe('“Name” must come before the gate that checks it.');
     expect(
       publicationMessage({
         detail,

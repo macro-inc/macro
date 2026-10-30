@@ -221,14 +221,20 @@ impl EntityAccessService for FakeEntityAccessService {
 struct FakeJwtValidator;
 
 impl JwtValidator for FakeJwtValidator {
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
         match jwt {
-            "valid" => Ok(ValidatedIdentity {
-                agent_id: None,
-                user_id: VALID_USER_ID.to_string(),
-                fusion_user_id: "fusion-valid-user".to_string(),
-                organization_id: Some(ORGANIZATION_ID),
-                permissions: None,
+            "valid" => Ok(macro_authorization::ValidatedCredential {
+                origin: macro_authorization::CredentialOrigin::Session,
+                identity: ValidatedIdentity {
+                    agent_id: None,
+                    user_id: VALID_USER_ID.to_string(),
+                    fusion_user_id: "fusion-valid-user".to_string(),
+                    organization_id: Some(ORGANIZATION_ID),
+                    permissions: None,
+                },
             }),
             "expired" => Err(Report::new(MacroAuthorizationError::CredentialsExpired)),
             _ => Err(Report::new(MacroAuthorizationError::InvalidCredentials)),

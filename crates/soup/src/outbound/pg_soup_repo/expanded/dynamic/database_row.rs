@@ -18,6 +18,7 @@ pub(in crate::outbound::pg_soup_repo) fn build_database_row_filter(
             Expr::And(a, b) => format!("({} AND {})", fold(a), fold(b)),
             Expr::Or(a, b) => format!("({} OR {})", fold(a), fold(b)),
             Expr::Not(a) => format!("NOT ({})", fold(a)),
+            Expr::Literal(DatabaseRowLiteral::Include) => "TRUE".to_owned(),
             Expr::Literal(DatabaseRowLiteral::TableId(id)) => format!("r.table_id = '{id}'"),
             Expr::Literal(DatabaseRowLiteral::Id(id)) => format!("r.id = '{id}'"),
         }

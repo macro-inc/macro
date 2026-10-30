@@ -20,6 +20,7 @@ tokio = { workspace = true, features = ["fs", "macros", "sync", "time"] }
 tracing = { workspace = true }
 url = { workspace = true }
 zip = "6"
+uuid = { version = "1.18.1", features = ["v4"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.5"
@@ -29,4 +30,7 @@ jni = "0.21"
 ndk-context = "0.1"
 
 [dev-dependencies]
+specta = { version = "=2.0.0-rc.25", features = ["derive"] }
+specta-serde = "=0.0.12"
+specta-typescript = "=0.0.12"
 tokio = { workspace = true, features = ["macros", "rt"] }

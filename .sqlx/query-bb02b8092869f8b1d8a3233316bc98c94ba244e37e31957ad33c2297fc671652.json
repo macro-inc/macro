@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM calendar_event_notes note\n                JOIN \"Document\" d ON d.id = note.document_id\n                  AND d.\"deletedAt\" IS NULL AND d.\"fileType\" = 'md'\n                WHERE note.document_id = $1 AND (\n                    calendar_note_event_visible($2, note.event_id, note.occurrence_key)\n                    OR EXISTS (\n                        SELECT 1 FROM team_user member\n                        WHERE member.team_id = note.team_id AND member.user_id = $2\n                    )\n                )\n            ) AS \"visible!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "visible!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bb02b8092869f8b1d8a3233316bc98c94ba244e37e31957ad33c2297fc671652"
+}

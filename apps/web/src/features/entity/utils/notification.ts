@@ -1,3 +1,4 @@
+import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity, NotificationType } from '@core/types';
 import type { NotificationStack } from '@notifications/notification-stacking';
@@ -236,7 +237,7 @@ export function getNotificationActionText(n: Notification): string {
 
   return match(tag)
     .with('channel_mention', () => 'mentioned')
-    .with('channel_message_send', () => 'sent')
+    .with('channel_message_send', 'external_chat_message', () => 'sent')
     .with('channel_message_reaction', () => 'reacted')
     .with('channel_message_reply', () => 'replied')
     .with('document_mention', () => 'mentioned')
@@ -270,6 +271,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('call_started', () => 'called')
     .with('reminder', () => 'reminder')
     .with('calendar_event_reminder', () => 'starting soon')
+    .with('calendar_event_join_request', () => 'asked to join')
     .with('inbox_reauth_required', () => 'needs reconnection')
     .with('agent_session_settled', () => 'finished')
     .with('agent_session_waiting_for_input', () => 'asked')
@@ -341,11 +343,16 @@ export function extractMessageContent(notification: Notification): string {
         m.content.displayName ||
         ''
     )
+    .with(
+      { tag: 'external_chat_message' },
+      (m) => `New ${providerIdentity(m.content.provider).label} message`
+    )
     .with({ tag: 'channel_invite' }, () => '')
     .with({ tag: 'invite_to_team' }, () => '')
     .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? '')
     .with({ tag: 'reminder' }, (m) => m.content.description)
     .with({ tag: 'calendar_event_reminder' }, (m) => m.content.title || '')
+    .with({ tag: 'calendar_event_join_request' }, (m) => m.content.title || '')
     .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress || '')
     .with(
       { tag: 'agent_session_settled' },

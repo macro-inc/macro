@@ -1,6 +1,7 @@
-import { createRoot } from 'solid-js';
+import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { entryHead } from '../core/collapse-runs';
+import type { ActivityScope } from '../core/event';
 import { createdEvent, editedEvent } from '../queries/fixtures';
 import { createMockActivityContext } from '../tests/mock-context';
 import { feedPage, overviewPage } from '../tests/wire';
@@ -17,7 +18,7 @@ function setup() {
   const context = createMockActivityContext();
   let state!: MyActivityState;
   const dispose = createRoot((rootDispose) => {
-    state = createMyActivityState(context);
+    state = createMyActivityState(context, () => 'mine');
     return rootDispose;
   });
   disposals.push(dispose);
@@ -64,7 +65,7 @@ describe('createMyActivityState', () => {
     let state!: MyActivityState;
     disposals.push(
       createRoot((dispose) => {
-        state = createMyActivityState(context);
+        state = createMyActivityState(context, () => 'mine');
         return dispose;
       })
     );
@@ -234,5 +235,85 @@ describe('createMyActivityState', () => {
     const overview = state.overview();
     if (overview.t !== 'ready') throw new Error(overview.t);
     expect(overview.overview.total).toBe(3);
+  });
+
+  describe('team scope', () => {
+    const teammateEdit = {
+      ...editedEvent,
+      id: 'evt-team',
+      actorId: 'macro|priya@example.com',
+      subjectId: 'macro|priya@example.com',
+    };
+
+    function setupScoped(initial: ActivityScope) {
+      const context = createMockActivityContext();
+      const [scope, setScope] = createSignal<ActivityScope>(initial);
+      let state!: MyActivityState;
+      disposals.push(
+        createRoot((dispose) => {
+          state = createMyActivityState(context, scope);
+          return dispose;
+        })
+      );
+      return { state, setScope, graphql: context.graphqlMock };
+    }
+
+    const feedRequests = (graphql: ReturnType<typeof setupScoped>['graphql']) =>
+      graphql.pending
+        .filter((op) => op.name === 'MyActivity')
+        .map((op) => op.variables);
+
+    const feedIds = (state: MyActivityState) => {
+      const feed = state.feed();
+      if (feed.t !== 'ready') return feed.t;
+      return feed.groups.flatMap((g) => g.entries.map((e) => entryHead(e).id));
+    };
+
+    it('reads the team feed and leaves out the overview row', () => {
+      const { state, graphql } = setupScoped('team');
+
+      expect(feedRequests(graphql)).toEqual([
+        { input: { limit: 50, cursor: null, scope: 'TEAM' } },
+      ]);
+      expect(state.rows().map((row) => row.kind)).toEqual(['status']);
+
+      graphql.latest('MyActivity').resolve(feedPage([teammateEdit]));
+
+      expect(feedIds(state)).toEqual(['evt-team']);
+      expect(state.rows().map((row) => row.kind)).toEqual(['day', 'entry']);
+    });
+
+    it('keeps paging through empty pages before calling the feed empty', () => {
+      const { state, graphql } = setupScoped('team');
+      graphql.latest('MyActivity').resolve(feedPage([], 'c2'));
+
+      // Nothing visible yet, but more pages remain: the tail, not the empty copy.
+      expect(state.rows().map((row) => row.kind)).toEqual(['tail']);
+      state.loadMore();
+      expect(graphql.latest('MyActivity').variables).toEqual({
+        input: { limit: 50, cursor: 'c2', scope: 'TEAM' },
+      });
+      graphql.latest('MyActivity').resolve(feedPage([], null));
+
+      expect(state.feed().t).toBe('empty');
+    });
+
+    it("never shows one tab the other tab's rows, and keeps both feeds", () => {
+      const { state, setScope, graphql } = setupScoped('mine');
+      graphql.latest('MyActivity').resolve(feedPage([createdEvent]));
+      expect(feedIds(state)).toEqual(['evt-1']);
+
+      setScope('team');
+      expect(state.feed().t).toBe('loading');
+      expect(graphql.latest('MyActivity').variables).toEqual({
+        input: { limit: 50, cursor: null, scope: 'TEAM' },
+      });
+      graphql.latest('MyActivity').resolve(feedPage([teammateEdit]));
+      expect(feedIds(state)).toEqual(['evt-team']);
+
+      setScope('mine');
+      expect(feedIds(state)).toEqual(['evt-1']);
+      expect(state.rows()[0]?.kind).toBe('overview');
+    });
   });
 });

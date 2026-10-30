@@ -82,10 +82,17 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
     return !!card;
   }
 
-  async function afterSend(newMessageId: string | null) {
+  async function afterSend(
+    newMessageId: string | null,
+    sent?: { queuedOffline: boolean }
+  ) {
     // Collapse the input after sending (Gmail-style).
     props.setShowReply?.(false);
 
+    if (sent?.queuedOffline) {
+      (ctx.returnToList ?? viewContext.composeHost?.goBack)?.();
+      return;
+    }
     if (!newMessageId) return;
 
     focusMessage(newMessageId);

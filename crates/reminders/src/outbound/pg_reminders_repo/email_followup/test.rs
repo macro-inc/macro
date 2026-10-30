@@ -892,3 +892,5 @@ async fn undo_and_archive_rollback_restore_original_inbox_order(pool: PgPool) {
         service.mailbox.0.lock().unwrap().archive_fails = false;
     }
 }
+
+mod outlook;

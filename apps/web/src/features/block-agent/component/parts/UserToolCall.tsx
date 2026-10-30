@@ -11,8 +11,8 @@
  */
 
 import { ItemPreview } from '@core/component/ItemPreview';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import EmailIcon from '@phosphor/envelope.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
 import type {
   ToolDetail,
   UserToolOutcome,

@@ -1,9 +1,10 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { CallChatHistory } from '@channel/Call/chat/CallChatHistory';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CallRecord } from '@service-call/client';
 import { format } from 'date-fns';
 import {
@@ -148,8 +149,9 @@ export function CallRecordingBody(props: {
   return (
     <div class="relative flex-1 min-h-0 overflow-hidden">
       <SidePanel.HeaderActions>
-        <div class="flex shrink-0 items-center gap-1">
+        <HeaderActionGroup label="Actions">
           <AskMacroButton
+            grouped
             entity={{
               type: 'document',
               id: props.callId,
@@ -157,7 +159,7 @@ export function CallRecordingBody(props: {
               fileType: 'call',
             }}
           />
-        </div>
+        </HeaderActionGroup>
       </SidePanel.HeaderActions>
       <div
         data-channel-scroll
@@ -219,6 +221,7 @@ export function CallRecordingBody(props: {
                     fallback={
                       <div class="grid min-h-32 place-items-center text-ink-muted">
                         <SpinnerIcon
+                          aria-hidden={false}
                           aria-label="Loading transcript"
                           class="size-5 animate-spin"
                         />

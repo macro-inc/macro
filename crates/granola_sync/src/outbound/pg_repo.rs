@@ -80,7 +80,7 @@ impl SyncRepository for PgSyncRepository {
                 namespace: row.namespace,
                 user_id: MacroUserIdStr::parse_from_str(&row.user_id)?.into_owned(),
                 account_id: row.account_id,
-                scope: serde_json::from_value(serde_json::Value::String(row.scope))?,
+                scope: row.scope.parse()?,
                 enabled: row.enabled,
                 endpoint_id: row.endpoint_id,
                 secret: row
@@ -89,7 +89,7 @@ impl SyncRepository for PgSyncRepository {
                     .transpose()?,
                 started_at: row.started_at,
                 last_synced_at: row.last_synced_at,
-                last_error: row.last_error,
+                last_error: row.last_error.as_deref().map(str::parse).transpose()?,
             })
         })
         .transpose()
@@ -108,11 +108,11 @@ impl SyncRepository for PgSyncRepository {
                     id: row.id,
                     user_id: MacroUserIdStr::parse_from_str(&row.user_id)?.into_owned(),
                     account_id: row.account_id,
-                    scope: serde_json::from_value(serde_json::Value::String(row.scope))?,
+                    scope: row.scope.parse()?,
                     enabled: row.enabled,
                     has_endpoint: row.has_endpoint,
                     started_at: row.started_at,
-                    last_error: row.last_error,
+                    last_error: row.last_error.as_deref().map(str::parse).transpose()?,
                 })
             })
             .collect()
@@ -130,7 +130,7 @@ impl SyncRepository for PgSyncRepository {
                 OR granola_sync_connections.started_at < now() - interval '2 minutes'
             RETURNING id"#,
             connection.id, connection.user_id.as_ref(), connection.account_id,
-            connection.scope.as_str(), connection.started_at, connection.namespace
+            connection.scope.as_ref(), connection.started_at, connection.namespace
         ).fetch_optional(tx.as_mut()).await?;
         if row.is_some() {
             sqlx::query!(
@@ -148,7 +148,7 @@ impl SyncRepository for PgSyncRepository {
         let changed = sqlx::query!(
             "UPDATE granola_sync_connections SET enabled = true, endpoint_id = $2, signing_secret = $3, scope = $4
              WHERE id = $1 AND last_error IS NULL AND endpoint_id IS NULL",
-            id, webhook.id, encrypted, scope.as_str()
+            id, webhook.id, encrypted, scope.as_ref()
         ).execute(&self.pool).await?.rows_affected();
         Ok(changed == 1)
     }
@@ -156,15 +156,20 @@ impl SyncRepository for PgSyncRepository {
         sqlx::query!(
             "UPDATE granola_sync_connections SET enabled = false, last_error = $2 WHERE id = $1",
             id,
-            STOPPED
+            SyncIssue::Stopped.as_ref()
         )
         .execute(&self.pool)
         .await?;
         Ok(())
     }
     async fn failed_setup(&self, id: Uuid) -> Result<()> {
-        sqlx::query!("UPDATE granola_sync_connections SET enabled = false, last_error = 'Could not register Granola webhook' WHERE id = $1", id)
-            .execute(&self.pool).await?;
+        sqlx::query!(
+            "UPDATE granola_sync_connections SET enabled = false, last_error = $2 WHERE id = $1",
+            id,
+            SyncIssue::SetupFailed.as_ref()
+        )
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
     async fn enqueue(&self, id: Uuid, event: Event) -> Result<()> {
@@ -172,7 +177,7 @@ impl SyncRepository for PgSyncRepository {
             r#"INSERT INTO granola_sync_events (connection_id, event_id, note_id, event_type, occurred_at)
             SELECT id, $2, $3, $4, $5 FROM granola_sync_connections WHERE id = $1 AND enabled
             ON CONFLICT (connection_id, event_id) DO NOTHING"#,
-            id, event.event_id, event.note_id.as_ref(), event.event_type.as_str(), event.occurred_at
+            id, event.event_id, event.note_id.as_ref(), event.event_type.as_ref(), event.occurred_at
         ).execute(&self.pool).await?;
         Ok(())
     }
@@ -203,11 +208,8 @@ impl SyncRepository for PgSyncRepository {
             attempts: row.attempts,
             event: Event {
                 event_id: row.event_id,
-                note_id: row
-                    .note_id
-                    .try_into()
-                    .map_err(|e| rootcause::report!("{e}"))?,
-                event_type: serde_json::from_value(serde_json::Value::String(row.event_type))?,
+                note_id: NoteId(row.note_id),
+                event_type: row.event_type.parse()?,
                 occurred_at: row.occurred_at,
             },
         }))
@@ -234,10 +236,14 @@ impl SyncRepository for PgSyncRepository {
             sqlx::query!(
                 r#"UPDATE granola_sync_connections
                 SET last_synced_at = CASE WHEN $2 THEN now() ELSE last_synced_at END,
-                    last_error = CASE WHEN $2 THEN NULL ELSE 'Meeting sync failed; retrying automatically' END
+                    last_error = CASE WHEN $2 THEN NULL ELSE $3 END
                 WHERE id = $1 AND enabled"#,
-                job.connection.id, success
-            ).execute(tx.as_mut()).await?;
+                job.connection.id,
+                success,
+                SyncIssue::MeetingSyncFailed.as_ref()
+            )
+            .execute(tx.as_mut())
+            .await?;
         }
         // Keep deduplication records longer than Granola's four-day retry window.
         sqlx::query!("DELETE FROM granola_sync_events WHERE connection_id = $1 AND completed_at < now() - interval '7 days'", job.connection.id)

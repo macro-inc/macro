@@ -28,6 +28,7 @@ function toItemType(type: EntityRef['type']): ItemType | undefined {
       // items.
       'database',
       'database_row',
+      'external_chat',
       () => undefined
     )
     .otherwise((itemType) => itemType);

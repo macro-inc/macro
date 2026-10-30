@@ -119,6 +119,7 @@ fn property_data_type_name(data_type: DataType) -> &'static str {
     match data_type {
         DataType::Boolean => "boolean",
         DataType::Date => "date",
+        DataType::DateRange => "date_range",
         DataType::Number => "number",
         DataType::String => "string",
         DataType::SelectNumber => "select_number",

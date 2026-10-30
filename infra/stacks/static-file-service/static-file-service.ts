@@ -134,6 +134,11 @@ export class StaticFileService extends pulumi.ComponentResource {
             expiredObjectDeleteMarker: true,
           },
         },
+        {
+          enabled: true,
+          transitions: [{ days: 0, storageClass: 'INTELLIGENT_TIERING' }],
+          abortIncompleteMultipartUploadDays: 7,
+        },
       ],
       corsRules: [
         {

@@ -335,6 +335,11 @@ export function createNotificationSource(
     // notification edges or dedicated notification queries instead.
     if (!enabled() || usesGraphql()) return;
     if (!notificationsQuery.data) return;
+    // A failed page keeps the loaded pages and the next cursor, so fetching
+    // again here would repeat the failed request in a tight loop (for example,
+    // a 401 after the session expired). The next successful fetch clears the
+    // error and resumes pagination.
+    if (notificationsQuery.error) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       fireAndForget(notificationsQuery.fetchNextPage(), 'notifications');
     }

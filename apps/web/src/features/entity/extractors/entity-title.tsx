@@ -1,3 +1,4 @@
+import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
@@ -19,7 +20,7 @@ function extractRawTitle(entity: EntityData): JSX.Element {
     .with({ type: 'channel' }, (e) => e.name)
     .with({ type: 'channel_message' }, (e) => e.channelName)
     .with({ type: 'channel_thread' }, (e) => e.name)
-    .with({ type: 'email' }, (e) => e.name || '(No Subject)')
+    .with({ type: 'email' }, (e) => displaySubject(e.name))
     .with({ type: 'agent_session' }, (e) => e.name || 'Agent session')
     .with({ type: 'chat' }, (e) => e.name)
     .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))

@@ -441,8 +441,8 @@ const SCRIPT: Block[] = [
 
 /** The run the comment lands on, and the comment itself. */
 const COMMENT_TEXT = 'Please check the date against Valentina’s email.';
-/** Which block carries the highlight and the badge -- the "Agenda" heading. */
-const COMMENT_BLOCK = 4;
+/** Anchor the date-check comment to the launch date, not the checklist heading. */
+const COMMENT_BLOCK = 3;
 
 // ---------------------------------------------------------------------------
 // The timeline, built rather than named
@@ -620,7 +620,7 @@ const TL = {
   commentType: [TYPED_END + 3280, TYPED_END + 4540] as const,
   send: TYPED_END + 4860,
   composerOut: [TYPED_END + 4860, TYPED_END + 5080] as const,
-  /** The heading keeps the highlight and picks up its badge. */
+  /** The commented text keeps its highlight and picks up its badge. */
   markIn: [TYPED_END + 4920, TYPED_END + 5240] as const,
   /** The pointer leaves the way it came. */
   pointerOut: [TYPED_END + 5080, TYPED_END + 5680] as const,
@@ -1409,7 +1409,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
         .mds-line.h2 { font-size: 1.2em; font-weight: 600; }
         .mds-line.row { display: flex; gap: 0.6em; }
         .mds-line.rowmid { margin-bottom: 0.36em; }
-        /* The heading row carries its comment badge at the far end. */
+        /* The commented row carries its badge at the far end. */
         .mds-h2row { align-items: center; display: flex; gap: 0.86em; justify-content: space-between; }
         .mds-run { position: relative; }
 
@@ -1555,7 +1555,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
            run of one: select-all is a keystroke, so it does not sweep and it
            does not need character boundaries. */
         .mds-selall { background-color: color-mix(in srgb, var(--c1) 16%, transparent); bottom: -0.12em; left: -1px; position: absolute; right: -1px; top: -0.06em; }
-        .mds-mark { background-color: color-mix(in srgb, var(--a0) 24%, transparent); border-bottom: max(1.5px, 0.11em) solid var(--a0); bottom: -0.12em; left: -1px; position: absolute; right: -1px; top: -0.06em; }
+        .mds-mark { background-color: oklch(from var(--color-yellow) l c h / .1); border-bottom: 2px solid oklch(from var(--color-yellow) l c h / .3); bottom: -0.12em; left: -1px; position: absolute; right: -1px; top: -0.06em; }
         .mds-runtext { position: relative; }
 
         .mds-bar {
@@ -1624,7 +1624,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
 
         .mds-badge {
           align-items: center;
-          background-color: color-mix(in srgb, var(--a0) 20%, transparent);
+          background-color: oklch(from var(--color-yellow) l c h / .1);
           border-radius: 0.36em;
           display: inline-flex;
           flex: none;
@@ -1900,6 +1900,9 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
                   <Show when={bi() === COMMENT_BLOCK && markAmt() > 0.004}>
                     <span
                       class="mds-badge"
+                      role="img"
+                      aria-label={`1 comment on the launch date: ${COMMENT_TEXT}`}
+                      title={COMMENT_TEXT}
                       style={{
                         opacity: markAmt().toFixed(3),
                         transform: `scale(${(0.86 + markAmt() * 0.14).toFixed(3)})`,

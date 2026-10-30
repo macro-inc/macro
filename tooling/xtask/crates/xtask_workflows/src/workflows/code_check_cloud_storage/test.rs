@@ -113,6 +113,20 @@ fn tests_continue_to_exclude_sync_service() {
     );
 }
 
+/// --all-features hides soup helpers that only the service or the Postgres
+/// repository call; most dependents build soup without `outbound`.
+#[test]
+fn clippy_lints_soup_without_outbound_whenever_soup_is_linted() {
+    let script = include_str!("../scripts/cargo_clippy.sh");
+    assert!(script.contains("cargo clippy -p soup --no-default-features\n"));
+    assert!(script.contains("cargo clippy -p soup --no-default-features --features ports"));
+    let calls = script.matches("\n  clippy_soup_without_outbound\n").count();
+    assert_eq!(
+        calls, 2,
+        "both the full run and a targeted soup run lint it: {script}"
+    );
+}
+
 /// The `if … fi` block starting at `marker` in the filter script.
 fn filter_script_block(marker: &str) -> &'static str {
     let script = include_str!("../scripts/compute_nextest_filter.sh");

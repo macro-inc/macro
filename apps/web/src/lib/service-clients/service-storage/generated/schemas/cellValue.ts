@@ -8,6 +8,7 @@ import type { CellValueOneOf } from './cellValueOneOf';
 import type { CellValueOneOfFive } from './cellValueOneOfFive';
 import type { CellValueOneOfNine } from './cellValueOneOfNine';
 import type { CellValueOneOfOnefive } from './cellValueOneOfOnefive';
+import type { CellValueOneOfOnenine } from './cellValueOneOfOnenine';
 import type { CellValueOneOfOneone } from './cellValueOneOfOneone';
 import type { CellValueOneOfOneseven } from './cellValueOneOfOneseven';
 import type { CellValueOneOfOnethree } from './cellValueOneOfOnethree';
@@ -27,4 +28,5 @@ export type CellValue =
   | CellValueOneOfOneone
   | CellValueOneOfOnethree
   | CellValueOneOfOnefive
-  | CellValueOneOfOneseven;
+  | CellValueOneOfOneseven
+  | CellValueOneOfOnenine;

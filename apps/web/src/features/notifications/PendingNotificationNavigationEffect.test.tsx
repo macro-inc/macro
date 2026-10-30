@@ -20,6 +20,7 @@ import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   pendingNotificationNavigationId,
+  receiveNotificationTap,
   setPendingNotificationNavigationId,
 } from './notification-navigation-intent';
 import type { NotificationSource } from './notification-source';
@@ -29,6 +30,7 @@ type OpenAttempt = {
   canOpen: () => boolean;
   onApplied: VoidFunction;
   succeed: VoidFunction;
+  fail: (error: { tag: 'NavigationFailedError'; cause: unknown }) => void;
 };
 
 function managerHarness(initiallyReady = false) {
@@ -76,8 +78,8 @@ describe('usePendingNotificationNavigationEffect', () => {
         _source: NotificationSource,
         options: Pick<OpenAttempt, 'canOpen' | 'onApplied'>
       ) => ({
-        match: (onSuccess: VoidFunction) => {
-          attempts.push({ ...options, succeed: onSuccess });
+        match: (onSuccess: VoidFunction, onError: OpenAttempt['fail']) => {
+          attempts.push({ ...options, succeed: onSuccess, fail: onError });
         },
       })
     );
@@ -94,7 +96,10 @@ describe('usePendingNotificationNavigationEffect', () => {
 
   function mount(source = {} as NotificationSource) {
     dispose = createRoot((rootDispose) => {
-      usePendingNotificationNavigationEffect(source);
+      usePendingNotificationNavigationEffect(
+        source,
+        () => 'macro|test@example.com'
+      );
       return rootDispose;
     });
     return source;
@@ -125,6 +130,69 @@ describe('usePendingNotificationNavigationEffect', () => {
     expect(pendingNotificationNavigationId()).toBe('notification-1');
 
     attempts[0]?.onApplied();
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+
+  it('passes an account-bound destination without waiting for notification hydration', async () => {
+    const host = managerHarness(true);
+    const source = mount();
+    const acknowledge = vi.fn(async () => {});
+    setGlobalSplitManager(host.manager);
+    const navigation = {
+      type: 'channel',
+      channelId: '11111111-1111-4111-8111-111111111111',
+      messageId: '22222222-2222-4222-8222-222222222222',
+      threadId: null,
+    };
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        deliveryId: 'native-tap',
+        payload: {
+          notificationId: 'notification-1',
+          recipientId: 'macro|test@example.com',
+          navigation,
+        },
+      },
+      acknowledge
+    );
+    await Promise.resolve();
+    expect(mocks.openNotificationFromId).toHaveBeenCalledWith(
+      'notification-1',
+      host.manager,
+      source,
+      {
+        canOpen: expect.any(Function),
+        onApplied: expect.any(Function),
+        target: navigation,
+      }
+    );
+    expect(acknowledge).not.toHaveBeenCalled();
+    attempts[0]?.onApplied();
+    await Promise.resolve();
+    expect(acknowledge).toHaveBeenCalledWith('native-tap');
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+
+  it('discards another account’s tap without opening or fetching it', async () => {
+    const host = managerHarness(true);
+    mount();
+    setGlobalSplitManager(host.manager);
+    const acknowledge = vi.fn(async () => {});
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        deliveryId: 'wrong-account',
+        payload: {
+          notificationId: 'private-notification',
+          recipientId: 'macro|another@example.com',
+        },
+      },
+      acknowledge
+    );
+    await Promise.resolve();
+    expect(mocks.openNotificationFromId).not.toHaveBeenCalled();
+    expect(acknowledge).toHaveBeenCalledWith('wrong-account');
     expect(pendingNotificationNavigationId()).toBeUndefined();
   });
 
@@ -192,6 +260,42 @@ describe('usePendingNotificationNavigationEffect', () => {
     expect(attempts).toHaveLength(2);
     attempts[1]?.succeed();
     attempts[1]?.onApplied();
+    expect(pendingNotificationNavigationId()).toBeUndefined();
+  });
+
+  it('does not acknowledge a newer tap when an older lookup fails', async () => {
+    const host = managerHarness(true);
+    mount();
+    setGlobalSplitManager(host.manager);
+    const acknowledge = vi.fn(async () => {});
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        deliveryId: 'older-delivery',
+        payload: { notificationId: 'older-notification' },
+      },
+      acknowledge
+    );
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        deliveryId: 'newer-delivery',
+        payload: { notificationId: 'newer-notification' },
+      },
+      acknowledge
+    );
+    expect(attempts).toHaveLength(2);
+
+    attempts[0]?.fail({
+      tag: 'NavigationFailedError',
+      cause: new Error('lookup unavailable'),
+    });
+    expect(acknowledge).not.toHaveBeenCalled();
+    expect(pendingNotificationNavigationId()).toBe('newer-notification');
+
+    attempts[1]?.onApplied();
+    await Promise.resolve();
+    expect(acknowledge).toHaveBeenCalledExactlyOnceWith('newer-delivery');
     expect(pendingNotificationNavigationId()).toBeUndefined();
   });
 });

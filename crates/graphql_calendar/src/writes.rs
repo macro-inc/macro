@@ -3,7 +3,10 @@ use std::{future::Future, pin::Pin, sync::Arc};
 use calendar_events::domain::{
     changes::{CalendarChangeQueryService, CalendarEventChange},
     meeting_links::CreateEventWithMacroCallError,
-    models::{AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventPatch},
+    models::{
+        AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
+        CalendarEventPatch,
+    },
     ports::{
         CalendarDeletionScope, CalendarMacroCallService, CalendarMutationError,
         CalendarMutationService, CalendarRsvpScope, CalendarUpdateScope,
@@ -60,6 +63,15 @@ pub(crate) trait CalendarGraphqlWrites: Send + Sync {
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
         responding_email: Option<String>,
+    ) -> WriteFuture<'_, CalendarEvent>;
+
+    fn invite_guests(
+        &self,
+        viewer: String,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        guests: Vec<CalendarAttendeeInput>,
+        scope: CalendarUpdateScope,
     ) -> WriteFuture<'_, CalendarEvent>;
 
     fn event_change(
@@ -179,6 +191,21 @@ where
                     scope,
                     responding_email,
                 )
+                .await
+        })
+    }
+
+    fn invite_guests(
+        &self,
+        viewer: String,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        guests: Vec<CalendarAttendeeInput>,
+        scope: CalendarUpdateScope,
+    ) -> WriteFuture<'_, CalendarEvent> {
+        Box::pin(async move {
+            self.mutations
+                .invite_guests(&viewer, event_id, calendar_id, guests, scope)
                 .await
         })
     }

@@ -14,6 +14,9 @@ pub mod get_team_invites;
 pub mod get_user_invites;
 /// Get all teams for a user.
 pub mod get_user_teams;
+/// Read, create, and turn off a team's shareable invite link, and join
+/// through it.
+pub mod invite_link;
 /// Invite users to a team.
 pub mod invite_to_team;
 /// Join a team via invite.
@@ -57,7 +60,7 @@ use crate::domain::{
         RemoveTeamInviteError, RemoveUserFromTeamError, SetTeamMemberPlanError, TeamError,
         ToggleAutoJoinDomainError,
     },
-    team_repo::TeamService,
+    team_repo::{TeamInviteLinkService, TeamService},
 };
 
 /// Router state containing the team service.
@@ -96,7 +99,7 @@ impl<T, Eas, Auth> Clone for TeamRouterState<T, Eas, Auth> {
 /// Build the teams router with all endpoints.
 pub fn teams_router<T, Eas, Auth, S>(state: TeamRouterState<T, Eas, Auth>) -> Router<S>
 where
-    T: TeamService,
+    T: TeamService + TeamInviteLinkService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     S: Send + Sync + 'static,
@@ -129,6 +132,20 @@ where
         )
         .route("/invites", get(get_team_invites::handler::<T, Eas, Auth>))
         .route("/invite", post(invite_to_team::handler::<T, Eas, Auth>))
+        .route(
+            "/invite-link",
+            get(invite_link::get_handler::<T, Eas, Auth>)
+                .post(invite_link::create_handler::<T, Eas, Auth>)
+                .delete(invite_link::delete_handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/invite-link/team",
+            post(invite_link::get_team_handler::<T, Eas, Auth>),
+        )
+        .route(
+            "/invite-link/join",
+            post(invite_link::join_handler::<T, Eas, Auth>),
+        )
         .route(
             "/join/{team_invite_id}",
             delete(reject_invitation::handler::<T, Eas, Auth>),
@@ -262,7 +279,7 @@ impl IntoResponse for InviteUsersToTeamError {
             InviteUsersToTeamError::TooManyEmails => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
-                    message: "too many emails".into(),
+                    message: "too many invites today; try again tomorrow".into(),
                 }),
             ),
             InviteUsersToTeamError::NonAdminInvitesDisabled => (

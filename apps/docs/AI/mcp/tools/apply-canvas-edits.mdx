@@ -1,0 +1,18 @@
+---
+title: ApplyCanvasEdits
+description: >-
+  Apply one precise CanvasEditor SDK batch directly, without a second AI model.
+---
+
+# ApplyCanvasEdits
+
+Apply one precise CanvasEditor SDK batch directly, without a second AI model. Prefer this for known moves, relabels, styles, resize or explicitly planned shapes; use EditCanvas for design/planning. ReadCanvas first for stable IDs and revision. JavaScript has editor and snippets only: no network/files/timers. Up to 100 operations/new IDs; the whole batch validates, measures real text, animates meaningful lanes, revalidates human changes and commits once with storage ACK. New IDs come only from editor.create/connect/group. Never repeat an uncertain write. SDK: editor.move([ids],dx,dy) uses WORLD deltas; editor.text(id,text,fitText?); editor.mentionUser(id,at,\{userId,email,displayName?},fitText?) inserts a real person chip preserving rich text; resolve identity first, never write literal @Name or invent IDs. Offsets are UTF-16 in ReadCanvas.text, counting each existing chip as one U+FFFC and newlines as one; userMentions reports identities and offsets. Canvas chips do not notify or grant access. editor.style([ids],\{fill?,stroke?,strokeWidth?,opacity?}); editor.resize(id,width,height,fitText?); editor.textStyle(id,\{fontSize?,fontFamily?:'sans'|'serif'|'mono',fitText?}); editor.fitText(id,mode?,width?); editor.create(\{type:'rectangle'|'ellipse'|'text',x,y,width?,height?,text?,fontSize?,fitText?,style?}) returns ID; editor.connect(\{start:\{point:\{x,y},binding?:\{targetId,anchor:'center'|'top'|'right'|'bottom'|'left'}},end:\{point:\{x,y},binding?:\{targetId,anchor}},route?:'straight'|'stepped'|'smooth',text?}) returns ID; editor.delete([ids]); editor.group([ids]) returns ID; editor.ungroup(id); editor.reparent(id,parentId); editor.order([ids],'front'|'back'|'forward'|'backward'). Text fit defaults grow: preserve readable fonts and grow height at bounded width. Explicit contain shrinks to fixed geometry; error rejects overflow. No media creation/deletion or scene replacement. Keep long prose in snippets and reference snippets.key in code. Returns measured geometry/overflow and current scene, so deterministic changes need no screenshots; visual design should still use actual image review.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `document_id` | string | Yes | Authorized Canvas document ID. |
+| `expected_revision` | string | Yes | Exact revision from a fresh ReadCanvas or RenderCanvas. |
+| `code` | string | Yes | Bounded JavaScript using editor; submit related work in one batch. |
+| `snippets` | object | No | Optional plain text values exposed as snippets inside the sandbox. |

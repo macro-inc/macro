@@ -1,14 +1,21 @@
-import TrayArrowDown from '@phosphor-icons/core/regular/tray-arrow-down.svg';
-import { createSignal } from 'solid-js';
+import TrayArrowDown from '@icon/system/regular/tray-arrow-down.svg';
+import { queryReadyGate } from '@queries/gate';
+import { useWorkspaceImportReportQuery } from '@queries/import';
+import { createSignal, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
-import { createToolRenderer } from './ToolRenderer';
+import {
+  createToolRenderer,
+  type RenderContext,
+  type ToolRenderContext,
+  useToolError,
+} from './ToolRenderer';
 
 /*
  * Renderers for the import-ledger tools the chat agent can call
- * (CreateImportEntity / ImportNotionPage / DeleteImportEntity /
- * ListImportEntities).
+ * (CreateImportEntity / ImportNotionPage / ImportFromNotion /
+ * DeleteImportEntity / ListImportEntities).
  */
 
 /** Human label for the item a call is about, from its source metadata. */
@@ -83,6 +90,88 @@ export const importNotionPageHandler = createToolRenderer({
       </BaseTool>
     );
   },
+});
+
+/** Progress while the short plan call waits; the persisted review takes over. */
+function WorkspaceScanProgress(props: {
+  source: 'notion' | 'linear' | 'jira';
+}) {
+  const report = useWorkspaceImportReportQuery(() => props.source);
+  return (
+    <Show when={queryReadyGate(report) ? report.data.scanned : undefined}>
+      {(scanned) => (
+        <span class="shrink-0 text-ink-muted">
+          {scanned().pages} {props.source === 'notion' ? 'pages' : 'issues'},{' '}
+          {scanned().dataSources}{' '}
+          {props.source === 'notion' ? 'databases' : 'projects'} found
+        </span>
+      )}
+    </Show>
+  );
+}
+
+function WorkspaceImportTool(
+  ctx: ToolRenderContext<
+    'ImportFromNotion' | 'ImportFromLinear' | 'ImportFromJira'
+  > &
+    RenderContext & { source: 'notion' | 'linear' | 'jira' }
+) {
+  const [isExpanded, setIsExpanded] = createSignal(false);
+  const hasResponse = () => ctx.response !== undefined;
+  const error = () => useToolError();
+  const source = () =>
+    match(ctx.source)
+      .with('notion', () => 'Notion')
+      .with('linear', () => 'Linear')
+      .with('jira', () => 'Jira')
+      .exhaustive();
+  const label = () =>
+    match(ctx.tool.data.action)
+      .with('plan', () => `Plan a ${source()} import`)
+      .with('status', () => `Check the ${source()} import`)
+      .with('cancel', () => `Stop the ${source()} import`)
+      .exhaustive();
+  return (
+    <BaseTool
+      icon={TrayArrowDown}
+      renderContext={ctx.renderContext}
+      type="call"
+      response={
+        hasResponse() && isExpanded() ? (
+          <div class="rounded-md bg-panel px-3 py-2 text-xs text-ink-muted">
+            {ctx.response?.data.message}
+          </div>
+        ) : undefined
+      }
+    >
+      <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
+        <div class="min-w-0 flex-1 truncate">{label()}</div>
+        <Show
+          when={ctx.tool.data.action === 'plan' && !hasResponse() && !error()}
+        >
+          <WorkspaceScanProgress source={ctx.source} />
+        </Show>
+        <Tool.ResultToggle
+          expanded={isExpanded()}
+          onToggle={() => setIsExpanded((expanded) => !expanded)}
+          showToggle={hasResponse()}
+        />
+      </div>
+    </BaseTool>
+  );
+}
+
+export const importFromNotionHandler = createToolRenderer({
+  name: 'ImportFromNotion',
+  render: (ctx) => <WorkspaceImportTool {...ctx} source="notion" />,
+});
+export const importFromLinearHandler = createToolRenderer({
+  name: 'ImportFromLinear',
+  render: (ctx) => <WorkspaceImportTool {...ctx} source="linear" />,
+});
+export const importFromJiraHandler = createToolRenderer({
+  name: 'ImportFromJira',
+  render: (ctx) => <WorkspaceImportTool {...ctx} source="jira" />,
 });
 
 export const deleteImportEntityHandler = createToolRenderer({

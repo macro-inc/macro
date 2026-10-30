@@ -7,3 +7,5 @@ pub mod http;
 pub mod ssh;
 /// Internal session-scoped MCP server.
 pub mod toolset;
+
+mod peer;

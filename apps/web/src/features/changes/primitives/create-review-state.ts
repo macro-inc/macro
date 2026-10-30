@@ -2,11 +2,12 @@
  * The reviewer's state for a changeset: collapsed diffs, the file the tree
  * last pointed at, and the notes queued for the agent.
  *
- * Collapsed diffs belong to one capture: a new changeset expands them.
+ * Collapsed diffs belong to one capture: a new changeset restores size-based defaults.
  * Notes outlive captures, since they are the reviewer's words,
  * and are only cleared by sending or deleting them.
  */
 
+import { defaultCollapsedPaths } from '@app/components/diff-view/model/collapse';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import type { Changeset } from '../core/changeset';
 import {
@@ -133,12 +134,14 @@ export function createReviewState(options: {
     () => options.changeset()?.files.map((file) => file.path) ?? []
   );
 
-  // Collapsed files from an older capture read as empty; the next write
-  // re-keys the stored state to the current capture.
+  // A fresh capture uses size-based defaults; saved choices for the same
+  // capture take precedence. The next write re-keys the stored state.
   const collapsed = createMemo(() => {
     const current = stored();
     return new Set(
-      current.changesetId === changesetId() ? current.collapsed : []
+      current.changesetId === changesetId()
+        ? current.collapsed
+        : defaultCollapsedPaths(options.changeset()?.files ?? [])
     );
   });
   const writeCollapsed = (update: (paths: string[]) => string[]) =>

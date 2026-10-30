@@ -161,16 +161,63 @@ fn map_domain_error(error: MicrosoftAuthError) -> InitOutlookLinkError {
 pub struct EmailConnectionProviders {
     pub gmail: bool,
     pub outlook: bool,
+    /// Where a Microsoft 365 administrator approves Macro for their whole
+    /// directory. Present when Outlook is configured and the request named an
+    /// `original_url` for the administrator's browser to return to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outlook_admin_consent_url: Option<String>,
 }
-#[utoipa::path(get,operation_id="email_connection_providers",path="/link/email/providers",responses((status=200,body=EmailConnectionProviders)))]
+
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct EmailConnectionProvidersQueryParams {
+    original_url: Option<Url>,
+}
+
+#[utoipa::path(
+    get,
+    operation_id = "email_connection_providers",
+    path = "/link/email/providers",
+    params(
+        ("original_url" = Option<String>, Query, description = "**OPTIONAL**. Where the admin-consent flow returns to; required for `outlook_admin_consent_url`."),
+    ),
+    responses(
+        (status = 200, body = EmailConnectionProviders),
+        (status = 400, body = ErrorResponse),
+    )
+)]
 pub async fn email_connection_providers(
     State(ctx): State<ApiContext>,
-) -> Json<EmailConnectionProviders> {
-    Json(EmailConnectionProviders {
+    Query(EmailConnectionProvidersQueryParams { original_url }): Query<
+        EmailConnectionProvidersQueryParams,
+    >,
+) -> Result<Json<EmailConnectionProviders>, InitOutlookLinkError> {
+    if original_url
+        .as_ref()
+        .is_some_and(|url| !crate::api::login::sso::is_allowed_original_url(url))
+    {
+        return Err(InitOutlookLinkError::InvalidReturnUrl);
+    }
+    // The consent URL is an optional extra; a failure to sign it must not hide
+    // which providers are available.
+    let outlook_admin_consent_url = match (&ctx.microsoft_auth, original_url) {
+        (Some(service), Some(original_url)) => service
+            .admin_consent_url(
+                &format_redirect_uri("microsoft"),
+                original_url.as_str(),
+                ctx.calendar_scope_enabled,
+            )
+            .inspect_err(|error| {
+                tracing::warn!(error=?error, "unable to build Outlook admin-consent URL");
+            })
+            .ok(),
+        _ => None,
+    };
+    Ok(Json(EmailConnectionProviders {
         gmail: true,
         outlook: ctx
             .microsoft_auth
             .as_ref()
             .is_some_and(|service| service.new_connections_enabled()),
-    })
+        outlook_admin_consent_url,
+    }))
 }

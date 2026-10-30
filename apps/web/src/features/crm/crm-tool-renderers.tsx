@@ -1,8 +1,8 @@
 import { BaseTool } from '@core/component/AI/component/tool/BaseTool';
 import { createToolRenderer } from '@core/component/AI/component/tool/ToolRenderer';
 import { ItemPreview } from '@core/component/ItemPreview';
-import Buildings from '@phosphor-icons/core/regular/buildings.svg';
-import UserPlus from '@phosphor-icons/core/regular/user-plus.svg';
+import Buildings from '@icon/system/regular/buildings.svg';
+import UserPlus from '@icon/system/regular/user-plus.svg';
 import { Show, Suspense } from 'solid-js';
 import {
   GetCompanyToolResponse,

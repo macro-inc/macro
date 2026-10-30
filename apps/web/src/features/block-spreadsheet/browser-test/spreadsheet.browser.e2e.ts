@@ -111,10 +111,12 @@ test('keeps function insertion, find, and paste menu focus usable from the ribbo
   await page
     .getByRole('button', { name: 'Find and replace', exact: true })
     .click();
+  const findBar = page.getByRole('search', { name: 'Find and replace' });
   const find = page.getByRole('textbox', { name: 'Find in sheet' });
+  await expect(findBar).toBeVisible();
   await expect(find).toBeFocused();
   await find.press('Escape');
-  await expect(page.getByRole('dialog')).toBeHidden();
+  await expect(findBar).toBeHidden();
   await expect(grid).toBeFocused();
 
   await page

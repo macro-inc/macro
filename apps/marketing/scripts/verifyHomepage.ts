@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { chromium, expect } from '@playwright/test';
+import { verifyCrmMotion } from './verifyCrmMotion';
 import { verifyDemo } from './verifyDemo';
 import { verifyProductPages } from './verifyProductPages';
 
@@ -78,6 +79,12 @@ export async function verifyHomepage(directory: string): Promise<void> {
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
+        // The SSR fallback is desktop, but CSS must hide it on phones before
+        // hydration replaces it with the mobile story. Otherwise it flashes in.
+        const desktopDemo = page.locator('.homepage-embedded-demo');
+        if (viewport.width < 800) await expect(desktopDemo).toBeHidden();
+        else await expect(desktopDemo).toBeVisible();
+
         releaseScripts();
         await page.waitForLoadState('load');
         if (errors.length)
@@ -91,6 +98,24 @@ export async function verifyHomepage(directory: string): Promise<void> {
             timeout: 10000,
           }
         );
+        if (viewport.width < 800) {
+          await expect(desktopDemo).toHaveCount(0);
+          await expect(page.locator('.homepage-mobile-story')).toBeVisible();
+          const featureGap = await page
+            .locator('#coding-agents .homepage-feature-title')
+            .evaluate((heading) => {
+              const links = document.querySelector(
+                '#documents .homepage-feature-more-group'
+              );
+              if (!links) throw new Error('Missing document feature links');
+              return (
+                heading.getBoundingClientRect().top -
+                links.getBoundingClientRect().bottom
+              );
+            });
+          expect(featureGap).toBeGreaterThanOrEqual(32);
+          expect(featureGap).toBeLessThanOrEqual(56);
+        } else await expect(desktopDemo).toBeVisible();
         await page.evaluate(async () => {
           await document.fonts.ready;
           await new Promise<void>((resolve) =>
@@ -144,6 +169,12 @@ export async function verifyHomepage(directory: string): Promise<void> {
           const workspace = page.frameLocator(
             'iframe[title="Embedded Macro sample workspace"]'
           );
+          // Prerendered buttons can paint before they have handlers. Also wait
+          // for iframe load, whose carousel listener selects the initial view.
+          await expect(page.locator('.homepage-embedded-loading')).toHaveCount(
+            0
+          );
+          await workspace.locator('.dummy-route:not([data-hk])').waitFor();
           const chat = workspace
             .getByRole('navigation', { name: 'Workspace navigation' })
             .getByRole('button', { name: 'Chat', exact: true });
@@ -173,6 +204,48 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await expect(
           page.getByRole('textbox', { name: 'Email body', exact: true })
         ).toBeEditable();
+        if (colorScheme === 'light') {
+          await page.locator('#documents').scrollIntoViewIfNeeded();
+          await page.locator('#documents .mds-chip-person').first().waitFor();
+          await page.locator('#coding-agents').scrollIntoViewIfNeeded();
+          await page
+            .locator('#coding-agents .homepage-person-mention')
+            .waitFor();
+          for (const selector of [
+            '#email .demo-inline-mention.mention-person',
+            '#documents .mds-chip-person',
+            '#coding-agents .homepage-person-mention',
+          ]) {
+            const tint = await page
+              .locator(selector)
+              .first()
+              .evaluate((node) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = canvas.height = 1;
+                const context = canvas.getContext('2d');
+                if (!context) throw new Error('Missing color test context');
+                context.fillStyle = '#fff';
+                context.fillRect(0, 0, 1, 1);
+                context.fillStyle = getComputedStyle(node).backgroundColor;
+                context.fillRect(0, 0, 1, 1);
+                const [red, , blue] = context.getImageData(0, 0, 1, 1).data;
+                return blue - red;
+              });
+            // The old neutral accent produced grey chips in the cream palette.
+            expect(
+              tint,
+              `${selector} needs a visible blue tint`
+            ).toBeGreaterThan(10);
+          }
+        }
+        await page.locator('#documents').scrollIntoViewIfNeeded();
+        const comment = page.getByRole('img', {
+          name: '1 comment on the launch date: Please check the date against Valentina’s email.',
+        });
+        await expect(comment).toBeVisible();
+        await expect(
+          page.locator('#documents .mds-line.h2 .mds-mark')
+        ).toHaveCount(0);
         if (errors.length)
           throw new Error(
             `Homepage demo failed (${label}): ${errors.join('; ')}`
@@ -185,6 +258,7 @@ export async function verifyHomepage(directory: string): Promise<void> {
         await page.close();
       }
     }
+    await verifyCrmMotion(browser, origin);
     await verifyProductPages(browser, origin);
   } finally {
     await browser?.close();

@@ -1,4 +1,4 @@
-import CaretLeftIcon from '@phosphor/caret-left.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import { Button, type ButtonProps, ComposerSurface, cn } from '@ui';
 import { children, createContext, type JSX, Show, useContext } from 'solid-js';
 import { settingsTarget } from './core/settings-target';
@@ -8,9 +8,8 @@ export const SettingsSheetContext = createContext(false);
 
 /*
  * Shared building blocks for the settings panels. Every settings tab composes
- * these so the whole menu shares one rhythm: a generous, centered content
- * column with a large page title and raised composer surfaces whose rows
- * are separated by hairline dividers.
+ * these so the whole menu shares one rhythm: a centered content column,
+ * clear section headings, and raised composer surfaces with subtle row dividers.
  *
  *   <SettingsPage title="Account" description="…">
  *     <SettingsSection title="Profile">
@@ -28,6 +27,10 @@ export const SettingsSheetContext = createContext(false);
  */
 export function SettingsPage(props: {
   title: string;
+  /** Layout width and spacing for the page content. */
+  contentClass?: string;
+  /** Spacing between the heading and page sections. */
+  bodyClass?: string;
   /** Inline subpages need their own heading beneath the mobile sheet chrome. */
   showTitleInSheet?: boolean;
   /** Optional one-line subtitle; accepts text or inline markup (e.g. a link). */
@@ -48,7 +51,7 @@ export function SettingsPage(props: {
     <div
       data-settings-page
       data-drawer-scroll-body={inSheet ? true : undefined}
-      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel [&_[data-variant=cta]]:bg-ink [&_[data-variant=cta]]:text-panel [&_[data-variant=cta]]:focus-visible:ring-panel/70 [&_:has(>input[type=checkbox])]:[--color-accent:var(--color-ink)] [&_input[type=checkbox]]:accent-ink"
+      class="@container/settings-page h-full min-h-0 overflow-y-auto [overflow-anchor:none] select-children bg-panel"
     >
       {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
           scroll content (plus the usual breathing room) so pages scroll under
@@ -58,7 +61,8 @@ export function SettingsPage(props: {
           'mx-auto w-full max-w-[960px]',
           inSheet
             ? '@container px-3 pt-2 pb-[max(24px,var(--mobile-sheet-safe-padding))]'
-            : '@container px-12 pt-8 pb-24 @max-[480px]/settings-page:px-4 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]'
+            : '@container px-12 pt-8 pb-24 @max-[480px]/settings-page:px-4 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]',
+          props.contentClass
         )}
       >
         <Show when={props.onBack}>
@@ -97,7 +101,11 @@ export function SettingsPage(props: {
           </Show>
         </header>
         <div
-          class={cn('flex flex-col', inSheet ? 'gap-6 mt-3' : 'mt-12 gap-12')}
+          class={cn(
+            'flex flex-col',
+            inSheet ? 'mt-3 gap-6' : 'mt-6 gap-8',
+            props.bodyClass
+          )}
         >
           {props.children}
         </div>
@@ -112,7 +120,14 @@ export function SettingsPage(props: {
  */
 export function SettingsSection(props: {
   title?: JSX.Element;
+  /**
+   * The settings search target, when the title is translated or not a plain
+   * string. Defaults to the title.
+   */
+  target?: string;
   description?: string;
+  /** Collapsible sections keep their heading visible when the body is closed. */
+  expanded?: boolean;
   /** Right-aligned controls beside the section heading. */
   actions?: JSX.Element;
   class?: string;
@@ -122,33 +137,37 @@ export function SettingsSection(props: {
   return (
     <section
       data-settings-target={
-        typeof props.title === 'string'
-          ? settingsTarget(props.title)
-          : undefined
+        props.target
+          ? settingsTarget(props.target)
+          : typeof props.title === 'string'
+            ? settingsTarget(props.title)
+            : undefined
       }
       tabIndex={-1}
-      class={cn('scroll-mt-4 outline-none rounded-[26.25px]', props.class)}
+      class={cn('scroll-mt-4 outline-none', props.class)}
     >
-      <SettingsSurface class="flex flex-col gap-2 p-5 touch:p-4">
-        <Show when={props.title || actions()}>
-          <div class="flex flex-wrap items-end justify-between gap-3">
-            <div class="flex flex-col gap-0.5 min-w-0">
-              <Show when={props.title}>
-                <h2 class="text-base font-medium text-ink">{props.title}</h2>
-              </Show>
-              <Show when={props.description}>
-                <p class="text-sm leading-relaxed text-ink/60">
-                  {props.description}
-                </p>
-              </Show>
-            </div>
-            <Show when={actions()}>
-              <div class="shrink-0">{actions()}</div>
+      <Show when={props.title || actions()}>
+        <div class="mb-2 flex flex-wrap items-start justify-between gap-3">
+          <div class="flex min-w-0 flex-col gap-1">
+            <Show when={props.title}>
+              <h2 class="text-base font-medium text-ink">{props.title}</h2>
+            </Show>
+            <Show when={props.description}>
+              <p class="text-sm leading-relaxed text-ink-muted">
+                {props.description}
+              </p>
             </Show>
           </div>
-        </Show>
-        {props.children}
-      </SettingsSurface>
+          <Show when={actions()}>
+            <div class="shrink-0">{actions()}</div>
+          </Show>
+        </div>
+      </Show>
+      <Show when={props.expanded ?? true}>
+        <SettingsSurface class="flex flex-col gap-2 p-4">
+          {props.children}
+        </SettingsSurface>
+      </Show>
     </section>
   );
 }
@@ -181,7 +200,7 @@ export function SettingsSurface(props: {
   );
 }
 
-/** Rows share a surface; standalone cards use the email composer's elevation. */
+/** Rows share a raised surface; nested cards do not add another box. */
 export function SettingsCard(props: { class?: string; children: JSX.Element }) {
   const nested = useContext(SettingsSurfaceContext);
   return (
@@ -228,7 +247,7 @@ export function SettingsRow(props: {
       }
       tabIndex={-1}
       class={cn(
-        'scroll-mt-4 outline-none flex gap-4 py-4 min-h-[64px]',
+        'scroll-mt-4 outline-none flex gap-4 py-3 min-h-[56px]',
         inSheet ? 'px-4 flex-wrap' : 'px-4',
         props.stackOnNarrow
           ? 'flex-col gap-1.5 @[460px]:flex-row @[460px]:justify-between @[460px]:gap-4'
@@ -290,14 +309,17 @@ export function ChoiceRow(props: {
   checked: boolean;
   title: string;
   description: string;
+  suggested?: boolean;
   disabled?: boolean;
   onChange: () => void;
 }) {
   return (
     <label
-      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted has-checked:border-accent has-checked:bg-accent-bg"
       classList={{
         'cursor-not-allowed opacity-50': props.disabled,
+        'p-4': props.suggested,
+        'p-3': !props.suggested,
       }}
     >
       <input
@@ -311,8 +333,15 @@ export function ChoiceRow(props: {
         class="mt-0.5 accent-accent"
       />
       <span class="min-w-0">
-        <span class="block text-sm font-medium text-ink">{props.title}</span>
-        <span class="mt-0.5 block text-xs text-ink-muted">
+        <span class="flex flex-wrap items-center gap-2 text-sm font-medium text-ink">
+          {props.title}
+          <Show when={props.suggested}>
+            <span class="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink-muted">
+              Suggested
+            </span>
+          </Show>
+        </span>
+        <span class="mt-0.5 block text-sm text-ink-muted">
           {props.description}
         </span>
       </span>
@@ -340,7 +369,7 @@ export function IntegrationRow(props: {
   class?: string;
 }) {
   return (
-    <div class={cn('flex flex-wrap items-center gap-4 px-4 py-4', props.class)}>
+    <div class={cn('flex flex-wrap items-center gap-3 px-4 py-3', props.class)}>
       <Show when={props.icon}>
         <div
           class={cn(
@@ -351,7 +380,8 @@ export function IntegrationRow(props: {
           {props.icon}
         </div>
       </Show>
-      <div class="flex-1 min-w-0 flex flex-col gap-0.5">
+      {/* The basis wraps actions below the text on narrow screens. */}
+      <div class="flex-1 basis-48 min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
           <div
             class={cn(
@@ -375,7 +405,9 @@ export function IntegrationRow(props: {
         </Show>
       </div>
       <Show when={props.children}>
-        <div class="shrink-0 flex items-center gap-2">{props.children}</div>
+        <div class="shrink-0 max-w-full flex flex-wrap items-center gap-2">
+          {props.children}
+        </div>
       </Show>
     </div>
   );
@@ -385,8 +417,9 @@ export function IntegrationRow(props: {
 export function SettingsButton(props: ButtonProps) {
   return (
     <Button
+      variant="ghost"
       {...props}
-      class={cn('rounded-lg font-normal gap-1.5', props.class)}
+      class={cn('rounded-full font-normal gap-1.5', props.class)}
     />
   );
 }

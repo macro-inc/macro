@@ -14,6 +14,7 @@ use crate::domain::meetings::GuestId;
 use crate::domain::models::{
     CallRecord, CallRecordGuest, CallRecordSource, CallRecordTranscriptSegment,
 };
+use crate::domain::records::CallProvider;
 
 /// Imported attendees, shown as guests: they carry provider identity hints
 /// (name, email) but never a Macro account.
@@ -85,6 +86,12 @@ pub(super) async fn read_imported_call_record(
         return Ok(None);
     };
 
+    let provider = call
+        .provider
+        .as_deref()
+        .map(str::parse::<CallProvider>)
+        .transpose()
+        .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
     let started_at = call.started_at.unwrap_or(call.created_at);
     let guests = imported_guests(&mut *conn, &[call.id])
         .await?
@@ -154,7 +161,7 @@ pub(super) async fn read_imported_call_record(
         participants: Vec::new(),
         guests,
         transcript,
-        source: call.provider.map(|provider| CallRecordSource {
+        source: provider.map(|provider| CallRecordSource {
             provider,
             external_url: call.external_url,
         }),

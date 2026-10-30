@@ -158,6 +158,9 @@ async fn dispatch_prepares_and_prompts_once_with_the_callers_identity() {
     assert_eq!(prepared[0].selection.bot_id.as_uuid(), agent.agent.id);
     assert_eq!(prepared[0].selection.model, None);
     assert_eq!(prepared[0].session_id.as_uuid(), response.agent_session_id);
+    // Recorded as another agent's dispatch, and listed like the owner's own.
+    assert_eq!(prepared[0].source, SessionSource::Agent);
+    assert_eq!(prepared[0].visibility, SessionVisibility::Listed);
     assert_eq!(response.agent_session_id.get_version_num(), 7);
     let prompted = sessions.prompted.lock().unwrap();
     assert_eq!(prompted.len(), 1);

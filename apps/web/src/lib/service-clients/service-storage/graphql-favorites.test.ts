@@ -89,6 +89,22 @@ describe('favorites GraphQL mutations', () => {
     });
   });
 
+  it('favorites an independent external chat without inventing a Soup entity', async () => {
+    await executeGraphqlSetFavoriteMutation(
+      client,
+      { entityType: 'external_chat', entityId: 'chat-1' },
+      true,
+      0
+    );
+    expect(mutationMock.mock.calls[0][1]).toMatchObject({
+      entity: { type: 'EXTERNAL_CHAT', id: 'chat-1' },
+    });
+    expect(
+      mutationMock.mock.calls[0][2].normalizedCacheOptimistic.optimisticResponse
+        .setFavorite.result.effects
+    ).toEqual([]);
+  });
+
   it.each([
     { entityType: 'email_thread', typename: 'GraphqlSoupEmailThread' },
     { entityType: 'initiative', typename: 'GraphqlSoupInitiative' },

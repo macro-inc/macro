@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
 import {
@@ -25,7 +25,12 @@ const harnessesQueryOptions = queryOptions({
   queryKey: harnessKeys.list.queryKey,
   queryFn: async (): Promise<Harness[]> =>
     await throwOnErr(() => storageServiceClient.getHarnesses()),
-  refetchInterval: 15_000,
+  // A dead session answers every poll with a 401, so wait for the next
+  // successful fetch (login invalidates every query) before polling again.
+  refetchInterval: (query) =>
+    thrownResultErrorHasCode(query.state.error, 'UNAUTHORIZED')
+      ? false
+      : 15_000,
 });
 
 /**
@@ -82,6 +87,32 @@ export function useApproveHarnessPairingMutation() {
     },
     onError: (error) =>
       console.error('failed to approve harness pairing', error),
+  }));
+}
+
+/**
+ * Approves a pairing opened by this computer's own daemon, granting exactly
+ * the permission-bypass ceiling the daemon requested from its config, so a
+ * re-pair keeps the access the user chose at setup.
+ */
+export function useApproveOwnHarnessPairingMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (code: string) => {
+      const pairing = await throwOnErr(() =>
+        storageServiceClient.getHarnessPairing({ code })
+      );
+      return await throwOnErr(() =>
+        storageServiceClient.approveHarnessPairing({
+          code,
+          allow_permission_bypass:
+            pairing.requested_allow_permission_bypass ?? false,
+        })
+      );
+    },
+    onSuccess: async () => await invalidateHarnesses(),
+    onError: (error) =>
+      console.error('failed to approve local harness pairing', error),
   }));
 }
 

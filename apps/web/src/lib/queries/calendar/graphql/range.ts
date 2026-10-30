@@ -8,6 +8,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
+import { Telemetry } from '@macro-inc/observability';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import {
   CalendarOccurrenceItemFieldsFragmentDoc,
@@ -15,6 +16,7 @@ import {
   type CalendarOccurrencesQuery,
   type CalendarRangeInput,
 } from '@service-storage/graphql/generated/graphql';
+import { ResultAsync } from 'neverthrow';
 import type { CalendarOccurrenceQueryRange } from '../keys';
 import type { CalendarOccurrencesData } from '../occurrences';
 import { mapCalendarOccurrence, mapCalendarSyncStatus } from './map';
@@ -252,24 +254,118 @@ const occurrenceSelection = selectRecords(
   CalendarOccurrenceItemFieldsFragmentDoc
 );
 
+/**
+ * Reads the occurrences behind range keys. A key whose record lacks a field
+ * the selection asks for, such as one cached by a build with fewer fields,
+ * comes back unreadable rather than as an item.
+ */
 async function readOccurrenceItems(
   host: Pick<CacheHost, 'readRecordsByKeys'>,
   keys: readonly string[]
 ) {
   const items = [];
+  const unreadable: string[] = [];
   for (
     let index = 0;
     index < keys.length;
     index += MAX_RECORD_SELECTION_PAGE_SIZE
   ) {
+    const batch = keys.slice(index, index + MAX_RECORD_SELECTION_PAGE_SIZE);
     const { records } = await readRecordsByKeys(
       host,
       occurrenceSelection,
-      keys.slice(index, index + MAX_RECORD_SELECTION_PAGE_SIZE)
+      batch
     );
-    for (const { record } of records) items.push(mapCalendarOccurrence(record));
+    const read = new Set<string>();
+    for (const { recordKey, record } of records) {
+      read.add(recordKey);
+      items.push(mapCalendarOccurrence(record));
+    }
+    for (const key of batch) if (!read.has(key)) unreadable.push(key);
   }
-  return items;
+  return { items, unreadable };
+}
+
+// Unreadable keys each host already refetched, so a row the server no longer
+// returns costs one request per session rather than one per read.
+const refetchedUnreadable = new WeakMap<object, Set<string>>();
+
+function claimUnreadable(host: object, keys: readonly string[]): string[] {
+  let claimed = refetchedUnreadable.get(host);
+  if (!claimed) {
+    claimed = new Set();
+    refetchedUnreadable.set(host, claimed);
+  }
+  const fresh = keys.filter((key) => !claimed.has(key));
+  for (const key of fresh) claimed.add(key);
+  return fresh;
+}
+
+function releaseUnreadable(host: object, keys: readonly string[]): void {
+  const claimed = refetchedUnreadable.get(host);
+  for (const key of keys) claimed?.delete(key);
+}
+
+async function fetchViewport(
+  host: Pick<CacheHost, 'calendarCommit'>,
+  args: CalendarRangeCacheArgs,
+  fetchPage: FetchCalendarOccurrencePage,
+  signal?: AbortSignal
+): Promise<void> {
+  for (const window of calendarGapWindows([
+    { kind: 'timed', start: args.startMs, end: args.endMs },
+    { kind: 'allDay', start: args.startDay, end: args.endDay },
+  ])) {
+    await fetchCalendarWindow(host, window, fetchPage, signal);
+  }
+}
+
+/**
+ * Reads a covered viewport's occurrences. When the current build cannot read
+ * some of them, the viewport is refetched once, rewriting them with every
+ * field it selects, as any cache miss goes to the network. A failed refetch
+ * answers with what was readable, as the viewport does offline.
+ */
+async function readViewportItems(
+  host: Pick<
+    CacheHost,
+    'calendarRange' | 'calendarCommit' | 'readRecordsByKeys'
+  >,
+  args: CalendarRangeCacheArgs,
+  occurrenceKeys: readonly string[],
+  fetchPage: FetchCalendarOccurrencePage,
+  signal?: AbortSignal
+): Promise<CalendarOccurrencesData['items'] | 'unsupported'> {
+  const read = await readOccurrenceItems(host, occurrenceKeys);
+  const unreadable = claimUnreadable(host, read.unreadable);
+  if (unreadable.length === 0) return read.items;
+  return Telemetry.span(
+    'calendar.refetch_unreadable_occurrences',
+    async (span) => {
+      span.setAttr('calendar.cache.unreadable_count', unreadable.length);
+      const fetched = await ResultAsync.fromPromise(
+        fetchViewport(host, args, fetchPage, signal),
+        (error) => error
+      );
+      if (fetched.isErr()) {
+        // A later read retries what this one could not refetch.
+        releaseUnreadable(host, unreadable);
+        if (signal?.aborted) throw fetched.error;
+        span.setAttr('calendar.cache.refetch_outcome', 'failed');
+        span.error('Refetching unreadable calendar occurrences failed');
+        return read.items;
+      }
+      const result = await host.calendarRange(args);
+      if (result.kind === 'unsupported') return 'unsupported';
+      const reread = await readOccurrenceItems(host, result.occurrenceKeys);
+      span.setAttr('calendar.cache.refetch_outcome', 'refetched');
+      span.setAttr(
+        'calendar.cache.still_unreadable_count',
+        reread.unreadable.length
+      );
+      return reread.items;
+    }
+  );
 }
 
 // The outstanding first read of each host that has not answered yet.
@@ -309,7 +405,10 @@ async function askCalendarRange(
   return withinCacheHeadStart(answer, headStartMs);
 }
 
-/** Answers a viewport from the cache, fetching only spans never fetched. */
+/**
+ * Answers a viewport from the cache, fetching only spans never fetched and,
+ * once per key, viewports whose cached occurrences cannot be read.
+ */
 export async function readCalendarRange(
   host: Pick<
     CacheHost,
@@ -331,23 +430,21 @@ export async function readCalendarRange(
   if (first === 'not-ready') return { kind: 'not-ready' };
   let result = first;
   if (result.kind === 'unsupported') return { kind: 'unsupported' };
+  const fetchPage = options.fetchPage ?? fetchCalendarOccurrencePage;
   if (result.gaps.length > 0) {
     for (const window of calendarGapWindows(result.gaps)) {
-      await fetchCalendarWindow(
-        host,
-        window,
-        options.fetchPage ?? fetchCalendarOccurrencePage,
-        options.signal
-      );
+      await fetchCalendarWindow(host, window, fetchPage, options.signal);
     }
     result = await host.calendarRange(args);
     if (result.kind === 'unsupported') return { kind: 'unsupported' };
   }
-  return {
-    kind: 'range',
-    data: {
-      items: await readOccurrenceItems(host, result.occurrenceKeys),
-      syncStatus: latestSyncStatus,
-    },
-  };
+  const items = await readViewportItems(
+    host,
+    args,
+    result.occurrenceKeys,
+    fetchPage,
+    options.signal
+  );
+  if (items === 'unsupported') return { kind: 'unsupported' };
+  return { kind: 'range', data: { items, syncStatus: latestSyncStatus } };
 }

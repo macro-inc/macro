@@ -11,14 +11,16 @@ use std::{
 };
 
 use crate::domain::{
-    models::{IssuedAuthorizationCode, PendingAuthorization, RegisteredClient},
+    models::{
+        IssuedAuthorizationCode, PendingAuthorization, RefreshTokenBinding, RegisteredClient,
+    },
     ports::{
-        BoundClientIdFuture, ClientRegistrationStore, RefreshTokenBindingStore,
-        RegisteredClientFuture, StoreWriteFuture,
+        ClientRegistrationStore, GrantRevokedFuture, RefreshTokenBindingFuture,
+        RefreshTokenBindingStore, RegisteredClientFuture, StoreWriteFuture,
     },
     service::{
         AUTHORIZATION_CODE_TTL, CLIENT_REGISTRATION_TTL, InflightAuthStore, PENDING_AUTH_TTL,
-        REFRESH_TOKEN_BINDING_TTL,
+        REFRESH_TOKEN_BINDING_TTL, REVOKED_GRANT_TTL,
     },
 };
 
@@ -26,6 +28,7 @@ const PENDING_KEY_PREFIX: &str = "mcp_auth_proxy:pending:";
 const ISSUED_KEY_PREFIX: &str = "mcp_auth_proxy:issued:";
 const CLIENT_KEY_PREFIX: &str = "mcp_auth_proxy:client:";
 const REFRESH_BINDING_KEY_PREFIX: &str = "mcp_auth_proxy:refresh_binding:";
+const REVOKED_GRANT_KEY_PREFIX: &str = "mcp_auth_proxy:revoked_grant:";
 
 /// Redis-backed implementation of the in-flight OAuth state store.
 #[derive(Clone)]
@@ -68,6 +71,37 @@ impl RedisClientRegistry {
     fn refresh_binding_key(refresh_token_digest: &str) -> String {
         format!("{REFRESH_BINDING_KEY_PREFIX}{refresh_token_digest}")
     }
+
+    fn revoked_grant_key(grant_id: &str) -> String {
+        format!("{REVOKED_GRANT_KEY_PREFIX}{grant_id}")
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct StoredRefreshTokenBinding {
+    client_id: String,
+    grant_id: String,
+}
+
+/// Reads a stored binding. Bindings written before grants were tracked hold
+/// the bare client id; each becomes a family of its own, named by its digest,
+/// and keeps that grant id as it rotates.
+fn parse_refresh_token_binding(
+    refresh_token_digest: &str,
+    value: String,
+) -> anyhow::Result<RefreshTokenBinding> {
+    if !value.starts_with('{') {
+        return Ok(RefreshTokenBinding {
+            client_id: value,
+            grant_id: refresh_token_digest.to_owned(),
+        });
+    }
+    let stored: StoredRefreshTokenBinding =
+        serde_json::from_str(&value).context("failed to deserialize refresh token binding")?;
+    Ok(RefreshTokenBinding {
+        client_id: stored.client_id,
+        grant_id: stored.grant_id,
+    })
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -154,18 +188,23 @@ impl RefreshTokenBindingStore for RedisClientRegistry {
     fn bind<'a>(
         &'a self,
         refresh_token_digest: &'a str,
-        client_id: &'a str,
+        binding: &'a RefreshTokenBinding,
     ) -> StoreWriteFuture<'a> {
         let redis_client = self.client.clone();
         let key = Self::refresh_binding_key(refresh_token_digest);
         Box::pin(async move {
+            let value = serde_json::to_string(&StoredRefreshTokenBinding {
+                client_id: binding.client_id.clone(),
+                grant_id: binding.grant_id.clone(),
+            })
+            .context("failed to serialize refresh token binding")?;
             let mut conn = redis_client
                 .get_multiplexed_async_connection()
                 .await
                 .context("unable to connect to redis")?;
-            conn.set_ex::<String, &str, ()>(
+            conn.set_ex::<String, String, ()>(
                 key.clone(),
-                client_id,
+                value,
                 REFRESH_TOKEN_BINDING_TTL.as_secs(),
             )
             .await
@@ -174,7 +213,7 @@ impl RefreshTokenBindingStore for RedisClientRegistry {
         })
     }
 
-    fn bound_client<'a>(&'a self, refresh_token_digest: &'a str) -> BoundClientIdFuture<'a> {
+    fn binding<'a>(&'a self, refresh_token_digest: &'a str) -> RefreshTokenBindingFuture<'a> {
         let redis_client = self.client.clone();
         let key = Self::refresh_binding_key(refresh_token_digest);
         Box::pin(async move {
@@ -182,11 +221,13 @@ impl RefreshTokenBindingStore for RedisClientRegistry {
                 .get_multiplexed_async_connection()
                 .await
                 .context("unable to connect to redis")?;
-            let client_id: Option<String> = conn
+            let value: Option<String> = conn
                 .get(&key)
                 .await
                 .with_context(|| format!("failed to fetch refresh token binding for key {key}"))?;
-            Ok(client_id)
+            value
+                .map(|value| parse_refresh_token_binding(refresh_token_digest, value))
+                .transpose()
         })
     }
 
@@ -202,6 +243,37 @@ impl RefreshTokenBindingStore for RedisClientRegistry {
                 .await
                 .with_context(|| format!("failed to delete refresh token binding for key {key}"))?;
             Ok(())
+        })
+    }
+
+    fn revoke_grant<'a>(&'a self, grant_id: &'a str) -> StoreWriteFuture<'a> {
+        let redis_client = self.client.clone();
+        let key = Self::revoked_grant_key(grant_id);
+        Box::pin(async move {
+            let mut conn = redis_client
+                .get_multiplexed_async_connection()
+                .await
+                .context("unable to connect to redis")?;
+            conn.set_ex::<String, u8, ()>(key.clone(), 1, REVOKED_GRANT_TTL.as_secs())
+                .await
+                .with_context(|| format!("failed to persist grant revocation for key {key}"))?;
+            Ok(())
+        })
+    }
+
+    fn is_grant_revoked<'a>(&'a self, grant_id: &'a str) -> GrantRevokedFuture<'a> {
+        let redis_client = self.client.clone();
+        let key = Self::revoked_grant_key(grant_id);
+        Box::pin(async move {
+            let mut conn = redis_client
+                .get_multiplexed_async_connection()
+                .await
+                .context("unable to connect to redis")?;
+            let revoked: bool = conn
+                .exists(&key)
+                .await
+                .with_context(|| format!("failed to read grant revocation for key {key}"))?;
+            Ok(revoked)
         })
     }
 }
@@ -243,10 +315,8 @@ struct StoredIssuedAuthorizationCode {
     refresh_token: crate::domain::models::RefreshToken,
     code_challenge: String,
     redirect_uri: String,
-    /// Unix seconds at which the upstream access token expires. Defaults to
-    /// `None` so codes written before this field existed still deserialize.
-    #[serde(default)]
-    access_token_expires_at_unix: Option<u64>,
+    /// Unix seconds at which the upstream access token expires.
+    access_token_expires_at_unix: u64,
 }
 
 impl From<IssuedAuthorizationCode> for StoredIssuedAuthorizationCode {
@@ -257,12 +327,11 @@ impl From<IssuedAuthorizationCode> for StoredIssuedAuthorizationCode {
             refresh_token: value.refresh_token,
             code_challenge: value.code_challenge,
             redirect_uri: value.redirect_uri,
-            access_token_expires_at_unix: value.access_token_expires_at.and_then(|expires_at| {
-                expires_at
-                    .duration_since(UNIX_EPOCH)
-                    .ok()
-                    .map(|since_epoch| since_epoch.as_secs())
-            }),
+            access_token_expires_at_unix: value
+                .access_token_expires_at
+                .duration_since(UNIX_EPOCH)
+                .map(|since_epoch| since_epoch.as_secs())
+                .unwrap_or(0),
         }
     }
 }
@@ -275,9 +344,8 @@ impl From<StoredIssuedAuthorizationCode> for IssuedAuthorizationCode {
             refresh_token: value.refresh_token,
             code_challenge: value.code_challenge,
             redirect_uri: value.redirect_uri,
-            access_token_expires_at: value
-                .access_token_expires_at_unix
-                .map(|unix_seconds| UNIX_EPOCH + Duration::from_secs(unix_seconds)),
+            access_token_expires_at: UNIX_EPOCH
+                + Duration::from_secs(value.access_token_expires_at_unix),
         }
     }
 }

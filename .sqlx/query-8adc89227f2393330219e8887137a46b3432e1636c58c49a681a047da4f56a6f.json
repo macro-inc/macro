@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_draft_client_ids SET message_id = $1 WHERE message_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8adc89227f2393330219e8887137a46b3432e1636c58c49a681a047da4f56a6f"
+}

@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { onCleanup, Show } from 'solid-js';
 import { SoupViewStateProvider } from '../next-soup/soup-view/soup-view-context';
 import { ViewTour } from '../tours/ViewTour';
 import { CrmProvider } from './context/crm-context';
@@ -15,6 +15,7 @@ import { createCrmWorkspace } from './workspace-adapter';
 
 export function Crm(props: { initialView?: CrmViewConfig; route: CrmRoute }) {
   const crm = createAppCrmContext();
+  onCleanup(crm.registerTaskComposerRecord(() => undefined));
   const workspace = createCrmWorkspace(crm, props.route, props.initialView);
   return (
     <CrmProvider value={crm}>

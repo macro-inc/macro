@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
@@ -17,8 +18,14 @@ function refreshSessionEntity(id: string) {
   });
 }
 
+// Agent sessions report as `agent`, as BlockLoader reports their opens.
 export async function renameAgentSession(id: string, name: string) {
   await throwOnErr(() => agentHarnessServiceClient.rename(id, name));
+  analytics.track('update_entity', {
+    entityType: 'agent',
+    entityId: id,
+    property: 'name',
+  });
   handleAgentSessionRenamed({ agentSessionId: id, name });
   refreshSessionEntity(id);
 }
@@ -30,5 +37,6 @@ export async function setAgentSessionArchived(id: string, isArchived: boolean) {
 
 export async function deleteAgentSession(id: string) {
   await throwOnErr(() => agentHarnessServiceClient.delete(id));
+  analytics.track('delete_entity', { entityType: 'agent', entityId: id });
   refreshSessionEntity(id);
 }

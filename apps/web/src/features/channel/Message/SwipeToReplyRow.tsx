@@ -6,7 +6,7 @@ import { triggerFocusInput } from '@core/directive/focusInput';
 import type { MessageActions, MessageData } from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
+import ReplyIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import { type ParentProps, Show, useContext } from 'solid-js';
 import { getMessageReplyPreviewTexts } from './browser-selection';
 

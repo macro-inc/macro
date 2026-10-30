@@ -1,8 +1,10 @@
 use super::*;
-use crate::domain::sharing::{DatabaseSharingRepo, DatabaseSharingService};
+use crate::domain::sharing::{DatabaseSharingRepo, DatabaseSharingService, SharingWrite};
 use models_permissions::share_permission::{
     SharePermissionV2, UpdateSharePermissionRequestV2,
-    access_level::AccessLevel as ShareAccessLevel, channel_share_permission::UpdateOperation,
+    access_level::AccessLevel as ShareAccessLevel,
+    channel_share_permission::UpdateOperation,
+    team_share::{TeamShareLevel, TeamSharePolicyError, TeamShareRequest, authorize_team_share},
 };
 
 /// Most channel grants one request may change.
@@ -32,11 +34,16 @@ where
             .channel_grants(database.id)
             .await
             .map_err(repository_error)?;
+        let team_share_access_level = self
+            .repository
+            .team_share_level(database.id)
+            .await
+            .map_err(repository_error)?;
         Ok(SharePermissionV2 {
             id: database.id.to_string(),
             link_share: None,
             link_share_access_level: None,
-            team_share_access_level: None,
+            team_share_access_level,
             owner: database.owner_id,
             channel_share_permissions: Some(channel_share_permissions),
         })
@@ -52,9 +59,6 @@ where
             || matches!(request.link_share_access_level, Some(Some(_)))
         {
             return Err(DatabaseError::from(SharingError::LinkShare));
-        }
-        if matches!(request.team_share_access_level, Some(Some(_))) {
-            return Err(DatabaseError::from(SharingError::TeamShare));
         }
         let grants = request.channel_share_permissions.unwrap_or_default();
         if grants.len() > MAX_CHANNEL_GRANTS_PER_UPDATE {
@@ -77,15 +81,37 @@ where
         if database.trashed_at.is_some() {
             return Err(DatabaseError::NotFound);
         }
-        if !self
+        let team_share = match request.team_share_access_level {
+            None => None,
+            access_level => {
+                let facts = self
+                    .repository
+                    .team_share_facts(database.id)
+                    .await
+                    .map_err(repository_error)?;
+                authorize_team_share(
+                    receipt.acting_user_id(),
+                    &facts,
+                    TeamShareRequest {
+                        access_level,
+                        legacy_enabled: None,
+                    },
+                    TeamShareLevel::Edit,
+                )
+                .map_err(team_share_refusal)?
+            }
+        };
+        match self
             .repository
-            .update_channel_grants(database.id, &grants)
+            .update_sharing(database.id, &grants, team_share.as_ref())
             .await
             .map_err(repository_error)?
         {
-            return Err(DatabaseError::NotFound);
+            SharingWrite::Written => {}
+            SharingWrite::Gone => return Err(DatabaseError::NotFound),
+            SharingWrite::Changed => return Err(SharingError::Changed.into()),
         }
-        if !grants.is_empty() {
+        if !grants.is_empty() || team_share.is_some() {
             self.emit(DatabaseMacroEvent::sharing_changed(
                 events::DatabaseSharingChangedMetadata {
                     database_id: database.id,
@@ -94,5 +120,19 @@ where
             ));
         }
         self.share_permissions(receipt).await
+    }
+}
+
+/// A team share the policy refused, as the caller sees it.
+fn team_share_refusal(error: TeamSharePolicyError) -> DatabaseError {
+    match error {
+        TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+            DatabaseError::Unauthorized
+        }
+        TeamSharePolicyError::MissingTeam => SharingError::NoTeam.into(),
+        TeamSharePolicyError::InvalidLevel | TeamSharePolicyError::ContradictoryInputs => {
+            SharingError::InvalidTeamLevel.into()
+        }
+        TeamSharePolicyError::InvalidRevision => repository_error(error),
     }
 }

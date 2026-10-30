@@ -68,7 +68,10 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({ notificationsByEntity: () => ({}) }),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'alice' }));
+const viewer = vi.hoisted(() => ({
+  id: (() => 'alice') as () => string | undefined,
+}));
+vi.mock('@core/context/user', () => ({ useUserId: () => viewer.id }));
 vi.mock('@queries/soup/items', () => ({ useSoupAstItemsQuery: vi.fn() }));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -182,6 +185,7 @@ describe('Home data source', () => {
     vi.setSystemTime(new Date(2026, 8, 10, 12));
     flags.graphqlSoup = false;
     touch.device = false;
+    viewer.id = () => 'alice';
   });
   afterEach(() => {
     dispose?.();
@@ -480,7 +484,7 @@ describe('Home data source', () => {
     expect(activity.fetchNextPage).not.toHaveBeenCalled();
   });
 
-  it('can select chats and agent sessions independently', () => {
+  it('selects both chats and agent sessions with the agents filter', () => {
     const activity = makeQuery(
       [
         {
@@ -503,10 +507,8 @@ describe('Home data source', () => {
       false
     );
     const { source, setState } = mount(makeQuery([], false), activity);
-    setState('facets', { type: ['chats'] });
-    expect(ids(source)).toEqual(['chat']);
     setState('facets', { type: ['agents'] });
-    expect(ids(source)).toEqual(['agent']);
+    expect(ids(source)).toEqual(['agent', 'chat']);
   });
 });
 
@@ -561,5 +563,45 @@ describe('Home work feed', () => {
 
     expect(workFeedSource.enabled?.()).toBe(false);
     expect(ids(source)).toEqual(['from-soup']);
+  });
+
+  it('waits for the viewer before querying the notification feed', () => {
+    touch.device = true;
+    const [userId, setUserId] = createSignal<string>();
+    viewer.id = userId;
+    const notifications = makeQuery([email('from-soup', 9)], false);
+    const activity = makeQuery([], false);
+    const { source } = mount(notifications, activity);
+    const [args, options] = vi.mocked(useSoupAstItemsQuery).mock.calls[0];
+
+    expect(options?.().enabled).toBe(false);
+    expect(JSON.stringify(args().body)).not.toContain('"Participant"');
+    expect(source.isLoading()).toBe(true);
+    expect(ids(source)).toEqual([]);
+
+    setUserId('macro|alice@example.com');
+    expect(options?.().enabled).toBe(true);
+    expect(JSON.stringify(args().body.cthf)).toContain(
+      '{"Participant":"macro|alice@example.com"}'
+    );
+    expect(source.isLoading()).toBe(false);
+    expect(ids(source)).toEqual(['from-soup']);
+  });
+
+  it('holds desktop recents back until the viewer is known', () => {
+    flags.graphqlSoup = false;
+    const [userId, setUserId] = createSignal<string>();
+    viewer.id = userId;
+    const notifications = makeQuery([email('notified', 9)], false);
+    const activity = makeQuery([email('recent', 10)], false);
+    const { source } = mount(notifications, activity);
+
+    expect(workFeedSource.enabled?.()).toBe(false);
+    expect(source.isLoading()).toBe(true);
+    expect(ids(source)).toEqual([]);
+
+    setUserId('macro|alice@example.com');
+    expect(source.isLoading()).toBe(false);
+    expect(ids(source)).toEqual(['recent', 'notified']);
   });
 });

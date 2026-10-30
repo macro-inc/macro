@@ -1,13 +1,13 @@
-import AlignMiddle from '@phosphor/align-center-vertical-simple.svg';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import Sigma from '@phosphor/sigma.svg';
-import Table from '@phosphor/table.svg';
-import TextColor from '@phosphor/text-a-underline.svg';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
+import AlignMiddle from '@icon/system/regular/align-center-vertical-simple.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import Sigma from '@icon/system/regular/sigma.svg';
+import Table from '@icon/system/regular/table.svg';
+import TextColor from '@icon/system/regular/text-a-underline.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { For, type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import {
@@ -31,9 +31,10 @@ function ToolbarMenu(
   return (
     <Dropdown placement="bottom-start" modal={false}>
       <Dropdown.Trigger
+        aria-label={props.label}
+        tooltip={props.label}
         size="sm"
         variant="ghost"
-        label={props.label}
         disabled={props.disabled}
         class="h-7 min-h-7 gap-1 px-1.5 text-[13px] font-normal text-ink-muted touch:h-[44px] touch:min-h-[44px] touch:min-w-[44px] touch:px-2 touch:text-[max(14px,0.875rem)]"
       >

@@ -20,6 +20,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { useParamNavigationCount } from '@core/component/ParamsProvider';
 import { useUserId } from '@core/context/user';
+import { onElementConnect } from '@core/util/onElementConnect';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
 import {
@@ -29,7 +30,6 @@ import {
 import { usePatchThreadMutation } from '@queries/messages/mutations';
 import { onThreadStateUpdated } from '@queries/messages/sync';
 import type { MessageThread } from '@service-storage/messages';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import {
   $getNodeByKey,
   COMMAND_PRIORITY_LOW,

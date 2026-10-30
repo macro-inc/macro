@@ -53,6 +53,10 @@ function currentViewerId(): string | undefined {
   );
 }
 
+function createDoneSessionId(): string {
+  return crypto.randomUUID();
+}
+
 /** Immediate display state, independent of durable enqueue and list recomputation. */
 export function hideGraphqlSoupEntitiesAsDone(args: {
   entityIds: readonly string[];
@@ -262,13 +266,16 @@ export function hideGraphqlSoupEntitiesAsDone(args: {
 export function usePendingGraphqlSoupDone(): Accessor<
   readonly PendingGraphqlSoupDone[]
 > {
+  // These queries live for the whole session and keep the options of their
+  // last observer, so their callbacks stay at module scope: an inline one would
+  // retain this hook's scope, and with it the closed view that called it.
   const viewer = useQuery(
     () => ({
       queryKey: authKeys.userInfo.queryKey,
       // Observe only. Unlike the private intent keys below, this key already
       // has an auth fetcher: skipToken would overwrite it during invalidation.
       enabled: false,
-      select: (info: DoneIntentViewer) => viewerIdFromInfo(info),
+      select: viewerIdFromInfo,
     }),
     () => queryClient
   );
@@ -279,7 +286,7 @@ export function usePendingGraphqlSoupDone(): Accessor<
     () => ({
       queryKey: graphqlSoupKeys.doneSession.queryKey,
       queryFn: skipToken,
-      initialData: () => crypto.randomUUID(),
+      initialData: createDoneSessionId,
       gcTime: Infinity,
     }),
     () => queryClient

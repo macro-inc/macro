@@ -37,7 +37,11 @@ export function parseRecording(jsonl: string): AgentSessionLogEntryDto[] {
       throw new Error(`recording line ${index + 1} is not JSON`);
     }
     const { direction, content } = parsed;
-    if (direction !== 'to_server' && direction !== 'to_runtime') {
+    if (
+      direction !== 'to_server' &&
+      direction !== 'to_runtime' &&
+      direction !== 'notification'
+    ) {
       throw new Error(`recording line ${index + 1} has no direction`);
     }
     if (typeof content !== 'object' || content === null) {
@@ -56,11 +60,11 @@ export function parseRecording(jsonl: string): AgentSessionLogEntryDto[] {
   return entries;
 }
 
-/** A user prompt on its way to the runtime — the frame a turn starts with. */
+/** An invocation on its way to the runtime, including trusted system turns. */
 export function isPromptEntry(entry: AgentSessionLogEntryDto): boolean {
   const content = entry.content as { type?: string; method?: string };
   return (
-    entry.direction === 'to_runtime' &&
+    (entry.direction === 'to_runtime' || entry.direction === 'notification') &&
     content.type === 'acp' &&
     content.method === 'session/prompt'
   );

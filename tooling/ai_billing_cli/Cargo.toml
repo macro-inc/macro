@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "ai_billing_cli"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "ai-billing"
+path = "src/main.rs"
+
+[dependencies]
+ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
+clap = { workspace = true }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+rootcause = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

@@ -1,0 +1,41 @@
+# The macOS desktop app, rendered with Chromium (CEF) instead of WKWebView.
+# It is its own workspace so that only this build resolves Tauri from the CEF
+# branch: iOS, Android, Linux, and Windows keep building ../src-tauri against
+# ../Cargo.lock unchanged.
+[workspace]
+
+[package]
+name = "macro-desktop-cef"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "app"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+app = { path = "../src-tauri", features = ["cef"] }
+tauri = { version = "2.11", features = ["devtools", "protocol-asset"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-runtime-cef = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1", features = ["devtools"] }
+
+[patch.crates-io]
+# Tauri's feat/cef branch plus the macro fork patches (macro-inc/tauri macro-cef).
+tauri = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
+tauri-build = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
+tauri-codegen = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
+tauri-macros = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
+tauri-runtime = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
+tauri-utils = { git = "https://github.com/macro-inc/tauri", rev = "285fb6b1" }
+# The CEF runtime builds on winit-gtk4, whose `dpi` must be the one Tauri uses.
+dpi = { git = "https://github.com/tauri-apps/winit-gtk4", rev = "3d7c7cd19d3c752f75762ceea535444e63bdf8de" }
+
+# Match ../Cargo.toml: run the GraphQL cache's SQL VM like production.
+[profile.dev.package.turso_core]
+opt-level = 3
+debug-assertions = false

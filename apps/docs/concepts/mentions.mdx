@@ -4,7 +4,7 @@ icon: "at"
 description: "How blocks reference each other and how permissions are handled. The @mention primitive that works across every markdown surface in Macro."
 ---
 
-Mentions are how blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, a chat or [automation](/product/agents#automations) prompt, or a task description) opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's [References panel](/concepts/blocks).
+Mentions are how blocks reference each other across the workspace. Typing `@` in any rich-text surface (a [document](/product/docs), an email body, a channel message, an agent or [routine](/product/routines) prompt, or a task description) opens an autocomplete that lets you reference something else in Macro. Whatever you pick renders as a live inline pill that carries its target's current metadata (a task mention shows the task's status and priority, for instance), and the reference is recorded as a backlink in the target's [References panel](/concepts/blocks).
 
 <Frame>
   <img
@@ -56,7 +56,7 @@ Mentioning people causes them to be added to cc on the email thread.
   ![An @mentioned person being added as a recipient on an email](/images/Screenshot-2026-06-09-at-4.00.50-PM.png)
 </Frame>
 
-The auto-sharing that happens when you mention in channels doesn't happen in email: because email chains can be forwarded and people added, the list of people who might need access isn't known in advance or traceable over time. Thus, you'll need to manually ensure that the recipients of your mentions in email are able to access your link. When you hit send, the @mention will appear as a plain hyperlink in other email clients.
+@mentioning a document or file in an email sets it to view-only for anyone with the link and shows a confirmation. If you cannot change the file's sharing, Macro shows a warning that recipients may not have access. In other email clients, the @mention appears as a plain hyperlink.
 
 ## Mentions in Documents
 
@@ -88,7 +88,7 @@ Use canvases to embed other entities on a 2D plane. This is useful for mind-mapp
 - **Channels, Threads, or a Specific Message**: Mentioning a channel doesn't grant permissions, and neither does mentioning a message. There is no way to share a message with someone who isn't in the channel, because the ability to view a message is determined by channel membership. If you need to share a message without adding somebody to a channel, send a screenshot. To add somebody to a channel, don't mention the channel — go to the channel and add them as a participant.
 - **Dates**: Choosing a date from the date picker inserts a date reference (useful for due dates, scheduling, and filtering). Dates don't notify or share anything.
 
-In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC. Mentioning a document inserts a link _and_ updates that document's permissions so recipients can open it.
+In a document or chat, a mention is a navigable link and a source of context. In an **email body** it has side effects: mentioning a person adds them to CC. Mentioning a document inserts a link _and_ makes it viewable by anyone with the link so recipients can open it.
 
 In a **channel** there are two special mentions on top of the normal ones: `@here` pings every participant, and `@Macro` invokes the agent inline.
 

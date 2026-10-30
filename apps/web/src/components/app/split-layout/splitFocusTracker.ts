@@ -169,6 +169,7 @@ export function createSplitFocusTracker(props: {
     on(
       () => props.splitManager.events(),
       (newEvent) => {
+        if (!newEvent) return;
         if (focusTimeout) {
           clearTimeout(focusTimeout);
         }

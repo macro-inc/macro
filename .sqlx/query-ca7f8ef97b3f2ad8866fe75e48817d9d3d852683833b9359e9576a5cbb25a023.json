@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT target.id FROM email_thread_client_ids alias\n           JOIN email_threads source ON source.id = alias.client_id AND source.link_id = alias.link_id\n           JOIN email_threads target ON target.id = alias.thread_id AND target.link_id = source.link_id\n           WHERE source.id = $1 AND source.link_id = ANY($2) AND target.id <> source.id\n             AND NOT EXISTS(SELECT 1 FROM email_messages WHERE thread_id = source.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ca7f8ef97b3f2ad8866fe75e48817d9d3d852683833b9359e9576a5cbb25a023"
+}

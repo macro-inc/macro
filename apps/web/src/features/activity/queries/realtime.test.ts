@@ -23,7 +23,10 @@ describe('mounted activity realtime queries', () => {
     const queries = createRoot((dispose) => {
       disposals.push(dispose);
       return {
-        feed: createMyActivityQuery(context, { enabled: () => true }),
+        feed: createMyActivityQuery(context, {
+          scope: 'mine',
+          enabled: () => true,
+        }),
         overview: createMyActivityOverviewQuery(context, {
           enabled: () => true,
         }),
@@ -74,7 +77,10 @@ describe('mounted activity realtime queries', () => {
     let dispose!: () => void;
     createRoot((cleanup) => {
       dispose = cleanup;
-      createMyActivityQuery({ graphql: client }, { enabled: () => true });
+      createMyActivityQuery(
+        { graphql: client },
+        { scope: 'mine', enabled: () => true }
+      );
     });
     disposals.push(dispose);
     first.latest('MyActivity').resolve(feedPage([]));

@@ -41,9 +41,9 @@ export function HomeTabs() {
         <div class="flex h-8 min-w-0 flex-1 items-center gap-3">
           <Tabs
             aria-label="Home views"
-            list={HOME_TABS}
+            options={HOME_TABS}
             value={state.tab}
-            onChange={handleTabChange}
+            onChange={setTab}
           />
           <HomeFilterDropdown />
         </div>

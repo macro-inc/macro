@@ -9,6 +9,9 @@ use serde::Serialize;
 use tauri::Manager;
 use uuid::Uuid;
 
+pub mod events;
+#[cfg(target_os = "ios")]
+mod ios;
 #[cfg(desktop)]
 mod launch;
 #[cfg(target_os = "macos")]
@@ -117,6 +120,7 @@ pub struct Diagnostics {
     identity: Identity,
     buffer: Mutex<SampleBuffer>,
     web_content: Mutex<WebContentDiagnostics>,
+    events: Mutex<events::EventBuffer>,
 }
 
 impl Diagnostics {
@@ -136,6 +140,7 @@ impl Diagnostics {
             },
             buffer: Mutex::new(SampleBuffer::default()),
             web_content: Mutex::new(WebContentDiagnostics::default()),
+            events: Mutex::new(events::EventBuffer::default()),
         }
     }
 
@@ -145,6 +150,7 @@ impl Diagnostics {
 
     /// Retain process termination evidence outside the WebView being reloaded.
     pub fn record_web_content_termination(&self) -> Result<(), String> {
+        self.record_native_event(events::NativeEvent::WebContentTerminated);
         let mut web_content = self.web_content.lock().map_err(|e| e.to_string())?;
         web_content.record_termination(
             SystemTime::now()
@@ -154,6 +160,33 @@ impl Diagnostics {
         );
         Ok(())
     }
+
+    pub fn record_native_event(&self, event: events::NativeEvent) {
+        if let Ok(mut buffer) = self.events.lock() {
+            buffer.native(event, timestamp_ms());
+        }
+    }
+}
+
+fn timestamp_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+#[tauri::command]
+pub fn record_frontend_diagnostic(
+    state: tauri::State<'_, Diagnostics>,
+    frontend_instance_id: Uuid,
+    event: events::FrontendEvent,
+) -> Result<(), String> {
+    state.events.lock().map_err(|e| e.to_string())?.frontend(
+        frontend_instance_id,
+        event,
+        timestamp_ms(),
+    );
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -164,6 +197,7 @@ pub struct Snapshot {
     dropped_samples: u64,
     web_content: WebContentDiagnostics,
     bundle_reloads: Option<macro_bundle_updater_plugin::inbound::plugin::BundleReloadDiagnostics>,
+    recent_events: events::EventSnapshot,
 }
 
 #[tauri::command]
@@ -182,6 +216,7 @@ pub fn read_desktop_diagnostics<R: tauri::Runtime>(
         bundle_reloads: macro_bundle_updater_plugin::inbound::plugin::bundle_reload_diagnostics(
             &app_handle,
         ),
+        recent_events: state.events.lock().map_err(|e| e.to_string())?.snapshot(),
     })
 }
 
@@ -196,6 +231,8 @@ pub fn setup<R: tauri::Runtime>(app: &tauri::App<R>, mut diagnostics: Diagnostic
         }
     }
     app.manage(diagnostics);
+    #[cfg(target_os = "ios")]
+    ios::observe_memory_warnings(app.handle().clone());
     if !recording {
         return;
     }

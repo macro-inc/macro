@@ -1,6 +1,8 @@
 import { HoverCard } from '@core/component/HoverCard';
 import { openExternalUrl } from '@core/util/url';
 import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import OpenIcon from '@icon/system/regular/arrows-out.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
 import {
   $isBookingLinkMentionNode,
   type BookingLinkMentionDecoratorProps,
@@ -9,8 +11,6 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
 import { cn, Surface } from '@ui';
 import {
   $getNodeByKey,
@@ -42,7 +42,7 @@ function BookingLinkPreviewCard(props: {
 }) {
   return (
     <div class="select-none w-72 text-ink">
-      <Surface depth={3} class="glass bg-menu-glass rounded-xl">
+      <Surface depth={3} hideBorder class="menu-surface rounded-xl">
         <div class="w-full flex flex-col">
           <div class="flex items-center justify-between gap-2 p-2">
             <div class="flex items-center gap-2 min-w-0">

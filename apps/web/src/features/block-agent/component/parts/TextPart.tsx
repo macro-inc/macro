@@ -8,12 +8,16 @@ import { hideIncompleteMacroXml } from './hideIncompleteMacroXml';
 export function TextPart(props: {
   text: string;
   inFlight?: boolean;
+  /** Agent prose stays truncated after a stop, interruption, or reload. */
+  hideIncompleteXml?: boolean;
   observeRender?: (element: HTMLElement) => (() => void) | undefined;
 }) {
   // Memoized so an `inFlight` flip that leaves the text unchanged does not
   // rebuild the markdown DOM and reload its images.
   const markdown = createMemo(() =>
-    props.inFlight ? hideIncompleteMacroXml(props.text) : props.text
+    props.inFlight || props.hideIncompleteXml
+      ? hideIncompleteMacroXml(props.text)
+      : props.text
   );
   let content!: HTMLDivElement;
   onMount(() => {

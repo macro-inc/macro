@@ -14,6 +14,8 @@ import { notificationIsRead } from '@entity/utils/notification';
 import { notificationStateFromGraphql } from '@notifications/notification-state';
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import { createChannelUnreadQuery } from '@queries/channel/unread-presence';
+import { queryReadyGate } from '@queries/gate';
+import { useNotificationTypePreferencesQuery } from '@queries/notification/type-preferences';
 import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import {
   type SoupApiItemFilter,
@@ -29,6 +31,10 @@ const signalInsertFilter: SoupApiItemFilter = (item) =>
 export function useNavigationUnread() {
   const notificationSource = useGlobalNotificationSource();
   const graphqlFlag = useFeatureFlag(enableGraphqlSoup);
+  const preferencesQuery = useNotificationTypePreferencesQuery();
+  const isTypeDisabled = (type: string) =>
+    queryReadyGate(preferencesQuery) &&
+    preferencesQuery.data.disabled_types.includes(type);
   const channels = createChannelUnreadQuery(
     makeGraphqlSoupInput({
       // Preserve the previous feed's 500-entity candidate bound, but select
@@ -60,16 +66,18 @@ export function useNavigationUnread() {
 
   // Guard resource reads so loading a badge cannot suspend the app shell.
   // Re-check cached rows: optimistic read/done changes can leave them in a page.
+  // Respect user preference: hide badge when email notifications are disabled.
   const emailUnread = createMemo(() => {
-    if (email.isLoading) return false;
-    return (email.data?.entities ?? []).some(
+    if (isTypeDisabled('new_email')) return false;
+    if (!queryReadyGate(email)) return false;
+    return email.data.entities.some(
       (entity) => entity.type === 'email' && !entity.isRead && !entity.done
     );
   });
   const channelsUnread = createMemo(() => {
     if (graphqlFlag().enabled) {
-      if (!channels.isEnabled || channels.isLoading) return false;
-      return (channels.data ?? []).some((notification) => {
+      if (!channels.isEnabled || !queryReadyGate(channels)) return false;
+      return channels.data.some((notification) => {
         const state = notificationStateFromGraphql(notification.state);
         return (
           (notificationSource.withLocalState?.({

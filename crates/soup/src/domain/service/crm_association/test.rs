@@ -101,10 +101,10 @@ fn edges_group_by_source_and_deduplicate() {
 }
 
 fn resolved(entities: AssociatedEntities) -> ResolvedAssociations {
-    ResolvedAssociations(HashMap::from([(
-        CrmAssociation::Company(COMPANY),
-        entities,
-    )]))
+    ResolvedAssociations {
+        entities: HashMap::from([(CrmAssociation::Company(COMPANY), entities)]),
+        activity_email: None,
+    }
 }
 
 fn id_set<T: std::fmt::Debug>(
@@ -190,13 +190,16 @@ fn top_level_scope_constrains_every_source_before_its_own_filter() {
 #[test]
 fn document_literals_resolve_inside_their_tree() {
     let contact = CrmAssociation::Contact(CONTACT);
-    let resolved = ResolvedAssociations(HashMap::from([(
-        contact,
-        AssociatedEntities {
-            documents: ids(&[7, 8]),
-            ..AssociatedEntities::default()
-        },
-    )]));
+    let resolved = ResolvedAssociations {
+        entities: HashMap::from([(
+            contact,
+            AssociatedEntities {
+                documents: ids(&[7, 8]),
+                ..AssociatedEntities::default()
+            },
+        )]),
+        activity_email: None,
+    };
     let ast = resolved.apply(EntityFilterAst {
         document_filter: Some(Arc::new(Expr::or(
             Expr::val(DocumentLiteral::CrmAssociated(contact)),
@@ -264,4 +267,60 @@ fn requested_opt_in_sources_are_constrained() {
     assert_eq!(open.company_ids, vec![id(10)]);
     let mut other = request(vec![id(11)]);
     assert!(!intersect_crm_companies(&mut other, &entities));
+}
+
+#[test]
+fn activity_uses_property_edges_only_and_matches_email_in_every_direction() {
+    let entities = AssociatedEntities::from_edges(
+        CrmAssociation::Activity,
+        vec![
+            edge(PropertyEntityType::Document, 1),
+            edge(PropertyEntityType::CallRecord, 2),
+            edge(PropertyEntityType::Thread, 3),
+        ],
+        vec![],
+    );
+    assert_eq!(entities.documents, ids(&[1]));
+    assert_eq!(entities.calls, ids(&[2]));
+    let email = Email::Domain("example.com".into());
+    let email_tree = Arc::new(Expr::or(
+        Expr::or(
+            Expr::val(EmailLiteral::Sender(email.clone())),
+            Expr::val(EmailLiteral::Recipient(email.clone())),
+        ),
+        Expr::or(
+            Expr::val(EmailLiteral::Cc(email.clone())),
+            Expr::val(EmailLiteral::Bcc(email)),
+        ),
+    ));
+    let resolved = ResolvedAssociations {
+        entities: HashMap::from([(CrmAssociation::Activity, entities)]),
+        activity_email: Some(email_tree.clone()),
+    };
+    let ast = resolved.apply(EntityFilterAst {
+        crm_association: Some(CrmAssociation::Activity),
+        ..EntityFilterAst::default()
+    });
+    assert_eq!(ast.email_filter.crm_scope, None);
+    assert_eq!(
+        serde_json::to_value(&ast.email_filter.tree).unwrap(),
+        serde_json::to_value(&Some(email_tree)).unwrap()
+    );
+    assert_matches!(ast.call_filter.as_deref(), Some(Expr::Literal(CallLiteral::CallId(id))) if *id == Uuid::from_u128(2));
+    assert!(
+        !serde_json::to_string(&ast.email_filter.tree)
+            .unwrap()
+            .contains(&Uuid::from_u128(3).to_string())
+    );
+
+    let empty = ResolvedAssociations {
+        entities: HashMap::from([(CrmAssociation::Activity, AssociatedEntities::default())]),
+        activity_email: None,
+    }
+    .apply(EntityFilterAst {
+        crm_association: Some(CrmAssociation::Activity),
+        ..EntityFilterAst::default()
+    });
+    assert_matches!(empty.email_filter.tree.as_deref(), Some(Expr::Literal(EmailLiteral::ThreadId(nil))) if nil.is_nil());
+    assert_matches!(empty.call_filter.as_deref(), Some(Expr::Literal(CallLiteral::CallId(nil))) if nil.is_nil());
 }

@@ -1,6 +1,6 @@
 # Type Alias: ApiDraftOutput
 
-> **ApiDraftOutput** = \{ `bcc?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; `body_html?`: `string` \| `null`; `body_macro?`: `string` \| `null`; `body_text?`: `string` \| `null`; `cc?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; `db_id?`: `string` \| `null`; `headers_json?`: `null` \| [`Value`](Value.md); `link_id`: `string`; `provider_id?`: `string` \| `null`; `provider_thread_id?`: `string` \| `null`; `replying_to_id?`: `string` \| `null`; `send_time?`: `string` \| `null`; `subject`: `string`; `thread_db_id?`: `string` \| `null`; `to?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; \}
+> **ApiDraftOutput** = \{ `bcc?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; `body_html?`: `string` \| `null`; `body_macro?`: `string` \| `null`; `body_text?`: `string` \| `null`; `cc?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; `db_id?`: `string` \| `null`; `draft_generation`: `number`; `headers_json?`: `null` \| [`Value`](Value.md); `link_id`: `string`; `provider_id?`: `string` \| `null`; `provider_thread_id?`: `string` \| `null`; `replying_to_id?`: `string` \| `null`; `send_time?`: `string` \| `null`; `subject`: `string`; `thread_db_id?`: `string` \| `null`; `to?`: [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null`; \}
 
 The draft output matching the current `MessageToSend` JSON shape for backward compat.
 
@@ -14,6 +14,7 @@ The draft output matching the current `MessageToSend` JSON shape for backward co
 | <a id="property-body_text"></a> `body_text?` | `string` \| `null` | Plain text body. |
 | <a id="property-cc"></a> `cc?` | [`ApiDraftContactInfo`](ApiDraftContactInfo.md)[] \| `null` | Cc recipients. |
 | <a id="property-db_id"></a> `db_id?` | `string` \| `null` | Message DB ID. |
+| <a id="property-draft_generation"></a> `draft_generation` | `number` | Generation required for subsequent edits. |
 | <a id="property-headers_json"></a> `headers_json?` | `null` \| [`Value`](Value.md) | - |
 | <a id="property-link_id"></a> `link_id` | `string` | Link ID. |
 | <a id="property-provider_id"></a> `provider_id?` | `string` \| `null` | Provider message ID. |

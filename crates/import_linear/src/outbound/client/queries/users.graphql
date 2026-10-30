@@ -1,0 +1,6 @@
+query ImportUsers($after: String) {
+  users(first: 50, after: $after, includeArchived: true) {
+    nodes { id name email }
+    pageInfo { hasNextPage endCursor }
+  }
+}

@@ -1,5 +1,6 @@
 import { SidePanel } from '@components/app/side-panel';
-import { createMemo, Match, Show, Suspense, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
 import {
@@ -13,6 +14,7 @@ import { ContactHeader } from './contact-header';
 import { ContactSharingSection } from './contact-sharing-section';
 import {
   RecordCallsSection,
+  RecordDatabasesSection,
   RecordFilesSection,
   RecordReferencesSection,
 } from './record-associations';
@@ -35,6 +37,13 @@ export function Contact(props: {
   const pipelinesEnabled = context.pipelinesEnabled();
   const contactQuery = useContactQuery(() => props.contactId);
   const contact = () => contactQuery.data;
+  onCleanup(
+    context.registerTaskComposerRecord(() => ({
+      type: 'contact',
+      id: props.contactId,
+      companyId: contact()?.companyId,
+    }))
+  );
   const isTeamAdmin = useIsTeamAdmin();
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
@@ -83,24 +92,17 @@ export function Contact(props: {
               <RecordFilesSection scope={scope()} />
             </Match>
             <Match when={section() === 'tasks'}>
-              <Suspense
-                fallback={
-                  <div class="p-6 text-center text-sm text-ink-muted touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)]">
-                    Loading…
-                  </div>
-                }
-              >
+              <Suspense fallback={<CrmListSkeleton label="Loading tasks" />}>
                 <Show
                   when={scope()}
-                  fallback={
-                    <div class="p-6 text-center text-sm text-ink-muted touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)]">
-                      Loading…
-                    </div>
-                  }
+                  fallback={<CrmListSkeleton label="Loading tasks" />}
                 >
                   {(current) => <context.RecordTasks scope={current()} />}
                 </Show>
               </Suspense>
+            </Match>
+            <Match when={section() === 'databases'}>
+              <RecordDatabasesSection scope={scope()} />
             </Match>
             <Match when={section() === 'calls'}>
               <RecordCallsSection scope={scope()} />

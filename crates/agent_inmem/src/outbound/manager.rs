@@ -8,6 +8,7 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
+use agent_api_keys::domain::{AgentKeys, NoAgentKeys};
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::{RuntimeConnection, ServerChannel};
@@ -18,7 +19,7 @@ use dashmap::DashMap;
 use model_owner::Owner;
 
 use crate::domain::agent::{AgentState, serve};
-use crate::domain::engine::{AgentIdentity, TurnEngine};
+use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine};
 use crate::domain::mcp::DynMcpToolConnector;
 use crate::domain::replay::{FrameSource, replay_history, replay_reasoning_effort, replay_speed};
 use crate::domain::session::{SessionState, SessionStore, Summarizing};
@@ -33,6 +34,8 @@ pub struct SessionFacts {
     pub id: AgentSessionId,
     /// The session's owner; turns act on their behalf.
     pub owner: Owner,
+    /// How the session's replies reach their reader.
+    pub delivery: ReplyDelivery,
     /// Model id stamped on the session row.
     pub model: String,
     /// The bot's display name and `@` handle, folded into every turn's
@@ -69,6 +72,7 @@ impl Drop for LiveAgent {
 pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
     admission: Arc<dyn AiAdmissionService>,
+    agent_keys: Arc<dyn AgentKeys>,
     model_access: Arc<dyn crate::domain::model_access::InMemModelAccess>,
     frames: Arc<dyn FrameSource>,
     mcp: Arc<dyn DynMcpToolConnector>,
@@ -96,6 +100,7 @@ impl InMemAgentManager {
             engine,
             model_access,
             admission: Arc::new(DisabledAiAdmissionService),
+            agent_keys: Arc::new(NoAgentKeys),
             frames,
             mcp,
             enable_dev_commands: false,
@@ -110,6 +115,14 @@ impl InMemAgentManager {
     #[must_use]
     pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
         self.admission = admission;
+        self
+    }
+
+    /// Let agents' turns run on their own API keys. Without this, every turn
+    /// runs on Macro's allowance.
+    #[must_use]
+    pub fn with_agent_keys(mut self, agent_keys: Arc<dyn AgentKeys>) -> Self {
+        self.agent_keys = agent_keys;
         self
     }
 
@@ -188,8 +201,10 @@ impl InMemAgentManager {
         let state = Arc::new(AgentState {
             session_id: facts.id,
             owner: facts.owner,
+            delivery: facts.delivery,
             engine: Arc::clone(&self.engine),
             admission: Arc::clone(&self.admission),
+            agent_keys: Arc::clone(&self.agent_keys),
             model_access: Arc::clone(&self.model_access),
             store: Arc::clone(&self.store),
             active_cancel: std::sync::Mutex::new(Vec::new()),

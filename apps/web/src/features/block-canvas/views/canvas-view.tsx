@@ -1,6 +1,8 @@
 import { useSidePanel } from '@components/app/side-panel';
 import { createImageActions } from '@core/component/Lightbox/createImageActions';
 import { fireAndForget } from '@core/util/fireAndForget';
+import Copy from '@icon/system/regular/copy.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   alignCommand,
@@ -11,6 +13,11 @@ import {
   styleCommand,
 } from '@macro-inc/graphics';
 import { attachConnectorControls } from '@macro-inc/graphics/browser';
+import type { GraphicsPresence } from '@macro-inc/graphics/loro';
+import {
+  attachPresencePointer,
+  GraphicsPresenceOverlay,
+} from '@macro-inc/graphics/loro/solid';
 import {
   ConnectorView,
   EllipseView,
@@ -18,8 +25,6 @@ import {
   RectangleView,
   TextView,
 } from '@macro-inc/graphics/solid';
-import Copy from '@phosphor/copy.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
 import { Button, Layer } from '@ui';
 import {
   type Component,
@@ -66,6 +71,7 @@ import { TextEditingView } from './text-editing-view';
 
 export function CanvasView(props: {
   state: CanvasState;
+  presence?: GraphicsPresence;
   fitOnLoad?: boolean;
   scopeId: string;
   embedView: Component<CanvasEmbedViewProps>;
@@ -201,6 +207,8 @@ export function CanvasView(props: {
     });
     props.attachScope(root);
     props.onViewport(host);
+    if (props.presence)
+      onCleanup(attachPresencePointer(host, editor, props.presence));
     onCleanup(props.insert.attach(host));
     droppable(host);
     onCleanup(props.clipboard.attach(root));
@@ -270,7 +278,7 @@ export function CanvasView(props: {
         <Show when={!sidePanel?.isOpen()}>
           <Layer depth={2}>
             <aside
-              class="absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-64 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-lg"
+              class="absolute right-4 top-4 z-30 flex max-h-[calc(100%-2rem)] w-64 max-w-[calc(100%-2rem)] flex-col overflow-hidden rounded-xl border border-edge-muted bg-surface shadow-lg touch:top-16 touch:max-h-[calc(100%-5rem)]"
               style={{
                 height:
                   state.selection().length > 0
@@ -423,6 +431,7 @@ export function CanvasView(props: {
                   <Show when={selectedImage()}>
                     <div class="flex flex-col gap-2 p-3">
                       <Button
+                        variant="ghost"
                         size="sm"
                         disabled={imageActionsDisabled()}
                         onClick={() =>
@@ -432,10 +441,11 @@ export function CanvasView(props: {
                           )
                         }
                       >
-                        <Copy />
+                        <Copy class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                         Copy image
                       </Button>
                       <Button
+                        variant="ghost"
                         size="sm"
                         disabled={imageActionsDisabled()}
                         onClick={() =>
@@ -445,7 +455,7 @@ export function CanvasView(props: {
                           )
                         }
                       >
-                        <DownloadSimple />
+                        <DownloadSimple class="size-3 touch:size-6 shrink-0 pointer-events-none" />
                         Save image
                       </Button>
                     </div>
@@ -705,6 +715,37 @@ export function CanvasView(props: {
                   )}
                 </Show>
               </GraphicsSurface>
+              <Show when={props.presence}>
+                {(presence) => (
+                  <GraphicsPresenceOverlay
+                    editor={editor}
+                    presence={presence()}
+                    renderers={{
+                      rectangle: (props) => (
+                        <RectangleView
+                          {...props}
+                          contentView={CanvasTextContent}
+                        />
+                      ),
+                      ellipse: (props) => (
+                        <EllipseView
+                          {...props}
+                          contentView={CanvasTextContent}
+                        />
+                      ),
+                      connector: (props) => (
+                        <ConnectorView
+                          {...props}
+                          contentView={CanvasTextContent}
+                        />
+                      ),
+                      text: (props) => (
+                        <TextView {...props} contentView={CanvasTextContent} />
+                      ),
+                    }}
+                  />
+                )}
+              </Show>
             </div>
           </ContextMenu.Trigger>
           <CanvasContextMenu

@@ -3,9 +3,15 @@
  */
 
 import type { Link } from '@service-email/generated/schemas';
-import { render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import { onlineManager } from '@tanstack/query-core';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/solid-query';
+import { createSignal, Suspense } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EmailLinksContextProvider, useEmailLinksContext } from './emailLinks';
 
 const mocks = vi.hoisted(() => ({
@@ -36,7 +42,52 @@ beforeEach(() => {
   mocks.useIsAuthenticated.mockReset();
 });
 
+afterEach(() => {
+  cleanup();
+  onlineManager.setOnline(true);
+});
+
 describe('EmailLinksContext', () => {
+  it.each(['fetching', 'paused'] as const)(
+    'renders cached mail while inbox identity metadata is %s',
+    async (status) => {
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const request = Promise.withResolvers<{ links: Link[] }>();
+      const started = Promise.withResolvers<void>();
+      const fetchLinks = vi.fn(() => {
+        started.resolve();
+        return request.promise;
+      });
+      mocks.useIsAuthenticated.mockReturnValue(() => true);
+      mocks.useEmailLinksQuery.mockImplementation(() =>
+        useQuery(() => ({ queryKey: ['links'], queryFn: fetchLinks }))
+      );
+      onlineManager.setOnline(status !== 'paused');
+      render(() => (
+        <QueryClientProvider client={client}>
+          <EmailLinksContextProvider>
+            <Suspense fallback={<span>Hidden mail</span>}>
+              <Consumer label="cached row" />
+            </Suspense>
+          </EmailLinksContextProvider>
+        </QueryClientProvider>
+      ));
+
+      if (status === 'fetching') await started.promise;
+      expect(screen.queryByText('Hidden mail')).toBeNull();
+      const row = screen.getByText('cached row:0:false');
+      onlineManager.setOnline(true);
+      await started.promise;
+      request.resolve({ links: [] });
+      await client.refetchQueries();
+      expect(client.getQueryState(['links'])?.status).toBe('success');
+      expect(screen.getByText('cached row:0:false')).toBe(row);
+      client.clear();
+    }
+  );
+
   it('shares reactive identity metadata across consumers', () => {
     const [authenticated, setAuthenticated] = createSignal(true);
     const [data] = createSignal({

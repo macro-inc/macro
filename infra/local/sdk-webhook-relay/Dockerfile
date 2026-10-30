@@ -12,6 +12,7 @@ RUN printf '%s\n' \
     'PasswordAuthentication no' \
     'KbdInteractiveAuthentication no' \
     'PubkeyAuthentication yes' \
+    'StrictModes no' \
     'AuthorizedKeysFile /etc/ssh/authorized_keys/%u' \
     'AllowTcpForwarding remote' \
     'GatewayPorts clientspecified' \

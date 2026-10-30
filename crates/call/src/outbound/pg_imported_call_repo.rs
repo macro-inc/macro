@@ -22,10 +22,7 @@ impl PgImportedCallRepository {
 impl ImportedCallRepository for PgImportedCallRepository {
     async fn upsert(&self, mut call: ImportedCall) -> Result<Uuid, rootcause::Report> {
         let source = &call.source;
-        let provider = match source.provider {
-            CallProvider::Macro => "macro",
-            CallProvider::Granola => "granola",
-        };
+        let provider: &'static str = source.provider.into();
         let key = serde_json::to_string(&(
             source.user_id.as_ref(),
             &source.namespace,
@@ -61,8 +58,8 @@ impl ImportedCallRepository for PgImportedCallRepository {
                 .await?;
             sqlx::query!(
                 r#"INSERT INTO call_entities (id, user_id, title, created_via, started_at, ended_at, duration_ms, share_permission_id)
-                VALUES ($1,$2,$3,'import',$4,$5,$6,$7)"#,
-                id, source.user_id.as_ref(), call.title, call.started_at, call.ended_at, duration, share_id
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8)"#,
+                id, source.user_id.as_ref(), call.title, CallCreatedVia::Import.as_ref(), call.started_at, call.ended_at, duration, share_id
             ).execute(tx.as_mut()).await?;
             entity_access_db_utils::insert_entity_access_row(
                 &mut tx,

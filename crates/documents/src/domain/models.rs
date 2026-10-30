@@ -393,6 +393,8 @@ pub struct NewDocument {
     pub share_with_team: bool,
     /// Custom creation timestamp.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Custom last-edit timestamp; defaults to `created_at`.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Sub type of the document — task or snippet (MD files only).
     pub sub_type: Option<document_sub_type::DocumentSubType>,
     /// Whether to skip adding to user history.
@@ -549,12 +551,36 @@ pub struct CreateMarkdownDocumentRequest {
     pub skip_history: bool,
 }
 
+/// Request for a backend-initialized native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentRequest {
+    /// Canvas name.
+    pub document_name: String,
+    /// Optional parent project.
+    pub project_id: Option<uuid::Uuid>,
+}
+
 /// Response for creating a markdown document.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CreateMarkdownDocumentResponse {
     /// The document ID of the created markdown document
+    pub document_id: String,
+    /// Metadata for the created document
+    pub document_metadata: DocumentResponseMetadata,
+    /// A pre-generated permission token that you can use for SS
+    pub token: String,
+}
+
+/// Response for creating a native Canvas.
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCanvasDocumentResponse {
+    /// The document ID of the created native Canvas
     pub document_id: String,
     /// Metadata for the created document
     pub document_metadata: DocumentResponseMetadata,

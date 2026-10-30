@@ -369,6 +369,7 @@ export function useAddInboxFlow() {
       // Preserve the layout so either callback can put it back.
       rememberInboxLinkReturn(result.value.link_id, {
         url: `${toBaseRelative(window.location.pathname)}${window.location.search}${window.location.hash}`,
+        scopes,
       });
       const authorizationUrl = inboxAuthorizationUrl(
         result.value.authorization_url,

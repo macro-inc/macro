@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id FROM whatsapp_linked_account a WHERE EXISTS (\n            SELECT 1 FROM whatsapp_pairing p WHERE p.account_id = a.id\n              AND p.consumed_at IS NULL\n              AND ($1::text IS NULL OR p.user_id = $1) AND ($2::uuid IS NULL OR p.id = $2)\n              AND ($3::uuid IS NULL OR p.account_id = $3)) ORDER BY a.id FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cf3e05a2a473943308a108a5ae4b75749bd847e9f2abf7eacf3717786fb936a7"
+}

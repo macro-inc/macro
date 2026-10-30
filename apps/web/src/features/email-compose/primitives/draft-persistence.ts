@@ -3,13 +3,14 @@ import {
   type DeleteEmailDraft,
   DraftPersistRejected,
   type DraftSaveResult,
-  type EmailComposeFeedback,
   type EmailDraftStorage,
 } from '../context/compose-capabilities';
 import type { EmailDraft } from '../core/email-draft';
 import type { LocalDraft } from '../core/local-draft';
 import type { DraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
+
+export type DraftPersistence = ReturnType<typeof createDraftPersistence>;
 
 /** Sent from another device: the server outcome supersedes the local draft. */
 export const isAlreadySentRejection = (error: unknown) =>
@@ -18,19 +19,16 @@ export const isAlreadySentRejection = (error: unknown) =>
 /**
  * A discard's delete. An already-sent verdict is not a failure: the reset
  * the caller performs next is exactly what that verdict asks for, so it is
- * announced and swallowed. Every other rejection propagates.
+ * swallowed. Every other rejection propagates.
  */
 export async function deleteDraftForDiscard(
   drafts: Pick<EmailDraftStorage, 'deleteDraft'>,
-  input: DeleteEmailDraft,
-  notices: Pick<EmailComposeFeedback, 'feedback'>,
-  alreadySentMessage: string
+  input: DeleteEmailDraft
 ): Promise<void> {
   try {
     await drafts.deleteDraft(input);
   } catch (error) {
     if (!isAlreadySentRejection(error)) throw error;
-    notices.feedback.alert(alreadySentMessage);
   }
 }
 
@@ -50,6 +48,7 @@ export async function deleteDraftForDiscard(
  */
 export function createDraftPersistence(options: {
   session: DraftSession;
+  draftGeneration?: () => number;
   drafts: Pick<
     EmailDraftStorage,
     'saveDraft' | 'deleteDraft' | 'saveLocalDraft' | 'retryDraft' | 'readDraft'
@@ -91,6 +90,15 @@ export function createDraftPersistence(options: {
   };
 
   return {
+    localVersion(): Pick<LocalDraft, 'generation' | 'revision'> | undefined {
+      return localGeneration !== undefined && localRevision !== undefined
+        ? { generation: localGeneration, revision: localRevision }
+        : undefined;
+    },
+    restored(local: Pick<LocalDraft, 'revision' | 'generation'> | undefined) {
+      localRevision = local?.revision;
+      localGeneration = local?.generation;
+    },
     async saveLocally(input: {
       draft: EmailDraft | null;
       inboxId?: string;
@@ -156,6 +164,7 @@ export function createDraftPersistence(options: {
         try {
           await options.drafts.deleteDraft({
             draftId,
+            draftGeneration: options.draftGeneration?.() ?? 0,
             threadId: session.threadId(),
             ...input,
           });

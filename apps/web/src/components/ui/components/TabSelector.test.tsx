@@ -1,4 +1,3 @@
-import { Tabs } from '@kobalte/core/tabs';
 import {
   cleanup,
   fireEvent,
@@ -31,11 +30,11 @@ it('keeps add actions separate from the tab selection', async () => {
   const create = vi.fn();
   render(() => (
     <TabSelector>
-      <Tabs value="books" onChange={select}>
+      <TabSelector.Root value="books" onChange={select}>
         <TabSelector.List aria-label="Tables">
           <TabSelector.Tab value="books">Books</TabSelector.Tab>
         </TabSelector.List>
-      </Tabs>
+      </TabSelector.Root>
       <TabSelector.AddMenu label="Add">
         <Dropdown.Item onSelect={create}>New table</Dropdown.Item>
       </TabSelector.AddMenu>
@@ -55,11 +54,11 @@ it('keeps add actions separate from the tab selection', async () => {
 it('scrolls with the wheel and arrows without moving the add menu', async () => {
   render(() => (
     <TabSelector>
-      <Tabs value="books">
+      <TabSelector.Root value="books">
         <TabSelector.List aria-label="Tables">
           <TabSelector.Tab value="books">Books</TabSelector.Tab>
         </TabSelector.List>
-      </Tabs>
+      </TabSelector.Root>
       <TabSelector.AddMenu label="Add">
         <Dropdown.Item>New table</Dropdown.Item>
       </TabSelector.AddMenu>

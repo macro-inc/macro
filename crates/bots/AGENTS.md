@@ -9,6 +9,8 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 ## Start here
 
 - `src/domain/service.rs` + `src/domain/models.rs`: bot CRUD policy and model.
+  Team admins may delete team agents; other team bots require the creator or
+  team owner.
 - `src/domain/events.rs`: `bot.created`/`bot.updated`/`bot.deleted` events published
   to the `macro.bots` Kafka topic (see `README.md` for the wire schema).
 - `src/inbound/axum_router.rs`, `src/inbound/channel_webhook_router.rs`,

@@ -2,6 +2,11 @@ import { queryClient } from '@queries/client';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const notificationVisible = vi.hoisted(() => vi.fn());
+vi.mock('@notifications/notification-open-trace', () => ({
+  markNotificationTargetVisible: notificationVisible,
+}));
+
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {},
 }));
@@ -21,6 +26,7 @@ import {
 
 afterEach(() => {
   queryClient.clear();
+  notificationVisible.mockClear();
   vi.useRealTimers();
 });
 
@@ -47,6 +53,33 @@ function mount(init?: { targetMessageId?: string; targetReplyId?: string }) {
     return { controller, ready, setKeys, dispose };
   });
 }
+
+describe('notification visibility', () => {
+  it('acknowledges only the active root after its scroll completes', () => {
+    const { controller, ready, dispose } = mount({ targetMessageId: 'm1' });
+    ready(['m1', 'm2']);
+    controller.completePendingScroll('m2');
+    expect(notificationVisible).not.toHaveBeenCalled();
+    controller.completePendingScroll('m1');
+    controller.completePendingScroll('m1');
+    expect(notificationVisible).toHaveBeenCalledExactlyOnceWith(CHANNEL, 'm1');
+    dispose();
+  });
+
+  it('acknowledges a reply only when the reply itself is positioned', () => {
+    const { controller, ready, dispose } = mount({
+      targetMessageId: 'm1',
+      targetReplyId: 'r1',
+    });
+    ready(['m1']);
+    controller.completePendingScroll('m1');
+    controller.completePendingReplyScroll('m1', 'r2');
+    expect(notificationVisible).not.toHaveBeenCalled();
+    controller.completePendingReplyScroll('m1', 'r1');
+    expect(notificationVisible).toHaveBeenCalledExactlyOnceWith(CHANNEL, 'r1');
+    dispose();
+  });
+});
 
 describe('construction', () => {
   it('does not read ThreadList inputs during construct (Channel.tsx TDZ)', () => {

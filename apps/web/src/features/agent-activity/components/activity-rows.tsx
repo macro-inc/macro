@@ -1,8 +1,8 @@
 import { TextShimmer } from '@app/features/block-agent/ui';
-import CheckIcon from '@phosphor/check.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
-import WarningIcon from '@phosphor/warning-circle.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import WarningIcon from '@icon/system/regular/warning-circle.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 
@@ -73,18 +73,28 @@ function StatusIcon(props: { status: ActivityRowView['status'] }) {
     <Switch>
       <Match when={props.status === 'running'}>
         <SpinnerIcon
+          aria-hidden={false}
           class="size-3.5 shrink-0 animate-spin text-ink-muted"
           aria-label="Running"
         />
       </Match>
       <Match when={props.status === 'completed'}>
-        <CheckIcon class="size-3.5 shrink-0 text-success" aria-label="Done" />
+        <CheckIcon
+          aria-hidden={false}
+          class="size-3.5 shrink-0 text-success"
+          aria-label="Done"
+        />
       </Match>
       <Match when={props.status === 'failed'}>
-        <XIcon class="size-3.5 shrink-0 text-failure" aria-label="Failed" />
+        <XIcon
+          aria-hidden={false}
+          class="size-3.5 shrink-0 text-failure"
+          aria-label="Failed"
+        />
       </Match>
       <Match when={props.status === 'interrupted'}>
         <WarningIcon
+          aria-hidden={false}
           class="size-3.5 shrink-0 text-ink-muted"
           aria-label="Interrupted: it may or may not have finished"
         />

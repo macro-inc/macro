@@ -1,4 +1,6 @@
-export const ALLOWED_ORIGINS = [
+import { stack } from '../../../shared';
+
+const PROD_LOCAL_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
   'http://localhost:3002',
@@ -19,6 +21,13 @@ export const ALLOWED_ORIGINS = [
   'https://localhost:3007',
   'https://localhost:3008',
   'https://localhost:3009',
+];
+
+// Browsers upload straight to presigned S3 URLs, so a local frontend on any
+// port needs CORS against non-prod buckets.
+const NON_PROD_LOCAL_ORIGINS = ['http://localhost:*', 'https://localhost:*'];
+
+const SHARED_ORIGINS = [
   'http://host.local:3000',
   'https://app-dev.macro.com',
   'https://app-staging.macro.com',
@@ -40,4 +49,10 @@ export const ALLOWED_ORIGINS = [
   // presigned S3 media such as call recordings.
   'https://*.preview.macro.com',
   'tauri://localhost',
+];
+
+/** Browser origins allowed by S3 bucket CORS rules on the current Pulumi stack. */
+export const ALLOWED_ORIGINS = [
+  ...(stack === 'prod' ? PROD_LOCAL_ORIGINS : NON_PROD_LOCAL_ORIGINS),
+  ...SHARED_ORIGINS,
 ];

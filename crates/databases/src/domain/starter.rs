@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use macro_event_broker::MacroEventBroker;
 use models_databases::OptionId;
-use models_databases::position::{Position, PositionError, keys_between};
+use models_databases::position::{Position, PositionError, key_between};
 use models_databases::views::{Lane, LaneKey, ViewLayout, ViewQuery};
 use serde::Serialize;
 
@@ -77,9 +77,8 @@ impl StarterBlueprint {
         stage_options: &[OptionId],
         now: DateTime<Utc>,
     ) -> Result<[DatabaseView; 2], PositionError> {
-        let [table_position, board_position] = keys_between(None, None, 2)?
-            .try_into()
-            .expect("two keys were asked for");
+        let board_position = key_between(None, None)?;
+        let table_position = key_between(None, Some(&board_position))?;
         let view = |name: &str, position: Position, layout: ViewLayout| DatabaseView {
             id: ViewId::new(),
             database_id: self.database_id,

@@ -76,7 +76,7 @@ fn granola_meeting(owner: &str) -> ImportedCall {
             namespace: "account".into(),
             provider: CallProvider::Granola,
             object_type: "note".into(),
-            external_id: "not_123456789abcde".to_owned().try_into().unwrap(),
+            external_id: ExternalCallId("not_123456789abcde".into()),
             external_url: Some("https://notes.granola.ai/d/abc".into()),
             external_updated_at: Some(started_at),
             synced_at: None,
@@ -150,7 +150,7 @@ async fn imported_call_record_reads_source_and_transcript(
     assert_eq!(record.created_by, "macro|import-a@test.com");
     assert_eq!(record.channel_id, None);
     let source = record.source.expect("imported calls carry their source");
-    assert_eq!(source.provider, "granola");
+    assert_eq!(source.provider, CallProvider::Granola);
     assert_eq!(
         source.external_url.as_deref(),
         Some("https://notes.granola.ai/d/abc")

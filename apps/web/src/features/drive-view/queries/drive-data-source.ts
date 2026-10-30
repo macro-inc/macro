@@ -180,6 +180,7 @@ export function createDriveDataSource(options: {
   });
 
   const search = createSearchState({
+    surface: () => 'drive',
     text: () => selection().search,
 
     enabled: facetsReady,

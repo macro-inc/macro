@@ -21,7 +21,7 @@ between different teams is unspecified.
 | `team.invite_created` | A new invite is persisted; one event is produced per newly invited lowercase email | `team_id`, `invite_id`, `email`, `invited_by`, `team_name` |
 | `team.invite_rejected` | The invitee successfully rejects and deletes an invite | `team_id`, `invite_id`, `email`, `actor_user_id` |
 | `team.invite_revoked` | An administrator successfully deletes an invite | `team_id`, `invite_id`, `email`, `actor_user_id` |
-| `team.member_joined` | An invited or domain-auto-joined membership and all rollback-capable side effects succeed | `team_id`, `member_id`, `teammate_ids`, `role`, `join_method` |
+| `team.member_joined` | An invited, domain-auto-joined, or invite-link membership and all rollback-capable side effects succeed | `team_id`, `member_id`, `teammate_ids`, `role`, `join_method` |
 | `team.member_removed` | Membership removal and all rollback-capable side effects succeed | `team_id`, `member_id`, `removed_by`, `role` |
 | `team.member_role_changed` | Each individual member role update succeeds | `team_id`, `actor_user_id`, `member_id`, `role`, `previous_role` |
 | `team.auto_join_domain_toggled` | An explicit auto-join-domain toggle succeeds | `team_id`, `actor_user_id`, `auto_join_domain` |
@@ -56,7 +56,9 @@ default a missing field to `[]` so events published before this field existed
 still decode.
 
 `join_method` is a tagged union. An accepted invite includes its invite UUID and
-the inviter; a domain auto-join is encoded as `{"type":"domain_auto_join"}`.
+the inviter; a domain auto-join is encoded as `{"type":"domain_auto_join"}` and
+a join through the team's shareable invite link as `{"type":"invite_link"}`.
+Consumers should ignore join methods they don't recognize.
 A complete invite-accepted membership envelope has this shape:
 
 ```json

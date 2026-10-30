@@ -22,8 +22,8 @@ import {
   isTaskEntity,
   type TaskEntityWithProperties,
 } from '@entity';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import Flag from '@phosphor/flag.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import Flag from '@icon/system/regular/flag.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useContacts } from '@queries/contacts/contacts';
@@ -383,7 +383,13 @@ function TaskListBar(props: {
             onOpenChange={setMenuOpen}
             groups={filterGroups()}
             isSelected={isSelected}
+            selectedIds={(group) => props.settings().filters[group]}
             onSelectionChange={setFilterValue}
+            onGroupSelectionChange={(group, ids) =>
+              props.update({
+                filters: { ...props.settings().filters, [group]: [...ids] },
+              })
+            }
             onClear={() =>
               props.update({
                 filters: { status: [], priority: [], assignees: [], due: [] },

@@ -3,6 +3,7 @@
 // Adopted from monitors created by hand in the Datadog UI. Do not edit a
 // monitor here and in the UI at the same time — this file wins on deploy.
 import { adopted } from '../adopted';
+import { notify } from '../notify';
 
 // https://us5.datadoghq.com/monitors/1177082
 adopted('web-app-errors-staging', {
@@ -10,7 +11,9 @@ adopted('web-app-errors-staging', {
   type: 'rum alert',
   query:
     'rum("@type:error @application.name:\\"Web App\\" env:production @view.url_host:staging.macro.com").rollup("count").last("5m") > 90',
-  message: '@slack-monitoring',
+  message: `The staging web app recorded {{value}} errors in 5 minutes.
+
+${notify({ pages: false, environment: 'staging' })}`,
   monitorThresholds: {
     critical: '90',
     warning: '50',
@@ -28,8 +31,7 @@ adopted('web-app-source-errors-prod', {
   query: 'formula("(1 - (query - query1) / query) * 100").last("1h") > 90',
   message: `{{value}} % of all views in Web App are throwing errors from source.
 
-@slack-monitoring
-{{#is_alert}}@slack-holy-shit-alarms {{/is_alert}}`,
+${notify({ pages: true })}`,
   priority: '2',
   tags: ['prod'],
   monitorThresholds: {

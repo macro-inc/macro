@@ -9,14 +9,44 @@ import {
   createSignal,
   ErrorBoundary,
   type JSX,
+  onCleanup,
   type ParentProps,
   Show,
 } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { useCrmContext } from '../context/crm-context';
 import type { CrmCommentTarget } from '../context/workspace-context';
 import type { CrmContact } from '../core/contact';
-import type { CrmRecordRef, CrmRecordSection } from '../core/record';
+import type {
+  CrmRecordRef,
+  CrmRecordSection,
+  CrmTaskRecord,
+} from '../core/record';
 import { CrmRecordDetail } from './record-detail';
+
+const taskContext = vi.hoisted(() => ({
+  records: [] as (() => CrmTaskRecord)[],
+  get record() {
+    return this.records.at(-1);
+  },
+  contactCompanyId: undefined as string | undefined,
+  recordError: (): boolean => false,
+}));
+vi.mock('../context/crm-context', () => ({
+  useCrmContext: () => ({
+    listsEnabled: () => () => false,
+    pipelinesEnabled: () => () => false,
+    isTeamAdmin: () => () => false,
+    openCreateContact: vi.fn(),
+    registerTaskComposerRecord: (source: () => CrmTaskRecord) => {
+      taskContext.records.push(source);
+      return () => {
+        const index = taskContext.records.indexOf(source);
+        if (index !== -1) taskContext.records.splice(index, 1);
+      };
+    },
+  }),
+}));
 
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
@@ -28,6 +58,8 @@ vi.mock('@ui', async () => ({
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
     Root: (props: ParentProps) => <>{props.children}</>,
+    Layout: (props: ParentProps) => <>{props.children}</>,
+    Section: (props: ParentProps) => <>{props.children}</>,
     Toggle: () => null,
   },
 }));
@@ -42,10 +74,24 @@ vi.mock('../components/record-tabs', () => ({
 }));
 vi.mock('./use-crm', () => ({
   useCompanyQuery: () => ({
-    query: { isError: false },
+    query: {
+      get isError() {
+        return taskContext.recordError();
+      },
+    },
     company: () => undefined,
+    contacts: () => [],
   }),
-  useContactQuery: () => ({ isSuccess: false, isError: false }),
+  useContactQuery: () => ({
+    isSuccess: !!taskContext.contactCompanyId,
+    get isError() {
+      return taskContext.recordError();
+    },
+    data: taskContext.contactCompanyId
+      ? { companyId: taskContext.contactCompanyId }
+      : undefined,
+  }),
+  useIsTeamAdmin: () => () => false,
 }));
 vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 vi.mock('./company-detail', async () => {
@@ -54,7 +100,16 @@ vi.mock('./company-detail', async () => {
   );
   return {
     // Reads its linked message the way the Discussion does.
-    Company: (props: { onOpenContact(contact: CrmContact): void }) => {
+    Company: (props: {
+      companyId: string;
+      onOpenContact(contact: CrmContact): void;
+    }) => {
+      onCleanup(
+        useCrmContext().registerTaskComposerRecord(() => ({
+          type: 'company',
+          id: props.companyId,
+        }))
+      );
       const params = useUrlParams({ commentId: 'comment_id' });
       const navigations = useParamNavigationCount('comment_id');
       return (
@@ -88,16 +143,77 @@ vi.mock('./contact-detail', () => ({
   Contact: (props: {
     contactId: string;
     onOpenCompany(companyId: string): boolean;
-  }) => (
-    <div>
-      Contact content: {props.contactId}
-      <button onClick={() => props.onOpenCompany('company-1')}>
-        Open contact company
-      </button>
-    </div>
-  ),
+  }) => {
+    onCleanup(
+      useCrmContext().registerTaskComposerRecord(() => ({
+        type: 'contact',
+        id: props.contactId,
+        companyId: taskContext.contactCompanyId,
+      }))
+    );
+    return (
+      <div>
+        Contact content: {props.contactId}
+        <button onClick={() => props.onOpenCompany('company-1')}>
+          Open contact company
+        </button>
+      </div>
+    );
+  },
 }));
-afterEach(cleanup);
+// The breadcrumb test replaces detail views, while registration tests load their real roots.
+vi.mock('./company-contacts-section', () => ({
+  CompanyContactsSection: () => null,
+}));
+vi.mock('./company-discussion-section', () => ({
+  CompanyDiscussionSection: () => null,
+}));
+vi.mock('./company-emails-section', () => ({
+  CompanyEmailsSection: () => null,
+}));
+vi.mock('./company-header', () => ({ CompanyHeader: () => null }));
+vi.mock('./company-list-membership', () => ({
+  CompanyListsSection: () => null,
+}));
+vi.mock('./company-properties-section', () => ({
+  CompanyPropertiesSection: () => null,
+}));
+vi.mock('./company-sharing-section', () => ({
+  CompanySharingSection: () => null,
+}));
+vi.mock('./contact-discussion-section', () => ({
+  ContactDiscussionSection: () => null,
+}));
+vi.mock('./contact-emails-section', () => ({
+  ContactEmailsSection: () => null,
+}));
+vi.mock('./contact-header', () => ({ ContactHeader: () => null }));
+vi.mock('./contact-sharing-section', () => ({
+  ContactSharingSection: () => null,
+}));
+vi.mock('./record-associations', () => ({
+  RecordCallsSection: () => null,
+  RecordFilesSection: () => null,
+  RecordReferencesSection: () => null,
+}));
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  taskContext.records.length = 0;
+  taskContext.contactCompanyId = undefined;
+  taskContext.recordError = () => false;
+});
 
 /** Stands in for the route: each open hands the detail a new trail. */
 function renderDetail(record: CrmRecordRef, viewName: string) {
@@ -186,6 +302,69 @@ it('opens a People contact in place and follows its company without duplicating 
   expect(close).toHaveBeenCalledOnce();
 });
 
+it('registers the actual company detail while mounted and clears it on unmount', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  const result = render(() => (
+    <Company companyId="company-1" section="files" />
+  ));
+  expect(taskContext.record?.()).toEqual({ type: 'company', id: 'company-1' });
+  result.unmount();
+  expect(taskContext.record).toBeUndefined();
+});
+
+it('registers the actual contact detail with its loaded company', async () => {
+  const { Contact } =
+    await vi.importActual<typeof import('./contact-detail')>(
+      './contact-detail'
+    );
+  taskContext.contactCompanyId = 'company-1';
+  const result = render(() => (
+    <Contact contactId="contact-1" section="files" />
+  ));
+  expect(taskContext.record?.()).toEqual({
+    type: 'contact',
+    id: 'contact-1',
+    companyId: 'company-1',
+  });
+  result.unmount();
+  expect(taskContext.record).toBeUndefined();
+});
+
+it('registers an unloaded contact without an unrelated company', async () => {
+  const { Contact } =
+    await vi.importActual<typeof import('./contact-detail')>(
+      './contact-detail'
+    );
+  const result = render(() => (
+    <Contact contactId="contact-2" section="files" />
+  ));
+  expect(taskContext.record?.()).toEqual({
+    type: 'contact',
+    id: 'contact-2',
+    companyId: undefined,
+  });
+  result.unmount();
+  expect(taskContext.record).toBeUndefined();
+});
+
+it.each(['company', 'contact'] as const)(
+  'keeps the selected %s association when the detail query fails',
+  (type) => {
+    const [error, setError] = createSignal(false);
+    taskContext.recordError = error;
+    taskContext.contactCompanyId = 'company-1';
+    renderDetail({ type, id: 'record-1', name: 'Selected record' }, 'Records');
+    expect(taskContext.record?.()).toMatchObject({ type, id: 'record-1' });
+    setError(true);
+    expect(screen.getByText(`This ${type} couldn’t be loaded.`)).toBeTruthy();
+    expect(taskContext.record?.()).toMatchObject({ type, id: 'record-1' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to view' }));
+    expect(taskContext.record).toBeUndefined();
+  }
+);
 it('keeps the shown record mounted while the route only changes its tab', () => {
   renderDetail({ type: 'contact', id: 'contact-1', name: 'Maya' }, 'People');
   const content = screen.getByText('Contact content: contact-1');

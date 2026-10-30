@@ -11,7 +11,10 @@ import {
   type TableCellNode,
   type TableNode,
 } from '@lexical/table';
-import { SupportedNodeTypes } from '@macro-inc/lexical-core/node-list';
+import {
+  NodeReplacements,
+  SupportedNodeTypes,
+} from '@macro-inc/lexical-core/node-list';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -56,7 +59,7 @@ export function createTableTestEditor(
 
   const editor = createEditor({
     namespace: 'table-test',
-    nodes: SupportedNodeTypes,
+    nodes: [...SupportedNodeTypes, ...NodeReplacements],
     onError: (error) => {
       throw error;
     },

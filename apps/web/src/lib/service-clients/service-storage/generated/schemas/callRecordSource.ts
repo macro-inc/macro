@@ -4,6 +4,8 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { CallProvider } from './callProvider';
 import type { CallRecordSourceExternalUrl } from './callRecordSourceExternalUrl';
 
 /**
@@ -12,6 +14,6 @@ import type { CallRecordSourceExternalUrl } from './callRecordSourceExternalUrl'
 export interface CallRecordSource {
   /** Link to the call in the provider's app, if it has one. */
   externalUrl?: CallRecordSourceExternalUrl;
-  /** Provider slug, e.g. `granola`. */
-  provider: string;
+  /** Provider that supplied the call. */
+  provider: CallProvider;
 }

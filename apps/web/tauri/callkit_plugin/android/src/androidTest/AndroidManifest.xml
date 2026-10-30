@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Only the instrumentation APK may connect to the local development server. -->
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <!-- Stands in for Macro's main activity so the plugin's in-app call window runs as in the app. -->
+        <activity android:name="com.macro.call.MiniWindowHostActivity" android:exported="false" android:theme="@style/Theme.AppCompat.Light.NoActionBar" android:supportsPictureInPicture="true" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout" />
+    </application>
 </manifest>

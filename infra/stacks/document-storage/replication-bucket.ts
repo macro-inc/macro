@@ -124,6 +124,7 @@ export function setupReplicationBucket() {
           's3:GetReplicationConfiguration',
           's3:PutReplicationConfiguration',
           's3:GetLifecycleConfiguration',
+          's3:PutLifecycleConfiguration',
           's3:GetAccountPublicAccessBlock',
           's3:GetBucketOwnershipControls',
           's3:GetBucketAcl',
@@ -171,6 +172,44 @@ export function setupReplicationBucket() {
         },
         { protect: true, provider: replicationRegion }
       )
+  );
+
+  // Lifecycle expirations on the source bucket are not replicated, so the
+  // replica needs its own. Admins may only put lifecycle rules once the policy
+  // above allows it.
+  new aws.s3.BucketLifecycleConfiguration(
+    'replication-bucket-lifecycle',
+    {
+      bucket: replicationBucket.id,
+      rules: [
+        {
+          id: 'temp-cleanup',
+          status: 'Enabled',
+          filter: { prefix: 'temp_files/' },
+          expiration: { days: 1 },
+        },
+        {
+          id: 'delete-marked-files',
+          status: 'Enabled',
+          filter: {},
+          expiration: { expiredObjectDeleteMarker: true },
+        },
+        {
+          id: 'noncurrent-version-cleanup',
+          status: 'Enabled',
+          filter: {},
+          noncurrentVersionExpiration: { noncurrentDays: 30 },
+        },
+        {
+          id: 'intelligent-tiering',
+          status: 'Enabled',
+          filter: {},
+          transitions: [{ days: 0, storageClass: 'INTELLIGENT_TIERING' }],
+          abortIncompleteMultipartUpload: { daysAfterInitiation: 7 },
+        },
+      ],
+    },
+    { provider: replicationRegion, dependsOn: bucketPolicy }
   );
 
   return {

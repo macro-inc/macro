@@ -94,8 +94,6 @@ export function runtimeLabel(
       return MACRO_HARNESS_NAME;
     case 'cursor':
       return 'Cursor';
-    case 'claude-cloud':
-      return 'Claude Cloud';
     case 'macrod':
       return (
         runtimes.find((runtime) => runtime.id === harnessId)?.name ??
@@ -158,7 +156,9 @@ function persistedAgent(
     connectLabel:
       agent.harness === 'cursor' && input.cursorNeedsConnection
         ? 'Connect Cursor'
-        : undefined,
+        : agent.harness === 'macrod' && !connected
+          ? 'Reconnect runtime'
+          : undefined,
     unavailableReason:
       agent.harness === 'macrod' && !connected
         ? 'Its runtime is disconnected'

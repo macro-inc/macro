@@ -60,6 +60,13 @@ export function getNotificationSenderFallbackName(
     .otherwise(() => undefined);
 }
 
+/** The sender's avatar when the notification metadata carries one. */
+export function getNotificationSenderAvatarUrl(
+  notification: UnifiedNotification
+): string | undefined {
+  return senderContent(notification)?.senderProfilePictureUrl ?? undefined;
+}
+
 export type NotificationAgentSender = {
   name: string;
   avatarUrl?: string;

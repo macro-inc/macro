@@ -1,11 +1,19 @@
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import {
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@solidjs/testing-library';
-import { type ComponentProps, type ParentProps, Show } from 'solid-js';
+import {
+  type ComponentProps,
+  type JSX,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { EmailDraftStorage } from '../context/compose-capabilities';
 import { useCompose } from '../context/compose-context';
@@ -21,7 +29,7 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
   StaticSplitLabel: () => null,
 }));
 vi.mock('@core/component/EmailPermissionsBanner', () => ({
-  EmailPermissionsBanner: () => null,
+  EmailPermissionsBanner: () => <p>No email account connected.</p>,
 }));
 vi.mock('@core/mobile/WrapUnlessMobile', () => ({
   WrapUnlessMobile: (props: ParentProps) => props.children,
@@ -36,7 +44,9 @@ vi.mock('../components/email-schedule-summary', () => ({
   EmailScheduleBar: () => null,
 }));
 vi.mock('../components/draft-sync-status', () => ({
-  DraftSyncStatus: () => null,
+  DraftSyncStatus: (props: { state?: { message: string } }) => (
+    <Show when={props.state}>{(state) => <p>{state().message}</p>}</Show>
+  ),
 }));
 vi.mock('./compose-toolbar', () => ({ EmailComposeToolbar: () => null }));
 vi.mock('@components/app/mobile/MobileDrawer', () => {
@@ -58,23 +68,59 @@ vi.mock('@components/app/mobile/MobileDrawer', () => {
   };
 });
 vi.mock('./compose-layout', () => ({
-  ComposeLayout: () => {
+  ComposeLayout: (props: { notice?: JSX.Element }) => {
     const state = useCompose();
     const editor = createEmailEditor();
     state.captureEditor(editor);
     state.onContentChange('');
     return (
-      <input
-        aria-label="Message"
-        onInput={(event) => {
-          setEmailEditorText(editor, event.currentTarget.value);
-          state.onContentChange(event.currentTarget.value);
-        }}
-      />
+      <>
+        {props.notice}
+        <input
+          aria-label="Message"
+          onInput={(event) => {
+            setEmailEditorText(editor, event.currentTarget.value);
+            state.onContentChange(event.currentTarget.value);
+          }}
+        />
+      </>
     );
   },
 }));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 afterEach(cleanup);
+
+it('keeps the page’s New button from floating over the full-screen composer', () => {
+  const slot = document.createElement('div');
+  document.body.append(slot);
+  FloatRegions.setMount('accessory', slot);
+  const page = render(() => (
+    <FloatRegion region="accessory" priority={-1}>
+      <button type="button">New</button>
+    </FloatRegion>
+  ));
+  expect(within(slot).getByRole('button', { name: 'New' })).toBeDefined();
+
+  const composer = render(() => (
+    <EmailComposeView context={createComposeContext()} />
+  ));
+  expect(within(slot).queryByRole('button', { name: 'New' })).toBeNull();
+
+  composer.unmount();
+  expect(within(slot).getByRole('button', { name: 'New' })).toBeDefined();
+  page.unmount();
+  slot.remove();
+});
+
+it('keeps a draft sync failure visible without a connected inbox', () => {
+  const context = createComposeContext();
+  context.accounts.inboxes = () => [];
+  context.drafts.saveLocalDraft = vi.fn();
+  context.drafts.syncAvailability = () => 'unavailable';
+  render(() => <EmailComposeView context={context} draftId="draft" />);
+  expect(screen.getByText('No email account connected.')).toBeDefined();
+  expect(screen.getByText('Draft synchronization unavailable')).toBeDefined();
+});
 
 it.each([false, true])(
   'leaves only after local saving succeeds (failure=%s)',

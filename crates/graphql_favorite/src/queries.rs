@@ -30,15 +30,15 @@ pub struct FavoritesFilterInput {
 
 impl FavoritesFilterInput {
     /// Convert the transport input into the domain filter.
-    pub fn into_model(self) -> FavoriteFilter {
-        FavoriteFilter {
+    pub fn into_model(self) -> async_graphql::Result<FavoriteFilter> {
+        Ok(FavoriteFilter {
             entity_types: self
                 .entity_types
                 .into_iter()
                 .map(GraphqlEntityType::into_model)
-                .collect(),
+                .collect::<async_graphql::Result<_>>()?,
             entity_ids: self.entity_ids.into_iter().map(|id| id.0).collect(),
-        }
+        })
     }
 }
 

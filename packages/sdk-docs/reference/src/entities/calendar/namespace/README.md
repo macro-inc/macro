@@ -7,3 +7,7 @@
 ## Interfaces
 
 - [CreateEventOptions](interfaces/CreateEventOptions.md)
+
+## Type Aliases
+
+- [CalendarEventRole](type-aliases/CalendarEventRole.md)

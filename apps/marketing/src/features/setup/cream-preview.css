@@ -5,6 +5,7 @@
    Everything is scoped to html[data-palette=cream]; the dark site is unchanged. */
 
 html[data-palette='cream'] {
+  --marketing-mention: oklch(.52 .14 250deg);
   /* Override every surface level: the frozen dark palette defines each one. */
   --color-surface-0: #f5f1e8;
   --color-surface-1: #faf8f3;
@@ -62,6 +63,7 @@ html[data-palette='cream'] .site-header {
   --nav-muted: #72706c;
   --nav-surface: rgb(250 248 243 / 85%);
   --nav-menu-surface: var(--color-surface-2);
+  --nav-mobile-surface: #f5f1e8;
   --nav-menu-shadow: 0 20px 60px #1d1c1a26, inset 0 1px 0 #ffffff80;
   --nav-edge: rgb(29 28 26 / 10%);
 }
@@ -81,6 +83,9 @@ html[data-palette='cream'] .homepage-email-toolbar button.homepage-email-send:di
 html[data-palette='cream'] .homepage-email-format button { background: #1d1c1a0a; }
 
 /* ---- Collaborative document ------------------------------------------ */
+/* Document object colors derive from a0. Keep them semantic even though the
+   cream website uses a neutral accent for ordinary controls. */
+html[data-palette='cream'] .mds { --a0: var(--marketing-mention); }
 html[data-palette='cream'] .homepage-collaborative-doc .mds-card { background: var(--color-surface-1); box-shadow: 0 10px 40px -12px #1d1c1a26; }
 html[data-palette='cream'] .homepage-collaborative-doc .mds-card::before { background: linear-gradient(135deg, #ffffff80, transparent 45%) border-box; border-color: #1d1c1a0d; }
 html[data-palette='cream'] .homepage-history-caption { background: #f5f1e8; }
@@ -138,15 +143,6 @@ html[data-palette='cream'] .dummy-route {
   color-scheme: light;
 }
 
-/* ---- Demo backdrops ---------------------------------------------------
-   The frames fade from the ink color, which is near-black here; use a faint
-   ink wash instead. */
-html[data-palette='cream'] .homepage-crm .mdf-frame {
-  background: linear-gradient(to bottom, #1d1c1a12 0%, #1d1c1a08 45%, #1d1c1a03 78%, transparent 100%);
-}
-html[data-palette='cream'] .homepage-crm .mdf-frame::before {
-  background: linear-gradient(to bottom, #1d1c1a14 0%, #1d1c1a0a 45%, transparent 100%);
-}
 html[data-palette='cream'] .homepage-demo-slide-copy h2 { color: var(--color-ink); }
 
 /* ---- Chat bubbles ------------------------------------------------------
@@ -304,9 +300,8 @@ html[data-palette='cream'] .email-desktop-demo[data-hero-frame=true] .email-desk
   background: #ebe6dc;
 }
 html[data-palette='cream'] .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper::before {
-  background: radial-gradient(ellipse at 8% 20%, #e7dfd2, transparent 53%),
-    radial-gradient(ellipse at 72% 0%, #dde3da, transparent 55%), #ebe6dc;
-  filter: none;
+  background: url('../../assets/desktop/monterey-dark.jpg') center / cover;
+  filter: grayscale(1) invert(1) sepia(.18) saturate(.6) brightness(.96) contrast(.82);
 }
 html[data-palette='cream'] .sales-calc-tools button[aria-pressed=true] .sales-calc-check {
   color: var(--color-surface-0);
@@ -385,9 +380,12 @@ html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-fram
   background: #ebe6dc;
 }
 html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper::before {
-  background: radial-gradient(ellipse at 8% 20%, #e7dfd2, transparent 53%),
-    radial-gradient(ellipse at 72% 0%, #dde3da, transparent 55%), #ebe6dc;
-  filter: none;
+  background: url('../../assets/desktop/monterey-dark.jpg') center / cover;
+  filter: grayscale(1) invert(1) sepia(.18) saturate(.6) brightness(.96) contrast(.82);
+}
+html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-frame=true] .email-desktop-window {
+  border-color: #1d1c1a1a;
+  box-shadow: 0 24px 60px #403a302b, 0 3px 12px #403a3014;
 }
 html[data-palette='cream'] :is(.agents-connection-path p, .agents-connection-path a, .calls-page .product-prose a, .calls-scene-picker button) {
   color: var(--color-ink-muted);

@@ -10,6 +10,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { useEmailLinks } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import type { RedirectLocation } from '@core/util/authRedirect';
+import { syncLoginStorage } from '@core/util/cookies';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
 import { isPlatform } from '@core/util/platform';
 import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
@@ -146,6 +147,11 @@ export function useSsoLogin(opts?: { signupMode?: boolean }) {
 
     analytics.track(analyticsEvent, { method: idp_name }, analyticsProviders);
 
+    // The hosted callback sets only HttpOnly cookies, which the app cannot
+    // see, and the return load probes identity only behind the login hint.
+    // Leave the hint now so that load checks the new session instead of
+    // showing sign-in again; a sign-in that did not complete 401s and clears it.
+    syncLoginStorage(true);
     window.location.href = authUrl.toString();
   };
 }

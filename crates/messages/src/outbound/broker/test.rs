@@ -51,6 +51,7 @@ fn reply(parent: MessageParent, attachments: Vec<MessageAttachment>) -> Message 
         imported_author: None,
         bot_profile: None,
         mentions: vec![],
+        triggered_via: None,
         triggered_by: None,
         content: "hello @someone".into(),
         created_at: Utc::now(),

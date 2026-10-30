@@ -34,6 +34,7 @@ function readClause(seen: boolean): FacetClause {
     cf: clause.eq('chatSeen', seen),
     pf: clause.eq('folderSeen', seen),
     fef: clause.eq('foreignEntitySeen', seen),
+    if: clause.eq('initiativeSeen', seen),
   };
 }
 
@@ -103,23 +104,27 @@ const typeOptions: Record<HomeTypeFilter, HomeFacetOption> = {
       entity.type === 'channel_message' ||
       entity.type === 'channel_thread',
   },
-  chats: {
-    id: 'chats',
-    label: 'Chats',
-    clause: { cf: clause.not(clause.eq('chatId', NIL_UUID)) },
-    predicate: (entity) => entity.type === 'chat',
-  },
   agents: {
     id: 'agents',
     label: 'Agents',
-    clause: { asf: clause.not(clause.eq('agentSessionId', NIL_UUID)) },
-    predicate: (entity) => entity.type === 'agent_session',
+    clause: {
+      cf: clause.not(clause.eq('chatId', NIL_UUID)),
+      asf: clause.not(clause.eq('agentSessionId', NIL_UUID)),
+    },
+    predicate: (entity) =>
+      entity.type === 'agent_session' || entity.type === 'chat',
   },
-  projects: {
-    id: 'projects',
-    label: 'Projects',
+  folders: {
+    id: 'folders',
+    label: 'Folders',
     clause: { pf: clause.not(clause.eq('folderId', NIL_UUID)) },
     predicate: (entity) => entity.type === 'project',
+  },
+  initiatives: {
+    id: 'initiatives',
+    label: 'Projects',
+    clause: { if: clause.eq('includeInitiatives', true) },
+    predicate: (entity) => entity.type === 'initiative',
   },
   github: {
     id: 'github',

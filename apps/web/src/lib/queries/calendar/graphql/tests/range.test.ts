@@ -187,6 +187,84 @@ describe('readCalendarRange', () => {
     expect(host.calendarCommit).not.toHaveBeenCalled();
   });
 
+  it('refetches a covered viewport whose occurrences cannot be read', async () => {
+    const args = toCalendarRangeArgs(week);
+    const key = 'GraphqlCalendarOccurrence:event-1:a';
+    const host = fakeHost([
+      range({ occurrenceKeys: [key] }),
+      range({ occurrenceKeys: [key] }),
+    ]);
+    // A record cached by a build that selected fewer fields reads as a miss.
+    host.readRecordsByKeys.mockResolvedValueOnce({
+      revision: '2' as never,
+      records: [],
+    });
+    const fetchPage = vi.fn().mockResolvedValue(page());
+
+    const data = await readData(host, week, { fetchPage });
+
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    expect(fetchPage.mock.calls[0]?.[0]).toEqual({
+      start: week.start,
+      end: week.end,
+      startDate: week.startDate,
+      endDate: week.endDate,
+      first: 2000,
+    });
+    expect(host.calendarCommit).toHaveBeenCalledWith({
+      coverage: [
+        { kind: 'timed', start: args.startMs, end: args.endMs },
+        { kind: 'allDay', start: args.startDay, end: args.endDay },
+      ],
+      watermark: { kind: 'merge', links: [{ linkId: 'link-1', seq: '9' }] },
+    });
+    expect(host.calendarRange).toHaveBeenCalledTimes(2);
+    expect(data.items).toHaveLength(1);
+  });
+
+  it('refetches an unreadable occurrence once per host', async () => {
+    const key = 'GraphqlCalendarOccurrence:event-1:a';
+    const host = fakeHost([
+      range({ occurrenceKeys: [key] }),
+      range({ occurrenceKeys: [key] }),
+      range({ occurrenceKeys: [key] }),
+    ]);
+    host.readRecordsByKeys.mockResolvedValue({
+      revision: '2' as never,
+      records: [],
+    });
+    const fetchPage = vi.fn().mockResolvedValue(page());
+
+    expect((await readData(host, week, { fetchPage })).items).toEqual([]);
+    expect((await readData(host, week, { fetchPage })).items).toEqual([]);
+
+    expect(fetchPage).toHaveBeenCalledTimes(1);
+    expect(host.calendarRange).toHaveBeenCalledTimes(3);
+  });
+
+  it('answers with what it read when the refetch fails, and retries later', async () => {
+    const key = 'GraphqlCalendarOccurrence:event-1:a';
+    const host = fakeHost([
+      range({ occurrenceKeys: [key] }),
+      range({ occurrenceKeys: [key] }),
+      range({ occurrenceKeys: [key] }),
+    ]);
+    host.readRecordsByKeys
+      .mockResolvedValueOnce({ revision: '2' as never, records: [] })
+      .mockResolvedValueOnce({ revision: '2' as never, records: [] });
+    const fetchPage = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(page());
+
+    expect((await readData(host, week, { fetchPage })).items).toEqual([]);
+    expect(host.calendarCommit).not.toHaveBeenCalled();
+
+    expect((await readData(host, week, { fetchPage })).items).toHaveLength(1);
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(host.calendarCommit).toHaveBeenCalledTimes(1);
+  });
+
   it('reports an unsupported host so the caller reads from REST', async () => {
     const host = fakeHost([{ kind: 'unsupported' }]);
     await expect(readCalendarRange(host, week)).resolves.toEqual({

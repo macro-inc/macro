@@ -199,6 +199,16 @@ pub trait DocumentRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Widen project `project_id` and every project above it to span a
+    /// document created in it with its own dates: creation moves back to
+    /// `created_at` and last edit forward to `updated_at`, never the other way.
+    fn extend_project_dates(
+        &self,
+        project_id: &str,
+        created_at: chrono::DateTime<chrono::Utc>,
+        updated_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Delete a document by ID (used for error cleanup).
     fn delete_document_by_id(
         &self,
@@ -342,6 +352,9 @@ pub trait PresignedUploadUrlPort: Send + Sync + 'static {
         source_key: &str,
         destination_key: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Remove a destination object when a multi-part document copy fails.
+    fn delete_object(&self, key: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
     fn get_snapshot(

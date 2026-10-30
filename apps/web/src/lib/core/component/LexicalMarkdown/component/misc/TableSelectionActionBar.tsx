@@ -11,6 +11,11 @@ import {
   writeClipboardData,
 } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import CornersInIcon from '@icon/system/regular/corners-in.svg';
+import CornersOutIcon from '@icon/system/regular/corners-out.svg';
+import ScissorsIcon from '@icon/system/regular/scissors.svg';
 import {
   $getClipboardDataFromSelection,
   $insertDataTransferForRichText,
@@ -22,11 +27,6 @@ import {
   $mergeCells,
   $unmergeCell,
 } from '@lexical/table';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import CornersInIcon from '@phosphor/corners-in.svg';
-import CornersOutIcon from '@phosphor/corners-out.svg';
-import ScissorsIcon from '@phosphor/scissors.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {
@@ -276,7 +276,7 @@ export function TableSelectionActionBar() {
               }}
             />
             <div
-              class="z-30 flex items-center gap-0.5 rounded-lg bg-surface p-1 shadow-lg ring-1 ring-edge"
+              class="menu-surface z-30 flex items-center gap-0.5 p-1"
               use:floatWithElement={{
                 element: anchorElem,
                 floatingOptions: { placement: 'top' },

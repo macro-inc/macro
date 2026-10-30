@@ -1,10 +1,9 @@
 //! Whether one of Macro's own tools may run in this turn.
 //!
 //! The sandboxed runtimes reach Macro's tools through the egress proxy, which
-//! holds a turn's calls for the owner when somebody else prompted it. This
-//! runtime runs those tools in-process, so it asks the same question here,
-//! before each call. Connected apps still go through the proxy and are not
-//! asked twice.
+//! resolves the selected actor and holds calls whose account differs from
+//! the verified requester. This runtime applies that policy before each native
+//! call and passes the resolved identity into dispatch. Connected apps use the proxy gate.
 
 use std::pin::Pin;
 
@@ -13,13 +12,15 @@ use agent_session::domain::model::AgentSessionId;
 /// What became of the question.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum NativeToolVerdict {
-    /// Run the tool.
+    /// Run without an account override: identity-free tools and ungated test hosts.
     Run,
+    /// Run with this verified user's access, preserving the session's billing identity.
+    RunAs(macro_user_id::user_id::MacroUserIdStr<'static>),
     /// Do not; this is what the model is told instead.
     Refuse(String),
 }
 
-/// Decides, and when need be waits for the owner, before a native tool runs.
+/// Resolves the account and, when needed, waits for owner approval before dispatch.
 /// Object-safe so the engine holds it erased.
 pub trait NativeToolGate: Send + Sync + 'static {
     /// May `session` run `tool` with `arguments` now?

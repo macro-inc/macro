@@ -1,8 +1,8 @@
 import { useUnfurl } from '@core/signal/unfurl';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
-import LinkIcon from '@phosphor/link.svg';
-import DeleteIcon from '@phosphor/x.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import DeleteIcon from '@icon/system/regular/x.svg';
 import { proxyResource } from '@service-unfurl/client';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -88,7 +88,6 @@ export function InlineLinkEditor() {
         : [normalized];
       await ctx.onSave?.(property(), { valueType: 'LINK', values: next });
       cancelAdding();
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     } finally {
@@ -105,7 +104,6 @@ export function InlineLinkEditor() {
         valueType: 'LINK',
         values: next.length > 0 ? next : null,
       });
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     } finally {

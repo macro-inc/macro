@@ -12,27 +12,10 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// A nonempty, opaque provider identifier, preserved verbatim.
+/// An opaque provider identifier, preserved verbatim. Imports reject empty IDs.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
-pub struct ExternalCallId(String);
-
-impl TryFrom<String> for ExternalCallId {
-    type Error = &'static str;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.is_empty() {
-            return Err("external call identifiers cannot be empty");
-        }
-        Ok(Self(value))
-    }
-}
-
-impl From<ExternalCallId> for String {
-    fn from(value: ExternalCallId) -> Self {
-        value.0
-    }
-}
+#[serde(transparent)]
+pub struct ExternalCallId(pub String);
 
 impl AsRef<str> for ExternalCallId {
     fn as_ref(&self) -> &str {
@@ -41,8 +24,11 @@ impl AsRef<str> for ExternalCallId {
 }
 
 /// How the entity was originally created; independent of its media and sources.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr, strum::EnumString,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum CallCreatedVia {
     /// A Macro RTC session.
     Native,
@@ -55,8 +41,21 @@ pub enum CallCreatedVia {
 }
 
 /// Supported call and transcript providers. Add variants as integrations grow.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    strum::AsRefStr,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum CallProvider {
     /// A Macro-native call or transcript.
     Macro,

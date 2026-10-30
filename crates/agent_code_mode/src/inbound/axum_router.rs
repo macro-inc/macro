@@ -16,6 +16,7 @@ use entity_access::{
 };
 use macro_authorization::{
     ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOnly,
 };
 use macro_uuid::Uuid;
 use std::sync::Arc;
@@ -190,7 +191,7 @@ pub async fn list_reviews<Access: EntityAccessService, Auth: MacroAuthorizationS
 /// Save edits or atomically claim the exact draft revision the user submitted.
 pub async fn decide_review<Access: EntityAccessService, Auth: MacroAuthorizationService>(
     access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
-    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, id)): Path<(Uuid, Uuid)>,
     Json(decision): Json<ReviewDecision>,
@@ -199,7 +200,7 @@ pub async fn decide_review<Access: EntityAccessService, Auth: MacroAuthorization
         .reviews
         .decide(
             &access.entity_access_receipt,
-            &caller.authorization.user.macro_user_id,
+            &caller.authorization.macro_user_id,
             ReviewId(id),
             decision,
         )

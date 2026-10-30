@@ -18,7 +18,8 @@ pub(super) struct PendingAction<Token> {
 }
 
 /// How a connection answers the agent's `session/request_permission`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, strum::IntoStaticStr)]
+#[strum(serialize_all = "camelCase")]
 pub enum PermissionPolicy {
     /// Approve the broadest allow option the moment the request arrives.
     /// Right for runtimes in sandboxes this deployment owns, where nothing

@@ -65,7 +65,7 @@ and tool events (for example `chat.tool_called` and `chat.tool_rejected`) are
 not yet produced; they can be added later as new enum variants.
 
 The AI auto-rename flow
-(`services/document_cognition_service/src/service/chat_renamer.rs`) patches
+(`services/agent_harness_service/src/cognition/service/chat_renamer.rs`) patches
 via `PgChatRepo` directly and does not emit `chat.updated`.
 
 Only the document cognition service (DCS) HTTP chat router, the DCS

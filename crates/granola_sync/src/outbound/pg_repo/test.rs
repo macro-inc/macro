@@ -22,7 +22,7 @@ fn event() -> Event {
     Event {
         event_id: macro_uuid::generate_uuid_v7(),
         event_type: EventType::Generated,
-        note_id: "not_123456789abcde".to_owned().try_into().unwrap(),
+        note_id: NoteId("not_123456789abcde".into()),
         occurred_at: chrono::Utc::now(),
     }
 }

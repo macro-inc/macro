@@ -70,7 +70,7 @@ it('opens with Down Arrow, keeps focused links available, and returns focus with
   expect(document.activeElement).toBe(home);
 });
 
-it('uses a separate touch toggle and closes when leaving navigation', () => {
+it('uses a single hamburger touch toggle and closes when leaving navigation', () => {
   render(() => <SiteHeader />);
   const home = screen.getByRole('link', { name: 'Macro home' });
   const touch = new Event('pointerenter', { bubbles: true });
@@ -78,8 +78,12 @@ it('uses a separate touch toggle and closes when leaving navigation', () => {
   fireEvent(home.parentElement!, touch);
   expect(screen.queryByRole('navigation')).toBeNull();
   const toggle = screen.getByRole('button', { name: 'Open navigation' });
+  expect(toggle.querySelector('.site-menu-mark')).toBeTruthy();
+  expect(toggle.querySelector('svg')).toBeNull();
   fireEvent.click(toggle);
   expect(screen.getByRole('navigation')).toBeTruthy();
+  expect(toggle.querySelector('svg')).toBeTruthy();
+  expect(toggle.querySelector('.site-menu-mark')).toBeNull();
   fireEvent.keyDown(toggle, { key: 'Escape' });
   expect(document.activeElement).toBe(toggle);
   expect(screen.queryByRole('navigation')).toBeNull();
@@ -112,11 +116,12 @@ it('keeps narrow-screen keyboard navigation inside the open menu', () => {
   const last = within(screen.getByRole('navigation')).getByRole('link', {
     name: 'Book a demo',
   });
-  home.focus();
-  fireEvent.keyDown(home, { key: 'Tab', shiftKey: true });
+  const toggle = screen.getByRole('button', { name: 'Close navigation' });
+  toggle.focus();
+  fireEvent.keyDown(toggle, { key: 'Tab', shiftKey: true });
   expect(document.activeElement).toBe(last);
   fireEvent.keyDown(last, { key: 'Tab' });
-  expect(document.activeElement).toBe(home);
+  expect(document.activeElement).toBe(toggle);
 });
 
 it('allows crossing the gap and cancels dismissal while over the dropdown', () => {

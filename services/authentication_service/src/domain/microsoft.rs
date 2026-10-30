@@ -191,6 +191,15 @@ pub trait MicrosoftGrantRepository: Send + Sync {
 pub trait MicrosoftIdentityProvider: Send + Sync {
     async fn identity_provider_id(&self) -> Result<String, MicrosoftAuthError>;
     fn authorize(&self, attempt: &LinkAttempt) -> Result<String, MicrosoftAuthError>;
+    /// The tenant-wide consent page an administrator completes when their
+    /// directory refuses user consent; Microsoft returns to `redirect_uri`,
+    /// which then sends the browser on to `return_uri`.
+    fn admin_consent_url(
+        &self,
+        redirect_uri: &str,
+        return_uri: &str,
+        calendar: bool,
+    ) -> Result<String, MicrosoftAuthError>;
     async fn exchange(
         &self,
         attempt: &LinkAttempt,
@@ -205,6 +214,14 @@ pub trait MicrosoftIdentityProvider: Send + Sync {
 #[async_trait::async_trait]
 pub trait MicrosoftAuth: Send + Sync {
     fn new_connections_enabled(&self) -> bool;
+    /// Where an administrator grants Macro's delegated permissions for their
+    /// whole directory, for users whose consent attempt needs admin approval.
+    fn admin_consent_url(
+        &self,
+        redirect_uri: &str,
+        return_uri: &str,
+        calendar: bool,
+    ) -> Result<String, MicrosoftAuthError>;
     async fn revoke_released_grant(
         &self,
         id: Uuid,
@@ -334,6 +351,15 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider> MicrosoftAuth
 {
     fn new_connections_enabled(&self) -> bool {
         self.connections_enabled
+    }
+    fn admin_consent_url(
+        &self,
+        redirect_uri: &str,
+        return_uri: &str,
+        calendar: bool,
+    ) -> Result<String, MicrosoftAuthError> {
+        self.provider
+            .admin_consent_url(redirect_uri, return_uri, calendar)
     }
     async fn revoke_released_grant(
         &self,

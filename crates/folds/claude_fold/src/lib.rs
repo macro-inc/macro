@@ -43,7 +43,7 @@ impl Fold for ClaudeLog {
         };
         match entry.get("type").and_then(Value::as_str) {
             Some("assistant") => assistant(message),
-            Some("user") => user_message(message),
+            Some("user") => user_message(message, origin(&entry)),
             _ => Vec::new(),
         }
     }
@@ -105,7 +105,14 @@ fn assistant(message: &Value) -> Vec<LogEvent> {
     events
 }
 
-fn user_message(message: &Value) -> Vec<LogEvent> {
+/// Who the CLI says wrote a user line. Claude Code injects its own events
+/// (`task-notification` when a background task settles) as user turns; the
+/// fold reads this tag, never the text, to tell them from a person's prompt.
+fn origin(entry: &Value) -> Option<&str> {
+    entry.pointer("/origin/kind").and_then(Value::as_str)
+}
+
+fn user_message(message: &Value, origin: Option<&str>) -> Vec<LogEvent> {
     let mut events = tool_results(message);
     let text = match message.get("content") {
         Some(Value::String(text)) => text.clone(),
@@ -116,10 +123,14 @@ fn user_message(message: &Value) -> Vec<LogEvent> {
             .join("\n"),
     };
     if !text.is_empty() {
-        events.push(LogEvent::Update(json!({
+        let mut update = json!({
             "sessionUpdate": "user_message_chunk",
             "content": {"type": "text", "text": text},
-        })));
+        });
+        if let Some(origin) = origin {
+            update["_meta"] = json!({"claudeCode": {"origin": origin}});
+        }
+        events.push(LogEvent::Update(update));
     }
     events
 }

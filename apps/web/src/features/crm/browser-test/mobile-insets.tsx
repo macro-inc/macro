@@ -1,6 +1,8 @@
 import '@app/index.css';
 import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { SidePanel } from '@components/app/side-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Button } from '@ui';
@@ -100,4 +102,14 @@ function Fixture() {
   );
 }
 const root = document.getElementById('root');
-if (root) render(() => <Fixture />, root);
+if (root)
+  render(
+    () => (
+      <AnalyticsContextProvider>
+        <PosthogProvider>
+          <Fixture />
+        </PosthogProvider>
+      </AnalyticsContextProvider>
+    ),
+    root
+  );

@@ -9,7 +9,10 @@ vi.mock('@property', async () => {
   const passthrough = (props: { children: JSX.Element }) => props.children;
   return {
     Property: {
-      Root: passthrough,
+      Root: (props: {
+        property: EntityProperty;
+        children: (property: () => EntityProperty) => JSX.Element;
+      }) => props.children(() => props.property),
       Tooltip: passthrough,
       EditTrigger: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
         <button {...props} />

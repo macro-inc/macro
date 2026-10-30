@@ -31,6 +31,13 @@ pub(super) struct World {
     /// Simulate the gateway refusing an awareness relay.
     pub(super) awareness_relay_fails: bool,
     pub(super) share_updates: Vec<Vec<models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission>>,
+    /// The owner's team, which a team share goes to.
+    pub(super) owner_team: Option<Uuid>,
+    /// The team share and its revision.
+    pub(super) team_share: Option<models_permissions::share_permission::team_share::TeamShareGrant>,
+    pub(super) team_share_revision: i64,
+    /// Simulate the team facts changing between authorization and the write.
+    pub(super) team_share_goes_stale: bool,
     /// Every `macro.databases` envelope the service handed the broker.
     pub(super) broker_events: Vec<serde_json::Value>,
     /// Every `settle_inference` call, newest last.

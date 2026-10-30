@@ -10,7 +10,7 @@ import {
   $getRoot,
   type LexicalEditor,
 } from 'lexical';
-import { type Accessor, createSignal } from 'solid-js';
+import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import type {
   EmailComposeFeedback,
   EmailEditorFiles,
@@ -23,31 +23,36 @@ import type {
  */
 export function appendAttachmentLinks(
   editor: LexicalEditor,
-  documents: readonly UploadedDocument[]
+  documents: readonly UploadedDocument[],
+  canEdit: Accessor<boolean> = () => true
 ) {
-  if (documents.length === 0) return;
-  editor.update(() => {
-    // Attaching from the toolbar must not pull focus into the editor.
-    $addUpdateTag('skip-dom-selection');
-    const root = $getRoot();
-    const quote = root
-      .getChildren()
-      .find(
-        (node) =>
-          $isClassedBlockNode(node) && node.__classes.includes('macro_quote')
-      );
-    for (const document of documents) {
-      const paragraph = $createParagraphNode().append(
-        $createDocumentMentionNode({
-          documentId: document.documentId,
-          documentName: document.name,
-          blockName: document.blockName,
-        })
-      );
-      if (quote) quote.insertBefore(paragraph);
-      else root.append(paragraph);
-    }
-  });
+  if (documents.length === 0 || !editor.isEditable() || !canEdit()) return;
+  editor.update(
+    () => {
+      if (!editor.isEditable() || !canEdit()) return;
+      // Attaching from the toolbar must not pull focus into the editor.
+      $addUpdateTag('skip-dom-selection');
+      const root = $getRoot();
+      const quote = root
+        .getChildren()
+        .find(
+          (node) =>
+            $isClassedBlockNode(node) && node.__classes.includes('macro_quote')
+        );
+      for (const document of documents) {
+        const paragraph = $createParagraphNode().append(
+          $createDocumentMentionNode({
+            documentId: document.documentId,
+            documentName: document.name,
+            blockName: document.blockName,
+          })
+        );
+        if (quote) quote.insertBefore(paragraph);
+        else root.append(paragraph);
+      }
+    },
+    { discrete: true }
+  );
 }
 
 /**
@@ -59,16 +64,32 @@ export function appendAttachmentLinks(
  */
 export function createAttachmentLinkOffer(options: {
   editor: Accessor<LexicalEditor | undefined>;
+  canEdit: Accessor<boolean>;
+  version: Accessor<string>;
   notices: Pick<EmailComposeFeedback, 'confirm'>;
   editorFiles: Pick<EmailEditorFiles, 'uploadDocuments' | 'makePublic'>;
 }) {
   const inFlight = new Set<Promise<UploadedDocument[]>>();
   const [uploading, setUploading] = createSignal(false);
   let generation = 0;
+  createEffect(() => {
+    if (!options.canEdit()) generation += 1;
+  });
+  onCleanup(() => {
+    generation += 1;
+  });
 
   const share = async (files: File[], limitBytes: number): Promise<void> => {
-    if (files.length === 0) return;
+    if (files.length === 0 || !options.canEdit()) return;
     const started = generation;
+    const version = options.version();
+    const editor = options.editor();
+    const current = () =>
+      started === generation &&
+      version === options.version() &&
+      options.canEdit() &&
+      options.editor() === editor &&
+      !!editor?.isEditable();
     const single = files.length === 1;
     const limitLabel = `${limitBytes / 1_000_000} MB`;
     await Telemetry.span('email.attachment_links', async (span) => {
@@ -87,7 +108,7 @@ export function createAttachmentLinkOffer(options: {
       span.setAttr('email.attachment_links.confirmed', confirmed);
       // The composer may have reset while the prompt was open; nothing to
       // upload for then.
-      if (!confirmed || started !== generation) {
+      if (!confirmed || !current()) {
         span.setAttr('email.attachment_links.linked', false);
         return;
       }
@@ -96,24 +117,20 @@ export function createAttachmentLinkOffer(options: {
       );
       inFlight.add(upload);
       setUploading(true);
-      let documents: UploadedDocument[];
       try {
-        documents = await upload;
+        const documents = await upload;
+        span.setAttr('email.attachment_links.uploaded_count', documents.length);
+        const valid = current();
+        span.setAttr('email.attachment_links.linked', valid);
+        if (!valid) return;
+        for (const document of documents) {
+          options.editorFiles.makePublic(document.documentId);
+        }
+        if (editor) appendAttachmentLinks(editor, documents, current);
       } finally {
         inFlight.delete(upload);
         setUploading(inFlight.size > 0);
       }
-      span.setAttr('email.attachment_links.uploaded_count', documents.length);
-      // The composer moved on while the files uploaded: they stay private and
-      // unlinked rather than landing in whatever is being written now.
-      const current = started === generation;
-      span.setAttr('email.attachment_links.linked', current);
-      if (!current) return;
-      for (const document of documents) {
-        options.editorFiles.makePublic(document.documentId);
-      }
-      const editor = options.editor();
-      if (editor) appendAttachmentLinks(editor, documents);
     });
   };
 

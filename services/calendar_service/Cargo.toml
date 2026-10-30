@@ -28,12 +28,14 @@ calendar_events = { path = "../../crates/calendar_events", features = [
   "google",
   "inbound",
   "postgres",
+  "notes",
 ] }
 calendar_scheduling = { path = "../../crates/calendar_scheduling", features = ["calendar", "inbound", "postgres"] }
 chrono = { workspace = true }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound", "ports"] }
 futures = { workspace = true }
 google_token = { path = "../../crates/google_token" }
 macro_auth = { path = "../../crates/macro_auth" }

@@ -1,6 +1,7 @@
 import { UserIcon } from '@core/component/UserIcon';
+import { Key } from '@solid-primitives/keyed';
 import { AvatarGroup } from '@ui';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import type { Property } from '../types';
 import { getEntityValues, isEntityProperty } from '../utils';
 
@@ -28,17 +29,17 @@ export function PropertyUserStack(props: Props) {
   return (
     <Show when={isUser()}>
       <AvatarGroup size="sm">
-        <For each={display()}>
+        <Key each={display()} by="entity_id">
           {(entity) => (
             <UserIcon
-              id={entity.entity_id}
+              id={entity().entity_id}
               size="sm"
               suppressClick
               showTooltip={false}
               class={props.avatarClass}
             />
           )}
-        </For>
+        </Key>
         <Show when={remaining() > 0}>
           <AvatarGroup.Count size="sm">+{remaining()}</AvatarGroup.Count>
         </Show>

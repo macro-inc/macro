@@ -76,6 +76,20 @@ fragment CalendarEventFields on GraphqlCalendarEvent {
 	reminders {
 		...CalendarReminderFields
 	}
+	guestPolicy {
+		canModify
+		canInviteOthers
+		canSeeOtherGuests
+	}
+	isSnapshot
+	viewerCan {
+		editDetails
+		inviteGuests
+		removeGuests
+		setGuestPolicy
+		rsvp
+		organize
+	}
 	createdAt
 	updatedAt
 }
@@ -116,6 +130,7 @@ fragment CalendarFields on GraphqlCalendar {
 		emailReminders
 		removeConference
 		resetRsvp
+		guestPolicy
 	}
 	name
 	color
@@ -214,6 +229,12 @@ mutation DeleteCalendarEvent($input: DeleteCalendarEventInput!) {
 
 mutation RespondToCalendarEvent($input: RespondToCalendarEventInput!) {
 	respondToCalendarEvent(input: $input) {
+		...CalendarMutationPayloadFields
+	}
+}
+
+mutation InviteCalendarEventGuests($input: InviteCalendarEventGuestsInput!) {
+	inviteCalendarEventGuests(input: $input) {
 		...CalendarMutationPayloadFields
 	}
 }

@@ -42,6 +42,7 @@ impl CrmService for FakeCrm {
                 vec![CONTACT, SIBLING_CONTACT],
             )),
             CrmAssociation::Contact(CONTACT) => Ok(CrmRecordAssociation::contact(CONTACT)),
+            CrmAssociation::Activity => Ok(CrmRecordAssociation::default()),
             CrmAssociation::Company(_) => Err(CrmError::CompanyNotFoundForTeam),
             CrmAssociation::Contact(_) => Err(CrmError::ContactNotFoundForTeam),
         }

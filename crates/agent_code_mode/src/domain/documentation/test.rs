@@ -8,6 +8,7 @@ struct Classifier {
     requests: Mutex<Vec<DecisionRequest>>,
     delay: Duration,
     fail: bool,
+    relevant: &'static [&'static str],
 }
 #[async_trait]
 impl Cognition for Classifier {
@@ -29,7 +30,7 @@ impl Cognition for Classifier {
             .map(|name| {
                 (
                     name.clone(),
-                    if ["ai", "documents"].contains(&name.as_str()) {
+                    if self.relevant.is_empty() || self.relevant.contains(&name.as_str()) {
                         0.9
                     } else {
                         0.1
@@ -54,6 +55,7 @@ async fn one_bounded_request_expands_only_selected_entities() {
         requests: Mutex::new(vec![]),
         delay: Duration::ZERO,
         fail: false,
+        relevant: &["ai", "documents"],
     });
     let service: Arc<dyn Cognition> = classifier.clone();
     let result = select_documentation(
@@ -63,9 +65,9 @@ async fn one_bounded_request_expands_only_selected_entities() {
         &CancellationToken::new(),
     )
     .await;
-    assert!(result.contains("### ai"));
-    assert!(result.contains("### documents"));
-    assert!(!result.contains("### email"));
+    assert!(result.contains("\n## ai\n"));
+    assert!(result.contains("\n## documents\n"));
+    assert!(!result.contains("\n## email\n"));
     assert!(result.contains("email:"));
     assert!(result.len() <= 48 * 1024);
     let requests = classifier.requests.lock().unwrap();
@@ -78,26 +80,13 @@ async fn one_bounded_request_expands_only_selected_entities() {
     requests[0].validate().unwrap();
 }
 
-#[test]
-fn namespace_overview_is_not_duplicated_in_discovery_responses() {
-    let doc: SdkDocumentation = serde_json::from_value(serde_json::json!({
-        "name": "documents",
-        "description": "Documents",
-        "documentation": "Full API reference",
-        "overview": "Namespace reference"
-    }))
-    .unwrap();
-    assert_eq!(doc.overview.as_deref(), Some("Namespace reference"));
-    let response = serde_json::to_value(doc).unwrap();
-    assert!(response.get("overview").is_none());
-    assert_eq!(response["documentation"], "Full API reference");
-}
 #[tokio::test]
 async fn errors_and_absent_provider_retain_catalog() {
     let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
         requests: Mutex::new(vec![]),
         delay: Duration::ZERO,
         fail: true,
+        relevant: &["ai", "documents"],
     });
     let fallback = select_documentation(&user(), "request", None, &CancellationToken::new()).await;
     assert_eq!(
@@ -118,6 +107,7 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
         requests: Mutex::new(vec![]),
         delay: Duration::from_secs(30),
         fail: false,
+        relevant: &["ai", "documents"],
     });
     let fallback = select_documentation(&user(), "request", None, &CancellationToken::new()).await;
     let result = tokio::time::timeout(
@@ -141,4 +131,125 @@ async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
     .await
     .unwrap();
     assert_eq!(result, fallback);
+}
+
+#[tokio::test]
+async fn task_documentation_returns_every_relevant_entity_within_budget() {
+    let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
+        requests: Mutex::new(vec![]),
+        delay: Duration::ZERO,
+        fail: false,
+        relevant: &["ai", "documents"],
+    });
+    let catalog = sdk_documentation();
+    let result = documentation_for_task(
+        &user(),
+        "summarize my recent documents",
+        Some(&classifier),
+        &CancellationToken::new(),
+    )
+    .await;
+    assert_eq!(result.status, SelectionStatus::Selected);
+    let mut names: Vec<_> = result
+        .entities
+        .iter()
+        .map(|doc| doc.name.as_str())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["ai", "documents"]);
+    let index = |name: &str| {
+        catalog
+            .iter()
+            .find(|entry| entry.name == name)
+            .unwrap()
+            .index
+            .clone()
+    };
+    assert_eq!(result.entities[0].index, index("ai"));
+    assert_eq!(result.entities[1].index, index("documents"));
+    assert!(result.omitted.is_empty());
+}
+
+#[tokio::test]
+async fn task_documentation_stays_within_budget_and_names_omissions() {
+    let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
+        requests: Mutex::new(vec![]),
+        delay: Duration::ZERO,
+        fail: false,
+        relevant: &[],
+    });
+    let result = documentation_for_task(
+        &user(),
+        "everything",
+        Some(&classifier),
+        &CancellationToken::new(),
+    )
+    .await;
+    let bytes: usize = result
+        .entities
+        .iter()
+        .map(|doc| doc.index.as_ref().unwrap().len())
+        .sum();
+    assert!(bytes <= 32 * 1024);
+    assert!(!result.omitted.is_empty());
+    assert_eq!(
+        result.entities.len() + result.omitted.len(),
+        sdk_documentation().len()
+    );
+}
+
+#[tokio::test]
+async fn task_documentation_reports_why_nothing_was_selected() {
+    let result = documentation_for_task(&user(), "anything", None, &CancellationToken::new()).await;
+    assert_eq!(result.status, SelectionStatus::Unconfigured);
+    assert!(result.entities.is_empty());
+    let classifier: Arc<dyn Cognition> = Arc::new(Classifier {
+        requests: Mutex::new(vec![]),
+        delay: Duration::ZERO,
+        fail: true,
+        relevant: &[],
+    });
+    let result = documentation_for_task(
+        &user(),
+        "anything",
+        Some(&classifier),
+        &CancellationToken::new(),
+    )
+    .await;
+    assert_eq!(result.status, SelectionStatus::ProviderError);
+    assert!(result.entities.is_empty());
+}
+
+#[test]
+fn symbol_references_stay_within_one_result_budget() {
+    // The largest references, requested together, overflow one result: the
+    // first is read and the rest are named for another request.
+    let symbols: Vec<String> = [
+        "NotifEvent",
+        "calendar.CalendarEvent",
+        "email.CalendarEvent",
+        "CallRecord",
+        "storage.CallRecord",
+        "EmailFilters",
+        "Document",
+        "Database",
+        "Channel",
+        "Task",
+    ]
+    .map(String::from)
+    .to_vec();
+    let result = read_symbols(&symbols);
+    let bytes: usize = result
+        .references
+        .iter()
+        .map(|reference| reference.reference.len())
+        .sum();
+    assert!(bytes <= 32 * 1024);
+    assert_eq!(result.references[0].symbol, "NotifEvent");
+    assert!(!result.omitted.is_empty());
+    assert_eq!(
+        result.references.len() + result.omitted.len(),
+        symbols.len()
+    );
+    assert!(result.unknown.is_empty());
 }

@@ -114,7 +114,14 @@ export function TeamSharingSettings(props: {
           </Show>
         </SettingsCard>
       </SettingsSection>
-      <Show when={props.hasTeam}>
+      <Show
+        when={
+          props.hasTeam &&
+          (props.calendarsLoading ||
+            props.calendarsError ||
+            props.calendars.length > 0)
+        }
+      >
         <SettingsSection
           title="Calendars that count as busy"
           description="Checked calendars block your time when teammates or agents check your availability."

@@ -214,8 +214,8 @@ export class ConvertService extends pulumi.ComponentResource {
               name: BASE_NAME,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
-              cpu: 4096,
-              memory: 8192,
+              cpu: stack === 'prod' ? 4096 : 512,
+              memory: stack === 'prod' ? 8192 : 3072,
               environment: [
                 ...containerEnvVars,
                 {

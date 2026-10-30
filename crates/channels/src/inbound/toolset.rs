@@ -41,10 +41,12 @@ use entity_access::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MessageServiceApi,
+    models::MessageAttribution,
     ports::MessageError,
     service::{MessageView, MessageWrite},
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
+use types::SenderNames;
 use uuid::Uuid;
 
 pub use create_channel_media_upload::{
@@ -72,6 +74,8 @@ where
     /// The bot these tools act as, on behalf of the requesting user. Defaults
     /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
     pub actor: BotId,
+    /// The client the requesting user works through, labelled on posts.
+    pub via: Option<String>,
 }
 
 impl<Svc, AccessSvc> Clone for ChannelToolContext<Svc, AccessSvc>
@@ -85,6 +89,7 @@ where
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             actor: self.actor,
+            via: self.via.clone(),
         }
     }
 }
@@ -105,6 +110,7 @@ where
             service: Arc::new(service),
             entity_access_service: Arc::new(entity_access_service),
             actor: bot_id::MACRO_AI_BOT_ID,
+            via: None,
         }
     }
 
@@ -129,6 +135,23 @@ where
     pub fn with_actor(mut self, actor: BotId) -> Self {
         self.actor = actor;
         self
+    }
+
+    /// Label the posts these tools make with the client the requesting user
+    /// works through, such as an MCP client.
+    pub fn with_via(mut self, client: String) -> Self {
+        self.via = Some(client);
+        self
+    }
+
+    /// How a post made by these tools is attributed.
+    pub fn attribution(&self) -> MessageAttribution {
+        match &self.via {
+            Some(client) => MessageAttribution::ActingUserVia {
+                client: client.clone(),
+            },
+            None => MessageAttribution::ActingUser,
+        }
     }
 
     /// Mint the requesting user's own channel write capability, for actions
@@ -192,6 +215,23 @@ where
             )
             .await
             .map_err(channel_access_error)
+    }
+
+    /// Profile names for the people among `user_senders`, so the read tools
+    /// name them as the app does. A failed lookup leaves the names out rather
+    /// than failing the read.
+    pub(crate) async fn sender_names(
+        &self,
+        user_senders: HashSet<MacroUserIdStr<'static>>,
+    ) -> SenderNames {
+        if user_senders.is_empty() {
+            return SenderNames::new();
+        }
+        self.service
+            .get_user_display_names(user_senders.into_iter().collect())
+            .await
+            .inspect_err(|error| tracing::warn!(error = ?error, "failed to resolve sender names"))
+            .unwrap_or_default()
     }
 
     /// Mint a member receipt before renaming a channel.

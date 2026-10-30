@@ -4,9 +4,10 @@ Code conventions are agent rules in [`.agents/rules/`](../../.agents/rules/). Ag
 load each file when they touch matching paths; reviewers and CodeRabbit read the
 same files. This page explains the scheme and indexes the rule files.
 
-**Check locally.** `just check` is the single gate: format, lint, and code rules,
-scoped to your changes against `origin/main`, with every finding printed as
-`file:line [rule-id]` and the command that fixes it. `just check full` adds `tsc`
+**Check locally.** `just check` is the single gate: format, lint, code rules, and
+a PII scan of added lines, scoped to your changes against `origin/main`, with
+every finding printed as `file:line [rule-id]` and the command that fixes it.
+`just check full` adds `tsc`
 and clippy. Mechanically enforceable rules live in [`rules/ast-grep/`](../../rules/ast-grep/).
 
 ## IDs
@@ -34,9 +35,11 @@ ID; deletions leave gaps and new rules take the next free number. A rule line re
 | [`web/architecture.md`](../../.agents/rules/web/architecture.md) | FE | `apps/web`, `packages` |
 | [`web/libraries.md`](../../.agents/rules/web/libraries.md) | FE 35–46 | `apps/web`, `packages` |
 | [`web/ui.md`](../../.agents/rules/web/ui.md) | FE | `.tsx` |
+| [`web/design-system.md`](../../.agents/rules/web/design-system.md) | FE 60–68 | `apps/web` `.tsx`: control roles, header layout, selected state, overlay surfaces, loading skeletons |
 | [`web/mobile.md`](../../.agents/rules/web/mobile.md) | | `apps/web` UI and CSS on touch and phones |
 | [`web/ui-primitives.md`](../../.agents/rules/web/ui-primitives.md) | | `apps/web/src/components/ui` |
 | [`web/startup-bundle.md`](../../.agents/rules/web/startup-bundle.md) | | `apps/web/src` |
+| [`web/i18n.md`](../../.agents/rules/web/i18n.md) | | `apps/web/src` user-visible text in new UI, menus, and navigation |
 | [`web/lexical-nodes.md`](../../.agents/rules/web/lexical-nodes.md) | | Lexical nodes and decorators |
 | [`infra/pulumi.md`](../../.agents/rules/infra/pulumi.md) | | `infra/`, deploy config |
 

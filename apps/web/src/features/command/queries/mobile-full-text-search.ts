@@ -1,6 +1,6 @@
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
+import { buildSoupSearchRequest } from '@app/features/next-soup/queries/search-request';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { buildSoupSearchRequest } from '@app/features/next-soup/soup-view/search-request';
 import { createSearchState } from '@app/features/soup/search';
 import type { Accessor } from 'solid-js';
 import { getCategorySearchFilters } from '../category-search-filters';
@@ -12,6 +12,7 @@ export function createMobileFullTextSearch(
   category: Accessor<EntitySearchCategory>
 ) {
   const search = createSearchState({
+    surface: () => 'mobile_search',
     text,
     disableLocalSearch: () => true,
     enabled: () => category() !== 'projects' && !!text().trim(),

@@ -332,8 +332,8 @@ export function createBuilder(options: BuilderOptions) {
     if (committed && pruned > 0)
       options.notify.success(
         pruned === 1
-          ? 'Removed 1 screener rule that checked it.'
-          : `Removed ${pruned} screener rules that checked it.`
+          ? 'Removed 1 gate rule that checked it.'
+          : `Removed ${pruned} gate rules that checked it.`
       );
     return committed;
   }

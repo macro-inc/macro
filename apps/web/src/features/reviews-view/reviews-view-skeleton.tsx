@@ -4,8 +4,13 @@ import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 export function ReviewsViewSkeleton() {
   return (
     <ViewSkeleton.Root asidePreferenceKey="reviews">
-      <ViewSkeleton.Sidebar title="Reviews" />
-      <ViewSkeleton.Main title="Reviews" searchPlaceholder="Search reviews" />
+      <ViewSkeleton.Sidebar title="Reviews" createLabel="New" />
+      <ViewSkeleton.Main
+        title="Involves me"
+        tabs={['• Open', '• Closed', '• All']}
+        controls={[1, 2, 1, '+ New ⌄', 1]}
+        searchPlaceholder="Search reviews"
+      />
     </ViewSkeleton.Root>
   );
 }

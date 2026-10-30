@@ -23,7 +23,7 @@ consumer-group event log without a full Kafka dependency.
 ## Boundaries
 
 - Depends on: `model-entity`, `redis` (streams/aio/tokio-comp).
-- Used by: `services/document_cognition_service`, `services/connection_gateway`.
+- Used by: `services/agent_harness_service`, `services/connection_gateway`.
 
 ## Checks
 

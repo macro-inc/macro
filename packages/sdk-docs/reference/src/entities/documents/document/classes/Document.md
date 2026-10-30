@@ -217,6 +217,18 @@ GitHub pull requests associated with the document.
 
 ***
 
+### meetingNotes()
+
+> **meetingNotes**(): `Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
+
+Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access.
+
+#### Returns
+
+`Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
+
+***
+
 ### messageThreadById()
 
 > **messageThreadById**(`id`): [`MessageThread`](../../../messages/thread/classes/MessageThread.md)

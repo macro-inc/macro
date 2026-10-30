@@ -19,17 +19,47 @@ export async function verifyProductPages(browser: Browser, origin: string) {
       reducedMotion: 'reduce',
       colorScheme: 'dark',
     });
+    let releaseScripts!: () => void;
+    const scriptsReady = new Promise<void>((resolve) => {
+      releaseScripts = resolve;
+    });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('**/*', async (request) => {
       if (new URL(request.request().url()).origin !== origin)
         await request.abort();
-      else await request.continue();
+      else {
+        if (request.request().resourceType() === 'script') await scriptsReady;
+        await request.continue();
+      }
     });
     try {
-      await page.goto(`${origin}${route}`, { waitUntil: 'load' });
+      await page.goto(`${origin}${route}`, { waitUntil: 'commit' });
       const heading = page.locator('.feature-page-hero h1');
       await expect(heading).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      // These must hold before route JavaScript can repair missing CSS. A
+      // stale prerender asset entry previously painted a 1000px brand SVG.
+      const brand = page.locator('.product-home-link > svg');
+      const initialBrand = await brand.boundingBox();
+      expect(initialBrand?.width, `${route}: first-paint logo width`).toBe(20);
+      expect(initialBrand?.height, `${route}: first-paint logo height`).toBe(
+        20
+      );
+      await expect(heading).toHaveCSS('font-family', /Roboto Slab/);
+      const padding = await page
+        .locator('.email-page-hero')
+        .evaluate((element) =>
+          Number.parseFloat(getComputedStyle(element).paddingTop)
+        );
+      expect(
+        padding,
+        `${route}: hero styled before JavaScript`
+      ).toBeGreaterThan(100);
+      releaseScripts();
+      await page.waitForLoadState('load');
+      await expect(brand).toHaveAttribute('width', '20');
+      await expect(brand).toHaveAttribute('height', '20');
       const demos = page.locator('.demo-interaction-boundary').filter({
         has: page.locator(':scope > .demo-interaction-activate'),
       });
@@ -66,10 +96,58 @@ export async function verifyProductPages(browser: Browser, origin: string) {
         false
       );
       expect(errors, `${route}: no browser errors`).toEqual([]);
+      if (route === '/tasks') {
+        await page.setViewportSize({ width: 1000, height: 844 });
+        await page.evaluate(() => document.fonts.ready);
+        const lines = await page
+          .locator('.email-page-hero-description')
+          .evaluate(
+            (element) =>
+              element.clientHeight /
+              Number.parseFloat(getComputedStyle(element).lineHeight)
+          );
+        expect(
+          lines,
+          'Tasks desktop subheading stays on its two intended lines'
+        ).toBeCloseTo(2, 1);
+        await page.emulateMedia({ reducedMotion: 'no-preference' });
+        const scroller = page.locator('#app-scroll-root');
+        await scroller.evaluate((element) => {
+          element.scrollTop = element.scrollHeight;
+        });
+        const appLink = page.locator('.site-header a.site-nav-open');
+        await expect(appLink).toHaveCount(1);
+        await expect(appLink).toHaveAttribute('data-cta-footer', '');
+        await expect
+          .poll(() =>
+            page.locator('.site-nav-open-footer').evaluate((element) => {
+              const textSize = Number.parseFloat(
+                getComputedStyle(element).fontSize
+              );
+              const matrix = new DOMMatrixReadOnly(
+                getComputedStyle(element.parentElement!).transform
+              );
+              return textSize > 24 && matrix.a === 1;
+            })
+          )
+          .toBe(true);
+        await scroller.evaluate((element) => {
+          element.scrollTop = 0;
+        });
+        await expect(appLink.locator('.site-nav-open-label')).toHaveCSS(
+          'opacity',
+          '1'
+        );
+        await expect(appLink.locator('.site-nav-open-footer')).toHaveCSS(
+          'font-size',
+          '16px'
+        );
+      }
       console.log(
         `[prerender] ${route}: ${count} mobile demos accept touch entry and return to page scrolling`
       );
     } finally {
+      releaseScripts();
       await page.close();
     }
   }

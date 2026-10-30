@@ -4,6 +4,7 @@ use models_email::service::{label::system_labels, message::ParsedSearchMessage};
 use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::email::UpsertEmailArgs,
+    upsert::properties::IndexedProperty,
 };
 use properties::outbound::entity_properties_get_query::{
     get_entity_properties_for_index, get_entity_properties_for_index_batch,
@@ -51,9 +52,7 @@ pub async fn process_upsert_message(
         .await
         .context("failed to get message info")?;
 
-    let message_info = if let Some(message_info) = message_info {
-        message_info
-    } else {
+    let Some(mut message_info) = message_info else {
         return Ok(());
     };
 
@@ -64,19 +63,12 @@ pub async fn process_upsert_message(
         return Ok(());
     }
 
-    let content = if let Some(content) = message_info.body_parsed_linkless {
-        content
-    } else {
+    let Some(content) = message_info.body_parsed_linkless.take() else {
         tracing::debug!("no content found for email message");
         return Ok(());
     };
 
     let now_millis = EpochMillis::new(Utc::now().timestamp_millis())?;
-
-    let updated_at_millis = message_info
-        .internal_date_ts
-        .and_then(|date| EpochMillis::plausible(date.timestamp_millis()))
-        .unwrap_or(now_millis);
 
     // A full index overwrites the doc, so thread properties must ride along
     // or a reindex would drop them. A fetch failure propagates (retry)
@@ -91,68 +83,77 @@ pub async fn process_upsert_message(
         .context("failed to fetch thread properties for search index")?,
     );
 
-    let upsert_email_message_args: UpsertEmailArgs = UpsertEmailArgs {
-        message_id: message_id.to_string(),
-        link_id: message_info.link_id.to_string(),
+    opensearch_client
+        .upsert_email_message(&upsert_args(
+            message_info,
+            content,
+            owner,
+            properties,
+            now_millis,
+        ))
+        .await?;
+
+    Ok(())
+}
+
+/// Builds the search document for a message. A message without a From contact
+/// is indexed with an empty sender so its content stays searchable.
+fn upsert_args(
+    message: ParsedSearchMessage,
+    content: String,
+    owner: &str,
+    properties: Vec<IndexedProperty>,
+    now_millis: EpochMillis,
+) -> UpsertEmailArgs {
+    let sent_at_millis = message
+        .internal_date_ts
+        .and_then(|date| EpochMillis::plausible(date.timestamp_millis()));
+
+    UpsertEmailArgs {
+        message_id: message.db_id.to_string(),
+        link_id: message.link_id.to_string(),
         user_id: owner.to_string(),
-        thread_id: message_info.thread_db_id.to_string(),
-        subject: message_info.subject,
-        sender: message_info
+        thread_id: message.thread_db_id.to_string(),
+        subject: message.subject,
+        sender: message
             .from
             .as_ref()
-            .context("expected from")?
-            .email
-            .to_lowercase(),
-        sender_name: message_info.from.as_ref().and_then(|f| f.name.clone()),
-        reply_to: message_info.reply_to,
-        recipients: message_info
+            .map(|f| f.email.to_lowercase())
+            .unwrap_or_default(),
+        sender_name: message.from.as_ref().and_then(|f| f.name.clone()),
+        reply_to: message.reply_to.map(|r| r.to_lowercase()),
+        recipients: message
             .to
             .iter()
             .map(|to| to.email.to_lowercase())
             .collect(),
-        recipient_names: message_info
-            .to
-            .iter()
-            .filter_map(|to| to.name.clone())
-            .collect(),
-        cc: message_info
+        recipient_names: message.to.iter().filter_map(|to| to.name.clone()).collect(),
+        cc: message
             .cc
             .iter()
             .map(|cc| cc.email.to_lowercase())
             .collect(),
-        cc_names: message_info
-            .cc
-            .iter()
-            .filter_map(|cc| cc.name.clone())
-            .collect(),
-        bcc: message_info
+        cc_names: message.cc.iter().filter_map(|cc| cc.name.clone()).collect(),
+        bcc: message
             .bcc
             .iter()
             .map(|bcc| bcc.email.to_lowercase())
             .collect(),
-        bcc_names: message_info
+        bcc_names: message
             .bcc
             .iter()
             .filter_map(|bcc| bcc.name.clone())
             .collect(),
-        labels: message_info
+        labels: message
             .labels
             .iter()
             .map(|label| label.name.clone())
             .collect(),
         content,
-        updated_at_millis,
-        sent_at_millis: message_info
-            .internal_date_ts
-            .and_then(|date| EpochMillis::plausible(date.timestamp_millis())),
+        updated_at_millis: sent_at_millis.unwrap_or(now_millis),
+        sent_at_millis,
         properties,
-    };
-
-    opensearch_client
-        .upsert_email_message(&upsert_email_message_args)
-        .await?;
-
-    Ok(())
+    }
 }
 
 pub async fn process_upsert_thread_message(
@@ -195,7 +196,7 @@ pub async fn process_upsert_thread_message(
         let mut delete_message_ids = Vec::new();
         let mut upsert_email_message_args = Vec::new();
 
-        for message in messages {
+        for mut message in messages {
             match classify_thread_message(&message) {
                 ThreadMessageDisposition::Delete => {
                     delete_message_ids.push(message.db_id);
@@ -210,60 +211,15 @@ pub async fn process_upsert_thread_message(
 
             let content = message
                 .body_parsed_linkless
+                .take()
                 .context("expected content for upsertable email message")?;
-            let sent_at_millis = message
-                .internal_date_ts
-                .and_then(|date| EpochMillis::plausible(date.timestamp_millis()));
-            let updated_at_millis = message
-                .internal_date_ts
-                .and_then(|date| EpochMillis::plausible(date.timestamp_millis()))
-                .unwrap_or(now_millis);
-
-            upsert_email_message_args.push(UpsertEmailArgs {
-                message_id: message.db_id.to_string(),
-                link_id: message.link_id.to_string(),
-                user_id: owner.to_string(),
-                thread_id: thread_id.to_string(),
-                subject: message.subject,
-                sender: message
-                    .from
-                    .as_ref()
-                    .map(|f| f.email.to_lowercase())
-                    .unwrap_or_default(),
-                sender_name: message.from.as_ref().and_then(|f| f.name.clone()),
-                reply_to: message.reply_to.map(|r| r.to_lowercase()),
-                recipients: message
-                    .to
-                    .iter()
-                    .map(|to| to.email.to_lowercase())
-                    .collect(),
-                recipient_names: message.to.iter().filter_map(|to| to.name.clone()).collect(),
-                cc: message
-                    .cc
-                    .iter()
-                    .map(|cc| cc.email.to_lowercase())
-                    .collect(),
-                cc_names: message.cc.iter().filter_map(|cc| cc.name.clone()).collect(),
-                bcc: message
-                    .bcc
-                    .iter()
-                    .map(|bcc| bcc.email.to_lowercase())
-                    .collect(),
-                bcc_names: message
-                    .bcc
-                    .iter()
-                    .filter_map(|bcc| bcc.name.clone())
-                    .collect(),
-                labels: message
-                    .labels
-                    .iter()
-                    .map(|label| label.name.clone())
-                    .collect(),
+            upsert_email_message_args.push(upsert_args(
+                message,
                 content,
-                updated_at_millis,
-                sent_at_millis,
-                properties: properties.clone(),
-            });
+                owner,
+                properties.clone(),
+                now_millis,
+            ));
         }
 
         for message_id in delete_message_ids {
@@ -323,7 +279,7 @@ pub async fn process_upsert_thread_batch_message(
     let mut delete_message_ids = Vec::new();
     let mut upsert_email_message_args = Vec::new();
 
-    for message in messages {
+    for mut message in messages {
         match classify_thread_message(&message) {
             ThreadMessageDisposition::Delete => {
                 delete_message_ids.push(message.db_id);
@@ -338,63 +294,14 @@ pub async fn process_upsert_thread_batch_message(
 
         let content = message
             .body_parsed_linkless
+            .take()
             .context("expected content for upsertable email message")?;
-        let sent_at_millis = message
-            .internal_date_ts
-            .and_then(|date| EpochMillis::plausible(date.timestamp_millis()));
-        let updated_at_millis = message
-            .internal_date_ts
-            .and_then(|date| EpochMillis::plausible(date.timestamp_millis()))
-            .unwrap_or(now_millis);
-
-        upsert_email_message_args.push(UpsertEmailArgs {
-            message_id: message.db_id.to_string(),
-            link_id: message.link_id.to_string(),
-            user_id: owner.to_string(),
-            thread_id: message.thread_db_id.to_string(),
-            subject: message.subject,
-            sender: message
-                .from
-                .as_ref()
-                .map(|f| f.email.to_lowercase())
-                .unwrap_or_default(),
-            sender_name: message.from.as_ref().and_then(|f| f.name.clone()),
-            reply_to: message.reply_to.map(|r| r.to_lowercase()),
-            recipients: message
-                .to
-                .iter()
-                .map(|to| to.email.to_lowercase())
-                .collect(),
-            recipient_names: message.to.iter().filter_map(|to| to.name.clone()).collect(),
-            cc: message
-                .cc
-                .iter()
-                .map(|cc| cc.email.to_lowercase())
-                .collect(),
-            cc_names: message.cc.iter().filter_map(|cc| cc.name.clone()).collect(),
-            bcc: message
-                .bcc
-                .iter()
-                .map(|bcc| bcc.email.to_lowercase())
-                .collect(),
-            bcc_names: message
-                .bcc
-                .iter()
-                .filter_map(|bcc| bcc.name.clone())
-                .collect(),
-            labels: message
-                .labels
-                .iter()
-                .map(|label| label.name.clone())
-                .collect(),
-            content,
-            updated_at_millis,
-            sent_at_millis,
-            properties: properties_by_thread
-                .get(&message.thread_db_id.to_string())
-                .cloned()
-                .unwrap_or_default(),
-        });
+        let properties = properties_by_thread
+            .get(&message.thread_db_id.to_string())
+            .cloned()
+            .unwrap_or_default();
+        upsert_email_message_args
+            .push(upsert_args(message, content, owner, properties, now_millis));
     }
 
     for message_id in delete_message_ids {

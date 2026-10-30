@@ -57,6 +57,25 @@ impl SQSWorker {
     pub async fn delete_message(&self, receipt_handle: &str) -> anyhow::Result<()> {
         delete_message::delete_message(&self.inner, &self.queue_url, receipt_handle).await
     }
+
+    /// Hides a received message from other consumers for `timeout_seconds`
+    /// from now, so work that outlasts the queue's visibility timeout is not
+    /// delivered again while it still runs.
+    #[tracing::instrument(skip(self, receipt_handle), err)]
+    pub async fn change_message_visibility(
+        &self,
+        receipt_handle: &str,
+        timeout_seconds: i32,
+    ) -> anyhow::Result<()> {
+        self.inner
+            .change_message_visibility()
+            .queue_url(&self.queue_url)
+            .receipt_handle(receipt_handle)
+            .visibility_timeout(timeout_seconds)
+            .send()
+            .await?;
+        Ok(())
+    }
 }
 
 #[tracing::instrument(skip(sqs_worker, message), fields(message_id=message.message_id, message_receipt_handle=message.receipt_handle))]

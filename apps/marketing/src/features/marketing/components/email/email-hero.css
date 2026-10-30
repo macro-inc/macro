@@ -44,6 +44,7 @@
 }
 
 .feature-page .email-page-hero > .email-page-hero-description {
+  width: 100%;
   max-width: 540px;
   color: var(--color-ink-muted);
   font-size: 17px;

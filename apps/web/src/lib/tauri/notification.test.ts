@@ -99,6 +99,45 @@ describe('desktop notification delivery', () => {
     expect(mocks.sendNotification).not.toHaveBeenCalled();
   });
 
+  it('titles macOS notifications with the sender and names the conversation beneath', async () => {
+    const adapter = createTauriNotificationInterface(vi.fn());
+    const sender = {
+      id: 'macro|ada@example.com',
+      name: 'Ada',
+      avatarUrl: 'https://cdn.example.com/ada.png',
+    };
+    await adapter.showNotification({
+      ...notification,
+      title: 'Ada <design>',
+      sender,
+      conversation: { id: 'channel-1', name: 'design' },
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith('send_macos_notification', {
+      title: 'Ada',
+      body: notification.options.body,
+      notificationId: notification.notificationId,
+      subtitle: 'design',
+      threadId: 'channel-1',
+      sender,
+    });
+  });
+
+  it('keeps the full title on macOS when nobody can be named', async () => {
+    const adapter = createTauriNotificationInterface(vi.fn());
+    await adapter.showNotification({
+      title: 'Someone <General>',
+      conversation: { id: 'channel-1', name: 'General' },
+    });
+    expect(mocks.invoke).toHaveBeenCalledWith('send_macos_notification', {
+      title: 'Someone <General>',
+      body: undefined,
+      notificationId: undefined,
+      subtitle: undefined,
+      threadId: 'channel-1',
+      sender: undefined,
+    });
+  });
+
   it.each(['default', 'denied'])(
     'does not send when macOS permission is %s',
     async (permission) => {

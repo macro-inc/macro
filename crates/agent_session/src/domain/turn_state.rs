@@ -10,6 +10,16 @@ use super::error::Result;
 use super::model::AgentSessionId;
 use super::ports::AgentSessionLogRepo;
 
+/// Whether this turn is user-visible work that should move the session in
+/// Agents and Home lists. Connection lifecycle (`idle` after reconnect,
+/// `disconnected`) must not look like the conversation was used.
+pub fn moves_session_list(turn: TurnState) -> bool {
+    matches!(
+        turn,
+        TurnState::Starting | TurnState::Running | TurnState::Stopping | TurnState::Blocked
+    )
+}
+
 /// The persistence operations needed by a bounded projection backfill.
 pub trait SessionTurnProjectionRepo {
     /// At most `limit` sessions that have never had their activity projected.

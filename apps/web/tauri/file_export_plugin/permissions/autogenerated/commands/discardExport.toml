@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-discardExport"
+description = "Enables the discardExport command without any pre-configured scope."
+commands.allow = ["discardExport"]
+
+[[permission]]
+identifier = "deny-discardExport"
+description = "Denies the discardExport command without any pre-configured scope."
+commands.deny = ["discardExport"]

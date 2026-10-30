@@ -12,6 +12,7 @@ const record: ScheduledActionResponse = {
   name: 'Daily report',
   kind: 'Agent',
   enabled: true,
+  run_visibility: 'unlisted',
   configuration_revision: 1,
   owner: 'macro|owner@example.test',
   created_at: '2026-10-19T00:00:00Z',
@@ -138,4 +139,35 @@ test('routine execution returns typed transcript handles and scoped history', as
   const [run] = await routine.history();
   expect(run.routine).toBe(routine);
   expect(run.id).toBe('run-1');
+});
+
+test('routine options carry run visibility and updates that omit it keep it', async () => {
+  const bodies: unknown[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      bodies.push(await request.json());
+      return Response.json({ ...record, run_visibility: 'listed' });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const macro = new Macro({
+    auth: { type: 'bot', token: 'mbot_test' },
+    requestedAs: record.owner,
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  });
+  const options = {
+    name: 'Daily report',
+    trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'UTC' },
+    prompt: 'Summarize',
+    userPrompt: 'Daily summary',
+  } as const;
+  const routine = await macro.routines.create({
+    ...options,
+    runVisibility: 'listed',
+  });
+  expect(await routine.runVisibility()).toBe('listed');
+  await routine.update(options);
+  expect(bodies[0]).toMatchObject({ run_visibility: 'listed' });
+  expect(bodies[1]).not.toHaveProperty('run_visibility');
 });

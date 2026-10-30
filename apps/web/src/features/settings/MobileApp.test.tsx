@@ -18,10 +18,10 @@ vi.mock('@core/context/user', () => ({
 vi.mock('@design/app-store.svg', () => ({
   default: () => '<svg data-testid="app-store-qr"></svg>',
 }));
-vi.mock('@phosphor/arrow-up-right.svg', () => ({
+vi.mock('@icon/system/regular/arrow-up-right.svg', () => ({
   default: () => '<svg></svg>',
 }));
-vi.mock('@phosphor/link.svg', () => ({
+vi.mock('@icon/system/regular/link.svg', () => ({
   default: () => '<svg></svg>',
 }));
 
@@ -60,7 +60,7 @@ describe('MobileApp', () => {
   it('renders the QR code and text', () => {
     render(() => <MobileApp />);
 
-    expect(screen.getByText(/Download Macro Alpha on the/)).toBeTruthy();
+    expect(screen.getByText(/Download Macro on the/)).toBeTruthy();
     // Use getAllByText and check it appears multiple times (in the paragraph and in the button)
     const appStoreText = screen.getAllByText(/App Store/);
     expect(appStoreText.length).toBeGreaterThan(0);

@@ -42,7 +42,7 @@ fn snapshot(owner: &str, revision: chrono::DateTime<Utc>) -> ImportedCall {
             namespace: "account".into(),
             provider: CallProvider::Granola,
             object_type: "note".into(),
-            external_id: "not_123456789abcde".to_owned().try_into().unwrap(),
+            external_id: ExternalCallId("not_123456789abcde".into()),
             external_url: None,
             external_updated_at: Some(revision),
             synced_at: None,
@@ -59,7 +59,10 @@ fn snapshot(owner: &str, revision: chrono::DateTime<Utc>) -> ImportedCall {
     fixtures(path = "../../../fixtures", scripts("import_users"))
 )]
 async fn imports_are_private_idempotent_owner_scoped_and_revision_ordered(pool: PgPool) {
-    let service = CallImportServiceImpl(PgImportedCallRepository::new(pool.clone()));
+    let service = CallImportServiceImpl(
+        PgImportedCallRepository::new(pool.clone()),
+        macro_event_broker::NoopMacroEventBroker,
+    );
     let now = Utc::now();
     let id = service.ingest(snapshot("import-a", now)).await.unwrap();
     let first = service.read(&user("import-a"), id).await.unwrap().unwrap();
@@ -95,4 +98,21 @@ async fn imports_are_private_idempotent_owner_scoped_and_revision_ordered(pool: 
     let other = service.ingest(snapshot("import-b", now)).await.unwrap();
     assert_ne!(other, id);
     assert_eq!(service.list(&user("import-a")).await.unwrap().len(), 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("import_users"))
+)]
+async fn imports_require_a_complete_source_identity(pool: PgPool) {
+    let service = CallImportServiceImpl(
+        PgImportedCallRepository::new(pool),
+        macro_event_broker::NoopMacroEventBroker,
+    );
+    let mut call = snapshot("import-a", Utc::now());
+    call.source.external_id = ExternalCallId(String::new());
+    assert!(service.ingest(call).await.is_err());
+    let mut call = snapshot("import-a", Utc::now());
+    call.source.namespace = " ".into();
+    assert!(service.ingest(call).await.is_err());
 }

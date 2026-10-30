@@ -10,7 +10,7 @@ import type {
   FilterSpec,
   Interpolation,
 } from '@core/psd-engine/types';
-import XIcon from '@phosphor/x.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { cn } from '@ui';
 import { Button } from '@ui/components/Button';
 import {
@@ -63,7 +63,7 @@ function DialogShell(props: {
         role="dialog"
         aria-label={props.title}
         data-testid={props.testId}
-        class="flex w-80 flex-col gap-3 rounded-xl border border-edge-muted bg-dialog p-4 text-ink shadow-xl"
+        class="elevated-surface flex w-80 flex-col gap-3 p-4"
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === 'Escape') props.onCancel();
@@ -78,7 +78,7 @@ function DialogShell(props: {
         {props.children}
         <div class="flex justify-end gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             data-testid={`${props.testId}-cancel`}
             onClick={() => props.onCancel()}
@@ -87,7 +87,7 @@ function DialogShell(props: {
           </Button>
           <Show when={props.onOk}>
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               data-testid={`${props.testId}-ok`}
               onClick={() => props.onOk?.()}
@@ -468,7 +468,7 @@ export function ShortcutsDialog(props: { mac: boolean; onClose: () => void }) {
       role="dialog"
       aria-label="Keyboard shortcuts"
       data-testid="psd-shortcuts"
-      class="absolute inset-x-4 bottom-10 z-30 mx-auto max-h-[70%] max-w-3xl overflow-y-auto rounded-xl border border-edge-muted bg-menu p-4 text-ink text-xs shadow-xl"
+      class="menu-surface absolute inset-x-4 bottom-10 z-30 mx-auto max-h-[70%] max-w-3xl overflow-y-auto p-4 text-xs"
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div class="mb-3 flex items-center justify-between">

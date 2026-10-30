@@ -19,3 +19,6 @@ pub mod tool_approval;
 
 /// Agent-neutral reconstructed turn lifecycle.
 pub mod turn;
+
+/// Typed durable system events.
+pub mod notification;

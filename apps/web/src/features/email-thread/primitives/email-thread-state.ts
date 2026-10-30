@@ -38,6 +38,7 @@ export type EmailThreadState = {
   drafts: {
     getDraftForMessage: (messageDbId: string) => EmailMessage | undefined;
     deleteDraftForMessage: (messageDbId: string) => void;
+    restoreDraftForMessage: (draft: EmailMessage) => void;
     initialDraftsSettled: Accessor<boolean>;
   };
 
@@ -88,6 +89,8 @@ export type EmailThreadState = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  /** Closes an embedded thread back to its list, when the host has one. */
+  returnToList?: () => void;
   /** Marks the thread done and opens the next one in the host's list. */
   archiveThreadAndAdvance: (opts?: ArchiveThreadOptions) => boolean;
   /** True when the thread is archived, i.e. currently marked done. */
@@ -279,6 +282,7 @@ export function createEmailThreadState(
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
     ...commands,
+    returnToList: host.returnToList,
     archiveThreadAndAdvance,
     messagesContainerRef,
     messagesListRef,

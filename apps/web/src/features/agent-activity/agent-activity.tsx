@@ -2,6 +2,7 @@ import type { AgentActivityData } from '@macro-inc/lexical-core';
 import { Show } from 'solid-js';
 import { ActivityRows } from './components/activity-rows';
 import { replyToTurn, segmentRows } from './core/live-reply';
+import { createCodeActivityRows } from './queries/code-activity';
 import { createLiveSession } from './queries/live-session';
 
 /**
@@ -25,9 +26,16 @@ export function AgentActivity(props: AgentActivityData) {
 
 function LiveActivity(props: AgentActivityData) {
   const live = createLiveSession(() => props.agentSessionId);
+  const reply = () => replyToTurn(live.messages(), props.turn);
   const rows = () => {
-    const reply = replyToTurn(live.messages(), props.turn);
-    return (reply && segmentRows(reply, props.segment)) ?? props.rows;
+    const message = reply();
+    return (message && segmentRows(message, props.segment)) ?? props.rows;
   };
-  return <ActivityRows rows={rows()} />;
+  const activity = createCodeActivityRows(
+    () => props.agentSessionId,
+    reply,
+    () => props.segment,
+    rows
+  );
+  return <ActivityRows rows={activity()} />;
 }

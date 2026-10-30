@@ -49,8 +49,8 @@ Sources checked September 21, 2026:
 - Preflight capability cache identity includes the harness and model. A selection
   from another target is discarded. External harnesses expose controls after
   opening a session; model-specific preflight is not guessed.
-- A model chosen at creation is the session's model from its row. In-memory,
-  Cursor, and Claude cloud runtimes start on it; the harness selects it over ACP
+- A model chosen at creation is the session's model from its row. In-memory
+  and Cursor runtimes start on it; the harness selects it over ACP
   for the others and holds the first prompt until the runtime accepts it.
 - An effort chosen at creation waits for the runtime's reported configuration,
   checks the effort choices, then confirms effort before sending the prompt.

@@ -6,13 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActionConfigurationUpdateEnabled } from './actionConfigurationUpdateEnabled';
+import type { ActionConfigurationUpdateRunVisibility } from './actionConfigurationUpdateRunVisibility';
 import type { ActionConfigurationUpdateTask } from './actionConfigurationUpdateTask';
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
 
 /**
  * Canonical configuration replacement. Activation has its own endpoint, so
-omitting `enabled` keeps the stored value.
+omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
+it too, so clients that predate the setting do not reset it.
  */
 export interface ActionConfigurationUpdate {
   /**
@@ -22,6 +24,7 @@ export interface ActionConfigurationUpdate {
   enabled?: ActionConfigurationUpdateEnabled;
   kind: ActionKind;
   name: string;
+  run_visibility?: ActionConfigurationUpdateRunVisibility;
   task: ActionConfigurationUpdateTask;
   trigger: ActionTrigger;
 }

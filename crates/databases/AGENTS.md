@@ -26,7 +26,8 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Boundaries
 
-- Depends on: `entity_access` (permission scoping), `properties` (cell values),
+- Depends on: `entity_access` (permission scoping), `entity_access_db_utils` and
+  `share_permission_db_utils` (channel grants and the team share), `properties` (cell values),
   `macro_event_broker`/`macro_event_topics` (change notifications),
   `connection_gateway_client` (liveness), `entity_mutation` (rename/trash/restore).
 - Used by: `databases_sql` (agent SQL), `crm` and `forms` (own storage via
@@ -55,6 +56,11 @@ service with Axum, agent-tool and Postgres adapters.
   other (see README "Storage and app entities").
 - Column type changes must convert every value or refuse with the misfit count;
   never silently drop data outside an explicit delete.
+- Sharing (`src/domain/sharing.rs`): channel grants and a team share; no share
+  link. The team share's state lives in a `SharePermission` row that
+  `database_entities.share_permission_id` points at, made the first time the
+  owner sets it, and its grant is a team-source `entity_access` row that rows,
+  listing and Soup read like any other. Only the actual owner may change it.
 
 ## Related
 

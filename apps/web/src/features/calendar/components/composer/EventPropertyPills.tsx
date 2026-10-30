@@ -1,26 +1,23 @@
-import { UserIcon } from '@core/component/UserIcon';
-import { type IUser, idToEmail, recipientEntityMapper } from '@core/user';
+import BellSimpleIcon from '@icon/system/regular/bell-simple.svg';
+import CalendarDotsIcon from '@icon/system/regular/calendar-dots.svg';
+import CalendarXIcon from '@icon/system/regular/calendar-x.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChatTextIcon from '@icon/system/regular/chat-text.svg';
+import MapPinIcon from '@icon/system/regular/map-pin.svg';
+import RepeatIcon from '@icon/system/regular/repeat.svg';
+import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
 import { Popover } from '@kobalte/core/popover';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
-import CalendarDotsIcon from '@phosphor/calendar-dots.svg';
-import CalendarXIcon from '@phosphor/calendar-x.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChatTextIcon from '@phosphor/chat-text.svg';
-import MapPinIcon from '@phosphor/map-pin.svg';
-import RepeatIcon from '@phosphor/repeat.svg';
-import SquaresFourIcon from '@phosphor/squares-four.svg';
-import UsersIcon from '@phosphor/users.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
 import { useProperty } from '@property/core/context';
 import { Root as PropertyRoot } from '@property/core/Root';
 import { EditorPopover } from '@property/editors/popover/EditorPopover';
 import { OptionCheckBox } from '@property/editors/selectors/OptionCheckBox';
-import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { PropertyCaret } from '@property/extractors/PropertyCaret';
 import { PropertyPill } from '@property/extractors/PropertyPill';
 import type { EntityProperty } from '@property/types';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { cn, Layer, Select } from '@ui';
+import { cn, Layer, Select, Tooltip } from '@ui';
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   formatReminderOffset,
@@ -28,6 +25,12 @@ import {
   REMINDER_PRESET_MINUTES,
 } from '../../utils/event-reminders';
 import { EventComposerPopoverPortal } from './EventComposerPopoverPortal';
+import {
+  AddOnlyGuestsEditor,
+  EventGuestPicker,
+  EventGuestRow,
+  guestDisplayName,
+} from './EventGuestsEditor';
 import {
   type EventEditorCalendarOption,
   type EventEditorConferenceChoice,
@@ -42,8 +45,10 @@ import {
   eventKindOf,
 } from './out-of-office';
 
+// A disabled pill dims, as the date and time pills do, and takes no pointer,
+// so it shows no hover; a tooltip around it still explains why.
 const PROPERTY_TRIGGER_CLASS =
-  'group flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-control px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink';
+  'group flex h-7 items-center justify-between gap-1.5 rounded-full border border-edge-muted bg-control px-2 py-1 text-left text-xs leading-tight text-ink-muted hover:bg-hover hover:text-ink focus-visible:bg-active focus-visible:text-ink focus-visible:ring-accent/10 data-expanded:bg-hover data-expanded:text-ink disabled:pointer-events-none disabled:opacity-50';
 const PROPERTY_VALUE_CLASS =
   'group-hover:text-ink group-focus-visible:text-ink group-data-expanded:text-ink';
 
@@ -53,30 +58,6 @@ export type EventComposerSelectOption = {
 };
 
 const GUESTS_PROPERTY_ID = 'event-composer-guests';
-
-function guestToUser(guest: SelectedEventEditorGuest): IUser {
-  return {
-    id: guest.id,
-    email: guestEmail(guest),
-    name: guestDisplayName(guest),
-  };
-}
-
-function guestFromId(
-  id: string,
-  options: EventEditorGuestOption[],
-  selected: SelectedEventEditorGuest[]
-): SelectedEventEditorGuest {
-  const option = options.find((guest) => guest.id === id);
-  if (option) return option;
-  const prior = selected.find((guest) => guest.id === id);
-  if (prior) return prior;
-  return recipientEntityMapper('custom')({
-    id,
-    email: idToEmail(id),
-    invalid: false,
-  });
-}
 
 function guestsAsProperty(
   selected: SelectedEventEditorGuest[]
@@ -104,11 +85,19 @@ export interface EventComposerGuestsPillProps {
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  /** Why a read-only guest list cannot change, shown as a tooltip. */
+  readOnlyReason?: string;
+  /**
+   * The organizer hides the guest list, so `selected` holds only the guests
+   * the viewer may see and the pill names the list hidden instead.
+   */
+  guestListHidden?: boolean;
+  /**
+   * The event's current guests when the viewer may add guests but not remove
+   * them; they stay in `selected` and the editor only adds to them.
+   */
+  currentGuests?: SelectedEventEditorGuest[];
   hideIcon?: boolean;
-}
-
-function guestDisplayName(guest: SelectedEventEditorGuest) {
-  return ('name' in guest.data && guest.data.name) || guest.data.email;
 }
 
 function guestPropertyLabel(selected: SelectedEventEditorGuest[]) {
@@ -129,60 +118,58 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       flip
       slide
     >
-      <Popover.Trigger
-        disabled={props.disabled}
-        aria-label="Guests"
-        aria-readonly="true"
-        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+      <Tooltip
+        label={props.readOnlyReason ?? ''}
+        disabled={!props.readOnlyReason || open()}
       >
-        <Show when={!props.hideIcon}>
-          <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-        </Show>
-        <span
-          class={cn(
-            'min-w-0 truncate',
-            PROPERTY_VALUE_CLASS,
-            props.selected.length > 0 ? 'text-current' : 'text-ink-extra-muted'
-          )}
+        <Popover.Trigger
+          disabled={props.disabled}
+          aria-label={props.guestListHidden ? 'Guest list hidden' : 'Guests'}
+          aria-readonly="true"
+          aria-description={props.readOnlyReason}
+          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
         >
-          {guestPropertyLabel(props.selected)}
-        </span>
-        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
-      </Popover.Trigger>
+          <Show when={!props.hideIcon}>
+            <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          </Show>
+          <span
+            class={cn(
+              'min-w-0 truncate',
+              PROPERTY_VALUE_CLASS,
+              props.selected.length > 0
+                ? 'text-current'
+                : 'text-ink-extra-muted'
+            )}
+          >
+            {props.guestListHidden
+              ? 'Guest list hidden'
+              : guestPropertyLabel(props.selected)}
+          </span>
+          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+        </Popover.Trigger>
+      </Tooltip>
       <EventComposerPopoverPortal>
         <Layer depth={3}>
-          <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-1.5 text-sm glass menu-open-animation">
+          <Popover.Content class="menu-surface z-action-menu w-72 max-w-[calc(100vw-1rem)] p-1.5 text-sm menu-open-animation">
             <Popover.Title class="sr-only">Event guests</Popover.Title>
+            <Show when={props.readOnlyReason}>
+              {(reason) => (
+                <p class="px-2 pt-1 pb-2 text-xs text-ink-muted">{reason()}</p>
+              )}
+            </Show>
             <Show
               when={props.selected.length > 0}
               fallback={
-                <p class="px-2 py-4 text-center text-sm text-ink-muted">
-                  No guests
-                </p>
+                <Show when={!props.guestListHidden}>
+                  <p class="px-2 py-4 text-center text-sm text-ink-muted">
+                    No guests
+                  </p>
+                </Show>
               }
             >
               <div class="flex max-h-64 flex-col overflow-y-auto">
                 <For each={props.selected}>
-                  {(guest) => (
-                    <div class="flex min-w-0 items-center gap-2 rounded-lg px-2 py-2 text-ink">
-                      <UserIcon
-                        id={guest.id}
-                        size="sm"
-                        isDeleted={false}
-                        suppressClick
-                      />
-                      <div class="min-w-0 flex-1 truncate text-sm">
-                        {guestDisplayName(guest)}
-                        <Show
-                          when={guestDisplayName(guest) !== guestEmail(guest)}
-                        >
-                          <span class="ml-[0.5em] text-ink-muted">
-                            {guestEmail(guest)}
-                          </span>
-                        </Show>
-                      </div>
-                    </div>
-                  )}
+                  {(guest) => <EventGuestRow guest={guest} />}
                 </For>
               </div>
             </Show>
@@ -194,17 +181,6 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
 }
 
 function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
-  const users = createMemo((): IUser[] => {
-    const byId = new Map<string, IUser>();
-    for (const guest of props.options()) {
-      byId.set(guest.id, guestToUser(guest));
-    }
-    for (const guest of props.selected) {
-      byId.set(guest.id, guestToUser(guest));
-    }
-    return [...byId.values()];
-  });
-
   return (
     <PropertyRoot
       property={guestsAsProperty(props.selected)}
@@ -212,8 +188,8 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
     >
       <GuestsPillTrigger {...props} />
       <GuestsPopoverEditor
-        users={users}
         selected={props.selected}
+        currentGuests={props.currentGuests}
         options={props.options}
         onChange={props.onChange}
       />
@@ -248,8 +224,8 @@ function GuestsPillTrigger(props: EventComposerGuestsPillProps) {
 }
 
 function GuestsPopoverEditor(props: {
-  users: Accessor<IUser[]>;
   selected: SelectedEventEditorGuest[];
+  currentGuests?: SelectedEventEditorGuest[];
   options: Accessor<EventEditorGuestOption[]>;
   onChange: (selected: SelectedEventEditorGuest[]) => void;
 }) {
@@ -257,26 +233,37 @@ function GuestsPopoverEditor(props: {
   return (
     <Show when={ctx.editorOpen()}>
       <EditorPopover portalScope="local">
-        <PropertyEntitySelector
-          config={{
-            isMultiSelect: true,
-            placeholder: 'Add guests...',
-            specificEntityType: 'USER',
-            users: props.users,
-            allowCustomEmail: true,
-          }}
-          selectedOptions={() =>
-            new Set(props.selected.map((guest) => guest.id))
+        <Show
+          when={props.currentGuests}
+          fallback={
+            <EventGuestPicker
+              options={props.options}
+              selected={props.selected}
+              onChange={props.onChange}
+              onClose={() => ctx.closeEditor()}
+            />
           }
-          setSelectedOptions={(ids) => {
-            props.onChange(
-              [...ids].map((id) =>
-                guestFromId(id, props.options(), props.selected)
-              )
+        >
+          {(currentGuests) => {
+            const isCurrent = (guest: SelectedEventEditorGuest) =>
+              currentGuests().some(
+                (current) =>
+                  guestEmail(current).toLowerCase() ===
+                  guestEmail(guest).toLowerCase()
+              );
+            return (
+              <AddOnlyGuestsEditor
+                options={props.options}
+                current={currentGuests()}
+                added={props.selected.filter((guest) => !isCurrent(guest))}
+                onAddedChange={(added) =>
+                  props.onChange([...currentGuests(), ...added])
+                }
+                onClose={() => ctx.closeEditor()}
+              />
             );
           }}
-          onClose={() => ctx.closeEditor()}
-        />
+        </Show>
       </EditorPopover>
     </Show>
   );
@@ -339,7 +326,7 @@ export function EventComposerLocationPill(
       <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content
-            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
+            class="menu-surface z-action-menu w-72 max-w-[calc(100vw-1rem)] p-2 menu-open-animation"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               queueMicrotask(() => input?.focus());
@@ -405,14 +392,21 @@ export function EventComposerConferencePill(
   const includesMacroCall = createMemo(
     () => props.macroCallsEnabled || props.value === 'macro'
   );
+  // The list must keep its identity while its contents do. A fresh array makes
+  // the select re-assert its selection, which calls `onChange` again; with an
+  // editor that rebuilds its state on every keystroke that is an endless loop.
+  // The provider and the existing-conferencing flag reach us through accessors
+  // that read the whole event, so each one is read through its own memo.
+  const provider = createMemo(() => props.provider);
+  const canKeepExisting = createMemo(() => props.canKeepExisting);
   const options = createMemo(() => [
     ...(includesMacroCall() ? [MACRO_CALL_OPTION] : []),
-    ...(props.provider === 'microsoft_teams'
+    ...(provider() === 'microsoft_teams'
       ? [MICROSOFT_TEAMS_OPTION]
-      : props.provider === null || props.provider === 'other'
+      : provider() === null || provider() === 'other'
         ? []
         : [GOOGLE_MEET_OPTION]),
-    ...(props.canKeepExisting ? [EXISTING_CONFERENCING_OPTION] : []),
+    ...(canKeepExisting() ? [EXISTING_CONFERENCING_OPTION] : []),
     NO_CONFERENCING_OPTION,
   ]);
   const selectedOption = () =>
@@ -591,6 +585,10 @@ export interface EventComposerRecurrencePillProps {
   onChange: (value: string) => void;
   disabled?: boolean;
   readOnly?: boolean;
+  /** Why a read-only rule cannot change, shown as a tooltip. */
+  readOnlyReason?: string;
+  /** Id of the line that explains the pill, such as its read-only reason. */
+  describedBy?: string;
   hideIcon?: boolean;
 }
 
@@ -610,19 +608,27 @@ export function EventComposerRecurrencePill(
       optionDisabled={() => props.readOnly === true}
       disabled={props.disabled}
     >
-      <Select.Trigger
-        aria-label="Repeats"
-        aria-readonly={props.readOnly || undefined}
-        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48')}
+      {/* Always wrapped, so the reason coming and going never moves the
+          trigger to a new parent. */}
+      <Tooltip
+        label={props.readOnlyReason ?? ''}
+        disabled={!props.readOnlyReason}
       >
-        <Show when={!props.hideIcon}>
-          <RepeatIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-        </Show>
-        <Select.Value<EventComposerSelectOption>>
-          {(selectState) => selectState.selectedOption().label}
-        </Select.Value>
-        <Select.Icon />
-      </Select.Trigger>
+        <Select.Trigger
+          aria-label="Repeats"
+          aria-readonly={props.readOnly || undefined}
+          aria-describedby={props.describedBy}
+          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48')}
+        >
+          <Show when={!props.hideIcon}>
+            <RepeatIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          </Show>
+          <Select.Value<EventComposerSelectOption>>
+            {(selectState) => selectState.selectedOption().label}
+          </Select.Value>
+          <Select.Icon />
+        </Select.Trigger>
+      </Tooltip>
       <Select.Content portalScope="local">
         <Select.Listbox />
       </Select.Content>
@@ -849,7 +855,7 @@ export function EventComposerDeclineMessagePill(
       <EventComposerPopoverPortal>
         <Layer depth={3}>
           <Popover.Content
-            class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
+            class="menu-surface z-action-menu w-72 max-w-[calc(100vw-1rem)] p-2 menu-open-animation"
             onOpenAutoFocus={(event) => {
               event.preventDefault();
               queueMicrotask(() => input?.focus());

@@ -105,6 +105,15 @@ vi.mock('@ui', () => ({
   ),
 }));
 
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchChannelTarget: vi.fn(async () => {}),
+}));
+
+import {
+  receiveNotificationTap,
+  setPendingNotificationNavigationId,
+} from '@notifications/notification-navigation-intent';
+import { endNotificationOpen } from '@notifications/notification-open-trace';
 import { queryClient } from '@queries/client';
 import { BasePathComponent } from './BasePath';
 
@@ -161,9 +170,50 @@ beforeEach(() => {
 afterEach(() => {
   dispose?.();
   dispose = undefined;
+  setPendingNotificationNavigationId(undefined);
+  endNotificationOpen('test_complete');
 });
 
 describe('BasePathComponent', () => {
+  it('chooses the tapped message before Home or a saved destination after authentication', async () => {
+    mocks.nativeMobile = true;
+    setPostLoginRedirect('/channels/previous');
+    const recipientId = 'macro|test@example.com';
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        payload: {
+          notificationId: 'notification-1',
+          recipientId,
+          navigation: {
+            type: 'channel',
+            channelId: '11111111-1111-4111-8111-111111111111',
+            messageId: '22222222-2222-4222-8222-222222222222',
+            threadId: null,
+          },
+        },
+      },
+      vi.fn()
+    );
+    let resolveIdentity!: (identity: {
+      authenticated: true;
+      userId: string;
+    }) => void;
+    mocks.fetchUserInfo.mockReturnValue(
+      new Promise((resolve) => {
+        resolveIdentity = resolve;
+      })
+    );
+    renderRoute();
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    resolveIdentity({ authenticated: true, userId: recipientId });
+    await vi.waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith(
+        '/channel/11111111-1111-4111-8111-111111111111?channel_message_id=22222222-2222-4222-8222-222222222222&channel_thread_id=22222222-2222-4222-8222-222222222222',
+        { replace: true }
+      )
+    );
+  });
   it.each([true, false])(
     'preserves a late native root query while authentication resolves (%s)',
     async (authenticated) => {

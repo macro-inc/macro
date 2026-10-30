@@ -9,7 +9,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
-import Stack from '@phosphor-icons/core/regular/stack.svg';
+import Stack from '@icon/system/regular/stack.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';

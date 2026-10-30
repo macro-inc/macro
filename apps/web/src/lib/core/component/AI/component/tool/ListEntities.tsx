@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import WideChannel from '@phosphor/hash-straight.svg';
-import List from '@phosphor-icons/core/regular/list.svg';
+import WideChannel from '@icon/system/regular/hash-straight.svg';
+import List from '@icon/system/regular/list.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createMemo, createSignal } from 'solid-js';
 import { VList } from 'virtua/solid';

@@ -75,6 +75,26 @@ Create a markdown document.
 
 ***
 
+### createCanvas()
+
+> **createCanvas**(`opts`): `Promise`\<[`Document`](../../document/classes/Document.md)\>
+
+Create a native Canvas with shared content ready for reading and editing.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `opts` | \{ `name`: `string`; `project?`: [`Project`](../../../projects/project/classes/Project.md); \} |
+| `opts.name` | `string` |
+| `opts.project?` | [`Project`](../../../projects/project/classes/Project.md) |
+
+#### Returns
+
+`Promise`\<[`Document`](../../document/classes/Document.md)\>
+
+***
+
 ### createSkill()
 
 > **createSkill**(`opts`): `Promise`\<[`Document`](../../document/classes/Document.md)\>

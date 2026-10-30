@@ -1,7 +1,7 @@
 use calendar_events::domain::models::{
     AttendeeResponseStatus, CalendarAttendee, CalendarEvent, CalendarOccurrence, EventReminders,
-    EventStatus, EventTime, EventTransparency, EventType, EventVisibility, OccurrenceException,
-    OccurrenceListing,
+    EventStatus, EventTime, EventTransparency, EventType, EventVisibility, GuestPolicy,
+    OccurrenceException, OccurrenceListing, ViewerCapabilities,
 };
 use chrono::{TimeZone, Utc};
 use uuid::Uuid;
@@ -56,6 +56,9 @@ pub(crate) fn series_event() -> CalendarEvent {
             AttendeeResponseStatus::Accepted,
         )],
         reminders: EventReminders::default(),
+        guest_policy: GuestPolicy::default(),
+        is_snapshot: false,
+        viewer_can: ViewerCapabilities::NONE,
         created_at: starts_at,
         updated_at: starts_at,
     }

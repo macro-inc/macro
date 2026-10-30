@@ -1,5 +1,5 @@
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import { Show } from 'solid-js';
 import { AuthButton, FormError } from './form-fields';
 import { OtpInput } from './otp-input';

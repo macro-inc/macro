@@ -450,7 +450,7 @@ mod test;
 /// other is never a valid choice.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentHarnessSelection {
-    /// Harness slug, e.g. `in-memory`, `cursor`, `claude-cloud`, or `macrod`.
+    /// Harness slug, e.g. `in-memory`, `cursor`, or `macrod`.
     pub harness: String,
     /// Registered harness to run on. Required when `harness` is `macrod`,
     /// forbidden otherwise.

@@ -1,3 +1,4 @@
+import { queryReadyGate } from '@queries/gate';
 import type {
   MailboxAction,
   MailboxOperation,
@@ -72,9 +73,11 @@ export function EmailThreadOperations(props: {
     () => props.threadId,
     () => props.enabled
   );
+  // Provider confirmation is supplemental; a cold REST lookup must not
+  // suspend the thread body already available from the GraphQL cache.
   return (
     <MailboxOperationsNotice
-      operations={query.data ?? []}
+      operations={queryReadyGate(query) ? query.data : []}
       announceRead={props.announceRead}
     />
   );

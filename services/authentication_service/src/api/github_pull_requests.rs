@@ -11,6 +11,7 @@ use github::domain::{
         GithubPullRequestMergeabilityRequest, GithubPullRequestMergeabilityResponse,
         MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
         SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
+        SetGithubPullRequestStateRequest, SetGithubPullRequestStateResponse,
     },
     ports::GithubLinkService,
 };
@@ -139,6 +140,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/enrich", post(handler))
         .route("/merge", post(merge_handler))
         .route("/draft", post(draft_handler))
+        .route("/state", post(state_handler))
         .route("/mergeability", post(mergeability_handler))
 }
 
@@ -238,6 +240,39 @@ pub async fn draft_handler(
     let response = ctx
         .github_link_service
         .set_pull_request_draft(&authorization.authorization.user.macro_user_id, request)
+        .await?;
+
+    Ok(Json(response))
+}
+
+/// Closes a GitHub pull request, or reopens it, as the authenticated user
+/// with their own GitHub grant.
+#[utoipa::path(
+    post,
+    path = "/github_pull_requests/state",
+    operation_id = "set_github_pull_request_state",
+    request_body = SetGithubPullRequestStateRequest,
+    responses(
+        (status = 200, body = SetGithubPullRequestStateResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, description = "The user cannot change the pull request", body = ErrorResponse),
+        (status = 404, description = "No GitHub link, or the pull request is not visible to the user", body = ErrorResponse),
+        (status = 422, description = "GitHub declined the change", body = ErrorResponse),
+        (status = 428, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
+pub async fn state_handler(
+    State(ctx): State<ApiContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    extract::Json(request): extract::Json<SetGithubPullRequestStateRequest>,
+) -> Result<Json<SetGithubPullRequestStateResponse>, UpdateGithubPullRequestError> {
+    tracing::info!("set_github_pull_request_state");
+
+    let response = ctx
+        .github_link_service
+        .set_pull_request_state(&authorization.authorization.user.macro_user_id, request)
         .await?;
 
     Ok(Json(response))

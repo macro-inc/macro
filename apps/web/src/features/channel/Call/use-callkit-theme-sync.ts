@@ -1,6 +1,4 @@
-import { ENABLE_CALLKIT } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isPlatform, isTauri } from '@core/util/platform';
 import { createEffect, createMemo } from 'solid-js';
 import { setNativeCallKitDrawerTheme } from './callkit-drawer-theme';
 import { useNativeCallState } from './native-call-state';
@@ -16,9 +14,8 @@ async function syncDrawerTheme(
 }
 
 export function useCallKitThemeSync() {
+  // CallKitSync mounts this only where native calls run (iOS and Android).
   const nativeCall = useNativeCallState();
-  if (!ENABLE_CALLKIT || !isTauri() || !isPlatform('ios')) return null;
-
   const theme = createMemo(nativeCall.drawerTheme);
   createEffect(() => {
     fireAndForget(syncDrawerTheme(theme()), 'channel-call');

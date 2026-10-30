@@ -1,4 +1,4 @@
-import Globe from '@phosphor-icons/core/regular/globe.svg';
+import Globe from '@icon/system/regular/globe.svg';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer } from './ToolRenderer';
 
@@ -7,7 +7,7 @@ const handler = createToolRenderer({
   name: 'WebFetch',
   render: (ctx) => (
     <BaseTool icon={Globe} renderContext={ctx.renderContext} type="call">
-      Fetched{' '}
+      {ctx.response ? 'Fetched' : 'Fetch'}{' '}
       <a
         href={ctx.tool.data.input}
         target="_blank"

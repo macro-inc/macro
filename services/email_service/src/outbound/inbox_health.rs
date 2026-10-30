@@ -1,3 +1,4 @@
+use contacts::domain::ports::ContactsIngress;
 use email::domain::mailbox::{MailboxError, health::*};
 use email_api_client::domain::{
     models::{AccessToken, EmailApiError, MailboxAccess, TokenError, TokenFreshness},
@@ -74,14 +75,17 @@ impl InboxHealthRepository for PgInboxHealth {
     }
 }
 
-pub struct ProviderInboxHealth<T, B> {
+pub struct ProviderInboxHealth<T, B, C> {
     pub gmail: crate::outbound::email_api::GmailApi,
     pub outlook: T,
     pub db: sqlx::PgPool,
     pub queue: sqs_client::SQS,
     pub broker: B,
+    pub contacts: std::sync::Arc<C>,
 }
-impl<T: MailboxTokenSource, B: MacroEventBroker> InboxHealthGateway for ProviderInboxHealth<T, B> {
+impl<T: MailboxTokenSource, B: MacroEventBroker, C: ContactsIngress> InboxHealthGateway
+    for ProviderInboxHealth<T, B, C>
+{
     async fn acquire(
         &self,
         binding: &InboxHealthBinding,
@@ -128,6 +132,7 @@ impl<T: MailboxTokenSource, B: MacroEventBroker> InboxHealthGateway for Provider
             &self.gmail,
             &self.queue,
             &self.broker,
+            &*self.contacts,
         )
         .await
         .map_err(|_| MailboxError::Persistence)

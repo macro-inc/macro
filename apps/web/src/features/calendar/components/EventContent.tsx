@@ -1,5 +1,5 @@
 import type { EventContentArg } from '@fullcalendar/core';
-import ExclamationIcon from '@phosphor/exclamation-mark.svg';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';

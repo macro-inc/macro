@@ -1,0 +1,44 @@
+#content-area h1,
+#content-area h2 {
+  font-family: "Roboto Slab", serif !important;
+  font-weight: 315 !important;
+  letter-spacing: -0.025em;
+}
+
+.card,
+.frame,
+.code-block-background,
+html.dark .code-block .code-block-background,
+#pagination,
+#content-area [aria-label="Navigate to header"] > div {
+  background-color: transparent !important;
+}
+
+.code-block-fade-overlay {
+  background-image: linear-gradient(to right, transparent, #f5f1e8 32px) !important;
+}
+
+html.dark .code-block-fade-overlay {
+  background-image: linear-gradient(to right, transparent, #000000 32px) !important;
+}
+
+.frame > [class*="bg-grid"] {
+  display: none;
+}
+
+#pagination,
+#content-area [aria-label="Navigate to header"] > div {
+  border: 1px solid rgb(3 7 18 / 0.1);
+  box-shadow: none !important;
+  filter: none !important;
+}
+
+html.dark #pagination,
+html.dark #content-area [aria-label="Navigate to header"] > div {
+  border-color: rgb(255 255 255 / 0.1);
+}
+
+#content-area h3,
+#content-area h4 {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif !important;
+}

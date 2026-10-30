@@ -5,17 +5,23 @@ import {
   TasksViewProvider,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import { createTaskWithProperties } from '@block-md/util/taskComposerProperties';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import PlusIcon from '@phosphor/plus.svg';
-import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import {
+  enableCrmActivity,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
-import type { PropertyApiValues } from '@property/types';
-import { Button } from '@ui';
 import { Show } from 'solid-js';
-import { match } from 'ts-pattern';
+import {
+  CrmListEmpty,
+  CrmListError,
+  CrmListSearchEmpty,
+  CrmListSkeleton,
+} from './components/list-state';
 import { RecordSection } from './components/record-section';
 import type { CrmRecordScope } from './core/record';
+import { crmTaskComposerContext } from './task-composer';
 
 /**
  * The record's Tasks tab: the production Tasks list, scoped to tasks
@@ -56,59 +62,26 @@ export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
   );
 }
 
-const reference = (
-  propertyId: string,
-  entityId: string,
-  entityType: 'COMPANY' | 'CONTACT'
-): [string, PropertyApiValues] => [
-  propertyId,
-  {
-    valueType: 'ENTITY',
-    refs: [{ entity_id: entityId, entity_type: entityType }],
-  },
-];
-
-/**
- * Properties a task created from the record starts with, like project tasks
- * start in their project. A contact's tasks also join its company.
- */
-function taskAssociations(
-  scope: CrmRecordScope
-): [string, PropertyApiValues][] {
-  return match(scope)
-    .with({ type: 'company' }, ({ id }) => [
-      reference(SYSTEM_PROPERTY_IDS.COMPANIES, id, 'COMPANY'),
-    ])
-    .with({ type: 'contact' }, ({ id, companyId }) => [
-      reference(SYSTEM_PROPERTY_IDS.CONTACTS, id, 'CONTACT'),
-      reference(SYSTEM_PROPERTY_IDS.COMPANIES, companyId, 'COMPANY'),
-    ])
-    .exhaustive();
-}
-
 function RecordTasksBody(props: { scope: CrmRecordScope }) {
-  const { state, setState } = useTasksView();
+  const { state, setState, source } = useTasksView();
   const layout = useSplitLayout();
   let listElement: HTMLDivElement | undefined;
 
-  const composeTask = () =>
+  const composeTask = () => {
+    const context = crmTaskComposerContext(props.scope);
+    const adaptive = isFeatureEnabled(enableCrmActivity);
     layout.popoverSplit({
       type: 'component',
       id: 'task-compose',
       params: {
-        createTask: (
-          ...[title, content, properties, ...rest]: Parameters<
-            typeof createTaskWithProperties
-          >
-        ) =>
-          createTaskWithProperties(
-            title,
-            content,
-            [...properties, ...taskAssociations(props.scope)],
-            ...rest
-          ),
+        // Record identity/associations must survive a restart even with the
+        // standard property row; they cannot live only in a create callback.
+        composerContext: adaptive
+          ? context
+          : { ...context, visiblePropertyIds: undefined },
       },
     });
+  };
 
   return (
     <RecordSection
@@ -116,17 +89,35 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
       search={state.search}
       onSearchChange={(search) => setState('search', search)}
       onSearchEscape={() => listElement?.focus()}
-      actions={
-        <>
-          <TasksControls />
-          <Button variant="outline" onClick={composeTask}>
-            <PlusIcon class="size-4" />
-            New task
-          </Button>
-        </>
-      }
+      actions={<TasksControls />}
+      createAction={{ label: 'New task', onClick: composeTask }}
+      toolbarCreate
     >
       <TaskList
+        loadingContent={<CrmListSkeleton label="Loading tasks" />}
+        errorContent={
+          <CrmListError
+            title="Tasks couldn’t be loaded."
+            onRetry={() => source.refresh()}
+          />
+        }
+        emptyContent={
+          state.search.trim() && source.hasMore() ? (
+            <span>Search more results to find matching tasks.</span>
+          ) : state.search.trim() ? (
+            <CrmListSearchEmpty
+              title="No tasks match this search"
+              onClearSearch={() => setState('search', '')}
+            />
+          ) : (
+            <CrmListEmpty
+              title="No tasks yet"
+              graphic={EmptyStateTasksGraphic}
+              description="Tasks associated with this record will appear here."
+              action={{ label: 'New task', onClick: composeTask }}
+            />
+          )
+        }
         ref={(element) => {
           listElement = element;
         }}

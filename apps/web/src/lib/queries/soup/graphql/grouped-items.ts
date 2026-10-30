@@ -8,19 +8,12 @@ import {
   type CacheRevision,
   normalizedCacheResultMetadata,
 } from '@app/lib/graphql-cache';
-import { createUrqlQuery } from '@app/lib/urql-solid';
 import { createBrowserOfflineSignal } from '@core/util/connectivity';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTransientRequestError } from '@core/util/request-error';
 import { Telemetry } from '@macro-inc/observability';
 import type { GroupByField } from '@queries/soup/grouped/types';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
-import {
-  GroupSoupDocument,
-  type GroupSoupQuery,
-  type GroupSoupQueryVariables,
-} from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import { GroupSoupDocument } from '@service-storage/graphql/generated/graphql';
 import type { CombinedError } from '@urql/core';
 import {
   type Accessor,
@@ -35,6 +28,7 @@ import { groupCachedMailByDate } from '../grouped/mail-date-groups';
 import type { SoupAstBody, SoupAstParams } from '../items';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlGroupedSoupInput } from './ast';
+import { createGroupedSoupLiveQuery } from './create-grouped-soup-live-query';
 import { createGraphqlSoupDoneProjection } from './done-projection';
 import { createGraphqlGroupedSoupProjection } from './grouped-projection';
 import {
@@ -62,7 +56,6 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   args: Accessor<GraphqlGroupedSoupAstItemsQueryArgs>,
   options: Accessor<GraphqlGroupedSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
-  const instructionsIdQuery = useInstructionsMdIdQuery();
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
@@ -122,65 +115,37 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   const isSupported = () => input() !== undefined;
   const inputKey = createMemo(() => JSON.stringify(input()));
 
-  const query = createUrqlQuery<
-    GroupSoupQuery,
-    GroupSoupQueryVariables,
-    { inputKey: string; data: GroupSoupQuery }
-  >(() => {
-    const queryOptions = options();
-    const groupBy = args().groupBy;
-    const queryInput = input();
-
-    const common = {
-      query: GroupSoupDocument,
-      client: getGraphqlSoupClient(),
-      requestPolicy: queryOptions.networkPaused
-        ? ('cache-only' as const)
-        : ('cache-and-network' as const),
-      keepPreviousData: queryOptions.keepPreviousData ?? false,
-      onResult: (
-        result: import('@urql/core').OperationResult<
-          GroupSoupQuery,
-          GroupSoupQueryVariables
-        >
-      ) => {
-        const metadata = normalizedCacheResultMetadata(result);
-        if (metadata?.source !== 'live-network') return;
-        const version = ++networkResultVersion;
-        setNetworkRevision(undefined);
-        if (result.error || result.data == null || result.hasNext) return;
-        fireAndForget(
-          acknowledgeNetworkResult(
-            metadata.persistence ?? Promise.resolve(metadata.revision),
-            queryInput,
-            version
-          ),
-          'soup-grouped-items'
-        );
-      },
-      // Associate cached data with its filters without remapping live rows.
-      select: (data: GroupSoupQuery) => ({
-        inputKey: JSON.stringify(queryInput),
-        data,
-      }),
-    };
-
-    if (!queryOptions.enabled || !groupBy || queryInput === undefined) {
-      return { ...common, enabled: false as const };
-    }
-
-    return {
-      ...common,
-      variables: { input: queryInput },
-      enabled: true,
-    };
-  });
+  const grouped = createGroupedSoupLiveQuery(
+    input,
+    () => {
+      const queryInput = input();
+      return {
+        ...options(),
+        onInitialResult: (result) => {
+          const metadata = normalizedCacheResultMetadata(result);
+          if (metadata?.source !== 'live-network') return;
+          const version = ++networkResultVersion;
+          setNetworkRevision(undefined);
+          if (result.error || result.data == null || result.hasNext) return;
+          fireAndForget(
+            acknowledgeNetworkResult(
+              metadata.persistence ?? Promise.resolve(metadata.revision),
+              queryInput,
+              version
+            ),
+            'soup-grouped-items'
+          );
+        },
+      };
+    },
+    now
+  );
+  const query = grouped.query;
 
   const projected = createGraphqlGroupedSoupProjection(
-    () => query.data?.data,
+    grouped.data,
     () => args().groupBy,
     () => ({
-      instructionsIdQuery,
       showSupportedForeignEntities: options().showSupportedForeignEntities,
     })
   );
@@ -246,6 +211,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   return {
+    groupedPaging: grouped.paging,
     data: createMemo(() =>
       projectDone(
         JSON.stringify([input(), viewerId()]),
@@ -267,13 +233,10 @@ export function createGraphqlGroupedSoupAstItemsQuery(
     fetchNextPage: async () => {
       if (cachedMail()) await local.fetchNextPage();
     },
-    resetToInitialPage: () => undefined,
+    resetToInitialPage: grouped.paging.resetToInitialPage,
     refresh: async () => {
       if (input() === undefined) return;
-      await query.refetch({
-        requestPolicy: 'network-only',
-        throwOnError: true,
-      });
+      await grouped.refresh();
     },
   };
 }

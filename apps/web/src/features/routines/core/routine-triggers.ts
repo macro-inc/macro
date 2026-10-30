@@ -1,4 +1,8 @@
-import { getDefaultTimezone } from '@core/util/cron';
+import {
+  describeCron,
+  formatTimeLabel,
+  getDefaultTimezone,
+} from '@core/util/cron';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
@@ -292,6 +296,26 @@ export function validateTriggers(
   }
   return null;
 }
+/** One trigger as a sentence, such as "Every Monday at 9:00 AM", without its time zone. */
+export function describeTrigger(trigger: RoutineTriggerDraft): string {
+  if (trigger.kind === 'event') return `When: ${eventTriggerLabel(trigger)}`;
+  return match(trigger.frequency)
+    .with('week', 'month', (frequency) => {
+      const text = describeCron({
+        frequency,
+        time: trigger.time,
+        daysOfWeek: trigger.daysOfWeek,
+        dayOfMonth: trigger.dayOfMonth,
+      });
+      return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+    })
+    .with('day', () => `Every day at ${formatTimeLabel(trigger.time)}`)
+    .with('hour', () => 'Every hour')
+    .with('once', () => 'Once')
+    .with('custom', () => `Custom schedule (${trigger.cron})`)
+    .exhaustive();
+}
+
 export function describeTriggers(triggers: RoutineTriggerDraft[]): string {
   return triggers
     .map((trigger) =>

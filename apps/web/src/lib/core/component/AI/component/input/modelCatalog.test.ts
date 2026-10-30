@@ -44,6 +44,18 @@ describe('model catalog sections', () => {
     );
   });
 
+  it('leads the suggested choices with Auto', () => {
+    const catalog = buildModelCatalog([
+      { id: 'anthropic/claude-opus-5-5', label: 'Opus 5.5' },
+      { id: 'auto', label: 'Auto' },
+      { id: 'fireworks/kimi-k3', label: 'Kimi K3' },
+    ]);
+    expect(catalog.frontier.map((option) => option.id)).toEqual([
+      'auto',
+      'anthropic/claude-opus-5-5',
+    ]);
+  });
+
   it('does not invent frontier choices for a restricted catalog', () => {
     const option = { id: 'custom', label: 'Custom model' };
     expect(buildModelCatalog([option])).toEqual({
@@ -62,8 +74,8 @@ describe('model catalog sections', () => {
       { id: 'auto', label: 'Auto' },
       { id: 'private-model', label: 'Custom model' },
     ]);
+    expect(catalog.frontier.map((option) => option.id)).toEqual(['auto']);
     expect(catalog.providers.map((group) => group.label)).toEqual([
-      'Automatic',
       'OpenAI',
       'Alibaba',
       'Moonshot AI',

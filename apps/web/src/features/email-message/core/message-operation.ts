@@ -51,6 +51,15 @@ export function operationBlocksEditing(
   );
 }
 
+/** Moving a draft is how rejected content recovers, but not mid-move. */
+export function operationBlocksInboxSwitch(
+  operation?: MessageOperation | null
+): boolean {
+  return (
+    operationBlocksEditing(operation) || !!operation?.issue?.startsWith('MOVE_')
+  );
+}
+
 export function operationActions(
   operation: MessageOperation
 ): MessageResolutionAction[] {
@@ -127,11 +136,13 @@ export function operationSettled(operation: MessageOperation): boolean {
   return operation.state === 'SENT' || operation.state === 'DELETED';
 }
 
-/** A move may remain editable while the original copy still prevents delivery. */
+/** Moves and provider-rejected content stay editable but cannot deliver until resolved. */
 export function operationBlocksSending(
   operation?: MessageOperation | null
 ): boolean {
   return (
-    operationBlocksEditing(operation) || !!operation?.issue?.startsWith('MOVE_')
+    operationBlocksEditing(operation) ||
+    !!operation?.issue?.startsWith('MOVE_') ||
+    operation?.issue === 'INVALID_CONTENT'
   );
 }

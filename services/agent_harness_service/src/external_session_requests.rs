@@ -8,7 +8,7 @@
 use std::time::Duration;
 
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::AgentSession;
+use agent_session::domain::model::{AgentSession, SessionSource};
 use agent_session::domain::ports::{
     AgentSessionRepo, ExternalSessionRequester, RequestedExternalSession,
 };
@@ -65,15 +65,23 @@ where
         loop {
             match self.sessions.get(session_id).await {
                 Ok(session) => {
-                    let Some(model) = request.model else {
+                    if request.model.is_none() && request.source == SessionSource::User {
                         return Ok(session);
-                    };
+                    }
                     // The runtime created the row on the persona's default.
                     // The choice goes on the row now, ahead of the first
                     // prompt - which the caller cannot send before this
                     // answers - so the session binds on it, exactly as it
                     // would on the persona's own.
-                    self.sessions.set_model(session_id, &model).await?;
+                    if let Some(model) = &request.model {
+                        self.sessions.set_model(session_id, model).await?;
+                    }
+                    // The runtime does not know who started it either.
+                    if request.source != SessionSource::User {
+                        self.sessions
+                            .set_origin(session_id, request.source, request.visibility)
+                            .await?;
+                    }
                     return self.sessions.get(session_id).await;
                 }
                 Err(error) => {

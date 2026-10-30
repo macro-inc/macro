@@ -506,6 +506,74 @@ fn calendar_consent_is_opt_in_and_contacts_are_read_only() {
 }
 
 #[test]
+fn admin_consent_url_targets_organizations_for_multi_tenant_apps() {
+    let state = "eyJraW5kIjoiYWRtaW5fY29uc2VudCJ9.c2ln+/=&?%20";
+    for (configured, expected_tenant) in [
+        ("common", "organizations"),
+        ("consumers", "organizations"),
+        ("organizations", "organizations"),
+        (
+            "cfc674f9-d10b-4b48-a2be-d018a76a6c27",
+            "cfc674f9-d10b-4b48-a2be-d018a76a6c27",
+        ),
+    ] {
+        let url = client()
+            .with_microsoft_credentials(
+                "microsoft-client-id".into(),
+                "microsoft-client-secret".into(),
+                configured.into(),
+            )
+            .construct_microsoft_admin_consent_url(
+                "https://auth.example.com/oauth2/microsoft/callback",
+                state,
+                false,
+            )
+            .unwrap();
+        let url = reqwest::Url::parse(&url).unwrap();
+        assert_eq!(
+            url.path(),
+            format!("/{expected_tenant}/v2.0/adminconsent"),
+            "{configured} should ask {expected_tenant}"
+        );
+        let values: HashMap<_, _> = url.query_pairs().into_owned().collect();
+        assert_eq!(url.query_pairs().count(), values.len());
+        assert_eq!(values["client_id"], "microsoft-client-id");
+        assert_eq!(
+            values["redirect_uri"],
+            "https://auth.example.com/oauth2/microsoft/callback"
+        );
+        assert_eq!(values["state"], state);
+        assert_eq!(values["scope"], oauth::MICROSOFT_SCOPES);
+        assert!(!url.as_str().contains("microsoft-client-secret"));
+    }
+}
+
+#[test]
+fn admin_consent_requests_calendar_only_when_the_deployment_offers_it() {
+    for calendar in [false, true] {
+        let url = microsoft_client()
+            .construct_microsoft_admin_consent_url(
+                "https://auth.example.com/callback",
+                "state",
+                calendar,
+            )
+            .unwrap();
+        let url = reqwest::Url::parse(&url).unwrap();
+        let values: HashMap<_, _> = url.query_pairs().into_owned().collect();
+        assert_eq!(
+            values["scope"]
+                .split_whitespace()
+                .any(|scope| scope == "Calendars.ReadWrite"),
+            calendar
+        );
+    }
+    assert!(matches!(
+        client().construct_microsoft_admin_consent_url("https://auth.example.com", "state", false),
+        Err(FusionAuthClientError::MicrosoftOAuthNotConfigured)
+    ));
+}
+
+#[test]
 fn id_token_without_email_is_usable_for_verified_graph_identity() {
     let mut claims = valid_claims();
     claims["email"] = serde_json::Value::Null;

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_cleanup_candidates (link_id, contact_email)\n           SELECT DISTINCT $2::uuid, lower(trim(c.email_address))\n           FROM email_message_recipients r JOIN email_contacts c ON c.id = r.contact_id\n           WHERE r.message_id=$1 AND c.email_address IS NOT NULL AND trim(c.email_address) <> ''\n           ON CONFLICT (link_id, contact_email) DO UPDATE SET created_at=NOW()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ebe5411562b9d4546a7969f4858a1469d0e25e2e314554c8815fb9bd3dfdadc"
+}

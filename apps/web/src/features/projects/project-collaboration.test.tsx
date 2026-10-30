@@ -1,6 +1,6 @@
 import type { MessageData } from '@core/messages/types';
 import type { MessageListItem, MessageParent } from '@service-storage/messages';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { type Accessor, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectDiscussion } from './project-collaboration';
@@ -46,8 +46,13 @@ vi.mock('@core/messages/MessageThread', () => ({
   MessageThread: (props: {
     data: MessageListItem;
     buildLink?: (message: MessageData) => string;
+    targetId?: string | null;
+    onClearTarget?: () => void;
   }) => (
-    <article>
+    <article
+      data-target={props.targetId ?? undefined}
+      onClick={props.onClearTarget}
+    >
       <a href={props.buildLink?.(props.data)}>{props.data.content}</a>
     </article>
   ),
@@ -80,7 +85,7 @@ function message(id: string, content: string): MessageListItem {
   };
 }
 
-function setup(targetId?: string) {
+function setup(initialTargetId?: string) {
   mocks.link.mockImplementation(
     (_parent: Accessor<MessageParent>, target: Accessor<string | null>) => ({
       messageId: target,
@@ -103,13 +108,15 @@ function setup(targetId?: string) {
     },
   });
   const [canWrite, setCanWrite] = createSignal(true);
+  const [targetId, setTargetId] = createSignal(initialTargetId);
   return {
     setCanWrite,
+    setTargetId,
     ...render(() => (
       <ProjectDiscussion
         projectId={projectId}
         canWrite={canWrite()}
-        targetId={targetId}
+        targetId={targetId()}
       />
     )),
   };
@@ -160,5 +167,37 @@ describe('project discussion uses the task conversation', () => {
     expect(url.pathname).toBe(
       `/app/component/initiative-view~${projectId}~overview~${oldId}`
     );
+  });
+
+  it('dismisses a linked comment highlight without changing the loaded timeline', () => {
+    const view = setup(oldId);
+    const comment = view.getByText('Old comment').closest('article')!;
+    expect(comment.dataset.target).toBe(oldId);
+
+    fireEvent.click(comment);
+    expect(comment.dataset.target).toBeUndefined();
+    const [, target] = mocks.link.mock.calls[0];
+    const [, around] = mocks.timeline.mock.calls[0];
+    expect(target()).toBe(oldId);
+    expect(around()).toBe(oldId);
+    expect(view.getAllByRole('article')).toHaveLength(2);
+
+    // An unrelated host update must not restore the highlight.
+    view.setCanWrite(false);
+    expect(comment.dataset.target).toBeUndefined();
+
+    // Following another link, then returning, starts a new highlight.
+    view.setTargetId(newId);
+    const next = view.getByText('New comment').closest('article')!;
+    expect(next.dataset.target).toBe(newId);
+    fireEvent.click(next);
+    expect(next.dataset.target).toBeUndefined();
+    view.setTargetId(oldId);
+    expect(comment.dataset.target).toBe(oldId);
+
+    fireEvent.click(comment);
+    view.setTargetId(undefined);
+    view.setTargetId(oldId);
+    expect(comment.dataset.target).toBe(oldId);
   });
 });

@@ -1,0 +1,1 @@
+The exact noun phrase naming the requested content category: messages, channels, DMs, documents, files, notes, tasks, emails, calls, folders, agents, AI chats, calendar events or events. Null when no category is specified. Category words inside the search topic are not a scope. Return a span from the draft, not a canonical category name.

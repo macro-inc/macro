@@ -7,18 +7,23 @@ import {
 } from '@channel/Input';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import {
   acceleratedSpeed,
   speedForModel,
 } from '@core/component/AI/constant/speed';
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
+import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
-import ChatIcon from '@phosphor/chat-circle.svg';
-import CodeIcon from '@phosphor/code.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import AutoIcon from '@icon/system/regular/sparkle.svg';
 import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
+import { chooseAgentMode } from '@queries/agents/mode-choice';
 import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
@@ -32,7 +37,11 @@ import {
 } from '../../block-agent/state/session-config';
 import { ChatComposer } from '../components/ChatComposer';
 import { type AgentKind, kindForMode } from '../core/agent-kind';
-import { type AgentsMode, agentsModeLabel } from '../core/mode';
+import {
+  type AgentsMode,
+  agentsModeLabel,
+  type ComposerMode,
+} from '../core/mode';
 import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import {
@@ -77,11 +86,11 @@ export function NewChatPage(props: {
   registerFocus?: (focus: () => void) => void;
   roster: RosterAgent[];
   /**
-   * Chat or Code, which also limits the agents offered. Uncontrolled callers
-   * get the signed-in user's last choice.
+   * Auto, Chat, or Code; Chat and Code also limit the agents offered.
+   * Uncontrolled callers start in Auto.
    */
-  mode?: AgentsMode;
-  onModeChange?: (mode: AgentsMode) => void;
+  mode?: ComposerMode;
+  onModeChange?: (mode: ComposerMode) => void;
   rosterLoading: boolean;
   /** Agents are listed but whether they can start is still unknown. */
   availabilityLoading?: boolean;
@@ -95,10 +104,14 @@ export function NewChatPage(props: {
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createPreferredInmemModel(userId());
-  const ownMode = createWorkspaceMode(userId());
+  const ownMode = createWorkspaceMode();
   const mode = () => props.mode ?? ownMode.mode();
-  const options = () =>
-    props.roster.filter((agent) => agent.kind === kindForMode(mode()));
+  const auto = () => mode() === 'auto';
+  /** Auto shows and prepares the chat agent; a prompt it sends to Code starts the coding agent. */
+  const agentsMode = (): AgentsMode => (mode() === 'code' ? 'code' : 'chat');
+  const optionsFor = (kind: AgentsMode) =>
+    props.roster.filter((agent) => agent.kind === kindForMode(kind));
+  const options = () => optionsFor(agentsMode());
   const [agentId, setAgentId] = createSignal<string>();
   /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
   const [modelOverride, setModelOverride] = createSignal<string>();
@@ -113,25 +126,26 @@ export function NewChatPage(props: {
       ? props.onDraftChange(text)
       : persistedDraft.setDraft(text);
   const [branchOverride, setBranchOverride] = createSignal<string>();
-  const recentAgentId = () => {
+  /** The picked agent, else the last one used, else Macro, else any that can start. */
+  const preferredAgent = (kind: AgentsMode, picked?: string) => {
+    const options = optionsFor(kind);
     // Falling back to Macro before availability is known would open the
     // compact composer, then swap to the last agent's layout once it settles.
     const settling = props.rosterLoading || props.availabilityLoading;
-    return recentAgents
+    const recent = recentAgents
       .ids()
       .find((id) =>
-        options().some(
+        options.some(
           (agent) => agent.id === id && (settling || !agent.unavailableReason)
         )
       );
-  };
-  const selected = createMemo(() => {
-    for (const wanted of [agentId(), recentAgentId(), MACRO_PERSONA_ID]) {
-      const agent = options().find((option) => option.id === wanted);
+    for (const wanted of [picked, recent, MACRO_PERSONA_ID]) {
+      const agent = options.find((option) => option.id === wanted);
       if (agent) return agent;
     }
-    return options().find((agent) => !agent.unavailableReason) ?? options()[0];
-  });
+    return options.find((agent) => !agent.unavailableReason) ?? options[0];
+  };
+  const selected = createMemo(() => preferredAgent(agentsMode(), agentId()));
   const selectedCatalog = createComposerModels(selected);
   /** In-memory choices come from the owner's catalog; other runtimes keep their rules. */
   const composerModelOverride = () => {
@@ -195,10 +209,13 @@ export function NewChatPage(props: {
       : undefined;
   };
   const coding = () => mode() === 'code';
+  // Auto holds the send while the backend picks Chat or Code.
+  const [choosingMode, setChoosingMode] = createSignal(false);
   const localRuntime = () => selected()?.harness === 'macrod';
   const canSelectRepository = () =>
     selected()?.harness === 'cursor' || localRuntime();
   const blocked = () => {
+    if (choosingMode()) return 'Choosing Chat or Code…';
     const agent = selected();
     return agent ? agent.unavailableReason : 'Choose an agent to start';
   };
@@ -222,7 +239,11 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
-    if (agent.harness === 'cursor') openSettings('Harness');
+    // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
+    // restart the local runtime (one click on desktop) or re-pair it.
+    if (agent.harness === 'cursor' || agent.harness === 'macrod') {
+      openSettings('Harness');
+    }
   };
 
   const attachmentTracker = createMemo(() => {
@@ -247,18 +268,51 @@ export function NewChatPage(props: {
     );
 
   const send = (prompt: string, attachments: InputAttachmentData[]) => {
-    const persona = selected();
     if (
       (!prompt.trim() && attachments.length === 0) ||
-      !persona ||
+      !selected() ||
       blocked() ||
       attachmentTracker().hasPending()
     )
       return;
+    if (auto()) fireAndForget(sendAuto(prompt, attachments), 'agents-view');
+    else start(prompt, attachments);
+  };
+
+  /** Starts the user's usual coding agent when the prompt needs one, else the chat agent. */
+  const sendAuto = async (
+    prompt: string,
+    attachments: InputAttachmentData[]
+  ) => {
+    const coder = preferredAgent('code');
+    if (!prompt.trim() || !coder || coder.unavailableReason) {
+      start(prompt, attachments);
+      return;
+    }
+    const submittedUserId = userId();
+    setChoosingMode(true);
+    const chosen = await chooseAgentMode(prompt);
+    setChoosingMode(false);
+    // A different account signed in meanwhile; this prompt was not theirs.
+    if (userId() !== submittedUserId) return;
+    start(prompt, attachments, chosen === 'code' ? coder : undefined);
+  };
+
+  /**
+   * Starts the selected agent with the composer's model, effort, speed, and
+   * repository, or Auto's `coder` with its own defaults.
+   */
+  const start = (
+    prompt: string,
+    attachments: InputAttachmentData[],
+    coder?: RosterAgent
+  ) => {
+    const persona = coder ?? selected();
+    if (!persona) return;
     recentAgents.remember(persona.id);
-    const repo = canSelectRepository() ? repoUrl() : undefined;
+    const repo = !coder && canSelectRepository() ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
-    const model = composerModelOverride();
+    const model = coder ? undefined : composerModelOverride();
     const inMemory =
       persona.harness === 'macro-inmem' || persona.harness === 'in-memory';
     const submittedTracker = attachmentTracker();
@@ -286,10 +340,10 @@ export function NewChatPage(props: {
       repoUrl: repo,
       ...(repo ? { repoBranch: repoBranch() } : {}),
       ...(model ? { modelOverride: model } : {}),
-      ...(inMemory && !model && selectedCatalog.pending()
+      ...(inMemory && !model && (coder || selectedCatalog.pending())
         ? { modelFallback: true }
         : {}),
-      effortOverride: effortOverride(),
+      effortOverride: coder ? undefined : effortOverride(),
       ...(model && inMemory && acceleratedSpeed(model)
         ? {
             speedOverride: {
@@ -348,7 +402,7 @@ export function NewChatPage(props: {
     />
   );
 
-  const setMode = (next: AgentsMode) => {
+  const setMode = (next: ComposerMode) => {
     // A model or effort picked for the other mode's agent does not carry over.
     setModelOverride(undefined);
     setEffortSelection(undefined);
@@ -360,23 +414,26 @@ export function NewChatPage(props: {
     <div ref={tourTarget(AGENTS_TOUR.modeSwitch)} class="shrink-0">
       <Tabs
         aria-label="Conversation mode"
-        list={(['chat', 'code'] as const).map((mode) => ({
-          value: mode,
-          label: () => (
-            <span class="flex items-center gap-1.5">
-              {mode === 'code' ? (
-                <CodeIcon class="size-3.5" />
-              ) : (
-                <ChatIcon class="size-3.5" />
-              )}
-              {/* Phones keep the icons; the name stays for assistive tech. */}
-              <span class="touch:sr-only">{agentsModeLabel(mode)}</span>
-            </span>
-          ),
-        }))}
+        options={[
+          ...(ownMode.autoAvailable()
+            ? [
+                {
+                  value: 'auto' as const,
+                  label: agentsModeLabel('auto'),
+                  icon: AutoIcon,
+                },
+              ]
+            : []),
+          { value: 'chat', label: agentsModeLabel('chat'), icon: ChatIcon },
+          { value: 'code', label: agentsModeLabel('code'), icon: CodeIcon },
+        ]}
+        variant="track"
+        fullWidth
+        // Phones keep the icons; the name stays for assistive tech.
+        iconOnly={isTouchDevice()}
         value={mode()}
-        onChange={(value) => setMode(value === 'code' ? 'code' : 'chat')}
-        labelClass="px-3 touch:px-2.5"
+        onChange={setMode}
+        class={ownMode.autoAvailable() ? 'w-72 touch:w-36' : 'w-56 touch:w-24'}
       />
     </div>
   );
@@ -415,7 +472,8 @@ export function NewChatPage(props: {
       onDraftChange={setDraft}
       blockedReason={blocked()}
       selector={
-        <div class="flex min-w-0 items-center gap-1">
+        // Auto picks the agent per prompt, so it has no agent, model, or effort to choose.
+        <div class="flex min-w-0 items-center gap-1" hidden={auto()}>
           {agentSelector()}
           <EffortSelector
             onCloseAutoFocus={restoreInputFocus}
@@ -452,6 +510,12 @@ export function NewChatPage(props: {
       drawerOpen
       placeholder={coding() ? 'Describe what you want to build' : undefined}
       onSend={send}
+      modelName={modelLabel(
+        composerModelOverride(),
+        selectedCatalog
+          .models()
+          .find((model) => model.id === composerModelOverride())?.name
+      )}
       supportsImages={
         selectedCatalog
           .models()
@@ -470,9 +534,17 @@ export function NewChatPage(props: {
       <section class="page newchat" data-active aria-label="New conversation">
         <div ref={tourTarget(AGENTS_TOUR.composer)} class="col">
           <div class="greeting">
-            <h2>
-              {coding() ? 'What should we build?' : 'What should we work on?'}
-            </h2>
+            <ComposerGreeting wireframe={coding()}>
+              <Show when={mode()} keyed>
+                {(currentMode) => (
+                  <span class="greeting-text">
+                    {currentMode === 'code'
+                      ? 'What should we build?'
+                      : 'What should we work on?'}
+                  </span>
+                )}
+              </Show>
+            </ComposerGreeting>
           </div>
           <FloatRegionOrInline
             region="accessory"

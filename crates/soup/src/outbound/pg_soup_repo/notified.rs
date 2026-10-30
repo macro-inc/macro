@@ -133,11 +133,27 @@ pub(super) fn foreign_entity_gate(filter: Option<&EntityFilterAst>) -> String {
 /// Agent sessions are authorized through `entity_access`, whose sources are
 /// the same user / channel / team ids the query's `user_source_ids` CTE
 /// already collects - the predicate the agent-session leg's own queries use.
+/// The filter's row predicates the gate can express apply as well, since
+/// hydration by id does not re-apply them.
 pub(super) fn agent_session_gate(filter: Option<&EntityFilterAst>) -> String {
+    let tree = filter.and_then(|filter| filter.agent_session_filter.as_deref());
+    let implied = implied_conjuncts_sql(tree, |literal| match literal {
+        AgentSessionLiteral::Source(source) => Some(super::agent_session::source_sql(*source)),
+        AgentSessionLiteral::Visibility(visibility) => {
+            Some(super::agent_session::visibility_sql(*visibility))
+        }
+        AgentSessionLiteral::Include
+        | AgentSessionLiteral::Id(_)
+        | AgentSessionLiteral::Owner(_) => None,
+    });
+    let matching = if implied.is_empty() {
+        String::new()
+    } else {
+        format!(" AND EXISTS (SELECT 1 FROM agent_session s WHERE s.id = {ID_SQL}::uuid{implied})")
+    };
     // IDs come from the typed UUID AST, never raw request text. `only` is an
     // internal refresh constraint and deliberately does not bypass visibility.
-    let named = filter
-        .and_then(|filter| filter.agent_session_filter.as_deref())
+    let named = tree
         .map(super::agent_session::explicitly_named_ids)
         .unwrap_or_default()
         .into_iter()
@@ -159,9 +175,9 @@ pub(super) fn agent_session_gate(filter: Option<&EntityFilterAst>) -> String {
             ) AND (
                 ({named}) OR NOT EXISTS (
                     SELECT 1 FROM agent_session s
-                    WHERE s.id = {ID_SQL}::uuid AND s.list_hidden
+                    WHERE s.id = {ID_SQL}::uuid AND s.visibility = 'hidden'
                 )
-            )"#
+            ){matching}"#
         ),
     )
 }

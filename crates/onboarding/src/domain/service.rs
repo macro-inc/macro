@@ -1,17 +1,9 @@
-//! The onboarding orchestrator: assembles the aggregate and keeps the
-//! import pipeline moving while the flow is active.
-//!
-//! Reconciliation is level-triggered and idempotent: every tick lists the
-//! user's MCP connections and asks the import service to start a gather for
-//! each authenticated connector with automatic import enabled.
-//! `start_gather` is a CAS that only wins when no run has ever started, so
-//! ticking on every read (and on the MCP post-auth hook) is safe.
+//! The onboarding orchestrator: assembles the aggregate and records when the
+//! flow finishes.
 
-use super::models::{ConnectedServer, OnboardingRow, OnboardingState, OnboardingStatus};
+use super::models::{ConnectedServer, DismissedPrompts, OnboardingRow, OnboardingState, PromptId};
 use super::ports::{OnboardingError, OnboardingRepo, Result};
 use generic_email_domains::is_generic_email_domain;
-use import::domain::models::{ImportSource, Initiator};
-use import::domain::service::ImportService;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
@@ -31,59 +23,51 @@ fn suggested_team_domain(user: &MacroUserIdStr<'_>) -> Option<String> {
 
 /// The API the onboarding router (and host-service hooks) talk to.
 pub trait OnboardingService: Send + Sync + 'static {
-    /// The full aggregate for the user. While the flow is active this also
-    /// starts any gather runs that are due, so reading the state is what
-    /// keeps onboarding moving.
+    /// The full aggregate for the user.
     fn get_state(
         &self,
         user: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<OnboardingState>> + Send;
 
-    /// An explicit reconcile tick, for host hooks that observed a real state
-    /// change (e.g. an MCP OAuth completion). A no-op for users who never
-    /// entered the flow or already finished it — connecting an MCP server
-    /// outside onboarding must not start gathers.
-    fn reconcile(&self, user: MacroUserIdStr<'static>) -> impl Future<Output = Result<()>> + Send;
-
-    /// Finish the flow (`skipped` records how). Unreserved leftover
-    /// onboarding-staged import candidates are deleted — never reviewed is
-    /// not declined, so they stay re-stageable by later gathers or chat.
-    /// Candidates reserved by configured automatic runs remain until their
-    /// run settles.
+    /// Finish the flow (`skipped` records how).
     fn complete(
         &self,
         user: MacroUserIdStr<'static>,
         skipped: bool,
     ) -> impl Future<Output = Result<OnboardingRow>> + Send;
+
+    /// The sidebar prompts the user dismissed, so a dismissal holds on
+    /// every device. Never enters the user into the onboarding flow.
+    fn dismissed_prompts(
+        &self,
+        user: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<DismissedPrompts>> + Send;
+
+    /// Dismiss one sidebar prompt for good.
+    fn dismiss_prompt(
+        &self,
+        user: MacroUserIdStr<'static>,
+        prompt: PromptId,
+    ) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Concrete orchestrator wiring the repo, the user's MCP servers, and the
-/// import service together.
-pub struct OnboardingServiceImpl<R, S, I, M> {
+/// Concrete orchestrator wiring the repo and the user's MCP servers together.
+pub struct OnboardingServiceImpl<R, S> {
     repo: R,
     mcp_store: Arc<S>,
-    import: Arc<I>,
-    mcp_select: Arc<M>,
 }
 
-impl<R, S, I, M> OnboardingServiceImpl<R, S, I, M> {
+impl<R, S> OnboardingServiceImpl<R, S> {
     /// Build the orchestrator.
-    pub fn new(repo: R, mcp_store: Arc<S>, import: Arc<I>, mcp_select: Arc<M>) -> Self {
-        Self {
-            repo,
-            mcp_store,
-            import,
-            mcp_select,
-        }
+    pub fn new(repo: R, mcp_store: Arc<S>) -> Self {
+        Self { repo, mcp_store }
     }
 }
 
-impl<R, S, I, M> OnboardingServiceImpl<R, S, I, M>
+impl<R, S> OnboardingServiceImpl<R, S>
 where
     R: OnboardingRepo,
     S: McpServerStore,
-    I: ImportService,
-    M: mcp_select::ConnectorSelect,
 {
     async fn connected_servers(
         &self,
@@ -103,50 +87,17 @@ where
             })
             .collect())
     }
-
-    /// Start an auto-importing gather run for every authenticated connector
-    /// that never had one. A failing source must not block the others (or
-    /// the read).
-    async fn start_due_gathers(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        _servers: &[ConnectedServer],
-    ) {
-        for source in ImportSource::all() {
-            // Which stack backs the connector is the selector's call
-            // (enabled native connectors take precedence, see `mcp_select`).
-            let connected = self
-                .mcp_select
-                .connector_connected(user, source.connector_ref())
-                .await
-                .inspect_err(
-                    |e| tracing::warn!(source = source.as_ref(), error = ?e, "connected check failed"),
-                )
-                .unwrap_or(false);
-            if !connected {
-                continue;
-            }
-            if let Err(e) = self.import.start_gather(user.clone(), source, true).await {
-                tracing::warn!(source = source.as_ref(), error = ?e, "failed to start gather run");
-            }
-        }
-    }
 }
 
-impl<R, S, I, M> OnboardingService for OnboardingServiceImpl<R, S, I, M>
+impl<R, S> OnboardingService for OnboardingServiceImpl<R, S>
 where
     R: OnboardingRepo,
     S: McpServerStore,
-    I: ImportService,
-    M: mcp_select::ConnectorSelect,
 {
     #[tracing::instrument(skip(self, user), err)]
     async fn get_state(&self, user: MacroUserIdStr<'static>) -> Result<OnboardingState> {
         let row = self.repo.ensure_row(&user).await?;
         let connected_servers = self.connected_servers(&user).await?;
-        if row.status == OnboardingStatus::Active {
-            self.start_due_gathers(&user, &connected_servers).await;
-        }
         Ok(OnboardingState {
             row,
             connected_servers,
@@ -155,56 +106,23 @@ where
     }
 
     #[tracing::instrument(skip(self, user), err)]
-    async fn reconcile(&self, user: MacroUserIdStr<'static>) -> Result<()> {
-        // get_row, NOT ensure_row: this runs from the generic MCP post-auth
-        // hook, and a user connecting a server outside onboarding must not
-        // be pulled into the flow (or have gathers started).
-        let Some(row) = self.repo.get_row(&user).await? else {
-            return Ok(());
-        };
-        if row.status != OnboardingStatus::Active {
-            // Self-heal the completion race: a reconcile (or a gather
-            // session it started) can outlive complete()'s cleanup and
-            // stage rows after it ran. Any later tick for a finished flow
-            // sweeps those leftovers, best-effort.
-            let _ = self
-                .import
-                .delete_staged_by_initiator(user, Initiator::Onboarding)
-                .await
-                .inspect_err(|e| {
-                    tracing::warn!(error = ?e, "failed to sweep post-completion staged rows");
-                });
-            return Ok(());
-        }
-        let servers = self.connected_servers(&user).await?;
-        self.start_due_gathers(&user, &servers).await;
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self, user), err)]
     async fn complete(
         &self,
         user: MacroUserIdStr<'static>,
         skipped: bool,
     ) -> Result<OnboardingRow> {
-        let row = self.repo.complete(&user, skipped).await?;
-        // Unreserved candidates the user never acted on are removed from the
-        // ledger, not discarded: discard means "the user said no" and blocks
-        // re-staging forever, which is wrong for items they never looked at
-        // ("Set up later" skips the whole review). Candidates reserved by an
-        // active or retryable configured auto-import run survive this cleanup.
-        // Explicit declines (a section toggled off) were already discarded by
-        // run_import.
-        // Chat-staged rows are untouched. Best-effort: the completion above
-        // is durable, so a cleanup failure must not fail the call — the
-        // next reconcile tick sweeps leftovers anyway.
-        let _ = self
-            .import
-            .delete_staged_by_initiator(user, Initiator::Onboarding)
-            .await
-            .inspect_err(|e| {
-                tracing::warn!(error = ?e, "failed to delete leftover onboarding-staged candidates");
-            });
-        Ok(row)
+        self.repo.complete(&user, skipped).await
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn dismissed_prompts(&self, user: MacroUserIdStr<'static>) -> Result<DismissedPrompts> {
+        Ok(DismissedPrompts {
+            dismissed: self.repo.dismissed_prompts(&user).await?,
+        })
+    }
+
+    #[tracing::instrument(skip(self, user), err)]
+    async fn dismiss_prompt(&self, user: MacroUserIdStr<'static>, prompt: PromptId) -> Result<()> {
+        self.repo.dismiss_prompt(&user, &prompt).await
     }
 }

@@ -30,17 +30,25 @@ hexagonal architecture pattern.
 
 ## Recipes
 
-- Add a favoritable entity type: `src/domain/models.rs` → `src/domain/service.rs`
-  → `src/outbound/pg_favorites_repo.rs` → caller's feature wiring.
+- Add a favoritable entity type: `validate_favoritable` in
+  `src/domain/mutation_service.rs` → `list_favorites` in
+  `src/outbound/pg_favorites_repo.rs` if the kind can be deleted → caller's
+  feature wiring.
 - Add an AI tool action: `src/inbound/toolset.rs` → `src/domain/mutation_service.rs`.
 
 ## Tool contracts
 
 - The AI adapter omits legacy chat targets; only advertise entity types supported by the domain mutation service.
+- `ExternalChat` entities are favoritable through the generic entity reference.
 
 ## Checks
 
 - `cargo test -p favorites --all-features` (`SQLX_OFFLINE` unset).
+
+## Gotchas
+
+- Authorize adds with `ports::FavoriteView`, not `ViewAccessLevel`: channels
+  resolve to channel roles, which `ViewAccessLevel` never accepts.
 
 ## Related
 

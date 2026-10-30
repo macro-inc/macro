@@ -40,13 +40,23 @@ use model_entity::EntityType;
 use teams::domain::team_repo::TeamService;
 use tracing::Instrument;
 
-/// Macro support team members added to every new user's support channel.
-const MACRO_SUPPORT_EMAILS: [&str; 5] = [
+/// Macro team members added to every new user's support channel.
+const MACRO_SUPPORT_EMAILS: [&str; 15] = [
     "jacob@macro.com",
     "julia@macro.com",
     "teo@macro.com",
     "valentina@macro.com",
     "chaitanya@macro.com",
+    "austin@macro.com",
+    "eric.hayes@macro.com",
+    "gab@macro.com",
+    "hutch@macro.com",
+    "jackson@macro.com",
+    "peter@macro.com",
+    "rahul@macro.com",
+    "sean@macro.com",
+    "wolf@macro.com",
+    "zhamilya@macro.com",
 ];
 
 fn support_channel_name<T: AsRef<str>>(email: &Email<T>) -> String {
@@ -538,6 +548,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 }
             };
 
+            let participants_count = participants.len();
             let channel = match channel_service
                 .create_system_channel(
                     owner_id.clone(),
@@ -557,7 +568,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                     return;
                 }
             };
-            tracing::info!(channel_id=%channel.id, "created Macro support channel");
+            tracing::info!(channel_id=%channel.id, participant_count=participants_count, "created Macro support channel");
 
             let channel_entity = EntityType::Channel.with_entity_str(&channel.id);
             if let Err(e) = favorites_service

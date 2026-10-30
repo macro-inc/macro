@@ -396,6 +396,117 @@ async fn set_pull_request_draft_reports_a_missing_pull_request() {
 }
 
 #[tokio::test]
+async fn set_pull_request_state_sends_the_state_and_reports_githubs_answer() {
+    let server = MockServer::start(MockResponse {
+        status: "200 OK",
+        body: serde_json::json!({ "number": 7, "state": "closed", "merged": false }).to_string(),
+    });
+    let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+
+    let outcome = client
+        .set_pull_request_state("token", "macro", "app", 7, GithubPullRequestState::Closed)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome,
+        GithubStateOutcome::Changed {
+            state: GithubPullRequestState::Closed,
+        }
+    );
+    let request = server.finish();
+    assert!(request.starts_with("PATCH /repos/macro/app/pulls/7 HTTP/1.1"));
+    assert!(
+        request
+            .to_ascii_lowercase()
+            .contains("authorization: bearer token")
+    );
+    assert!(request.ends_with(r#"{"state":"closed"}"#));
+}
+
+#[tokio::test]
+async fn set_pull_request_state_maps_access_and_validation_statuses() {
+    for (status, expected) in [
+        ("403 Forbidden", GithubPullRequestUpdateRejection::Forbidden),
+        ("404 Not Found", GithubPullRequestUpdateRejection::NotFound),
+        (
+            "422 Unprocessable Entity",
+            GithubPullRequestUpdateRejection::Invalid,
+        ),
+    ] {
+        let server = MockServer::start(MockResponse {
+            status,
+            body: serde_json::json!({ "message": "declined" }).to_string(),
+        });
+        let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+
+        let outcome = client
+            .set_pull_request_state("token", "macro", "app", 7, GithubPullRequestState::Open)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            outcome,
+            GithubStateOutcome::Rejected {
+                rejection: expected,
+                message: "declined".to_string(),
+            },
+            "status {status}"
+        );
+        let request = server.finish();
+        assert!(request.ends_with(r#"{"state":"open"}"#));
+    }
+}
+
+#[tokio::test]
+async fn set_pull_request_state_reports_the_validation_reason() {
+    let server = MockServer::start(MockResponse {
+        status: "422 Unprocessable Entity",
+        body: serde_json::json!({
+            "message": "Validation Failed",
+            "errors": [{
+                "resource": "PullRequest",
+                "code": "custom",
+                "message": "state cannot be changed. The head branch was deleted."
+            }]
+        })
+        .to_string(),
+    });
+    let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+
+    let outcome = client
+        .set_pull_request_state("token", "macro", "app", 7, GithubPullRequestState::Open)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome,
+        GithubStateOutcome::Rejected {
+            rejection: GithubPullRequestUpdateRejection::Invalid,
+            message: "state cannot be changed. The head branch was deleted.".to_string(),
+        }
+    );
+    server.finish();
+}
+
+#[tokio::test]
+async fn set_pull_request_state_treats_unexpected_status_as_error() {
+    let server = MockServer::start(MockResponse {
+        status: "502 Bad Gateway",
+        body: "upstream down".to_string(),
+    });
+    let client = GithubOauthImpl::with_api_base_url(server.base_url.clone());
+
+    let error = client
+        .set_pull_request_state("token", "macro", "app", 7, GithubPullRequestState::Closed)
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("502"));
+    server.finish();
+}
+
+#[tokio::test]
 async fn get_pull_request_mergeability_batches_and_skips_hidden_pull_requests() {
     let server = MockServer::start(MockResponse {
         status: "200 OK",

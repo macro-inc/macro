@@ -8,13 +8,12 @@ import type { FilterTestOneOfOnethreeKind } from './filterTestOneOfOnethreeKind'
 import type { SetOperator } from './setOperator';
 
 /**
- * A reference or relation column.
+ * A select or tag column.
  */
 export type FilterTestOneOfOnethree = {
-  /** Entity ids, or for a relation the related rows' ids; at least
-one. */
-  entities: string[];
   kind: FilterTestOneOfOnethreeKind;
-  /** How the cell's references relate to these. */
+  /** How the cell's options relate to these. */
   operator: SetOperator;
+  /** Options of the column; at least one. */
+  options: string[];
 };

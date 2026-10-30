@@ -209,6 +209,17 @@ export type AgentSessionEntity = EntityBase & {
   turnState?: string | null;
   bot?: { id: string; name: string; avatarUrl?: string | null } | null;
   threadId?: string | null;
+  /**
+   * Who started the session: a person, another agent that dispatched it, or a
+   * routine. Absent from older cached rows.
+   */
+  source?: 'user' | 'agent' | 'routine';
+  /**
+   * Where the session is shown: unlisted sessions (routine runs, unless the
+   * routine lists them) are left out of Home and the default Agents list, and
+   * hidden ones are returned only by id. Absent from older cached rows.
+   */
+  visibility?: 'listed' | 'unlisted' | 'hidden';
   status: string;
   properties?: SoupProperty[];
 };
@@ -284,6 +295,14 @@ export type EmailAttachment = {
   sizeBytes?: number | null;
 };
 
+/** A thread's Focus classification; present only on Focus list rows. */
+export type EmailFocus = {
+  /** 0 to 100. */
+  importance: number;
+  needsReply: boolean;
+  needsFollowUp: boolean;
+};
+
 // We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
 export type EmailEntity = EntityBase & {
   type: 'email';
@@ -308,6 +327,7 @@ export type EmailEntity = EntityBase & {
   properties?: SoupProperty[];
   /** ISO 8601 time of the thread draft's confirmed scheduled send. */
   scheduledSendTime?: string;
+  focus?: EmailFocus;
 };
 
 export type ProjectEntity = EntityBase & {

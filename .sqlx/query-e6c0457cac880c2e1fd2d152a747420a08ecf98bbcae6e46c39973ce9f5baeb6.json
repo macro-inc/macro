@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET scanned_pages = $3, scanned_data_sources = $4\n            WHERE user_id = $1 AND source = $2 AND status = 'running'\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e6c0457cac880c2e1fd2d152a747420a08ecf98bbcae6e46c39973ce9f5baeb6"
+}

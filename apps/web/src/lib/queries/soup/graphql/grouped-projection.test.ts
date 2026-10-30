@@ -103,7 +103,7 @@ describe('grouped Soup projections', () => {
         const projected = createGraphqlGroupedSoupProjection(
           () => view.data as GroupSoupQuery,
           () => ({ type: 'property', propertyDefinitionId: 'status' }),
-          () => ({ instructionsIdQuery: { isSuccess: false, data: undefined } })
+          () => ({})
         );
         const before = projected()!;
         const held = [...before.entities];
@@ -171,7 +171,7 @@ describe('grouped Soup projections', () => {
         const projected = createGraphqlGroupedSoupProjection(
           source,
           () => ({ type: 'property', propertyDefinitionId: 'status' }),
-          () => ({ instructionsIdQuery: { isSuccess: false, data: undefined } })
+          () => ({})
         );
         const first = projected()!.entities[0];
         const next = page(2);

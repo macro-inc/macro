@@ -11,6 +11,7 @@ const message: ParsedMessage = {
   db_id: '0198a4cc-e138-7670-a308-a6b766602700',
   link_id: '0198a4cc-e138-7670-a308-a6b766602701',
   thread_db_id: '0198a4cc-e138-7670-a308-a6b766602702',
+  draft_generation: 2,
   bcc: [],
   cc: [],
   to: [],
@@ -24,7 +25,11 @@ const transferred: TransferDraftResponse = {
   attachments: [],
 };
 
-for (const action of ['attachment completion', 'draft transfer'] as const) {
+for (const action of [
+  'attachment completion',
+  'draft transfer',
+  'stale draft transfer',
+] as const) {
   test(`${action} uses the draft's secondary inbox instead of the primary inbox`, async () => {
     const requests: Request[] = [];
     const fetchMock = Object.assign(
@@ -37,7 +42,7 @@ for (const action of ['attachment completion', 'draft transfer'] as const) {
             status: 403,
           });
         }
-        return action === 'draft transfer'
+        return action !== 'attachment completion'
           ? Response.json(transferred)
           : new Response(null, { status: 204 });
       },
@@ -49,13 +54,17 @@ for (const action of ['attachment completion', 'draft transfer'] as const) {
       hosts: { email: 'https://email.example.test' },
     });
     const draft = macro.email.message(message.db_id);
-    if (action === 'draft transfer') {
+    if (action !== 'attachment completion') {
       const request = {
         operation_id: '0198a4cc-e138-7670-a308-a6b766602705',
         destination_link_id: '0198a4cc-e138-7670-a308-a6b766602706',
+        ...(action === 'stale draft transfer' ? { draft_generation: 0 } : {}),
       };
       expect(await draft.transferDraft(request)).toEqual(transferred);
-      expect(await requests[1].json()).toEqual(request);
+      expect(await requests[1].json()).toEqual({
+        ...request,
+        draft_generation: action === 'stale draft transfer' ? 0 : 2,
+      });
     } else {
       await draft.completeDraftAttachment(
         '0198a4cc-e138-7670-a308-a6b766602707',
@@ -72,3 +81,50 @@ for (const action of ['attachment completion', 'draft transfer'] as const) {
     );
   });
 }
+
+test('an upload keeps its captured generation after Send and Undo restore a newer draft', async () => {
+  let generation = 2;
+  const writes: Request[] = [];
+  spyOn(globalThis, 'fetch').mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL) => {
+        const request = input instanceof Request ? input : new Request(input);
+        if (request.method === 'GET')
+          return Response.json({ ...message, draft_generation: generation });
+        writes.push(request);
+        if (new URL(request.url).pathname.endsWith('/attachments'))
+          return Response.json({
+            attachment_id: 'attachment',
+            upload_url: 'https://upload.example.test',
+            content_type: 'text/plain',
+          });
+        return Response.json(
+          { error: 'Draft generation conflict' },
+          { status: 409 },
+        );
+      },
+      { preconnect: globalThis.fetch.preconnect },
+    ),
+  );
+  const macro = new Macro({
+    auth: { type: 'user', apiKey: 'mak_test' },
+    hosts: { email: 'https://email.example.test' },
+  });
+  const draft = macro.email.draftById(message.db_id);
+  const upload = await draft.addAttachment({
+    fileName: 'note.txt',
+    sha: 'sha',
+    size: 5,
+  });
+  generation = 4;
+  await expect(upload.attachment.complete()).rejects.toThrow();
+  await expect(upload.attachment.remove()).rejects.toThrow();
+  expect(writes).toHaveLength(3);
+  expect(
+    writes.every(
+      (request) =>
+        new URL(request.url).searchParams.get('draft_generation') === '2',
+    ),
+  ).toBe(true);
+  expect(upload.attachment.toJSON().draftGeneration).toBe(2);
+});

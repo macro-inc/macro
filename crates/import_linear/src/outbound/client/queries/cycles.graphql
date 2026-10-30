@@ -1,0 +1,6 @@
+query ImportCycles($after: String) {
+  cycles(first: 50, after: $after, includeArchived: true) {
+    nodes { id name number team { id } }
+    pageInfo { hasNextPage endCursor }
+  }
+}

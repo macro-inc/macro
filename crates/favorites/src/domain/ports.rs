@@ -3,7 +3,10 @@
 use std::collections::HashSet;
 
 use entity_access::domain::{
-    models::{AccessError, EntityAccessReceipt, ViewAccessLevel},
+    models::{
+        AccessError, EntityAccessReceipt, EntityPermission, RequiredPermission, ViewAccessLevel,
+        ViewOnly,
+    },
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -12,6 +15,17 @@ use model_entity::Entity;
 use crate::domain::models::{
     Favorite, FavoriteFilter, FavoritesError, FavoritesMutationActor, SetFavoriteResult,
 };
+
+/// Minimum permission to favorite an entity: view access to an item, or any
+/// channel permission. Channels never resolve to an item access level.
+#[derive(Debug, Clone, Copy)]
+pub struct FavoriteView;
+
+impl RequiredPermission for FavoriteView {
+    fn is_satisfied_by(permission: &EntityPermission) -> bool {
+        permission.satisfies::<ViewAccessLevel>() || permission.satisfies::<ViewOnly>()
+    }
+}
 
 /// Outbound persistence port for favorites.
 pub trait FavoritesRepo: Send + Sync + 'static {
@@ -76,7 +90,7 @@ pub trait FavoritesAuthorizer: Send + Sync + 'static {
         &self,
         actor: &FavoritesMutationActor,
         entity: &Entity<'static>,
-    ) -> impl Future<Output = Result<EntityAccessReceipt<ViewAccessLevel>, FavoritesError>> + Send;
+    ) -> impl Future<Output = Result<EntityAccessReceipt<FavoriteView>, FavoritesError>> + Send;
 }
 
 impl<A> FavoritesAuthorizer for A
@@ -87,8 +101,8 @@ where
         &self,
         actor: &FavoritesMutationActor,
         entity: &Entity<'static>,
-    ) -> Result<EntityAccessReceipt<ViewAccessLevel>, FavoritesError> {
-        self.generate_entity_access_receipt::<ViewAccessLevel>(
+    ) -> Result<EntityAccessReceipt<FavoriteView>, FavoritesError> {
+        self.generate_entity_access_receipt::<FavoriteView>(
             &actor.user_id,
             actor.organization_id,
             &entity.entity_id,
@@ -131,7 +145,7 @@ pub trait FavoritesService: Send + Sync + 'static {
     /// Add an entity to the user's favorites (idempotent).
     fn add_favorite(
         &self,
-        receipt: &EntityAccessReceipt<ViewAccessLevel>,
+        receipt: &EntityAccessReceipt<FavoriteView>,
     ) -> impl Future<Output = Result<Favorite, FavoritesError>> + Send;
 
     /// Add an entity after a trusted caller has already established that the

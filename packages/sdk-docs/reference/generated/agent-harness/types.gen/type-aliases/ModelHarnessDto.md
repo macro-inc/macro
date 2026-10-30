@@ -1,5 +1,5 @@
 # Type Alias: ModelHarnessDto
 
-> **ModelHarnessDto** = `"in-memory"` \| `"cursor"` \| `"claude-cloud"` \| `"macrod"`
+> **ModelHarnessDto** = `"in-memory"` \| `"cursor"` \| `"macrod"`
 
 Harness names accepted by the model discovery endpoint.

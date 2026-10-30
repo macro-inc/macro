@@ -13,6 +13,7 @@ export type LogDirectionDto =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const LogDirectionDto = {
+  notification: 'notification',
   to_server: 'to_server',
   to_runtime: 'to_runtime',
 } as const;

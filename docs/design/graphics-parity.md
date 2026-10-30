@@ -2,7 +2,7 @@
 
 Canvas Next implements the shared graphics foundation and the main local editing
 flows. It is the editor for all saved canvases and embeds, migrates
-older JSON at the host boundary, and writes the current versioned format.
+older JSON at the host boundary, and shares edits through SyncService.
 
 ## Current coverage
 
@@ -12,8 +12,8 @@ older JSON at the host boundary, and writes the current versioned format.
 | Everyday editing | Selection, marquee, move, duplicate, clipboard, nudge, undo/redo, and context actions are implemented |
 | Content | Shapes, pencil, rich text and labels, connectors, images, video, Macro entity cards, and document embeds are implemented |
 | Presentation | Solid rendering, overlays, fit/pan/zoom, inspectors, and shared controls are implemented |
-| Persistence | Versioned JSON loading, migration, and saving are connected at the Canvas host boundary |
-| Collaboration | Loro mapping and two-peer tests exist; production transport, recovery, and rollout are not complete |
+| Persistence | Versioned JSON import/export, single-winner shared initialization, snapshot/WAL recovery and live sync are connected |
+| Collaboration | Production shared runtime and awareness are connected; three-peer and rendered collaboration tests exist; capacity is unmeasured |
 
 ## Ownership
 
@@ -26,7 +26,7 @@ migration, sharing, and product rollout.
 
 1. Expand legacy import coverage with explicit diagnostics for unsupported records.
 2. Lock down durable artwork colors separately from theme-driven application UI.
-3. Integrate production collaboration, offline recovery, and permission handling.
+3. Extend collaboration with character-level rich text, gesture rebasing, and measured multi-user capacity.
 4. Add high-value whiteboard gaps such as snapping, touch, crop, frames, export,
    and libraries as separate checkpoints.
 5. Measure mixed-content scenes before adding broad indexing or culling systems.

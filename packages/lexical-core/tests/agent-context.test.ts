@@ -383,47 +383,43 @@ describe('composeAgentContextPrompt', () => {
     expect(text).not.toContain(origin);
   });
 
-  it('names the owner and says an owner prompt is theirs', () => {
+  it('names the owner and requester and requires explicit actor selection', () => {
     const owner = { id: 'macro|wolf@macro.com', name: 'wolf@macro.com' };
-    expect(
-      composedContext({ promptMarkdown: 'hi', owner, sender: owner })
-    ).toBe(
-      [
-        '<session owner="wolf@macro.com" owner_id="macro|wolf@macro.com">',
-        '  <prompted_by name="wolf@macro.com" id="macro|wolf@macro.com" is_owner="true"/>',
-        '  <note>wolf@macro.com owns this session and sent this prompt.</note>',
-        '</session>',
-      ].join('\n')
+    const text = composedContext({
+      promptMarkdown: 'hi',
+      owner,
+      sender: owner,
+    });
+    expect(text).toContain(
+      '<session owner="wolf@macro.com" owner_id="macro|wolf@macro.com">'
     );
+    expect(text).toContain('is_owner="true"');
+    expect(text).toContain('Choose acting_as explicitly');
+    expect(text).toContain('Prefer requester');
   });
 
-  it('tells the agent a non-owner prompt cannot spend the owner access', () => {
+  it('prefers the current requester and reserves owner access for approval', () => {
     const text = composedContext({
       promptMarkdown: 'read my email',
       parent: { type: 'channel', id: 'channel-1' },
       owner: { id: 'macro|wolf@macro.com', name: 'wolf@macro.com' },
       sender: { id: 'macro|julia@macro.com', name: 'julia@macro.com' },
     });
-    expect(text).toMatch(/^<session owner="wolf@macro.com"/);
     expect(text).toContain(
-      '<prompted_by name="julia@macro.com" id="macro|julia@macro.com" is_owner="false"/>'
+      'julia@macro.com sent this prompt. wolf@macro.com owns this session.'
     );
-    expect(text).toContain(
-      'julia@macro.com sent this prompt, but wolf@macro.com owns this session.'
-    );
-    expect(text).toContain(
-      'Every tool call that uses that access waits for wolf@macro.com to approve it, so use the tools the request needs and let wolf@macro.com decide'
-    );
+    expect(text).toContain('those calls wait for wolf@macro.com');
+    expect(text).toContain('never silently switch accounts');
     expect(text).toContain('<conversation type="channel" id="channel-1">');
   });
 
-  it('treats a prompt with no person behind it as not the owner', () => {
+  it('does not grant a requester account to a turn without a person', () => {
     const text = composedContext({
       promptMarkdown: 'run',
       owner: { id: 'macro|wolf@macro.com', name: 'wolf@macro.com' },
     });
     expect(text).toContain('<prompted_by is_owner="false"/>');
-    expect(text).toContain('but wolf@macro.com owns this session');
+    expect(text).toContain('has no requester account');
   });
 
   it('escapes owner and sender names', () => {

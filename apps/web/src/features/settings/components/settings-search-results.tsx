@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { SettingsSearchResult } from '../core/settings-search';
@@ -8,15 +9,18 @@ export function SettingsSearchResults(props: {
   onSelect: (result: SettingsSearchResult) => void;
 }) {
   return (
-    <nav aria-label="Settings search results" class="flex flex-col gap-1">
+    <nav
+      aria-label={t('settingsNav.searchResults')}
+      class="flex flex-col gap-1"
+    >
       <span class="sr-only" role="status">
-        {props.results.length} settings found
+        {t('settingsNav.searchResultCount', { count: props.results.length })}
       </span>
       <Show
         when={props.results.length}
         fallback={
           <div class="px-3 py-6 text-sm text-ink-muted">
-            No settings found. Try “signature”, “theme”, or “calendar”.
+            {t('settingsNav.searchNoResults')}
           </div>
         }
       >
@@ -36,11 +40,11 @@ export function SettingsSearchResults(props: {
                 <span class="block text-sm leading-5 text-ink">
                   {result.title}
                 </span>
-                <Show when={result.title !== result.page.label}>
-                  <span class="mt-1 block text-sm text-ink/50">
-                    {result.page.label}
-                  </span>
-                </Show>
+                <span class="mt-1 block text-sm text-ink/50">
+                  {result.title === result.page.label
+                    ? result.group
+                    : `${result.group} · ${result.page.label}`}
+                </span>
               </span>
             </button>
           )}

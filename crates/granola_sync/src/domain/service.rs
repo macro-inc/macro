@@ -50,8 +50,8 @@ pub(crate) fn plan(
         } else if state.enabled {
             !SCOPE_PREFERENCE.contains(&state.scope)
         } else {
-            match state.last_error.as_deref() {
-                Some(STOPPED) => true,
+            match state.last_error {
+                Some(SyncIssue::Stopped) => true,
                 Some(_) => state.started_at < now - SETUP_RETRY,
                 // A reservation that never finished; its owner likely exited.
                 None => !state.has_endpoint && state.started_at < now - SETUP_LEASE,
@@ -158,7 +158,7 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> Service<R,
             self.granola.unregister(&cleanup).await?;
             return Err(SyncError::Conflict);
         }
-        tracing::Span::current().record("scope", scope.as_str());
+        tracing::Span::current().record("scope", scope.as_ref());
         tracing::info!("Granola meeting sync started");
         Ok(())
     }
@@ -221,7 +221,7 @@ impl<R: SyncRepository, G: Granola, A: Accounts, V: DeliveryVerifier> SyncServic
             "granola.sync_meeting",
             connection_id = %job.connection.id,
             event_id = %job.event.event_id,
-            event_type = job.event.event_type.as_str(),
+            event_type = job.event.event_type.as_ref(),
             attempts = job.attempts,
             imported = tracing::field::Empty,
         );

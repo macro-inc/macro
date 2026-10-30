@@ -138,6 +138,10 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         props.setReplyInputState(undefined);
         props.onExit();
       }}
+      onEscape={() => {
+        props.setReplyInputState(undefined);
+        props.onExit();
+      }}
       onSend={(snapshot) => {
         const senderId = userId();
         if (!senderId) return;

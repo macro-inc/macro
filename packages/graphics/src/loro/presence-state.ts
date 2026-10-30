@@ -1,8 +1,15 @@
-import type { Matrix } from '../core/affine';
+import { type Matrix, multiply, translation } from '../core/affine';
 import { resolveAppearance } from '../core/appearance';
 import type { GraphicsEditor } from '../core/editor';
-import type { Bounds, Point, ShapeItem, ShapeKind } from '../core/model';
-import { drawableIds, roots, worldMatrix } from '../core/scene';
+import type {
+  Bounds,
+  GraphicsDocument,
+  GraphicsItem,
+  Point,
+  ShapeItem,
+  ShapeKind,
+} from '../core/model';
+import { drawableIds, roots, worldBounds, worldMatrix } from '../core/scene';
 import { isShape, shapeDefinition } from '../core/shapes/registry';
 
 export type PresenceClock = Record<string, number>;
@@ -16,11 +23,38 @@ export type PresenceShape = {
   pencil?: { points: [number, number, number][]; simulatePressure: boolean };
   strokeWidth?: number;
   cornerRadius?: number;
+  /** Bounded host-rendered AI presentation; never imported into the document. */
+  item?: {
+    type: 'rectangle' | 'ellipse' | 'text' | 'connector';
+    geometry: string;
+    appearance: {
+      fill: string;
+      stroke: string;
+      strokeWidth?: number;
+      strokeStyle?: 'solid' | 'dashed' | 'dotted';
+      opacity?: number;
+      cornerRadius?: number;
+    };
+  };
+};
+export type ActionGuard = {
+  items: Record<string, string | null>;
+  regions: Bounds[];
+  occupants: string[];
 };
 export type ActionPreview = {
-  kind: 'draw' | 'move' | 'resize' | 'scale' | 'rotate' | 'radius' | 'marquee';
+  kind:
+    | 'draw'
+    | 'move'
+    | 'resize'
+    | 'scale'
+    | 'rotate'
+    | 'radius'
+    | 'marquee'
+    | 'ai';
   shapes: PresenceShape[];
   box: Bounds | null;
+  guard?: ActionGuard;
 };
 export type PeerPresence = {
   id: string;
@@ -30,18 +64,32 @@ export type PeerPresence = {
   selectedIds: string[];
   clock: PresenceClock;
   preview: ActionPreview | null;
+  reducedMotion?: boolean;
+  /** Real operation groups in one atomic AI batch; never additional CRDT writers. */
+  lanes?: {
+    id: string;
+    name: string;
+    color: string;
+    itemIds: string[];
+    cursor: Point | null;
+  }[];
 };
 export type PresenceIdentity = Pick<PeerPresence, 'id' | 'name' | 'color'>;
 const wireMatrix = (matrix: Matrix): WireMatrix => [...matrix];
 
 function presenceShape(node: ShapeItem, world: Matrix): PresenceShape {
   const bounds = shapeDefinition(node.type).bounds(node);
+  const boundsOnly = !['rectangle', 'ellipse', 'pencil'].includes(node.type);
   return {
     id: node.id,
-    kind: node.type,
+    // Host-specific text, media, references and connectors use bounds-only ghosts.
+    // Their complete geometry/content is intentionally absent from presence.
+    kind: boundsOnly ? 'rectangle' : node.type,
     width: bounds.width,
     height: bounds.height,
-    world: wireMatrix(world),
+    world: wireMatrix(
+      boundsOnly ? multiply(world, translation(bounds.x, bounds.y)) : world
+    ),
     ...(node.type === 'rectangle'
       ? { cornerRadius: node.appearance.cornerRadius ?? 0 }
       : {}),
@@ -121,13 +169,64 @@ export function capturePresence(
   };
 }
 
+/** Loro values may enumerate object keys differently across WASM replicas. */
+export function presenceItemState(
+  item: GraphicsItem | undefined
+): string | null {
+  return item
+    ? JSON.stringify(item, (_, value: unknown) =>
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? Object.fromEntries(
+              Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+            )
+          : value
+      )
+    : null;
+}
+
 /** A delayed gesture is invalid as soon as either replica has another commit. */
 export function currentPresencePreview(
   state: PeerPresence,
-  clock: PresenceClock
+  clock: PresenceClock,
+  document?: GraphicsDocument
 ): ActionPreview | null {
+  const guard = state.preview?.guard;
+  if (state.preview?.kind === 'ai' && guard) {
+    if (
+      !document ||
+      Object.entries(guard.items).some(
+        ([id, value]) => presenceItemState(document.items[id]) !== value
+      )
+    )
+      return null;
+    const current = presenceRegionOccupants(document, guard.regions);
+    return JSON.stringify(current) === JSON.stringify(guard.occupants)
+      ? state.preview
+      : null;
+  }
   const keys = new Set([...Object.keys(state.clock), ...Object.keys(clock)]);
   return [...keys].every((key) => (state.clock[key] ?? 0) === (clock[key] ?? 0))
     ? state.preview
     : null;
+}
+
+/** Membership plus individual item preconditions prevents stale ghosts after any target change. */
+export function presenceRegionOccupants(
+  document: GraphicsDocument,
+  regions: Bounds[]
+): string[] {
+  return Object.values(document.items)
+    .filter((item) => {
+      if (item.type === 'surface' || item.type === 'connector') return false;
+      const bounds = worldBounds(document, item.id);
+      return regions.some(
+        (region) =>
+          region.x < bounds.x + bounds.width &&
+          bounds.x < region.x + region.width &&
+          region.y < bounds.y + bounds.height &&
+          bounds.y < region.y + region.height
+      );
+    })
+    .map((item) => item.id)
+    .sort();
 }

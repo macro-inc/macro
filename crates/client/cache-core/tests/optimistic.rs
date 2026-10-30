@@ -1108,6 +1108,74 @@ fn pending_uuid_replacement_moves_to_tail_and_keeps_only_latest_layer() {
 }
 
 #[test]
+fn pending_uuid_replacement_keeps_the_first_enqueue_time() {
+    block_on(async {
+        const X: &str = "0f0b1a43-1d47-4a52-9b8f-3a1e2f6f7a01";
+        const Y: &str = "0f0b1a43-1d47-4a52-9b8f-3a1e2f6f7a02";
+        let mut engine = engine_with_base("Status", "todo").await;
+        begin_value(&mut engine, X, "a", 100).await;
+        begin_value(&mut engine, X, "b", 250).await;
+        // A clock that moved backwards cannot make the replacement look newer.
+        begin_value(&mut engine, Y, "c", 500).await;
+        begin_value(&mut engine, Y, "d", 400).await;
+
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(
+            queued
+                .iter()
+                .map(|row| row.mutation.created_at_ms)
+                .collect::<Vec<_>>(),
+            [100, 400]
+        );
+        let inspected = engine.inspect_mutations().await.unwrap();
+        assert_eq!(
+            inspected
+                .iter()
+                .map(|item| item.enqueued_at_ms)
+                .collect::<Vec<_>>(),
+            [Some(100), Some(400)]
+        );
+        let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert_eq!(wire["enqueuedAtMs"], json!(100));
+    });
+}
+
+#[test]
+fn active_uuid_replacement_keeps_its_own_enqueue_time() {
+    block_on(async {
+        const X: &str = "0f0b1a43-1d47-4a52-9b8f-3a1e2f6f7a03";
+        let mut engine = engine_with_base("Status", "todo").await;
+        begin_value(&mut engine, X, "a", 100).await;
+        let (_, _) = claim_head(&mut engine, "runner", 110).await;
+        begin_value(&mut engine, X, "b", 300).await;
+
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert!(queued[0].superseded);
+        assert_eq!(
+            queued
+                .iter()
+                .map(|row| row.mutation.created_at_ms)
+                .collect::<Vec<_>>(),
+            [100, 300]
+        );
+    });
+}
+
+#[test]
+fn enqueue_time_outside_the_javascript_safe_range_is_unknown() {
+    block_on(async {
+        const X: &str = "0f0b1a43-1d47-4a52-9b8f-3a1e2f6f7a04";
+        let mut engine = engine_with_base("Status", "todo").await;
+        begin_value(&mut engine, X, "a", 1 << 60).await;
+
+        let inspected = engine.inspect_mutations().await.unwrap();
+        assert_eq!(inspected[0].enqueued_at_ms, None);
+        let wire = serde_json::to_value(&inspected[0]).unwrap();
+        assert!(wire.get("enqueuedAtMs").is_none());
+    });
+}
+
+#[test]
 fn pending_replacement_restores_fields_omitted_by_the_new_intent() {
     block_on(async {
         const X: &str = "5470d1c4-e5d8-45d7-a165-afca1331954c";

@@ -8,25 +8,19 @@ use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
-use futures::{StreamExt, TryStreamExt, stream};
+use futures::{StreamExt, stream};
 use messages::domain::{
     api::MessageReader,
-    models::{Message, MessageListItem, ThreadAnchor},
-    ports::{MessageError, MessageTimelineQuery},
+    discussions::{live_roots, with_replies},
+    models::{Message, MessageThread, ThreadAnchor},
+    ports::MessageError,
     service::MessageView,
 };
 use uuid::Uuid;
 
 use super::models::DocumentError;
 
-/// Discussions read per timeline page, the most the message service returns.
-const PAGE_SIZE: u16 = 100;
-
-/// Most discussions returned for one document, newest kept, so a heavily
-/// discussed document cannot crowd its own content out of an agent's context.
-pub const MAX_DISCUSSIONS: usize = 500;
-
-/// Concurrent thread and mark lookups for one read.
+/// Concurrent mark lookups for one read.
 const LOOKUP_CONCURRENCY: usize = 8;
 
 /// Reads what a comment mark covers in the live document.
@@ -161,7 +155,7 @@ pub struct DocumentDiscussion {
 #[async_trait::async_trait]
 pub trait DocumentComments: Send + Sync + 'static {
     /// Every live discussion on the document, oldest first, capped at
-    /// [`MAX_DISCUSSIONS`].
+    /// [`messages::domain::discussions::MAX_DISCUSSIONS`].
     async fn discussions(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -180,78 +174,13 @@ impl<M: CommentMarks> DocumentCommentReader<M> {
         Self { messages, marks }
     }
 
-    async fn roots(
-        &self,
-        access: &EntityAccessReceipt<MessageView>,
-    ) -> Result<Vec<MessageListItem>, MessageError> {
-        let mut roots = Vec::new();
-        let mut cursor = None;
-        loop {
-            let page = self
-                .messages
-                .timeline(
-                    access.clone(),
-                    MessageTimelineQuery {
-                        cursor,
-                        limit: Some(PAGE_SIZE),
-                        ..Default::default()
-                    },
-                )
-                .await?;
-            // A deleted first comment with no live replies is not returned,
-            // so it must not count toward the cap.
-            roots.extend(
-                page.items.into_iter().filter(|item| {
-                    item.message.deleted_at.is_none() || item.thread.reply_count > 0
-                }),
-            );
-            if roots.len() >= MAX_DISCUSSIONS {
-                tracing::warn!(count = roots.len(), "document discussions truncated");
-                roots.truncate(MAX_DISCUSSIONS);
-                return Ok(roots);
-            }
-            match page.next_cursor {
-                Some(next) => cursor = Some(next),
-                None => return Ok(roots),
-            }
-        }
-    }
-
-    /// Replies of the threads whose timeline preview does not hold them all.
-    async fn full_replies(
-        &self,
-        access: &EntityAccessReceipt<MessageView>,
-        roots: &[MessageListItem],
-    ) -> Result<HashMap<Uuid, Vec<Message>>, MessageError> {
-        let partial: Vec<Uuid> = roots
-            .iter()
-            .filter(|item| item.thread.reply_count > item.thread.preview.len() as i64)
-            .map(|item| item.message.id)
-            .collect();
-        stream::iter(partial)
-            .map(|root| async move {
-                let thread = self.messages.get_thread(access.clone(), root).await?;
-                Ok::<_, MessageError>((root, thread.replies))
-            })
-            .buffer_unordered(LOOKUP_CONCURRENCY)
-            .try_collect()
-            .await
-    }
-
     /// What each markdown mark covers now. A failed lookup leaves the mark
     /// out, so the snapshot stands in rather than failing the read.
     async fn live_marks(
         &self,
         document_id: &str,
-        roots: &[MessageListItem],
+        mark_ids: Vec<Uuid>,
     ) -> HashMap<Uuid, Option<String>> {
-        let mark_ids: Vec<Uuid> = roots
-            .iter()
-            .filter_map(|item| match &item.state.anchor {
-                Some(ThreadAnchor::Markdown { mark_id, .. }) => Some(*mark_id),
-                _ => None,
-            })
-            .collect();
         stream::iter(mark_ids)
         .map(|mark_id| async move {
             self.marks
@@ -281,60 +210,43 @@ impl<M: CommentMarks> DocumentComments for DocumentCommentReader<M> {
         let access = receipt
             .try_into_requirement::<MessageView>()
             .map_err(|_| DocumentError::Unauthorized)?;
-        let roots = self.roots(&access).await.map_err(message_error)?;
-        let (replies, marks) = futures::join!(
-            self.full_replies(&access, &roots),
-            self.live_marks(&document_id, &roots)
-        );
-        let mut replies = replies.map_err(message_error)?;
-        Ok(roots
-            .into_iter()
-            .rev()
-            .filter_map(|item| {
-                let replies = replies
-                    .remove(&item.message.id)
-                    .unwrap_or(item.thread.preview);
-                discussion(
-                    item.message,
-                    item.state.resolved,
-                    item.state.anchor,
-                    replies,
-                    &marks,
-                )
+        let roots = live_roots(self.messages.as_ref(), &access)
+            .await
+            .map_err(message_error)?;
+        let mark_ids: Vec<Uuid> = roots
+            .iter()
+            .filter_map(|item| match &item.state.anchor {
+                Some(ThreadAnchor::Markdown { mark_id, .. }) => Some(*mark_id),
+                _ => None,
             })
+            .collect();
+        let (threads, marks) = futures::join!(
+            with_replies(self.messages.as_ref(), &access, roots),
+            self.live_marks(&document_id, mark_ids)
+        );
+        Ok(threads
+            .map_err(message_error)?
+            .into_iter()
+            .map(|thread| discussion(thread, &marks))
             .collect())
     }
 }
 
-/// A thread whose first comment was deleted is kept only while it has replies.
-fn discussion(
-    root: Message,
-    resolved: bool,
-    anchor: Option<ThreadAnchor>,
-    replies: Vec<Message>,
-    marks: &HashMap<Uuid, Option<String>>,
-) -> Option<DocumentDiscussion> {
-    if root.deleted_at.is_some() && replies.is_empty() {
-        return None;
-    }
-    let kind = match anchor {
+fn discussion(thread: MessageThread, marks: &HashMap<Uuid, Option<String>>) -> DocumentDiscussion {
+    let kind = match thread.state.anchor {
         None => CommentThreadKind::Discussion,
         Some(_) => CommentThreadKind::Inline,
     };
-    Some(DocumentDiscussion {
-        id: root.id,
+    DocumentDiscussion {
+        id: thread.root.id,
         kind,
-        resolved,
-        anchor: comment_anchor(anchor, marks),
-        comments: std::iter::once(root)
-            .chain(
-                replies
-                    .into_iter()
-                    .filter(|reply| reply.deleted_at.is_none()),
-            )
+        resolved: thread.state.resolved,
+        anchor: comment_anchor(thread.state.anchor, marks),
+        comments: std::iter::once(thread.root)
+            .chain(thread.replies)
             .map(comment)
             .collect(),
-    })
+    }
 }
 
 fn comment_anchor(

@@ -28,9 +28,7 @@ use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
-#[cfg(feature = "list")]
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// Verified channel participation required to change a channel picture.
@@ -262,6 +260,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
         viewer_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<String, Self::Err>> + Send;
 
+    /// Profile names (`first last`) for the given users, as the app shows
+    /// them. Users without a name are absent from the map.
+    fn get_user_display_names(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err>> + Send;
+
     /// Check whether a user belongs to a team.
     fn user_has_team(
         &self,
@@ -441,6 +446,13 @@ pub trait ChannelService: Send + Sync + 'static {
         &self,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
+
+    /// Profile names (`first last`) for the given users, as the app shows
+    /// them. Users without a name are absent from the map.
+    fn get_user_display_names(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<HashMap<MacroUserIdStr<'static>, String>, ChannelMessagesErr>> + Send;
 
     /// Fetch channel metadata (type + resolved display name) from the viewer's perspective.
     fn get_channel_metadata(
@@ -795,6 +807,23 @@ pub enum ChannelMessagesErr {
     MessageNotFound(Uuid),
 }
 
+/// Decides whether a viewer may see the entity a comment belongs to, so comment
+/// references are authorized by the parent's own permissions rather than by
+/// channel participation.
+///
+/// Object-safe (`async_trait`) because the service holds it as `Arc<dyn _>`.
+#[async_trait::async_trait]
+pub trait CommentParentAccess: Send + Sync + 'static {
+    /// Whether `viewer` may view the stored parent entity; unknown parent types
+    /// and unparseable viewers are not viewable.
+    async fn can_view_parent(
+        &self,
+        viewer: &str,
+        parent_entity_type: &str,
+        parent_entity_id: &str,
+    ) -> anyhow::Result<bool>;
+}
+
 /// Publisher for realtime channel side-effect commands.
 pub trait ChannelRealtimePublisher: Send + Sync + 'static {
     /// Error type for publishing operations.
@@ -933,6 +962,31 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
         channel_id: Uuid,
         items: Vec<ReferencedShareItem>,
     ) -> impl Future<Output = Result<Vec<ReferenceShareResult>, Self::Err>> + Send;
+}
+
+/// What a bot created for a person while answering them, so its channel
+/// reply shares only those items.
+pub trait AgentCreations: Clone + Send + Sync + 'static {
+    /// Error type for creation lookups.
+    type Err: Into<anyhow::Error> + Send;
+
+    /// When `person` last wrote in the thread rooted at `thread_root` before
+    /// `before`: the request a bot reply posted then is answering.
+    fn request_sent_at(
+        &self,
+        thread_root: Uuid,
+        person: &MacroUserIdStr<'static>,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
+
+    /// The `items` that `bot` recorded creating on `person`'s behalf at or after `since`.
+    fn created_since(
+        &self,
+        bot: BotId,
+        person: &MacroUserIdStr<'static>,
+        since: DateTime<Utc>,
+        items: Vec<ReferencedShareItem>,
+    ) -> impl Future<Output = Result<Vec<ReferencedShareItem>, Self::Err>> + Send;
 }
 
 /// Errors that can occur while mutating channels.

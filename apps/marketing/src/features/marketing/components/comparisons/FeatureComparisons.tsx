@@ -13,6 +13,7 @@ import './feature-comparisons.css';
 export function FeatureComparisons(props: {
   title: string;
   comparisons: readonly FeatureComparison[];
+  tableMinWidth?: number;
 }) {
   let container!: HTMLDivElement;
   const rows = () =>
@@ -77,6 +78,7 @@ export function FeatureComparisons(props: {
       <h2 class="feature-comparison-heading">{props.title}</h2>
       <ComparisonTable
         presentation="framed"
+        minWidth={props.tableMinWidth}
         columns={[
           { label: 'Macro', macro: true, icon: <ComparisonMacroLogo /> },
           ...props.comparisons.map((comparison) => ({

@@ -319,7 +319,7 @@ impl DraftRepository for PgMailboxSync {
         let message = sqlx::query!(r#"
             UPDATE email_messages SET is_draft = false,is_sent = true,
                 mailbox_state = (COALESCE(mailbox_state,'{}'::jsonb) - 'provider_missing') || '{"is_draft":false}'::jsonb,
-                sent_at = now(),updated_at = now()
+                sent_at = now(),internal_date_ts = now(),updated_at = now()
             WHERE id = $1 RETURNING thread_id
         "#,lease.message_id).fetch_one(&mut *tx).await.map_err(db_error)?;
         sqlx::query!("UPDATE email_scheduled_messages SET sent = true,processing = false,updated_at = now() WHERE message_id = $1 AND link_id = $2",lease.message_id,lease.mailbox.link_id).execute(&mut *tx).await.map_err(db_error)?;

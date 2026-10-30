@@ -20,7 +20,10 @@ export type DraftOptions = Omit<
   | 'body_macro'
   | 'headers_json'
   | 'include_signature'
+  | 'draft_generation'
 > & {
+  /** Generation captured when editing began; defaults to the loaded draft. */
+  draftGeneration?: number;
   /** Plain text body. */
   bodyText?: string;
   /** HTML body. */
@@ -39,8 +42,12 @@ export type DraftOptions = Omit<
 
 /** A draft email. Sending remains an explicit separate operation. */
 export class EmailDraft extends EmailMessage {
-  private async inboxHeaders() {
-    return { 'X-Email-Link-Id': (await this.link()).id };
+  private async draftContext() {
+    const draft = await this.detail.get();
+    return {
+      headers: { 'X-Email-Link-Id': draft.link_id },
+      query: { draft_generation: draft.draft_generation ?? 0 },
+    };
   }
 
   /** Construct a lazy draft handle. */
@@ -48,22 +55,31 @@ export class EmailDraft extends EmailMessage {
     return new EmailDraft(client, id);
   }
 
+  /** Edit generation to capture with content before saving or transferring it. */
+  readonly draftGeneration = this.field('draft_generation');
+
   /** Replace draft content without changing its identity or sending it. */
   async update(options: DraftOptions): Promise<void> {
-    const headers = await this.inboxHeaders();
+    const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
       c.email.createDraft({
         headers,
-        body: { draft: { ...draftBody(options), db_id: this.id } },
+        body: {
+          draft: {
+            ...draftBody(options),
+            db_id: this.id,
+            draft_generation: options.draftGeneration ?? query.draft_generation,
+          },
+        },
       }),
     );
   }
 
   /** Delete the draft. */
   async delete(): Promise<void> {
-    const headers = await this.inboxHeaders();
+    const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
-      c.email.deleteDraft({ path: { id: this.id }, headers }),
+      c.email.deleteDraft({ path: { id: this.id }, headers, query }),
     );
   }
 
@@ -72,11 +88,12 @@ export class EmailDraft extends EmailMessage {
     sendTime: string,
     options?: { includeSignature?: boolean },
   ): Promise<void> {
-    const headers = await this.inboxHeaders();
+    const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
       c.email.upsertScheduledMessage({
         path: { id: this.id },
         headers,
+        query,
         body: {
           send_time: sendTime,
           include_signature: options?.includeSignature,
@@ -87,9 +104,13 @@ export class EmailDraft extends EmailMessage {
 
   /** Remove a scheduled send. */
   async unschedule(): Promise<void> {
-    const headers = await this.inboxHeaders();
+    const { headers, query } = await this.draftContext();
     await this.mutate((c) =>
-      c.email.deleteScheduledDraft({ path: { message_id: this.id }, headers }),
+      c.email.deleteScheduledDraft({
+        path: { message_id: this.id },
+        headers,
+        query,
+      }),
     );
   }
 
@@ -106,12 +127,23 @@ export class EmailDraft extends EmailMessage {
       size: options.size,
       upload_id: options.uploadId,
     };
-    const headers = await this.inboxHeaders();
+    const { headers, query } = await this.draftContext();
     const result = await this.mutate((c) =>
-      c.email.addDraftAttachment({ path: { id: this.id }, headers, body }),
+      c.email.addDraftAttachment({
+        path: { id: this.id },
+        headers,
+        query,
+        body,
+      }),
     );
     return {
-      attachment: DraftAttachment.byId(this.client, this, result.attachment_id),
+      attachment: DraftAttachment.byId(
+        this.client,
+        this,
+        result.attachment_id,
+        false,
+        query.draft_generation,
+      ),
       uploadUrl: result.upload_url,
       contentType: result.content_type,
     };
@@ -121,27 +153,36 @@ export class EmailDraft extends EmailMessage {
   async forwardAttachment(
     attachment: EmailAttachment,
   ): Promise<DraftAttachment> {
-    const headers = await this.inboxHeaders();
+    const { headers, query } = await this.draftContext();
     const result = await this.mutate((c) =>
       c.email.addForwardedAttachment({
         path: { id: this.id },
         headers,
+        query,
         body: { attachment_id: attachment.id },
       }),
     );
-    return DraftAttachment.byId(this.client, this, result.attachment_id, true);
+    return DraftAttachment.byId(
+      this.client,
+      this,
+      result.attachment_id,
+      true,
+      query.draft_generation,
+    );
   }
 
   /** Remove a draft attachment. */
   async removeAttachment(attachment: DraftAttachment): Promise<void> {
     if (attachment.draft.id !== this.id)
       throw new Error('Attachment belongs to another draft');
-    const headers = await this.inboxHeaders();
+    const { headers } = await this.draftContext();
+    const query = { draft_generation: attachment.draftGeneration };
     if (attachment.forwarded)
       await this.mutate((c) =>
         c.email.removeForwardedAttachment({
           path: { id: this.id, attachment_id: attachment.id },
           headers,
+          query,
         }),
       );
     else
@@ -149,6 +190,7 @@ export class EmailDraft extends EmailMessage {
         c.email.removeDraftAttachment({
           path: { id: this.id, attachment_id: attachment.id },
           headers,
+          query,
         }),
       );
   }
@@ -157,7 +199,10 @@ export class EmailDraft extends EmailMessage {
   async verifyAttachment(attachment: DraftAttachment): Promise<void> {
     if (attachment.draft.id !== this.id || attachment.forwarded)
       throw new Error('Expected an uploaded attachment on this draft');
-    await this.completeDraftAttachment(attachment.id);
+    await this.completeDraftAttachment(
+      attachment.id,
+      attachment.draftGeneration,
+    );
   }
 }
 
@@ -170,6 +215,8 @@ export class DraftAttachment {
     readonly id: string,
     /** Whether this attachment was forwarded. */
     readonly forwarded: boolean,
+    /** Draft generation captured when the attachment was reserved. */
+    readonly draftGeneration: number,
   ) {}
 
   /** Construct a draft scoped attachment handle. */
@@ -178,8 +225,9 @@ export class DraftAttachment {
     draft: EmailDraft,
     id: string,
     forwarded = false,
+    draftGeneration = 0,
   ): DraftAttachment {
-    return new DraftAttachment(draft, id, forwarded);
+    return new DraftAttachment(draft, id, forwarded, draftGeneration);
   }
 
   /** Complete verification after uploading the file. */
@@ -194,7 +242,12 @@ export class DraftAttachment {
 
   /** Serialize identity without credentials. */
   toJSON() {
-    return { id: this.id, draftId: this.draft.id, forwarded: this.forwarded };
+    return {
+      id: this.id,
+      draftId: this.draft.id,
+      forwarded: this.forwarded,
+      draftGeneration: this.draftGeneration,
+    };
   }
 }
 
@@ -206,6 +259,7 @@ export function draftBody(options: DraftOptions): ApiDraftInput {
     bodyMacro,
     headers,
     includeSignature,
+    draftGeneration,
     thread,
     replyingTo,
     ...rest
@@ -227,6 +281,7 @@ export function draftBody(options: DraftOptions): ApiDraftInput {
     body_macro: bodyMacro,
     headers_json: headers,
     include_signature: includeSignature,
+    draft_generation: draftGeneration,
     thread_db_id: thread?.id,
     replying_to_id: replyingTo?.id,
   };

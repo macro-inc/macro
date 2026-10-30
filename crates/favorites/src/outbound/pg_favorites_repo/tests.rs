@@ -195,6 +195,51 @@ async fn list_favorites_hydrates_uuid_keyed_entities(pool: PgPool) {
     assert_eq!(favorites[1].channel_type, None);
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_favorites_skips_agent_sessions_that_no_longer_exist(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let bot_id = Uuid::now_v7();
+    sqlx::query(
+        r#"INSERT INTO bots (id, kind, name, handle, has_agent, owner_user_id) VALUES ($1, 'owned', 'Coder', $2, true, $3)"#,
+    )
+    .bind(bot_id)
+    .bind(format!("coder-{}", bot_id.simple()))
+    .bind(USER_A)
+    .execute(&pool)
+    .await
+    .expect("bot should insert");
+    let live_session = Uuid::now_v7();
+    sqlx::query(
+        r#"
+        INSERT INTO agent_session (id, owner_id, bot_id, model, harness, repo_url, workspace)
+        VALUES ($1, $2, $3, 'claude', 'macrod', 'https://github.com/example/example', '/workspace')
+        "#,
+    )
+    .bind(live_session)
+    .bind(USER_A)
+    .bind(bot_id)
+    .execute(&pool)
+    .await
+    .expect("agent session should insert");
+
+    let repo = PgFavoritesRepo::new(pool);
+    for session_id in [live_session, Uuid::now_v7()] {
+        repo.add_favorite(
+            &user(USER_A),
+            &EntityType::AgentSession.with_entity_str(&session_id.to_string()),
+        )
+        .await
+        .expect("agent session favorite should insert");
+    }
+
+    let favorites = repo
+        .list_favorites(&user(USER_A), &FavoriteFilter::default())
+        .await
+        .expect("favorites should list");
+    assert_eq!(favorites.len(), 1);
+    assert_eq!(favorites[0].entity_id, live_session.to_string());
+}
+
 async fn listed(repo: &PgFavoritesRepo, filter: &FavoriteFilter) -> Vec<(EntityType, String)> {
     repo.list_favorites(&user(USER_A), filter)
         .await

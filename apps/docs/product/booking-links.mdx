@@ -1,0 +1,47 @@
+---
+title: "Booking links"
+icon: "calendar-check"
+description: "Public links for booking time with you or your team."
+---
+
+A booking link is a public page where guests book a meeting on your calendar. Guests do not need a Macro account. Bookings send a calendar invitation to all attendees, with a Google Meet link if configured.
+
+Booking links require a connected [calendar](/product/calendar).
+
+## Creating a booking link
+
+1. Open **Settings → Booking links**, or click **Copy booking link** in the calendar topbar.
+2. Click **New booking link**. On a team, select personal or team ownership.
+3. Set the title, duration, and availability schedule.
+4. Optional: notice time, buffers, booking window, daily limit, and guest questions.
+5. Turn on **Accept bookings** and save. New links are paused until **Accept bookings** is on.
+
+Links can be paused, duplicated, previewed, and copied from the list.
+
+## Availability
+
+**Availability** contains weekly schedules. Each day has one or more time ranges. Schedules support date overrides and a time zone. One schedule is the default for new links.
+
+Times that are busy on your connected calendars are not offered.
+
+## Team booking links
+
+Team links are **collective**, which books all hosts, or **round-robin**, which books one host. Hosts are set in the link editor. Each host's default hours and calendar availability apply.
+
+Team owners and admins can edit team links. Other members can view them.
+
+## Booking page
+
+**Booking page** sets the name and description shown to guests. Guests select a time zone, date, and time, and answer your questions. Guests receive a private receipt link to reschedule or cancel.
+
+## Bookings
+
+**Bookings** lists upcoming, past, and cancelled meetings for a date range. Search by guest, title, or email. Filter by link. Bookings can be rescheduled or cancelled. Past bookings can be marked attended or no-show.
+
+## Insights
+
+**Insights** shows bookings over time, meeting hours, no-shows, and top links for the last 7, 30, or 90 days or a custom range. **Download** exports bookings as CSV.
+
+## Agents
+
+[Agents](/product/agents) can create and edit booking links. The agent shows the hosts, availability, and rules and waits for approval before saving. Agents and [MCP clients](/AI/mcp/overview) use [`ListBookingLinks`](/AI/mcp/tools/list-booking-links), [`CreateBookingLink`](/AI/mcp/tools/create-booking-link), and [`EditBookingLink`](/AI/mcp/tools/edit-booking-link).

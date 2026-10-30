@@ -34,8 +34,13 @@ export type ItemDragOverlayData = {
 
 const DragOperationContext = createContext<DragOperationContextValue>();
 
+/** Optional for composed entity rows rendered outside the draggable workspace. */
+export function useOptionalDragOperation() {
+  return useContext(DragOperationContext);
+}
+
 export function useDragOperation() {
-  const context = useContext(DragOperationContext);
+  const context = useOptionalDragOperation();
   if (!context) {
     throw new Error('useDragOperation must be used within ItemDndProvider');
   }

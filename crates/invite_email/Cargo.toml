@@ -10,7 +10,7 @@ askama = { workspace = true }
 macro_env = { path = "../macro_env" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
-notification = { path = "../notification" }
+notification = { path = "../notification", default-features = false }
 rootcause = { workspace = true }
 serde = { workspace = true }
 url = { workspace = true, features = ["serde"] }

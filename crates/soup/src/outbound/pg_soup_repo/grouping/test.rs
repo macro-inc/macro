@@ -1,5 +1,6 @@
 mod access;
 mod pagination;
+mod project;
 mod sorting;
 
 use super::*;
@@ -44,13 +45,6 @@ fn date_bucket_order_matches_display_order() {
 fn entity_type_expr() {
     let expr = group_select_expr(&GroupByField::EntityType);
     assert_eq!(&*expr, "item_type");
-}
-
-#[test]
-fn project_expr() {
-    let expr = group_select_expr(&GroupByField::Project);
-    assert!(expr.contains("project_id"));
-    assert!(expr.contains("COALESCE"));
 }
 
 #[test]

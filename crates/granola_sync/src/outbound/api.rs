@@ -6,47 +6,71 @@ use crate::domain::{
 use async_trait::async_trait;
 use call::domain::{imports::ImportedCall, records::*};
 use chrono::{DateTime, Utc};
-use pipedream_mcp::domain::{
-    models::PipedreamConnection,
-    ports::{ApiProxy, ProxyMethod, ProxyResponse},
-};
+use http::{HeaderMap, Method};
+use pipedream_mcp::domain::{models::PipedreamConnection, ports::ConnectedAppProxy};
 use rootcause::prelude::IntoRootcause;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::Arc};
+use strum::VariantArray;
 
 pub struct GranolaApi<P>(pub Arc<P>);
 
-impl<P: ApiProxy> GranolaApi<P> {
+/// Granola's answer, whatever its status. Never log the body: registration
+/// returns the webhook secret.
+struct Reply {
+    status: u16,
+    body: Value,
+}
+
+/// Provider IDs are opaque; encode them so one can never change the path.
+fn segment(id: &str) -> String {
+    url::form_urlencoded::byte_serialize(id.as_bytes()).collect()
+}
+
+impl<P: ConnectedAppProxy> GranolaApi<P> {
     async fn send(
         &self,
         connection: &Connection,
-        method: ProxyMethod,
+        method: Method,
         path: &str,
         body: Option<Value>,
-    ) -> Result<ProxyResponse> {
+    ) -> Result<Reply> {
         let account = PipedreamConnection {
             user_id: connection.user_id.clone(),
-            app_slug: "granola".into(),
+            app_slug: GRANOLA_APP.into(),
             server_name: "Granola".into(),
             account_id: connection.account_id.clone(),
             enabled: true,
         };
-        self.0
+        let response = self
+            .0
             .proxy(
                 &account,
                 method,
                 &format!("https://public-api.granola.ai/v1{path}"),
-                body,
+                &HeaderMap::new(),
+                body.as_ref(),
             )
             .await
-            .into_rootcause()
+            .into_rootcause()?;
+        // Preserve status for provider-specific retries and missing resources.
+        let body = if response.body.trim().is_empty() {
+            Value::Null
+        } else {
+            serde_json::from_str(&response.body)
+                .map_err(|error| rootcause::report!("invalid Granola JSON response: {error}"))?
+        };
+        Ok(Reply {
+            status: response.status.as_u16(),
+            body,
+        })
     }
 
     async fn request(
         &self,
         connection: &Connection,
-        method: ProxyMethod,
+        method: Method,
         path: &str,
         body: Option<Value>,
     ) -> Result<Option<Value>> {
@@ -55,7 +79,7 @@ impl<P: ApiProxy> GranolaApi<P> {
     }
 }
 
-fn checked(response: ProxyResponse) -> Result<Option<Value>> {
+fn checked(response: Reply) -> Result<Option<Value>> {
     match response.status {
         200..=299 => Ok(Some(response.body)),
         404 => Ok(None),
@@ -99,7 +123,7 @@ fn error_reason(body: &Value) -> String {
 }
 
 #[async_trait]
-impl<P: ApiProxy> Granola for GranolaApi<P> {
+impl<P: ConnectedAppProxy> Granola for GranolaApi<P> {
     async fn register(
         &self,
         connection: &Connection,
@@ -109,11 +133,11 @@ impl<P: ApiProxy> Granola for GranolaApi<P> {
         let response = self
             .send(
                 connection,
-                ProxyMethod::Post,
+                Method::POST,
                 "/webhook-endpoints",
                 Some(json!({
                     "url": url, "scopes": scope.scopes(),
-                    "events": ["note.generated", "note.edited", "note.access_granted"]
+                    "events": EventType::VARIANTS
                 })),
             )
             .await?;
@@ -136,11 +160,10 @@ impl<P: ApiProxy> Granola for GranolaApi<P> {
     }
     async fn unregister(&self, connection: &Connection) -> Result<()> {
         if let Some(id) = &connection.endpoint_id {
-            // Treat provider IDs as path segments rather than concatenating input.
-            let id = url::form_urlencoded::byte_serialize(id.as_bytes()).collect::<String>();
+            let id = segment(id);
             self.request(
                 connection,
-                ProxyMethod::Delete,
+                Method::DELETE,
                 &format!("/webhook-endpoints/{id}"),
                 None,
             )
@@ -152,8 +175,8 @@ impl<P: ApiProxy> Granola for GranolaApi<P> {
         let Some(body) = self
             .request(
                 connection,
-                ProxyMethod::Get,
-                &format!("/notes/{}", id.as_ref()),
+                Method::GET,
+                &format!("/notes/{}", segment(id.as_ref())),
                 None,
             )
             .await?
@@ -171,7 +194,7 @@ impl<P: ApiProxy> Granola for GranolaApi<P> {
         let mut cursor: Option<String> = None;
         let mut seen = HashSet::new();
         loop {
-            let mut path = format!("/notes/{}/transcript", id.as_ref());
+            let mut path = format!("/notes/{}/transcript", segment(id.as_ref()));
             if let Some(cursor) = &cursor {
                 let query = url::form_urlencoded::Serializer::new(String::new())
                     .append_pair("cursor", cursor)
@@ -179,10 +202,7 @@ impl<P: ApiProxy> Granola for GranolaApi<P> {
                 path.push('?');
                 path.push_str(&query);
             }
-            let Some(page) = self
-                .request(connection, ProxyMethod::Get, &path, None)
-                .await?
-            else {
+            let Some(page) = self.request(connection, Method::GET, &path, None).await? else {
                 if cursor.is_some() {
                     return Err(rootcause::report!(
                         "Granola transcript disappeared during pagination"
@@ -343,9 +363,7 @@ fn map_meeting(
             namespace: connection.namespace.to_string(),
             provider: CallProvider::Granola,
             object_type: "note".into(),
-            external_id: String::from(note.id)
-                .try_into()
-                .map_err(|e| rootcause::report!("{e}"))?,
+            external_id: ExternalCallId(note.id.0),
             external_url: Some(note.web_url),
             external_updated_at: Some(note.updated_at),
             synced_at: Some(Utc::now()),

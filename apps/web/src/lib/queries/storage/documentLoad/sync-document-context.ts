@@ -147,7 +147,7 @@ export function fetchSyncDocumentOpenContext(documentId: string) {
   return openWith(loader, documentId);
 }
 
-/** Open a stored-file document (DOCX), which needs no sync-service content, with the same authorization. */
+/** Open document metadata and authorization before selecting its content location (stored files or Canvas shared content). */
 export function fetchFileDocumentOpenContext(documentId: string) {
   return openWith(fileLoader, documentId);
 }

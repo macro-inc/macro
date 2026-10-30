@@ -4,14 +4,23 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  COMMAND_PRIORITY_HIGH,
   createEditor,
   KEY_ARROW_RIGHT_COMMAND,
+  KEY_DOWN_COMMAND,
   type LexicalEditor,
   ParagraphNode,
   TextNode,
 } from 'lexical';
 import { describe, expect, test } from 'vitest';
-import { keyboardShortcutsPlugin } from './keyboardShortcutsPlugin';
+import {
+  NODE_TRANSFORM,
+  type NodeTransformType,
+} from '../node-transform/nodeTransformPlugin';
+import {
+  keyboardShortcutsPlugin,
+  ListAndQuoteShortcuts,
+} from './keyboardShortcutsPlugin';
 
 function createTestEditor(): LexicalEditor {
   const editor = createEditor({
@@ -201,5 +210,38 @@ describe('keyboardShortcutsPlugin', () => {
       expect(selection.anchor.getNode().getTextContent()).toBe(' ');
       expect(selection.anchor.offset).toBe(1);
     });
+  });
+});
+
+describe('ListAndQuoteShortcuts', () => {
+  test.each([
+    ['Digit7', 'list-number'],
+    ['Digit8', 'list-bullet'],
+    ['Digit9', 'quote'],
+  ] as const)('mod+shift+%s formats the block as %s', (code, transform) => {
+    const editor = createTestEditor();
+    keyboardShortcutsPlugin({ shortcuts: ListAndQuoteShortcuts })(editor);
+    const dispatched: NodeTransformType[] = [];
+    editor.registerCommand(
+      NODE_TRANSFORM,
+      (payload) => {
+        dispatched.push(payload);
+        return true;
+      },
+      COMMAND_PRIORITY_HIGH
+    );
+
+    const press = (init: KeyboardEventInit) =>
+      editor.dispatchCommand(
+        KEY_DOWN_COMMAND,
+        new KeyboardEvent('keydown', { code, ...init })
+      );
+
+    // Without the shift modifier the digit is left to the editor.
+    press({ metaKey: true, ctrlKey: true });
+    expect(dispatched).toEqual([]);
+
+    press({ shiftKey: true, metaKey: true, ctrlKey: true });
+    expect(dispatched).toEqual([transform]);
   });
 });

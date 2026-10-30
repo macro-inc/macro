@@ -4,17 +4,19 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { EntityReference } from './entityReference';
 import type { PropertyValueOneOfOnethreeType } from './propertyValueOneOfOnethreeType';
 
 /**
- * Link value(s) - always an array (check is_multi_select to determine if single or multi)
-Single-select: {"type": "Link", "value": ["https://example.com"]} (length 0 or 1)
-Multi-select: {"type": "Link", "value": ["https://example.com", "https://other.com"]} (length 0+)
+ * Entity reference(s) - always an array (check is_multi_select to determine if single or multi)
+Single-select: {"type": "EntityReference", "value": [{...}]} (length 0 or 1)
+Multi-select: {"type": "EntityReference", "value": [{...}, {...}, ...]} (length 0+)
  */
 export type PropertyValueOneOfOnethree = {
   type: PropertyValueOneOfOnethreeType;
-  /** Link value(s) - always an array (check is_multi_select to determine if single or multi)
-Single-select: {"type": "Link", "value": ["https://example.com"]} (length 0 or 1)
-Multi-select: {"type": "Link", "value": ["https://example.com", "https://other.com"]} (length 0+) */
-  value: string[];
+  /** Entity reference(s) - always an array (check is_multi_select to determine if single or multi)
+Single-select: {"type": "EntityReference", "value": [{...}]} (length 0 or 1)
+Multi-select: {"type": "EntityReference", "value": [{...}, {...}, ...]} (length 0+) */
+  value: EntityReference[];
 };

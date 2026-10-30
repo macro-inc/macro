@@ -1,4 +1,4 @@
-import PencilSimple from '@phosphor/pencil-simple.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
 
 /**
  * A saved reply shown under the message it answers, where touch devices have

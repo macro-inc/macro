@@ -1,4 +1,5 @@
-.feature-page .feature-comparisons {
+.feature-page .feature-comparisons,
+.migrate-full-comparison .feature-comparisons {
   --comparison-header-bg: color-mix(in srgb, var(--color-ink) 5%, var(--b0));
   --comparison-header-size: 17px;
   --comparison-header-padding: 24px 16px;
@@ -27,7 +28,8 @@
 .feature-comparison-key svg { flex: none; }
 .feature-comparisons .comparison-table-scroll svg { filter: grayscale(1); }
 @media (max-width: 799px) {
-  .feature-page .feature-comparisons { width: calc(100% - 36px); margin-inline: auto; margin-bottom: 48px; }
+  .feature-page .feature-comparisons,
+  .migrate-full-comparison .feature-comparisons { width: calc(100% - 36px); margin-inline: auto; margin-bottom: 48px; }
 }
 @media (max-width: 699px) {
   .feature-page .product-page .feature-comparisons { width: 100%; }
@@ -56,7 +58,8 @@
 }
 .comparison-inline-brand { display: inline-flex; align-items: center; gap: 9px; }
 @media (max-width: 699px) {
-  .feature-page .feature-comparisons {
+  .feature-page .feature-comparisons,
+  .migrate-full-comparison .feature-comparisons {
     --comparison-header-size: 14px;
     --comparison-header-padding: 20px 12px;
     --comparison-row-size: 13px;

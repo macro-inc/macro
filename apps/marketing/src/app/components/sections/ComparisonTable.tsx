@@ -30,6 +30,8 @@ export type ComparisonTableProps = {
   rows: readonly ComparisonRow[];
   mobileCellWidth?: number;
   mobileMinWidth?: number;
+  /** Keep wide overview tables readable and scrollable at every viewport. */
+  minWidth?: number;
   sortRows?: boolean;
   valueWrap?: 'normal' | 'nowrap';
   scrollLabel?: string;
@@ -318,7 +320,7 @@ export function ComparisonTable(props: ComparisonTableProps) {
         '-webkit-overflow-scrolling': 'touch',
         'max-width': '100%',
         'min-width': '0',
-        'overflow-x': mobile() ? 'auto' : 'visible',
+        'overflow-x': mobile() || props.minWidth ? 'auto' : 'visible',
         width: '100%',
       }}
     >
@@ -328,9 +330,11 @@ export function ComparisonTable(props: ComparisonTableProps) {
           display: 'grid',
           'font-family': "'Inter', body",
           'grid-template-columns': gridTemplate(),
-          'min-width': mobile()
-            ? `${props.mobileMinWidth ?? Math.max(480, 132 + columns().length * (props.mobileCellWidth ?? 58))}px`
-            : 'auto',
+          'min-width': props.minWidth
+            ? `${props.minWidth}px`
+            : mobile()
+              ? `${props.mobileMinWidth ?? Math.max(480, 132 + columns().length * (props.mobileCellWidth ?? 58))}px`
+              : 'auto',
           overflow: props.presentation === 'framed' ? 'visible' : 'hidden',
         }}
       >

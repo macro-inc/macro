@@ -1,0 +1,7 @@
+{"direction":"to_server","content":{"type":"event","event":"acp_ready"}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"init-2","method":"initialize","params":{"protocolVersion":1}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"init-2","result":{"protocolVersion":1,"agentCapabilities":{}}}}
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"load-2","method":"session/load","params":{"sessionId":"s1","cwd":"/workspace","mcpServers":[]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"replayed prompt"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"replayed answer"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"load-2","result":{}}}

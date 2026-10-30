@@ -1,8 +1,21 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SignatureForm } from './signature-form';
 
-afterEach(cleanup);
+beforeEach(() =>
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  )
+);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 const baseProps = {
   email: 'alex@gmail.com',

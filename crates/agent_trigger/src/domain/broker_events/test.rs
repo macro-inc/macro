@@ -394,6 +394,7 @@ fn a_conversation_turn_carries_its_trigger_without_the_channel() {
                 author: person,
                 content: "an earlier turn".to_owned(),
                 posted_at: Utc::now(),
+                attachments: Vec::new(),
             }],
             messages_omitted: false,
         }],

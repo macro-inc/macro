@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import FileDocIcon from '@phosphor/file-doc.svg';
+import FileDocIcon from '@icon/system/regular/file-doc.svg';
 import { createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

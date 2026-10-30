@@ -28,7 +28,7 @@ const PROVIDERS: &[ConnectorRef<'static>] = &[
     },
     ConnectorRef {
         pipedream_app_slugs: &["datadog"],
-        native_server_url: "https://mcp.datadoghq.com/mcp",
+        native_server_url: "https://mcp.datadoghq.com/v1/mcp",
     },
     ConnectorRef {
         pipedream_app_slugs: &["grafana"],
@@ -36,7 +36,7 @@ const PROVIDERS: &[ConnectorRef<'static>] = &[
     },
 ];
 
-fn same_endpoint(a: &str, b: &str) -> bool {
+pub(crate) fn same_endpoint(a: &str, b: &str) -> bool {
     a.trim_end_matches('/') == b.trim_end_matches('/')
 }
 

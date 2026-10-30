@@ -1,4 +1,5 @@
 import type { CalendarEvent, CalendarSource } from '../types';
+import { calendarDisplayLabel } from './calendar-label';
 
 /** A person attributed on an event: organizer or creator. */
 export interface CalendarPerson {
@@ -58,7 +59,10 @@ function sameAsCalendar(person: CalendarPerson, calendar: CalendarSource) {
   );
 }
 
-function findOrganizer(event: CalendarEvent): CalendarPerson | undefined {
+/** Who organizes the event, whether or not event details show them. */
+export function findOrganizer(
+  event: CalendarEvent
+): CalendarPerson | undefined {
   const organizerAttendee = event.attendees.find(
     (attendee) => attendee.isOrganizer
   );
@@ -98,7 +102,7 @@ export function eventAttribution(event: CalendarEvent): EventAttribution {
     organizer !== undefined && !sameAsCalendar(organizer, event.calendar);
 
   return {
-    calendarName: event.calendar.name || 'Calendar',
+    calendarName: calendarDisplayLabel(event.calendar, false) || 'Calendar',
     creator: showCreator ? creator : undefined,
     organizer: showOrganizer ? organizer : undefined,
   };

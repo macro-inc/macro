@@ -8,12 +8,12 @@
 // the Android binary — iOS, macOS, Linux, Windows and desktop-only paths by
 // naming convention (a path component or extension naming the platform, the
 // generated Xcode project under gen/apple, the desktop updater manifest,
-// editor config) — plus one thing outside that tree: the version of the
-// client cache wasm package. The app compiles the cache crates natively, and
+// editor config, Markdown docs) — plus one thing outside that tree: the
+// version of the client cache wasm package. The app compiles the cache crates natively, and
 // the team bumps that version when a cache change must ship, so the bump
 // counts as a native change while other edits under crates/client do not.
 // The iOS gate (tooling/xtask/.../scripts/ios_native_tree.sh) is the mirror
-// image, excluding Android-only paths instead.
+// image, excluding Android-only and desktop-only paths instead.
 
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -22,7 +22,7 @@ import { pathToFileURL } from 'node:url';
 export const tauriPath = 'apps/web/tauri';
 export const cacheWasmManifest = 'crates/client/cache-wasm/Cargo.toml';
 export const androidExclude =
-  /(^|\/)(ios|macos|linux|windows|apple|desktop)([_./-]|$)|\.(ios|macos|linux|windows)\.|^desktop-release\.json$|^\.helix\//;
+  /(^|\/)(ios|macos|linux|windows|apple|desktop)([_./-]|$)|\.(ios|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix\//;
 
 /// A `git` runner bound to a working directory.
 export function gitIn(cwd) {

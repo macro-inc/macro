@@ -23,6 +23,7 @@ import type { CrmRoute, CrmWorkspace } from './context/workspace-context';
 import type { CrmViewConfig } from './core/saved-view';
 import { createCrmCollectionFilters } from './filter-adapter';
 import { COMPANY_GROUP_OPTIONS } from './group-options';
+import { createSettingsPage } from './primitives/settings-page';
 
 // The filter context lands in cached soup query meta, so its stage resolvers
 // close over the deal stages only, never this workspace's scope (see "Query
@@ -278,6 +279,14 @@ export function createCrmWorkspace(
   state.context.setActiveTab = wrappedSetActiveTab;
 
   const { openSettings } = useSettingsState();
+  const settings = createSettingsPage(() =>
+    [
+      route.tab(),
+      ...route.records().map((record) => `${record.type}:${record.id}`),
+      route.section() ?? '',
+      route.commentTarget()?.seek ?? '',
+    ].join(' ')
+  );
   const context: CrmWorkspace = {
     ...soupView,
     setActiveTab: wrappedSetActiveTab,
@@ -296,7 +305,14 @@ export function createCrmWorkspace(
           'open-entity-in-split'
         );
       },
-      openSettings: () => openSettings('CRM'),
+      settings: {
+        ...settings,
+        open: () => {
+          // The list unmounts; its entry keeps the scroll position for the return.
+          panel.handle.captureEntryState();
+          settings.open();
+        },
+      },
       openTeamSettings: () => openSettings('Team'),
       record: route,
     },

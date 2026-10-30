@@ -2,6 +2,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { type Attributes, Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
+import type { BundleReloadDiagnostics } from './generated/bundle-reloads';
+import type { EventSnapshot } from './generated/native-diagnostics';
 
 export type ProcessMemory = {
   pid: number;
@@ -34,10 +36,12 @@ export type DesktopSnapshot = {
     terminations: number;
     lastTerminationMs: number | null;
   };
-  bundleReloads?: {
-    dispatches: number;
-    lastSource: string | null;
-  } | null;
+  bundleReloads?:
+    | (Pick<BundleReloadDiagnostics, 'dispatches' | 'lastSource'> &
+        Partial<BundleReloadDiagnostics>)
+    | null;
+  /** Absent on older native binaries; also gates the diagnostic write command. */
+  recentEvents?: EventSnapshot;
 };
 
 type SampleSink = {
@@ -94,6 +98,7 @@ export function desktopResourceAttributes(
     'app.runtime': 'tauri',
     'app.platform': getPlatform(),
     'service.instance.id': snapshot.identity.instanceId,
+    native_instance_id: snapshot.identity.instanceId,
     'macro.recording.id': snapshot.identity.recordingId ?? undefined,
     'macro.recording.enabled': snapshot.identity.recordingId !== null,
     'macro.native.version': snapshot.identity.nativeVersion,

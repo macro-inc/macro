@@ -26,10 +26,7 @@ function Fixture() {
         value={search()}
         onInput={(event) => setSearch(event.currentTarget.value)}
       />
-      <Surface
-        depth={2}
-        class="w-96 pt-2 pb-1.5 glass bg-menu-glass rounded-xl"
-      >
+      <Surface depth={2} class="menu-surface w-96 pt-2 pb-1.5">
         <ItemBin
           label="People"
           binType="users"

@@ -112,6 +112,17 @@ fn android_notification(
     FCMMessage::notification(title, body, identifier, data, recipient_id)
 }
 
+fn ios_notification(
+    apns: &APNSPushNotification<serde_json::Value>,
+    recipient_id: &MacroUserIdStr<'_>,
+) -> APNSPushNotification<serde_json::Value> {
+    let mut notification = apns.clone();
+    if let Some(data) = notification.push_notification_data.as_object_mut() {
+        data.insert("recipientId".into(), recipient_id.as_ref().into());
+    }
+    notification
+}
+
 #[cfg(test)]
 mod test;
 
@@ -237,6 +248,7 @@ where
         let mut out = Vec::with_capacity(total);
 
         for (user_id, user_apns) in &apns.ios_device_endpoints {
+            let ios = ios_notification(&apns.notif, user_id);
             let android = (!user_apns.android_endpoints.is_empty())
                 .then(|| android_notification(apns, user_id.clone()));
             let checkers: Vec<_> = user_apns
@@ -245,7 +257,7 @@ where
                 .map(|endpoint| MobilePushSend {
                     mobile: &self.mobile,
                     endpoint_arn: endpoint,
-                    notif: MobilePayload::Ios(&apns.notif),
+                    notif: MobilePayload::Ios(&ios),
                     attributes: &apns.attributes,
                 })
                 .chain(android.iter().flat_map(|android| {

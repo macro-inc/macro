@@ -1,8 +1,14 @@
 //! Trusted integration entry point. Import ownership comes from the connected
 //! Macro user, never from provider attendees; imports confer no attendee access.
+#[cfg(test)]
+mod test;
+
+use super::events::{CallMacroEvent, CallRecordImportedMetadata};
 use super::records::{CallEntityRecord, CallParticipant, CallSource, CallTranscript};
+use super::service::publish_call_event;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Serialize;
 use uuid::Uuid;
@@ -73,13 +79,19 @@ pub trait CallImportService: Send + Sync {
     ) -> Result<Option<CallEntityRecord>, rootcause::Report>;
 }
 
-/// Validates provider snapshots before passing them to persistence.
-pub struct CallImportServiceImpl<R>(pub R);
+/// Validates provider snapshots before passing them to persistence, then
+/// announces each stored record on `macro.calls`.
+pub struct CallImportServiceImpl<R, B>(pub R, pub B);
 
 #[async_trait]
-impl<R: ImportedCallRepository> CallImportService for CallImportServiceImpl<R> {
+impl<R: ImportedCallRepository, B: MacroEventBroker> CallImportService
+    for CallImportServiceImpl<R, B>
+{
     async fn ingest(&self, call: ImportedCall) -> Result<Uuid, rootcause::Report> {
-        if call.source.namespace.trim().is_empty() || call.source.object_type.trim().is_empty() {
+        if call.source.namespace.trim().is_empty()
+            || call.source.object_type.trim().is_empty()
+            || call.source.external_id.as_ref().is_empty()
+        {
             return Err(rootcause::report!(
                 "an import requires a scoped source identity"
             ));
@@ -87,7 +99,13 @@ impl<R: ImportedCallRepository> CallImportService for CallImportServiceImpl<R> {
         if matches!((call.started_at, call.ended_at), (Some(start), Some(end)) if end < start) {
             return Err(rootcause::report!("reversed imported call timing"));
         }
-        self.0.upsert(call).await
+        let owner = call.source.user_id.clone();
+        let call_id = self.0.upsert(call).await?;
+        publish_call_event(
+            &self.1,
+            &CallMacroEvent::record_imported(CallRecordImportedMetadata { call_id, owner }),
+        );
+        Ok(call_id)
     }
     async fn list(
         &self,

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared by adaptive and legacy icons. Keep artwork inside the central 66dp circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="72"
+    android:viewportHeight="72">
+    <group android:translateX="10" android:translateY="18.75" android:scaleX="0.281" android:scaleY="0.281">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="m48.143,0 -17.297,6.7832v44.893l-13.547,-12.793 -17.299,6.7812v51.516c0,0.98 0.20089,1.9496 0.58789,2.8496 0.388,0.9 0.95402,1.7108 1.666,2.3848l21.559,20.387 17.312,-6.7812v-44.891l54.654,51.672 17.313,-6.7812v-44.891l54.672,51.674 17.299,-6.7812v-51.516c0,-0.98 -0.20089,-1.9496 -0.58789,-2.8496 -0.388,-0.9 -0.95402,-1.7118 -1.666,-2.3848l-62.682,-59.271 -17.316,6.7832v44.893z" />
+    </group>
+</vector>

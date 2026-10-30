@@ -17,8 +17,9 @@ mod test;
 
 /// The highest access level `source_ids` hold on a database: its own grants,
 /// and Edit through edit or owner on any live form over it, so form editors
-/// can read and change their responses. View on a form grants nothing here. A
-/// database has no `SharePermission`, so there is no public-sharing arm.
+/// can read and change their responses. View on a form grants nothing here.
+/// Databases have no share link, so there is no public-sharing arm; a team
+/// share is a team-source grant like any other.
 /// Both grant paths require an app entity; core storage alone is not shareable.
 #[tracing::instrument(err, skip(pool, source_ids))]
 pub async fn get_database_access(

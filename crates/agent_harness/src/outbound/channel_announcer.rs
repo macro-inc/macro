@@ -251,12 +251,6 @@ fn connection_prompt(blocker: SessionBlocker) -> AgentConnectionPrompt {
             "codex-cloud",
             "Codex",
         ),
-        SessionBlocker::ClaudeNotConnected => (
-            "@claude",
-            "runs on your own Claude account. Connect Claude, then mention me again.",
-            "claude-cloud",
-            "Claude",
-        ),
     };
     AgentConnectionPrompt {
         agent_tag: agent_tag.to_owned(),
@@ -398,31 +392,29 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 message_id: announcement.origin_message_id,
             });
         }
-        let posted = self
-            .messages
-            .post(
-                access,
-                PostMessage {
-                    id: announcement.reply_message_id,
-                    attribution: MessageAttribution::ActingUser,
-                    // Neither shape is news yet. The chip is a pointer: the
-                    // thread hears about the session when it finishes or
-                    // asks, through the lifecycle notifications. The
-                    // pending reply notifies when it is resolved into the
-                    // answer, as the answer.
-                    notification_policy: PostMessageNotificationPolicy::Silent,
-                    content,
-                    thread_id: announcement
-                        .reply_placement
-                        .thread_id(announcement.origin_thread_id),
-                    anchor: None,
-                    mentions: Vec::new(),
-                    attachments: Vec::new(),
-                    nonce: None,
-                },
-            )
-            .await
-            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+        let input = PostMessage {
+            id: announcement.reply_message_id,
+            attribution: MessageAttribution::ActingUser,
+            // Neither shape is news yet. The chip is a pointer: the
+            // thread hears about the session when it finishes or
+            // asks, through the lifecycle notifications. The
+            // pending reply notifies when it is resolved into the
+            // answer, as the answer.
+            notification_policy: PostMessageNotificationPolicy::Silent,
+            content,
+            thread_id: announcement
+                .reply_placement
+                .thread_id(announcement.origin_thread_id),
+            anchor: None,
+            mentions: Vec::new(),
+            attachments: Vec::new(),
+            nonce: None,
+        };
+        let posted = match announcement.reply_message_id {
+            Some(id) => self.messages.post_from_event(access, id, input).await,
+            None => self.messages.post(access, input).await,
+        }
+        .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
         Ok(AnnouncedMessage {
             message_id: posted.id,
         })

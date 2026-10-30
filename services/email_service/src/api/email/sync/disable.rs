@@ -1,71 +1,55 @@
 use crate::api::context::{ApiContext, AuthorizationService};
+use crate::api::email::links::access::InboxActionError;
+use axum::Extension;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
+use email::domain::mailbox::lifecycle::InboxActor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::email::service::link::Link;
-use models_email::email::service::pubsub::LinkManagerMessage;
-use strum_macros::AsRefStr;
-use thiserror::Error;
 
-#[derive(Debug, Error, AsRefStr)]
-pub enum DisableSyncError {
-    #[error("Failed to enqueue delete notification")]
-    EnqueueError(#[from] anyhow::Error),
-}
-
-impl IntoResponse for DisableSyncError {
-    fn into_response(self) -> Response {
-        let status_code = match &self {
-            DisableSyncError::EnqueueError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-
-        let message = self.to_string();
-        (
-            status_code,
-            Json(ErrorResponse {
-                message: message.into(),
-            }),
-        )
-            .into_response()
-    }
-}
-
-/// Disables inbox syncing for user.
+/// Disables inbox syncing for the selected inbox.
+///
+/// The inbox is the caller's primary, or the one named by `X-Email-Link-Id`,
+/// which may be an inbox the caller only reaches through delegation. Removal
+/// therefore follows the same policy as `DELETE /email/links/{link_id}`: an
+/// owner's inbox is torn down, while a delegate only loses their
+/// `macro_user_links` edge and the owner's data stays intact.
 #[utoipa::path(
     delete,
     tag = "Sync",
     path = "/email/sync",
     operation_id = "disable_sync",
+    params(
+        ("X-Email-Link-Id" = Option<uuid::Uuid>, Header, description = "Inbox link ID to act on instead of the caller's primary inbox; may name a delegated inbox."),
+    ),
     responses(
             (status = 204, body=EmptyResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
+            (status = 403, body=ErrorResponse),
+            (status = 404, body=ErrorResponse),
+            (status = 409, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id), err)]
+#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id, link_id=%link.id), err)]
 pub async fn disable_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
-    link: Extension<Link>,
-) -> Result<Response, DisableSyncError> {
-    tracing::info!(user_id = %authorization.authorization.user.user_context.user_id, "Disable called");
-
-    // Enqueue the delete operation to handle cleanup asynchronously
-    let message = LinkManagerMessage::DeleteLink {
-        link_id: link.id,
-        deletion_reason: models_email::email::service::pubsub::DeletionReason::ManuallyDisabled,
+    Extension(link): Extension<Link>,
+) -> Result<Response, InboxActionError> {
+    let actor = InboxActor {
+        macro_id: authorization.authorization.user.macro_user_id.clone(),
+        credential_owner: authorization
+            .authorization
+            .user
+            .user_context
+            .fusion_user_id
+            .to_string(),
     };
-
-    ctx.sqs_client
-        .enqueue_link_manager_notification(message)
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, link_id=?link.id, "Failed to enqueue delete notification");
-        })?;
+    ctx.inbox_lifecycle.remove(&actor, link.id).await?;
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }

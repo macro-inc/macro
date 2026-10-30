@@ -18,7 +18,7 @@ export type PropertyEditorEntity =
 export const [propertyEditorOpen, setPropertyEditorOpen] =
   createControlledOpenSignal(false, { id: 'property-edit' });
 
-interface PropertyEditorState {
+export interface PropertyEditorState {
   mode: PropertyEditorMode;
   selectedEntities: PropertyEditorEntity[];
   targetProperty?: Property | PropertyDefinitionDomain;

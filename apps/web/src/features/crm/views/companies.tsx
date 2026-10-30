@@ -1,6 +1,7 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Show, Suspense } from 'solid-js';
 import { SoupViewList } from '../../next-soup/soup-view/soup-view';
+import { CrmListError, CrmListSkeleton } from '../components/list-state';
 import { useCrmWorkspace } from '../context/workspace-context';
 import { CompanyGroupHeader } from './company-group-header';
 import { ResponsiveCompanyListHeader } from './company-list-header';
@@ -21,12 +22,23 @@ export function Companies() {
           data-list-view="companies"
         >
           <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
-            <Suspense>
+            <Suspense fallback={<CrmListSkeleton />}>
               <Show
                 when={people()}
                 fallback={
                   <SoupViewList
-                    emptyContent={<CrmEmptyState />}
+                    emptyState={(state) => (
+                      <CrmEmptyState
+                        filtered={state.filtered}
+                        onClearFilters={state.clearFilters}
+                        onClearPeopleSearch={options.clearPeopleSearch}
+                        onEditList={options.editList}
+                      />
+                    )}
+                    loadingContent={<CrmListSkeleton />}
+                    errorContent={(retry) => (
+                      <CrmListError onRetry={async () => retry()} />
+                    )}
                     onOpenEntity={options.onOpenEntity}
                     rowEntry={{ component: CompanyListEntity, family: 'row' }}
                     groupHeader={CompanyGroupHeader}
@@ -39,7 +51,18 @@ export function Companies() {
                 }
               >
                 <SoupViewList
-                  emptyContent={<CrmEmptyState />}
+                  emptyState={(state) => (
+                    <CrmEmptyState
+                      filtered={state.filtered}
+                      onClearFilters={state.clearFilters}
+                      onClearPeopleSearch={options.clearPeopleSearch}
+                      onEditList={options.editList}
+                    />
+                  )}
+                  loadingContent={<CrmListSkeleton />}
+                  errorContent={(retry) => (
+                    <CrmListError onRetry={async () => retry()} />
+                  )}
                   onOpenEntity={options.onOpenEntity}
                   rowEntry={{ component: ContactListEntity, family: 'row' }}
                   listHeader={
