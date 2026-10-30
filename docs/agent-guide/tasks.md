@@ -92,13 +92,16 @@ and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
 Desktop task-list columns place Project before Assignees; mobile property order is unchanged.
+Created by uses a compact icon-only column and header; owner names remain available
+on hover and to assistive technology. Its narrow-container visibility is unchanged.
 The project pill beneath a task title shows the project icon and name without
 a `Project:` prefix.
 Wide desktop task rows and group headers share their leading icon alignment.
 Narrow and mobile group headers use compact independent spacing and keep the caret,
 value icon, label, and count on one line; long labels truncate. Group-header carets
-are 16px, with 18px status and Urgent icons. Phone task rows have
-4px list insets, 44px row height, and an 8px unread-dot rail without a checkbox
+are 16px, with 18px status and Urgent icons. Desktop list insets follow the list
+container: 8px below 640px and 12px from 640px; phone insets remain 4px.
+Phone task rows have 44px row height and an 8px unread-dot rail without a checkbox
 column. The rail stays reserved on read tasks so titles do not shift. Status and
 priority controls retain their 36px touch targets; selection highlighting and row
 selection behavior remain available.
@@ -109,7 +112,10 @@ Priority sits directly beside the title. Their pickers replace
 the separate Status/Priority columns and duplicate trailing mobile pills; Assignees
 and Project stay on the right, with 20px phone icons. Empty assignees use a person in
 a dashed circular frame. Empty priority shows hollow ascending bars, Urgent shows a
-filled exclamation badge, Completed uses a filled check-circle, and Canceled uses a filled x-circle.
+filled badge with a hollow exclamation mark, Completed uses a filled check-circle,
+and Canceled uses a filled x-circle.
+Not started stays hollow, with a subtle recessed bevel formed by inner shadow and
+highlight arcs; its status color and icon dimensions stay unchanged.
 The property edit menus use 18px status and Urgent icons on desktop and mobile.
 Each status has its own `task-status-*` theme color, shared by task icons and
 group-header tints. In the theme editor's **Task statuses** section, change a status
