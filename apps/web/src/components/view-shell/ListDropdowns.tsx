@@ -191,11 +191,18 @@ export type ListFilterDropdownProps<
 > = {
   groups: ListFilterGroup<TGroupId, TOptionId>[];
   isSelected: (groupId: TGroupId, optionId: TOptionId) => boolean;
+  /** Include persisted selections absent from dynamic options, such as removed contacts. */
+  selectedIds?: (groupId: TGroupId) => readonly TOptionId[];
   isGroupActive?: (groupId: TGroupId) => boolean;
   onSelectionChange: (
     groupId: TGroupId,
     optionId: TOptionId,
     selected: boolean
+  ) => void;
+  /** Replace a group's selection in one write for deferred persistence. */
+  onGroupSelectionChange?: (
+    groupId: TGroupId,
+    ids: readonly TOptionId[]
   ) => void;
   onClear?: () => void;
   /**
@@ -247,6 +254,45 @@ export function ListFilterDropdown<
         option.id !== group.defaultOptionId &&
         props.isSelected(group.id, option.id)
     );
+
+  const selectedOptionIds = (group: ListFilterGroup<TGroupId, TOptionId>) => [
+    ...new Set([
+      ...(props.selectedIds?.(group.id) ?? []),
+      ...group.options
+        .filter((option) => props.isSelected(group.id, option.id))
+        .map((option) => option.id),
+    ]),
+  ];
+  const setSelectedOptionIds = (
+    group: ListFilterGroup<TGroupId, TOptionId>,
+    ids: readonly string[]
+  ) => {
+    const current = selectedOptionIds(group);
+    const optionIds = [
+      ...new Set([...current, ...group.options.map((option) => option.id)]),
+    ];
+    const next = optionIds.filter((id) => {
+      if (group.options.find((option) => option.id === id)?.disabled)
+        return current.includes(id);
+      return ids.includes(id);
+    });
+    if (
+      next.length === current.length &&
+      next.every((id) => current.includes(id))
+    )
+      return;
+    if (props.onGroupSelectionChange) {
+      props.onGroupSelectionChange(group.id, next);
+      return;
+    }
+    batch(() => {
+      for (const id of optionIds) {
+        const selected = next.includes(id);
+        if (selected !== current.includes(id))
+          props.onSelectionChange(group.id, id, selected);
+      }
+    });
+  };
 
   return (
     <Dropdown open={isOpen()} onOpenChange={setOpen} placement="bottom-end">
@@ -329,9 +375,8 @@ export function ListFilterDropdown<
                           !props.isSelected(group().id, id)
                       )
                     }
-                    closeOnSelect={
-                      group().selectionMode === 'single' ? true : 'unless-shift'
-                    }
+                    onOnly={(id) => setSelectedOptionIds(group(), [id])}
+                    closeOnSelect
                     contentClass={group().contentClass}
                   />
                 }
@@ -341,29 +386,8 @@ export function ListFilterDropdown<
                   label={group().label}
                   active={isGroupActive(group())}
                   options={() => group().options}
-                  activeIds={() =>
-                    group()
-                      .options.filter((option) =>
-                        props.isSelected(group().id, option.id)
-                      )
-                      .map((option) => option.id)
-                  }
-                  onChange={(ids) =>
-                    batch(() => {
-                      for (const option of group().options) {
-                        const selected = ids.includes(option.id);
-                        if (
-                          selected !== props.isSelected(group().id, option.id)
-                        ) {
-                          props.onSelectionChange(
-                            group().id,
-                            option.id,
-                            selected
-                          );
-                        }
-                      }
-                    })
-                  }
+                  activeIds={() => selectedOptionIds(group())}
+                  onChange={(ids) => setSelectedOptionIds(group(), ids)}
                   placeholder={group().searchPlaceholder}
                 />
               </Show>

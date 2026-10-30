@@ -108,7 +108,9 @@ export function floatWithSelection(
     let anchor: Range | Element | null = null;
 
     if (selection.rangeCount >= 1) {
-      const range = selection.getRangeAt(0);
+      // Snapshot the caret. getRangeAt() is live, so focusing a picker
+      // search field would rewrite this anchor and hide() the menu.
+      const range = selection.getRangeAt(0).cloneRange();
       if (range.collapsed && range.startContainer instanceof Text) {
         anchor = range;
       } else if (range.collapsed && range.startContainer instanceof Element) {

@@ -69,7 +69,7 @@ export function useEmailFilters() {
       return;
     }
 
-    // Persisted facets preserve unknown IDs; menu actions only accept known IDs.
+    // Preserve unknown IDs during toggles; Only explicitly removes other IDs.
     const update = selected
       ? addUnique<string>(optionId)
       : removeValue<string>(optionId);
@@ -83,6 +83,7 @@ export function useEmailFilters() {
     groups,
     activeCount: activeFilterCount,
     isSelected,
+    selectedIds: (groupId: EmailFilterGroupId) => state.facets[groupId] ?? [],
     setSelected,
     clear: () => setFacets({}),
   };

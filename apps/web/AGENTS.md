@@ -152,6 +152,8 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
 - Gate account-only queries, comment readers, and account WebSockets on confirmed
   authentication; keep public document loading independent of those services
   and distinguish unresolved identity from confirmed sign-out in UI prompts.
+  `withAuth` routes offer sign-in on confirmed sign-out; never leave a
+  signed-out viewer on a loader.
 - Probe identity on deploy-preview origins even without a local login hint;
   shared HttpOnly dev cookies are not visible to JavaScript or localStorage.
 - Leave the login hint (`syncLoginStorage(true)`) before a full-page hosted
@@ -196,6 +198,9 @@ ownership. Cancel, logout, and the ten-minute timeout retire pending callbacks.
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` activity uses the same Calling N tools peek window as
   ordinary consecutive tool calls.
+- Compose multiselect filters with `Dropdown.MultiSelectItem` and the shared
+  searchable filters; follow [multiselect dropdowns](../../docs/agent-guide/ui-conventions.md#multiselect-dropdowns)
+  for checkbox, row, Only, keyboard, and touch behavior.
 - All API/network calls live in service-clients.
 - Open projects through `openProject` (`features/projects/open-project.ts`): it
   retargets an already-open project split to the section or comment in place.

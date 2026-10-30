@@ -32,3 +32,18 @@ test('a menu under a composer near the top still opens below it', async ({
   expect(menu.y).toBeGreaterThanOrEqual(composer.y + composer.height);
   expect(menu.height).toBeGreaterThanOrEqual(256);
 });
+
+test('a picker that focuses its search field stays visible above a bottom composer', async ({
+  page,
+}) => {
+  await page.goto(`${fixture}?stealFocus=1`);
+  await expect(page.getByTestId('search')).toBeFocused();
+  const { menu, composer } = await boxes(page);
+
+  expect(
+    await page
+      .getByTestId('menu')
+      .evaluate((el) => getComputedStyle(el).visibility)
+  ).toBe('visible');
+  expect(menu.y + menu.height).toBeLessThanOrEqual(composer.y);
+});

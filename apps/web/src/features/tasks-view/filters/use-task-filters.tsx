@@ -166,6 +166,7 @@ export function useTaskFilters() {
     clear: () => setFacets({}),
     groups,
     isSelected,
+    selectedIds: (groupId: TaskFilterGroupId) => state.facets[groupId] ?? [],
     setSelected,
   };
 }

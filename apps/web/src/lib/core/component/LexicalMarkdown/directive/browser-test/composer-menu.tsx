@@ -6,7 +6,7 @@ import { floatWithSelection } from '../floatWithSelection';
 const PANEL_DECORATION_HEIGHT = 18;
 const MAX_CONTENT_HEIGHT = 256;
 
-function Menu(props: { rows: number }) {
+function Menu(props: { rows: number; stealFocus?: boolean }) {
   const [availableHeight, setAvailableHeight] = createSignal<number>();
   const contentMaxHeight = () => {
     const h = availableHeight();
@@ -29,6 +29,9 @@ function Menu(props: { rows: number }) {
       }
     >
       <div class="menu-surface rounded-xl p-px py-2">
+        <Show when={props.stealFocus}>
+          <input data-testid="search" type="search" aria-label="Search" />
+        </Show>
         <div
           class="overflow-y-auto"
           style={{ 'max-height': `${contentMaxHeight()}px` }}
@@ -48,6 +51,8 @@ function Menu(props: { rows: number }) {
 function Fixture() {
   const caretAtTop =
     new URLSearchParams(location.search).get('caret') === 'top';
+  const stealFocus =
+    new URLSearchParams(location.search).get('stealFocus') === '1';
   const [open, setOpen] = createSignal(false);
   const [rows, setRows] = createSignal(1);
   let composer!: HTMLDivElement;
@@ -59,6 +64,15 @@ function Fixture() {
     document.getSelection()?.removeAllRanges();
     document.getSelection()?.addRange(range);
     setOpen(true);
+    if (stealFocus) {
+      // GIF picker's search field takes focus after open; the live Range
+      // from getSelection() would otherwise follow it and hide() the menu.
+      setTimeout(() => {
+        document
+          .querySelector<HTMLInputElement>('[data-testid=search]')
+          ?.focus();
+      }, 50);
+    }
     setTimeout(() => setRows(12), 100);
   });
   return (
@@ -73,7 +87,7 @@ function Fixture() {
         /
       </div>
       <Show when={open()}>
-        <Menu rows={rows()} />
+        <Menu rows={rows()} stealFocus={stealFocus} />
       </Show>
     </main>
   );

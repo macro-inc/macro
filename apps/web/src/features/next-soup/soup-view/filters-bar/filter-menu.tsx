@@ -208,16 +208,10 @@ export function FilterOptionItem(props: {
   disabled?: boolean;
   closeOnSelect?: SelectionDismissal;
   onSelect: () => void;
+  onOnly?: () => void;
 }) {
-  return (
-    <Dropdown.Item
-      role="menuitemcheckbox"
-      aria-checked={props.active}
-      disabled={props.disabled}
-      onSelect={props.onSelect}
-      closeOnSelect={props.closeOnSelect}
-    >
-      <TypeIndicator active={props.active} />
+  const content = () => (
+    <>
       <Show when={props.icon}>
         {(icon) => (
           <span class="size-4 flex items-center justify-center shrink-0">
@@ -233,7 +227,38 @@ export function FilterOptionItem(props: {
       >
         {props.content?.() ?? props.label}
       </span>
-    </Dropdown.Item>
+    </>
+  );
+  return (
+    <Show
+      when={props.onOnly}
+      fallback={
+        <Dropdown.Item
+          role="menuitemcheckbox"
+          aria-checked={props.active}
+          disabled={props.disabled}
+          onSelect={props.onSelect}
+          closeOnSelect={props.closeOnSelect}
+        >
+          <TypeIndicator active={props.active} />
+          {content()}
+        </Dropdown.Item>
+      }
+    >
+      {(onOnly) => (
+        <Dropdown.MultiSelectItem
+          checked={props.active}
+          label={props.label}
+          disabled={props.disabled}
+          onChange={(checked) => {
+            if (checked !== props.active) props.onSelect();
+          }}
+          onOnly={onOnly()}
+        >
+          {content()}
+        </Dropdown.MultiSelectItem>
+      )}
+    </Show>
   );
 }
 
@@ -265,6 +290,7 @@ export function FilterSubmenu<TId extends string>(props: {
   isSelected: (id: TId) => boolean;
   onSelect: (id: TId) => void;
   closeOnSelect?: SelectionDismissal;
+  onOnly?: (id: TId) => void;
   contentClass?: string;
   selectionMode?: 'single' | 'multiple';
 }) {
@@ -297,6 +323,7 @@ export function FilterSubmenu<TId extends string>(props: {
                     disabled={option().disabled}
                     active={props.isSelected(option().id)}
                     onSelect={() => props.onSelect(option().id)}
+                    onOnly={props.onOnly && (() => props.onOnly?.(option().id))}
                     closeOnSelect={props.closeOnSelect}
                   />
                 )}

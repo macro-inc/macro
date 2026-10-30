@@ -127,6 +127,7 @@ export function ConversationListControls(props: ConversationListControlsProps) {
           class="size-(--sidebar-control-size)"
           groups={FILTER_GROUPS}
           isSelected={isSelected}
+          selectedIds={(group) => props.filters[group]}
           onSelectionChange={props.onFilterChange}
           onClear={props.onClearFilters}
         />

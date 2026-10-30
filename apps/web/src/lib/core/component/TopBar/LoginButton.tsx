@@ -1,4 +1,5 @@
 import { useIsAuthenticated } from '@core/auth';
+import { setPostLoginRedirect } from '@core/util/postLoginRedirect';
 import { useNavigate } from '@solidjs/router';
 import { Button } from '@ui';
 
@@ -18,7 +19,10 @@ export function LoginButton() {
       <Button
         variant="outline"
         size="sm"
-        onClick={() => navigate(`/login${window.location.search}`)}
+        onClick={() => {
+          setPostLoginRedirect(window.location.href);
+          navigate(`/login${window.location.search}`);
+        }}
       >
         Login
       </Button>
@@ -26,7 +30,10 @@ export function LoginButton() {
       <Button
         variant="accent"
         size="sm"
-        onClick={() => navigate(`/welcome${window.location.search}`)}
+        onClick={() => {
+          setPostLoginRedirect(window.location.href);
+          navigate(`/welcome${window.location.search}`);
+        }}
       >
         Sign Up
       </Button>

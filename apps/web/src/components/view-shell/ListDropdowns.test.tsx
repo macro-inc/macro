@@ -55,11 +55,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(single = false, searchable = false) {
-  const [selected, setSelected] = createSignal<string[]>([]);
+function setup(single = false, searchable = false, initial: string[] = []) {
+  const [selected, setSelected] = createSignal<string[]>(initial);
   const [open, setOpen] = createSignal(true);
   render(() => (
-    <ListFilterDropdown
+    <ListFilterDropdown<'people' | 'scope', string>
       label="Filter tasks"
       activeCount={selected().length}
       open={open()}
@@ -74,6 +74,7 @@ function setup(single = false, searchable = false) {
             { id: 'alice', label: 'Alice' },
             { id: 'bob', label: 'Bob' },
             { id: 'carol', label: 'Carol' },
+            { id: 'disabled', label: 'Disabled', disabled: true },
           ],
         },
         {
@@ -84,6 +85,7 @@ function setup(single = false, searchable = false) {
         },
       ]}
       isSelected={(_, id) => selected().includes(id)}
+      selectedIds={(group) => (group === 'people' ? selected() : [])}
       onSelectionChange={(_, id, checked) =>
         setSelected((ids) =>
           checked
@@ -120,48 +122,61 @@ async function openSubmenu() {
   fireEvent.keyDown(trigger, { key: 'ArrowRight' });
 }
 
-it('keeps multi-select menus open with Shift while adding and removing filters', async () => {
+it('toggles checkboxes without closing a multiselect submenu', async () => {
   const { selected, open } = setup();
-  const trigger = screen.getByLabelText('Filter tasks');
   await openSubmenu();
+  const alice = await screen.findByRole('menuitemcheckbox', { name: 'Alice' });
   selectOption(
-    await screen.findByRole('menuitemcheckbox', { name: 'Alice' }),
-    true
+    alice.querySelector<HTMLElement>('[data-multiselect-checkbox]')!
   );
   expect(selected()).toEqual(['alice']);
-  expect(trigger.textContent).toBe('1');
   expect(open()).toBe(true);
-  expect(
-    screen
-      .getByRole('menuitemcheckbox', { name: 'Alice' })
-      .getAttribute('aria-checked')
-  ).toBe('true');
-  selectOption(screen.getByRole('menuitemcheckbox', { name: 'Bob' }), true);
+  const bob = screen.getByRole('menuitemcheckbox', { name: 'Bob' });
+  selectOption(bob.querySelector<HTMLElement>('[data-multiselect-checkbox]')!);
   expect(selected()).toEqual(['alice', 'bob']);
-  expect(trigger.textContent).toBe('2');
-  selectOption(screen.getByRole('menuitemcheckbox', { name: 'Alice' }), true);
+  selectOption(
+    alice.querySelector<HTMLElement>('[data-multiselect-checkbox]')!
+  );
   expect(selected()).toEqual(['bob']);
-  expect(trigger.textContent).toBe('1');
   expect(open()).toBe(true);
+  expect(screen.getByLabelText('Filter tasks').textContent).toBe('1');
 });
 
-it.each(['pointer', 'keyboard'])(
-  'closes multi-select menus after releasing Shift (%s)',
-  async (input) => {
-    const { selected, open } = setup();
+it.each(['Alice', 'Bob'])(
+  'adds a row without removing existing selections and closes (%s)',
+  async (name) => {
+    const { selected, open } = setup(false, false, ['alice']);
     await openSubmenu();
-    const alice = await screen.findByRole('menuitemcheckbox', {
-      name: 'Alice',
-    });
-    if (input === 'pointer') selectOption(alice, true);
-    else fireEvent.keyDown(alice, { key: 'Enter', shiftKey: true });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(open()).toBe(true);
-    expect(selected()).toEqual(['alice']);
-    if (input === 'pointer') selectOption(alice);
-    else fireEvent.keyDown(alice, { key: 'Enter' });
+    selectOption(await screen.findByRole('menuitemcheckbox', { name }));
+    expect(selected()).toEqual(name === 'Alice' ? ['alice'] : ['alice', 'bob']);
     await waitFor(() => expect(open()).toBe(false));
-    expect(selected()).toEqual([]);
+  }
+);
+
+it.each(['pointer', 'keyboard', 'Only'])(
+  'selects only one option and stays open (%s)',
+  async (input) => {
+    const { selected, open } = setup(false, false, ['alice', 'carol']);
+    await openSubmenu();
+    const bob = await screen.findByRole('menuitemcheckbox', { name: 'Bob' });
+    if (input === 'pointer') selectOption(bob, true);
+    else if (input === 'keyboard')
+      fireEvent.keyDown(bob, { key: 'Enter', shiftKey: true });
+    else
+      fireEvent.click(screen.getByRole('button', { name: 'Select only Bob' }));
+    expect(selected()).toEqual(['bob']);
+    expect(open()).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Select only Bob' }));
+    expect(selected()).toEqual(['bob']);
+    expect(open()).toBe(true);
+    fireEvent.keyDown(screen.getByRole('menuitemcheckbox', { name: 'Alice' }), {
+      key: ' ',
+    });
+    expect(selected()).toEqual(['bob', 'alice']);
+    expect(open()).toBe(true);
+    fireEvent.keyDown(bob, { key: 'Enter' });
+    await waitFor(() => expect(open()).toBe(false));
+    expect(selected()).toEqual(['bob', 'alice']);
   }
 );
 
@@ -178,21 +193,190 @@ function clickSearchOption(element: HTMLElement, shiftKey: boolean) {
   }
 }
 
-it('Shift-click toggles individual searchable options without selecting a range', async () => {
+it('searchable checkboxes toggle while Shift-click and Only replace the selection without closing', async () => {
   const { selected, open } = setup(false, true);
   await openSubmenu();
   const alice = await screen.findByRole('option', { name: 'Alice' });
-  clickSearchOption(alice, true);
+  clickSearchOption(
+    alice.querySelector<HTMLElement>('[data-multiselect-checkbox]')!,
+    false
+  );
   await waitFor(() => expect(selected()).toEqual(['alice']));
-  clickSearchOption(screen.getByRole('option', { name: 'Carol' }), true);
+  clickSearchOption(
+    screen
+      .getByRole('option', { name: 'Carol' })
+      .querySelector<HTMLElement>('[data-multiselect-checkbox]')!,
+    false
+  );
   await waitFor(() => expect(selected()).toEqual(['alice', 'carol']));
   expect(open()).toBe(true);
   clickSearchOption(screen.getByRole('option', { name: 'Alice' }), true);
-  await waitFor(() => expect(selected()).toEqual(['carol']));
+  await waitFor(() => expect(selected()).toEqual(['alice']));
+  expect(open()).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Select only Carol' }));
+  expect(selected()).toEqual(['carol']);
   expect(open()).toBe(true);
   clickSearchOption(screen.getByRole('option', { name: 'Carol' }), false);
   await waitFor(() => expect(open()).toBe(false));
-  expect(selected()).toEqual([]);
+  expect(selected()).toEqual(['carol']);
+});
+
+it.each([false, true])(
+  'Only leaves other groups unchanged (searchable: %s)',
+  async (searchable) => {
+    const [people, setPeople] = createSignal(['alice', 'bob']);
+    const [status, setStatus] = createSignal(['open']);
+    render(() => (
+      <ListFilterDropdown
+        open
+        groups={[
+          {
+            id: 'people',
+            label: 'Assignee',
+            searchPlaceholder: searchable ? 'Search assignees...' : undefined,
+            options: [
+              { id: 'alice', label: 'Alice' },
+              { id: 'bob', label: 'Bob' },
+            ],
+          },
+          {
+            id: 'status',
+            label: 'Status',
+            options: [{ id: 'open', label: 'Open' }],
+          },
+        ]}
+        isSelected={(group, id) =>
+          (group === 'people' ? people() : status()).includes(id)
+        }
+        onSelectionChange={(group, id, checked) => {
+          const update = (ids: string[]) =>
+            checked ? [...ids, id] : ids.filter((value) => value !== id);
+          if (group === 'people') setPeople(update);
+          else setStatus(update);
+        }}
+      />
+    ));
+    await openSubmenu();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Select only Bob' })
+    );
+    expect(people()).toEqual(['bob']);
+    expect(status()).toEqual(['open']);
+  }
+);
+
+it.each([
+  { searchable: false, disabledSelected: false },
+  { searchable: true, disabledSelected: false },
+  { searchable: false, disabledSelected: true },
+  { searchable: true, disabledSelected: true },
+])(
+  'replaces the whole group in one write when persistence is deferred (searchable: $searchable, disabled selected: $disabledSelected)',
+  async ({ searchable, disabledSelected }) => {
+    const initial: Record<'people' | 'scope', string[]> = {
+      people: ['alice', 'carol', 'unavailable'],
+      scope: ['all'],
+    };
+    if (disabledSelected) initial.people.push('disabled');
+    const expectedPeople = disabledSelected ? ['disabled', 'bob'] : ['bob'];
+    const [filters, setFilters] = createSignal(initial);
+    const [open, setOpen] = createSignal(true);
+    let pending = initial;
+    const persist = vi.fn((next: typeof initial) => {
+      pending = next;
+    });
+    render(() => (
+      <ListFilterDropdown<'people' | 'scope', string>
+        open={open()}
+        onOpenChange={setOpen}
+        groups={[
+          {
+            id: 'people',
+            label: 'Assignee',
+            searchPlaceholder: searchable ? 'Search assignees...' : undefined,
+            options: [
+              { id: 'alice', label: 'Alice' },
+              { id: 'bob', label: 'Bob' },
+              { id: 'carol', label: 'Carol' },
+              { id: 'disabled', label: 'Disabled', disabled: true },
+            ],
+          },
+          {
+            id: 'scope',
+            label: 'Files',
+            options: [{ id: 'all', label: 'All files' }],
+          },
+        ]}
+        isSelected={(group, id) => filters()[group].includes(id)}
+        selectedIds={(group) => filters()[group]}
+        onSelectionChange={(group, id, selected) => {
+          const current = filters();
+          persist({
+            ...current,
+            [group]: selected
+              ? [...current[group], id]
+              : current[group].filter((value) => value !== id),
+          });
+        }}
+        onGroupSelectionChange={(group, ids) =>
+          persist({ ...filters(), [group]: [...ids] })
+        }
+      />
+    ));
+    await openSubmenu();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Select only Bob' })
+    );
+
+    // Like Lexical settings, the committed filters stay stale until the write settles.
+    expect(filters()).toEqual(initial);
+    expect(persist).toHaveBeenCalledExactlyOnceWith({
+      people: expectedPeople,
+      scope: ['all'],
+    });
+    setFilters(pending);
+    expect(filters().people).toEqual(expectedPeople);
+    expect(filters().scope).toEqual(['all']);
+    expect(open()).toBe(true);
+    expect(
+      screen
+        .getByRole(searchable ? 'option' : 'menuitemcheckbox', { name: 'Bob' })
+        .getAttribute(searchable ? 'aria-selected' : 'aria-checked')
+    ).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Select only Bob' }));
+    expect(persist).toHaveBeenCalledTimes(1);
+  }
+);
+
+it.each([false, true])(
+  'disabled options cannot change selection (searchable: %s)',
+  async (searchable) => {
+    const { selected, open } = setup(false, searchable, ['alice']);
+    await openSubmenu();
+    const option = await screen.findByRole(
+      searchable ? 'option' : 'menuitemcheckbox',
+      { name: 'Disabled' }
+    );
+    if (searchable) clickSearchOption(option, true);
+    else selectOption(option, true);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Select only Disabled' })
+    );
+    expect(selected()).toEqual(['alice']);
+    expect(open()).toBe(true);
+  }
+);
+
+it('Shift-clicking a searchable checkbox still toggles only that checkbox', async () => {
+  const { selected, open } = setup(false, true, ['alice']);
+  await openSubmenu();
+  const carol = await screen.findByRole('option', { name: 'Carol' });
+  clickSearchOption(
+    carol.querySelector<HTMLElement>('[data-multiselect-checkbox]')!,
+    true
+  );
+  expect(selected()).toEqual(['alice', 'carol']);
+  expect(open()).toBe(true);
 });
 
 it('Enter closes the entire searchable filter menu after applying the selection', async () => {
@@ -208,7 +392,7 @@ it('Enter closes the entire searchable filter menu after applying the selection'
 });
 
 it.each(['pointer', 'keyboard'])(
-  'standalone searchable filters keep Shift selections open and close on a normal selection (%s)',
+  'standalone searchable filters keep exclusive selection open and add on ordinary selection (%s)',
   async (method) => {
     const [selected, setSelected] = createSignal<string[]>([]);
     const [open, setOpen] = createSignal(true);
@@ -246,9 +430,89 @@ it.each(['pointer', 'keyboard'])(
     } else
       clickSearchOption(screen.getByRole('option', { name: 'Alice' }), false);
     await waitFor(() => expect(open()).toBe(false));
-    expect(selected()).toEqual([]);
+    expect(selected()).toEqual(['alice']);
   }
 );
+
+it.each([false, true])(
+  'Only clears hidden group selections without ordinary toggles dropping them (searchable: %s)',
+  async (searchable) => {
+    const { selected, open } = setup(false, searchable, [
+      'alice',
+      'unavailable',
+    ]);
+    await openSubmenu();
+    const bob = await screen.findByRole(
+      searchable ? 'option' : 'menuitemcheckbox',
+      { name: 'Bob' }
+    );
+    const checkbox = bob.querySelector<HTMLElement>(
+      '[data-multiselect-checkbox]'
+    )!;
+    if (searchable) clickSearchOption(checkbox, false);
+    else selectOption(checkbox);
+    expect(selected()).toEqual(['alice', 'unavailable', 'bob']);
+    fireEvent.click(screen.getByRole('button', { name: 'Select only Bob' }));
+    expect(selected()).toEqual(['bob']);
+    expect(open()).toBe(true);
+  }
+);
+
+it('preserves selected IDs absent from the current searchable options until Only replaces the selection', async () => {
+  const [selected, setSelected] = createSignal(['alice', 'unavailable']);
+  render(() => (
+    <SearchableMultiSelect
+      options={() => [
+        { id: 'alice', label: 'Alice' },
+        { id: 'bob', label: 'Bob' },
+      ]}
+      activeIds={selected}
+      onChange={setSelected}
+      open={() => true}
+    >
+      <Combobox.Trigger>People</Combobox.Trigger>
+    </SearchableMultiSelect>
+  ));
+  const alice = await screen.findByRole('option', { name: 'Alice' });
+  clickSearchOption(
+    alice.querySelector<HTMLElement>('[data-multiselect-checkbox]')!,
+    false
+  );
+  expect(selected()).toEqual(['unavailable']);
+  const bob = screen.getByRole('option', { name: 'Bob' });
+  clickSearchOption(
+    bob.querySelector<HTMLElement>('[data-multiselect-checkbox]')!,
+    false
+  );
+  expect(selected()).toEqual(['unavailable', 'bob']);
+  fireEvent.click(screen.getByRole('button', { name: 'Select only Bob' }));
+  expect(selected()).toEqual(['bob']);
+});
+
+it('runs a searchable action once and closes without changing the selected options', async () => {
+  const [selected, setSelected] = createSignal(['alice']);
+  const [open, setOpen] = createSignal(true);
+  const onSelect = vi.fn();
+  render(() => (
+    <SearchableMultiSelect
+      options={() => [{ id: 'alice', label: 'Alice' }]}
+      activeIds={selected}
+      onChange={setSelected}
+      open={open}
+      onOpenChange={setOpen}
+      action={{ label: 'Connect account', onSelect }}
+    >
+      <Combobox.Trigger>People</Combobox.Trigger>
+    </SearchableMultiSelect>
+  ));
+  clickSearchOption(
+    await screen.findByRole('option', { name: 'Connect account' }),
+    true
+  );
+  expect(onSelect).toHaveBeenCalledOnce();
+  expect(open()).toBe(false);
+  expect(selected()).toEqual(['alice']);
+});
 
 it('shared checkbox filters support Shift+Enter and close after ordinary Enter', async () => {
   const [checked, setChecked] = createSignal(false);
@@ -500,7 +764,7 @@ it('focuses searchable submenus on opening and reopening and supports keyboard s
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
     await waitFor(() =>
-      expect(selected()).toEqual(attempt ? ['alice', 'bob'] : ['alice'])
+      expect(selected()).toEqual(attempt ? ['bob'] : ['alice'])
     );
     expect(open()).toBe(true);
     fireEvent.keyDown(input, { key: 'Escape' });
