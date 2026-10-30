@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
+use models_entity_access_management::{EntityAccessSource, EntityAccessSourceType};
 
 use super::*;
 use crate::domain::ports::{SoupRealtimeConsumer, SoupRealtimePublisher, UserAccessExpander};
@@ -14,6 +15,8 @@ const OTHER_DOCUMENT_ID: &str = "00000000-0000-0000-0000-000000000002";
 
 struct FakeAccessExpander {
     users: Vec<MacroUserIdStr<'static>>,
+    /// Users every recorded audience reaches.
+    source_users: Vec<MacroUserIdStr<'static>>,
     fail: bool,
     calls: Arc<AtomicUsize>,
     entities: Arc<Mutex<Vec<Entity<'static>>>>,
@@ -34,6 +37,13 @@ impl UserAccessExpander for FakeAccessExpander {
         } else {
             Ok(self.users.clone())
         }
+    }
+
+    async fn expand_sources(
+        &self,
+        _sources: &[EntityAccessSource],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Ok(self.source_users.clone())
     }
 }
 
@@ -99,6 +109,7 @@ fn gated_service() -> GatedHarness {
     let service = SoupRealtimeServiceImpl::new(
         FakeAccessExpander {
             users: vec![user("one")],
+            source_users: Vec::new(),
             fail: false,
             calls: Arc::new(AtomicUsize::new(0)),
             entities: Arc::new(Mutex::new(Vec::new())),
@@ -222,6 +233,13 @@ fn document(id: &str) -> Entity<'static> {
     EntityType::Document.with_entity_string(id.to_string())
 }
 
+fn team_source() -> EntityAccessSource {
+    EntityAccessSource {
+        source_type: EntityAccessSourceType::Team,
+        source_id: "00000000-0000-0000-0000-0000000000aa".to_string(),
+    }
+}
+
 fn updated_document() -> Patch<Entity<'static>> {
     Patch::Updated(document(DOCUMENT_ID))
 }
@@ -237,6 +255,7 @@ fn harness(
     let service = SoupRealtimeServiceImpl::new(
         FakeAccessExpander {
             users,
+            source_users: vec![user("one"), user("former")],
             fail: access_fails,
             calls: access_calls.clone(),
             entities: access_entities.clone(),
@@ -392,7 +411,7 @@ async fn audience_users_receive_the_patch_alongside_current_accessors() {
         .service
         .notify_users(
             SoupRealtimePatch::for_entity(Patch::Deleted(document(DOCUMENT_ID)))
-                .with_audience(vec![user("one"), user("former")]),
+                .with_audience(vec![team_source()]),
         )
         .await
         .expect("patch is published");
@@ -408,8 +427,13 @@ async fn audience_users_receive_the_patch_alongside_current_accessors() {
 
 #[test]
 fn patch_debug_output_counts_the_audience_without_naming_it() {
-    let patch = SoupRealtimePatch::for_entity(Patch::Deleted(document(DOCUMENT_ID)))
-        .with_audience(vec![user("former")]);
+    let patch =
+        SoupRealtimePatch::for_entity(Patch::Deleted(document(DOCUMENT_ID))).with_audience(vec![
+            EntityAccessSource {
+                source_type: EntityAccessSourceType::User,
+                source_id: user("former").as_ref().to_string(),
+            },
+        ]);
 
     let rendered = format!("{patch:?}");
 

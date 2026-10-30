@@ -14,8 +14,8 @@ use crate::domain::{
         DocumentPurger, DocxPartReferences,
     },
 };
+use entity_access::domain::models::EntityAccessSource;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
-use macro_user_id::user_id::MacroUserIdStr;
 
 const DOCX: &str = "93000000-0000-0000-0000-000000000011";
 
@@ -54,7 +54,7 @@ impl DocxPartReferences for Arc<RecordingPartReferences> {
 struct NoAudience;
 
 impl DocumentAudience for NoAudience {
-    async fn users(&self, _: &str) -> Result<Vec<MacroUserIdStr<'static>>, DocumentError> {
+    async fn sources(&self, _: &str) -> Result<Vec<EntityAccessSource>, DocumentError> {
         Ok(Vec::new())
     }
 }
@@ -175,5 +175,8 @@ async fn a_legacy_document_id_has_an_empty_audience_instead_of_an_error(pool: Pg
         PgAccessRepository::new(pool),
     )));
 
-    assert_eq!(audience.users("legacy-document").await.unwrap(), Vec::new());
+    assert_eq!(
+        audience.sources("legacy-document").await.unwrap(),
+        Vec::new()
+    );
 }

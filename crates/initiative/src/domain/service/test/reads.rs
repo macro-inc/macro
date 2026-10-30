@@ -23,8 +23,8 @@ pub(super) struct FakeResources {
     checked: Arc<Mutex<Vec<String>>>,
     /// Every entity id whose receipt reached `properties`, in call order.
     read_properties: Arc<Mutex<Vec<String>>>,
-    /// Users `audience` reports.
-    audience: Vec<MacroUserIdStr<'static>>,
+    /// Grants `audience` reports.
+    audience: Vec<entity_access::domain::models::EntityAccessSource>,
     /// Set once `audience` is read.
     audience_read: Arc<AtomicBool>,
     fail_audience: bool,
@@ -33,7 +33,7 @@ pub(super) struct FakeResources {
 impl FakeResources {
     /// Resources whose `audience` reports `audience` and sets `audience_read`.
     pub(super) fn with_audience(
-        audience: Vec<MacroUserIdStr<'static>>,
+        audience: Vec<entity_access::domain::models::EntityAccessSource>,
         audience_read: Arc<AtomicBool>,
     ) -> Self {
         Self {
@@ -74,7 +74,10 @@ impl InitiativeResources for FakeResources {
     ) -> ResourceFuture<'_, ()> {
         Box::pin(async { Ok(()) })
     }
-    fn audience(&self, _id: InitiativeId) -> ResourceFuture<'_, Vec<MacroUserIdStr<'static>>> {
+    fn audience(
+        &self,
+        _id: InitiativeId,
+    ) -> ResourceFuture<'_, Vec<entity_access::domain::models::EntityAccessSource>> {
         self.audience_read.store(true, Ordering::SeqCst);
         Box::pin(async {
             if self.fail_audience {

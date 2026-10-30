@@ -132,7 +132,7 @@ impl<B: MacroEventBroker, A: DocumentAudience> EntityLifecycleService
         // The row delete below removes the access realtime recipients resolve from.
         let audience = self
             .audience
-            .users(&entity.entity_id)
+            .sources(&entity.entity_id)
             .await
             .map_err(|error| internal!(error))?;
         if document.file_type.as_deref() == Some("docx") {

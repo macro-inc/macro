@@ -7,8 +7,10 @@ use super::super::domain::{
         PurgeTarget, PurgedRows,
     },
 };
-use entity_access::domain::{models::EntityType, ports::EntityAccessService};
-use macro_user_id::user_id::MacroUserIdStr;
+use entity_access::domain::{
+    models::{EntityAccessSource, EntityType},
+    ports::EntityAccessSources,
+};
 use model_owner::Owner;
 use std::sync::Arc;
 
@@ -111,7 +113,7 @@ impl DocxPartReferences for RedisDocxPartReferences {
     }
 }
 
-/// A document's audience as the entity access service resolves it.
+/// A document's grants as the entity access service reads them.
 pub struct EntityAccessDocumentAudience<S> {
     access: Arc<S>,
 }
@@ -123,19 +125,16 @@ impl<S> EntityAccessDocumentAudience<S> {
     }
 }
 
-impl<S: EntityAccessService> DocumentAudience for EntityAccessDocumentAudience<S> {
+impl<S: EntityAccessSources> DocumentAudience for EntityAccessDocumentAudience<S> {
     #[tracing::instrument(skip(self), err)]
-    async fn users(
-        &self,
-        document_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, DocumentError> {
-        // Entity access resolves users only for UUID ids. A legacy document id has
-        // none to read, and realtime could not resolve recipients for it either.
+    async fn sources(&self, document_id: &str) -> Result<Vec<EntityAccessSource>, DocumentError> {
+        // Entity access keys grants by UUID. A legacy document id has none to read,
+        // and realtime could not resolve recipients for it either.
         if uuid::Uuid::parse_str(document_id).is_err() {
             return Ok(Vec::new());
         }
         self.access
-            .get_users_by_entity(document_id, EntityType::Document)
+            .access_sources(document_id, EntityType::Document)
             .await
             .map_err(|error| DocumentError::Internal(error.into()))
     }

@@ -79,6 +79,21 @@ impl InitiativeEventPublisher for Events {
     }
 }
 
+/// The owner's grant and a team's, as a delete would read them.
+fn grants() -> Vec<entity_access::domain::models::EntityAccessSource> {
+    use entity_access::domain::models::{EntityAccessSource, EntityAccessSourceType};
+    vec![
+        EntityAccessSource {
+            source_type: EntityAccessSourceType::User,
+            source_id: OWNER.to_owned(),
+        },
+        EntityAccessSource {
+            source_type: EntityAccessSourceType::Team,
+            source_id: "00000000-0000-0000-0000-0000000000aa".to_owned(),
+        },
+    ]
+}
+
 #[tokio::test]
 async fn deletion_announces_the_audience_read_before_access_is_removed() {
     let audience_read = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -92,10 +107,7 @@ async fn deletion_announces_the_audience_read_before_access_is_removed() {
     InitiativeServiceImpl::new(
         repo,
         deleting_surfaces(),
-        Arc::new(reads::FakeResources::with_audience(
-            vec![user(OWNER), user(OTHER)],
-            audience_read,
-        )),
+        Arc::new(reads::FakeResources::with_audience(grants(), audience_read)),
     )
     .with_event_publisher(events.clone())
     .delete(owner_receipt())
@@ -105,7 +117,7 @@ async fn deletion_announces_the_audience_read_before_access_is_removed() {
     let [InitiativeTopicEvent::Purged { audience, .. }] = recorded.as_slice() else {
         panic!("one purge")
     };
-    assert_eq!(audience, &vec![user(OWNER), user(OTHER)]);
+    assert_eq!(audience, &grants());
 }
 
 #[tokio::test]

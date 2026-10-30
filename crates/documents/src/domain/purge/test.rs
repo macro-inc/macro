@@ -14,10 +14,10 @@ use super::{
     DocumentPurger, DocxPartReferences, PurgeTarget, PurgedRows,
 };
 use crate::domain::models::DocumentError;
-use macro_user_id::user_id::MacroUserIdStr;
+use entity_access::domain::models::{EntityAccessSource, EntityAccessSourceType};
 
 const OWNER: &str = "macro|owner@example.com";
-const VIEWER: &str = "macro|viewer@example.com";
+const TEAM: &str = "00000000-0000-0000-0000-0000000000aa";
 
 #[derive(Clone, Copy, Default)]
 enum BrokerFailure {
@@ -124,20 +124,23 @@ impl DocumentPurgeRepository for Arc<State> {
 }
 
 impl DocumentAudience for Arc<State> {
-    async fn users(
-        &self,
-        document_id: &str,
-    ) -> Result<Vec<MacroUserIdStr<'static>>, DocumentError> {
+    async fn sources(&self, document_id: &str) -> Result<Vec<EntityAccessSource>, DocumentError> {
         self.record("audience", document_id);
         if self.fail_audience.load(Ordering::SeqCst) {
             return Err(DocumentError::Internal(anyhow::anyhow!(
                 "access lookup failed"
             )));
         }
-        Ok([OWNER, VIEWER]
-            .into_iter()
-            .map(|user| MacroUserIdStr::parse_from_str(user).unwrap())
-            .collect())
+        Ok(vec![
+            EntityAccessSource {
+                source_type: EntityAccessSourceType::User,
+                source_id: OWNER.to_owned(),
+            },
+            EntityAccessSource {
+                source_type: EntityAccessSourceType::Team,
+                source_id: TEAM.to_owned(),
+            },
+        ])
     }
 }
 
@@ -234,7 +237,10 @@ async fn purge_event_carries_the_audience_read_before_the_rows_are_deleted() {
     purger(&state).purge(Uuid::now_v7()).await.unwrap();
     assert_eq!(
         *state.published_audiences.lock().unwrap(),
-        vec![serde_json::json!([OWNER, VIEWER])]
+        vec![serde_json::json!([
+            { "source_type": "user", "source_id": OWNER },
+            { "source_type": "team", "source_id": TEAM },
+        ])]
     );
 }
 

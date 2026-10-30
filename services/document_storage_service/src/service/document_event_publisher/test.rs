@@ -53,7 +53,10 @@ async fn publishes_document_purged_event_to_documents_topic() {
     publish_document_purged_event(
         &event_broker,
         "document-one",
-        vec![MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap()],
+        vec![entity_access::domain::models::EntityAccessSource {
+            source_type: entity_access::domain::models::EntityAccessSourceType::Team,
+            source_id: "00000000-0000-0000-0000-0000000000aa".to_string(),
+        }],
     )
     .unwrap();
 
@@ -68,7 +71,10 @@ async fn publishes_document_purged_event_to_documents_topic() {
     assert_eq!(event.envelope["event_type"], json!("document.purged"));
     assert_eq!(
         event.envelope["metadata"],
-        json!({ "document_id": "document-one", "audience": ["macro|viewer@example.com"] })
+        json!({
+            "document_id": "document-one",
+            "audience": [{ "source_type": "team", "source_id": "00000000-0000-0000-0000-0000000000aa" }],
+        })
     );
 }
 

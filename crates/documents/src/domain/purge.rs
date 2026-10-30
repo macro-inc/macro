@@ -5,8 +5,8 @@ use super::{
     events::{DocumentMacroEvent, DocumentPurgedMetadata},
     models::DocumentError,
 };
+use entity_access::domain::models::EntityAccessSource;
 use macro_event_broker::MacroEventBroker;
-use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
 use rootcause::{Report, prelude::*};
 use shared_entity_registry::{OwnedPurgeOutcome, PurgeOwnedEntity};
@@ -68,14 +68,15 @@ pub trait DocumentPurgeQueue: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 }
 
-/// Who can currently see a document.
+/// Who can currently see a document, as its grants.
 pub trait DocumentAudience: Send + Sync + 'static {
-    /// Users with access to the document. A purge reads them before the row
-    /// delete removes that access, so realtime consumers can still reach them.
-    fn users(
+    /// The document's user, channel and team grants. A purge reads them before
+    /// the row delete removes them, so realtime consumers can still reach the
+    /// people they cover.
+    fn sources(
         &self,
         document_id: &str,
-    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, DocumentError>> + Send;
+    ) -> impl Future<Output = Result<Vec<EntityAccessSource>, DocumentError>> + Send;
 }
 
 /// Reference counts of stored docx parts, which documents share by SHA.
@@ -126,7 +127,7 @@ where
     ) -> Result<(), DocumentError> {
         // Read before anything is removed: without it no client hears about the purge,
         // and failing here leaves the document for a retry like every step below.
-        let audience = self.audience.users(&document_id).await?;
+        let audience = self.audience.sources(&document_id).await?;
         self.queue
             .enqueue(document_id.clone(), target.owner.clone())
             .await?;
