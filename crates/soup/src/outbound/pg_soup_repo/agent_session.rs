@@ -10,7 +10,8 @@ use item_filters::ast::{
     agent_session::{AgentSessionLiteral, AgentSessionSource, AgentSessionVisibility},
     properties::{PropertiesLiteral, properties_filter_matches_propertyless},
 };
-use model_entity::EntityType;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
@@ -119,7 +120,7 @@ pub(super) async fn cursor_soup(
     // `$1` is the requesting user for every clause in this query: the source
     // id CTE, the history join, and any `Owner` literal that binds it again.
     query.push_bind(req.user_id.as_ref().to_string());
-    query.push(ACCESS_SQL);
+    push_access_rows(&mut query);
     query.push(" AND (");
     push_filter(&mut query, filter);
     query.push(")");
@@ -152,19 +153,14 @@ pub(super) async fn by_ids(
     db: &PgPool,
     req: AdvancedSortParams<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    let ids = req
-        .entities
-        .iter()
-        .filter(|entity| entity.entity_type == EntityType::AgentSession)
-        .filter_map(|entity| entity.entity_id.parse::<Uuid>().ok())
-        .collect::<Vec<_>>();
+    let ids = session_ids(req.entities);
     if ids.is_empty() {
         return Ok(Vec::new());
     }
 
     let mut query = QueryBuilder::<Postgres>::new(SELECT_SQL);
     query.push_bind(req.user_id.as_ref().to_string());
-    query.push(ACCESS_SQL);
+    push_access_rows(&mut query);
     query.push(" AND s.id = ANY(");
     query.push_bind(ids);
     query.push(") ORDER BY s.modified_at DESC, s.id DESC");
@@ -175,6 +171,44 @@ pub(super) async fn by_ids(
         .into_iter()
         .map(row_to_item)
         .collect()
+}
+
+/// Hydrate sessions the caller already holds view receipts for. No access
+/// predicate: a public link authorizes a single-item read that the listing
+/// never enumerates. `viewer` only joins view history.
+pub(super) async fn viewable_by_ids(
+    db: &PgPool,
+    viewer: Option<MacroUserIdStr<'_>>,
+    entities: &[Entity<'_>],
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    let ids = session_ids(entities);
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    sqlx::query_as::<_, AgentSessionRow>(&format!("{ROW_SQL} WHERE s.id = ANY($2)"))
+        .bind(viewer.as_ref().map(|user| user.as_ref().to_owned()))
+        .bind(ids)
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .map(row_to_item)
+        .collect()
+}
+
+fn session_ids(entities: &[Entity<'_>]) -> Vec<Uuid> {
+    entities
+        .iter()
+        .filter(|entity| entity.entity_type == EntityType::AgentSession)
+        .filter_map(|entity| entity.entity_id.parse::<Uuid>().ok())
+        .collect()
+}
+
+/// Pushes the listing's source ids, row, and access predicate after the
+/// `$1` user bind that [`SELECT_SQL`] ends on.
+fn push_access_rows(query: &mut QueryBuilder<'_, Postgres>) {
+    query.push(SOURCE_IDS_SQL);
+    query.push(ROW_SQL);
+    query.push(ACCESS_SQL);
 }
 
 fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
@@ -216,23 +250,25 @@ fn parts_from_query<F>(
     }
 }
 
-/// Selects the row shape and joins the requesting user's view history. Ends
-/// right before the first bind so `$1` is the user id.
+/// Opens the listing's source-id CTE. Ends right before the first bind so `$1`
+/// is the user id.
 const SELECT_SQL: &str = r#"
     WITH user_source_ids AS (
         SELECT cp.channel_id::text AS source_id
         FROM comms_channel_participants cp
         WHERE cp.user_id = "#;
 
-/// Continues [`SELECT_SQL`] after the user id bind: the remaining source-id
-/// arms, the row projection, the history join, and the access predicate.
-/// Every `$1` here refers back to that same bind.
-const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
+/// Continues [`SELECT_SQL`] after the user id bind with the remaining
+/// source-id arms. Every `$1` here refers back to that same bind.
+const SOURCE_IDS_SQL: &str = r#" AND cp.left_at IS NULL
         UNION ALL
         SELECT t.team_id::text FROM team_user t WHERE t.user_id = $1
         UNION ALL
         SELECT $1
-    )
+    )"#;
+
+/// The row projection and the viewer's history join. `$1` is the viewer.
+const ROW_SQL: &str = r#"
     SELECT
         s.id,
         s.name,
@@ -257,7 +293,10 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
     LEFT JOIN "UserHistory" uh
         ON uh."itemId" = s.id::text
         AND uh."itemType" = 'agent_session'
-        AND uh."userId" = $1
+        AND uh."userId" = $1"#;
+
+/// The listing's access predicate over the source ids of [`SOURCE_IDS_SQL`].
+const ACCESS_SQL: &str = r#"
     WHERE EXISTS (
         SELECT 1 FROM entity_access ea
         WHERE ea.entity_id = s.id

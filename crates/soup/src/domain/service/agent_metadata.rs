@@ -23,7 +23,7 @@ fn pull_request_key(url: &str) -> Option<String> {
 pub(super) async fn enrich<F: GithubPullRequestListing>(
     pull_requests: &F,
     branches: Option<&dyn SessionBranchReader>,
-    user: String,
+    user: Option<String>,
     sources: Vec<SourceId>,
     items: &mut [SoupCandidate],
 ) -> Result<(), SoupErr> {
@@ -64,6 +64,9 @@ pub(super) async fn enrich<F: GithubPullRequestListing>(
         }
     };
     let pr_facts = async {
+        let Some(user) = user else {
+            return Ok(Vec::new());
+        };
         let Some(ids) = balanced_or_tree(
             keys.iter()
                 .cloned()

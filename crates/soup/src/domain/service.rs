@@ -23,7 +23,7 @@ use email::domain::{
     models::{GetEmailsRequest, PreviewView, PreviewViewStandardLabel},
     ports::EmailPreviewServiceReadOnly,
 };
-use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole, ViewAccessLevel};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{ForeignEntity, SourceId},
@@ -69,6 +69,7 @@ use uuid::Uuid;
 mod agent_metadata;
 mod crm_association;
 mod favorites;
+mod viewable;
 
 #[cfg(test)]
 mod tests;
@@ -993,7 +994,7 @@ where
         agent_metadata::enrich(
             &self.github_pull_request_service,
             self.agent_branches.as_deref(),
-            req.user.to_string(),
+            Some(req.user.to_string()),
             metadata_source_ids,
             &mut items,
         )
@@ -1902,7 +1903,7 @@ where
         agent_metadata::enrich(
             &self.github_pull_request_service,
             self.agent_branches.as_deref(),
-            metadata_user,
+            Some(metadata_user),
             metadata_source_ids,
             items,
         )
@@ -1950,6 +1951,15 @@ where
     {
         let output = self.get_user_soup_internal(req, team_receipt, true).await?;
         Ok(Self::into_projection_output(output))
+    }
+
+    #[tracing::instrument(err, skip_all, fields(item_count = receipts.len()))]
+    async fn get_viewable_items(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
+        self.viewable_items(receipts, team_receipt).await
     }
 
     #[tracing::instrument(err, skip(self, req, team_receipt))]

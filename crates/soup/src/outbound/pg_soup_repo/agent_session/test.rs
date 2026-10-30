@@ -590,3 +590,33 @@ async fn unlisted_runs_leave_lists_that_exclude_them(pool: PgPool) -> anyhow::Re
     assert_eq!(ids(&listed), vec![fixture.shared]);
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn viewable_reads_hydrate_sessions_the_listing_never_reaches(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    let stranger = MacroUserIdStr::parse_from_str(STRANGER)?;
+    let requested = [EntityType::AgentSession.with_entity_string(fixture.private.to_string())];
+    assert!(
+        by_ids(
+            &pool,
+            AdvancedSortParams {
+                user_id: stranger.clone(),
+                entities: &requested,
+            },
+        )
+        .await?
+        .is_empty(),
+        "the listing's by-ID read keeps its access predicate"
+    );
+
+    for viewer in [Some(stranger), None] {
+        assert_eq!(
+            ids(&viewable_by_ids(&pool, viewer, &requested).await?),
+            vec![fixture.private],
+            "a receipt already authorized the read"
+        );
+    }
+    Ok(())
+}

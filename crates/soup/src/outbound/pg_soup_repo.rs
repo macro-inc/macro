@@ -14,6 +14,7 @@ use crate::{
 };
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{Identify, SortOn};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{SoupProperty, item::SoupItem};
@@ -252,6 +253,16 @@ impl SoupRepo for PgSoupRepo {
                     document_server_facts: None,
                 }),
         );
+        Ok(items)
+    }
+
+    async fn expanded_viewable_by_ids<'a>(
+        &self,
+        viewer: Option<MacroUserIdStr<'a>>,
+        entities: &'a [Entity<'a>],
+    ) -> Result<Vec<SoupItem<()>>, Self::Err> {
+        let mut items = initiative::viewable_by_ids(&self.pool.0, viewer.clone(), entities).await?;
+        items.extend(agent_session::viewable_by_ids(&self.pool.0, viewer, entities).await?);
         Ok(items)
     }
 
