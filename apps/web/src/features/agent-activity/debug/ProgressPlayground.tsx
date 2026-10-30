@@ -1,7 +1,8 @@
 /**
  * Local playground for how an agent's reply reads while it works and once it
  * is done: every state in a DM, as a channel mention's thread reply, and in
- * the agent session, one tab each, from one set of fixture parts. Mounted at
+ * the agent session, one tab each, from one set of fixture parts. A fourth tab
+ * tries a DM whose progress is one row above the composer. Mounted at
  * `/app/debug/agent-progress`.
  *
  * Messages are composed by the server's own serializer, so each is the
@@ -37,6 +38,8 @@ import { clearThemePreview, previewTheme } from '@theme/utils/themeUtils';
 import { Button, Tabs } from '@ui';
 import { createSignal, For, Index, type JSX, onCleanup, Show } from 'solid-js';
 import { match, P } from 'ts-pattern';
+import { ActivityLine } from '../components/activity-line';
+import type { ActivityRowView } from '../components/activity-rows';
 import { LiveTail } from '../components/live-tail';
 import { TypingRow } from '../components/typing-row';
 import { streamingProse, typingLabel } from '../core/live-reply';
@@ -320,7 +323,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'thinking',
     title: 'Before the first step',
-    note: 'A mention and the session show the working line; a DM only its typing row.',
+    note: 'A mention, the session, and the bottom row show the working line; a DM only its typing row.',
     parts: [],
     inFlight: true,
   },
@@ -363,7 +366,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'streaming',
     title: 'Steps done, answer streaming',
-    note: 'The run folds. The passage being written is posted once finished; a DM streams it under its typing row.',
+    note: 'The run folds. The passage being written is posted once finished; a DM streams it under its typing row, and the bottom row says Writing.',
     parts: [SEARCH_DOCS, READ_DOC, text(ANSWER)],
     inFlight: true,
   },
@@ -741,12 +744,43 @@ function storedSegment(
   };
 }
 
+/** Each passage with the steps after it, as a DM posts them; steps before any passage post on their own. */
+function trailingRuns(stored: readonly AgentReplySegment[]) {
+  const messages: AgentReplySegment[][] = [];
+  for (const segment of stored) {
+    const last = messages.at(-1);
+    if (segment.kind === 'prose' || !last) messages.push([segment]);
+    else last.push(segment);
+  }
+  return messages;
+}
+
+/**
+ * Each run of steps with the passage it led to, for the bottom-row DM: a
+ * message waits for its passage, so none shows a step running.
+ */
+function leadingRuns(stored: readonly AgentReplySegment[], inFlight: boolean) {
+  const messages: AgentReplySegment[][] = [];
+  let run: AgentReplySegment | undefined;
+  for (const segment of stored) {
+    if (segment.kind !== 'prose') {
+      run = segment;
+      continue;
+    }
+    messages.push(run ? [run, segment] : [segment]);
+    run = undefined;
+  }
+  // A turn that ended on steps posts them with its closing line.
+  if (run && !inFlight) messages.push([run]);
+  return messages;
+}
+
 /**
  * The messages a reply posts (agent_harness `present.rs`). A mention's reply
  * is one message in its thread that leads with the session link and shows
  * the spinner while the turn runs. A DM posts a message per finished passage
  * with the steps after it attached, and nothing until there is something to
- * show.
+ * show; the bottom-row DM attaches steps to the passage after them instead.
  */
 function replyMessages(
   scenario: Scenario,
@@ -770,12 +804,10 @@ function replyMessages(
           : { kind: 'markdown', markdown: scenario.footer ?? '' };
     return [{ sessionId: SESSION, link: true, body }];
   }
-  const messages: AgentReplySegment[][] = [];
-  for (const segment of stored) {
-    const last = messages.at(-1);
-    if (segment.kind === 'prose' || !last) messages.push([segment]);
-    else last.push(segment);
-  }
+  const messages =
+    conversation === 'bottom-row'
+      ? leadingRuns(stored, scenario.inFlight)
+      : trailingRuns(stored);
   if (messages.length === 0) {
     return scenario.footer && !scenario.inFlight
       ? [
@@ -822,12 +854,14 @@ function channelMessage(reply: AgentChatReply, id: string): MessageData {
 type Theme = 'app' | 'light' | 'dark';
 type Viewer = 'reader' | 'member';
 type Width = 'wide' | 'phone';
-type Conversation = 'dm' | 'mention';
+/** `bottom-row` is a DM whose progress is one row above the composer. */
+type Conversation = 'dm' | 'bottom-row' | 'mention';
 /** Where a reply is read: a conversation, or the agent session itself. */
 type View = Conversation | 'session';
 
 const VIEWS: readonly { value: View; label: string }[] = [
   { value: 'dm', label: 'DM' },
+  { value: 'bottom-row', label: 'DM · bottom row' },
   { value: 'mention', label: 'Channel mention' },
   { value: 'session', label: 'Agent session' },
 ];
@@ -863,9 +897,56 @@ function Frame(props: { phone: boolean; children: JSX.Element }) {
   );
 }
 
+const PHASE_LINES: Record<TurnPhase, string> = {
+  thinking: 'Thinking',
+  writing: 'Writing',
+  working: 'Working',
+  waiting: 'Waiting for an answer',
+};
+
+/**
+ * What the bottom row says: the open run's steps to a reader of the session,
+ * otherwise what the turn is doing, which its typing tells everyone.
+ */
+function workingRows(reply: FoldedMessage, reader: boolean): ActivityRowView[] {
+  const open = reply.segments.at(-1);
+  if (reader && open?.kind === 'activity' && !open.sealed) return open.rows;
+  const phase = reply.phase ?? 'thinking';
+  return [{ id: phase, label: PHASE_LINES[phase], status: 'running' }];
+}
+
+/**
+ * A DM's one live row, above the composer: the agent's avatar beside what it
+ * is doing, and Stop for a viewer who may stop it.
+ */
+function WorkingRow(props: {
+  avatar: JSX.Element;
+  rows: readonly ActivityRowView[];
+  onStop?: () => void;
+}) {
+  return (
+    <div class="flex min-w-0 items-center gap-2 px-[var(--message-padding-x)] py-1">
+      <div class="flex w-[var(--user-icon-width)] shrink-0 justify-center">
+        {props.avatar}
+      </div>
+      <div class="min-w-0 flex-1">
+        <ActivityLine rows={props.rows} />
+      </div>
+      <Show when={props.onStop}>
+        {(stop) => (
+          <Button size="xs" variant="ghost" onClick={() => stop()()}>
+            Stop
+          </Button>
+        )}
+      </Show>
+    </div>
+  );
+}
+
 /**
  * A conversation: the reply's messages, and in a DM the typing row while it
- * runs. A mention's reply sits in a thread, which shows no typing row.
+ * runs, or the bottom row. A mention's reply sits in a thread, which shows no
+ * typing row.
  */
 function ConversationView(props: {
   scenario: Scenario;
@@ -906,6 +987,17 @@ function ConversationView(props: {
             <LiveTail prose={streamingProse(reply())} onStop={() => {}} />
           </Show>
         </TypingRow>
+      </Show>
+      <Show
+        when={props.conversation === 'bottom-row' && props.scenario.inFlight}
+      >
+        <WorkingRow
+          avatar={
+            <PersonaAvatar botId={MACRO_AGENT_BOT_ID} name="Macro" size="md" />
+          }
+          rows={workingRows(reply(), props.reader)}
+          onStop={props.reader ? () => {} : undefined}
+        />
       </Show>
     </>
   );
