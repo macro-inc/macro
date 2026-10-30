@@ -3659,6 +3659,14 @@ export type ImportKind =
   | 'jira_epic'
   | 'channel';
 /**
+ * A kind of action or inactivity the user should see.
+ */
+export type AgentUpdateKind =
+  | 'permission'
+  | 'elicitation'
+  | 'tool_approval'
+  | 'stalled';
+/**
  * Provider selected from the persisted calendar account and email binding.
  */
 export type CalendarProvider = 'google' | 'outlook';
@@ -11270,6 +11278,31 @@ export interface IssueBotCredentialResponse {
    * Human-readable result summary.
    */
   summary: string;
+}
+/**
+ * List the current user's coding-agent sessions waiting for an answer or stalled for over 20 minutes. The user answers permissions and questions through the cards Macro renders from this tool's result. To send a coding agent instructions, use ManageAgentSession with a prompt. To recall the user's earlier decisions about these agents, search earlier agent conversations with ContentSearch (entity_types agent_sessions) and read them with ReadAgentSession.
+ */
+export type ListAgentUpdates = {};
+/**
+ * Bounded results; truncation means older qualifying sessions were not folded.
+ */
+export interface AgentUpdates {
+  items: AgentUpdate[];
+  truncated: boolean;
+  truncationNotice?: string | null;
+}
+/**
+ * One pending interaction, or one stalled session.
+ */
+export interface AgentUpdate {
+  sessionId: string;
+  sessionName: string;
+  harness: string;
+  pullRequestUrl?: string | null;
+  kind: AgentUpdateKind;
+  summary: string;
+  since: string;
+  options: string[];
 }
 /**
  * List every AI agent the current user can manage - their own, their teams', and channel agents they can mention - with each agent's current instructions and settings: harness, model, channel availability, connected apps, permission behavior, and whether it is a coding or chat agent. Use this to find an agent's botId and read its current configuration before changing it with ConfigureAgent. ListBots covers plain webhook bots instead.
