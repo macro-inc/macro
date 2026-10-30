@@ -18,6 +18,8 @@ export type RoutineEditorSlots = RoutineToolSlots & {
   Triggers: Component<{
     triggers: RoutineTriggerDraft[];
     onChange(triggers: RoutineTriggerDraft[]): void;
+    /** `rows` for the routine page's When card; inline tokens otherwise. */
+    layout?: 'rows' | 'inline';
   }>;
   Apps: Component<{
     apps: RoutineApp[];

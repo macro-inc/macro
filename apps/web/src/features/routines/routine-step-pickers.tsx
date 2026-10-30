@@ -1,33 +1,73 @@
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TagIcon from '@icon/system/regular/tag.svg';
+import UserIcon from '@icon/system/regular/user.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import FolderIcon from '@phosphor/folder-simple.svg';
-import HashIcon from '@phosphor/hash.svg';
-import UserIcon from '@phosphor/user.svg';
 import { useQuickAccessEntities } from '@property/editors/selectors/entityUtils';
 import { PropertyEntitySelector } from '@property/editors/selectors/PropertyEntitySelector';
 import { TagDot } from '@property/tags/TagDot';
-import { badgeTriggerClasses, Dropdown } from '@ui';
-import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
+import { Button } from '@ui';
 import {
-  menuMount,
-  type TagChoice,
-  TextChoice,
-} from './components/routine-tool-step';
+  createSignal,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+  type ValidComponent,
+} from 'solid-js';
+import { SearchMenu } from './components/routine-search-menu';
+import { menuMount, type TagChoice } from './components/routine-tool-step';
 import type { RoutineEditorSlots } from './context/routine-slots';
 import { useEmailLabelNames, useRoutineTags } from './queries/step-sources';
 
+/** A token's caret, after its value. */
+function Caret() {
+  return <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />;
+}
+
+/** Gmail labels by name, so a step works in each email's own inbox. */
 function RoutineLabelPicker(props: {
   value: string;
   onChange(label: string): void;
 }) {
   const names = useEmailLabelNames();
   return (
-    <TextChoice
+    <SearchMenu
       label="Label"
-      value={props.value}
-      placeholder="Label name"
-      suggestions={names()}
-      onChange={props.onChange}
+      triggerVariant={props.value ? 'secondary' : 'outline'}
+      triggerClass="max-w-full gap-1.5"
+      trigger={
+        <>
+          <TagIcon class="size-3.5 shrink-0 text-ink-muted" />
+          <span class="truncate">{props.value || 'Choose a label'}</span>
+          <Caret />
+        </>
+      }
+      placeholder="Search labels"
+      sections={[
+        {
+          items: names().map((name) => ({
+            key: name,
+            label: name,
+            icon: TagIcon,
+            selected: name === props.value,
+            onSelect: () => props.onChange(name),
+          })),
+        },
+      ]}
+      fromQuery={(query) =>
+        names().some((name) => name.toLowerCase() === query.toLowerCase())
+          ? undefined
+          : {
+              key: `use:${query}`,
+              label: `Use “${query}”`,
+              icon: PlusIcon,
+              onSelect: () => props.onChange(query),
+            }
+      }
+      empty="No labels yet. Type a label’s name."
     />
   );
 }
@@ -38,61 +78,54 @@ function RoutineTagPicker(props: {
 }) {
   const tags = useRoutineTags();
   const selected = () => tags().find((tag) => tag.optionId === props.value);
-  let trigger: HTMLButtonElement | undefined;
   return (
-    <Dropdown placement="bottom-start">
-      <Dropdown.Trigger ref={trigger} aria-label="Tag" class="gap-1.5">
-        <Show when={selected()} fallback="Choose a tag">
+    <SearchMenu
+      label="Tag"
+      triggerVariant={selected() ? 'secondary' : 'outline'}
+      triggerClass="max-w-full gap-1.5"
+      trigger={
+        <Show
+          when={selected()}
+          fallback={
+            <>
+              Choose a tag
+              <Caret />
+            </>
+          }
+        >
           {(tag) => (
             <>
               <TagDot color={tag().color} />
-              {tag().label}
+              <span class="truncate">{tag().label}</span>
+              <Caret />
             </>
           )}
         </Show>
-        <CaretDownIcon class="size-3" />
-      </Dropdown.Trigger>
-      <Dropdown.Content
-        portalScope="local"
-        mount={menuMount(trigger)}
-        class="max-h-72 overflow-y-auto"
-      >
-        <Dropdown.Group>
-          <Show
-            when={tags().length}
-            fallback={
-              <p class="px-2 py-1.5 text-xs text-ink-muted">
-                No tags yet. Create one from any item’s tags.
-              </p>
-            }
-          >
-            <For each={tags()}>
-              {(tag) => (
-                <Dropdown.Item
-                  onSelect={() =>
-                    props.onChange({
-                      definitionId: tag.definitionId,
-                      optionId: tag.optionId,
-                      label: tag.label,
-                    })
-                  }
-                >
-                  <TagDot color={tag.color} />
-                  <span class="flex-1">{tag.label}</span>
-                  <Show when={tag.scope === 'team'}>
-                    <span class="text-xs text-ink-extra-muted">Team</span>
-                  </Show>
-                </Dropdown.Item>
-              )}
-            </For>
-          </Show>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
+      }
+      placeholder="Search tags"
+      sections={[
+        {
+          items: tags().map((tag) => ({
+            key: tag.optionId,
+            label: tag.label,
+            swatch: <TagDot color={tag.color} />,
+            hint: tag.scope === 'team' ? 'Team' : undefined,
+            selected: tag.optionId === props.value,
+            onSelect: () =>
+              props.onChange({
+                definitionId: tag.definitionId,
+                optionId: tag.optionId,
+                label: tag.label,
+              }),
+          })),
+        },
+      ]}
+      empty="No tags yet. Create one from any item’s tags."
+    />
   );
 }
 
-/** A chip that opens an inline search for one channel, person or folder. */
+/** A token that opens an inline search for one channel, person or folder. */
 function EntityPicker(props: {
   kind: 'CHANNEL' | 'USER' | 'PROJECT';
   value: string | undefined;
@@ -109,26 +142,29 @@ function EntityPicker(props: {
   const label = () => (props.value ? name(props.value) : props.placeholder);
   return (
     <Popover open={open()} onOpenChange={setOpen} placement="bottom-start">
-      <Popover.Trigger
+      <Popover.Trigger<ValidComponent>
+        as={Button}
         ref={trigger}
-        class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
+        variant={props.value ? 'secondary' : 'outline'}
+        size="sm"
+        class="max-w-full gap-1.5"
       >
         <Switch>
           <Match when={props.kind === 'CHANNEL'}>
-            <HashIcon class="size-3.5" />
+            <HashIcon class="size-3.5 shrink-0 text-ink-muted" />
           </Match>
           <Match when={props.kind === 'USER'}>
-            <UserIcon class="size-3.5" />
+            <UserIcon class="size-3.5 shrink-0 text-ink-muted" />
           </Match>
           <Match when={props.kind === 'PROJECT'}>
-            <FolderIcon class="size-3.5" />
+            <FolderIcon class="size-3.5 shrink-0 text-ink-muted" />
           </Match>
         </Switch>
         <span class="max-w-48 truncate">{label()}</span>
-        <CaretDownIcon class="size-3" />
+        <Caret />
       </Popover.Trigger>
       <Popover.Portal mount={menuMount(trigger)}>
-        <Popover.Content class="menu-surface z-modal w-72 overflow-hidden text-ink outline-none">
+        <Popover.Content class="menu-surface z-action-menu w-72 overflow-hidden rounded-xl text-ink outline-none">
           <Suspense
             fallback={<p class="p-3 text-sm text-ink-muted">Loading…</p>}
           >
@@ -175,7 +211,7 @@ function RoutineAssigneePicker(props: {
     <EntityPicker
       kind="USER"
       value={props.value}
-      placeholder="Choose a person"
+      placeholder="Person"
       search="Search people…"
       onChange={props.onChange}
     />
@@ -190,7 +226,7 @@ function RoutineFolderPicker(props: {
     <EntityPicker
       kind="PROJECT"
       value={props.value}
-      placeholder="Choose a folder"
+      placeholder="None"
       search="Search folders…"
       onChange={(id) => props.onChange(id)}
     />

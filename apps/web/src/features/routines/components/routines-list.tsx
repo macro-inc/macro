@@ -140,15 +140,12 @@ export function RoutinesList(props: {
       >
         <div
           role="rowgroup"
-          class="sticky top-0 z-1 min-w-[748px] bg-panel @max-[760px]/routines:hidden"
+          class="sticky top-0 z-1 mx-1 min-w-[760px] bg-panel pt-2 @max-[760px]/routines:hidden"
         >
           <RoutineRowLayout
             role="row"
-            class="text-xs font-medium text-ink-extra-muted"
+            class="min-h-8 px-2 text-xs font-medium text-ink-extra-muted"
           >
-            <span role="columnheader" class="sr-only">
-              On
-            </span>
             <span role="columnheader">Routine</span>
             <span role="columnheader">When</span>
             <span role="columnheader">Then</span>
@@ -157,17 +154,18 @@ export function RoutinesList(props: {
         </div>
         <div
           role="rowgroup"
-          class="min-w-[748px] @max-[760px]/routines:min-w-0"
+          class="min-w-[760px] pb-6 @max-[760px]/routines:min-w-0"
         >
           <For each={groups()}>
             {(group) => (
               <>
                 <div
                   role="row"
-                  class="px-4 pb-1 pt-4 text-xs font-medium text-ink-extra-muted"
+                  class="mx-1 flex items-center px-2 pb-1.5 pt-4 text-xs font-medium text-ink-extra-muted"
                 >
-                  <span role="cell" aria-colspan={5}>
+                  <span role="cell" aria-colspan={4} class="flex gap-2">
                     {group.title}
+                    <span class="tabular-nums">{group.rows.length}</span>
                   </span>
                 </div>
                 <For each={group.rows}>
@@ -188,7 +186,7 @@ export function RoutinesList(props: {
           <div role="row">
             <div
               role="cell"
-              aria-colspan={5}
+              aria-colspan={4}
               class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
             >
               <ClockIcon class="size-6 text-ink-extra-muted" />

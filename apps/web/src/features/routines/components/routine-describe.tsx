@@ -28,50 +28,51 @@ export function RoutineDescribe(props: {
     }
   };
   return (
-    <section
-      aria-label="Describe your routine"
-      class="grid gap-2 rounded-xl border border-edge-muted bg-surface p-3"
-    >
-      <TextField
-        value={description()}
-        onChange={setDescription}
-        disabled={props.disabled || pending()}
-      >
-        <TextField.Label class="sr-only">Describe your routine</TextField.Label>
-        <TextField.TextArea
-          autoResize
-          rows={3}
-          autofocus
-          class="border-none bg-transparent text-base shadow-none"
-          placeholder="Describe what should happen, and when. “When an invoice arrives, label it Finance and make a task to pay it.”"
-          onKeyDown={(event: KeyboardEvent) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-              event.stopPropagation();
-              fireAndForget(submit(), 'routines');
-            }
-          }}
-        />
-      </TextField>
-      <div class="flex items-center justify-between gap-2">
-        <Show when={error()} fallback={<span />}>
-          {(message) => (
-            <span role="alert" class="text-xs text-failure">
-              {message()}
-            </span>
-          )}
-        </Show>
-        <Button
-          size="sm"
-          variant="primary"
-          class="shrink-0 gap-1.5"
-          disabled={props.disabled || pending() || !description().trim()}
-          onClick={() => fireAndForget(submit(), 'routines')}
+    <section aria-label="Describe your routine" class="grid gap-2">
+      {/* One box: the field draws the frame, the button sits inside it. */}
+      <div class="relative">
+        <TextField
+          value={description()}
+          onChange={setDescription}
+          disabled={props.disabled || pending()}
         >
-          <SparkleIcon class="size-3.5" />
-          {pending() ? 'Drafting…' : 'Draft it'}
-        </Button>
+          <TextField.Label class="sr-only">
+            Describe your routine
+          </TextField.Label>
+          <TextField.TextArea
+            autoResize
+            rows={2}
+            autofocus
+            class="min-h-28 px-3.5 pb-12 pt-3 text-[15px] leading-[22px]"
+            placeholder="Describe what should happen, and when. “When an invoice arrives, label it Finance and make a task to pay it.”"
+            onKeyDown={(event: KeyboardEvent) => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                fireAndForget(submit(), 'routines');
+              }
+            }}
+          />
+        </TextField>
+        <div class="absolute bottom-2.5 right-2.5">
+          <Button
+            size="md"
+            variant="accent"
+            disabled={props.disabled || pending() || !description().trim()}
+            onClick={() => fireAndForget(submit(), 'routines')}
+          >
+            <SparkleIcon class="size-3.5" />
+            {pending() ? 'Drafting…' : 'Draft it'}
+          </Button>
+        </div>
       </div>
+      <Show when={error()}>
+        {(message) => (
+          <span role="alert" class="px-1 text-xs text-failure">
+            {message()}
+          </span>
+        )}
+      </Show>
     </section>
   );
 }

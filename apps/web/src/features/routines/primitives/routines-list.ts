@@ -3,13 +3,14 @@ import { type Accessor, createMemo } from 'solid-js';
 import type { RoutineListSource } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
 import type { RoutineSnapshot } from '../core/routine';
-import type { RoutineTarget } from '../core/routine-target';
+import { summarizeWork } from '../core/routine-summary';
 import {
   describeTrigger,
   hasOnlyScheduledTriggers,
+  type RoutineTriggerDraft,
+  triggerKind,
 } from '../core/routine-triggers';
-import { describeSteps } from '../core/step-catalog';
-import { stepsForRun, summarizeRun } from '../core/step-history';
+import { runOutcome, stepsForRun, summarizeRun } from '../core/step-history';
 import type { RoutineRow } from '../core/types';
 
 /** Today's runs show their time; older ones their day. */
@@ -28,26 +29,26 @@ function lastRun(routine: RoutineSnapshot): RoutineRow['lastRun'] {
   if (!record || !at) return undefined;
   return {
     at: runTime(at),
-    failed: record.success === false,
+    outcome: runOutcome(record),
     summary: summarizeRun(record, stepsForRun(record, routine)),
   };
 }
 
-function describeWork(
-  routine: RoutineSnapshot,
-  targetLabel: (target: RoutineTarget) => string
-): string {
-  const draft = routine.draft;
-  if (!draft) return '';
-  return draft.steps
-    ? describeSteps(draft.steps)
-    : `Ask AI · ${targetLabel(draft.target)}`;
+/** What starts the routine, its AI check included, in a line. */
+function describeWhen(triggers: RoutineTriggerDraft[]): string {
+  return triggers
+    .map((trigger) => {
+      const condition =
+        trigger.kind === 'event' ? trigger.condition?.trim() : undefined;
+      const text = describeTrigger(trigger);
+      return condition ? `${text} · ${condition}` : text;
+    })
+    .join(' · ');
 }
 
 export function createRoutineRows(
   source: RoutineListSource,
-  userId: Accessor<string | undefined>,
-  targetLabel: (target: RoutineTarget) => string
+  userId: Accessor<string | undefined>
 ) {
   return createMemo<RoutineRow[]>(() =>
     source
@@ -58,12 +59,18 @@ export function createRoutineRows(
         const running = isClaimActive(routine.claimedAt);
         const scheduled = hasOnlyScheduledTriggers(draft?.triggers);
         const completed = scheduled && !routine.nextRunAt && !running;
+        const work = draft
+          ? summarizeWork(draft.steps, draft.prompt)
+          : { text: '' };
+        const [first] = draft?.triggers ?? [];
         return {
           id: routine.id,
           name: routine.name,
           createdAt: routine.createdAt,
-          when: (draft?.triggers ?? []).map(describeTrigger).join(' · '),
-          does: describeWork(routine, targetLabel),
+          when: describeWhen(draft?.triggers ?? []),
+          whenKind: first ? triggerKind(first) : undefined,
+          does: work.text,
+          ai: work.chip,
           group: scheduled ? 'schedule' : 'activity',
           lastRun: lastRun(routine),
           status: running

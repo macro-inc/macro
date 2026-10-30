@@ -15,25 +15,8 @@ import {
   RoutineHistory,
 } from './routine-history';
 
-vi.mock('@core/component/EntityIcon', () => ({
-  EntityIcon: (props: { targetType: string }) => (
-    <span data-icon={props.targetType} />
-  ),
-}));
 vi.mock('@entity', () => ({
   formatDateAndTime: (value: string) => value,
-  ListLayoutProvider: (props: { children: JSX.Element }) => props.children,
-  ListEntity: (props: {
-    entity: AgentSessionEntity | ChatEntity;
-    leadingAction: JSX.Element;
-    onClick: JSX.EventHandler<HTMLButtonElement, MouseEvent>;
-  }) => (
-    <button data-entity-type={props.entity.type} onClick={props.onClick}>
-      {props.entity.name}
-      {props.leadingAction}
-      <time>{String(props.entity.sortTs ?? '')}</time>
-    </button>
-  ),
 }));
 vi.mock('@ui', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
@@ -89,9 +72,12 @@ function sources() {
     onOpen: vi.fn(),
   };
 }
+function row(name: string | RegExp) {
+  return screen.getByRole('listitem', { name });
+}
 
 describe('routine history', () => {
-  it('uses Soup entities and resolves agent and legacy resources from each result', () => {
+  it('opens the conversation of a run that only ran its agent, from each result', () => {
     const source = sources();
     render(() => (
       <RoutineHistory
@@ -114,16 +100,16 @@ describe('routine history', () => {
       ['legacy-error'],
     ]);
     expect(source.createAgentMetadata.mock.calls).toEqual([['session']]);
-    const session = screen.getByRole('listitem', { name: 'Agent session' });
-    expect(
-      session.querySelector('[data-entity-type="agent_session"]')
-    ).not.toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /^Chat chat/ }));
-    fireEvent.keyDown(session, { key: 'Enter', shiftKey: true });
-    fireEvent.click(
-      screen.getByRole('button', { name: /^Chat legacy-error/ }),
-      { shiftKey: true }
-    );
+    // Runs without steps have nothing to show beside the list.
+    expect(screen.queryByRole('region', { name: 'Run details' })).toBeNull();
+    fireEvent.click(within(row('Chat chat')).getByRole('button'));
+    fireEvent.keyDown(within(row('Agent session')).getByRole('button'), {
+      key: 'Enter',
+      shiftKey: true,
+    });
+    fireEvent.click(within(row('Chat legacy-error')).getByRole('button'), {
+      shiftKey: true,
+    });
     expect(source.onOpen.mock.calls).toEqual([
       [{ type: 'chat', id: 'chat' }, false],
       [{ type: 'agent', id: 'session' }, true],
@@ -131,41 +117,32 @@ describe('routine history', () => {
     ]);
   });
 
-  it('keeps live runs neutral, shows failures, and includes execution duration', () => {
+  it('marks how each run ended and shows why one failed', () => {
     render(() => (
       <RoutineHistory
         {...sources()}
         isPending={false}
         records={[
           record('agent', 'pending', { id: undefined, is_success: false }),
-          record('agent', 'failed', { is_success: false }),
-          record('agent', 'success', {
-            start_time: '2026-10-04T12:00:00Z',
-            end_time: '2026-10-04T12:01:12Z',
+          record('agent', 'failed', {
+            is_success: false,
+            result: {
+              version: 1,
+              resource: { type: 'agent', id: 'failed' },
+              error: 'Model unavailable',
+            },
           }),
+          record('agent', 'success', { start_time: '2026-10-04T12:00:00Z' }),
         ]}
       />
     ));
-    expect(
-      within(screen.getByRole('listitem', { name: 'Agent pending' }))
-        .getByText('Running')
-        .classList.contains('text-failure')
-    ).toBe(false);
-    expect(
-      within(screen.getByRole('listitem', { name: 'Agent failed' }))
-        .getByText('Failed')
-        .classList.contains('text-failure')
-    ).toBe(true);
-    expect(
-      within(screen.getByRole('listitem', { name: 'Agent success' })).getByText(
-        '1m 12s'
-      )
-    ).toBeTruthy();
-    expect(
-      within(screen.getByRole('listitem', { name: 'Agent success' })).getByText(
-        '2026-10-04T12:00:00Z'
-      )
-    ).toBeTruthy();
+    expect(within(row('Agent pending')).getByText('Running')).toBeTruthy();
+    const failed = within(row('Agent failed'));
+    expect(failed.getByText('Failed')).toBeTruthy();
+    expect(failed.getByText('Model unavailable').className).toContain(
+      'text-failure'
+    );
+    expect(within(row('Agent success')).getByText('Succeeded')).toBeTruthy();
   });
 
   it.each([
@@ -196,7 +173,8 @@ describe('routine history', () => {
           ]}
         />
       ));
-      fireEvent.click(screen.getByText('Run unavailable'));
+      // A run that failed before any step says so; others lost their transcript.
+      fireEvent.click(screen.getByText(/^Run (unavailable|failed)$/));
       expect(screen.queryByRole('button')).toBeNull();
       expect(source.onOpen).not.toHaveBeenCalled();
       expect(source.createChatMetadata).not.toHaveBeenCalled();
@@ -219,12 +197,11 @@ describe('routine history', () => {
       />
     ));
     expect(screen.getByText('Loading…')).toBeTruthy();
-    expect(screen.getByRole('listitem', { name: 'Chat ready' })).toBeTruthy();
+    expect(row('Chat ready')).toBeTruthy();
     setMetadata({ status: 'unavailable' });
-    fireEvent.click(screen.getByText('Run unavailable'));
-    expect(source.onOpen).not.toHaveBeenCalled();
+    expect(within(row('Run unavailable')).queryByRole('button')).toBeNull();
     setMetadata({ status: 'ready', entity: entity('agent', 'session', '  ') });
-    expect(screen.getByRole('listitem', { name: 'Untitled run' })).toBeTruthy();
+    expect(row('Untitled run')).toBeTruthy();
   });
 
   it('catches suspending metadata at the row without detaching siblings', () => {
@@ -249,7 +226,7 @@ describe('routine history', () => {
     expect(screen.queryByText('Outer loading')).toBeNull();
     expect(screen.getByText('Editor')).toBeTruthy();
     expect(screen.getByText('Loading…')).toBeTruthy();
-    expect(screen.getByRole('listitem', { name: 'Chat ready' })).toBeTruthy();
+    expect(row('Chat ready')).toBeTruthy();
   });
 
   it('replaces a resource with the correct metadata source when records change', () => {
@@ -260,7 +237,7 @@ describe('routine history', () => {
     ));
     setRecords([record('agent', 'second')]);
     expect(screen.queryByRole('listitem', { name: 'Chat first' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /^Agent second/ }));
+    fireEvent.click(within(row('Agent second')).getByRole('button'));
     expect(source.onOpen).toHaveBeenCalledWith(
       { type: 'agent', id: 'second' },
       false
@@ -287,14 +264,35 @@ describe('routine history', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(51);
     expect(screen.queryByText('Load more runs')).toBeNull();
   });
+
+  it('groups runs under the day they started', () => {
+    const today = new Date();
+    today.setHours(9, 30, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    render(() => (
+      <RoutineHistory
+        {...sources()}
+        isPending={false}
+        records={[
+          record('agent', 'new', { start_time: today.toISOString() }),
+          record('agent', 'old', { start_time: yesterday.toISOString() }),
+        ]}
+      />
+    ));
+    const list = screen.getByRole('list', { name: 'Routine runs' });
+    expect(
+      [...list.children].map((child) => child.textContent?.split('Agent')[0])
+    ).toEqual(['Today', expect.anything(), 'Yesterday', expect.anything()]);
+  });
 });
 
 describe('skipped runs', () => {
-  function skip(id: string, condition: unknown) {
+  function skip(id: string, condition: unknown, error: string | null = null) {
     return record('agent', id, {
       id: `skip-${id}`,
       resource_id: null,
-      result: { version: 1, resource: null, error: null, condition },
+      result: { version: 1, resource: null, error, condition },
     });
   }
 
@@ -307,25 +305,23 @@ describe('skipped runs', () => {
         records={[
           skip('a', { status: 'not_met', probability: 0.12 }),
           record('agent', 'ran'),
-          skip('b', { status: 'unavailable' }),
+          skip(
+            'b',
+            { status: 'unavailable' },
+            'The condition couldn’t be checked.'
+          ),
         ]}
       />
     ));
-    const unmet = screen.getByText('Condition not met').closest('[role]')!;
-    expect(unmet.getAttribute('title')).toBe('12% likely yes');
+    const unmet = within(row('Condition not met'));
+    expect(unmet.getByText('Skipped')).toBeTruthy();
+    expect(unmet.getByText('12% likely yes').className).not.toContain(
+      'text-failure'
+    );
+    const unavailable = within(row('Condition couldn’t be checked'));
     expect(
-      within(unmet as HTMLElement)
-        .getByText('Skipped')
-        .classList.contains('text-failure')
-    ).toBe(false);
-    const unavailable = screen
-      .getByText('Condition couldn’t be checked')
-      .closest('[role]')!;
-    expect(
-      within(unavailable as HTMLElement)
-        .getByText('Skipped')
-        .classList.contains('text-failure')
-    ).toBe(true);
+      unavailable.getByText('The condition couldn’t be checked.').className
+    ).toContain('text-failure');
     expect(source.createAgentMetadata.mock.calls).toEqual([['ran']]);
   });
 
@@ -344,28 +340,30 @@ describe('skipped runs', () => {
       />
     ));
     expect(screen.queryByText('Condition not met')).toBeNull();
-    const group = screen.getByRole('button', {
-      name: /3 events skipped by the condition/,
-    });
+    const group = within(row('3 skipped by the condition')).getByRole('button');
     expect(group.getAttribute('aria-expanded')).toBe('false');
+    expect(group.textContent).toContain('Show');
     fireEvent.click(group);
+    expect(group.textContent).toContain('Hide');
     expect(screen.getAllByText('Condition not met')).toHaveLength(3);
     expect(
-      screen.getAllByRole('listitem').map((item) => item.textContent)
+      screen
+        .getAllByRole('listitem')
+        .map((item) => item.getAttribute('aria-label'))
     ).toEqual([
-      expect.stringContaining('Agent newest'),
-      expect.stringContaining('3 events skipped'),
-      expect.stringContaining('Condition not met'),
-      expect.stringContaining('Condition not met'),
-      expect.stringContaining('Condition not met'),
-      expect.stringContaining('Agent oldest'),
+      'Agent newest',
+      '3 skipped by the condition',
+      'Condition not met',
+      'Condition not met',
+      'Condition not met',
+      'Agent oldest',
     ]);
   });
 });
 
 describe('routine history steps', () => {
-  it('lists what each step did and keeps agent-only runs quiet', () => {
-    const triage = toHistoryRecord({
+  function triage() {
+    return toHistoryRecord({
       id: 'run-steps',
       result: {
         version: 1,
@@ -383,8 +381,39 @@ describe('routine history steps', () => {
         ],
       },
       start_time: '2026-10-09T10:00:00Z',
+      end_time: '2026-10-09T10:00:03Z',
       is_success: false,
     });
+  }
+  function weekly(id: string) {
+    return toHistoryRecord({
+      id,
+      result: {
+        version: 1,
+        resource: null,
+        steps: [
+          { path: '0', kind: 'tool', tool: 'CreateDocument' },
+          { path: '1', kind: 'if', answer: false, probability: 0.2 },
+        ],
+      },
+      start_time: '2026-10-08T10:00:00Z',
+      is_success: true,
+    });
+  }
+  const describeRunStep = (
+    step: Parameters<
+      NonNullable<Parameters<typeof RoutineHistory>[0]['describeStep']>
+    >[0]
+  ) =>
+    step.kind === 'tool'
+      ? `${step.tool}${step.error ? ` failed: ${step.error}` : ''}`
+      : step.kind === 'choose'
+        ? `Chose ${step.choices?.join(', ')}`
+        : step.kind === 'if'
+          ? `Urgent? ${step.answer ? 'yes' : 'no'}`
+          : 'Asked AI';
+
+  it('reads each run in two lines and shows the newest one beside the list', () => {
     const agentOnly = record('agent', 'agent-run', {
       result: {
         version: 1,
@@ -392,36 +421,96 @@ describe('routine history steps', () => {
         steps: [{ path: '0', kind: 'agent' }],
       },
     });
+    const source = sources();
     render(() => (
       <RoutineHistory
-        records={[triage, agentOnly]}
+        {...source}
+        records={[agentOnly, triage(), weekly('run-weekly')]}
         isPending={false}
-        {...sources()}
-        onOpen={vi.fn()}
-        describeStep={(step) =>
-          step.kind === 'tool'
-            ? `${step.tool}${step.error ? ' failed' : ''}`
-            : step.kind === 'choose'
-              ? `Chose ${step.choices?.join(', ')}`
-              : 'Asked AI'
-        }
+        describeStep={describeRunStep}
       />
     ));
-    expect(screen.getByText('Ran steps')).toBeTruthy();
-    expect(screen.getByText('Chose Invoice')).toBeTruthy();
-    expect(screen.getByText('→ UpdateThreadLabels')).toBeTruthy();
-    expect(screen.getByText('→ SendChannelMessage failed').className).toContain(
-      'text-failure'
-    );
-    expect(screen.queryByText('Asked AI')).toBeNull();
+    // Its first step names the run; the failed step says why it stopped.
+    const run = within(row('Chose Invoice'));
+    expect(
+      run.getByText('SendChannelMessage failed: No access').className
+    ).toContain('text-failure');
+    expect(within(row('CreateDocument')).getByText('Urgent? no')).toBeTruthy();
 
-    fireEvent.click(screen.getByText('Ran steps'));
     const details = within(screen.getByRole('region', { name: 'Run details' }));
-    expect(details.getByText('Failed run')).toBeTruthy();
-    expect(details.getByText('Chose Invoice')).toBeTruthy();
+    expect(
+      details.getByRole('heading', { name: 'Chose Invoice' })
+    ).toBeTruthy();
+    expect(details.getByText(/Failed · took 3\.0 s · 1 AI call/)).toBeTruthy();
     expect(details.getByText('90%')).toBeTruthy();
-    expect(details.getByText('SendChannelMessage failed')).toBeTruthy();
-    fireEvent.click(details.getByRole('button', { name: 'Close run details' }));
-    expect(screen.queryByRole('region', { name: 'Run details' })).toBeNull();
+    expect(details.getByText('SendChannelMessage')).toBeTruthy();
+    expect(details.getByText('No access').className).toContain('text-failure');
+
+    fireEvent.click(within(row('CreateDocument')).getByRole('button'));
+    expect(
+      details.queryByRole('heading', { name: 'Chose Invoice' })
+    ).toBeNull();
+    expect(details.getByText('No')).toBeTruthy();
+    expect(details.getByText('80%')).toBeTruthy();
+
+    // A run that only asked its agent opens the conversation instead.
+    fireEvent.click(within(row('Agent agent-run')).getByRole('button'));
+    expect(source.onOpen).toHaveBeenCalledWith(
+      { type: 'agent', id: 'agent-run' },
+      false
+    );
+  });
+
+  it('opens an agent step’s conversation from the run', () => {
+    const source = sources();
+    const program = record('agent', 'program', {
+      result: {
+        version: 1,
+        resource: { type: 'agent', id: 'program' },
+        steps: [
+          { path: '0', kind: 'if', answer: true, probability: 0.97 },
+          { path: '0.then.0', kind: 'agent' },
+        ],
+      },
+    });
+    render(() => (
+      <RoutineHistory
+        {...source}
+        records={[program]}
+        isPending={false}
+        describeStep={describeRunStep}
+      />
+    ));
+    expect(source.createAgentMetadata).not.toHaveBeenCalled();
+    const details = within(screen.getByRole('region', { name: 'Run details' }));
+    expect(details.getByText('97%')).toBeTruthy();
+    fireEvent.click(details.getByRole('button', { name: /Open conversation/ }));
+    expect(source.onOpen).toHaveBeenCalledWith(
+      { type: 'agent', id: 'program' },
+      false
+    );
+  });
+
+  it('returns from a chosen run to the list', () => {
+    render(() => (
+      <RoutineHistory
+        {...sources()}
+        records={[triage(), weekly('run-weekly')]}
+        isPending={false}
+        describeStep={describeRunStep}
+      />
+    ));
+    fireEvent.click(within(row('CreateDocument')).getByRole('button'));
+    expect(
+      within(row('CreateDocument'))
+        .getByRole('button')
+        .getAttribute('aria-current')
+    ).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
+    expect(
+      within(row('Chose Invoice'))
+        .getByRole('button')
+        .getAttribute('aria-current')
+    ).toBe('true');
   });
 });

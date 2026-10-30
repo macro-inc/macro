@@ -383,7 +383,7 @@ function openRunOptions() {
 }
 
 function activationItem(): HTMLElement {
-  const name = /^(Enable|Disable) routine$/;
+  const name = /^Turn (on|off)$/;
   if (!screen.queryByRole('menuitem', { name })) openRunOptions();
   return screen.getByRole('menuitem', { name });
 }
@@ -609,7 +609,7 @@ describe('routine execution target autosave', () => {
       enabled: false,
     });
     setSchedules([{ ...cron, claimed, enabled: false }]);
-    expect(activationItem().textContent).toContain('Enable routine');
+    expect(activationItem().textContent).toContain('Turn on');
     expect(activationItem().getAttribute('aria-disabled')).toBe('true');
     setSchedules([{ ...cron, enabled: false }]);
     expect(activationItem().getAttribute('aria-disabled')).not.toBe('true');
@@ -617,10 +617,10 @@ describe('routine execution target autosave', () => {
 
   it('shows a paused routine and still runs it on demand', async () => {
     render(() => <Routine />);
-    expect(activationItem().textContent).toContain('Disable routine');
+    expect(activationItem().textContent).toContain('Turn off');
     expect(screen.getByText(/Next run/)).toBeTruthy();
     setSchedules([{ ...cron, enabled: false }]);
-    expect(activationItem().textContent).toContain('Enable routine');
+    expect(activationItem().textContent).toContain('Turn on');
     expect(screen.getByText('Next run: Paused')).toBeTruthy();
     fireEvent.keyDown(activationItem(), { key: 'Escape' });
     await vi.advanceTimersByTimeAsync(0);
@@ -808,12 +808,8 @@ describe('routine editor triggers', () => {
       { ...events, task: { ...(events.task as object), prompt: 'Be brief.' } },
     ]);
     render(() => <Routine />);
-    const add = screen.getByRole('button', { name: 'Add step' });
-    add.focus();
-    fireEvent.keyDown(add, { key: 'Enter' });
-    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Create task' }), {
-      key: 'Enter',
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Create task/ }));
     // The closing menu can leave the page aria-hidden for a moment.
     const agent = screen.getByRole('region', { name: 'Ask AI', hidden: true });
     // Its card's header toggle comes first.
@@ -895,12 +891,12 @@ describe('routine editor triggers', () => {
     // A narrow pane shows the details panel on request.
     fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
     const visibility = await screen.findByRole('button', {
-      name: 'Runs hidden',
+      name: 'Runs: Hidden',
     });
     visibility.focus();
     fireEvent.keyDown(visibility, { key: 'Enter' });
     fireEvent.keyDown(
-      await screen.findByRole('menuitemradio', { name: 'Show runs' }),
+      await screen.findByRole('menuitemradio', { name: /^Shown/ }),
       { key: 'Enter' }
     );
     await vi.advanceTimersByTimeAsync(300);

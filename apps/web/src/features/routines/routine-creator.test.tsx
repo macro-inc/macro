@@ -194,12 +194,8 @@ async function mount(): Promise<void> {
   });
   if (blank) {
     fireEvent.click(blank);
-    const add = await screen.findByRole('button', { name: 'Add step' });
-    add.focus();
-    fireEvent.keyDown(add, { key: 'Enter' });
-    fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Ask AI' }), {
-      key: 'Enter',
-    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Add step' }));
+    fireEvent.click(await screen.findByRole('option', { name: /^Ask AI/ }));
   }
   await screen.findByRole('textbox', { name: 'Routine name' });
   await screen.findByRole('textbox', { name: 'Instructions' });
@@ -256,7 +252,7 @@ function create(): void {
 async function addScheduled(name = 'Daily') {
   const add = screen.getByRole('button', { name: 'Add trigger' });
   fireEvent.click(add);
-  fireEvent.click(await screen.findByRole('button', { name: 'Scheduled' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'On a schedule' }));
   fireEvent.click(await screen.findByRole('radio', { name }));
   fireEvent.click(
     within(screen.getByRole('dialog', { name: 'Add trigger' })).getByRole(
@@ -341,9 +337,7 @@ describe('routine composer execution selection', () => {
     const visibility = screen.getByRole('button', { name: 'Runs hidden' });
     visibility.focus();
     fireEvent.keyDown(visibility, { key: 'Enter' });
-    const show = await screen.findByRole('menuitemradio', {
-      name: 'Show runs',
-    });
+    const show = await screen.findByRole('menuitemradio', { name: /^Shown/ });
     fireEvent.keyDown(show, { key: 'Enter' });
     expect(
       await screen.findByRole('button', { name: 'Runs shown' })
@@ -517,8 +511,8 @@ describe('routine composer execution selection', () => {
       expect(await screen.findByText(name)).toBeTruthy();
     }
     for (const name of [
-      'Scheduled',
-      'Run once',
+      'On a schedule',
+      'Once',
       'Channel created',
       'Message sent in channel',
       '@ mentioned in channel',
@@ -575,7 +569,9 @@ describe('routine composer execution selection', () => {
     fireEvent.click(
       await screen.findByRole('button', { name: 'New email received' })
     );
-    const condition = screen.getByRole('textbox', { name: 'Only run if' });
+    const condition = screen.getByRole('textbox', {
+      name: 'Only run if AI says yes',
+    });
     expect(condition.getAttribute('placeholder')).toBe(
       'Is this email an invoice or a receipt?'
     );
@@ -639,7 +635,7 @@ describe('routine composer execution selection', () => {
     inputPrompt();
     const before = Date.now();
     fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Once' }));
     const date = screen.getByRole('textbox', { name: 'Run once date' });
     fireEvent.input(date, { target: { value: 'in 2 hours' } });
     fireEvent.keyDown(date, { key: 'Enter' });
@@ -670,7 +666,7 @@ describe('routine composer execution selection', () => {
     await mount();
     inputPrompt();
     fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Run once' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Once' }));
     const panel = screen.getByRole('dialog', { name: 'Add trigger' });
     const confirm = () =>
       within(panel).getByRole('button', { name: 'Add trigger' });
@@ -737,7 +733,7 @@ describe('routine composer start', () => {
     });
     expect(screen.queryByRole('button', { name: 'Create routine' })).toBeNull();
     fireEvent.click(
-      within(brief).getByRole('button', { name: 'Use template' })
+      within(brief).getByRole('button', { name: 'Activate for me' })
     );
     expect(
       (

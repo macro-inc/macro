@@ -1,7 +1,8 @@
+import { SidePanel } from '@components/app/side-panel';
 import CheckIcon from '@icon/system/regular/check.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
-import { Dropdown } from '@ui';
+import { cn, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import type { RunVisibility } from '../core/draft';
 
@@ -12,33 +13,56 @@ const OPTIONS: {
 }[] = [
   {
     value: 'unlisted',
-    label: 'Hide runs',
+    label: 'Hidden',
     description:
       'Runs stay in this routine’s history. Agents shows them on request.',
   },
   {
     value: 'listed',
-    label: 'Show runs',
+    label: 'Shown',
     description: 'Runs appear in Home and Agents like your own sessions.',
   },
 ];
 
-/** Whether the routine's runs appear in Home and the Agents list. */
+/**
+ * Whether the routine's runs appear in Home and the Agents list: a chip in the
+ * composer, a pill in the routine's details panel.
+ */
 export function RoutineRunVisibility(props: {
   value: RunVisibility;
   onChange(value: RunVisibility): void;
+  appearance?: 'chip' | 'pill';
+  disabled?: boolean;
 }) {
+  const listed = () => props.value === 'listed';
   return (
     <Dropdown modal={false} placement="bottom-start">
-      <Dropdown.Trigger class="rounded-full text-ink-muted">
-        <Show
-          when={props.value === 'listed'}
-          fallback={<EyeSlashIcon class="size-3.5" />}
+      <Show
+        when={props.appearance === 'pill'}
+        fallback={
+          <Dropdown.Trigger
+            class="rounded-full text-ink-muted"
+            disabled={props.disabled}
+          >
+            <Show when={listed()} fallback={<EyeSlashIcon class="size-3.5" />}>
+              <EyeIcon class="size-3.5" />
+            </Show>
+            {listed() ? 'Runs shown' : 'Runs hidden'}
+          </Dropdown.Trigger>
+        }
+      >
+        <Dropdown.Trigger
+          as="button"
+          aria-label={`Runs: ${listed() ? 'Shown' : 'Hidden'}`}
+          disabled={props.disabled}
+          class={cn(
+            SidePanel.pillClass,
+            'text-ink outline-none hover:bg-hover focus-visible:bg-hover'
+          )}
         >
-          <EyeIcon class="size-3.5" />
-        </Show>
-        {props.value === 'listed' ? 'Runs shown' : 'Runs hidden'}
-      </Dropdown.Trigger>
+          {listed() ? 'Shown' : 'Hidden'}
+        </Dropdown.Trigger>
+      </Show>
       <Dropdown.Content
         portalScope="local"
         class="w-72 max-w-[calc(100vw-1rem)]"

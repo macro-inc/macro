@@ -9,16 +9,20 @@ import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import { Button, Dropdown, ToggleSwitch } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
 import { RoutineRunVisibility } from '../components/routine-run-visibility';
-import { RoutineSteps } from '../components/routine-step-editor';
+import { RoutineStatus } from '../components/routine-status';
+import {
+  RoutineSteps,
+  RoutineStepsSummary,
+} from '../components/routine-step-editor';
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
-import type { HistoryResource } from '../core/history';
+import type { HistoryRecord, HistoryResource } from '../core/history';
 import {
   createEmptyDraft,
   draftPrompt,
@@ -37,6 +41,40 @@ import {
   RoutineConflictError,
 } from '../primitives/routine-detail';
 import { RoutineHistory } from './routine-history';
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Runs in the last week by outcome, from the history loaded so far. */
+function lastWeek(records: readonly HistoryRecord[], now = Date.now()) {
+  const recent = records.filter((record) => {
+    const started = record.startedAt ? Date.parse(record.startedAt) : NaN;
+    return Number.isFinite(started) && now - started <= WEEK_MS;
+  });
+  if (!recent.length) return 'No runs';
+  const skipped = recent.filter((record) => record.skipped).length;
+  const failed = recent.filter(
+    (record) => !record.skipped && record.success === false
+  ).length;
+  const ran = recent.length - skipped - failed;
+  return `${ran} ran · ${skipped} skipped · ${failed} failed`;
+}
+
+/** Whether the routine's edits have reached the server. */
+function SaveState(props: { saving: boolean; failed: boolean }) {
+  return (
+    <span
+      role="status"
+      class="px-1.5 text-xs text-ink-extra-muted @max-[600px]/routine:hidden"
+    >
+      <Switch fallback="Saved">
+        <Match when={props.failed}>
+          <span class="text-failure">Not saved</span>
+        </Match>
+        <Match when={props.saving}>Saving…</Match>
+      </Switch>
+    </span>
+  );
+}
 
 export function RoutineDetailView(props: {
   source: RoutineDetailSource;
@@ -75,6 +113,7 @@ export function RoutineDetailView(props: {
     onRename: (name) => props.onRename(name),
   });
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');
+  const [showRun, setShowRun] = createSignal(true);
   const back = () => props.onBack();
   const prompt = () => {
     const draft = state();
@@ -116,22 +155,31 @@ export function RoutineDetailView(props: {
           showHistory={isOwned()}
           onTab={setTab}
           onBack={back}
-          runActions={
+          runCount={props.source.history().length}
+          headerActions={
             isOwned() && (
-              <RoutineRunButton
-                enabled={isActive()}
-                runDisabled={runDisabled() || needsEvent()}
-                runHint={
-                  needsEvent()
-                    ? 'This routine acts on the item that triggers it, so it runs on activity'
-                    : undefined
-                }
-                activationDisabled={activationDisabled()}
-                copyDisabled={!prompt()}
-                onRun={runNow}
-                onEnabled={(enabled) => props.source.setEnabled(enabled)}
-                onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
-              />
+              <>
+                <Show when={state()}>
+                  <SaveState
+                    saving={autosave.dirty() || autosave.saving()}
+                    failed={Boolean(autosave.error())}
+                  />
+                </Show>
+                <RoutineRunButton
+                  enabled={isActive()}
+                  runDisabled={runDisabled() || needsEvent()}
+                  runHint={
+                    needsEvent()
+                      ? 'This routine acts on the item that triggers it, so it runs on activity'
+                      : undefined
+                  }
+                  activationDisabled={activationDisabled()}
+                  copyDisabled={!prompt()}
+                  onRun={runNow}
+                  onEnabled={(enabled) => props.source.setEnabled(enabled)}
+                  onCopyPrompt={() => fireAndForget(copyPrompt(), 'routines')}
+                />
+              </>
             )
           }
           actions={
@@ -156,15 +204,19 @@ export function RoutineDetailView(props: {
                     <Show when={props.onShareTemplate}>
                       <Dropdown.Item onSelect={props.onShareTemplate}>
                         <ShareIcon class="size-4" />
-                        Share as template
+                        Share as template…
                       </Dropdown.Item>
                     </Show>
-                    <Show when={isOwned()}>
-                      <Dropdown.Item onSelect={props.onDelete}>
-                        <TrashIcon class="size-4" />
-                        Delete
-                      </Dropdown.Item>
-                    </Show>
+                  </Dropdown.Group>
+                  <Dropdown.Separator />
+                  <Dropdown.Group>
+                    <Dropdown.Item
+                      class="text-failure-ink"
+                      onSelect={props.onDelete}
+                    >
+                      <TrashIcon class="size-4" />
+                      Delete
+                    </Dropdown.Item>
                   </Dropdown.Group>
                 </Dropdown.Content>
               </Dropdown>
@@ -180,6 +232,11 @@ export function RoutineDetailView(props: {
                   <EntityMetadataRow label="Next run">
                     {nextRun()}
                   </EntityMetadataRow>
+                  <Show when={isOwned() && !props.source.historyLoading()}>
+                    <EntityMetadataRow label="Last 7 days">
+                      {lastWeek(props.source.history())}
+                    </EntityMetadataRow>
+                  </Show>
                 </EntityMetadata>
               </SidePanel.Footer>
               <SidePanel.Section
@@ -190,16 +247,16 @@ export function RoutineDetailView(props: {
               >
                 <SidePanel.Grid>
                   <SidePanel.Row label="Status">
-                    <ToggleSwitch
-                      label={isActive() ? 'Enabled' : 'Disabled'}
-                      labelClass="text-xs text-ink-muted"
-                      checked={isActive()}
+                    <RoutineStatus
+                      enabled={isActive()}
                       disabled={!isOwned() || activationDisabled()}
                       onChange={(enabled) => props.source.setEnabled(enabled)}
                     />
                   </SidePanel.Row>
                   <SidePanel.Row label="Runs">
                     <RoutineRunVisibility
+                      appearance="pill"
+                      disabled={!isOwned()}
                       value={state()?.runVisibility ?? DEFAULT_RUN_VISIBILITY}
                       onChange={(runVisibility) =>
                         setState((draft) => ({ ...draft, runVisibility }))
@@ -226,28 +283,65 @@ export function RoutineDetailView(props: {
                   </Show>
                 </SidePanel.Grid>
               </SidePanel.Section>
-              <Show when={props.onOpenTemplate && routine().templateId}>
-                {(templateId) => (
-                  <SidePanel.Section
-                    id="routine-template"
-                    title="Template"
-                    order={20}
-                    defaultOpen
+              <Show when={props.onOpenTemplate || props.onShareTemplate}>
+                <SidePanel.Section
+                  id="routine-template"
+                  title="Template"
+                  order={20}
+                  defaultOpen
+                >
+                  <Show
+                    when={props.onOpenTemplate && routine().templateId}
+                    fallback={
+                      <div class="flex items-center justify-between gap-2 text-xs text-ink-muted">
+                        Not shared
+                        <Show when={isOwned() && props.onShareTemplate}>
+                          {(share) => (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => share()()}
+                            >
+                              Share…
+                            </Button>
+                          )}
+                        </Show>
+                      </div>
+                    }
                   >
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => props.onOpenTemplate?.(templateId())}
-                    >
-                      Created from template
-                      <ArrowUpRightIcon class="size-3.5" />
-                    </Button>
-                  </SidePanel.Section>
-                )}
+                    {(templateId) => (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        class="-ml-2"
+                        onClick={() => props.onOpenTemplate?.(templateId())}
+                      >
+                        Created from template
+                        <ArrowUpRightIcon class="size-3.5" />
+                      </Button>
+                    )}
+                  </Show>
+                </SidePanel.Section>
               </Show>
             </>
           }
           nextRun={nextRun()}
+          stepsAside={
+            <Show when={state()}>
+              {(draft) => (
+                <RoutineStepsSummary
+                  steps={draftSteps(draft())}
+                  triggers={draft().triggers ?? []}
+                  lastRun={latestStepRun(
+                    props.source.history(),
+                    routine().revision
+                  )}
+                  showRun={showRun()}
+                  onShowRun={setShowRun}
+                />
+              )}
+            </Show>
+          }
           steps={
             <Show when={state()}>
               {(draft) => (
@@ -270,6 +364,7 @@ export function RoutineDetailView(props: {
                       props.source.history(),
                       routine().revision
                     )}
+                    showRun={showRun()}
                   />
                 </Show>
               )}
@@ -286,6 +381,7 @@ export function RoutineDetailView(props: {
             >
               {(draft) => (
                 <props.slots.Triggers
+                  layout="rows"
                   triggers={draft().triggers ?? []}
                   onChange={(triggers) =>
                     setState((current) => ({ ...current, triggers }))

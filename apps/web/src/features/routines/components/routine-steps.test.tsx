@@ -1,7 +1,18 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { agentStep, type StepDraft } from '../core/routine-steps';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  agentStep,
+  choice,
+  chooseStep,
+  type StepDraft,
+} from '../core/routine-steps';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import {
   aiPicks,
@@ -78,35 +89,70 @@ function renderSteps(options: {
   return steps;
 }
 
-function openMenu(name: string, index = 0) {
+function openAdd(name = 'Add step', index = 0) {
   // A just-closed menu can leave the rest of the page aria-hidden briefly.
+  fireEvent.click(
+    screen.getAllByRole('button', { name, hidden: true })[index]!
+  );
+}
+
+/** Choose from the menu opened last; jsdom keeps closed popovers around. */
+function add(name: string) {
+  fireEvent.click(
+    lastMenu().getByRole('option', {
+      name: new RegExp(`^${name}`),
+      hidden: true,
+    })
+  );
+}
+
+function lastMenu() {
+  return within(screen.getAllByRole('listbox', { hidden: true }).at(-1)!);
+}
+
+function openMenu(name: string, index = 0) {
   const trigger = screen.getAllByRole('button', { name, hidden: true })[index]!;
   trigger.focus();
   fireEvent.keyDown(trigger, { key: 'Enter' });
 }
 
 function choose(name: string) {
-  fireEvent.keyDown(screen.getByRole('menuitem', { name }), { key: 'Enter' });
+  fireEvent.keyDown(
+    screen.getByRole('menuitem', { name: new RegExp(`^${name}`) }),
+    {
+      key: 'Enter',
+    }
+  );
 }
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
 
 afterEach(() => {
   cleanup();
-  // The list or flow choice is remembered per viewer.
-  localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 describe('routine steps editor', () => {
   it('adds email actions after the agent and edits their label', () => {
     const steps = renderSteps({ triggers: [email] });
-    openMenu('Add step');
-    choose('Archive');
+    openAdd();
+    add('Archive');
     expect(steps().map((step) => step.kind)).toEqual(['agent', 'tool']);
     expect(steps()[1]).toMatchObject({
       tool: 'UpdateThreadLabels',
       arguments: { label: 'INBOX', add: false },
     });
-    openMenu('Add step');
-    choose('Add label');
+    openAdd();
+    add('Add label');
     fireEvent.input(screen.getByLabelText('Label', { selector: 'input' }), {
       target: { value: 'Finance' },
     });
@@ -118,15 +164,27 @@ describe('routine steps editor', () => {
     ).toBeTruthy();
   });
 
+  it('finds steps by searching the Add step menu', () => {
+    renderSteps({ triggers: [email] });
+    openAdd();
+    fireEvent.input(screen.getByRole('textbox', { name: 'Search steps' }), {
+      target: { value: 'sender' },
+    });
+    expect(
+      lastMenu().getByRole('option', { name: /^Mark sender as/ })
+    ).toBeTruthy();
+    expect(lastMenu().queryByRole('option', { name: /^Archive/ })).toBeNull();
+  });
+
   it('branches on a yes/no question and adds steps inside a branch', () => {
     const steps = renderSteps({ triggers: [email], steps: [] });
-    openMenu('Add step');
-    choose('If yes or no');
+    openAdd();
+    add('If yes or no');
     fireEvent.input(screen.getByLabelText('Yes/no question'), {
       target: { value: 'Is this an invoice?' },
     });
-    openMenu('Add step to branch', 0);
-    choose('Star');
+    openAdd('Add step to “Yes”');
+    add('Star');
     expect(steps()).toMatchObject([
       {
         kind: 'if',
@@ -135,24 +193,64 @@ describe('routine steps editor', () => {
         no: [],
       },
     ]);
+    // Numbered in reading order, through the branch.
+    expect(
+      screen.getByRole('region', { name: 'Star', hidden: true }).textContent
+    ).toContain('2');
+  });
+
+  it('shows a choice’s options as branches with their steps', () => {
+    const archive = createActionStep(
+      stepActions.find((action) => action.key === 'archive')!,
+      triggerScope('email')
+    );
+    const invoice = { ...choice('Invoice'), description: 'bills', steps: [] };
+    const newsletter = { ...choice('Newsletter'), steps: [archive] };
+    renderSteps({
+      triggers: [email],
+      steps: [chooseStep('What kind of email is this?', [invoice, newsletter])],
+      lastRun: {
+        success: true,
+        steps: [
+          {
+            path: '0',
+            kind: 'choose',
+            choices: ['Newsletter'],
+            probability: 0.9,
+          },
+          { path: '0.options.1.0', kind: 'tool', tool: 'UpdateThreadLabels' },
+        ],
+      },
+    });
+    expect(screen.getByText('What kind of email is this?')).toBeTruthy();
+    expect(screen.getByText('Newsletter 90%')).toBeTruthy();
+    expect(screen.getByText('· bills')).toBeTruthy();
+    expect(screen.getAllByText('Do nothing').length).toBe(2);
+    expect(
+      screen.getByRole('region', { name: 'Archive', hidden: true })
+    ).toBeTruthy();
   });
 
   it('explains why schedules can’t decide or act on a triggering item', () => {
     renderSteps({ triggers: [daily] });
-    openMenu('Add step');
-    expect(screen.queryByRole('menuitem', { name: 'If yes or no' })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
-    expect(screen.getByText(/Needs an activity trigger/)).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Create task' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Ask AI' })).toBeTruthy();
+    openAdd();
+    expect(
+      lastMenu().queryByRole('option', { name: /^If yes or no/ })
+    ).toBeNull();
+    expect(lastMenu().queryByRole('option', { name: /^Archive/ })).toBeNull();
+    expect(screen.getByText(/need an activity trigger/)).toBeTruthy();
+    expect(
+      lastMenu().getByRole('option', { name: /^Create task/ })
+    ).toBeTruthy();
+    expect(lastMenu().getByRole('option', { name: /^Ask AI/ })).toBeTruthy();
   });
 
   it('acts on a task created by an earlier step', () => {
     const steps = renderSteps({ triggers: [daily], steps: [] });
-    openMenu('Add step');
-    choose('Create task');
-    openMenu('Add step');
-    choose('Set priority');
+    openAdd();
+    add('Create task');
+    openAdd();
+    add('Set priority');
     expect(steps()[1]).toMatchObject({
       tool: 'SetEntityProperty',
       arguments: { entity_id: '{{steps.task.documentId}}' },
@@ -160,12 +258,31 @@ describe('routine steps editor', () => {
     expect(
       screen.getByRole('button', { name: 'Item', hidden: true })
     ).toBeTruthy();
+    fireEvent.click(screen.getByRole('radio', { name: 'High', hidden: true }));
+    expect(steps()[1]).toMatchObject({
+      arguments: { option_id: '00000001-0000-0000-0003-000000000003' },
+    });
+  });
+
+  it('writes text with fields from the triggering email', () => {
+    const steps = renderSteps({ triggers: [email], steps: [] });
+    openAdd();
+    add('Create task');
+    const title = screen.getByRole('textbox', { name: 'Title', hidden: true });
+    title.textContent = 'Pay: ';
+    fireEvent.input(title);
+    openMenu('Insert a field');
+    choose('Email subject');
+    expect(steps()[0]).toMatchObject({
+      arguments: { documentName: 'Pay: {{trigger.email.subject}}' },
+    });
+    expect(title.textContent).toContain('Email subject');
   });
 
   it('lets AI apply every label that fits', () => {
     const steps = renderSteps({ triggers: [email], steps: [] });
-    openMenu('Add step');
-    choose('Label with AI');
+    openAdd();
+    add('Label with AI');
     const [first, second] = screen.getAllByLabelText('Label', {
       selector: 'input',
     });
@@ -192,8 +309,8 @@ describe('routine steps editor', () => {
       screen.getByRole('region', { name: 'Label with AI', hidden: true })
     ).toBeTruthy();
     // A row can also do more when its value fits.
-    openMenu('Add step to branch', 0);
-    choose('Archive');
+    openAdd('Add step to “Finance”');
+    add('Archive');
     expect(steps()[0]).toMatchObject({
       options: [
         {
@@ -206,7 +323,7 @@ describe('routine steps editor', () => {
         { label: 'Hiring' },
       ],
     });
-    expect(screen.getByText('Also')).toBeTruthy();
+    expect(screen.getByText('Finance also')).toBeTruthy();
   });
 
   it('collapses finished steps and shows what the last run did', () => {
@@ -236,23 +353,35 @@ describe('routine steps editor', () => {
     });
     expect(screen.getByText('Urgent · High · Medium · Low')).toBeTruthy();
     expect(screen.getByText('Triaged')).toBeTruthy();
-    expect(screen.getByText('Chose High · 96%')).toBeTruthy();
-    expect(screen.getByText('Didn’t run')).toBeTruthy();
-    fireEvent.click(
-      screen.getByRole('button', { name: /Set priority with AI/, hidden: true })
-    );
-    expect(screen.getAllByLabelText('Chosen').length).toBe(1);
+    expect(screen.getByText('High 96%')).toBeTruthy();
+    // The comment didn't run, so it shows no result.
+    expect(screen.queryAllByLabelText('Ran').length).toBe(0);
+    fireEvent.click(screen.getByRole('switch', { name: 'Show last run' }));
+    expect(screen.queryByText('High 96%')).toBeNull();
   });
 
-  it('reorders and removes steps from each step’s menu', () => {
+  it('reorders, duplicates, wraps and deletes steps from each step’s menu', () => {
     const steps = renderSteps({ triggers: [email] });
-    openMenu('Add step');
-    choose('Star');
+    openAdd();
+    add('Create task');
     openMenu('Step actions', 1);
     choose('Move up');
     expect(steps().map((step) => step.kind)).toEqual(['tool', 'agent']);
     openMenu('Step actions', 0);
-    choose('Remove step');
-    expect(steps().map((step) => step.kind)).toEqual(['agent']);
+    choose('Duplicate');
+    expect(steps()).toMatchObject([
+      { kind: 'tool', output: 'task' },
+      { kind: 'tool', output: 'task_2' },
+      { kind: 'agent' },
+    ]);
+    openMenu('Step actions', 1);
+    choose('Wrap in');
+    expect(steps()[1]).toMatchObject({
+      kind: 'if',
+      yes: [{ kind: 'tool', output: 'task_2' }],
+    });
+    openMenu('Step actions', 0);
+    choose('Delete step');
+    expect(steps().map((step) => step.kind)).toEqual(['if', 'agent']);
   });
 });

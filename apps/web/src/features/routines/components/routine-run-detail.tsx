@@ -6,61 +6,175 @@ import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import type { HistoryRecord, HistoryStep } from '../core/history';
+import { failedStep, type RunOutcome, runOutcome } from '../core/step-history';
 
-function percent(probability: number | undefined) {
-  return probability === undefined
-    ? undefined
-    : `${Math.round(probability * 100)}%`;
+const OUTCOME_LABEL: Record<RunOutcome, string> = {
+  running: 'Running',
+  succeeded: 'Succeeded',
+  failed: 'Failed',
+  skipped: 'Skipped',
+  nothing: 'Changed nothing',
+};
+
+/** What a run ended as, in words. */
+export function outcomeLabel(outcome: RunOutcome): string {
+  return OUTCOME_LABEL[outcome];
 }
 
-function stepProbability(step: HistoryStep) {
-  return step.kind === 'if' || step.kind === 'choose'
-    ? step.probability
-    : undefined;
+function seconds(ms: number): string {
+  if (ms < 60_000) {
+    const value = ms / 1000;
+    return `${value < 10 ? value.toFixed(1) : Math.round(value)} s`;
+  }
+  const total = Math.round(ms / 1000);
+  return `${Math.floor(total / 60)}m ${total % 60}s`;
 }
 
-function stepError(step: HistoryStep) {
-  return step.kind === 'tool' || step.kind === 'agent' ? step.error : undefined;
+/** When the run started, how it ended, how long it took, and its AI calls. */
+function runMeta(record: HistoryRecord): string {
+  const parts: string[] = [];
+  if (record.startedAt) parts.push(formatDateAndTime(record.startedAt));
+  parts.push(outcomeLabel(runOutcome(record)));
+  const took =
+    record.startedAt && record.endedAt
+      ? Date.parse(record.endedAt) - Date.parse(record.startedAt)
+      : Number.NaN;
+  if (Number.isFinite(took) && took >= 0) parts.push(`took ${seconds(took)}`);
+  const steps = record.steps ?? [];
+  // One classifier call answers every decision; each agent is its own call.
+  const calls =
+    (steps.some((step) => step.kind === 'if' || step.kind === 'choose')
+      ? 1
+      : 0) + steps.filter((step) => step.kind === 'agent').length;
+  if (calls) parts.push(calls === 1 ? '1 AI call' : `${calls} AI calls`);
+  return parts.join(' · ');
 }
 
-/** One step of a run: what AI decided, with how sure it was, or what ran. */
-function RunStep(props: { step: HistoryStep; label: string }) {
-  const decided = () =>
-    props.step.kind === 'if' || props.step.kind === 'choose';
+/** The step as it would read had it succeeded; its error shows apart. */
+function withoutError(step: HistoryStep): HistoryStep {
+  return step.kind === 'tool' || step.kind === 'agent'
+    ? { ...step, error: undefined }
+    : step;
+}
+
+function percent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
+/** How sure AI was of what it decided, as labelled bars. */
+function decisionBars(
+  step: HistoryStep
+): { label: string; value: number; chosen: boolean }[] {
+  if (step.kind === 'if') {
+    return [
+      {
+        label: step.answer ? 'Yes' : 'No',
+        value: step.answer ? step.probability : 1 - step.probability,
+        chosen: true,
+      },
+    ];
+  }
+  if (step.kind !== 'choose' || step.probability === undefined) return [];
+  return step.choices?.length
+    ? [
+        {
+          label: step.choices.join(', '),
+          value: step.probability,
+          chosen: true,
+        },
+      ]
+    : [{ label: 'Best option', value: step.probability, chosen: false }];
+}
+
+function DecisionBar(props: { label: string; value: number; chosen: boolean }) {
   return (
-    <li class="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3 gap-y-1">
+    <span
+      class={cn(
+        'grid grid-cols-[7rem_minmax(0,1fr)_2.5rem] items-center gap-2.5 text-xs',
+        props.chosen ? 'text-ink-muted' : 'text-ink-extra-muted'
+      )}
+    >
+      <span class="truncate">{props.label}</span>
+      <span class="h-1.5 min-w-10 overflow-hidden rounded-full bg-hover">
+        <span
+          class={cn(
+            'block h-full rounded-full',
+            props.chosen ? 'bg-accent' : 'bg-edge'
+          )}
+          style={{ width: percent(props.value) }}
+        />
+      </span>
+      <span class="text-right tabular-nums">{percent(props.value)}</span>
+    </span>
+  );
+}
+
+/** One step of a run on the timeline: what AI decided, or what ran. */
+function RunStep(props: {
+  step: HistoryStep;
+  describe: (step: HistoryStep) => string;
+  last: boolean;
+  onOpenConversation?: () => void;
+}) {
+  const error = () =>
+    props.step.kind === 'tool' || props.step.kind === 'agent'
+      ? props.step.error
+      : undefined;
+  const ai = () => props.step.kind !== 'tool';
+  return (
+    <li class="relative grid grid-cols-[1.375rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 pb-4">
+      <Show when={!props.last}>
+        <span
+          aria-hidden="true"
+          class="absolute bottom-0.5 left-[0.625rem] top-6 w-px bg-edge"
+        />
+      </Show>
       <span
         aria-hidden="true"
         class={cn(
-          'mt-0.5 flex size-5 items-center justify-center rounded-full',
-          stepError(props.step)
+          'flex size-[1.375rem] items-center justify-center rounded-full',
+          error()
             ? 'bg-failure-bg text-failure'
-            : decided()
+            : ai()
               ? 'bg-accent-bg text-accent-ink'
               : 'bg-success-bg text-success'
         )}
       >
         <Switch fallback={<CheckIcon class="size-3" />}>
-          <Match when={stepError(props.step)}>
+          <Match when={error()}>
             <XIcon class="size-3" />
           </Match>
-          <Match when={decided()}>
+          <Match when={ai()}>
             <SparkleIcon class="size-3" />
           </Match>
         </Switch>
       </span>
-      <span class="min-w-0 text-sm text-ink">{props.label}</span>
-      <Show when={stepProbability(props.step)}>
-        {(probability) => (
-          <span class="col-start-2 flex items-center gap-2 text-xs text-ink-muted">
-            <span class="h-1.5 w-32 overflow-hidden rounded-full bg-hover">
-              <span
-                class="block h-full rounded-full bg-accent"
-                style={{ width: percent(probability()) }}
-              />
-            </span>
-            <span class="tabular-nums">{percent(probability())}</span>
-          </span>
+      <span class="min-w-0 pt-px text-sm font-medium text-ink">
+        {props.describe(withoutError(props.step))}
+      </span>
+      <Show when={error()}>
+        {(message) => (
+          <span class="col-start-2 text-xs text-failure">{message()}</span>
+        )}
+      </Show>
+      <Show when={decisionBars(props.step).length}>
+        <span class="col-start-2 grid gap-1.5">
+          <For each={decisionBars(props.step)}>
+            {(bar) => <DecisionBar {...bar} />}
+          </For>
+        </span>
+      </Show>
+      <Show when={props.step.kind === 'agent' && props.onOpenConversation}>
+        {(open) => (
+          <Button
+            variant="secondary"
+            size="sm"
+            class="col-start-2 w-fit"
+            onClick={() => open()()}
+          >
+            Open conversation
+            <ArrowUpRightIcon class="size-3.5" />
+          </Button>
         )}
       </Show>
     </li>
@@ -70,61 +184,64 @@ function RunStep(props: { step: HistoryStep; label: string }) {
 /** What one run of a routine with steps did, step by step. */
 export function RunDetail(props: {
   record: HistoryRecord;
+  title: string;
   describe: (step: HistoryStep) => string;
   /** Opens the run's agent session, when it has one. */
   onOpenConversation?: () => void;
-  onClose(): void;
 }) {
-  const failedStep = () => props.record.steps?.some(stepError);
+  const steps = () => props.record.steps ?? [];
+  // A run can fail outside its steps, e.g. while preparing its agent.
+  const unexplained = () =>
+    props.record.success === false && !failedStep(props.record)
+      ? props.record.error
+      : undefined;
   return (
-    <section aria-label="Run details" class="grid min-w-0 gap-4 p-4">
-      <div class="flex min-w-0 items-start gap-2">
-        <div class="grid min-w-0 flex-1 gap-0.5">
-          <h2 class="text-sm font-semibold text-ink">
-            {props.record.success === false ? 'Failed run' : 'Run'}
+    <section
+      aria-label="Run details"
+      class="flex min-w-0 flex-col gap-5 px-7 py-5 touch:px-4"
+    >
+      <header class="flex min-w-0 flex-wrap items-start gap-3">
+        <div class="grid min-w-0 flex-1 basis-60 gap-1">
+          <h2 class="text-lg font-semibold leading-6 text-ink">
+            {props.title}
           </h2>
-          <Show when={props.record.startedAt}>
-            {(at) => (
-              <span class="text-xs text-ink-muted">
-                {formatDateAndTime(at())}
-              </span>
-            )}
-          </Show>
+          <span class="text-xs text-ink-muted">{runMeta(props.record)}</span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => props.onClose()}
-          aria-label="Close run details"
+        <Show
+          when={
+            !steps().some((step) => step.kind === 'agent') &&
+            props.onOpenConversation
+          }
         >
-          <XIcon class="size-4" />
-        </Button>
-      </div>
-      <ol class="grid gap-3">
-        <For each={props.record.steps ?? []}>
-          {(step) => <RunStep step={step} label={props.describe(step)} />}
+          {(open) => (
+            <Button variant="secondary" size="sm" onClick={() => open()()}>
+              Open conversation
+              <ArrowUpRightIcon class="size-3.5" />
+            </Button>
+          )}
+        </Show>
+      </header>
+      <ol aria-label="Steps" class="flex flex-col">
+        <For each={steps()}>
+          {(step, index) => (
+            <RunStep
+              step={step}
+              describe={props.describe}
+              last={index() === steps().length - 1}
+              onOpenConversation={props.onOpenConversation}
+            />
+          )}
         </For>
       </ol>
-      <Show
-        when={
-          props.record.success === false && props.record.error && !failedStep()
-        }
-      >
-        <p role="alert" class="text-sm text-failure">
-          {props.record.error}
-        </p>
-      </Show>
-      <Show when={props.onOpenConversation}>
-        {(open) => (
-          <Button
-            variant="secondary"
-            size="sm"
-            class="w-fit"
-            onClick={() => open()()}
+      <Show when={unexplained()}>
+        {(message) => (
+          <p
+            role="alert"
+            class="flex gap-2.5 rounded-[10px] border border-failure/30 bg-failure-bg px-3 py-2.5 text-sm text-failure"
           >
-            Open conversation
-            <ArrowUpRightIcon class="size-3.5" />
-          </Button>
+            <XIcon class="mt-0.5 size-3.5 shrink-0" />
+            {message()}
+          </p>
         )}
       </Show>
     </section>

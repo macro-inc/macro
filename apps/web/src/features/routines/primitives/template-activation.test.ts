@@ -139,7 +139,10 @@ describe('createTemplateActivation', () => {
         activator: () => ACTIVATOR,
         access: () => new Map(),
       });
-      const steps = (activation.request()?.task as { steps: unknown[] }).steps;
+      const task = activation.request()?.task as
+        | { steps: unknown[] }
+        | undefined;
+      const steps = task?.steps ?? [];
       expect(JSON.stringify(steps[0])).toContain('macro|jun@macro.com');
       expect(JSON.stringify(steps[0])).not.toContain('eric@macro.com');
       // Someone else the author chose stays as chosen.

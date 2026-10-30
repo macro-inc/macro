@@ -2,19 +2,17 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 import { RoutinesList } from '../components/routines-list';
 import type { RoutineListSource } from '../context/routine-sources';
-import type { RoutineTarget } from '../core/routine-target';
 import { createRoutineRows } from '../primitives/routines-list';
 
 export function RoutinesListView(props: {
   source: RoutineListSource;
   userId: Accessor<string | undefined>;
-  targetLabel(target: RoutineTarget): string;
   showTitle?: boolean;
   registerSearchFocus?: (focus: () => void) => void;
   onCreate(): void;
   onOpen(id: string): void;
 }) {
-  const rows = createRoutineRows(props.source, props.userId, props.targetLabel);
+  const rows = createRoutineRows(props.source, props.userId);
   return (
     <RoutinesList
       showTitle={props.showTitle}

@@ -1,11 +1,10 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableRoutineConditions } from '@core/constant/featureFlags';
-import { Show, Suspense } from 'solid-js';
+import { Suspense } from 'solid-js';
 import { RoutineEventCondition } from './components/routine-event-condition';
 import { RoutineTriggers as TriggerList } from './components/routine-triggers';
 import {
   eventScopeKind,
-  isGlobalEvent,
   type RoutineTriggerDraft,
 } from './core/routine-triggers';
 import {
@@ -16,6 +15,7 @@ import {
 export function RoutineTriggers(props: {
   triggers: RoutineTriggerDraft[];
   onChange: (triggers: RoutineTriggerDraft[]) => void;
+  layout?: 'rows' | 'inline';
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
   return (
@@ -38,15 +38,11 @@ export function RoutineTriggers(props: {
         </Suspense>
       )}
       renderEventScope={(trigger, onChange) => (
-        <Show
-          when={!isGlobalEvent(trigger().events) || trigger().ids !== undefined}
-        >
-          <RoutineEventScope
-            kind={eventScopeKind(trigger())}
-            ids={trigger().ids}
-            onChange={onChange}
-          />
-        </Show>
+        <RoutineEventScope
+          kind={eventScopeKind(trigger())}
+          ids={trigger().ids}
+          onChange={onChange}
+        />
       )}
     />
   );

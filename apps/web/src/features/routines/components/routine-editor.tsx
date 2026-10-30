@@ -1,25 +1,60 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
-import { SidePanel } from '@components/app/side-panel';
+import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import { EntityComposer, Layer, TabSelector } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { Layer, TabSelector } from '@ui';
+import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';
 
-function SectionLabel(props: { children: JSX.Element; aside?: JSX.Element }) {
+/** A section of the routine page: a small uppercase heading over its content. */
+function RoutineSection(props: {
+  label: string;
+  aside?: JSX.Element;
+  children: JSX.Element;
+}) {
   return (
-    <div class="mb-2 mt-6 flex items-center justify-between gap-3">
-      <h2 class="text-xs font-medium text-ink-extra-muted">{props.children}</h2>
-      <Show when={props.aside}>
-        <span class="text-xs text-ink-extra-muted">{props.aside}</span>
-      </Show>
+    <section aria-label={props.label} class="grid min-w-0 gap-2.5">
+      <div class="flex min-h-5 items-center gap-2">
+        <h2 class="text-xs font-semibold uppercase tracking-[0.04em] text-ink-extra-muted">
+          {props.label}
+        </h2>
+        <span class="flex-1" />
+        <Show when={props.aside}>
+          <span class="flex min-w-0 items-center gap-2 truncate text-xs text-ink-extra-muted">
+            {props.aside}
+          </span>
+        </Show>
+      </div>
+      {props.children}
+    </section>
+  );
+}
+
+/** Below the shared side panel's split width, the details panel floats over the page, as in tasks. */
+const SPLIT_DETAILS_MIN_PX = 1224;
+
+/**
+ * The page's scroller. A floating details card covers the right of the pane,
+ * so while it is open the document column makes room for it.
+ */
+function DocumentScroller(props: ParentProps<{ floating: boolean }>) {
+  const panel = useSidePanel();
+  const clearance = () =>
+    props.floating && panel?.isOpen() ? SidePanel.FLOATING_CLEARANCE_PX : 0;
+  return (
+    <div
+      class="size-full overflow-y-auto @min-[900px]/routine:pr-(--details-clearance)"
+      style={{ '--details-clearance': `${clearance()}px` }}
+    >
+      {props.children}
     </div>
   );
 }
 
 /**
  * A routine's page: When and Then in a document column, its settings in the
- * details panel tasks and documents use, and a full-width run list.
+ * details panel beside it, and a full-width run list.
  */
 export function RoutineEditor(props: {
   draft: ScheduleDraft;
@@ -28,21 +63,40 @@ export function RoutineEditor(props: {
   tab: 'settings' | 'history';
   onTab: (tab: 'settings' | 'history') => void;
   onBack: () => void;
-  runActions?: JSX.Element;
+  /** Right of the header: save state and Run now. */
+  headerActions?: JSX.Element;
   /** What the routine does: its agent's instructions or its steps. */
   steps: JSX.Element;
+  /** The Then heading's controls, on its line. */
+  stepsAside?: JSX.Element;
+  /** The When card's rows: triggers and their conditions. */
   triggerContent?: JSX.Element;
   nextRun: string;
   history: JSX.Element;
   showHistory?: boolean;
+  /** Runs loaded for the Runs tab's count. */
+  runCount?: number;
   /** The routine menu, shown right after its name. */
   actions?: JSX.Element;
   feedback?: JSX.Element;
   /** Details panel sections (`SidePanel.Section`, `SidePanel.Footer`). */
   details?: JSX.Element;
 }) {
+  const tabs = () =>
+    props.showHistory === false
+      ? [{ value: 'settings', label: 'Overview', count: undefined }]
+      : [
+          { value: 'settings', label: 'Overview', count: undefined },
+          { value: 'history', label: 'Runs', count: props.runCount },
+        ];
+  const [pane, setPane] = createSignal<HTMLElement>();
+  const paneSize = createElementSize(pane);
+  // A pane too narrow for the details column gets the floating card instead
+  // of a full-screen overlay; until it is measured, assume it is wide.
+  const floating = () =>
+    paneSize.width !== null && paneSize.width < SPLIT_DETAILS_MIN_PX;
   return (
-    <SidePanel.Root floating>
+    <SidePanel.Root persistKey="routine">
       <ViewBreadcrumbs.Root
         value="routine"
         onChange={(value) => {
@@ -97,38 +151,41 @@ export function RoutineEditor(props: {
             <div class="shrink-0 @max-[600px]/routine:order-last @max-[600px]/routine:w-full">
               <TabSelector class="w-fit">
                 <TabSelector.List aria-label="Routine details">
-                  <For
-                    each={
-                      props.showHistory === false
-                        ? [{ value: 'settings', label: 'Overview' }]
-                        : [
-                            { value: 'settings', label: 'Overview' },
-                            { value: 'history', label: 'Runs' },
-                          ]
-                    }
-                  >
+                  <For each={tabs()}>
                     {(tab) => (
                       <TabSelector.Tab value={tab.value}>
                         {tab.label}
+                        <Show when={tab.count}>
+                          {(count) => (
+                            <span
+                              aria-hidden="true"
+                              class="ml-1.5 tabular-nums text-ink-extra-muted"
+                            >
+                              {count()}
+                            </span>
+                          )}
+                        </Show>
                       </TabSelector.Tab>
                     )}
                   </For>
                 </TabSelector.List>
               </TabSelector>
             </div>
-            <Show when={props.tab === 'settings'}>
-              <div class="ml-auto flex shrink-0 items-center">
-                <SidePanel.Toggle />
-              </div>
-            </Show>
+            <div class="ml-auto flex shrink-0 items-center gap-2">
+              {props.headerActions}
+              <Show when={props.tab === 'settings'}>
+                <SidePanel.Toggle size="sm" />
+              </Show>
+            </div>
           </ViewShell.TopBar>
           <TabSelector.Panel
+            ref={setPane}
             value="settings"
             class="relative min-h-0 flex-1 outline-none"
           >
-            <SidePanel.Layout floating headerToggle={false}>
-              <div class="size-full overflow-y-auto px-6 pb-8 pt-12 touch:pt-6">
-                <div class="mx-auto max-w-3xl">
+            <SidePanel.Layout headerToggle={false} floating={floating()}>
+              <DocumentScroller floating={floating()}>
+                <div class="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-10 pb-16 pt-8 @max-[600px]/routine:px-4 touch:pt-6">
                   <div class="min-w-0">
                     <Show
                       when={!props.disabled}
@@ -149,38 +206,36 @@ export function RoutineEditor(props: {
                       />
                     </Show>
                   </div>
-                  <SectionLabel aside={`Next run: ${props.nextRun}`}>
-                    When
-                  </SectionLabel>
-                  <Layer depth={1}>
-                    <section
-                      aria-label="Routine triggers"
-                      class="flex items-start gap-4 rounded-xl border border-edge-muted bg-surface p-4"
-                    >
+                  <RoutineSection
+                    label="When"
+                    aside={`Next run: ${props.nextRun}`}
+                  >
+                    <Layer depth={1}>
                       <fieldset
+                        aria-label="Routine triggers"
                         disabled={props.disabled}
                         inert={props.disabled}
-                        class="min-w-0 flex-1"
+                        class="min-w-0 rounded-xl border border-edge-muted bg-surface px-3 py-2.5"
                       >
-                        <EntityComposer.Properties aria-label="Triggers">
-                          {props.triggerContent}
-                        </EntityComposer.Properties>
+                        {props.triggerContent}
                       </fieldset>
-                      <div class="shrink-0">{props.runActions}</div>
-                    </section>
-                  </Layer>
-                  <SectionLabel>Then</SectionLabel>
-                  <fieldset
-                    disabled={props.disabled}
-                    inert={props.disabled}
-                    class="min-w-0"
-                    aria-label="Routine steps"
-                  >
-                    <Layer depth={1}>{props.steps}</Layer>
-                  </fieldset>
-                  <div class="mt-4 grid gap-2">{props.feedback}</div>
+                    </Layer>
+                  </RoutineSection>
+                  <RoutineSection label="Then" aside={props.stepsAside}>
+                    <fieldset
+                      disabled={props.disabled}
+                      inert={props.disabled}
+                      class="min-w-0"
+                      aria-label="Routine steps"
+                    >
+                      <Layer depth={1}>{props.steps}</Layer>
+                    </fieldset>
+                  </RoutineSection>
+                  <Show when={props.feedback}>
+                    <div class="grid gap-2 empty:hidden">{props.feedback}</div>
+                  </Show>
                 </div>
-              </div>
+              </DocumentScroller>
               {props.details}
             </SidePanel.Layout>
           </TabSelector.Panel>

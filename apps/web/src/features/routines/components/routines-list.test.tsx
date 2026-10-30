@@ -30,9 +30,11 @@ const rows: RoutineRow[] = [
     name: 'Morning briefing',
     createdAt: '',
     when: 'Weekdays at 9:00 AM',
-    does: 'Ask AI · Sonnet 5.5',
+    whenKind: 'schedule',
+    does: 'Sum up my day',
+    ai: 'Ask AI',
     group: 'schedule',
-    lastRun: { at: '9:00 AM', failed: false, summary: 'Asked AI' },
+    lastRun: { at: '9:00 AM', outcome: 'succeeded', summary: 'Asked AI' },
     status: 'Active',
     enabled: true,
     editable: true,
@@ -41,12 +43,14 @@ const rows: RoutineRow[] = [
     id: 'revenue',
     name: 'Revenue signals',
     createdAt: '',
-    when: 'When: New email received',
-    does: 'Ask AI · Finance agent',
+    when: 'New email received',
+    whenKind: 'email',
+    does: 'Invoice, Newsletter · 4 actions',
+    ai: 'AI picks',
     group: 'activity',
     lastRun: {
       at: 'Monday',
-      failed: true,
+      outcome: 'failed',
       summary: 'Failed: No label named "Receipts" in this thread\'s inbox.',
     },
     status: 'Paused',
@@ -73,7 +77,7 @@ describe('routines list', () => {
     const props = setup();
     fireEvent.click(screen.getByRole('button', { name: 'Search routines' }));
     fireEvent.input(screen.getByRole('searchbox'), {
-      target: { value: 'finance' },
+      target: { value: 'invoice' },
     });
     expect(screen.queryByText('Morning briefing')).toBeNull();
     fireEvent.click(
@@ -93,42 +97,50 @@ describe('routines list', () => {
   });
   it('toggles the enabled property without opening the routine', () => {
     const props = setup();
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Enabled for Morning briefing',
-        pressed: true,
-      })
-    );
+    const on = screen.getByRole('switch', {
+      name: 'Enabled for Morning briefing',
+    }) as HTMLInputElement;
+    expect(on.checked).toBe(true);
+    fireEvent.click(on);
     expect(props.onToggle).toHaveBeenCalledWith(rows[0]);
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Enabled for Revenue signals',
-        pressed: false,
-      })
-    );
+    const off = screen.getByRole('switch', {
+      name: 'Enabled for Revenue signals',
+    }) as HTMLInputElement;
+    expect(off.checked).toBe(false);
+    fireEvent.click(off);
     expect(props.onToggle).toHaveBeenLastCalledWith(rows[1]);
     expect(props.onOpen).not.toHaveBeenCalled();
   });
   it('prevents repeated changes while a property is saving', () => {
     const props = setup({ pendingId: 'mine' });
-    const button = screen.getByRole('button', {
+    const toggle = screen.getByRole('switch', {
       name: 'Enabled for Morning briefing',
-    });
-    expect(button.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(button);
+    }) as HTMLInputElement;
+    expect(toggle.disabled).toBe(true);
+    fireEvent.click(toggle);
     expect(props.onToggle).not.toHaveBeenCalled();
     expect(props.onOpen).not.toHaveBeenCalled();
   });
   it('groups routines by what starts them and shows how each last ran', () => {
     setup();
-    expect(screen.getByText('When something happens')).toBeTruthy();
-    expect(screen.getByText('On a schedule')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Monday · Failed: No label named "Receipts" in this thread\'s inbox.'
-      )
-    ).toBeTruthy();
-    expect(screen.getByText('9:00 AM · Asked AI')).toBeTruthy();
+    const groups = screen
+      .getAllByRole('row')
+      .filter((row) =>
+        /When something happens|On a schedule/.test(row.textContent ?? '')
+      );
+    expect(groups.map((row) => row.textContent)).toEqual([
+      'When something happens1',
+      'On a schedule1',
+    ]);
+    // How AI takes part reads as a chip before what the routine does.
+    expect(screen.getByText('AI picks')).toBeTruthy();
+    expect(screen.getByText('Invoice, Newsletter · 4 actions')).toBeTruthy();
+    expect(screen.getByText('Ask AI')).toBeTruthy();
+    const table = screen.getByRole('table', { name: 'Routines' });
+    expect(table.textContent).toContain(
+      'Monday · Failed: No label named "Receipts" in this thread\'s inbox.'
+    );
+    expect(table.textContent).toContain('9:00 AM · Asked AI');
   });
   it('shows only routines that are on under On', () => {
     setup();

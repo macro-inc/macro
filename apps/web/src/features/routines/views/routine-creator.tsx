@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import ClockIcon from '@icon/system/regular/clock.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, EntityComposer, ToggleSwitch } from '@ui';
@@ -93,8 +94,10 @@ export function RoutineCreatorView(props: {
       }}
     >
       <EntityComposer.Header>
-        <ClockIcon class="ml-2 size-4 text-ink-muted" />
-        <span class="flex-1 px-1 text-sm text-ink-muted">New routine</span>
+        <ClockIcon class="ml-2 size-4 shrink-0 text-ink-muted" />
+        <h2 class="flex-1 px-1 text-base font-semibold tracking-[-0.01em] text-ink">
+          New routine
+        </h2>
         <Button
           size="icon-md"
           variant="ghost"
@@ -105,14 +108,23 @@ export function RoutineCreatorView(props: {
         </Button>
       </EntityComposer.Header>
       <Show when={stage() === 'start'}>
-        <div class="min-h-0 overflow-y-auto px-2">
+        <div class="min-h-0 flex-1 overflow-y-auto px-2">
           <RoutineStart
             describe={props.renderComposer?.(begin, draft, described())}
             templates={availableTemplates(props.decisionsEnabled)}
             onTemplate={startFrom}
-            onBlank={() => begin({ ...draft(), triggers: [], steps: [] })}
           />
         </div>
+        <EntityComposer.Footer class="-mx-4 items-center border-t border-edge-muted px-4 pt-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => begin({ ...draft(), triggers: [], steps: [] })}
+          >
+            <PlusIcon class="size-3.5" />
+            Start from scratch
+          </Button>
+        </EntityComposer.Footer>
       </Show>
       <Show when={stage() === 'edit'}>
         <div class="min-h-0 overflow-y-auto px-2">

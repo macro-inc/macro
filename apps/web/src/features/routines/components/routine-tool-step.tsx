@@ -1,6 +1,5 @@
-import BracketsIcon from '@phosphor/brackets-curly.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import { Dropdown, Input, TextField } from '@ui';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import { cn, Dropdown, Tabs, TextField } from '@ui';
 import {
   type Component,
   createSignal,
@@ -18,11 +17,15 @@ import {
   senderPolicies,
   statusOptions,
   stepActionKey,
+  stepActions,
   stepTarget,
   stepTargets,
   TRIGGER_ID,
-  triggerFields,
 } from '../core/step-catalog';
+import { FieldText } from './routine-field-text';
+import { menuMount } from './routine-search-menu';
+
+export { menuMount };
 
 export type TagChoice = {
   definitionId: string;
@@ -55,14 +58,43 @@ export type RoutineToolSlots = {
 const text = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /**
- * Where a step menu mounts: on the creator's dialog when inside one, so the
- * composer's scrolling panel can't clip it; the local scope otherwise.
+ * One setting of an open step: its name in a fixed column, its control
+ * beside it. A narrow step stacks them.
  */
-export function menuMount(trigger: HTMLElement | undefined) {
-  return trigger?.closest<HTMLElement>('[role="dialog"]') ?? undefined;
+export function PropRow(props: {
+  label: string;
+  /** Top-align the name with a tall control, like a message. */
+  tall?: boolean;
+  children: JSX.Element;
+}) {
+  return (
+    <div
+      class={cn(
+        'grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-x-2.5 gap-y-1 @max-[30rem]/step:grid-cols-1',
+        props.tall ? 'items-start' : 'items-center'
+      )}
+    >
+      <span
+        class={cn(
+          'min-w-0 truncate text-[13px] text-ink-muted',
+          props.tall && 'pt-1.5'
+        )}
+      >
+        {props.label}
+      </span>
+      <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+        {props.children}
+      </div>
+    </div>
+  );
 }
 
-/** Pick one of a few fixed options. */
+/** A muted line under a step's settings. */
+export function StepNote(props: { children: JSX.Element }) {
+  return <p class="text-xs text-ink-muted">{props.children}</p>;
+}
+
+/** A token that picks one of a few fixed options. */
 export function OptionMenu(props: {
   label: string;
   value: unknown;
@@ -70,19 +102,29 @@ export function OptionMenu(props: {
   onChange(id: string): void;
 }) {
   let trigger: HTMLButtonElement | undefined;
+  const selected = () =>
+    props.options.find((option) => option.id === props.value);
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger ref={trigger} aria-label={props.label} class="gap-1.5">
-        {props.options.find((option) => option.id === props.value)?.label ??
-          'Choose…'}
-        <CaretDownIcon class="size-3" />
+      <Dropdown.Trigger
+        ref={trigger}
+        variant={selected() ? 'secondary' : 'outline'}
+        aria-label={props.label}
+        class="max-w-full gap-1.5"
+      >
+        <span class="truncate">{selected()?.label ?? 'Choose…'}</span>
+        <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
       </Dropdown.Trigger>
-      <Dropdown.Content portalScope="local" mount={menuMount(trigger)}>
+      <Dropdown.Content
+        portalScope="local"
+        mount={menuMount(trigger)}
+        class="min-w-48"
+      >
         <Dropdown.Group>
           <For each={props.options}>
             {(option) => (
               <Dropdown.Item onSelect={() => props.onChange(option.id)}>
-                {option.label}
+                <span class="flex-1">{option.label}</span>
               </Dropdown.Item>
             )}
           </For>
@@ -92,85 +134,26 @@ export function OptionMenu(props: {
   );
 }
 
-/** Insert `{{…}}` fields from the triggering item and earlier steps. */
-function FieldMenu(props: { scope: StepScope; onInsert(value: string): void }) {
-  const fields = () => [
-    ...triggerFields(props.scope.subject),
-    ...props.scope.outputs,
-  ];
-  let trigger: HTMLButtonElement | undefined;
-  return (
-    <Show when={fields().length}>
-      <Dropdown placement="bottom-end">
-        <Dropdown.Trigger
-          ref={trigger}
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Insert a field"
-          title="Insert a field from the triggering item or an earlier step"
-        >
-          <BracketsIcon class="size-3.5" />
-        </Dropdown.Trigger>
-        <Dropdown.Content portalScope="local" mount={menuMount(trigger)}>
-          <Dropdown.Group>
-            <Dropdown.GroupLabel>Insert field</Dropdown.GroupLabel>
-            <For each={fields()}>
-              {(field) => (
-                <Dropdown.Item onSelect={() => props.onInsert(field.value)}>
-                  {field.label}
-                </Dropdown.Item>
-              )}
-            </For>
-          </Dropdown.Group>
-        </Dropdown.Content>
-      </Dropdown>
-    </Show>
-  );
-}
-
-/** Text that may embed `{{…}}` fields. */
-function TemplateField(props: {
+/** A few fixed values side by side, like Low · Medium · High · Urgent. */
+function ValueTabs(props: {
   label: string;
-  value: string;
-  placeholder?: string;
-  multiline?: boolean;
-  scope: StepScope;
-  onChange(value: string): void;
+  value: unknown;
+  options: readonly { id: string; label: string }[];
+  wrap?: boolean;
+  onChange(id: string): void;
 }) {
-  const insert = (field: string) => {
-    const value = props.value;
-    props.onChange(
-      value && !value.endsWith(' ') ? `${value} ${field}` : `${value}${field}`
-    );
-  };
   return (
-    <TextField value={props.value} onChange={props.onChange} class="grid gap-1">
-      <div class="flex items-center justify-between gap-2">
-        <TextField.Label class="text-xs text-ink-muted">
-          {props.label}
-        </TextField.Label>
-        <FieldMenu scope={props.scope} onInsert={insert} />
-      </div>
-      <Show
-        when={props.multiline}
-        fallback={<TextField.Input placeholder={props.placeholder} />}
-      >
-        <TextField.TextArea
-          autoResize
-          rows={2}
-          placeholder={props.placeholder}
-        />
-      </Show>
-    </TextField>
-  );
-}
-
-export function Row(props: { label: string; children: JSX.Element }) {
-  return (
-    <div class="flex flex-wrap items-center gap-2 text-sm">
-      <span class="text-xs text-ink-muted">{props.label}</span>
-      {props.children}
-    </div>
+    <Tabs
+      aria-label={props.label}
+      size="sm"
+      wrap={props.wrap}
+      options={props.options.map((option) => ({
+        value: option.id,
+        label: option.label,
+      }))}
+      value={typeof props.value === 'string' ? props.value : undefined}
+      onChange={props.onChange}
+    />
   );
 }
 
@@ -230,7 +213,7 @@ export function TargetRow(props: {
   const visible = () => targets().length > 1 || current() !== TRIGGER_ID;
   return (
     <Show when={targets().length && visible()}>
-      <Row label="On">
+      <PropRow label="On">
         <OptionMenu
           label="Item"
           value={current()}
@@ -243,7 +226,7 @@ export function TargetRow(props: {
             if (item) props.onChange(retarget(props.step, item));
           }}
         />
-      </Row>
+      </PropRow>
     </Show>
   );
 }
@@ -323,15 +306,6 @@ export function ActionValue(props: {
   );
 }
 
-const valueLabels: Partial<Record<ReturnType<typeof stepActionKey>, string>> = {
-  add_label: 'Label',
-  remove_label: 'Label',
-  add_tag: 'Tag',
-  set_status: 'Status',
-  set_priority: 'Priority',
-  assign: 'Assign to',
-};
-
 /** The form for one tool step, chosen by the action it was built from. */
 export function ToolStepBody(props: {
   step: ToolStepDraft;
@@ -346,120 +320,159 @@ export function ToolStepBody(props: {
       arguments: { ...props.step.arguments, ...patch },
     });
   const key = () => stepActionKey(props.step);
+  const description = () =>
+    stepActions.find((action) => action.key === key())?.description;
+  const created = () => (key() === 'create_task' ? 'task' : 'document');
   return (
-    <div class="grid gap-3">
+    <div class="grid min-w-0 gap-3">
       <TargetRow
         step={props.step}
         scope={props.scope}
         onChange={props.onChange}
       />
       <Switch>
-        <Match when={valueLabels[key()]}>
-          {(label) => (
-            <Row label={label()}>
-              <ActionValue
-                step={props.step}
-                slots={props.slots}
-                onChange={(patch) => set(patch)}
-              />
-            </Row>
-          )}
+        <Match when={key() === 'add_label' || key() === 'remove_label'}>
+          <PropRow label="Label">
+            <ActionValue
+              step={props.step}
+              slots={props.slots}
+              onChange={(patch) => set(patch)}
+            />
+          </PropRow>
+          <StepNote>
+            Matched by name in each email’s own inbox, so it works across
+            inboxes.
+          </StepNote>
+        </Match>
+        <Match when={key() === 'add_tag'}>
+          <PropRow label="Tag">
+            <ActionValue
+              step={props.step}
+              slots={props.slots}
+              onChange={(patch) => set(patch)}
+            />
+          </PropRow>
+        </Match>
+        <Match when={key() === 'assign'}>
+          <PropRow label="To">
+            <ActionValue
+              step={props.step}
+              slots={props.slots}
+              onChange={(patch) => set(patch)}
+            />
+          </PropRow>
+        </Match>
+        <Match when={key() === 'set_status'}>
+          <PropRow label="Status">
+            <ValueTabs
+              label="Status"
+              wrap
+              value={args().option_id}
+              options={statusOptions}
+              onChange={(option_id) => set({ option_id })}
+            />
+          </PropRow>
+        </Match>
+        <Match when={key() === 'set_priority'}>
+          <PropRow label="Priority">
+            <ValueTabs
+              label="Priority"
+              value={args().option_id}
+              options={priorityOptions}
+              onChange={(option_id) => set({ option_id })}
+            />
+          </PropRow>
         </Match>
         <Match when={key() === 'sender_policy'}>
-          <Row label="Treat future mail from this sender as">
-            <OptionMenu
+          <PropRow label="Treat as">
+            <ValueTabs
               label="Sender policy"
               value={args().policy}
               options={senderPolicies}
               onChange={(policy) => set({ policy })}
             />
-          </Row>
+          </PropRow>
+          <StepNote>Applies to future mail from this sender.</StepNote>
         </Match>
         <Match when={key() === 'move'}>
-          <Row label="Folder">
+          <PropRow label="Folder">
             <props.slots.FolderPicker
               value={text(args().projectId) || undefined}
               onChange={(projectId) => set({ projectId })}
             />
-          </Row>
+          </PropRow>
         </Match>
         <Match when={key() === 'create_task' || key() === 'create_document'}>
-          <TemplateField
-            label="Title"
-            value={text(args().documentName)}
-            placeholder={key() === 'create_task' ? 'Follow up' : 'Daily brief'}
-            scope={props.scope}
-            onChange={(documentName) => set({ documentName })}
-          />
-          <TemplateField
-            label={key() === 'create_task' ? 'Description' : 'Content'}
-            value={text(args().fileContent)}
-            placeholder="Optional details"
-            multiline
-            scope={props.scope}
-            onChange={(fileContent) => set({ fileContent })}
-          />
+          <PropRow label="Title">
+            <FieldText
+              label="Title"
+              value={text(args().documentName)}
+              placeholder={
+                key() === 'create_task' ? 'Follow up' : 'Daily brief'
+              }
+              scope={props.scope}
+              onChange={(documentName) => set({ documentName })}
+            />
+          </PropRow>
+          <PropRow label={key() === 'create_task' ? 'Details' : 'Content'} tall>
+            <FieldText
+              label={key() === 'create_task' ? 'Details' : 'Content'}
+              value={text(args().fileContent)}
+              placeholder="Optional"
+              multiline
+              scope={props.scope}
+              onChange={(fileContent) => set({ fileContent })}
+            />
+          </PropRow>
+          <PropRow label="Folder">
+            <props.slots.FolderPicker
+              value={text(args().projectId) || undefined}
+              onChange={(projectId) => set({ projectId })}
+            />
+          </PropRow>
+          <Show when={props.step.output}>
+            <StepNote>Later steps can act on this {created()}.</StepNote>
+          </Show>
         </Match>
         <Match when={key() === 'send_message'}>
-          <Row label="Channel">
+          <PropRow label="Channel">
             <props.slots.ChannelPicker
               value={text(args().channel_id)}
               onChange={(channel_id) => set({ channel_id })}
             />
-          </Row>
-          <TemplateField
-            label="Message"
-            value={text(args().content)}
-            placeholder="New invoice from {{trigger.email.from.name}}"
-            multiline
-            scope={props.scope}
-            onChange={(content) => set({ content })}
-          />
+          </PropRow>
+          <PropRow label="Message" tall>
+            <FieldText
+              label="Message"
+              value={text(args().content)}
+              placeholder="Write the message"
+              multiline
+              scope={props.scope}
+              onChange={(content) => set({ content })}
+            />
+          </PropRow>
         </Match>
         <Match when={key() === 'comment' || key() === 'reply_in_thread'}>
-          <TemplateField
-            label={key() === 'comment' ? 'Comment' : 'Reply'}
-            value={text(args().content)}
-            multiline
-            scope={props.scope}
-            onChange={(content) => set({ content })}
-          />
+          <PropRow label={key() === 'comment' ? 'Comment' : 'Reply'} tall>
+            <FieldText
+              label={key() === 'comment' ? 'Comment' : 'Reply'}
+              value={text(args().content)}
+              placeholder={
+                key() === 'comment' ? 'Write the comment' : 'Write the reply'
+              }
+              multiline
+              scope={props.scope}
+              onChange={(content) => set({ content })}
+            />
+          </PropRow>
         </Match>
         <Match when={key() === 'other'}>
           <ArgumentsEditor step={props.step} onChange={props.onChange} />
         </Match>
+        <Match when={description()}>
+          {(note) => <StepNote>{note()}</StepNote>}
+        </Match>
       </Switch>
     </div>
-  );
-}
-
-/** A compact input for free text, e.g. a label name. */
-export function TextChoice(props: {
-  label: string;
-  value: string;
-  placeholder: string;
-  suggestions?: string[];
-  onChange(value: string): void;
-}) {
-  const listId = `routine-${props.label.toLowerCase().replace(/\W+/g, '-')}-${crypto.randomUUID()}`;
-  return (
-    <>
-      <Input
-        aria-label={props.label}
-        size="sm"
-        class="w-48"
-        value={props.value}
-        placeholder={props.placeholder}
-        list={props.suggestions?.length ? listId : undefined}
-        onChange={(event) => props.onChange(event.currentTarget.value.trim())}
-      />
-      <Show when={props.suggestions?.length}>
-        <datalist id={listId}>
-          <For each={props.suggestions}>
-            {(suggestion) => <option value={suggestion} />}
-          </For>
-        </datalist>
-      </Show>
-    </>
   );
 }

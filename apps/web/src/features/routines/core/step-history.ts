@@ -1,5 +1,6 @@
+import { isSameDay, isSameYear, subDays } from 'date-fns';
 import { match } from 'ts-pattern';
-import type { HistoryRecord, HistoryStep } from './history';
+import type { HistoryRecord, HistorySkip, HistoryStep } from './history';
 import type { StepDraft } from './routine-steps';
 import { describeToolStep } from './step-catalog';
 
@@ -118,21 +119,93 @@ export function latestStepRun(
     );
 }
 
-/** A run in a line: why it failed, or what it decided or did first. */
+/**
+ * How a run ended. A run its trigger's condition skipped is neither a
+ * success nor a failure, and one whose decisions led to no action changed
+ * nothing.
+ */
+export type RunOutcome =
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'skipped'
+  | 'nothing';
+
+export function runOutcome(record: HistoryRecord): RunOutcome {
+  if (!record.id) return 'running';
+  if (record.skipped) return 'skipped';
+  if (!record.success) return 'failed';
+  const acted = record.steps?.some(
+    (step) => step.kind === 'tool' || step.kind === 'agent'
+  );
+  return record.steps?.length && !acted ? 'nothing' : 'succeeded';
+}
+
+/** Why a trigger's condition kept a run from starting. */
+export function describeSkip(skip: HistorySkip): string {
+  return skip.reason === 'not_met'
+    ? 'Condition not met'
+    : 'Condition couldn’t be checked';
+}
+
+/** The step that failed a run, if one did. */
+export function failedStep(
+  record: HistoryRecord
+): Extract<HistoryStep, { kind: 'tool' | 'agent' }> | undefined {
+  return record.steps?.find(
+    (step): step is Extract<HistoryStep, { kind: 'tool' | 'agent' }> =>
+      (step.kind === 'tool' || step.kind === 'agent') && Boolean(step.error)
+  );
+}
+
+/** A run in a line: why it was skipped or failed, or what it did first. */
 export function summarizeRun(
   record: HistoryRecord,
   steps: StepDraft[] | undefined
 ): string {
+  if (record.skipped) {
+    return record.skipped.reason === 'not_met'
+      ? 'Skipped: condition not met'
+      : 'Skipped: condition couldn’t be checked';
+  }
   if (record.success === false) {
-    const failed = record.steps?.find(
-      (step) => (step.kind === 'tool' || step.kind === 'agent') && step.error
-    );
-    const reason =
-      failed?.kind === 'tool' || failed?.kind === 'agent'
-        ? failed.error
-        : record.error;
+    const reason = failedStep(record)?.error ?? record.error;
     return reason ? `Failed: ${reason}` : 'Failed';
   }
   const [first] = record.steps ?? [];
   return first ? describeHistoryStep(first, steps) : 'Ran';
+}
+
+/** Runs of one day, newest first, under the day's label. */
+export type RunDay = { key: string; label: string; records: HistoryRecord[] };
+
+function dayLabel(date: Date, now: Date): string {
+  if (isSameDay(date, now)) return 'Today';
+  if (isSameDay(date, subDays(now, 1))) return 'Yesterday';
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    ...(isSameYear(date, now) ? {} : { year: 'numeric' }),
+  }).format(date);
+}
+
+/**
+ * Groups runs by the day they started, in the order the days first appear;
+ * a run still starting is today's. Each day appears once, keyed by its date.
+ */
+export function runDays(
+  records: readonly HistoryRecord[],
+  now = new Date()
+): RunDay[] {
+  const days = new Map<string, RunDay>();
+  for (const record of records) {
+    const started = record.startedAt ? new Date(record.startedAt) : now;
+    const date = Number.isNaN(started.getTime()) ? now : started;
+    const key = date.toDateString();
+    const day = days.get(key);
+    if (day) day.records.push(record);
+    else days.set(key, { key, label: dayLabel(date, now), records: [record] });
+  }
+  return [...days.values()];
 }

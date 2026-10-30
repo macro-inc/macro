@@ -1,10 +1,8 @@
-import ArrowsSplitIcon from '@phosphor/arrows-split.svg';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
-import { Dropdown } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import GitForkIcon from '@icon/system/regular/git-fork.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SparkleIcon from '@icon/system/regular/sparkle.svg';
+import { Show } from 'solid-js';
 import {
   agentStep,
   chooseStep,
@@ -17,146 +15,130 @@ import {
   createActionStep,
   createPickStep,
   type StepScope,
+  stepActionGroupLabels,
   stepActionGroups,
 } from '../core/step-catalog';
+import { SearchMenu, type SearchMenuSection } from './routine-search-menu';
 import { actionIcon, useSteps } from './routine-steps';
-import { menuMount } from './routine-tool-step';
 
-function MenuHint(props: { children: JSX.Element }) {
-  return (
-    <p class="max-w-64 px-2 pb-1.5 text-xs text-ink-muted">{props.children}</p>
-  );
-}
-
+/**
+ * The menu of every step that fits here: plain actions first, since they are
+ * exact and free, then steps where AI decides, then handing off to an agent.
+ */
 export function AddStep(props: {
-  /** `list` closes a step list; `chip` sits among a rule's steps. */
-  variant: 'list' | 'chip';
-  title?: string;
+  /** `step` is the dashed "+ Step"; `icon` a small + beside a choice's row. */
+  variant?: 'step' | 'icon';
+  /** Names where the step goes, e.g. a branch, for its accessible name. */
+  place?: string;
   scope: StepScope;
   onAdd(step: StepDraft): void;
 }) {
   const steps = useSteps();
-  const actions = () => availableActions(props.scope);
   const add = (step: StepDraft) => {
     steps.fresh.add(step.id);
     props.onAdd(step);
   };
-  let trigger: HTMLButtonElement | undefined;
+  const sections = (): SearchMenuSection[] => {
+    const actions = availableActions(props.scope);
+    const plain = stepActionGroups.map((group) => ({
+      label: stepActionGroupLabels[group],
+      items: actions
+        .filter((action) => action.group === group)
+        .map((action) => ({
+          key: action.key,
+          label: action.menuLabel ?? action.label,
+          description: action.description,
+          icon: actionIcon(action.key),
+          onSelect: () =>
+            add(createActionStep(action, props.scope, steps.steps())),
+        })),
+    }));
+    const decide =
+      steps.decisions() === 'on'
+        ? [
+            {
+              label: 'Let AI decide',
+              items: [
+                ...availablePicks(props.scope).map((pick) => ({
+                  key: pick.label,
+                  label: pick.label,
+                  description: pick.description,
+                  icon: SparkleIcon,
+                  ai: true,
+                  onSelect: () => add(createPickStep(pick, props.scope)),
+                })),
+                {
+                  key: 'if',
+                  label: 'If yes or no',
+                  keywords: 'condition question branch',
+                  description: 'Ask AI a yes/no question and branch on it.',
+                  icon: GitBranchIcon,
+                  ai: true,
+                  onSelect: () => add(ifStep()),
+                },
+                {
+                  key: 'choose',
+                  label: 'Choose between options',
+                  keywords: 'classify route branch',
+                  description: 'AI picks the option that fits.',
+                  icon: GitForkIcon,
+                  ai: true,
+                  onSelect: () => add(chooseStep()),
+                },
+              ],
+            },
+          ]
+        : [];
+    return [
+      ...plain,
+      ...decide,
+      {
+        label: 'Hand off',
+        items: [
+          {
+            key: 'agent',
+            label: 'Ask AI',
+            keywords: 'agent model instructions',
+            description:
+              'Hand the rest to a model or agent with instructions. One per run.',
+            icon: SparkleIcon,
+            ai: true,
+            hint: '1 per run',
+            onSelect: () => add(agentStep(steps.defaultTarget())),
+          },
+        ],
+      },
+    ];
+  };
+  // Why some steps are missing here, if they are.
+  const note = () => {
+    if (steps.decisions() === 'needs-event')
+      return 'AI decisions need an activity trigger, like a new email or task.';
+    if (
+      !availableActions(props.scope).some((action) => action.group === 'Item')
+    )
+      return 'Status, priority, assign and comment show up once a task is in play: a task trigger, or a Create task step above.';
+    return undefined;
+  };
   return (
-    <Dropdown placement="bottom-start">
-      <Show
-        when={props.variant === 'chip'}
-        fallback={
-          <Dropdown.Trigger
-            ref={trigger}
-            variant="ghost"
-            size="sm"
-            class="w-fit gap-1.5 text-ink-muted"
-            aria-label="Add step"
-          >
-            <PlusIcon class="size-3.5" />
-            Add step
-          </Dropdown.Trigger>
-        }
-      >
-        <Dropdown.Trigger
-          ref={trigger}
-          variant="ghost"
-          size="icon-sm"
-          class="size-7 shrink-0 border border-dashed border-edge text-ink-muted"
-          aria-label="Add step to branch"
-          title={props.title ?? 'Add a step'}
-        >
-          <PlusIcon class="size-3" />
-        </Dropdown.Trigger>
-      </Show>
-      <Dropdown.Content
-        portalScope="local"
-        mount={menuMount(trigger)}
-        class="max-h-[min(32rem,var(--kb-popper-content-available-height))] min-w-56 overflow-y-auto overscroll-contain"
-      >
-        <For each={stepActionGroups}>
-          {(group) => (
-            <Show when={actions().some((action) => action.group === group)}>
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>{group}</Dropdown.GroupLabel>
-                <For
-                  each={actions().filter((action) => action.group === group)}
-                >
-                  {(action) => (
-                    <Dropdown.Item
-                      title={action.description}
-                      onSelect={() =>
-                        add(
-                          createActionStep(action, props.scope, steps.steps())
-                        )
-                      }
-                    >
-                      <Dynamic
-                        component={actionIcon(action.key)}
-                        class="size-4"
-                      />
-                      {action.label}
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Group>
-            </Show>
-          )}
-        </For>
-        <Show when={!actions().some((action) => action.group === 'Item')}>
-          <Dropdown.Group>
-            <Dropdown.GroupLabel>Item</Dropdown.GroupLabel>
-            <MenuHint>
-              Tag, assign, comment and move need an activity trigger or a task
-              created by an earlier step.
-            </MenuHint>
-          </Dropdown.Group>
-        </Show>
-        <Show when={steps.decisions() !== 'off'}>
-          <Dropdown.Group>
-            <Dropdown.GroupLabel>Let AI decide</Dropdown.GroupLabel>
-            <Show
-              when={steps.decisions() === 'on'}
-              fallback={
-                <MenuHint>
-                  Needs an activity trigger, like a new email or task.
-                </MenuHint>
-              }
-            >
-              <For each={availablePicks(props.scope)}>
-                {(pick) => (
-                  <Dropdown.Item
-                    title={pick.description}
-                    onSelect={() => add(createPickStep(pick, props.scope))}
-                  >
-                    <Dynamic
-                      component={actionIcon(pick.action)}
-                      class="size-4"
-                    />
-                    {pick.label}
-                  </Dropdown.Item>
-                )}
-              </For>
-              <Dropdown.Item onSelect={() => add(ifStep())}>
-                <GitBranchIcon class="size-4" />
-                If yes or no
-              </Dropdown.Item>
-              <Dropdown.Item onSelect={() => add(chooseStep())}>
-                <ArrowsSplitIcon class="size-4" />
-                Choose between options
-              </Dropdown.Item>
-            </Show>
-          </Dropdown.Group>
-        </Show>
-        <Dropdown.Group>
-          <Dropdown.GroupLabel>AI</Dropdown.GroupLabel>
-          <Dropdown.Item onSelect={() => add(agentStep(steps.defaultTarget()))}>
-            <SparkleIcon class="size-4" />
-            Ask AI
-          </Dropdown.Item>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
+    <SearchMenu
+      label={props.place ? `Add step to ${props.place}` : 'Add step'}
+      title={props.variant === 'icon' ? 'Also do something' : undefined}
+      triggerVariant={props.variant === 'icon' ? 'ghost' : 'outline'}
+      triggerSize={props.variant === 'icon' ? 'icon-sm' : 'sm'}
+      triggerClass={
+        props.variant === 'icon' ? undefined : 'w-fit border-dashed'
+      }
+      trigger={
+        <>
+          <PlusIcon class="size-3.5" />
+          <Show when={props.variant !== 'icon'}>Step</Show>
+        </>
+      }
+      placeholder="Search steps"
+      sections={sections()}
+      footer={note()}
+      width="w-72"
+    />
   );
 }

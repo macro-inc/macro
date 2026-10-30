@@ -149,6 +149,8 @@ type ActionContext = {
 export type StepAction = {
   key: StepActionKey;
   label: string;
+  /** What the Add step menu calls it, when that differs from its title. */
+  menuLabel?: string;
   group: StepActionGroup;
   description: string;
   /** Kinds of item it acts on; absent when it needs none. */
@@ -240,7 +242,8 @@ export const stepActions: StepAction[] = [
   },
   {
     key: 'sender_policy',
-    label: 'Mark sender as noise',
+    label: 'Mark sender as',
+    menuLabel: 'Mark sender as…',
     group: 'Email',
     description:
       'Treat future mail from this sender as noise, signal or blocked.',
@@ -399,6 +402,14 @@ export const stepActionGroups: StepActionGroup[] = [
   'Create',
   'Messages',
 ];
+
+/** What the Add step menu calls each group. */
+export const stepActionGroupLabels: Record<StepActionGroup, string> = {
+  Email: 'Email',
+  Item: 'This item',
+  Create: 'Create',
+  Messages: 'Messages',
+};
 
 /** Items in scope an action can act on, the triggering one first. */
 export function actionTargets(

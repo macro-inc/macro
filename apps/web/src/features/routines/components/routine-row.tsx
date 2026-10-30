@@ -1,8 +1,16 @@
 import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
-import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
-import { cn, InlineCheckbox, Layer, Tooltip } from '@ui';
+import CheckSquareIcon from '@icon/system/regular/check-square.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import { Badge, cn, ToggleSwitch, Tooltip } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { match } from 'ts-pattern';
+import type { TriggerKind } from '../core/routine-triggers';
 import type { RoutineRow } from '../core/types';
 
 /**
@@ -16,7 +24,7 @@ export function RoutineRowLayout(
     <EntityLayout
       role={props.role}
       class={cn(
-        'grid min-h-10 min-w-[740px] grid-cols-[2rem_minmax(11rem,1.2fr)_minmax(9rem,1fr)_minmax(9rem,1fr)_minmax(9rem,1fr)] items-center gap-2 px-3 touch:min-h-11 @max-[760px]/routines:min-w-0 @max-[760px]/routines:grid-cols-[2rem_minmax(0,1fr)_minmax(0,auto)]',
+        'grid min-h-11 min-w-[760px] grid-cols-[minmax(13rem,1.3fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(10rem,13rem)] items-center gap-3 px-3 @max-[760px]/routines:min-w-0 @max-[760px]/routines:grid-cols-[minmax(0,1fr)_minmax(0,auto)]',
         props.class
       )}
     >
@@ -25,14 +33,33 @@ export function RoutineRowLayout(
   );
 }
 
-function TextCell(props: { text: string; class?: string }) {
+function TriggerIcon(props: { kind?: TriggerKind }) {
+  const icon = () =>
+    match(props.kind)
+      .with('email', () => EnvelopeIcon)
+      .with('task', () => CheckSquareIcon)
+      .with('document', () => FileTextIcon)
+      .with('channel', () => HashIcon)
+      .with('call', () => PhoneIcon)
+      .with('schedule', undefined, () => ClockIcon)
+      .exhaustive();
+  return (
+    <Dynamic
+      component={icon()}
+      aria-hidden="true"
+      class="size-3.5 shrink-0 text-ink-muted"
+    />
+  );
+}
+
+function Cell(props: ParentProps<{ label: string; class?: string }>) {
   return (
     <EntitySlot
       role="cell"
-      class={cn('min-w-0 text-xs text-ink-muted', props.class)}
+      class={cn('min-w-0 text-[13px] text-ink-muted', props.class)}
     >
-      <Tooltip label={props.text} class="min-w-0 max-w-full">
-        <span class="block truncate">{props.text}</span>
+      <Tooltip label={props.label} class="min-w-0 max-w-full">
+        <span class="flex min-w-0 items-center gap-1.5">{props.children}</span>
       </Tooltip>
     </EntitySlot>
   );
@@ -52,79 +79,105 @@ export function RoutineListRow(props: {
   const toggleDescription = () => {
     if (props.pending) return 'Saving…';
     if (!props.row.enabled && props.row.status === 'Completed')
-      return 'Update the schedule before enabling this routine';
+      return 'Update the schedule before turning this routine on';
     if (!props.row.enabled && props.row.status === 'Running')
-      return 'Wait for the current run to finish before enabling this routine';
-    return `${props.row.enabled ? 'Disable' : 'Enable'} ${props.row.name}`;
+      return 'Wait for the current run to finish before turning this routine on';
+    return `Turn ${props.row.enabled ? 'off' : 'on'}`;
   };
+  const doesLabel = () =>
+    props.row.ai ? `${props.row.ai} · ${props.row.does}` : props.row.does;
 
   return (
     <div
       role="row"
       class={cn(
-        'soup-list-entity @container/entity mx-1 min-w-[740px] rounded-xl py-0.5 hover:bg-list-hover focus-within:bg-list-highlighted @max-[760px]/routines:min-w-0',
-        !props.row.enabled && 'text-ink-muted'
+        'soup-list-entity @container/entity mx-1 min-w-[760px] rounded-xl hover:bg-list-hover focus-within:bg-list-highlighted @max-[760px]/routines:min-w-0',
+        !props.row.enabled && 'opacity-60'
       )}
       onClick={() => props.onOpen(props.row.id)}
     >
       <RoutineRowLayout class="px-2 text-sm">
-        <EntitySlot
-          role="cell"
-          class="min-w-0"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <Layer depth={2}>
+        <EntitySlot role="cell" class="flex min-w-0 items-center gap-2.5">
+          {/* The switch acts on the routine without opening it. */}
+          <span
+            class="flex shrink-0"
+            onClick={(event) => event.stopPropagation()}
+          >
             <Tooltip label={toggleDescription()}>
-              <button
-                type="button"
-                aria-label={`Enabled for ${props.row.name}`}
-                aria-pressed={props.row.enabled}
+              <ToggleSwitch
+                label={`Enabled for ${props.row.name}`}
+                labelClass="sr-only"
                 aria-busy={props.pending}
+                checked={props.row.enabled}
                 disabled={toggleDisabled()}
-                class="inline-flex items-center rounded-full p-1.5 outline-none hover:bg-surface/50 focus-visible:ring-2 focus-visible:ring-edge-focus disabled:opacity-50"
-                onClick={() => props.onToggle(props.row)}
-              >
-                <InlineCheckbox checked={props.row.enabled} />
-              </button>
+                onChange={() => props.onToggle(props.row)}
+              />
             </Tooltip>
-          </Layer>
-        </EntitySlot>
-        <EntitySlot role="cell" class="min-w-0">
+          </span>
           <Tooltip label={props.row.name} class="min-w-0 max-w-full">
             <button
               type="button"
-              class="flex min-w-0 max-w-full items-center gap-2 text-left font-medium text-ink outline-none focus-visible:underline"
+              class="block min-w-0 max-w-full truncate text-left font-medium text-ink outline-none focus-visible:underline"
             >
-              <ClockIcon class="size-4 shrink-0 text-ink-muted" />
-              <span class="truncate">{props.row.name}</span>
+              {props.row.name}
             </button>
           </Tooltip>
         </EntitySlot>
-        <TextCell text={props.row.when} class="@max-[760px]/routines:hidden" />
-        <TextCell text={props.row.does} class="@max-[760px]/routines:hidden" />
-        <EntitySlot role="cell" class="min-w-0 text-xs text-ink-muted">
-          <Show when={props.row.lastRun}>
-            {(run) => (
-              <Tooltip
-                label={`${run().at} · ${run().summary}`}
-                class="min-w-0 max-w-full"
-              >
-                <span class="flex min-w-0 items-center gap-1.5">
-                  <span
-                    aria-hidden="true"
-                    class={cn(
-                      'size-1.5 shrink-0 rounded-full',
-                      run().failed ? 'bg-failure' : 'bg-success'
-                    )}
-                  />
-                  <span class="truncate">
-                    {run().at} · {run().summary}
-                  </span>
-                </span>
-              </Tooltip>
+        <Cell label={props.row.when} class="@max-[760px]/routines:hidden">
+          <TriggerIcon kind={props.row.whenKind} />
+          <span class="truncate">{props.row.when}</span>
+        </Cell>
+        <Cell label={doesLabel()} class="@max-[760px]/routines:hidden">
+          <Show when={props.row.ai}>
+            {(chip) => (
+              <Badge size="xs" class="bg-accent-bg text-accent">
+                {chip()}
+              </Badge>
             )}
           </Show>
-        </EntitySlot>
+          <span class="truncate">{props.row.does}</span>
+        </Cell>
+        <Show
+          when={props.row.lastRun}
+          fallback={
+            <EntitySlot
+              role="cell"
+              class="min-w-0 text-[13px] text-ink-extra-muted"
+            >
+              Not run yet
+            </EntitySlot>
+          }
+        >
+          {(run) => (
+            <Cell label={`${run().at} · ${run().summary}`}>
+              <span
+                aria-hidden="true"
+                class={cn(
+                  'size-2 shrink-0 rounded-full',
+                  // Skipped and changed-nothing runs aren't successes.
+                  match(run().outcome)
+                    .with('succeeded', () => 'bg-success')
+                    .with('failed', () => 'bg-failure')
+                    .with(
+                      'skipped',
+                      'nothing',
+                      'running',
+                      () => 'bg-ink-extra-muted'
+                    )
+                    .exhaustive()
+                )}
+              />
+              <span class="truncate">
+                {run().at}
+                {/* A phone shows when it ran; the summary needs the room. */}
+                <span class="@max-[760px]/routines:hidden">
+                  {' '}
+                  · {run().summary}
+                </span>
+              </span>
+            </Cell>
+          )}
+        </Show>
       </RoutineRowLayout>
     </div>
   );

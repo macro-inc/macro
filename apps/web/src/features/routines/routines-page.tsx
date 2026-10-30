@@ -6,7 +6,6 @@ import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
 import { getErrorMessage } from './core/routine-draft';
 import { createRoutineListSource } from './queries/routine-sources';
-import { createRoutineTargetDisplay } from './queries/routine-target-display';
 import { RoutineDetail } from './routine-detail';
 import { routineContent, routineIdFromContent } from './routine-navigation';
 import { RoutinesListView } from './views/routines-list';
@@ -34,7 +33,6 @@ function RoutinesContent() {
       },
     },
   });
-  const display = createRoutineTargetDisplay();
   const source = createRoutineListSource((error) =>
     toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
   );
@@ -55,7 +53,6 @@ function RoutinesContent() {
         <RoutinesListView
           source={source}
           userId={userId}
-          targetLabel={display.targetLabel}
           registerSearchFocus={(focus) => (focusSearch = focus)}
           onCreate={create}
           onOpen={(id) => open(id)}

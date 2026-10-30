@@ -1,5 +1,9 @@
-import { EntityIcon } from '@core/component/EntityIcon';
-import { formatDateAndTime, ListEntity, ListLayoutProvider } from '@entity';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import MinusIcon from '@icon/system/regular/minus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
 import {
   type Accessor,
@@ -7,17 +11,25 @@ import {
   createSignal,
   For,
   type JSX,
+  Match,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
-
-import { RunDetail } from '../components/routine-run-detail';
+import { outcomeLabel, RunDetail } from '../components/routine-run-detail';
 import type {
   HistoryRecord,
   HistoryResource,
   HistorySkip,
   HistoryStep,
 } from '../core/history';
+import {
+  describeSkip,
+  failedStep,
+  type RunOutcome,
+  runDays,
+  runOutcome,
+} from '../core/step-history';
 
 export type { HistoryRecord } from '../core/history';
 
@@ -35,212 +47,281 @@ type RoutineHistoryProps = {
   describeStep?: (step: HistoryStep, record: HistoryRecord) => string;
 };
 
-type HistoryRowProps = {
-  record: HistoryRecord;
-  resource?: HistoryResource;
-  metadata: HistoryMetadata;
-  onOpen?: (resource: HistoryResource, newSplit: boolean) => void;
-  /** Shows what a run without a session did, step by step. */
-  onSelect?: () => void;
-};
-
-function RunOutcome(props: { record: HistoryRecord }) {
-  const outcome = () =>
-    !props.record.id
-      ? 'Running'
-      : props.record.skipped
-        ? 'Skipped'
-        : props.record.success
-          ? 'Succeeded'
-          : 'Failed';
-  const duration = () => {
-    if (!props.record.startedAt || !props.record.endedAt) return undefined;
-    const seconds = Math.max(
-      0,
-      Math.round(
-        (Date.parse(props.record.endedAt) -
-          Date.parse(props.record.startedAt)) /
-          1000
-      )
-    );
-    if (!Number.isFinite(seconds)) return undefined;
-    return seconds < 60
-      ? `${seconds}s`
-      : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  };
+function OutcomeIcon(props: { outcome: RunOutcome }) {
   return (
-    <span class="inline-flex items-center gap-3 whitespace-nowrap text-xs text-ink-muted">
-      <span
-        class={cn(
-          (outcome() === 'Failed' ||
-            props.record.skipped?.reason === 'unavailable') &&
-            'text-failure'
-        )}
-      >
-        {outcome()}
-      </span>
-      <Show when={duration()}>
-        {(value) => (
-          <span class="tabular-nums text-ink-extra-muted">{value()}</span>
-        )}
-      </Show>
+    <span class="mt-0.5 flex size-4 items-center justify-center">
+      <Switch>
+        <Match when={props.outcome === 'succeeded'}>
+          <CheckIcon class="size-4 text-success" />
+        </Match>
+        <Match when={props.outcome === 'failed'}>
+          <XIcon class="size-4 text-failure" />
+        </Match>
+        <Match when={props.outcome === 'skipped'}>
+          <CircleDashedIcon class="size-3.5 text-ink-muted" />
+        </Match>
+        <Match when={props.outcome === 'nothing'}>
+          <MinusIcon class="size-3.5 text-ink-muted" />
+        </Match>
+        <Match when={props.outcome === 'running'}>
+          <ClockIcon class="size-3.5 text-ink-muted" />
+        </Match>
+      </Switch>
+      <span class="sr-only">{outcomeLabel(props.outcome)}</span>
     </span>
   );
 }
 
-function HistoryRow(props: HistoryRowProps): JSX.Element {
-  const entity = () => {
-    const metadata = props.metadata;
-    return metadata.status === 'ready'
-      ? {
-          ...metadata.entity,
-          name: metadata.entity.name.trim() || 'Untitled run',
-          sortTs: props.record.startedAt ?? metadata.entity.sortTs,
+function runTime(record: HistoryRecord): string | undefined {
+  if (!record.startedAt) return undefined;
+  const date = new Date(record.startedAt);
+  return Number.isNaN(date.getTime())
+    ? undefined
+    : date.toLocaleTimeString(undefined, {
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+}
+
+type RunRowProps = {
+  record: HistoryRecord;
+  title: string;
+  /** Rows that report a non-event (a skip) read lighter. */
+  quiet?: boolean;
+  summary?: string;
+  failure?: boolean;
+  selected?: boolean;
+  /** Selected only until someone chooses, so narrow screens don't mark it. */
+  selectedByDefault?: boolean;
+  /** What the row does when chosen; absent rows are plain text. */
+  onActivate?: (newSplit: boolean) => void;
+  trailing?: JSX.Element;
+  expanded?: boolean;
+};
+
+/** One run in the list: how it ended, what it was, when, and what it did. */
+function RunRow(props: RunRowProps) {
+  const content = () => (
+    <>
+      <OutcomeIcon outcome={runOutcome(props.record)} />
+      <span
+        class={cn(
+          'min-w-0 truncate text-sm',
+          props.quiet ? 'text-ink-muted' : 'font-medium text-ink'
+        )}
+      >
+        {props.title}
+      </span>
+      <Show
+        when={props.trailing}
+        fallback={
+          <time class="whitespace-nowrap text-xs tabular-nums text-ink-muted">
+            {runTime(props.record) ?? ''}
+          </time>
         }
-      : undefined;
-  };
-  const open = (newSplit: boolean) => {
-    if (props.resource && entity()) props.onOpen?.(props.resource, newSplit);
-  };
-  return (
-    <Show
-      when={entity()}
-      fallback={
-        <div
-          role="listitem"
-          tabIndex={props.onSelect ? 0 : undefined}
+      >
+        {props.trailing}
+      </Show>
+      <Show when={props.summary}>
+        <span
           class={cn(
-            'soup-list-entity mx-1 flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm text-ink-muted outline-none',
-            props.onSelect &&
-              'hover:bg-list-hover focus-visible:bg-list-highlighted'
+            'col-span-2 col-start-2 min-w-0 truncate text-xs',
+            props.failure ? 'text-failure' : 'text-ink-muted'
           )}
-          onClick={() => props.onSelect?.()}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' || !props.onSelect) return;
-            event.preventDefault();
-            props.onSelect();
-          }}
         >
-          <span class="size-4 shrink-0">
-            <EntityIcon
-              targetType={props.resource?.type ?? 'routine'}
-              size="xs"
-            />
-          </span>
-          <span class="min-w-0 flex-1 truncate">
-            {props.metadata.status === 'pending'
-              ? 'Loading…'
-              : props.record.steps
-                ? 'Ran steps'
-                : 'Run unavailable'}
-          </span>
-          <RunOutcome record={props.record} />
-          <span class="ml-2 text-xs text-ink-extra-muted">
-            {props.record.startedAt
-              ? formatDateAndTime(props.record.startedAt)
-              : '—'}
-          </span>
-        </div>
-      }
-    >
-      {(entity) => (
-        <div
-          role="listitem"
-          tabIndex={0}
-          aria-label={entity().name}
-          class="outline-none focus-visible:bg-list-highlighted"
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter') return;
-            event.preventDefault();
-            open(event.shiftKey);
-          }}
-        >
-          <ListEntity
-            entity={entity()}
-            hideCheckbox
-            deferInteractions
-            leadingAction={<RunOutcome record={props.record} />}
-            onClick={(event) => open(event.shiftKey)}
-          />
-        </div>
-      )}
-    </Show>
+          {props.summary}
+        </span>
+      </Show>
+    </>
+  );
+  const layout =
+    'grid w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2.5 gap-y-0.5 rounded-[10px] px-2.5 py-2 text-left';
+  return (
+    <div role="listitem" aria-label={props.title}>
+      <Show
+        when={props.onActivate}
+        fallback={<div class={layout}>{content()}</div>}
+      >
+        {(activate) => (
+          <button
+            type="button"
+            aria-current={props.selected ? 'true' : undefined}
+            aria-expanded={props.expanded}
+            class={cn(
+              layout,
+              'outline-none focus-visible:bg-list-highlighted not-touch:hover:bg-list-hover',
+              props.selected && 'bg-list-highlighted',
+              props.selectedByDefault && '@max-[720px]/runs:bg-transparent'
+            )}
+            onClick={(event) => activate()(event.shiftKey)}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              activate()(event.shiftKey);
+            }}
+          >
+            {content()}
+          </button>
+        )}
+      </Show>
+    </div>
   );
 }
 
-function ResourceHistoryRow(props: {
-  record: HistoryRecord;
-  resource: HistoryResource;
-  createMetadata: (id: string) => Accessor<HistoryMetadata>;
-  onOpen: RoutineHistoryProps['onOpen'];
-}): JSX.Element {
-  const metadata = props.createMetadata(props.resource.id);
+/** The step as it would read had it succeeded; its error shows apart. */
+function withoutError(step: HistoryStep): HistoryStep {
+  return step.kind === 'tool' || step.kind === 'agent'
+    ? { ...step, error: undefined }
+    : step;
+}
+
+/** Whether a run has steps worth showing beyond its agent's transcript. */
+function hasStepDetail(record: HistoryRecord): boolean {
+  return Boolean(
+    record.id &&
+      !record.skipped &&
+      record.steps?.some((step) => step.kind !== 'agent' || step.error)
+  );
+}
+
+/**
+ * A run with steps in two lines: what it did first, then the rest, or the
+ * step that failed. Runs record no name for the item that triggered them.
+ */
+function stepLines(
+  record: HistoryRecord,
+  describe: (step: HistoryStep) => string
+): { title: string; summary?: string; failure: boolean } {
+  const steps = record.steps ?? [];
+  const [first, ...rest] = steps.map((step) => describe(withoutError(step)));
+  const failed = failedStep(record);
+  const failure = failed
+    ? describe(failed)
+    : record.success === false
+      ? record.error
+      : undefined;
+  return {
+    title: first ?? 'Ran steps',
+    summary: failure ?? (rest.join(' · ') || undefined),
+    failure: Boolean(failure),
+  };
+}
+
+function SkippedRow(props: { record: HistoryRecord; skip: HistorySkip }) {
   return (
-    <HistoryRow
+    <RunRow
       record={props.record}
-      resource={props.resource}
-      metadata={metadata()}
-      onOpen={props.onOpen}
+      title={describeSkip(props.skip)}
+      quiet
+      summary={
+        props.skip.reason === 'not_met'
+          ? `${Math.round(props.skip.probability * 100)}% likely yes`
+          : (props.record.error ?? undefined)
+      }
+      failure={props.skip.reason === 'unavailable'}
     />
   );
 }
 
-function skipLabel(skip: HistorySkip) {
-  return skip.reason === 'not_met'
-    ? 'Condition not met'
-    : 'Condition couldn’t be checked';
-}
-
-function SkippedRow(props: { record: HistoryRecord; skip: HistorySkip }) {
-  const confidence = () =>
-    props.skip.reason === 'not_met'
-      ? `${Math.round(props.skip.probability * 100)}% likely yes`
-      : undefined;
+/** A run that only ran its agent: its row opens the conversation. */
+function SessionRow(props: {
+  record: HistoryRecord;
+  resource: HistoryResource;
+  createMetadata: (id: string) => Accessor<HistoryMetadata>;
+  onOpen: RoutineHistoryProps['onOpen'];
+}) {
+  const metadata = props.createMetadata(props.resource.id);
+  const title = () => {
+    const current = metadata();
+    return current.status === 'ready'
+      ? current.entity.name.trim() || 'Untitled run'
+      : current.status === 'pending'
+        ? 'Loading…'
+        : 'Run unavailable';
+  };
+  const ready = () => metadata().status === 'ready';
   return (
-    <div
-      role="listitem"
-      title={confidence()}
-      class="soup-list-entity mx-1 flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm text-ink-muted"
-    >
-      <span class="size-4 shrink-0">
-        <EntityIcon targetType="routine" size="xs" />
-      </span>
-      <span class="min-w-0 flex-1 truncate">{skipLabel(props.skip)}</span>
-      <RunOutcome record={props.record} />
-      <span class="ml-2 text-xs text-ink-extra-muted">
-        {props.record.startedAt
-          ? formatDateAndTime(props.record.startedAt)
-          : '—'}
-      </span>
-    </div>
+    <RunRow
+      record={props.record}
+      title={title()}
+      summary={
+        props.record.success === false
+          ? (props.record.error ?? undefined)
+          : 'Asked AI'
+      }
+      failure={props.record.success === false}
+      onActivate={
+        ready()
+          ? (newSplit) => props.onOpen(props.resource, newSplit)
+          : undefined
+      }
+    />
   );
 }
 
-/** Consecutive skips collapse so a busy trigger doesn't bury real runs. */
-function SkippedGroupToggle(props: {
-  count: number;
-  open: boolean;
-  onToggle: () => void;
+function RunEntry(props: {
+  record: HistoryRecord;
+  history: RoutineHistoryProps;
+  selected: boolean;
+  selectedByDefault: boolean;
+  onSelect: () => void;
 }) {
+  const describe = (step: HistoryStep) =>
+    props.history.describeStep?.(step, props.record) ?? step.kind;
+  const lines = () => stepLines(props.record, describe);
   return (
-    <div role="listitem" class="mx-1">
-      <button
-        type="button"
-        aria-expanded={props.open}
-        class="flex min-h-11 w-full items-center gap-2 rounded-xl px-2 text-left text-sm text-ink-muted hover:bg-hover focus-visible:bg-hover outline-none"
-        onClick={() => props.onToggle()}
-      >
-        <span class="size-4 shrink-0">
-          <EntityIcon targetType="routine" size="xs" />
-        </span>
-        <span class="min-w-0 flex-1 truncate">
-          {props.count} events skipped by the condition
-        </span>
-        <span class="text-xs text-ink-extra-muted">
-          {props.open ? 'Hide' : 'Show'}
-        </span>
-      </button>
-    </div>
+    <Show
+      when={!hasStepDetail(props.record) && props.record.resource}
+      keyed
+      fallback={
+        <Show
+          when={props.record.steps?.length}
+          fallback={
+            <RunRow
+              record={props.record}
+              title={
+                props.record.success === false && props.record.error
+                  ? 'Run failed'
+                  : 'Run unavailable'
+              }
+              summary={
+                props.record.success === false
+                  ? (props.record.error ?? undefined)
+                  : undefined
+              }
+              failure
+            />
+          }
+        >
+          <RunRow
+            record={props.record}
+            title={lines().title}
+            summary={lines().summary}
+            failure={lines().failure}
+            selected={props.selected}
+            selectedByDefault={props.selected && props.selectedByDefault}
+            onActivate={
+              hasStepDetail(props.record) ? () => props.onSelect() : undefined
+            }
+          />
+        </Show>
+      }
+    >
+      {(resource) => (
+        <Suspense fallback={<RunRow record={props.record} title="Loading…" />}>
+          <SessionRow
+            record={props.record}
+            resource={resource}
+            createMetadata={
+              resource.type === 'chat'
+                ? props.history.createChatMetadata
+                : props.history.createAgentMetadata
+            }
+            onOpen={props.history.onOpen}
+          />
+        </Suspense>
+      )}
+    </Show>
   );
 }
 
@@ -262,129 +343,56 @@ function skipRuns(records: readonly HistoryRecord[]) {
   return runs;
 }
 
-/** What each step of a run did, under its row. */
-function StepsSummary(props: {
+/** A skipped run, or the row its run of consecutive skips collapses into. */
+function SkippedEntry(props: {
   record: HistoryRecord;
-  describe: (step: HistoryStep) => string;
-  onSelect: () => void;
+  skip: HistorySkip;
+  run: SkipRun | undefined;
+  open: boolean;
+  onToggle: () => void;
 }) {
-  const failed = (step: HistoryStep) =>
-    (step.kind === 'tool' || step.kind === 'agent') && Boolean(step.error);
-  // A run that only ran its agent says nothing its session doesn't.
-  const informative = () =>
-    props.record.steps?.some((step) => step.kind !== 'agent' || step.error) ||
-    // Without a transcript to open, the error is the only explanation.
-    Boolean(
-      !props.record.success && props.record.error && !props.record.resource
-    );
-  return (
-    <Show when={informative()}>
-      <button
-        type="button"
-        aria-label="Show run details"
-        class="mx-1 -mt-1 mb-1 flex min-w-0 flex-wrap gap-x-1.5 rounded-lg pl-9 pr-2 text-left text-xs text-ink-muted outline-none hover:text-ink focus-visible:underline"
-        onClick={() => props.onSelect()}
-      >
-        <For each={props.record.steps ?? []}>
-          {(step, index) => (
-            <span class={cn('min-w-0', failed(step) && 'text-failure')}>
-              {index() > 0 ? '→ ' : ''}
-              {props.describe(step)}
-            </span>
-          )}
-        </For>
-        <Show
-          when={
-            !props.record.success &&
-            props.record.error &&
-            !props.record.steps?.some(failed)
-          }
-        >
-          <span class="min-w-0 text-failure">{props.record.error}</span>
-        </Show>
-      </button>
-    </Show>
-  );
-}
-
-function ResolvedHistoryRow(props: {
-  record: HistoryRecord;
-  history: RoutineHistoryProps;
-  onSelect: () => void;
-}): JSX.Element {
+  const grouped = () => (props.run?.length ?? 1) > 1;
   return (
     <>
-      <ResourceOrRunRow
-        record={props.record}
-        history={props.history}
-        onSelect={props.onSelect}
-      />
-      <Show when={props.history.describeStep}>
-        {(describe) => (
-          <StepsSummary
-            record={props.record}
-            describe={(step) => describe()(step, props.record)}
-            onSelect={props.onSelect}
-          />
-        )}
+      <Show when={grouped() && props.run?.first === props.record}>
+        <RunRow
+          record={props.record}
+          title={`${props.run?.length ?? 0} skipped by the condition`}
+          quiet
+          expanded={props.open}
+          trailing={
+            <span class="text-xs text-accent-ink">
+              {props.open ? 'Hide' : 'Show'}
+            </span>
+          }
+          onActivate={() => props.onToggle()}
+        />
+      </Show>
+      <Show when={!grouped() || props.open}>
+        <SkippedRow record={props.record} skip={props.skip} />
       </Show>
     </>
   );
 }
 
-function ResourceOrRunRow(props: {
-  record: HistoryRecord;
-  history: RoutineHistoryProps;
-  onSelect: () => void;
-}): JSX.Element {
-  const resource = createMemo(() => props.record.resource);
-  return (
-    <Show
-      when={resource()}
-      keyed
-      fallback={
-        <HistoryRow
-          record={props.record}
-          metadata={{ status: 'unavailable' }}
-          onSelect={props.record.steps?.length ? props.onSelect : undefined}
-        />
-      }
-    >
-      {(target) => (
-        <Suspense
-          fallback={
-            <HistoryRow
-              record={props.record}
-              resource={target}
-              metadata={{ status: 'pending' }}
-            />
-          }
-        >
-          <ResourceHistoryRow
-            record={props.record}
-            resource={target}
-            createMetadata={
-              target.type === 'chat'
-                ? props.history.createChatMetadata
-                : props.history.createAgentMetadata
-            }
-            onOpen={props.history.onOpen}
-          />
-        </Suspense>
-      )}
-    </Show>
-  );
-}
-
+/**
+ * Every run of a routine, by day, beside what the selected one did. Runs that
+ * only ran an agent open its conversation instead.
+ */
 export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
-  const [selectedId, setSelectedId] = createSignal<string>();
-  const selected = () =>
-    props.records.find((record) => record.id && record.id === selectedId());
   const [visibleCount, setVisibleCount] = createSignal(50);
-  const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const visibleRecords = createMemo(() =>
     props.records.slice(0, visibleCount())
   );
+  // The run someone chose. Until then the newest run with steps shows beside
+  // the list, except on narrow screens, which show the list alone.
+  const [chosenId, setChosenId] = createSignal<string>();
+  const chosen = () =>
+    props.records.find(
+      (record) => record.id && record.id === chosenId() && hasStepDetail(record)
+    );
+  const selected = () => chosen() ?? visibleRecords().find(hasStepDetail);
+  const days = createMemo(() => runDays(visibleRecords()));
   const runs = createMemo(() => skipRuns(visibleRecords()));
   // Keyed by the run's newest record id, which survives history refetches.
   const [expanded, setExpanded] = createSignal(new Set<string>());
@@ -397,13 +405,19 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
       return next;
     });
   };
+  const isOpen = (run: SkipRun | undefined) => {
+    const id = run?.first.id;
+    return !!id && expanded().has(id);
+  };
   return (
     <div class="@container/runs flex min-h-0 flex-1">
       <div
-        ref={setListElement}
         class={cn(
-          'min-h-0 flex-1 overflow-y-auto py-3',
-          selected() && '@max-[720px]/runs:hidden'
+          'min-h-0 min-w-0 overflow-y-auto px-2 py-2.5',
+          selected()
+            ? 'w-[26rem] shrink-0 border-r border-edge-muted @max-[720px]/runs:w-full @max-[720px]/runs:border-r-0'
+            : 'flex-1',
+          chosen() && '@max-[720px]/runs:hidden'
         )}
       >
         <Show
@@ -417,70 +431,96 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
             </div>
           }
         >
-          <ListLayoutProvider ref={listElement}>
-            <div role="list" aria-label="Routine runs">
-              <For each={visibleRecords()}>
-                {(record) => (
-                  <Show
-                    when={record.skipped}
-                    fallback={
-                      <ResolvedHistoryRow
-                        record={record}
-                        history={props}
-                        onSelect={() => setSelectedId(record.id ?? undefined)}
-                      />
-                    }
-                  >
-                    {(skip) => {
-                      const run = () => runs().get(record);
-                      const grouped = () => (run()?.length ?? 1) > 1;
-                      const first = () => run()?.first === record;
-                      const open = () => {
-                        const id = run()?.first.id;
-                        return !!id && expanded().has(id);
-                      };
-                      return (
-                        <>
-                          <Show when={grouped() && first()}>
-                            <SkippedGroupToggle
-                              count={run()?.length ?? 0}
-                              open={open()}
-                              onToggle={() => toggle(run()?.first)}
+          <div
+            role="list"
+            aria-label="Routine runs"
+            class={cn(!selected() && 'mx-auto w-full max-w-3xl')}
+          >
+            {/* Keyed by date, so a new page or run keeps the rows it has. */}
+            <For each={days().map((day) => day.key)}>
+              {(key) => {
+                const day = () => days().find((each) => each.key === key);
+                return (
+                  <>
+                    <div
+                      role="presentation"
+                      class="px-2.5 pb-1 pt-3 text-xs font-medium text-ink-muted first:pt-1"
+                    >
+                      {day()?.label}
+                    </div>
+                    <For each={day()?.records ?? []}>
+                      {(record) => (
+                        <Show
+                          when={record.skipped}
+                          fallback={
+                            <RunEntry
+                              record={record}
+                              history={props}
+                              selected={
+                                Boolean(record.id) &&
+                                selected()?.id === record.id
+                              }
+                              selectedByDefault={!chosen()}
+                              onSelect={() =>
+                                setChosenId(record.id ?? undefined)
+                              }
                             />
-                          </Show>
-                          <Show when={!grouped() || open()}>
-                            <SkippedRow record={record} skip={skip()} />
-                          </Show>
-                        </>
-                      );
-                    }}
-                  </Show>
-                )}
-              </For>
-            </div>
-          </ListLayoutProvider>
+                          }
+                        >
+                          {(skip) => (
+                            <SkippedEntry
+                              record={record}
+                              skip={skip()}
+                              run={runs().get(record)}
+                              open={isOpen(runs().get(record))}
+                              onToggle={() => toggle(runs().get(record)?.first)}
+                            />
+                          )}
+                        </Show>
+                      )}
+                    </For>
+                  </>
+                );
+              }}
+            </For>
+          </div>
           <Show when={props.records.length > visibleCount()}>
-            <div class="flex justify-center p-3">
-              <Button
-                variant="secondary"
-                onClick={() => setVisibleCount((count) => count + 50)}
-              >
-                Load more runs
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              class={cn('m-1.5', !selected() && 'mx-auto flex')}
+              onClick={() => setVisibleCount((count) => count + 50)}
+            >
+              Load more runs
+            </Button>
           </Show>
         </Show>
       </div>
       <Show when={selected()}>
         {(record) => {
+          const describe = (step: HistoryStep) =>
+            props.describeStep?.(step, record()) ?? step.kind;
           const resource = () => record().resource;
           return (
-            <aside class="min-h-0 w-96 shrink-0 overflow-y-auto border-l border-edge-muted @max-[720px]/runs:w-full @max-[720px]/runs:border-l-0">
+            <div
+              class={cn(
+                'min-h-0 min-w-0 flex-1 overflow-y-auto',
+                !chosen() && '@max-[720px]/runs:hidden'
+              )}
+            >
+              <Button
+                variant="ghost"
+                size="sm"
+                class="mx-3 mt-3 hidden @max-[720px]/runs:inline-flex"
+                onClick={() => setChosenId(undefined)}
+              >
+                <CaretLeftIcon class="size-4" />
+                Runs
+              </Button>
               <RunDetail
                 record={record()}
-                describe={(step) =>
-                  props.describeStep?.(step, record()) ?? step.kind
-                }
+                title={stepLines(record(), describe).title}
+                describe={describe}
                 onOpenConversation={
                   resource()
                     ? () => {
@@ -489,9 +529,8 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
                       }
                     : undefined
                 }
-                onClose={() => setSelectedId(undefined)}
               />
-            </aside>
+            </div>
           );
         }}
       </Show>

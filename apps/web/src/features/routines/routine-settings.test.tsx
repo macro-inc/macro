@@ -34,12 +34,6 @@ vi.mock('@app/features/agents-view/primitives/open-page', () => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
 }));
-vi.mock('./queries/routine-target-display', () => ({
-  createRoutineTargetDisplay: () => ({
-    targetLabel: () => 'Sonnet 5.5',
-    targetModel: () => undefined,
-  }),
-}));
 vi.mock('./queries/routine-sources', () => ({
   createRoutineListSource: (): RoutineListSource => ({
     routines: () => [

@@ -5,7 +5,7 @@ import PlayIcon from '@icon/system/regular/play.svg';
 import { ButtonGroup, Dropdown } from '@ui';
 import { Show } from 'solid-js';
 
-/** Routine actions share the task's compact agent-action control. */
+/** The routine page's header action: Run now, with turning it on or off. */
 export function RoutineRunButton(props: {
   enabled: boolean;
   runDisabled: boolean;
@@ -53,7 +53,7 @@ export function RoutineRunButton(props: {
             <Show when={props.enabled} fallback={<PlayIcon class="size-4" />}>
               <PauseIcon class="size-4" />
             </Show>
-            {props.enabled ? 'Disable routine' : 'Enable routine'}
+            {props.enabled ? 'Turn off' : 'Turn on'}
           </Dropdown.Item>
           <Dropdown.Item
             disabled={props.copyDisabled}
