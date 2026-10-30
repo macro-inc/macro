@@ -1,5 +1,4 @@
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
@@ -8,7 +7,7 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
-import { Button, cn, InlineCheckbox, Tooltip } from '@ui';
+import { Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
   createSignal,
@@ -21,7 +20,7 @@ import {
 } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
-import { CALL_PANEL_MEDIUM_NARROW_PX } from './call-panel-breakpoints';
+import { CallSharingMenu } from './CallControls/CallSharingMenu';
 import { createControlsVisibility } from './create-controls-visibility';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
@@ -290,12 +289,14 @@ export function CallOverlay(props: {
   const [chatOpen, setChatOpen] = createSignal(false);
   const [chatMounted, setChatMounted] = createSignal(false);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [sharingOpen, setSharingOpen] = createSignal(false);
   const [keyboardFocus, setKeyboardFocus] = createSignal(false);
   const controls = createControlsVisibility({
     enabled: isMobile,
     keepVisible: () =>
       chatOpen() ||
       settingsOpen() ||
+      sharingOpen() ||
       keyboardFocus() ||
       virtualKeyboardVisible(),
   });
@@ -312,12 +313,10 @@ export function CallOverlay(props: {
     setChatOpen(true);
   };
   const canChat = () => props.showChat !== false && !!callCtx.activeCallId();
+  const canShareWithTeam = () =>
+    callCtx.activeChannelId() !== null && props.showTeamSharing !== false;
   const teamShareLocked = () =>
     isConnecting() || !teamShare.canToggle() || teamShare.isPending();
-
-  const splitPanel = useSplitPanel();
-  const panelWidth = () => splitPanel?.panelSize.width ?? Infinity;
-  const isMediumNarrow = () => panelWidth() < CALL_PANEL_MEDIUM_NARROW_PX;
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
@@ -526,55 +525,40 @@ export function CallOverlay(props: {
             inert={controlsHidden()}
             data-holds-prompts={isTouchDevice() ? undefined : ''}
           >
-            <Show
-              when={
-                callCtx.activeChannelId() !== null &&
-                props.showTeamSharing !== false
-              }
-            >
-              <Tooltip
-                placement="top"
-                label={
-                  sharedWithTeam()
-                    ? "The creator's team can view the chat, transcript, and AI summary once the call ends"
-                    : "Let the creator's team view the chat, transcript, and AI summary once the call ends"
-                }
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    fireAndForget(teamShare.toggle(), 'channel-call')
-                  }
-                  disabled={teamShareLocked()}
-                  role="checkbox"
-                  aria-label="Share with team"
-                  aria-checked={sharedWithTeam()}
-                  class={cn(
-                    'order-1 inline-flex items-center gap-2 rounded-md h-7 px-2.5 text-xs select-none',
-                    'border border-ink-muted/[0.08] bg-ink-muted/[0.025]',
-                    'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
-                    sharedWithTeam() && 'text-ink',
-                    teamShareLocked() && 'pointer-events-none opacity-50'
-                  )}
-                >
-                  <InlineCheckbox checked={sharedWithTeam()} />
-                  <Show when={!isMediumNarrow()}>
-                    <span class="whitespace-nowrap">Share with team</span>
-                  </Show>
-                </button>
-              </Tooltip>
-            </Show>
             <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
               <div class="min-w-0 max-w-48 mobile:hidden">
                 {props.footerLeading}
               </div>
-              <div class="flex min-w-0 justify-center">
+              <div
+                class={cn(
+                  'flex min-w-0 justify-center',
+                  canShareWithTeam() &&
+                    'mobile:@max-[22rem]/call-stage:col-span-2'
+                )}
+              >
                 <CallControls
                   onLeave={props.onLeave}
                   onSettingsOpenChange={setSettingsOpen}
-                />
+                >
+                  <Show when={canShareWithTeam()}>
+                    <CallSharingMenu
+                      sharedWithTeam={sharedWithTeam()}
+                      disabled={teamShareLocked()}
+                      onToggle={() =>
+                        fireAndForget(teamShare.toggle(), 'channel-call')
+                      }
+                      onOpenChange={setSharingOpen}
+                    />
+                  </Show>
+                </CallControls>
               </div>
-              <div class="flex justify-end">
+              <div
+                class={cn(
+                  'flex justify-end',
+                  canShareWithTeam() &&
+                    'mobile:@max-[22rem]/call-stage:col-start-2'
+                )}
+              >
                 <Show when={canChat()}>
                   <Button
                     ref={chatButton}

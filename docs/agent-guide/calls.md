@@ -220,8 +220,14 @@ the toolbar on click only; hovering opens nothing. **Audio settings** lists
 microphones, speakers (when the browser can choose one), and noise suppression.
 **Video settings** lists cameras and the background effects as tiles: None,
 Light blur, Strong blur, a selected custom image, and Upload. Screen share and
-Leave call are separate buttons. Click outside or press Escape to close a menu.
-The controls also work by keyboard and touch.
+Leave call are separate buttons. Live channel calls also include **Call sharing**
+in the toolbar: its menu offers **Team sharing** and **Private**, each with a short
+explanation and a checkmark on the current choice. The icon changes between team
+and lock. Audio settings, video settings, and call sharing use bottom drawers on
+phones, with a handle and scrollable options; desktop and tablet keep dropdowns.
+The sharing icons align with the option titles, with short descriptions below.
+Click outside or press Escape to close and return focus to the opener. The
+controls also work by keyboard and touch.
 The floating mobile **New** action is hidden while the call view is open and
 returns when you leave the call view. Phone calls also hide the app's bottom
 navigation, but keep the channel header island visible. Setup screens and tablets
@@ -237,9 +243,11 @@ Open live chat with **Open chat** at the bottom-right, alongside the media contr
 On desktop, Copy Meeting Url stays at the bottom-left. On phones it uses the same
 header island style as the channel header, while chat keeps its 48px tap target.
 Media controls and chat occupy a separate row below the video, never over it.
+On the smallest phones, channel-call controls keep their toolbar on one row and
+chat moves to a second row instead of compressing tap targets or wrapping the toolbar.
 The phone's bottom controls hide after four idle seconds and return when the call
 is tapped, reserving their row so the video does not resize. Header islands stay
-visible. Chat, settings menus, keyboard navigation, and text entry keep controls
+visible. Chat, settings menus or drawers, keyboard navigation, and text entry keep controls
 visible. Check 320px phones, safe-area insets, and rotation.
 Desktop chat fills the call content height alongside both
 the video and its media controls, with a rounded, raised background and a gap from
@@ -295,19 +303,22 @@ opening the call tab alone does not create a link. If loading fails, click again
 to retry. If clipboard access fails, a selectable URL appears below the button.
 
 A channel call's **Share** dialog has a `Team access` control (None or View) for the same canonical
-team share. Its side panel has a `Sharing` section with one `Share with team` checkbox, and the
-in-call controls carry the same checkbox while a call is live. It is canonical team sharing (the
-same `Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
-the checkbox is a pending toggle (on by default for channel calls)
-that any participant with edit access can flip;
-other participants see it update live. When the call ends it is applied: with the toggle on,
-everyone on the creator's team can open the recorded call, read the transcript and AI summary,
-and find it under Calls and in search; off means nothing is shared. Afterwards only the call's
-**creator** can change it — everyone else sees the checkbox read-only with a note saying so.
+team share. Its side panel has a `Sharing` section with one `Share with team` checkbox.
+While a call is live, the controls bar instead has a **Call sharing** dropdown with
+**Team sharing** and **Private** options. Each option explains the resulting team
+access under its name; choosing the current option does not save again. Controls
+are disabled while connecting or saving. Team sharing is canonical **view** access
+(the same `Team access` model documents and AI chats use), enabled by default for
+channel calls. Any participant with edit access can change it, and other
+participants see it update live. When the call ends, **Team sharing** lets the
+creator's team open the recorded call, read the transcript and AI summary, and find
+it under Calls and in search; **Private** grants no automatic team access.
+Afterwards only the call's **creator** can change it; everyone else sees the
+side-panel checkbox read-only with a note saying so.
 Team sharing is independent of channel access and of link sharing.
 
 Standalone instant and scheduled calls are excluded from team memory. They have no
-`Share with team` or `Team access` controls during the call or on the saved recording.
+team-sharing or `Team access` controls during the call or on the saved recording.
 Signed-in participants keep direct access to their recordings, transcripts, and summaries;
 joining a standalone call never makes its content available to the wider team.
 

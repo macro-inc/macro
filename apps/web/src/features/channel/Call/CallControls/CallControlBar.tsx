@@ -6,8 +6,9 @@ import PhoneDisconnect from '@icon/system/regular/phone-disconnect.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
 import VideoCamera from '@icon/system/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
-import { Button, ButtonGroup, Dropdown } from '@ui';
+import { Button, ButtonGroup } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
+import { CallSettingsMenu } from './CallSettingsMenu';
 
 /**
  * A media toggle split from its settings menu: the left half turns the device
@@ -22,54 +23,56 @@ function MediaSplitButton(props: {
   onToggle: () => void;
   icon: JSX.Element;
   children: JSX.Element;
+  mobileContent: JSX.Element;
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = createSignal(false);
   return (
-    <Dropdown
-      placement="top-start"
+    <CallSettingsMenu
+      title={props.menuLabel}
       open={open()}
       onOpenChange={(open) => {
         setOpen(open);
         props.onOpenChange?.(open);
       }}
-    >
-      <ButtonGroup
-        size={isMobile() ? 'icon-md' : 'icon-lg'}
-        aria-label={props.label}
-      >
-        <ButtonGroup.Button
-          aria-label={props.toggleLabel}
-          tooltip={{ content: props.toggleLabel, placement: 'top' }}
-          aria-pressed={props.on}
-          disabled={props.disabled}
-          onClick={props.onToggle}
-        >
-          {props.icon}
-        </ButtonGroup.Button>
-        <ButtonGroup.Divider />
-        <Dropdown.Trigger
-          as={ButtonGroup.Button}
-          variant="ghost"
+      mobileContent={props.mobileContent}
+      trigger={(triggerProps) => (
+        <ButtonGroup
           size={isMobile() ? 'icon-md' : 'icon-lg'}
-          aria-label={props.menuLabel}
-          tooltip={{
-            content: props.menuLabel,
-            placement: 'top',
-            disabled: open(),
-          }}
-          class="w-6"
+          aria-label={props.label}
         >
-          <CaretUp
-            class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
-            classList={{ 'rotate-180': open() }}
-          />
-        </Dropdown.Trigger>
-      </ButtonGroup>
-      <Dropdown.Content class="w-72 max-w-[calc(100vw-2rem)]">
-        {props.children}
-      </Dropdown.Content>
-    </Dropdown>
+          <ButtonGroup.Button
+            aria-label={props.toggleLabel}
+            tooltip={{ content: props.toggleLabel, placement: 'top' }}
+            aria-pressed={props.on}
+            disabled={props.disabled}
+            onClick={props.onToggle}
+          >
+            {props.icon}
+          </ButtonGroup.Button>
+          <ButtonGroup.Divider />
+          <ButtonGroup.Button
+            {...triggerProps}
+            variant="ghost"
+            size={isMobile() ? 'icon-md' : 'icon-lg'}
+            aria-label={props.menuLabel}
+            tooltip={{
+              content: props.menuLabel,
+              placement: 'top',
+              disabled: open(),
+            }}
+            class="w-6"
+          >
+            <CaretUp
+              class="size-3 transition-transform duration-200 ease-out motion-reduce:transition-none"
+              classList={{ 'rotate-180': open() }}
+            />
+          </ButtonGroup.Button>
+        </ButtonGroup>
+      )}
+    >
+      {props.children}
+    </CallSettingsMenu>
   );
 }
 
@@ -86,8 +89,11 @@ export function CallControlBar(props: {
   audioMenu: JSX.Element;
   /** Dropdown items for the camera and its background effect. */
   videoMenu: JSX.Element;
+  audioDrawer: JSX.Element;
+  videoDrawer: JSX.Element;
   error?: string;
   onSettingsOpenChange?: (open: boolean) => void;
+  children?: JSX.Element;
 }) {
   let audioOpen = false;
   let videoOpen = false;
@@ -104,6 +110,7 @@ export function CallControlBar(props: {
             props.audioMuted ? 'Unmute microphone' : 'Mute microphone'
           }
           menuLabel="Audio settings"
+          mobileContent={props.audioDrawer}
           on={!props.audioMuted}
           disabled={props.disabled}
           onToggle={props.onToggleAudio}
@@ -125,6 +132,7 @@ export function CallControlBar(props: {
             props.onSettingsOpenChange?.(audioOpen || videoOpen);
           }}
           toggleLabel={props.videoMuted ? 'Turn on camera' : 'Turn off camera'}
+          mobileContent={props.videoDrawer}
           menuLabel="Video settings"
           on={!props.videoMuted}
           disabled={props.disabled}
@@ -158,6 +166,7 @@ export function CallControlBar(props: {
         >
           <Screencast class="size-5" />
         </Button>
+        {props.children}
         <Button
           size={isMobile() ? 'icon-md' : 'icon-lg'}
           variant="danger"

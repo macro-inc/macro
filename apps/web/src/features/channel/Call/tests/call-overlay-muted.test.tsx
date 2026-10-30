@@ -4,7 +4,7 @@
 
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import type { RemoteParticipant, Track } from 'livekit-client';
-import { createSignal, type Setter } from 'solid-js';
+import { createSignal, type JSX, type Setter } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState } from '../CallContext';
 import { CallOverlay } from '../CallOverlay';
@@ -41,7 +41,9 @@ vi.mock('@ui', async () => ({
   Button: (await import('@ui/components/Button')).Button,
   cn: (...classes: Array<string | false | null | undefined>) =>
     classes.filter(Boolean).join(' '),
-  InlineCheckbox: () => null,
+  Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
+  SingleSelectCheck: (await import('@ui/components/Checkbox'))
+    .SingleSelectCheck,
   Tooltip: (props: { children: unknown }) => props.children,
 }));
 
@@ -50,7 +52,7 @@ vi.mock('../CallContext', () => ({
 }));
 
 vi.mock('../CallControls/CallControls', () => ({
-  CallControls: () => null,
+  CallControls: (props: { children?: JSX.Element }) => props.children,
 }));
 
 vi.mock('../chat/CallChat', () => ({
@@ -170,13 +172,13 @@ describe('CallOverlay muted microphone badges', () => {
     const controls = setUpCallState();
     controls.setChannelId(null);
     render(() => <CallOverlay onLeave={() => undefined} showTeamSharing />);
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
     controls.setChannelId('channel-1');
     expect(
-      screen.getByRole('checkbox', { name: 'Share with team' })
+      screen.getByRole('button', { name: 'Call sharing: Private' })
     ).toBeTruthy();
     controls.setChannelId(null);
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
   });
 
   it('uses the guest name from the media session and hides team sharing for guests', () => {
@@ -193,7 +195,7 @@ describe('CallOverlay muted microphone badges', () => {
     expect(
       screen.getByRole('status', { name: 'Taylor Guest is muted' })
     ).toBeTruthy();
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
   });
 
   it('opens chat for a standalone meeting without a channel', async () => {
@@ -207,7 +209,7 @@ describe('CallOverlay muted microphone badges', () => {
       await screen.findByRole('textbox', { name: 'Message this call' })
     ).toBeTruthy();
     expect(screen.getByText('call-id')).toBeTruthy();
-    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Call sharing:/ })).toBeNull();
   });
 
   it('does not mount authenticated message queries for a guest', () => {
