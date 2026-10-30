@@ -582,6 +582,7 @@ export function NewChatPage(props: {
             }
           >
             <AgentUpdatesStack
+              home
               sessions={props.updateSessions ?? []}
               onOpenSession={(id) => props.onOpenUpdateSession?.(id)}
               onChatAbout={chatAboutUpdate}

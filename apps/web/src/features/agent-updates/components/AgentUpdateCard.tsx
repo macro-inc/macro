@@ -97,7 +97,8 @@ export function AgentUpdateCard(props: {
   update: AgentUpdate;
   answering: boolean;
   onAnswer: (answer: UpdateAnswer) => Promise<boolean>;
-  onChatAbout: () => void;
+  /** Omitted where there is no composer to attach the update to. */
+  onChatAbout?: () => void;
   onOpenSession: () => void;
 }) {
   const request = () =>
@@ -127,15 +128,19 @@ export function AgentUpdateCard(props: {
         )}
       </Show>
       <div class="mt-2 flex flex-wrap gap-1 pl-4">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          class="touch:min-h-11"
-          onClick={props.onChatAbout}
-        >
-          Chat about this
-        </Button>
+        <Show when={props.onChatAbout}>
+          {(onChatAbout) => (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="touch:min-h-11"
+              onClick={() => onChatAbout()()}
+            >
+              Chat about this
+            </Button>
+          )}
+        </Show>
         <Button
           type="button"
           variant="ghost"

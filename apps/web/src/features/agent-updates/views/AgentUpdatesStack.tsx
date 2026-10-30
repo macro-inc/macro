@@ -1,24 +1,24 @@
 import { useUserId } from '@core/context/user';
-import type { AgentSessionEntity } from '@entity';
 import { NotificationStack } from '@ui';
-import { type Accessor, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { AgentUpdateCard } from '../components/AgentUpdateCard';
 import type { AgentUpdate, UpdateSession } from '../core/agent-update';
 import { createAgentUpdates } from '../primitives/create-agent-updates';
 
-type Callbacks = {
+/**
+ * Live updates for the given sessions as a notification stack. Hosts supply
+ * the sessions (the Agents list, or an AI tool result) and navigation.
+ */
+export function AgentUpdatesStack(props: {
+  sessions: readonly UpdateSession[];
   onOpenSession: (sessionId: string) => void;
-  onChatAbout: (sessionId: string, sessionName: string) => void;
-};
-
-function Updates(
-  props: {
-    sessions: Accessor<readonly UpdateSession[]>;
-    home?: boolean;
-  } & Callbacks
-) {
+  /** Omitted where there is no composer to attach an update to. */
+  onChatAbout?: (sessionId: string, sessionName: string) => void;
+  /** Leave room for the floating composer on the touch home page. */
+  home?: boolean;
+}) {
   const ownerId = useUserId();
-  const model = createAgentUpdates(props.sessions, ownerId);
+  const model = createAgentUpdates(() => props.sessions, ownerId);
   return (
     <Show when={model.updates().length > 0}>
       <div
@@ -46,8 +46,11 @@ function Updates(
               update={update}
               answering={model.answering(update)}
               onAnswer={(answer) => model.answer(update, answer)}
-              onChatAbout={() =>
-                props.onChatAbout(update.sessionId, update.sessionName)
+              onChatAbout={
+                props.onChatAbout
+                  ? () =>
+                      props.onChatAbout?.(update.sessionId, update.sessionName)
+                  : undefined
               }
               onOpenSession={() => props.onOpenSession(update.sessionId)}
             />
@@ -55,47 +58,5 @@ function Updates(
         </NotificationStack>
       </div>
     </Show>
-  );
-}
-
-/** Home view, backed by the existing Agents session list. */
-export function AgentUpdatesStack(
-  props: {
-    sessions: readonly AgentSessionEntity[];
-  } & Callbacks
-) {
-  return (
-    <Updates
-      sessions={() => props.sessions}
-      home
-      onOpenSession={props.onOpenSession}
-      onChatAbout={props.onChatAbout}
-    />
-  );
-}
-
-/** A single live session's updates for embedded surfaces. */
-export function AgentSessionUpdates(
-  props: {
-    sessionId: string;
-    sessionName: string;
-    /** Current entity state from the host's session source. */
-    session: Pick<
-      UpdateSession,
-      'ownerId' | 'botId' | 'harness' | 'turnState' | 'isArchived' | 'updatedAt'
-    >;
-  } & Callbacks
-) {
-  const session = (): UpdateSession => ({
-    ...props.session,
-    id: props.sessionId,
-    name: props.sessionName,
-  });
-  return (
-    <Updates
-      sessions={() => [session()]}
-      onOpenSession={props.onOpenSession}
-      onChatAbout={props.onChatAbout}
-    />
   );
 }
