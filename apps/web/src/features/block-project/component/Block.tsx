@@ -1,4 +1,7 @@
-import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import {
+  FolderDropZone,
+  useBlockEntityCommands,
+} from '@app/features/next-soup/actions';
 import {
   createSoupState,
   type SoupState,
@@ -130,21 +133,23 @@ const Block: Component = () => {
         <Show when={isDragging() && !isSpecialProject}>
           <FileDropOverlay>Upload to this folder</FileDropOverlay>
         </Show>
-        <SidePanel.Layout defaultOpen={false} floating>
-          <Show when={!isSpecialProject}>
-            <ProjectSidePanelSections />
-          </Show>
-          <div class="flex size-full min-w-0 flex-col overflow-hidden">
-            <TopBar />
-            <ProjectEntityList
-              projectId={projectId}
-              soup={projectSoup}
-              // Scope is already attached by the block container so we can use that
-              // Change this when we remove blocks
-              scopeId={blockHotkeyScopeSignal.get()}
-            />
-          </div>
-        </SidePanel.Layout>
+        <FolderDropZone folderId={isSpecialProject ? undefined : projectId}>
+          <SidePanel.Layout defaultOpen={false} floating>
+            <Show when={!isSpecialProject}>
+              <ProjectSidePanelSections />
+            </Show>
+            <div class="flex size-full min-w-0 flex-col overflow-hidden">
+              <TopBar />
+              <ProjectEntityList
+                projectId={projectId}
+                soup={projectSoup}
+                // Scope is already attached by the block container so we can use that
+                // Change this when we remove blocks
+                scopeId={blockHotkeyScopeSignal.get()}
+              />
+            </div>
+          </SidePanel.Layout>
+        </FolderDropZone>
       </div>
     </DocumentBlockContainer>
   );
