@@ -50,6 +50,7 @@ pub struct LocalEnv {
     /// Browser-facing origin for post-login redirects and Pipedream CORS.
     /// Both attached and headless frontends are exposed through HTTPS.
     frontend_origin: String,
+    connect_public_url: String,
     /// Browser-facing route to document cognition's MCP OAuth callback.
     mcp_client_public_url: String,
     /// Browser-facing base the static file service stamps into permalinks
@@ -109,6 +110,7 @@ impl LocalEnv {
             mcp_client_public_url: format!("{frontend_origin}/cognition"),
             static_file_public_url: format!("{frontend_origin}/static-file"),
             frontend_origin,
+            connect_public_url: format!("{}/connect", proxy::url(instance)),
             external_egress_url: tunnels.egress.map(str::to_owned).unwrap_or_else(|| {
                 format!(
                     "http://localhost:{}",
@@ -135,6 +137,11 @@ impl LocalEnv {
         env.insert("ENVIRONMENT".into(), self.environment.into());
         env.insert("COMPOSE_PROJECT_NAME".into(), self.project_name.clone());
         env.insert("PORT".into(), "8080".into());
+        env.insert("CONNECT_PUBLIC_URL".into(), self.connect_public_url.clone());
+        env.insert(
+            "OVERRIDE_CONNECT_API_URL".into(),
+            "http://connect-api:8080".into(),
+        );
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
         env.insert("FRONTEND_ORIGIN".into(), self.frontend_origin.clone());
         env.insert("APP_BASE_URL".into(), self.frontend_origin.clone());
@@ -694,6 +701,11 @@ impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
         // The worker is opt-in and ships paused; an explicit env-file can enable it.
         env.insert("SLACK_IMPORT_ENABLED".into(), "false".into());
+        // Deterministic local-only AES-256 wrapping key; never used in deployed environments.
+        env.insert(
+            "CONNECT_LOCAL_WRAPPING_KEY".into(),
+            "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=".into(),
+        );
         env.insert("SLACK_IMPORT_CONCURRENCY".into(), "1".into());
         // connection_gateway config reads `REDIS_HOST` (a Redis URL, not a
         // hostname — see `redis::Client::open`).

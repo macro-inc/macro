@@ -216,6 +216,17 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: false,
     },
     RustService {
+        compose_name: "connect_api",
+        cargo_bin: "connect_api",
+        package: "connect_api",
+        host_port: Some(Port::ConnectApi),
+        path_prefix: Some("/connect"),
+        is_websocket: false,
+        modes: &[Mode::Local],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "notification_service",
         cargo_bin: "notification_service",
         package: "notification_service",

@@ -29,8 +29,9 @@ service and gateway, resolved from `macro_env::Environment` with an
 ## Recipes
 
 - Add a new service URL: add a field to the `service_url! { struct ServiceUrls { ... } }`
-  block in `src/lib.rs` with `local`/`dev`/`prod` values, then update the other
-  three copies of the table (see Related).
+  block in `src/lib.rs` with `local`/`dev`/`prod` values, then update each
+  runtime that calls it. Connect's URL is copied to infra; Macro reaches it
+  through its backend, so the web and SDK tables have no Connect entry.
 
 ## Checks
 

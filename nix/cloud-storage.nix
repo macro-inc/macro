@@ -74,6 +74,7 @@
         || (pdfiumFilter path type)
         || (assetFilter path type)
         || (binFilter path type)
+        || (pkgs.lib.hasInfix "/connect/registry" (toString path))
         || (craneLib.filterCargoSources path type);
       cloudStorageSrc = pkgs.lib.cleanSourceWith {
         src = ../.;
@@ -141,6 +142,10 @@
           || (rel == "vendor")
           || (rel == "vendor/utoipa-swagger-ui")
           || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
+          || (rel == "connect")
+          || (rel == "connect/registry")
+          || (rel == "connect/registry/apps")
+          || (pkgs.lib.hasPrefix "connect/registry/apps/" rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -377,6 +382,11 @@
           binaries = [ "calendar_service" ];
         }
         {
+          serviceName = "connect-api";
+          packageName = "connect_api";
+          binaries = [ "connect_api" ];
+        }
+        {
           serviceName = "connection-gateway";
           packageName = "connection_gateway";
           binaries = [ "connection_gateway_service" ];
@@ -584,6 +594,7 @@
       localStackDeployServiceNames = [
         "agent-harness-service"
         "calendar-service"
+        "connect-api"
         "connection-gateway"
         "contacts-service"
         "document-storage-service"

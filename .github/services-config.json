@@ -318,6 +318,18 @@
       "deploy_binaries": [
         "whatsapp_session_service"
       ]
+    },
+    "connect-api": {
+      "source_paths": [
+        "connect/services/connect_api/**",
+        "connect/crates/**",
+        "connect/registry/apps/**"
+      ],
+      "stack_path": "infra/stacks/connect-api/**",
+      "deploy_binaries": [
+        "connect_api"
+      ],
+      "bootstrap_pending": "Doppler project connect-api, database, and first deploy pending Eric's approval"
     }
   }
 }

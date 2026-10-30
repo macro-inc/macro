@@ -254,6 +254,51 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # connect_api (Port 8112)
+  # Macro Connect catalog and customer API.
+  # ============================================================================
+  connect_db_init:
+    image: pgvector/pgvector:pg18
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGUSER: user
+      PGPASSWORD: password
+      PGDATABASE: postgres
+    command:
+      - sh
+      - -c
+      - |
+        psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'connect'" | grep -q 1 ||
+          psql -c 'CREATE DATABASE connect'
+    networks:
+      - databases
+
+  connect_api:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/connect_api"]
+    ports:
+      - "8112:8080"
+    depends_on:
+      connect_db_init:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://user:password@postgres:5432/connect
+    networks:
+      databases:
+      services:
+        aliases:
+          - connect-api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================

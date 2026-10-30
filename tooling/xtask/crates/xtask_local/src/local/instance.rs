@@ -120,6 +120,8 @@ pub enum Port {
     PreviewSsh = 2222,
     /// Local wildcard preview TLS listener.
     PreviewHttps = 8443,
+    /// Macro Connect API.
+    ConnectApi = 8112,
 }
 
 impl Port {
