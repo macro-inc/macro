@@ -39,8 +39,11 @@ import {
 import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
+import { enableAgentUpdates } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
+import type { AgentSessionEntity } from '@entity';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentsSidebar } from '../components/AgentsSidebar';
 import { Topbar } from '../components/Topbar';
@@ -86,6 +89,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+  const updatesFlag = useFeatureFlag(enableAgentUpdates);
   useWarmAgentSessionQuery(userId);
   const notifications = useGlobalNotificationSource();
   const mode = (): AgentsMode => props.route?.mode ?? 'chat';
@@ -168,6 +172,13 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     )
   );
   const partitioned = createMemo(() => partitionArchived(conversations()));
+  const updateSessions = () =>
+    query.isSuccess
+      ? query.data.filter(
+          (entity): entity is AgentSessionEntity =>
+            entity.type === 'agent_session'
+        )
+      : [];
   const modeForConversation = (conversation: AgentConversationEntity) =>
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
@@ -452,6 +463,21 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                                 classList={{ hidden: page() !== 'new' }}
                               >
                                 <NewChatPage
+                                  showUpdates={
+                                    updatesFlag().enabled && page() === 'new'
+                                  }
+                                  updateSessions={updateSessions()}
+                                  onOpenUpdateSession={(id) => {
+                                    const session = updateSessions().find(
+                                      (item) => item.id === id
+                                    );
+                                    if (session)
+                                      openConversation(
+                                        session,
+                                        undefined,
+                                        modeForConversation(session)
+                                      );
+                                  }}
                                   mode={workspace.mode()}
                                   onModeChange={workspace.setMode}
                                   active={
