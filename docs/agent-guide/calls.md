@@ -233,7 +233,8 @@ Click outside or press Escape to close and return focus to the opener. The
 controls also work by keyboard and touch.
 The floating mobile **New** action is hidden while the call view is open and
 returns when you leave the call view. Phone calls also hide the app's bottom
-navigation, but keep the channel header island visible. Setup screens and tablets
+navigation and channel Invite action, but keep the channel header island visible.
+Invite returns when you leave the call tab. Setup screens, desktop, and tablets
 stay unchanged. Back returns to the app without hanging up; only **Leave call**
 ends participation.
 
@@ -244,9 +245,11 @@ A talking participant has an accent-colored border above their video or avatar.
 
 Open live chat with **Open chat** alongside the media controls. On phones, the
 fully rounded control bar fills the available space beside a separate chat button,
-with side gutters, an 8px gap, and a 48px chat tap target. On desktop, chat stays at
-the bottom-right and Copy Meeting Url stays at the bottom-left. On phones, Copy
-Meeting Url uses the same header island style as the channel header. Media
+with side gutters, an 8px gap (4px on the smallest phones), and a 48px chat tap
+target. Without chat, the controls fill the row without an empty chat column.
+On desktop, chat stays at the bottom-right and Copy Meeting Url stays at the
+bottom-left. On phones, Copy Meeting Url uses the shared `CopyButton` in a
+standard 40px header island, without custom button colors or sizing. Media
 controls and chat occupy a separate row below the video, never over it. Controls
 remain visible while idle; auto-hide is disabled for now. Header islands also
 stay visible. Check 320px phones, safe-area insets, and rotation.

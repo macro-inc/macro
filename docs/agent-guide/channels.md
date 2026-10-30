@@ -1222,11 +1222,11 @@ usable.
 The **Open chat** button at the bottom-right opens chat beside the video.
 **Copy Meeting Url** sits at the bottom-left on desktop and becomes icon-only in narrow panes.
 Active phone calls keep the channel header island and place Copy Meeting Url
-in a matching header island. Media controls and chat sit below the video with
-side insets, not over the participant tiles. Back keeps the call running; tapping
-the call restores bottom controls after four idle seconds without resizing the
-video. Header islands stay visible. Chat and settings keep controls visible.
-Phone calls hide the app's bottom navigation. Tap or click a participant to
+in a matching header island using the shared `CopyButton`. The media control bar
+fills the space beside the separate chat button, below the video and within side
+insets. Back keeps the call running. Controls and header islands stay visible;
+idle auto-hide is disabled. Phone calls hide the app's bottom navigation and
+channel Invite action; Invite returns when leaving the live call tab. Tap or click a participant to
 focus them and tap again to return to the grid; speakers have an accent border.
 The panel has a **Call chat** heading and
 spans the full call content height, including the media controls row. The controls
@@ -1326,8 +1326,9 @@ cancellation, and focus restoration before sending invites.
 
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
-`Ask Macro`, `Invite`, and `Call` actions remain in the header. On narrow desktop
-panes, the tabs collapse from text labels to icons. Standalone mobile channels
+`Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
+live-phone-call exceptions described above. On narrow desktop panes, the tabs
+collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists

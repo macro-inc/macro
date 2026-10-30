@@ -34,6 +34,7 @@ import {
   useChannelName,
   useChannelType,
 } from '@core/context/channels';
+import { isMobile } from '@core/mobile/isMobile';
 import { createMethodRegistration } from '@core/orchestrator';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { Tabs } from '@ui';
@@ -158,6 +159,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
   const call = useCall(() => props.channelId);
+  const { activeTab } = useChannelTab();
 
   // Seed for "Ask Macro": a new chat with this channel @mentioned.
   const askMacroEntity = () => {
@@ -196,13 +198,17 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           )}
         </Show>
       </HeaderActionGroup>
-      <DebugSuspense name="ChannelDetail.invite">
-        <ChannelInviteButton
-          channelId={props.channelId}
-          channelName={channelName() ?? 'New Channel'}
-          channelType={channelType()}
-        />
-      </DebugSuspense>
+      <Show
+        when={!isMobile() || activeTab() !== 'call' || !call.isInThisChannel()}
+      >
+        <DebugSuspense name="ChannelDetail.invite">
+          <ChannelInviteButton
+            channelId={props.channelId}
+            channelName={channelName() ?? 'New Channel'}
+            channelType={channelType()}
+          />
+        </DebugSuspense>
+      </Show>
     </div>
   );
 }

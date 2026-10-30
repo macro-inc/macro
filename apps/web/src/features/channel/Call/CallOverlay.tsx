@@ -547,7 +547,14 @@ export function CallOverlay(props: {
             inert={controlsHidden()}
             data-holds-prompts={isTouchDevice() ? undefined : ''}
           >
-            <div class="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:grid-cols-[minmax(0,1fr)_auto] mobile:px-[max(16px,var(--mobile-chrome-gutter))] @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]">
+            <div
+              class={cn(
+                'grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))] mobile:@max-[21rem]/call-stage:gap-1 @3xl/call-stage:grid-cols-[minmax(0,1fr)_minmax(18rem,2fr)_minmax(0,1fr)]',
+                canChat()
+                  ? 'mobile:grid-cols-[minmax(0,1fr)_auto]'
+                  : 'mobile:grid-cols-1'
+              )}
+            >
               <div class="min-w-0 max-w-48 mobile:hidden">
                 {props.footerLeading}
               </div>
@@ -568,9 +575,11 @@ export function CallOverlay(props: {
                   </Show>
                 </CallControls>
               </div>
-              <div class="flex justify-end">
-                <ChatToggle />
-              </div>
+              <Show when={!isMobile() || canChat()}>
+                <div class="flex justify-end">
+                  <ChatToggle />
+                </div>
+              </Show>
             </div>
           </div>
         </div>
