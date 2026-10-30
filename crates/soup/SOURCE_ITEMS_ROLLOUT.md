@@ -103,6 +103,14 @@ other entity types keep their existing paths. Every filter and cursor predicate
 runs before a per-source limit. Property rows keep their entity type across a
 subtype change, so they cannot narrow document/task kinds.
 
+An arm reads `source_items` only when a per-source scan can stop at the page:
+every conjunct is served by the scan (kind, `"updatedAt"` bounds, the owner
+driver for the viewer's own documents, id and project lookups, notifications)
+or cannot be selective (a negated literal, or a disjunction with such a side).
+Otherwise, for example a filter on another user's documents, a property value,
+a creation date or a name, that arm reads its item table in the same query, as
+it would with the projection disabled.
+
 Soup's query tests run every case on both paths and require identical pages,
 and assert the projection is exact after every fixture. `crates/source_items`
 tests every kind of write, forced interleavings of each race, and concurrent
