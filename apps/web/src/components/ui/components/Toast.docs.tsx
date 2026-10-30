@@ -3,21 +3,42 @@ import {
   ToastContent,
   ToastType,
 } from '@core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { Toast, toaster } from '@kobalte/core/toast';
-import { type ComponentProps, createSignal, createUniqueId, onCleanup } from 'solid-js';
+import {
+  type ComponentProps,
+  createSignal,
+  createUniqueId,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { Button } from './Button';
 import { Spinner } from './Spinner';
+import { Tabs } from './Tabs';
 
 type PreviewToast = Omit<ComponentProps<typeof ToastContent>, 'toastId'>;
 
 // Each demo owns its records and simulation timers, never the app's regions.
-function createToastPreview() {
+function createToastPreview(options?: { appPosition?: boolean }) {
   const regionId = `toast-gallery-${createUniqueId()}`;
+  const persistentRegionId = `${regionId}-persistent`;
   const ids = new Set<number>();
   const timers = new Set<ReturnType<typeof setTimeout>>();
+  let activeTransientId: number | undefined;
 
   const show = (content: PreviewToast) => {
+    if (
+      options?.appPosition &&
+      isMobile() &&
+      !content.persistent &&
+      activeTransientId !== undefined
+    ) {
+      toaster.dismiss(activeTransientId);
+    }
     const id = toaster.show(
       (props) => (
         <ToastContent
@@ -25,13 +46,19 @@ function createToastPreview() {
           toastId={props.toastId}
           onDismiss={() => {
             ids.delete(props.toastId);
+            if (activeTransientId === props.toastId) activeTransientId = undefined;
             content.onDismiss?.();
           }}
         />
       ),
-      { region: regionId }
+      {
+        region: options?.appPosition && content.persistent
+          ? persistentRegionId
+          : regionId,
+      }
     );
     ids.add(id);
+    if (!content.persistent) activeTransientId = id;
     return id;
   };
   const dismiss = (id: number) => {
@@ -54,10 +81,15 @@ function createToastPreview() {
     timers.clear();
     for (const id of ids) toaster.dismiss(id);
     ids.clear();
+    activeTransientId = undefined;
   };
   onCleanup(clear);
-  return { regionId, show, dismiss, later, clear };
+  return { regionId, persistentRegionId, show, dismiss, later, clear };
 }
+
+type ToastDemoProps = {
+  preview?: ReturnType<typeof createToastPreview>;
+};
 
 function PreviewRegion(props: {
   preview: ReturnType<typeof createToastPreview>;
@@ -85,8 +117,8 @@ function PreviewRegion(props: {
 }
 
 // #region demo:notifications
-function StatusesDemo() {
-  const preview = createToastPreview();
+function StatusesDemo(props: ToastDemoProps = {}) {
+  const preview = props.preview ?? createToastPreview();
   return (
     <div class="flex w-full flex-col items-center gap-4">
       <div class="flex flex-wrap justify-center gap-2">
@@ -131,15 +163,17 @@ function StatusesDemo() {
         </Button>
         <Button variant="ghost" onClick={preview.clear}>Clear</Button>
       </div>
-      <PreviewRegion preview={preview} label="Status previews" />
+      <Show when={!props.preview}>
+        <PreviewRegion preview={preview} label="Status previews" />
+      </Show>
     </div>
   );
 }
 // #endregion
 
 // #region demo:actions
-function ActionsDemo() {
-  const preview = createToastPreview();
+function ActionsDemo(props: ToastDemoProps = {}) {
+  const preview = props.preview ?? createToastPreview();
   const undo = () => {
     const id = preview.show({
       toastType: ToastType.SUCCESS,
@@ -200,15 +234,17 @@ function ActionsDemo() {
         </Button>
         <Button variant="ghost" onClick={preview.clear}>Clear</Button>
       </div>
-      <PreviewRegion preview={preview} label="Action previews" />
+      <Show when={!props.preview}>
+        <PreviewRegion preview={preview} label="Action previews" />
+      </Show>
     </div>
   );
 }
 // #endregion
 
 // #region demo:async
-function AsyncDemo() {
-  const preview = createToastPreview();
+function AsyncDemo(props: ToastDemoProps = {}) {
+  const preview = props.preview ?? createToastPreview();
   const simulateOperation = (fail: boolean) => {
     preview.clear();
     let cancel: (() => void) | undefined;
@@ -287,15 +323,17 @@ function AsyncDemo() {
         <Button variant="secondary" onClick={simulateDownload}>Download progress</Button>
         <Button variant="ghost" onClick={preview.clear}>Clear</Button>
       </div>
-      <PreviewRegion preview={preview} label="Async previews" />
+      <Show when={!props.preview}>
+        <PreviewRegion preview={preview} label="Async previews" />
+      </Show>
     </div>
   );
 }
 // #endregion
 
 // #region demo:stack
-function StackDemo() {
-  const preview = createToastPreview();
+function StackDemo(props: ToastDemoProps = {}) {
+  const preview = props.preview ?? createToastPreview();
   const replay = () => {
     preview.clear();
     preview.show({ toastType: ToastType.SUCCESS, message: 'Link copied', duration: 12000 });
@@ -323,7 +361,86 @@ function StackDemo() {
         <Button variant="secondary" onClick={replay}>Replay stack</Button>
         <Button variant="ghost" onClick={preview.clear}>Clear</Button>
       </div>
-      <PreviewRegion preview={preview} label="Stack preview" stack />
+      <Show when={!props.preview}>
+        <PreviewRegion preview={preview} label="Stack preview" stack />
+      </Show>
+    </div>
+  );
+}
+// #endregion
+
+// #region demo:app-position
+function AppPositionDemo() {
+  const preview = createToastPreview({ appPosition: true });
+  const [example, setExample] = createSignal('statuses');
+
+  return (
+    <div class="flex w-full flex-col items-center gap-4">
+      <Tabs
+        aria-label="Toast examples at the app position"
+        size="sm"
+        options={[
+          { value: 'statuses', label: 'Status' },
+          { value: 'actions', label: 'Actions' },
+          { value: 'async', label: 'Loading' },
+          { value: 'stack', label: 'Stack' },
+        ]}
+        value={example()}
+        onChange={(value) => {
+          preview.clear();
+          setExample(value);
+        }}
+      />
+      <Switch>
+        <Match when={example() === 'statuses'}>
+          <StatusesDemo preview={preview} />
+        </Match>
+        <Match when={example() === 'actions'}>
+          <ActionsDemo preview={preview} />
+        </Match>
+        <Match when={example() === 'async'}>
+          <AsyncDemo preview={preview} />
+        </Match>
+        <Match when={example() === 'stack'}>
+          <StackDemo preview={preview} />
+        </Match>
+      </Switch>
+      <Portal>
+        <div
+          class={isMobile()
+            ? 'fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5'
+            : 'fixed bottom-5 right-5 m-0 w-95 max-w-[calc(100vw-32px)] pointer-events-none z-toast-region flex flex-col items-stretch gap-4'}
+          style={isMobile()
+            ? { bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)' }
+            : undefined}
+        >
+          <Toast.Region
+            regionId={preview.persistentRegionId}
+            aria-label="Persistent toast previews at the app position"
+            class="macro-toast-region"
+            duration={Infinity}
+            limit={1}
+            pauseOnInteraction={false}
+            swipeDirection={isMobile() ? 'left' : 'right'}
+          >
+            <Toast.List class="macro-toast-list" />
+          </Toast.Region>
+          <Toast.Region
+            regionId={preview.regionId}
+            aria-label="Toast previews at the app position"
+            class="macro-toast-region"
+            limit={isMobile() ? 1 : 3}
+            duration={4500}
+            pauseOnInteraction
+            swipeDirection={isMobile() ? 'left' : 'right'}
+          >
+            <Toast.List
+              class="macro-toast-list"
+              data-stack={isMobile() ? undefined : ''}
+            />
+          </Toast.Region>
+        </div>
+      </Portal>
     </div>
   );
 }
@@ -333,9 +450,16 @@ export default defineDoc({
   name: 'Toast',
   category: 'Feedback',
   description:
-    'Standalone status icons, title-aligned content, primary actions with secondary Dismiss buttons, and compact mobile notices. These local previews use the app renderer without triggering real operations or publishing into the app notification regions.',
+    'Standalone status icons, title-aligned content, primary actions with secondary Dismiss buttons, and compact mobile notices. Preview them inline or at the device-specific app position without triggering real operations or publishing into the app notification regions.',
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
+    {
+      id: 'app-position',
+      title: 'App position',
+      description: 'Desktop toasts appear at the bottom-right; mobile toasts sit above the dock. These previews have their own queue, separate from real app notifications. Switching examples or leaving the page clears them.',
+      render: AppPositionDemo,
+      fill: true,
+    },
     { id: 'notifications', title: 'Statuses and close controls', render: StatusesDemo, fill: true },
     { id: 'actions', title: 'Inline undo, stacked prompts, and custom content', render: ActionsDemo, fill: true },
     { id: 'async', title: 'Loading and progress', render: AsyncDemo, fill: true },
