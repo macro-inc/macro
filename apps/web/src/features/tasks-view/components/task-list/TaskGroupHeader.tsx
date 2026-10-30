@@ -48,6 +48,7 @@ export function TaskGroupHeader(props: {
   onFocus: () => void;
 }) {
   const isWide = useListLayout()?.isWide ?? (() => true);
+  const alignWithRows = () => isWide() && !isMobile();
   const agent = usePropertyUserDisplay(() =>
     props.groupBy === 'assignee' && isBotPrincipalId(props.row.groupId)
       ? props.row.groupId
@@ -117,7 +118,12 @@ export function TaskGroupHeader(props: {
             <button
               type="button"
               tabIndex={-1}
-              class="grid min-w-0 w-full grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)] items-center gap-x-(--soup-row-column-gap) whitespace-nowrap rounded-[inherit] pl-(--soup-row-padding-l) pr-3 py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11"
+              class={cn(
+                'grid min-w-0 w-full items-center whitespace-nowrap rounded-[inherit] py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11',
+                alignWithRows()
+                  ? 'grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)] gap-x-(--soup-row-column-gap) pl-(--soup-row-padding-l) pr-3'
+                  : 'grid-cols-[1rem_minmax(0,1fr)] gap-x-1 px-2'
+              )}
               aria-expanded={props.expanded}
               onMouseMove={props.onFocus}
               onClick={props.onToggle}
@@ -133,7 +139,12 @@ export function TaskGroupHeader(props: {
                 </span>
               </Layer>
               <div class="flex min-w-0 items-center gap-2">
-                <span class="flex h-4.5 w-6 shrink-0 items-center justify-center touch:w-9">
+                <span
+                  class={cn(
+                    'flex h-4.5 shrink-0 items-center justify-center',
+                    alignWithRows() ? 'w-6 touch:w-9' : 'w-4'
+                  )}
+                >
                   <Switch>
                     <Match when={!props.row.groupId}>
                       <PropertyEmptyIcon

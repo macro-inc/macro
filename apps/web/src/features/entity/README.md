@@ -17,5 +17,8 @@ and 10px on touch; status keeps the row gap before priority. The controls share 
 property editor and mutation path across wide task rows and narrow entity rows,
 including optimistic values and rollback. Narrow rows omit duplicate trailing Status and Priority properties;
 wide task rows omit the separate Status and Priority columns.
+Phone task rows omit the unread/checkbox rail and use a 4px gap between the status
+and priority controls while preserving their 36px touch targets and row selection.
+Other entity rows keep their existing indicator layout.
 Narrow rows show the people icon beside the count for multiple assignees when
 avatars are collapsed.
