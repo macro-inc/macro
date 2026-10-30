@@ -129,6 +129,7 @@ struct MockTeamRepository {
     add_user_to_team_calls: Arc<Mutex<usize>>,
     remove_user_calls: Arc<Mutex<usize>>,
     auto_join_toggle_calls: Arc<Mutex<Vec<uuid::Uuid>>>,
+    created_auto_join_domains: Arc<Mutex<Vec<Option<String>>>>,
     auto_join_toggle_result: Option<String>,
     fail_auto_join_toggle: bool,
     allow_non_admin_invites: bool,
@@ -216,6 +217,7 @@ impl MockTeamRepository {
             add_user_to_team_calls: Arc::new(Mutex::new(0)),
             remove_user_calls: Arc::new(Mutex::new(0)),
             auto_join_toggle_calls: Arc::new(Mutex::new(Vec::new())),
+            created_auto_join_domains: Arc::new(Mutex::new(Vec::new())),
             auto_join_toggle_result: Some("example.com".to_string()),
             fail_auto_join_toggle: false,
             allow_non_admin_invites: true,
@@ -369,11 +371,16 @@ impl TeamRepository for MockTeamRepository {
         team_slug: &str,
         _: Option<&stripe::SubscriptionId>,
         _: SeatPlan,
+        auto_join_domain: Option<&str>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send {
         self.create_team_calls
             .lock()
             .unwrap()
             .push((team_name.to_string(), team_slug.to_string()));
+        self.created_auto_join_domains
+            .lock()
+            .unwrap()
+            .push(auto_join_domain.map(str::to_owned));
         let team = self.created_team.clone();
         async move { Ok(team) }
     }
@@ -2083,7 +2090,7 @@ async fn team_event_create_publishes_actual_domain_and_billing_flags() {
     let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
 
     service
-        .create_team(&owner, "Enterprise Team", Some(&subscription_id))
+        .create_team(&owner, "Enterprise Team", Some(&subscription_id), true)
         .await
         .unwrap();
 
@@ -2094,7 +2101,8 @@ async fn team_event_create_publishes_actual_domain_and_billing_flags() {
     assert_eq!(metadata["team_id"], team_id.to_string());
     assert_eq!(metadata["enterprise"], true);
     assert_eq!(metadata["paid"], true);
-    assert_eq!(metadata["auto_join_domain"], "example.com");
+    // The owner's own work domain, stored with the team.
+    assert_eq!(metadata["auto_join_domain"], "corporate.test");
 }
 
 #[tokio::test]
@@ -2109,7 +2117,7 @@ async fn team_event_create_generic_domain_is_unpaid_without_auto_join() {
     let service = build_service_with_event_broker(team_repository, event_broker.clone());
 
     service
-        .create_team(&owner, "Personal Team", None)
+        .create_team(&owner, "Personal Team", None, true)
         .await
         .unwrap();
 
@@ -2132,7 +2140,7 @@ async fn team_event_create_failure_emits_nothing_and_broker_failure_is_swallowed
 
     assert!(
         service
-            .create_team(&owner, "Failed Team", None)
+            .create_team(&owner, "Failed Team", None, true)
             .await
             .is_err()
     );
@@ -2146,7 +2154,7 @@ async fn team_event_create_failure_emits_nothing_and_broker_failure_is_swallowed
     let service = build_service_with_event_broker(team_repository, RecordingEventBroker::failing());
     assert!(
         service
-            .create_team(&owner, "Successful Team", None)
+            .create_team(&owner, "Successful Team", None, true)
             .await
             .is_ok()
     );
@@ -2831,7 +2839,10 @@ async fn create_team_sets_slug_from_name_or_uses_default() {
             NoOpTeamCrmSettingsRepository,
         );
 
-        service.create_team(&owner, team_name, None).await.unwrap();
+        service
+            .create_team(&owner, team_name, None, true)
+            .await
+            .unwrap();
 
         assert_eq!(
             *create_team_calls.lock().unwrap(),
@@ -2872,7 +2883,7 @@ async fn create_team_creates_default_team_channel() {
     );
 
     service
-        .create_team(&owner, "Requested Team Name", None)
+        .create_team(&owner, "Requested Team Name", None, true)
         .await
         .unwrap();
 
@@ -2930,7 +2941,7 @@ async fn create_team_fails_when_default_team_channel_creation_fails() {
     .with_event_broker(event_broker.clone());
 
     let result = service
-        .create_team(&owner, "Failed Channel Team", None)
+        .create_team(&owner, "Failed Channel Team", None, true)
         .await;
 
     assert!(matches!(result, Err(CreateTeamError::StorageLayerError(_))));
@@ -2965,7 +2976,12 @@ async fn test_create_team_moves_github_installation_to_created_team() {
     );
 
     let created_team = service
-        .create_team(&user_id, "New Team", Some(&"sub_test".parse().unwrap()))
+        .create_team(
+            &user_id,
+            "New Team",
+            Some(&"sub_test".parse().unwrap()),
+            true,
+        )
         .await
         .unwrap();
 
@@ -3004,7 +3020,12 @@ async fn test_create_team_propagates_github_installation_move_failure() {
     );
 
     let err = service
-        .create_team(&user_id, "New Team", Some(&"sub_test".parse().unwrap()))
+        .create_team(
+            &user_id,
+            "New Team",
+            Some(&"sub_test".parse().unwrap()),
+            true,
+        )
         .await
         .err()
         .unwrap();
@@ -3046,6 +3067,7 @@ async fn team_analytics_create_team_emits_created_event_with_team_id() {
             &user_id,
             "Analytics Team",
             Some(&"sub_test".parse().unwrap()),
+            true,
         )
         .await
         .unwrap();
@@ -3096,6 +3118,7 @@ async fn team_analytics_failure_is_swallowed_by_create_team() {
             &user_id,
             "Analytics Team",
             Some(&"sub_test".parse().unwrap()),
+            true,
         )
         .await;
 
@@ -3133,6 +3156,7 @@ async fn team_analytics_create_team_does_not_emit_when_side_effect_fails() {
             &user_id,
             "Analytics Team",
             Some(&"sub_test".parse().unwrap()),
+            true,
         )
         .await
         .err()
@@ -7621,7 +7645,7 @@ async fn create_team_without_subscription_skips_convert_and_defaults_auto_join()
     let user_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
     let team_repo = MockTeamRepository::new(Vec::new(), "Free Team", mark_sent_calls);
-    let auto_join_toggle_calls = team_repo.auto_join_toggle_calls.clone();
+    let created_auto_join_domains = team_repo.created_auto_join_domains.clone();
     let created_team_id = *team_repo.created_team.id();
 
     let customer_repo = MockCustomerRepository::default();
@@ -7638,16 +7662,16 @@ async fn create_team_without_subscription_skips_convert_and_defaults_auto_join()
     );
 
     let team = service
-        .create_team(&user_id, "Free Team", None)
+        .create_team(&user_id, "Free Team", None, true)
         .await
         .unwrap();
 
     assert_eq!(*team.id(), created_team_id);
     assert!(convert_calls.lock().unwrap().is_empty());
-    // example.com is not a generic email domain, so auto-join defaults on.
+    // example.com is not a generic email domain, so the team is created with it.
     assert_eq!(
-        *auto_join_toggle_calls.lock().unwrap(),
-        vec![created_team_id]
+        *created_auto_join_domains.lock().unwrap(),
+        vec![Some("example.com".to_owned())]
     );
 }
 
@@ -7656,8 +7680,7 @@ async fn create_team_with_subscription_converts_and_defaults_auto_join() {
     let user_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
     let team_repo = MockTeamRepository::new(Vec::new(), "Paid Team", mark_sent_calls);
-    let auto_join_toggle_calls = team_repo.auto_join_toggle_calls.clone();
-    let created_team_id = *team_repo.created_team.id();
+    let created_auto_join_domains = team_repo.created_auto_join_domains.clone();
 
     let customer_repo = MockCustomerRepository::default();
     let convert_calls = customer_repo.convert_calls.clone();
@@ -7674,14 +7697,14 @@ async fn create_team_with_subscription_converts_and_defaults_auto_join() {
 
     let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
     service
-        .create_team(&user_id, "Paid Team", Some(&subscription_id))
+        .create_team(&user_id, "Paid Team", Some(&subscription_id), true)
         .await
         .unwrap();
 
     assert_eq!(convert_calls.lock().unwrap().len(), 1);
     assert_eq!(
-        *auto_join_toggle_calls.lock().unwrap(),
-        vec![created_team_id]
+        *created_auto_join_domains.lock().unwrap(),
+        vec![Some("example.com".to_owned())]
     );
 }
 
@@ -7690,6 +7713,32 @@ async fn create_team_generic_domain_does_not_default_auto_join() {
     let user_id = MacroUserIdStr::parse_from_str("macro|owner@gmail.com").unwrap();
     let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
     let team_repo = MockTeamRepository::new(Vec::new(), "Personal Team", mark_sent_calls);
+    let created_auto_join_domains = team_repo.created_auto_join_domains.clone();
+
+    let service = TeamServiceImpl::new(
+        team_repo,
+        MockCustomerRepository::default(),
+        RecordingChannelService::default(),
+        MockUserRolesAndPermissionsService::default(),
+        Arc::new(MockNotificationIngress::new(HashSet::new())),
+        NoOpCrmEnqueuer,
+        NoOpTeamCrmSettingsRepository,
+    );
+
+    service
+        .create_team(&user_id, "Personal Team", None, true)
+        .await
+        .unwrap();
+
+    assert_eq!(*created_auto_join_domains.lock().unwrap(), vec![None]);
+}
+
+#[tokio::test]
+async fn create_team_without_domain_join_leaves_auto_join_off() {
+    let user_id = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let mark_sent_calls = Arc::new(Mutex::new(Vec::new()));
+    let team_repo = MockTeamRepository::new(Vec::new(), "Closed Team", mark_sent_calls);
+    let created_auto_join_domains = team_repo.created_auto_join_domains.clone();
     let auto_join_toggle_calls = team_repo.auto_join_toggle_calls.clone();
 
     let service = TeamServiceImpl::new(
@@ -7703,10 +7752,11 @@ async fn create_team_generic_domain_does_not_default_auto_join() {
     );
 
     service
-        .create_team(&user_id, "Personal Team", None)
+        .create_team(&user_id, "Closed Team", None, false)
         .await
         .unwrap();
 
+    assert_eq!(*created_auto_join_domains.lock().unwrap(), vec![None]);
     assert!(auto_join_toggle_calls.lock().unwrap().is_empty());
 }
 

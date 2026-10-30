@@ -3817,6 +3817,55 @@
         }
       }
     },
+    "/team/domain-notice": {
+      "post": {
+        "tags": ["teams::inbound::axum_router::domain_notice"],
+        "summary": "Emails the caller's contacts on the team's auto-join domain that the team\nexists, so they can sign up and join. Contacts already on Macro, on the\nteam, invited, or emailed before are skipped, and a team emails at most 25\npeople in total. Call it after sending the team's invites. Requires the\ncaller to be an Admin or Owner of the team.",
+        "operationId": "send_team_domain_notice",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendDomainNoticeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/invite": {
       "post": {
         "tags": ["teams::inbound::axum_router::invite_to_team"],
@@ -6246,6 +6295,10 @@
         "description": "The request body to create a new team",
         "required": ["name"],
         "properties": {
+          "allow_domain_join": {
+            "type": "boolean",
+            "description": "Whether colleagues who sign up with the owner's work email domain join\nthe team automatically. Ignored for generic email providers."
+          },
           "name": {
             "type": "string",
             "description": "The name of the team"
@@ -7832,6 +7885,19 @@
         "type": "string",
         "description": "The paid plan a seat is billed at. Every member of a paying team has one;\na team may mix them, and its Stripe subscription carries one seat item per\nplan in use.",
         "enum": ["premium", "max"]
+      },
+      "SendDomainNoticeResponse": {
+        "type": "object",
+        "description": "Response for the domain notice endpoint.",
+        "required": ["sent"],
+        "properties": {
+          "sent": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many colleagues were emailed by this call.",
+            "minimum": 0
+          }
+        }
       },
       "SendInviteBody": {
         "type": "object",

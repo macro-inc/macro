@@ -103,6 +103,8 @@ export type AppEvents = {
     /** How many of those the user removed before creating the team. */
     invites_removed?: number;
     used_domain_suggestion?: boolean;
+    /** Whether people on the work domain may join, which also sends the notice. */
+    allow_domain_join?: boolean;
   };
   /**
    * The flow finished (free, premium, or plan skipped) with a rollup of

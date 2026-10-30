@@ -305,8 +305,10 @@ export function createFakeOnboarding(
       contacts: () => ({ t: 'ready', value: world.contacts }),
       retry: () => call('retryTeams'),
     }),
-    createTeam: async ({ name, invites }) => {
-      call(`createTeam:${name}:${invites.join(',')}`);
+    createTeam: async ({ name, invites, allowDomainJoin }) => {
+      call(
+        `createTeam:${name}:${invites.join(',')}${allowDomainJoin ? '' : ':closed'}`
+      );
       fail('createTeam');
       update((draft) => {
         draft.teams = [{ name }];

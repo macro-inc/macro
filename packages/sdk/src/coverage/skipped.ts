@@ -132,6 +132,7 @@ export const authExcluded = [
   'resolveGtmInviteLink',
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
+  'sendTeamDomainNotice',
   'sendReferralCode',
   'sessionCreation',
   'sessionLogin',

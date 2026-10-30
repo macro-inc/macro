@@ -31,8 +31,6 @@ struct State {
     receipts: Vec<Uuid>,
     polls: Vec<Uuid>,
     recorded_search: Vec<SearchState>,
-    announcements: Vec<JoinAnnouncement>,
-    fail_announce: bool,
     fail_bind: bool,
     trace: Vec<&'static str>,
 }
@@ -40,7 +38,7 @@ struct State {
 #[derive(Clone, Default)]
 struct Fake(Arc<Mutex<State>>);
 
-type Importer = ConversationImporter<Fake, Fake, Fake, Fake, Fake, Fake, Fake>;
+type Importer = ConversationImporter<Fake, Fake, Fake, Fake, Fake, Fake>;
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
@@ -54,7 +52,6 @@ fn now() -> DateTime<Utc> {
 
 fn importer(fake: &Fake, limits: ImportLimits) -> Importer {
     ConversationImporter::new(
-        fake.clone(),
         fake.clone(),
         fake.clone(),
         fake.clone(),
@@ -284,19 +281,6 @@ impl ImportTargets for Fake {
     async fn warn(&self, _: &Lease, warning: ImportWarning) -> PortResult<()> {
         self.0.lock().unwrap().warnings.push(warning);
         Ok(())
-    }
-}
-
-impl JoinAnnouncer for Fake {
-    async fn announce(&self, announcement: JoinAnnouncement) -> PortResult<()> {
-        let mut state = self.0.lock().unwrap();
-        state.trace.push("announce");
-        state.announcements.push(announcement);
-        if state.fail_announce {
-            Err(ImportError::Internal.into())
-        } else {
-            Ok(())
-        }
     }
 }
 
@@ -987,51 +971,7 @@ async fn failed_missing_and_stale_search_receipts_retry_and_only_publication_com
 }
 
 #[tokio::test]
-async fn new_public_channel_announces_sorted_members_once_after_bind() {
-    let (fake, context) = fixture(ConversationKind::PublicChannel, &[]);
-    importer(&fake, ImportLimits::default())
-        .import(&context)
-        .await
-        .unwrap();
-    let state = fake.0.lock().unwrap();
-    assert_eq!(state.trace, ["bind", "announce"]);
-    assert_eq!(state.announcements.len(), 1);
-    let announcement = &state.announcements[0];
-    assert_eq!(announcement.team_id, context.team_id);
-    assert_eq!(announcement.joined, user("admin@example.com"));
-    assert_eq!(announcement.joined_name.as_deref(), Some("Importer Admin"));
-    assert_eq!(
-        announcement.members,
-        vec![
-            user("admin@example.com"),
-            user("alice+raw@example.com"),
-            user("bob@example.com"),
-        ]
-    );
-    assert_eq!(state.settlements, [(ConversationStatus::Completed, None)]);
-}
-
-#[tokio::test]
-async fn resolved_dm_announces_its_two_members() {
-    let (fake, context) = fixture(ConversationKind::DirectMessage, &[]);
-    importer(&fake, ImportLimits::default())
-        .import(&context)
-        .await
-        .unwrap();
-    let state = fake.0.lock().unwrap();
-    assert_eq!(state.announcements.len(), 1);
-    let announcement = &state.announcements[0];
-    assert_eq!(announcement.joined, context.requested_by);
-    assert_eq!(announcement.joined_name.as_deref(), Some("Importer Admin"));
-    assert_eq!(
-        announcement.members,
-        vec![user("alice+raw@example.com"), user("bob@example.com")]
-    );
-    assert!(!announcement.members.contains(&context.requested_by));
-}
-
-#[tokio::test]
-async fn unresolvable_dm_announces_nothing() {
+async fn unresolvable_dm_skips_before_bind() {
     let (fake, mut context) = fixture(ConversationKind::DirectMessage, &[]);
     context.metadata.member_ids = vec!["U1".parse().unwrap(), "U3".parse().unwrap()];
     importer(&fake, ImportLimits::default())
@@ -1039,13 +979,12 @@ async fn unresolvable_dm_announces_nothing() {
         .await
         .unwrap();
     let state = fake.0.lock().unwrap();
-    assert!(state.announcements.is_empty());
     assert!(state.trace.is_empty());
     assert_eq!(state.settlements[0].0, ConversationStatus::Skipped);
 }
 
 #[tokio::test]
-async fn unauthorized_existing_target_announces_nothing() {
+async fn unauthorized_existing_target_skips_before_bind() {
     let (fake, context) = fixture(ConversationKind::PublicChannel, &[]);
     let id = Uuid::now_v7();
     {
@@ -1066,7 +1005,6 @@ async fn unauthorized_existing_target_announces_nothing() {
         .await
         .unwrap();
     let state = fake.0.lock().unwrap();
-    assert!(state.announcements.is_empty());
     assert!(state.plans.is_empty());
     assert!(state.trace.is_empty());
     assert_eq!(
@@ -1076,7 +1014,7 @@ async fn unauthorized_existing_target_announces_nothing() {
 }
 
 #[tokio::test]
-async fn failed_bind_announces_nothing() {
+async fn failed_bind_records_no_plan_or_settlement() {
     let (fake, context) = fixture(ConversationKind::PublicChannel, &[]);
     fake.0.lock().unwrap().fail_bind = true;
     let error = importer(&fake, ImportLimits::default())
@@ -1085,30 +1023,7 @@ async fn failed_bind_announces_nothing() {
         .unwrap_err();
     assert_eq!(error.into_current_context(), ImportError::Internal);
     let state = fake.0.lock().unwrap();
-    assert!(state.announcements.is_empty());
     assert!(state.plans.is_empty());
     assert!(state.trace.is_empty());
     assert!(state.settlements.is_empty());
-}
-
-#[tokio::test]
-async fn announcer_error_still_completes_after_one_announcement() {
-    let (fake, context) = fixture(ConversationKind::PublicChannel, &[]);
-    fake.0.lock().unwrap().fail_announce = true;
-    importer(&fake, ImportLimits::default())
-        .import(&context)
-        .await
-        .unwrap();
-    let state = fake.0.lock().unwrap();
-    assert_eq!(state.trace, ["bind", "announce"]);
-    assert_eq!(state.announcements.len(), 1);
-    assert_eq!(
-        state.announcements[0].members,
-        vec![
-            user("admin@example.com"),
-            user("alice+raw@example.com"),
-            user("bob@example.com"),
-        ]
-    );
-    assert_eq!(state.settlements, [(ConversationStatus::Completed, None)]);
 }

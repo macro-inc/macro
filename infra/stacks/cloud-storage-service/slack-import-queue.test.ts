@@ -5,8 +5,6 @@ const resources: pulumi.runtime.MockResourceArgs[] = [];
 const bucketArn = 'arn:aws:s3:::bulk-upload-staging-dev';
 const mainArn = 'arn:aws:sqs:us-east-1:123456789012:slack-import-queue-dev';
 const dlqArn = 'arn:aws:sqs:us-east-1:123456789012:slack-import-dlq-dev';
-const notificationIngressQueueArn =
-  'arn:aws:sqs:us-east-1:123456789012:notification-ingress';
 
 beforeAll(async () => {
   pulumi.runtime.setAllConfig({ 'aws:region': 'us-east-1' });
@@ -38,7 +36,6 @@ beforeAll(async () => {
   const { SlackImportQueue } = await import('./slack-import-queue');
   new SlackImportQueue('slack-import-dev', {
     stagingBucketArn: bucketArn,
-    notificationIngressQueueArn,
     tags: {},
   });
   await pulumi.runtime.waitForRPCs();
@@ -125,11 +122,6 @@ describe('Slack import queue and IAM', () => {
           Effect: 'Allow',
           Action: ['sqs:SendMessage'],
           Resource: [mainArn],
-        },
-        {
-          Effect: 'Allow',
-          Action: ['sqs:SendMessage'],
-          Resource: [notificationIngressQueueArn],
         },
       ],
     });
