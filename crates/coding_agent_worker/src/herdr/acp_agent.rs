@@ -53,6 +53,8 @@ use permission::{OpenTool, track_open_tool};
 pub(crate) const SUBCOMMAND: &str = "herdr-acp";
 
 const MODEL_CONFIG_ID: &str = "model";
+/// Attempts to read one native agent's state while listing live sessions.
+const LIVE_SESSION_LOOKUPS: usize = 3;
 const DEFAULT_MODEL: &str = "default";
 const CLAUDE_MODELS: &[(&str, &str)] = &[
     (DEFAULT_MODEL, "Default (Claude Code's choice)"),
@@ -479,7 +481,8 @@ impl Adapter {
 
     /// Stored sessions whose Herdr agent still runs, oldest first. Read-only:
     /// the service's following `session/load` attaches them. A closed agent
-    /// (any `agent get` error) is not live, so it is never reopened.
+    /// is not live, so it is never reopened; other lookup failures are
+    /// retried before a session is left out.
     async fn live_sessions(&self) -> LiveSessionsResponse {
         use futures::StreamExt as _;
         let Some(herdr) = &self.herdr else {
@@ -494,11 +497,17 @@ impl Adapter {
                 .filter(|record| record.kind == self.options.kind),
         )
         .map(|record| async move {
-            herdr
-                .agent_info(&agent_name(&record.id))
-                .await
-                .is_ok()
-                .then_some(record)
+            let name = agent_name(&record.id);
+            for _ in 0..LIVE_SESSION_LOOKUPS {
+                match herdr.agent_info(&name).await {
+                    Ok(_) => return Some(record),
+                    Err(error) if error.missing_agent() => return None,
+                    Err(error) => {
+                        tracing::warn!(%name, %error, "could not tell whether a native agent still runs");
+                    }
+                }
+            }
+            None
         })
         .buffer_unordered(8)
         .filter_map(std::future::ready)

@@ -389,7 +389,7 @@ where
     pub async fn live_sessions(&self) -> Result<Vec<SessionId>, LiveSessionsError> {
         let id = RequestId::Str(format!(
             "macro-live-sessions-{}",
-            macro_uuid::Uuid::new_v4()
+            macro_uuid::generate_uuid_v7()
         ));
         let (answered, answer) = oneshot::channel();
         self.answers.insert(id.clone(), answered);
@@ -549,7 +549,8 @@ where
     /// Hand an answer to the connection request waiting for it.
     fn answer(&self, message: ToServerMessage) {
         let ToServerMessage::Acp(AcpMessage(frame)) = message else {
-            unreachable!("only responses are routed as answers")
+            tracing::error!("dropping a connection answer that is not an ACP response");
+            return;
         };
         let Some((_, waiter)) = frame.response_id().and_then(|id| self.answers.remove(id)) else {
             return;

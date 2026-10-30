@@ -880,6 +880,10 @@ async fn live_sessions_lists_stored_sessions_whose_herdr_agent_still_runs() {
     );
     assert!(output.try_recv().is_err());
     assert!(lock(&adapter.sessions).is_empty());
+    assert!(
+        root.path().join("flaked").exists(),
+        "a lookup that failed without naming the agent missing was retried"
+    );
 }
 
 #[tokio::test]
