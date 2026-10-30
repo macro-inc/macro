@@ -50,9 +50,12 @@ impl MacroAuthorizationService for TestAuthorizationService {
     }
 }
 
+/// A canned result for the stub service.
+type Outcome = fn() -> Result<StoredGeneratedImage, GenerateImageError>;
+
 /// Records each request and answers with a canned result.
 struct StubService {
-    result: fn() -> Result<StoredGeneratedImage, GenerateImageError>,
+    result: Outcome,
     requests: Mutex<Vec<(CreationPrincipal, NewGeneratedImage)>>,
 }
 
@@ -85,9 +88,7 @@ fn stored() -> Result<StoredGeneratedImage, GenerateImageError> {
     })
 }
 
-fn router(
-    result: fn() -> Result<StoredGeneratedImage, GenerateImageError>,
-) -> (Router, Arc<StubService>) {
+fn router(result: Outcome) -> (Router, Arc<StubService>) {
     let service = Arc::new(StubService {
         result,
         requests: Mutex::default(),
@@ -196,11 +197,7 @@ async fn rejects_malformed_bodies_with_a_coded_error() {
 
 #[tokio::test]
 async fn maps_domain_failures_to_statuses_and_codes() {
-    let cases: [(
-        fn() -> Result<StoredGeneratedImage, GenerateImageError>,
-        StatusCode,
-        &str,
-    ); 5] = [
+    let cases: [(Outcome, StatusCode, &str); 5] = [
         (
             || {
                 Err(GenerateImageError::BadRequest(
