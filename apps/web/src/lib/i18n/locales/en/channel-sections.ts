@@ -52,6 +52,27 @@ export default {
   openConversation: 'Open conversation',
   startConversation: 'Start conversation',
   createChannel: 'Create a channel',
+  nameFirstDescription: 'Name a channel or choose someone to message.',
+  nameOrPerson: 'Channel name, person, or email',
+  addPerson: 'Add another person',
+  suggestions: 'Suggested channels and people',
+  openChannel: 'Open channel',
+  messagePerson: 'Message',
+  invitePerson: 'Invite',
+  removeRecipient: 'Remove {{name}}',
+  privateChannel: 'Private channel',
+  privateChannelDescription:
+    'Only invited people can see and join this channel.',
+  teamChannelDescription:
+    'Everyone on your team can find and join this channel.',
+  autoJoinTeam: 'Automatically add teammates',
+  addPeopleOrAgents: 'Add people or agents',
+  invitePlaceholder: 'People, agents, or email addresses',
+  channelNameTooLong: 'Channel names must be 80 characters or fewer.',
+  creationFailed:
+    'Could not create the channel or conversation. Please try again.',
+  channelSetupFailed:
+    'The channel was created, but setup is unfinished. Retry to finish or open the channel.',
   channelName: 'Channel name',
   matchingChannels: 'A channel with this name already exists',
   createAnyway: 'Create another channel',

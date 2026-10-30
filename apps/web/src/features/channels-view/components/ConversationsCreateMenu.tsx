@@ -1,7 +1,6 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
-import { openNewChannelModal } from '@channel/CreateChannelModal';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -9,7 +8,7 @@ import { Show } from 'solid-js';
 import { CHANNELS_TOUR } from '../tour';
 import { openNewConversationDialog } from './NewConversationDialog';
 
-/** The shared creation menu for conversations, named channels, and sections. */
+/** The shared creation menu for conversations, channels, and sections. */
 export function ConversationsCreateMenu(props: {
   presentation?: 'sidebar' | 'toolbar';
   onCreateSection?: () => void;
@@ -43,20 +42,20 @@ export function ConversationsCreateMenu(props: {
           if (document.querySelector('[role="dialog"]')) event.preventDefault();
         }}
       >
-        <Dropdown.Item onSelect={openNewConversationDialog}>
-          {t('channelSections.newConversation')}
-        </Dropdown.Item>
-        <Dropdown.Item onSelect={() => openNewChannelModal()}>
-          {t('channelSections.createChannel')}
-        </Dropdown.Item>
-        <Show when={props.onCreateSection}>
-          <Dropdown.Separator />
-          <Dropdown.Item
-            disabledReason={props.sectionDisabledReason}
-            onSelect={() => props.onCreateSection?.()}
-          >
-            {t('channelSections.newSection')}
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={openNewConversationDialog}>
+            {t('channelSections.newConversation')}
           </Dropdown.Item>
+        </Dropdown.Group>
+        <Show when={props.onCreateSection}>
+          <Dropdown.Group>
+            <Dropdown.Item
+              disabledReason={props.sectionDisabledReason}
+              onSelect={() => props.onCreateSection?.()}
+            >
+              {t('channelSections.newSection')}
+            </Dropdown.Item>
+          </Dropdown.Group>
         </Show>
       </Dropdown.Content>
     </Dropdown>

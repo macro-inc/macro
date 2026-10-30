@@ -74,6 +74,9 @@ vanishes when the first timeline entry appears. Agent DMs keep their own UI.
 
 ## Create a channel
 
+Chat's **New → New conversation** uses the single name-first dialog described
+[below](#new-conversation). The global Create menu retains this three-step flow:
+
 1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.
 2. Fill the name and click `Next`. Step 2 of 3 shows `Visibility`, with `Team — anyone on your team` selected by default. Team channels are always discoverable to teammates.
 3. For a team channel, click `Create`. For a private channel, select `Private — only specific people` and click `Create`. Creation navigates to the channel (as a split pane: `.../channel/<uuid>`); a system row `Channel <name> created` appears.
@@ -919,20 +922,23 @@ Turning the flag off hides section controls and stops label reads without
 deleting saved labels. The New conversation action remains independent of the
 label service and its feature flag.
 
-Use **New → New section** to create a section. One dialog combines the name,
-personal or shared visibility, and manual or smart grouping. **Manage sections**
-beside New edits existing sections and expands/collapses all sections. Personal
+Use **New → New section** to create a section. The wider dialog has a name field
+and independent **Shared with team** and **Smart section** switches. Both off
+creates a personal manual section; smart grouping reveals its name rule and
+preview. Edit and delete through each section's own More menu. Personal
 sections are private to the account, including for team
 members, and accept joined team, public, or private channels. Shared sections
 retain the team's existing label permissions and accept only channels from that
 team. Neither kind accepts DMs. A personal assignment never changes a shared
 assignment. Names are unique within each scope, case-insensitively.
 
-Each heading has a sort/filter menu with independent sorting and **Unread only**.
+Each heading has a sliders-icon sort/filter menu with independent sorting and
+**Unread only**. The unread label sits on the left and its switch on the right;
+toggling it keeps the menu open.
 Custom sections have a separate **More** menu for editing, Mark all as read, and
 a destructive Delete action. Both menus use the standard dropdown groups and
 selection indicators. Use the heading's caret to expand/collapse it; this is not
-repeated in either menu. The same custom-section actions appear in **Manage sections**.
+repeated in either menu. There is no separate all-sections management menu.
 Sorting and unread filters are personal, even for a team-shared section. Date ordering
 follows each paginated source; Favorites and custom sections also offer A–Z.
 Filtered-out channels retain their membership and do not reappear ungrouped.
@@ -952,9 +958,9 @@ Verify personal and shared creation, same-name sections in different scopes,
 private-channel assignment, and rejecting private-channel assignment to a shared
 section. Check collapse and reload, stale requests after an account change,
 empty sections, assignment failures, and one channel in both scopes. Check the
-New menu, the unified dialog, Manage sections, keyboard access, edit-dialog
-focus, expand/collapse all, destructive deletion, and per-section unread and
-sort preferences after reload. Confirm unread filtering does not change section
+New menu, both dialog switches, keyboard access, edit-dialog focus, destructive
+deletion, and per-section unread and sort preferences after reload. Confirm
+unread filtering does not change section
 membership or another section's rows. Scroll a
 long sidebar with many sections and confirm that the DM heading remains
 available at the bottom. Keyboard navigation and section shortcuts must follow
@@ -964,21 +970,32 @@ lookups refetch, including with a slow or paused connection.
 
 ### New conversation
 
-**New** opens a dropdown for conversations, named channels, and sections.
-Choose **New conversation** for the people-and-conversation picker. Choosing an
-existing channel opens it. Choosing people starts or reuses a direct message or private group
-through the existing get-or-create endpoints. Existing one-to-one DMs are shown
-as Open conversation instead of Start conversation. External email recipients
-retain the existing invitation behavior.
+**New** offers **New conversation** and **New section**. The conversation dialog
+creates named channels and direct conversations without opening another dialog.
+Its main field accepts a channel name, person, or email, with at most three
+matching existing channels and people directly below it. Selecting a channel
+opens it. Selecting people changes the primary action to Start conversation or
+Open conversation and supports a private group. Selecting an agent keeps that
+conversation one-to-one. Complete external emails offer Invite explicitly.
+Typing alone never silently chooses a suggestion. Arrow Down from the input
+focuses the first suggestion; arrow keys move through the matches, and Enter
+opens or selects the focused match.
 
-Create a channel opens the named-channel flow, carrying the typed name forward.
-An exact, case-insensitive match among visible channels offers opening the
-existing channel. Creating another requires an explicit confirmation; duplicate
-names are not globally prohibited. Cancel and failed requests preserve the
-appropriate draft, and late responses must not navigate a different account.
-Verify existing DMs, new DMs, private groups, external recipients, matching
-channel names, deliberate duplicates, cancellation, and failed requests on
-desktop and touch layouts.
+With a channel name and no selected recipients, the action is **Create a channel**.
+Channel controls appear in the same dialog: **Private channel**, team auto-join
+when not private, and optional **Add people or agents**. Team discoverability and
+auto-join remain the defaults. An exact, case-insensitive existing name offers
+reuse and requires explicit confirmation before creating another channel.
+
+Failed setup and a team change preserve the created channel for its originating
+account; returning to its team retries only unfinished
+invitations or auto-join, rather than creating another channel. The draft stays
+locked once creation succeeds; Open channel can leave optional setup unfinished.
+Late responses must not navigate a different account or continue setup in a
+different team. Verify existing and new DMs, private groups, agents, external
+recipients, three-result suggestion limits, deliberate duplicates, private/team
+creation, optional invites, partial failure and retry, and cancellation on desktop
+and touch layouts.
 
 When calls are enabled, `Live` appears below the rail's toolbar while an active
 quick call is available. It stays visible while browsing sections and during conversation

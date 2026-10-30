@@ -501,16 +501,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the bottom; personal and team-shared section assignments remain independent.
   Mobile retains the recent feed. Use the unified New conversation picker and
   require explicit confirmation before creating a duplicate visible channel name.
-  Keep picker suggestions inside the dialog and retain typed names through blur and handoff.
+  Use one name-first dialog for channels and conversations, with at most three inline suggestions; reveal channel privacy and invite controls only for channel creation, and retain typed names on blur.
+  Resume unfinished channel setup after failures without recreating the channel; keep drafts locked after creation and guard each later write against account/team changes.
   Align channel rows across built-in and custom sections without nested indentation.
   Reuse shared collapsible section headers and their hidden-caret behavior, with a neutral Shared badge after the caret and no scope icons; apply focus backgrounds across the full header row.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep loaded channel rows visible while section changes refetch by-ID lookups.
-  Show lock icons for private conversations and visible section options; share
-  section actions with Manage sections, and keep empty sections usable as drop targets.
-  Create all section types through New → New section and one dialog; keep collapse on the header and style deletion as destructive.
+  Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
+  Create all section types through New → New section in a wider dialog with independent Shared and Smart switches; keep collapse on the header and style deletion as destructive.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
-  Keep each section's sort/filter dropdown separate from More actions, using shared Dropdown groups, selection indicators, and item styling.
+  Keep each section's sliders-icon sort/filter dropdown separate from More actions; use shared menu styling and an Unread only row with its label left and switch right that stays open when toggled.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
   never retry failed GraphQL writes through REST. Preserve non-owner history removal
