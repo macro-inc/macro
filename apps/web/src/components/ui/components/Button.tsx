@@ -23,8 +23,8 @@ import { Tooltip } from './Tooltip';
 const buttonFrames = {
   primary:
     'bg-button-primary-bg text-button-primary-ink border-transparent shadow-button',
-  neutral:
-    'bg-button-neutral-bg text-button-neutral-ink border-transparent shadow-button',
+  accent:
+    'bg-button-accent-bg text-button-accent-ink border-transparent shadow-button',
   secondary: cn(
     'bg-button-secondary-bg text-ink-muted border-border-secondary dark-mode:border-transparent shadow-button',
     'light-mode:not-data-disabled:active:border-border-secondary light-mode:aria-pressed:border-border-secondary light-mode:popup-open:border-border-secondary'
@@ -34,6 +34,8 @@ const buttonFrames = {
   ghost:
     'bg-button-tertiary-bg text-ink-muted border-transparent bg-none shadow-none',
   danger: 'bg-button-danger-bg text-failure border-transparent shadow-button',
+  'danger-ghost':
+    'bg-button-tertiary-bg text-failure border-transparent bg-none shadow-none',
   success: 'bg-button-success-bg text-success border-transparent shadow-button',
   link: 'border-transparent bg-transparent text-link shadow-none',
 };
@@ -54,9 +56,9 @@ const buttonStyles = createVariants(
         'not-data-disabled:hover:bg-button-primary-hover not-data-disabled:active:bg-button-primary-pressed aria-pressed:bg-button-primary-pressed aria-pressed:not-data-disabled:hover:bg-button-primary-pressed popup-open:bg-button-primary-pressed popup-open:not-data-disabled:hover:bg-button-primary-pressed',
         buttonPressedStyles
       ),
-      neutral: cn(
-        buttonFrames.neutral,
-        'not-data-disabled:hover:bg-button-neutral-hover not-data-disabled:active:bg-button-neutral-pressed aria-pressed:bg-button-neutral-pressed aria-pressed:not-data-disabled:hover:bg-button-neutral-pressed popup-open:bg-button-neutral-pressed popup-open:not-data-disabled:hover:bg-button-neutral-pressed',
+      accent: cn(
+        buttonFrames.accent,
+        'not-data-disabled:hover:bg-button-accent-hover not-data-disabled:active:bg-button-accent-pressed aria-pressed:bg-button-accent-pressed aria-pressed:not-data-disabled:hover:bg-button-accent-pressed popup-open:bg-button-accent-pressed popup-open:not-data-disabled:hover:bg-button-accent-pressed',
         buttonPressedStyles
       ),
       secondary: cn(
@@ -78,6 +80,11 @@ const buttonStyles = createVariants(
       ),
       danger: cn(
         buttonFrames.danger,
+        'not-data-disabled:hover:bg-button-danger-hover not-data-disabled:active:bg-button-danger-pressed aria-pressed:bg-button-danger-pressed aria-pressed:not-data-disabled:hover:bg-button-danger-pressed popup-open:bg-button-danger-pressed popup-open:not-data-disabled:hover:bg-button-danger-pressed',
+        buttonPressedStyles
+      ),
+      'danger-ghost': cn(
+        buttonFrames['danger-ghost'],
         'not-data-disabled:hover:bg-button-danger-hover not-data-disabled:active:bg-button-danger-pressed aria-pressed:bg-button-danger-pressed aria-pressed:not-data-disabled:hover:bg-button-danger-pressed popup-open:bg-button-danger-pressed popup-open:not-data-disabled:hover:bg-button-danger-pressed',
         buttonPressedStyles
       ),
@@ -120,7 +127,10 @@ export type ButtonClassOptions = {
 
 function buttonFinishClasses(variant: ButtonVariant, finish?: ButtonFinish) {
   if (finish === 'flat' || variant === 'outline') return 'shadow-none';
-  if (finish !== 'raised' && (variant === 'ghost' || variant === 'link')) {
+  if (
+    finish !== 'raised' &&
+    (variant === 'ghost' || variant === 'danger-ghost' || variant === 'link')
+  ) {
     return undefined;
   }
 
@@ -181,6 +191,7 @@ export type ButtonProps<T extends ValidComponent = 'button'> = PolymorphicProps<
 
 /**
  * Actions use Button; navigation uses anchors. Framed variants adapt to the device.
+ * @do Use primary for solid neutral emphasis and accent for explicit theme-color emphasis.
  * @do Set aria-label for icon-only actions and use an explicit icon-* size.
  * @do Use tooltip strings for content only, or options for hotkeys and placement.
  * @dont Use Button for links or size descendant icons through the control.

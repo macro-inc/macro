@@ -720,7 +720,6 @@ export default {
     groupAdmin: '管理',
     tabTeamGeneral: '一般',
     tabTeamMembers: 'メンバー',
-    tabTeamConnections: '接続',
     tabEmail: 'メール',
     tabCalendar: 'カレンダー',
     tabAgents: 'エージェント',

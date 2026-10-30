@@ -729,6 +729,24 @@ describe('Message thought shimmer', () => {
   });
 });
 
+describe('Message prompt context', () => {
+  it.each([true, false])(
+    'hides internal context when pending is %s',
+    (pending) => {
+      const raw =
+        '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\nOnly user text.';
+      const prompt: FoldedMessage = {
+        ...message([text(raw)]),
+        author: { kind: 'user', userId: null },
+        pending,
+      };
+      const view = render(() => <Message message={prompt} inFlight={false} />);
+      expect(view.getByTestId('bubble').textContent).toBe('Only user text.');
+      expect(prompt.parts).toEqual([text(raw)]);
+    }
+  );
+});
+
 describe('Message prompt attribution', () => {
   const prompt = (userId: string | null): FoldedMessage => ({
     ...message([text('Do the thing.')]),

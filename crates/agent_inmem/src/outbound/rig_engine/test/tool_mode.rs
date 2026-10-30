@@ -47,6 +47,7 @@ async fn remote(
 
 fn request(mcp_tools: Option<RemoteMcpToolSet>) -> TurnRequest {
     TurnRequest {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         purpose: TurnPurpose::Conversation,
         session_id: AgentSessionId::new(),
         awaiting: Arc::new(AwaitingUser::default()),

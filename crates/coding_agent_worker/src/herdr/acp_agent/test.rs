@@ -369,6 +369,50 @@ async fn an_unconfirmed_submission_never_sends_an_extra_enter_or_reports_success
     adapter.shutdown.cancel();
 }
 
+/// Claude Code in vim editor mode spends the first Esc leaving insert mode;
+/// the turn keeps running until the second.
+#[tokio::test]
+async fn a_cancelled_turn_presses_esc_until_the_native_agent_stops() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    let presses = root.path().join("presses");
+    let script = root.path().join("herdr");
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\npresses={}\ncase \"$2\" in\n  send-keys) printf '%s\\n' \"$4\" >> \"$presses\";;\n  get) if [ \"$(wc -l < \"$presses\" 2>/dev/null || echo 0)\" -ge 2 ]; then status=done; else status=working; fi\n       printf '{{\"result\":{{\"agent\":{{\"agent_status\":\"%s\"}}}}}}\\n' \"$status\";;\n  *) exit 2;;\nesac\n",
+            shell_words::quote(&presses.to_string_lossy())
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    save_transcript(root.path(), &id);
+    let (adapter, _) = test_adapter(root.path());
+    adapter
+        .load_session(&json!({"sessionId":id,"cwd":root.path()}))
+        .await
+        .unwrap();
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    let mut guard = session.live.lock().await;
+    let cancel = CancellationToken::new();
+    cancel.cancel();
+
+    let stop = adapter
+        .follow(
+            &HerdrCli::new(script, None),
+            &session,
+            guard.as_mut().unwrap(),
+            &cancel,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(stop, "cancelled");
+    assert_eq!(std::fs::read_to_string(presses).unwrap(), "esc\nesc\n");
+    adapter.shutdown.cancel();
+}
+
 #[test]
 fn configured_models_are_advertised_even_when_not_in_the_builtin_catalog() {
     let options = config_options(TuiAgent::Codex, "custom-model");
@@ -548,6 +592,90 @@ esac
     assert_eq!(
         std::fs::read_to_string(root.path().join("starts")).unwrap(),
         "xxx"
+    );
+    adapter.shutdown.cancel();
+}
+
+#[tokio::test]
+async fn a_late_codex_item_never_answers_a_waiting_macro_prompt() {
+    use std::io::Write as _;
+    let root = tempfile::tempdir().unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    let transcript = root.path().join("rollout.jsonl");
+    std::fs::write(&transcript, "").unwrap();
+    Store(root.path().to_owned())
+        .save(&Record {
+            version: 1,
+            id: id.clone(),
+            kind: TuiAgent::Codex,
+            cwd: root.path().to_owned(),
+            model: "gpt-5".into(),
+            native_id: None,
+            transcript: Some(transcript.clone()),
+            started: 1,
+        })
+        .unwrap();
+    let (mut adapter, mut output) = test_adapter(root.path());
+    Arc::get_mut(&mut adapter).unwrap().options.kind = TuiAgent::Codex;
+    adapter
+        .load_session(&json!({"sessionId":id, "cwd":root.path()}))
+        .await
+        .unwrap();
+    while output.try_recv().is_ok() {}
+    let session = adapter.session(&json!({"sessionId":id})).unwrap();
+    session.prompt_pending.store(true, Ordering::SeqCst);
+    // Held throughout, so the observer stays out of the way.
+    let mut guard = session.live.lock().await;
+    let live = guard.as_mut().unwrap();
+    let append = |payload: Value| {
+        let mut file = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&transcript)
+            .unwrap();
+        writeln!(file, "{}", json!({"type":"event_msg", "payload":payload})).unwrap();
+    };
+    let late = |id: &str| {
+        json!({"type":"item_completed", "item":{"type":"CommandExecution", "id":id,
+            "command":["bash","-lc","bun run type-check"], "status":"completed", "exit_code":0}})
+    };
+
+    // Submitted, but Codex has not started the prompt's turn yet.
+    append(late("exec-1"));
+    assert_eq!(
+        adapter.forward(&session, live, &mut None).unwrap(),
+        (true, None)
+    );
+    assert_eq!(
+        output.try_recv().unwrap()["params"]["update"]["toolCallId"],
+        "exec-1"
+    );
+    assert!(output.try_recv().is_err());
+
+    append(json!({"type":"task_started"}));
+    append(
+        json!({"type":"item_completed", "item":{"type":"AgentMessage", "id":"m1", "content":[{"type":"Text", "text":"Done."}]}}),
+    );
+    append(json!({"type":"task_complete"}));
+    assert_eq!(
+        adapter.forward(&session, live, &mut None).unwrap(),
+        (true, Some("end_turn"))
+    );
+    while output.try_recv().is_ok() {}
+
+    // With no prompt waiting, the late item is a finished turn of its own.
+    session.prompt_pending.store(false, Ordering::SeqCst);
+    append(late("exec-2"));
+    assert_eq!(
+        adapter.forward(&session, live, &mut None).unwrap(),
+        (true, None)
+    );
+    assert_eq!(
+        output.try_recv().unwrap()["params"]["update"]["toolCallId"],
+        "exec-2"
+    );
+    assert_eq!(
+        output.try_recv().unwrap()["method"],
+        "_session/turn_complete"
     );
     adapter.shutdown.cancel();
 }

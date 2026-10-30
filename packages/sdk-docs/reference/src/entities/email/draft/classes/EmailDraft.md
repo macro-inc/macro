@@ -103,6 +103,24 @@ Delete the draft.
 
 ***
 
+### downloadEml()
+
+> **downloadEml**(): `Promise`\<`Blob`\>
+
+The message's original source, exactly as Gmail or Outlook holds it, as
+`message/rfc822` bytes for an `.eml` file. Drafts and messages still on
+their way have no source yet and fail with a 404.
+
+#### Returns
+
+`Promise`\<`Blob`\>
+
+#### Inherited from
+
+[`EmailMessage`](../../message/classes/EmailMessage.md).[`downloadEml`](../../message/classes/EmailMessage.md#downloademl)
+
+***
+
 ### forwardAttachment()
 
 > **forwardAttachment**(`attachment`): `Promise`\<[`DraftAttachment`](DraftAttachment.md)\>

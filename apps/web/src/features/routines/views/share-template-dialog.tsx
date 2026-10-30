@@ -185,7 +185,7 @@ export function ShareTemplateDialog(props: {
             <Show when={props.template} fallback={<span />}>
               <div class="flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => props.onCopyLink()}>
-                  <LinkIcon />
+                  <LinkIcon class="size-4" />
                   Copy template link
                 </Button>
                 <Button

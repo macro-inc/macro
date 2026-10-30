@@ -56,7 +56,7 @@ function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
             props.tabManager.closeTab(props.tab.id);
           }}
         >
-          <XIcon />
+          <XIcon class="size-3.5" />
         </Button>
       </Show>
     </div>

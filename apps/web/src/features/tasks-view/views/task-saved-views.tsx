@@ -498,11 +498,9 @@ export function TaskSaveViewButton() {
   };
   return (
     <Show when={visible()}>
-      <HeaderActionGroup label="Save task view">
-        <ButtonGroup.Button variant="primary" onClick={() => create()}>
-          Save view
-        </ButtonGroup.Button>
-      </HeaderActionGroup>
+      <Button variant="primary" onClick={() => create()}>
+        Save view
+      </Button>
     </Show>
   );
 }
@@ -675,43 +673,43 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
   return (
     <>
       <Show when={savedViews?.view().kind === 'new' || selected()?.dirty}>
-        <HeaderActionGroup label="Saved view actions">
-          <Show
-            when={savedViews?.view().kind === 'new'}
-            fallback={
-              <>
-                <Show when={selected()?.record.ownerId === viewerId()}>
-                  <ButtonGroup.Button
-                    variant="primary"
-                    class="touch:order-last"
-                    disabled={update.isPending || !!selected()?.issues.length}
-                    title={
-                      selected()?.issues.length
-                        ? 'Update the app or remove unsupported settings before saving.'
-                        : undefined
-                    }
-                    onClick={() => fireAndForget(save(), 'saved-views')}
-                  >
-                    Save changes
-                  </ButtonGroup.Button>
-                </Show>
+        <Show
+          when={savedViews?.view().kind === 'new'}
+          fallback={
+            <HeaderActionGroup label="Saved view actions">
+              <Show when={selected()?.record.ownerId === viewerId()}>
                 <ButtonGroup.Button
-                  variant="ghost"
-                  onClick={() => savedViews?.reset()}
+                  variant="primary"
+                  class="touch:order-last"
+                  disabled={update.isPending || !!selected()?.issues.length}
+                  title={
+                    selected()?.issues.length
+                      ? 'Update the app or remove unsupported settings before saving.'
+                      : undefined
+                  }
+                  onClick={() => fireAndForget(save(), 'saved-views')}
                 >
-                  Reset
+                  Save changes
                 </ButtonGroup.Button>
-              </>
-            }
-          >
-            <ButtonGroup.Button variant="primary" onClick={() => showCreate()}>
+              </Show>
+              <ButtonGroup.Button
+                variant="ghost"
+                onClick={() => savedViews?.reset()}
+              >
+                Reset
+              </ButtonGroup.Button>
+            </HeaderActionGroup>
+          }
+        >
+          <div class="flex items-center gap-2">
+            <Button variant="primary" onClick={() => showCreate()}>
               Save view
-            </ButtonGroup.Button>
-            <ButtonGroup.Button variant="ghost" onClick={leaveSavedView}>
+            </Button>
+            <Button variant="ghost" onClick={leaveSavedView}>
               Cancel
-            </ButtonGroup.Button>
-          </Show>
-        </HeaderActionGroup>
+            </Button>
+          </div>
+        </Show>
       </Show>
       <Show when={failure()}>
         {(error) => (

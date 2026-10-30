@@ -9,9 +9,12 @@ vi.mock('@property', () => ({
   Property: {
     Root: (props: {
       canEdit: boolean;
-      children: import('solid-js').JSX.Element;
+      property: Property;
+      children: (property: () => Property) => import('solid-js').JSX.Element;
     }) => (
-      <div data-status-editable={String(props.canEdit)}>{props.children}</div>
+      <div data-status-editable={String(props.canEdit)}>
+        {props.children(() => props.property)}
+      </div>
     ),
     Tooltip: (props: { children: import('solid-js').JSX.Element }) =>
       props.children,

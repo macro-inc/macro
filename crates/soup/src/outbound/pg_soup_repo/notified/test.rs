@@ -606,6 +606,123 @@ fn agent_sessions_are_opt_in_by_filter() {
     );
 }
 
+/// Projects are opt-in like agent sessions: a live notification alone never
+/// surfaces one, while a not-done notification-state filter both opts them in
+/// and drops the project whose only notification is done.
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn initiatives_surface_when_notified_and_opted_in(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::ast::initiative::InitiativeLiteral;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    // user-1 created three projects and still holds a grant on two of them
+    // (one with a done notification); the third's grant is gone, and a
+    // notification about it must never surface.
+    let shared = Uuid::from_u128(0xad00_0001);
+    let done = Uuid::from_u128(0xad00_0002);
+    let hidden = Uuid::from_u128(0xad00_0006);
+    for initiative in [shared, done, hidden] {
+        let share = format!("notified-initiative-share-{initiative}");
+        sqlx::query!(r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#, share)
+            .execute(&pool)
+            .await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO initiative (id, name, owner_user_id, share_permission_id)
+            VALUES ($1, 'Launch', $2, $3)
+            "#,
+            initiative,
+            USER_1,
+            share,
+        )
+        .execute(&pool)
+        .await?;
+    }
+    for initiative in [shared, done] {
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'initiative', $2, 'user', 'owner')
+            "#,
+            initiative,
+            USER_1,
+        )
+        .execute(&pool)
+        .await?;
+    }
+    for (index, initiative) in [(0x61u128, shared), (0x62, done), (0x63, hidden)] {
+        sqlx::query!(
+            r#"
+            INSERT INTO notification ("id", "notification_event_type", "event_item_id", "event_item_type", "service_sender", "created_at", "metadata")
+            VALUES ($1, 'entity_access_requested', $2, 'initiative', 'test', '2024-06-01 10:22:00', '{}')
+            "#,
+            Uuid::from_u128(index),
+            initiative.to_string(),
+        )
+        .execute(&pool)
+        .await?;
+    }
+    for index in [0x61u128, 0x63] {
+        sqlx::query!(
+            r#"
+            INSERT INTO user_notification ("user_id", "notification_id", "created_at", "sent", "state")
+            VALUES ($1, $2, '2024-06-01 10:22:00', TRUE, 'unseen')
+            "#,
+            USER_1,
+            Uuid::from_u128(index),
+        )
+        .execute(&pool)
+        .await?;
+    }
+    sqlx::query!(
+        r#"
+        INSERT INTO user_notification ("user_id", "notification_id", "created_at", "sent", "state")
+        VALUES ($1, $2, '2024-06-01 10:22:00', TRUE, 'done')
+        "#,
+        USER_1,
+        Uuid::from_u128(0x62),
+    )
+    .execute(&pool)
+    .await?;
+
+    let page = notified_soup_page(&pool, req(None, &link_ids, &sources, EVERYTHING)).await?;
+    assert!(
+        !keys(&page)
+            .iter()
+            .any(|(kind, _)| *kind == EntityType::Initiative)
+    );
+
+    let not_done = EntityFilterAst {
+        initiative_filter: Some(Arc::new(filter_ast::Expr::or(
+            filter_ast::Expr::val(InitiativeLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(InitiativeLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ))),
+        ..EntityFilterAst::default()
+    };
+    let page =
+        notified_soup_page(&pool, req(Some(&not_done), &link_ids, &sources, EVERYTHING)).await?;
+    let keys = keys(&page);
+    let initiatives: Vec<&str> = keys
+        .iter()
+        .filter(|(kind, _)| *kind == EntityType::Initiative)
+        .map(|(_, id)| id.as_str())
+        .collect();
+    assert_eq!(initiatives, vec![shared.to_string().as_str()]);
+    // Keyed on its notification like every other type: newest in the feed.
+    assert_eq!(keys[0], (EntityType::Initiative, shared.to_string()));
+    assert_eq!(minutes(&page)[0], 22);
+
+    Ok(())
+}
+
 /// An agent session user-1 was notified about, plus one they cannot open.
 async fn seed_agent_sessions(pool: &Pool<Postgres>) -> anyhow::Result<(Uuid, Uuid)> {
     const USER_2: &str = "macro|user-2@test.com";

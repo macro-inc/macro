@@ -102,6 +102,16 @@ pub(crate) type AttachmentReadSvc = email::domain::attachment_access::Attachment
     EmailEntityAccessService,
 >;
 
+pub(crate) type MessageSourceSvc = email::domain::message_source::MessageSourceService<
+    EmailPgRepo,
+    crate::outbound::message_source::ProviderMessageSource<
+        email_api_client::OutlookApiClientRepository,
+        MicrosoftTokens,
+        email_api_client::domain::ports::AlwaysAllowRateLimiter,
+    >,
+    EmailEntityAccessService,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub mailbox_notifications: Arc<
@@ -129,6 +139,7 @@ pub(crate) struct ApiContext {
     >,
     pub inbox_health: Arc<crate::composition::InboxHealth>,
     pub attachment_reads: Arc<AttachmentReadSvc>,
+    pub message_sources: Arc<MessageSourceSvc>,
     pub draft_attachments: Arc<DraftAttachmentSvc>,
     pub event_forward_sender: Arc<EventForwardSender>,
     pub draft_transfers: Arc<

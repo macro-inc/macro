@@ -142,6 +142,7 @@ fn initiative_filters_materialize_for_browser_and_server() {
         json!({"nameContains": "Launch"}),
         json!({"dueBefore": "2026-10-01T00:00:00Z"}),
         json!({"dueAfter": "2026-09-01T00:00:00Z"}),
+        json!({"notificationState": "UNSEEN"}),
     ] {
         let value = json!({"initiativeFilter": {"literal": literal}});
         let ast = materialize_graphql_filter(value.clone()).unwrap();

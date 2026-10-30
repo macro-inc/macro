@@ -1,6 +1,7 @@
 import { authorizeGithub } from '@core/auth/authorize-github';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { fireAndForget } from '@core/util/fireAndForget';
 import GithubIcon from '@icon/mcp-github.svg';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import {
@@ -17,15 +18,17 @@ import {
 } from './integration-ui';
 import { IntegrationRow, SettingsCard } from './primitives';
 
-/** GitHub integration as a Connected-accounts card. */
-export function GitHubCard(props: { class?: string } = {}) {
+/** The viewer's GitHub account link and the actions that change it. */
+export function useGithubConnection() {
   const githubLink = useGithubLinkStatusQuery();
   const initGithubLink = useInitGithubLinkMutation();
   const deleteGithubLink = useDeleteGithubLinkMutation();
   const reauthenticateGithub = useReauthenticateGithubMutation();
 
-  const status = () => githubLink.data?.status;
-  const username = () => githubLink.data?.username;
+  const status = () =>
+    githubLink.isSuccess ? githubLink.data.status : undefined;
+  const username = () =>
+    githubLink.isSuccess ? githubLink.data.username : undefined;
 
   // Drives the account connection dot.
   const connectionState = (): ConnectionState | undefined =>
@@ -34,10 +37,8 @@ export function GitHubCard(props: { class?: string } = {}) {
       : status() === 'reauthentication_required'
         ? 'attention'
         : undefined;
-  const connectionLabel = () =>
-    connectionState() === 'attention' ? 'Reconnect required' : 'Connected';
 
-  const handleGithubEnable = async () => {
+  const connect = async () => {
     try {
       await authorizeGithub(
         (callbackUrl) => initGithubLink.mutateAsync(callbackUrl),
@@ -48,7 +49,7 @@ export function GitHubCard(props: { class?: string } = {}) {
     }
   };
 
-  const handleGithubDisable = async () => {
+  const disconnect = async () => {
     try {
       await deleteGithubLink.mutateAsync();
     } catch {
@@ -56,7 +57,7 @@ export function GitHubCard(props: { class?: string } = {}) {
     }
   };
 
-  const handleGithubReconnect = async () => {
+  const reconnect = async () => {
     try {
       await authorizeGithub(
         (callbackUrl) => reauthenticateGithub.mutateAsync(callbackUrl),
@@ -67,32 +68,60 @@ export function GitHubCard(props: { class?: string } = {}) {
     }
   };
 
+  return {
+    loading: () => githubLink.isLoading,
+    status,
+    username,
+    connectionState,
+    connect,
+    disconnect,
+    reconnect,
+    connecting: () => initGithubLink.isPending,
+    disconnecting: () => deleteGithubLink.isPending,
+    reconnecting: () => reauthenticateGithub.isPending,
+  };
+}
+
+/** Where the viewer installs or configures the GitHub App for their repositories. */
+export const GITHUB_APP_INSTALL_URL = `${SERVER_HOSTS['document-storage-service']}/github/install-sync`;
+
+/** GitHub account link, one row on the Integrations page. */
+export function GitHubCard(props: { class?: string } = {}) {
+  const github = useGithubConnection();
+  const connectionLabel = () =>
+    github.connectionState() === 'attention'
+      ? 'Reconnect required'
+      : 'Connected';
+
   return (
     <SettingsCard class={props.class}>
       <IntegrationRow
         icon={<GithubIcon />}
         title="GitHub"
+        description="Review your pull requests in Macro, see live pull request status in docs and chats, and let agents work in your repositories."
         status={
-          <Show when={connectionState()}>
+          <Show when={github.connectionState()}>
             {(state) => <StatusDot state={state()} label={connectionLabel()} />}
           </Show>
         }
       >
         <Show
-          when={!githubLink.isLoading}
+          when={!github.loading()}
           fallback={<span class="text-sm text-ink-muted">Loading…</span>}
         >
           <Switch
             fallback={
               <ConnectAction
                 label="Connect"
-                onClick={handleGithubEnable}
-                disabled={initGithubLink.isPending}
+                onClick={() =>
+                  fireAndForget(github.connect(), 'github-settings')
+                }
+                disabled={github.connecting()}
               />
             }
           >
-            <Match when={status() === 'linked'}>
-              <Show when={username()}>
+            <Match when={github.status() === 'linked'}>
+              <Show when={github.username()}>
                 {(name) => (
                   <span class="ph-no-capture text-sm text-ink-muted">
                     @{name()}
@@ -102,22 +131,26 @@ export function GitHubCard(props: { class?: string } = {}) {
               <ConnectAction
                 label="Disconnect"
                 variant="danger"
-                onClick={handleGithubDisable}
-                disabled={deleteGithubLink.isPending}
+                onClick={() =>
+                  fireAndForget(github.disconnect(), 'github-settings')
+                }
+                disabled={github.disconnecting()}
               />
             </Match>
-            <Match when={status() === 'reauthentication_required'}>
+            <Match when={github.status() === 'reauthentication_required'}>
               <ConnectAction
                 label="Reconnect"
-                onClick={handleGithubReconnect}
-                disabled={reauthenticateGithub.isPending}
+                onClick={() =>
+                  fireAndForget(github.reconnect(), 'github-settings')
+                }
+                disabled={github.reconnecting()}
               />
             </Match>
           </Switch>
         </Show>
-        <Show when={status() === 'linked'}>
+        <Show when={github.status() === 'linked'}>
           <a
-            href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+            href={GITHUB_APP_INSTALL_URL}
             target="_blank"
             rel="noopener noreferrer"
             class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"

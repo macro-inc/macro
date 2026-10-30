@@ -253,3 +253,16 @@ it('retains the draft if editing access is revoked while applying speed', async 
   expect(mocks.issue).not.toHaveBeenCalled();
   expect(mocks.consumeNotes).not.toHaveBeenCalled();
 });
+
+it('allows another prompt after a failed turn', () => {
+  mocks.session = () => ({ canEdit: true });
+  mocks.turn = () => 'failed';
+  render(() => <AgentComposer />);
+
+  expect(mocks.input?.busy).toBe(false);
+  mocks.input?.onSend('Try again', []);
+  expect(mocks.issue).toHaveBeenCalledWith({
+    type: 'prompt',
+    prompt: 'Try again',
+  });
+});

@@ -196,6 +196,8 @@ export const cognitionExcluded = [
   // Sidebar setup and import cards remember dismissals per user (web app only).
   'dismissedPromptsHandler',
   'dismissPromptHandler',
+  // Proposes SQL for the web app's in-browser engine to execute.
+  'generateDatabaseQuery',
   'setPricingHandler',
   'startMcpAuth',
   'updateMcpServer',
@@ -335,7 +337,6 @@ export const storageExcluded = [
   'getAttachmentReferences',
   'getBatchCallRecordPreview',
   'getBatchChannelPreview',
-  'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
   'getBotOwnerProfiles',

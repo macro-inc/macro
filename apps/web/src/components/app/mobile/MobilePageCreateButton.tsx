@@ -14,13 +14,12 @@ import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import DocumentIcon from '@icon/system/regular/file-text.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
-import CreateIcon from '@icon/system/regular/plus.svg';
 import { Show } from 'solid-js';
+import { MobileCreateButton } from './MobileCreateButton';
 import {
   MobileCreateMenu,
   type MobileCreateMenuItem,
 } from './MobileCreateMenu';
-import { MobileDockIsland } from './MobileDockIsland';
 import type { MobileNavViewId } from './mobile-nav-views';
 import { mobilePageCreateBlock } from './mobile-page-create-action';
 import { useForegroundMobileView } from './use-mobile-nav';
@@ -117,17 +116,11 @@ export function MobilePageCreateButton() {
           <Show
             when={foregroundView() === 'calendar' && calendarEnabled()}
             fallback={
-              <MobileDockIsland class="shrink-0">
-                <button
-                  type="button"
-                  aria-label={actionAriaLabel()}
-                  onClick={() => action().onSelect()}
-                  class="relative flex h-(--mobile-chrome-button-size) shrink-0 items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
-                >
-                  <CreateIcon class="size-5.5 shrink-0" />
-                  <span>{action().label}</span>
-                </button>
-              </MobileDockIsland>
+              <MobileCreateButton
+                ariaLabel={actionAriaLabel()}
+                label={action().label}
+                onClick={() => action().onSelect()}
+              />
             }
           >
             <MobileCreateMenu items={calendarActions()} />

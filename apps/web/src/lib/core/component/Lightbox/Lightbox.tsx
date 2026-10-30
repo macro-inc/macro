@@ -22,7 +22,13 @@ import { LightboxChrome } from './LightboxChrome';
 import { LightboxToolbar } from './LightboxToolbar';
 
 const SpinnerIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> = (p) => (
-  <Spinner {...p} class="animate-spin" />
+  <Spinner
+    {...p}
+    class={cn(
+      'size-4 touch:size-6 shrink-0 pointer-events-none animate-spin',
+      p.class
+    )}
+  />
 );
 
 type LightboxProps = {

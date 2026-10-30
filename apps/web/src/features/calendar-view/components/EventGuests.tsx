@@ -168,9 +168,13 @@ function InviteGuestsForm(props: {
   );
 }
 
-/** Shown above the forward button; Google says the same of its own forward. */
+/**
+ * Shown above the forward button; Google says the same of its own forward.
+ * The server decides whether recipients get an invitation to answer or a
+ * file to add, so this says only what both share.
+ */
 const FORWARD_FORM_NOTE =
-  "They can add the event to their calendar but won't appear in the guest list.";
+  "They'll get the event by email but won't appear in the guest list.";
 
 /**
  * Forwarding the invitation, for a guest who cannot add guests: the same

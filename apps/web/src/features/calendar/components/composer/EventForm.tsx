@@ -530,6 +530,7 @@ export function EventForm(props: EventFormProps) {
       <div class="flex shrink-0 items-center justify-end gap-3">
         <Show when={props.showRecurringEditNotice}>
           <RadioGroup
+            size="sm"
             value={editScope()}
             onChange={(value) => changeEditScope(value as CalendarUpdateScope)}
             disabled={formIsDisabled()}
@@ -539,7 +540,7 @@ export function EventForm(props: EventFormProps) {
             <For each={RECURRING_EDIT_SCOPE_OPTIONS}>
               {(option) => (
                 <RadioGroup.Item value={option.scope} class="gap-1.5">
-                  <RadioGroup.ItemControl class="size-3.5" />
+                  <RadioGroup.ItemControl />
                   <RadioGroup.ItemLabel>{option.label}</RadioGroup.ItemLabel>
                 </RadioGroup.Item>
               )}

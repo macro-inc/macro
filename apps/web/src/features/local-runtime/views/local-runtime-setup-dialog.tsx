@@ -34,7 +34,7 @@ export function LocalRuntimeSetupDialog(props: {
               aria-label={t('localRuntime.close')}
               onClick={() => props.onClose()}
             >
-              <XIcon />
+              <XIcon class="size-4" />
             </Button>
           </div>
         </Panel.Header>

@@ -1,6 +1,8 @@
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { hasValue } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
@@ -9,8 +11,10 @@ import {
   createSignal,
   For,
   type JSX,
+  Match,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { TaskBoard } from '../components/task-board';
 import {
@@ -92,26 +96,6 @@ export function TaskBoardView(props: {
       await operation();
     } catch {
       setReadError('Could not load tasks. Try again.');
-    }
-  };
-
-  const loadMore = async (columnId?: string) => {
-    if (columnId === undefined) {
-      await source.loadMore();
-      const error = source.error();
-
-      if (error) {
-        throw error;
-      }
-
-      return;
-    }
-
-    await source.loadMoreGroup(columnId);
-    const error = source.groupError?.(columnId);
-
-    if (error) {
-      throw error;
     }
   };
 
@@ -290,23 +274,30 @@ export function TaskBoardView(props: {
                   </p>
                 }
                 footer={
-                  <Show when={column().hasMore}>
-                    <div class="py-3">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={column().loadingMore}
-                        onClick={() =>
+                  <Switch>
+                    <Match when={column().hasMore}>
+                      <TaskBoardColumnContinuation
+                        isLoading={column().loadingMore}
+                        failed={Boolean(source.groupError?.(column().id))}
+                        onLoad={() =>
                           fireAndForget(
-                            read(() => loadMore(column().id)),
+                            source.loadMoreGroup(column().id),
                             'tasks-view'
                           )
                         }
-                      >
-                        {column().loadingMore ? 'Loading…' : 'Load more tasks'}
-                      </Button>
-                    </div>
-                  </Show>
+                      />
+                    </Match>
+                    {/* Ungrouped results (search) continue from any column's end. */}
+                    <Match when={source.hasMore()}>
+                      <TaskBoardColumnContinuation
+                        isLoading={source.isLoadingMore()}
+                        failed={Boolean(source.error())}
+                        onLoad={() =>
+                          fireAndForget(source.loadMore(), 'tasks-view')
+                        }
+                      />
+                    </Match>
+                  </Switch>
                 }
               >
                 {(task) => {
@@ -333,22 +324,38 @@ export function TaskBoardView(props: {
           )}
         </TaskBoard.Columns>
       </TaskBoard.Root>
-      <Show when={source.hasMore()}>
-        <div class="p-3">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={source.isLoadingMore()}
-            onClick={() =>
-              fireAndForget(
-                read(() => loadMore()),
-                'tasks-view'
-              )
-            }
-          >
-            {source.isLoadingMore() ? 'Loading…' : 'Load more tasks'}
-          </Button>
-        </div>
+    </div>
+  );
+}
+
+/** Requests the column's next page while near its visible cards; a failure waits for Retry. */
+function TaskBoardColumnContinuation(props: {
+  isLoading: boolean;
+  failed: boolean;
+  onLoad: () => void;
+}) {
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => !props.failed,
+    isFetchingNextPage: () => props.isLoading,
+    fetchNextPage: () => props.onLoad(),
+  });
+
+  return (
+    <div
+      ref={setSentinel}
+      aria-busy={!props.failed}
+      class="flex flex-wrap items-center justify-center gap-2 py-3 text-xs text-ink-muted"
+    >
+      <Show
+        when={props.failed}
+        fallback={<SpinnerIcon class="size-4 animate-spin" />}
+      >
+        <span>Couldn’t load more tasks.</span>
+        <Button size="sm" variant="secondary" onClick={() => props.onLoad()}>
+          Retry
+        </Button>
       </Show>
     </div>
   );

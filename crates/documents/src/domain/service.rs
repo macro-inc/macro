@@ -213,6 +213,23 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
     }
 }
 
+/// The dates a document was created with, when its creator supplied them
+/// rather than taking now.
+#[derive(Debug, Clone, Copy)]
+struct DocumentDates {
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl DocumentDates {
+    fn of(document: &NewDocument) -> Option<Self> {
+        document.created_at.map(|created_at| Self {
+            created_at,
+            updated_at: document.updated_at.unwrap_or(created_at),
+        })
+    }
+}
+
 fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
     let uuid = macro_uuid::string_to_uuid(entity_id)
         .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
@@ -707,11 +724,16 @@ impl<
         })
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a created document carries its type, folder, dates, content hash, attribution and job"
+    )]
     async fn finish_created_document(
         &self,
         document_metadata: DocumentMetadata,
         file_type: Option<FileType>,
         project_id: Option<uuid::Uuid>,
+        dates: Option<DocumentDates>,
         sha: String,
         attribution: Attribution,
         job_id: Option<String>,
@@ -809,7 +831,20 @@ impl<
                 .entity_access_management_service
                 .add_entity_to_project(&document_uuid, EntityType::Document, project_id)
                 .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&project_id_str).await.inspect_err(
+            // A document carrying its own dates dates its folders by them
+            // rather than by now.
+            let updated = match dates {
+                Some(DocumentDates {
+                    created_at,
+                    updated_at,
+                }) => {
+                    self.repo
+                        .extend_project_dates(&project_id_str, created_at, updated_at)
+                        .await
+                }
+                None => self.repo.update_project_modified(&project_id_str).await,
+            };
+            let _ = updated.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
@@ -1527,6 +1562,7 @@ impl<
         let owner = principal.owner();
         let file_type = document.file_type;
         let project_id = document.project_id;
+        let dates = DocumentDates::of(&document);
         let sha = document.sha.clone();
 
         let share_permission = match document.initial_link_share {
@@ -1553,6 +1589,7 @@ impl<
             document_metadata,
             file_type,
             project_id,
+            dates,
             sha,
             Attribution::from(principal),
             job_id,
@@ -1582,6 +1619,7 @@ impl<
 
         let file_type = args.document.file_type;
         let project_id = args.document.project_id;
+        let dates = DocumentDates::of(&args.document);
         let sha = args.document.sha.clone();
         let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
 
@@ -1605,6 +1643,7 @@ impl<
                     document_metadata,
                     file_type,
                     project_id,
+                    dates,
                     sha,
                     attribution,
                     None,
@@ -2151,14 +2190,22 @@ impl<
         })
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(
+        skip(self, entity_access_receipt, credited_user),
+        fields(
+            task_id = %entity_access_receipt.entity().entity_id,
+            credit_requested = credited_user.is_some()
+        ),
+        err
+    )]
     async fn update_task_status(
         &self,
         entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        credited_user: Option<MacroUserIdStr<'static>>,
         status: &str,
     ) -> Result<(), DocumentError> {
         self.task_properties_service
-            .update_task_status(&entity_access_receipt.entity().entity_id, status)
+            .update_task_status(&entity_access_receipt, credited_user.as_ref(), status)
             .await
             .map_err(DocumentError::Internal)?;
 

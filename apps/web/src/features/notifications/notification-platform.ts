@@ -157,7 +157,8 @@ export async function toPlatformNotificationData(
 export async function maybeHandlePlatformNotification(
   notification: UnifiedNotification,
   notificationInterface: PlatformNotificationState,
-  splitLayoutManager: SplitManager
+  splitLayoutManager: SplitManager,
+  delivery: { silent?: boolean } = {}
 ) {
   // Ignore notification types that should not show as browser notifications.
   // GitHub PR notifications should remain visible in-app, but should not
@@ -181,6 +182,7 @@ export async function maybeHandlePlatformNotification(
   if (platformNotificationData) {
     let notificationHandle = await notificationInterface.showNotification({
       ...platformNotificationData,
+      options: { ...platformNotificationData.options, silent: delivery.silent },
       notificationId: notification.id,
     });
     if (

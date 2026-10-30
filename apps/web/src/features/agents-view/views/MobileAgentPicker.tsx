@@ -203,7 +203,7 @@ export function MobileAgentPicker(props: AgentPickerProps) {
                             }}
                           >
                             <ModelIcon model={option.id} />
-                            <span class="min-w-0 flex-1 truncate">
+                            <span class="min-w-0 flex-1 whitespace-normal wrap-anywhere">
                               {option.label}
                             </span>
                             <Show

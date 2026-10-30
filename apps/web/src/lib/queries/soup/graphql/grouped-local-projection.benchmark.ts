@@ -78,6 +78,7 @@ function scenario(
         key,
         items: items.slice(offset, offset + 10),
         totalCount: items.length + 100,
+        label: null,
         nextCursor: `${key}:${offset + 10}`,
       };
       if (offset === 0) initial.user.groupSoup.bins.push(bin);

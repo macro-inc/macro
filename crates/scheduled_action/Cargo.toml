@@ -27,6 +27,7 @@ document_sub_type = { path = "../document_sub_type" }
 email = { path = "../email", default-features = false, features = ["outbound"] }
 entity_access_management = { path = "../entity_access_management" }
 frecency = { path = "../frecency", features = ["postgres"] }
+feature_flags = { path = "../feature_flags" }
 jev = { path = "../jev", features = ["outbound"] }
 lexical_client = { path = "../lexical_client" }
 mention_utils = { path = "../mention_utils" }

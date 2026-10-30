@@ -329,6 +329,7 @@ describe('runSoupBackfills', () => {
       DEFAULT_SOUP_BACKFILL_LANES.map((lane) => lane.checkpointId)
     ).toEqual([
       'core-entities',
+      'initiatives',
       'email-signal-filter-metadata',
       'email-noise-filter-metadata',
       'shared-email-filter-metadata',

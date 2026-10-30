@@ -12,6 +12,8 @@ export type QueryCapabilities = {
     prompt: string;
     sql: string;
     schema: QuerySchema;
+    /** One failed SQL proposal may be repaired using the engine error. */
+    error?: string;
   }): ResultAsync<QueryProposal, QueryFailure>;
   read(
     sql: string,

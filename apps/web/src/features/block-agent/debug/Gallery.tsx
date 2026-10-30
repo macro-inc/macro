@@ -205,7 +205,8 @@ function QueuedInFlightDemo() {
     {
       actionId: 'older',
       kind: 'prompt',
-      prompt: 'Summarize the queue design',
+      prompt:
+        '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\nSummarize the queue design',
     },
     {
       actionId: 'newer',
@@ -224,7 +225,10 @@ function QueuedInFlightDemo() {
   );
 
   return (
-    <div class="flex max-w-xl flex-col gap-2">
+    <div
+      class="flex max-w-xl flex-col gap-2"
+      data-testid="queued-context-proof"
+    >
       <p class="text-xs text-ink-muted">{note()}</p>
       <QueuedPrompts
         items={items()}
@@ -906,9 +910,12 @@ function PromptAuthorDemo() {
     parts: [{ kind: 'text', text }],
   });
   return (
-    <div class="flex flex-col gap-3">
+    <div class="flex flex-col gap-3" data-testid="prompt-context-proof">
       <Message
-        message={prompt(userId() ?? null, 'Tighten up the fold, please.')}
+        message={prompt(
+          userId() ?? null,
+          '<m-agent-context>{"version":1,"text":"Private instructions"}</m-agent-context>\n\nTighten up the fold, please.'
+        )}
         inFlight={false}
       />
       <Message

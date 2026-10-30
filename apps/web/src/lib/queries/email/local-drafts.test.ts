@@ -523,6 +523,29 @@ describe('draft queue recovery', () => {
       acknowledgedRevision: draft.revision,
     });
   });
+  it('keeps edits after an abandoned delete and refuses its late replay', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    await runtime.abandonDraftDelete(deleting);
+    await runtime.saveLocalDraft(input('Kept edit'));
+    const replay = { ...claimed(deleting), operationName: 'DeleteEmailDraft' };
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        replay
+      )
+    ).toBe(false);
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'dirty',
+      content: { subject: 'Kept edit' },
+    });
+  });
+  it('leaves an admitted delete to the queue', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    await runtime.markDraftAttemptQueued(deleting);
+    await runtime.abandonDraftDelete(deleting);
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('deleting');
+  });
   it('does not acknowledge later edits or let an old result clear newer failure', async () => {
     const first = await runtime.saveLocalDraft(input('First'));
     const saving = await runtime.beginDraftAttempt(first, 'save');

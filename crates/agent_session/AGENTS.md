@@ -50,7 +50,7 @@ consumer talks to.
 
 ## Tool contracts
 
-- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals.
+- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
 
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the

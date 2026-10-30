@@ -1,11 +1,13 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
 import { useBlockId } from '@core/block';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
+import { enableRoutineSharing } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getOwner, onMount, Show } from 'solid-js';
@@ -52,6 +54,7 @@ export function RoutineDetail(props: {
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
   const hasPaidAccess = useHasPaidAccess();
+  const sharing = useFeatureFlag(enableRoutineSharing);
   const back = () =>
     props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
   const open = (id: string) =>
@@ -127,8 +130,8 @@ export function RoutineDetail(props: {
             toast.success('Prompt copied');
           else toast.alert('Could not copy prompt');
         }}
-        onShareTemplate={shareTemplate}
-        onOpenTemplate={open}
+        onShareTemplate={sharing().enabled ? shareTemplate : undefined}
+        onOpenTemplate={sharing().enabled ? open : undefined}
         slots={{
           PromptEditor: RoutinePromptEditor,
           ExecutionPicker: RoutineExecutionPicker,

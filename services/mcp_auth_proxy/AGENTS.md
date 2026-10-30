@@ -49,6 +49,10 @@ and other library consumers. Both retain OAuth metadata, CORS, and bearer auth.
 
 ## Gotchas
 
+- Don't add an MCP client's host to FusionAuth's authorized origins
+  (`infra/stacks/fusionauth-instance/origins.ts`). `/authorize` withholds the
+  client's Referer from FusionAuth; a new client needs only a trusted redirect
+  host. See README "Origin versus redirect URI".
 - `client_id` is not a secret; every endpoint must still check it against a
   live registration — see README "Which client a grant belongs to" before
   changing token/refresh validation.

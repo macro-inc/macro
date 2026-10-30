@@ -118,6 +118,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 tracing.workspace = true
+unicode-segmentation.workspace = true
 utoipa.workspace = true
 uuid.workspace = true
 remote_env_var = { path = "../remote_env_var" }

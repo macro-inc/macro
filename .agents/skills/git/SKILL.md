@@ -1,12 +1,30 @@
 ---
 name: git
-description: Commit, branch, push, and open or update pull requests in this repository. Use before writing a commit message or PR title/body, pushing, stacking PRs, or when asked to "commit", "open a PR", or "push".
+description: Read this before any git or GitHub operation. Use whenever you commit, branch, rebase, push, or open or update a pull request — including writing a commit message or PR title/body. Never include customer PII or secrets in commits, messages, or PR descriptions.
 ---
 
 # Git and pull requests
 
 Commit as you go on a feature branch, one logical change per commit, without
 asking. Never commit to `main`. Push or open a PR only when the user asks.
+
+## PII and secrets
+
+Never put customer or third-party PII, or secrets, in a commit, commit
+message, PR title, or PR description. That includes emails, phone numbers,
+physical addresses, API keys, and tokens. Refer to people as "the customer"
+or a placeholder (`customer@example.com`).
+
+The pre-commit hook scans staged added lines. During a merge of `origin/main`,
+it compares the staged result with that incoming main commit, checking all
+branch additions and conflict resolutions without rescanning existing main
+content. Other merges keep the ordinary staged-diff scan. Do not skip the hook
+(`--no-verify`).
+Do not add lines to `tooling/pii/exceptions` unless a human asks you to.
+
+Before opening or updating a PR, reread the title and body and strip any PII
+that came from logs, traces, or production data. `python3 tooling/pii/scan.py
+--text -` reads a title or body from stdin; `--changed` is what `just check` runs.
 
 ## Branches
 

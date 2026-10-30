@@ -11,14 +11,17 @@ Outlook (Microsoft Graph) outbound adapters.
 - `src/domain/service.rs`: `EmailApiClientServiceImpl<R, T, L>` — the
   orchestration layer, generic over a repository, token source, and request
   gate port; submodules `attachments`/`blocklist`/`contacts`/`labels`/
-  `messages`/`send`/`subscription`/`sync` hold one capability each.
+  `messages`/`raw_message`/`send`/`subscription`/`sync` hold one capability
+  each.
 - `src/domain/ports.rs`: `ProviderRequestGate` (per-mailbox admission for the
   service above), `ProviderRateLimiter` (the Outlook `MailboxApiService`'s),
   `ProviderTokenSource`, and the repository traits adapters implement.
 - `src/outbound/gmail.rs`: the Gmail adapter (feature `outbound-gmail`).
 - `src/outbound/outlook.rs`: the Microsoft Graph adapter (feature
   `outbound-outlook`); every Graph call goes through `outlook/transport.rs`,
-  which owns request headers, provider error mapping, and write-failure logs.
+  which owns request headers, provider error mapping, write-failure logs,
+  and one `outlook.graph_request` span per attempt (with an
+  `outlook.graph_admission` child for the per-mailbox gate wait).
 
 ## Scope
 
@@ -70,9 +73,19 @@ Outlook (Microsoft Graph) outbound adapters.
   the link for reauthorization. Contact listings use `retry_with_fresh_token`
   to keep their WARN-level logging. Writes use `call_with_token` and do not
   retry.
+- `SendRequest::build_mime` (Gmail sends) turns an inline `text/calendar`
+  attachment with no Content-ID into the message's calendar body, the last
+  alternative after the text and HTML, which is how an answerable invitation
+  (RFC 6047) is sent; other files stay attachments. Outlook sends do not go
+  through it.
 - Graph answers a bodyless POST or PATCH without `Content-Length: 0` with 411
   Length Required. `transport.rs` adds the header, so new Graph calls must go
-  through `request`/`conditional_request` rather than the raw client.
+  through `request`/`conditional_request` rather than the raw client. Use
+  `graph_request` only when a caller must branch on the Graph status, error
+  code, or request id; the others drop them.
+- Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
+  400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
+  carries the same correlation and RFC reply headers.
 
 ## Related
 

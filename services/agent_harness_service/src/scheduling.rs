@@ -265,10 +265,26 @@ pub async fn build(
             config.routine_agents_enabled,
         )),
     );
+    let template_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                Duration::from_secs(3),
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
             Arc::new(PgRoutineTemplateRepo::new(db.clone())),
+            template_flags,
         )),
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),

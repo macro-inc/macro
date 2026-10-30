@@ -230,8 +230,12 @@ pub trait RoutineTemplateService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Read a template by its unguessable ID for any authenticated viewer.
-    fn get_template(&self, id: Uuid) -> impl Future<Output = Result<RoutineTemplate>> + Send;
+    /// Read a template by its unguessable ID for a viewer with sharing enabled.
+    fn get_template(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+    ) -> impl Future<Output = Result<RoutineTemplate>> + Send;
 
     /// Create the principal's own routine from a shared template. The input
     /// is the activator's filled-in configuration, validated like any create.

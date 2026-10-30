@@ -1,23 +1,30 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { queryReadyGate } from '@queries/gate';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { PipelinesSource } from '../context/pipelines';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmQueryDependencies } from './dependencies';
 import { crmKeys } from './keys';
 
+function pipelinesQueryOptions(
+  deps: CrmQueryDependencies,
+  teamId: string | undefined
+) {
+  return queryOptions({
+    queryKey: crmKeys.pipelines(teamId).queryKey,
+    queryFn: () => throwOnErr(() => deps.storage.listCrmPipelines()),
+    enabled: !!teamId,
+  });
+}
+
 export function createPipelinesSource(
   deps: CrmQueryDependencies,
   teamId: Accessor<string | undefined>
 ): PipelinesSource {
   const query = useQuery(
-    () => ({
-      queryKey: crmKeys.pipelines(teamId()).queryKey,
-      queryFn: () => throwOnErr(() => deps.storage.listCrmPipelines()),
-      enabled: !!teamId(),
-    }),
+    () => pipelinesQueryOptions(deps, teamId()),
     () => deps.client
   );
   const refresh = async () => {

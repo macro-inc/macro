@@ -27,7 +27,7 @@ export function EmailSettings() {
     >
       <SettingsSection
         title="Accounts"
-        description="Connect Gmail accounts and manage their sync with Macro."
+        description="Connect email accounts and manage their sync with Macro."
       >
         <Suspense
           fallback={
@@ -42,7 +42,7 @@ export function EmailSettings() {
       <Show when={signatures().enabled}>
         <SettingsSection
           title="Signatures"
-          description="Create a signature for each email account, import from Gmail, or paste your HTML. Preview it before sending."
+          description="Create a signature for each email account and preview it before sending."
         >
           <Suspense
             fallback={

@@ -6,7 +6,7 @@
 # the run, warnings/hints only print). oxlint's only error rule is
 # typescript/no-floating-promises, so apps/web files are linted --type-aware.
 #
-#   just check        fast: rustfmt + biome + oxlint + ast-grep   (~seconds)
+#   just check        fast: rustfmt + biome + oxlint + ast-grep + PII   (~seconds)
 #   just check full   also runs tsc + clippy                      (~minutes)
 #
 # Override the diff base with CHECK_BASE=<ref> (useful in shallow clones,
@@ -99,6 +99,12 @@ check *ARGS:
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/development/style-guide.md)"
       bunx --yes @ast-grep/cli@0.44.1 scan --report-style=short $sg || fail=1
+    fi
+    echo "── PII scan (added lines vs merge-base)"
+    python3 tooling/pii/scan.py --changed --skip-gitleaks || fail=1
+    if grep -q '^tooling/pii/' <<<"$changed"; then
+      echo "── PII scanner tests"
+      ( \cd tooling/pii && python3 -m unittest test_scan.py ) || fail=1
     fi
     if [ "{{ ARGS }}" = "full" ]; then
       if [ -n "$js" ]; then

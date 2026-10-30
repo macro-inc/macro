@@ -153,6 +153,7 @@ fn new_document(req: CreateDocumentRequest) -> NewDocument {
         team_id: req.team_id,
         share_with_team: false,
         created_at: req.created_at,
+        updated_at: None,
         sub_type: req
             .is_task
             .then_some(document_sub_type::DocumentSubType::Task),

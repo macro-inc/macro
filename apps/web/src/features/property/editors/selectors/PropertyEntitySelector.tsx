@@ -359,7 +359,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       }
     } else {
       newSelected.clear();
-      newSelected.add(entity.id);
+      if (!isCurrentlySelected) newSelected.add(entity.id);
     }
 
     props.setSelectedOptions(newSelected, [

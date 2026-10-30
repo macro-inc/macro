@@ -31,6 +31,11 @@ bridges old-producer writes during rollout; keep that bridge until legacy
 review producers have retired. Encode empty legacy item lists as JSON arrays so
 the typed notification reader can decode them.
 
+The `agent_session.turn_state` constraint includes `failed` for terminal turn
+errors; extend it additively before services begin writing new turn states.
+Install widened checks as `NOT VALID` and validate in a separate migration so
+the scan does not retain the replacement migration's exclusive table lock.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,

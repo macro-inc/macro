@@ -128,6 +128,19 @@ it('keeps project controls independent from the parent Tasks URL and tab', () =>
   expect(project.state.layout).toBe('list');
 });
 
+it('restores project view history without retaining task person filters', () => {
+  const view = setup();
+  view.setSearch('tab', 'my-projects');
+  expect(view.state.tab).toBe('my-projects');
+  expect(view.state.facets).toEqual(DEFAULT_TASK_FACET_SELECTION);
+  expect(view.state.groupBy).toBe('status');
+  view.setSearch('tab', 'created-projects');
+  expect(view.state.tab).toBe('created-projects');
+  view.setSearch('tab', 'my-tasks');
+  expect(view.state.tab).toBe('my-tasks');
+  expect(view.state.groupBy).toBe('priority');
+  expect(view.state.search).toBe('keep this search');
+});
 it('leaves embedded entry state and the parent URL untouched without a URL capability', () => {
   const view = setup({
     state: { tab: 'team-tasks', groupBy: 'status' },

@@ -8,9 +8,11 @@ use crate::domain::model::{
     ConversationLine, ConversationSpeaker, McpHeader, McpServer, McpTransport, RepoUrl, RunListing,
     RunOutcome, RunStatus,
 };
-use crate::domain::ports::{NoArtifactStore, StreamConnectError};
+use crate::domain::ports::{NoArtifactStore, PromptImageFetcher, StreamConnectError};
+use crate::domain::prompt_image::CursorPromptImage;
 use crate::testing::{CursorCall, FakeCursor, FixedChooser, RecordingNotifier};
-use agent_client_protocol::schema::v1::{SessionUpdate, StopReason, ToolCallStatus};
+use agent_client_protocol::schema::v1::{ContentBlock, SessionUpdate, StopReason, ToolCallStatus};
+use futures::future::BoxFuture;
 use std::path::Path;
 
 type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedChooser, NoArtifactStore>;
@@ -160,12 +162,74 @@ async fn first_prompt_creates_the_agent_with_the_session_repo() {
             Some(repo),
             true,
             Vec::new(),
-            None
+            None,
+            Vec::new(),
         )]
     );
     let updates = notifier.updates();
     assert_eq!(updates.len(), 1);
     assert!(matches!(updates[0].1, SessionUpdate::AgentMessageChunk(_)));
+}
+
+/// A link pasted into the prompt is fetched, and when it is an image it goes
+/// to Cursor as `prompt.images` and to the transcript as an ACP image frame.
+#[tokio::test]
+async fn a_pasted_image_link_is_sent_as_a_cursor_image() {
+    let cursor = FakeCursor::new();
+    let notifier = RecordingNotifier::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        notifier.clone(),
+        FixedChooser(None, false),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    )
+    .with_image_fetcher(Arc::new(ScriptedImage));
+    let session = service.new_session(Path::new(""), Vec::new());
+    let url = "https://cdn.example/images?q=thumbnail&size=10";
+
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service
+        .prompt(&session, &format!("look at {url}"))
+        .await
+        .expect("prompt runs");
+
+    let calls = cursor.calls();
+    let CursorCall::CreateAgent(prompt, _, _, _, _, images) = &calls[0] else {
+        panic!("expected one create_agent, got {calls:?}");
+    };
+    assert!(prompt.contains(url), "the link stays in the prompt text");
+    assert_eq!(images.len(), 1);
+    assert_eq!(images[0].mime_type, "image/png");
+    assert_eq!(images[0].data, "aW1n");
+    assert_eq!(images[0].source_url.as_deref(), Some(url));
+    assert!(
+        notifier.updates().iter().any(|(_, update)| {
+            matches!(
+                update,
+                SessionUpdate::UserMessageChunk(chunk)
+                    if matches!(&chunk.content, ContentBlock::Image(image)
+                        if image.uri.as_deref() == Some(url) && image.mime_type == "image/png")
+            )
+        }),
+        "the transcript gets an ACP image frame"
+    );
+}
+
+#[derive(Debug)]
+struct ScriptedImage;
+
+impl PromptImageFetcher for ScriptedImage {
+    fn fetch_image<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Option<CursorPromptImage>> {
+        let image = url.contains("cdn.example").then(|| CursorPromptImage {
+            data: "aW1n".to_owned(),
+            mime_type: "image/png".to_owned(),
+            source_url: Some(url.to_owned()),
+        });
+        Box::pin(async move { image })
+    }
 }
 
 #[tokio::test]
@@ -832,7 +896,8 @@ async fn session_mcp_servers_reach_agent_creation() {
             None,
             false,
             servers,
-            None
+            None,
+            Vec::new(),
         )]
     );
 }
@@ -856,7 +921,8 @@ async fn a_session_without_mcp_servers_forwards_none() {
             None,
             false,
             Vec::new(),
-            None
+            None,
+            Vec::new(),
         )]
     );
 }
@@ -892,7 +958,8 @@ async fn a_restored_session_prompts_its_existing_agent() {
         vec![CursorCall::CreateRun(
             CursorAgentId::new("bc-restored"),
             "continue".to_owned(),
-            None
+            None,
+            Vec::new(),
         )]
     );
 }
@@ -1875,7 +1942,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
     tx.send(CursorEvent::Done).unwrap();
     restored.prompt(&id, "continue").await.unwrap();
     assert!(
-        matches!(cursor.calls().last(), Some(CursorCall::CreateRun(_, prompt, _)) if prompt == "continue")
+        matches!(cursor.calls().last(), Some(CursorCall::CreateRun(_, prompt, ..)) if prompt == "continue")
     );
 }
 
@@ -4542,4 +4609,119 @@ async fn a_prompt_gives_up_on_the_turn_gate_after_the_busy_budget() {
     drop(foreign);
     mirror.abort();
     let _ = mirror.await;
+}
+
+#[derive(Debug)]
+struct WaitingImage(tokio::sync::Notify);
+
+impl PromptImageFetcher for WaitingImage {
+    fn fetch_image<'a>(&'a self, _url: &'a str) -> BoxFuture<'a, Option<CursorPromptImage>> {
+        Box::pin(async move {
+            self.0.notify_one();
+            futures::future::pending().await
+        })
+    }
+}
+
+#[tokio::test]
+async fn stopping_during_image_resolution_never_creates_a_run() {
+    let cursor = FakeCursor::new();
+    let fetcher = Arc::new(WaitingImage(tokio::sync::Notify::new()));
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        FixedChooser(None, false),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    )
+    .with_image_fetcher(fetcher.clone());
+    let session = service.new_session(Path::new(""), Vec::new());
+    let (result, ()) = tokio::join!(service.prompt(&session, "https://cdn.example/pic"), async {
+        fetcher.0.notified().await;
+        service.cancel(&session).await.expect("cancel");
+    },);
+    assert_eq!(result.expect("cancelled prompt"), StopReason::Cancelled);
+    assert!(cursor.calls().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn direct_images_fill_the_cap_without_fetching_links() {
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor,
+        RecordingNotifier::new(),
+        FixedChooser(None, false),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    )
+    .with_image_fetcher(Arc::new(WaitingImage(tokio::sync::Notify::new())));
+    let image = CursorPromptImage {
+        data: "aW1n".into(),
+        mime_type: "image/png".into(),
+        source_url: None,
+    };
+    let mut blocks = vec![image.to_content_block(); prompt_image::MAX_PROMPT_IMAGES];
+    blocks.push(ContentBlock::Text(TextContent::new(
+        "https://cdn.example/pic",
+    )));
+    let started = tokio::time::Instant::now();
+    let (_, images) = service.resolve_prompt_images(&blocks).await;
+    assert_eq!(images.len(), prompt_image::MAX_PROMPT_IMAGES);
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+}
+
+#[derive(Debug)]
+struct FiveImages;
+impl PromptImageFetcher for FiveImages {
+    fn fetch_image<'a>(&'a self, url: &'a str) -> BoxFuture<'a, Option<CursorPromptImage>> {
+        Box::pin(async move {
+            if url.ends_with("/slow") {
+                return futures::future::pending().await;
+            }
+            Some(CursorPromptImage {
+                data: "aW1n".into(),
+                mime_type: "image/png".into(),
+                source_url: Some(url.into()),
+            })
+        })
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn reaching_the_image_cap_does_not_wait_for_an_unused_fetch() {
+    let service = CursorSessionService::new(
+        FakeCursor::new(),
+        RecordingNotifier::new(),
+        FixedChooser(None, false),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    )
+    .with_image_fetcher(Arc::new(FiveImages));
+    let blocks = vec![ContentBlock::Text(TextContent::new(
+        "https://cdn.example/1 https://cdn.example/2 https://cdn.example/3 https://cdn.example/4 https://cdn.example/5 https://cdn.example/slow",
+    ))];
+    let started = tokio::time::Instant::now();
+    let (_, images) = service.resolve_prompt_images(&blocks).await;
+    assert_eq!(images.len(), prompt_image::MAX_PROMPT_IMAGES);
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+}
+
+#[tokio::test(start_paused = true)]
+async fn slow_image_links_leave_the_text_prompt_after_the_total_budget() {
+    let service = CursorSessionService::new(
+        FakeCursor::new(),
+        RecordingNotifier::new(),
+        FixedChooser(None, false),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
+    )
+    .with_image_fetcher(Arc::new(WaitingImage(tokio::sync::Notify::new())));
+    let blocks = vec![ContentBlock::Text(TextContent::new(
+        "https://cdn.example/1 https://cdn.example/2 https://cdn.example/3 https://cdn.example/4 https://cdn.example/5 https://cdn.example/6",
+    ))];
+    let started = tokio::time::Instant::now();
+    let (resolved, images) = service.resolve_prompt_images(&blocks).await;
+    assert!(images.is_empty());
+    assert!(resolved.is_empty());
+    assert_eq!(started.elapsed(), std::time::Duration::from_secs(10));
 }

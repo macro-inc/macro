@@ -15,7 +15,6 @@ const [savedConnection, setSavedConnection] = createSignal<Leftover>({
   kind: 'pipedream',
   id: 'pd-slack',
   title: 'Slack workspace',
-  subtitle: 'Slack',
   appSlug: 'slack_v2',
   enabled: false,
 });

@@ -292,6 +292,17 @@ impl GmailClient {
         get_message(self, access_token, message_provider_id).await
     }
 
+    /// Fetches a message's original RFC 822 bytes, or `None` when Gmail no
+    /// longer has it.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn get_raw_message(
+        &self,
+        access_token: &str,
+        message_provider_id: &str,
+    ) -> Result<Option<Vec<u8>>, GmailApiHttpError> {
+        messages::get_raw_message(self, access_token, message_provider_id).await
+    }
+
     #[tracing::instrument(skip(self, access_token), err)]
     pub async fn get_message_label_ids(
         &self,

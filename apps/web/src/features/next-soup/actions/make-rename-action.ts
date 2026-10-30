@@ -15,6 +15,9 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'agent_session' && entity.isArchived) return false;
+    if (entity.type === 'database') {
+      return entity.grant === 'edit' || entity.grant === 'owner';
+    }
     if (entity.type === 'channel') return canEditChannelIdentity(entity);
     // The types the rename mutation supports; it rejects any other.
     if (

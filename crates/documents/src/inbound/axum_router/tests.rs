@@ -414,6 +414,7 @@ impl DocumentService for FakeDocumentService {
     async fn update_task_status(
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _credited_user: Option<MacroUserIdStr<'static>>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")

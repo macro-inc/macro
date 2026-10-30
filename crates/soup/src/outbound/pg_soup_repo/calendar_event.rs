@@ -4,6 +4,7 @@ use item_filters::ast::{
     calendar_event::CalendarEventLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to},
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
@@ -13,6 +14,8 @@ use models_soup::{
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
+use super::candidate_gates::UUID_PATTERN;
+use super::expanded::dynamic::{NotificationPredicate, strip_notification_conjunction};
 use crate::domain::models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest};
 
 #[derive(FromRow)]
@@ -49,6 +52,7 @@ struct CursorParts {
     property_filter: Option<Expr<PropertiesLiteral>>,
 }
 
+#[tracing::instrument(err, skip_all, fields(limit = req.limit))]
 pub(super) async fn cursor_soup(
     db: &PgPool,
     req: SimpleSortRequest<'_>,
@@ -60,14 +64,32 @@ pub(super) async fn cursor_soup(
         return Ok(Vec::new());
     }
 
+    // A notification-state conjunct bounds the page to events the caller was
+    // notified about, a set the viewer index answers directly; folding it per
+    // event instead scanned every calendar event in the table.
+    let notification = parts.filter.as_ref().and_then(|filter| {
+        strip_notification_conjunction(filter, |literal| match literal {
+            CalendarEventLiteral::NotificationState(state) => {
+                Some(NotificationPredicate::state(*state))
+            }
+            _ => None,
+        })
+    });
+    let (notified, filter) = match &notification {
+        Some((predicate, rest)) => (Some(*predicate), rest.as_ref()),
+        None => (None, parts.filter.as_ref()),
+    };
+
     let sort = sort_sql(parts.sort);
-    let mut query =
-        QueryBuilder::<Postgres>::new(format!("{} WHERE (event.owner_id = ", select_sql()));
-    query.push_bind(req.user_id.as_ref().to_string());
-    query.push(" OR EXISTS (SELECT 1 FROM macro_user_links link WHERE link.link_id = event.source_link_id AND link.primary_macro_id = ");
-    query.push_bind(req.user_id.as_ref().to_string());
-    query.push("))");
-    if let Some(filter) = &parts.filter {
+    let mut query = QueryBuilder::<Postgres>::new(format!("{} WHERE ", select_sql()));
+    push_access(&mut query, req.user_id);
+    if let Some(predicate) = notified {
+        query.push(format!(
+            " AND event.id IN ({})",
+            notified_event_ids_sql(predicate)
+        ));
+    }
+    if let Some(filter) = filter {
         query.push(" AND (");
         push_filter(&mut query, filter);
         query.push(")");
@@ -109,12 +131,9 @@ pub(super) async fn by_ids(
         return Ok(Vec::new());
     }
 
-    let mut query =
-        QueryBuilder::<Postgres>::new(format!("{} WHERE (event.owner_id = ", select_sql()));
-    query.push_bind(req.user_id.as_ref().to_string());
-    query.push(" OR EXISTS (SELECT 1 FROM macro_user_links link WHERE link.link_id = event.source_link_id AND link.primary_macro_id = ");
-    query.push_bind(req.user_id.as_ref().to_string());
-    query.push(")) AND event.id = ANY(");
+    let mut query = QueryBuilder::<Postgres>::new(format!("{} WHERE ", select_sql()));
+    push_access(&mut query, req.user_id);
+    query.push(" AND event.id = ANY(");
     query.push_bind(ids);
     query.push(
         ") ORDER BY GREATEST(event.updated_at, event.last_reminder_fired_at) DESC, event.id DESC",
@@ -126,6 +145,35 @@ pub(super) async fn by_ids(
         .into_iter()
         .map(row_to_item)
         .collect()
+}
+
+/// Calendar events are owner- or delegation-scoped, never `entity_access`
+/// rows: visible iff the caller owns the event or is delegated the inbox it
+/// was synced from. Binds the caller first, so `$1` is the requesting user
+/// for every clause rendered after it. The delegated links are collected once
+/// rather than probed per event, which lets the planner index both sides of
+/// the OR.
+fn push_access(query: &mut QueryBuilder<'_, Postgres>, user_id: MacroUserIdStr<'_>) {
+    query.push("(event.owner_id = ");
+    query.push_bind(user_id.as_ref().to_string());
+    query.push(
+        " OR event.source_link_id = ANY(ARRAY(SELECT link.link_id FROM macro_user_links link WHERE link.primary_macro_id = $1)))",
+    );
+}
+
+/// Ids of the events the caller holds a non-deleted notification for in the
+/// predicate's states. Each recipient row carries its notification's entity,
+/// so `idx_user_notification_viewer_entity` answers this without touching
+/// `notification`. The id column is unconstrained text: a malformed id is
+/// filtered out before the projection casts it.
+fn notified_event_ids_sql(predicate: NotificationPredicate) -> String {
+    format!(
+        "SELECT un.event_item_id::uuid FROM user_notification un \
+         WHERE un.user_id = $1 AND un.deleted_at IS NULL \
+         AND un.event_item_type = 'calendar_event' AND {} \
+         AND un.event_item_id ~ '{UUID_PATTERN}'",
+        predicate.sql()
+    )
 }
 
 fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {

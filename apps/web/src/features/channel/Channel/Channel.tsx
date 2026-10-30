@@ -672,29 +672,54 @@ export function Channel(props: ChannelProps) {
     },
   });
 
+  let sendSurfaceDisposed = false;
+  onCleanup(() => {
+    sendSurfaceDisposed = true;
+  });
+
   const onSend: ChannelInputProps['onSend'] = (snapshot) => {
+    const channelId = props.channelId;
     const senderId = userId();
     if (!senderId) return;
     const payload = buildPostMessageSendPayload({
       snapshot,
     });
 
-    sendMessageMutation.mutate(
-      {
-        parent: { type: 'channel', id: props.channelId },
-        senderId,
-        optimisticId: newMessageId(),
-        ...payload,
-      },
-      {
-        onError: () => {
+    const optimisticId = newMessageId();
+    fireAndForget(
+      Telemetry.span('channel.send', async (span) => {
+        span.setAttr('message.id', optimisticId);
+        span.setAttr('channel.id', channelId);
+        try {
+          await sendMessageMutation.mutateAsync({
+            parent: { type: 'channel', id: channelId },
+            senderId,
+            optimisticId,
+            ...payload,
+          });
+          span.setAttr('composer.outcome', 'succeeded');
+        } catch {
+          span.error('Channel send failed');
           const handle = channelInputHandle();
-          if (!handle) return;
+          if (
+            !handle ||
+            sendSurfaceDisposed ||
+            props.channelId !== channelId ||
+            userId() !== senderId
+          ) {
+            span.setAttr('composer.outcome', 'unmounted');
+            return;
+          }
           const current = channelInputSnapshot();
-          if (current && hasSendableInputContent(current)) return;
+          if (current && hasSendableInputContent(current)) {
+            span.setAttr('composer.outcome', 'preserved_newer_draft');
+            return;
+          }
           handle.restoreSnapshot(snapshot);
-        },
-      }
+          span.setAttr('composer.outcome', 'restored');
+        }
+      }),
+      'channel-input'
     );
   };
 

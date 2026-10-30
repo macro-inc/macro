@@ -6,6 +6,11 @@ use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::email::service::link::{Link, UserProvider};
 use sqlx::{Pool, Postgres};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tracing::field::{Field, Visit};
+use tracing_subscriber::layer::{Context, SubscriberExt as _};
+use tracing_subscriber::registry::LookupSpan;
 
 /// The fixture link that tests purge.
 const PURGED: Uuid = Uuid::from_u128(0xa001);
@@ -122,16 +127,17 @@ async fn deletion_state(pool: &Pool<Postgres>, link_id: Uuid) -> anyhow::Result<
     .await?)
 }
 
-fn batch_sizes(messages: u32, threads: u32, contacts: u32) -> PurgeBatchSizes {
-    PurgeBatchSizes {
+fn batch_sizes(messages: u32, threads: u32, contacts: u32) -> PurgePacing {
+    PurgePacing {
         messages: NonZeroU32::new(messages).expect("non-zero"),
         threads: NonZeroU32::new(threads).expect("non-zero"),
         contacts: NonZeroU32::new(contacts).expect("non-zero"),
+        pause: Duration::ZERO,
     }
 }
 
 /// Small enough that every phase of the fixture takes several batches, with a partial last one.
-fn tiny_batches() -> PurgeBatchSizes {
+fn tiny_batches() -> PurgePacing {
     batch_sizes(4, 3, 3)
 }
 
@@ -173,6 +179,129 @@ async fn purge_removes_all_link_data_in_batches(pool: Pool<Postgres>) -> anyhow:
     assert_eq!(link_rows(&pool, KEPT).await?, LinkRows::FULL);
     // The purged link's stored files are handed to the SFS cleanup instead of leaking.
     assert_eq!(detached_sfs_rows(&pool).await?, 10);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("purge_link"))
+)]
+async fn purge_pauses_between_batches(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // 30 messages in batches of 20 take one full batch and one partial one; threads and
+    // contacts each fit in a single partial batch. So the purge pauses exactly once.
+    let pause = Duration::from_secs(1);
+    let started = std::time::Instant::now();
+
+    let summary = purge_link(
+        &pool,
+        PURGED,
+        PurgePacing {
+            pause,
+            ..batch_sizes(20, 100, 100)
+        },
+    )
+    .await?;
+
+    assert!(started.elapsed() >= pause);
+    assert!(summary.link_deleted);
+    assert_eq!(link_rows(&pool, PURGED).await?, LinkRows::EMPTY);
+    assert_eq!(link_rows(&pool, KEPT).await?, LinkRows::FULL);
+
+    Ok(())
+}
+
+/// The integer fields recorded on each span while installed, by span and field name.
+#[derive(Clone, Default)]
+struct RecordedFields(Arc<Mutex<HashMap<&'static str, HashMap<&'static str, u128>>>>);
+
+impl RecordedFields {
+    fn of(&self, span: &str) -> HashMap<&'static str, u128> {
+        let spans = self.0.lock().expect("recorded fields lock poisoned");
+        spans.get(span).cloned().unwrap_or_default()
+    }
+}
+
+impl<S> tracing_subscriber::Layer<S> for RecordedFields
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+{
+    fn on_record(
+        &self,
+        id: &tracing::span::Id,
+        values: &tracing::span::Record<'_>,
+        ctx: Context<'_, S>,
+    ) {
+        let Some(span) = ctx.span(id) else {
+            return;
+        };
+        let mut spans = self.0.lock().expect("recorded fields lock poisoned");
+        values.record(&mut IntegerFields(spans.entry(span.name()).or_default()));
+    }
+}
+
+struct IntegerFields<'a>(&'a mut HashMap<&'static str, u128>);
+
+impl Visit for IntegerFields<'_> {
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        self.0.insert(field.name(), value.into());
+    }
+
+    fn record_u128(&mut self, field: &Field, value: u128) {
+        self.0.insert(field.name(), value);
+    }
+
+    fn record_debug(&mut self, _field: &Field, _value: &dyn std::fmt::Debug) {}
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("purge_link"))
+)]
+async fn purge_phases_record_their_batches_and_pauses(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let recorded = RecordedFields::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(recorded.clone()));
+    tracing::callsite::rebuild_interest_cache();
+    let pause = Duration::from_millis(5);
+
+    let summary = purge_link(
+        &pool,
+        PURGED,
+        PurgePacing {
+            pause,
+            ..tiny_batches()
+        },
+    )
+    .await?;
+
+    // 30 messages in batches of 4 take 7 full batches and a partial one. A full batch keeps
+    // its last thread even when it emptied it, so they finish 8 of the 11 threads, and the
+    // thread phase takes the other 3 in one full batch and an empty one. 4 contacts in
+    // batches of 3 take a full batch and a partial one. Every full batch is followed by a
+    // pause.
+    let messages = recorded.of("email.purge_link.messages");
+    assert_eq!(messages["batches"], 8);
+    assert_eq!(messages["paused_ms"], 7 * pause.as_millis());
+    assert_eq!(messages["messages"], 30);
+    assert_eq!(messages["threads"], 8);
+    let threads = recorded.of("email.purge_link.threads");
+    assert_eq!(threads["batches"], 2);
+    assert_eq!(threads["paused_ms"], pause.as_millis());
+    assert_eq!(threads["deleted"], 3);
+    let contacts = recorded.of("email.purge_link.contacts");
+    assert_eq!(contacts["batches"], 2);
+    assert_eq!(contacts["paused_ms"], pause.as_millis());
+    assert_eq!(contacts["deleted"], 4);
+    assert_eq!(
+        summary,
+        PurgeSummary {
+            messages: 30,
+            threads: 11,
+            contacts: 4,
+            link_deleted: true,
+        }
+    );
 
     Ok(())
 }
@@ -299,7 +428,7 @@ async fn sync_does_not_resume_on_a_link_being_deleted(pool: Pool<Postgres>) -> a
     assert_eq!(state.deleting_at, Some(deleting_at));
 
     assert!(
-        purge_link(&pool, link.id, PurgeBatchSizes::default())
+        purge_link(&pool, link.id, PurgePacing::default())
             .await?
             .link_deleted
     );
@@ -320,7 +449,7 @@ async fn purge_of_a_missing_link_is_a_no_op(pool: Pool<Postgres>) -> anyhow::Res
 
     mark_link_deleting(&pool, missing).await?;
     assert_eq!(
-        purge_link(&pool, missing, PurgeBatchSizes::default()).await?,
+        purge_link(&pool, missing, PurgePacing::default()).await?,
         PurgeSummary::default()
     );
 

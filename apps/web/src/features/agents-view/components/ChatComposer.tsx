@@ -40,6 +40,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -176,11 +177,16 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
-  // Apply host-supplied drafts (Home suggestions) to the existing editor.
-  createEffect(() => {
-    if (props.draft !== editor.controls.getMarkdown())
-      editor.controls.setMarkdown(props.draft);
-  });
+  // Only host draft changes should replace the editor contents.
+  createEffect(
+    on(
+      () => props.draft,
+      (draft) => {
+        if (draft !== editor.controls.getMarkdown())
+          editor.controls.setMarkdown(draft);
+      }
+    )
+  );
 
   onMount(() => {
     if (props.collapseOnBlur) {
@@ -214,8 +220,8 @@ export function ChatComposer(props: {
     )
       return;
     const attached = attachments();
-    editor.controls.clear();
     props.onDraftChange('');
+    editor.controls.clear();
     hapticImpact('light');
     props.onSend(prompt, attached);
   };
@@ -280,7 +286,7 @@ export function ChatComposer(props: {
       class="min-w-0 flex-1 self-center overflow-y-auto px-[9.375px] not-touch:group-data-[composer-compact=false]/composer:px-1.5 group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px] touch:group-data-[composer-compact=false]/composer:min-h-18 group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full"
     >
       <MarkdownShell
-        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
         config={editor}
         initialValue={props.draft}
         placeholder={

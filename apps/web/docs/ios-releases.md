@@ -104,8 +104,8 @@ icon and app-name branding are Android-only.
    `minNativeBuilds.ios` = the new build number. Installed apps on older
    native builds stop applying OTA bundles and show the "update from the
    App Store" prompt instead (`NativeUpdateRequired` in
-   `src/lib/tauri/TauriProvider.tsx`). The Android floor is independent; see
-   `docs/development/android.md`.
+   `src/lib/tauri/TauriProvider.tsx`). The Android floor is independent:
+   `just android-bump` raises it; see `docs/development/android.md`.
 
 The bump is deliberately a local command rather than something the label
 workflow pushes: a `GITHUB_TOKEN` push never re-triggers required checks, so

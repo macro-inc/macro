@@ -151,7 +151,7 @@ export default function SpreadsheetDemo() {
             aria-busy={actions.pending() === 'ask'}
             onClick={() => fireAndForget(actions.ask(), 'spreadsheet-draft')}
           >
-            <ChatWithAgentIcon />
+            <ChatWithAgentIcon class="size-3.5" />
             Ask Macro
           </Button>
           <Button

@@ -25,8 +25,9 @@ use uuid::Uuid;
 pub(crate) struct ForwardCalendarEventRequest {
     /// The people it goes to, at most 50.
     pub to: Vec<ForwardCalendarEventRecipient>,
-    /// The email's plain-text body. Without one, it names the event and
-    /// says the recipient won't be on the organizer's guest list.
+    /// A plain-text summary of the event the email opens with; the title
+    /// when absent. The email ends with a note saying what the recipient
+    /// can do with the forward.
     #[serde(default)]
     pub body_text: Option<String>,
 }
@@ -116,11 +117,14 @@ impl From<EventForwardError> for ForwardCalendarEventError {
 }
 
 /// Email one of the viewer's events to people the organizer's guest list
-/// does not name: the event's iCalendar file (`METHOD:PUBLISH`, no
-/// attendees, no join link), sent from the inbox that holds the viewer's
-/// copy, with the usual undo delay. Recipients can add the event to their
-/// own calendar; they are not added to the guest list and the organizer is
-/// not told.
+/// does not name, from the inbox that holds the viewer's copy, with the
+/// usual undo delay, carrying the copy's join link. When the copy is Google's
+/// private copy of an invitation from an organizer outside Google, it is a
+/// real invitation (`METHOD:REQUEST`) naming the recipients, who answer it to
+/// the organizer, who gets the email too. Otherwise it is the event's file
+/// (`METHOD:PUBLISH`, no attendees): recipients can add the event to their
+/// own calendar, are not added to the guest list, and the organizer is not
+/// told.
 #[utoipa::path(post,
     path = "/email/calendar-events/{event_id}/forward",
     tag = "email",

@@ -299,6 +299,7 @@ export {
   Initiative,
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
+export type { InitiativeSummary } from './entities/initiatives/namespace';
 export { Meeting } from './entities/meetings/meeting';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
@@ -315,6 +316,7 @@ export {
 } from './entities/routines/routine';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
+export type { TaskSummary } from './entities/tasks/task';
 export { WhatsAppAccount } from './entities/whatsapp/account';
 export {
   WhatsAppChat,

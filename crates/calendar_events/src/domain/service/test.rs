@@ -39,6 +39,8 @@ struct FakeRepo {
     meeting_copies: Vec<crate::domain::models::MeetingCopy>,
     /// What `event_export` resolves for every event.
     export: Option<crate::domain::ics::CalendarEventExport>,
+    /// What `forwarded_copy` reads for every event.
+    forwarded: Option<crate::domain::ics::ForwardedCopy>,
 }
 
 impl CalendarRepository for FakeRepo {
@@ -124,6 +126,14 @@ impl CalendarRepository for FakeRepo {
         _event_id: Uuid,
     ) -> Result<Option<crate::domain::ics::CalendarEventExport>, Report> {
         Ok(self.export.clone())
+    }
+
+    async fn forwarded_copy(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<crate::domain::ics::ForwardedCopy>, Report> {
+        Ok(self.forwarded.clone())
     }
 
     async fn open_join_request(
@@ -1936,32 +1946,172 @@ fn forward_copy(event_id: Uuid, inbox: &str) -> crate::domain::models::MeetingCo
     }
 }
 
-#[tokio::test]
-async fn event_forward_sends_the_export_from_the_requested_copys_inbox() {
-    let requested = Uuid::now_v7();
-    let other = Uuid::now_v7();
-    let service = CalendarService::new(FakeRepo {
+fn invitees() -> Vec<crate::domain::ics::IcsParticipant> {
+    vec![crate::domain::ics::IcsParticipant {
+        email: "friend@example.net".to_string(),
+        name: Some("A Friend".to_string()),
+    }]
+}
+
+/// Google's private copy of an invitation from an organizer outside Google.
+fn outside_invitation() -> crate::domain::ics::ForwardedCopy {
+    crate::domain::ics::ForwardedCopy {
+        google_private_copy: true,
+        is_snapshot: false,
+        join_link: Some(crate::domain::ics::JoinLink {
+            url: "https://teams.microsoft.com/l/meetup-join/abc".to_string(),
+            provider: Some(crate::domain::models::ConferenceProvider::MicrosoftTeams),
+        }),
+    }
+}
+
+fn forward_service(
+    export: crate::domain::ics::CalendarEventExport,
+    forwarded: crate::domain::ics::ForwardedCopy,
+    requested: Uuid,
+) -> CalendarService<FakeRepo> {
+    CalendarService::new(FakeRepo {
         meeting_copies: vec![
-            forward_copy(other, "work@example.com"),
+            forward_copy(Uuid::now_v7(), "work@example.com"),
             forward_copy(requested, "guest@example.com"),
         ],
-        export: Some(forward_export(
-            crate::domain::ics::CalendarEventExportAccess::OwnCopy,
-        )),
+        export: Some(export),
+        forwarded: Some(forwarded),
         ..FakeRepo::default()
-    });
+    })
+}
 
-    let forward = service
-        .event_forward("macro|guest@example.com", requested)
+#[tokio::test]
+async fn event_forward_publishes_a_google_organizers_event_from_the_requested_copys_inbox() {
+    let requested = Uuid::now_v7();
+    let export = crate::domain::ics::CalendarEventExport {
+        ical_uid: "abc123@google.com".to_string(),
+        ..forward_export(crate::domain::ics::CalendarEventExportAccess::OwnCopy)
+    };
+    let forwarded = crate::domain::ics::ForwardedCopy {
+        google_private_copy: false,
+        is_snapshot: false,
+        join_link: Some(crate::domain::ics::JoinLink {
+            url: "https://meet.google.com/abc-defg-hij".to_string(),
+            provider: Some(crate::domain::models::ConferenceProvider::GoogleMeet),
+        }),
+    };
+
+    let forward = forward_service(export, forwarded, requested)
+        .event_forward("macro|guest@example.com", requested, &invitees())
         .await
         .unwrap()
         .expect("the requester's own copy can be forwarded");
 
     assert_eq!(forward.inbox, "guest@example.com");
     assert_eq!(forward.ics.title, "Office tour");
-    assert!(forward.ics.document.contains("METHOD:PUBLISH"));
-    assert!(forward.ics.document.contains("UID:meeting@example.com"));
-    assert!(!forward.ics.document.contains("ATTENDEE"));
+    assert_eq!(
+        forward.kind,
+        crate::domain::ics::CalendarEventForwardKind::EventFile
+    );
+    let document = forward.ics.document.replace("\r\n ", "");
+    assert!(document.contains("METHOD:PUBLISH"));
+    assert!(document.contains("UID:abc123@google.com"));
+    assert!(!document.contains("ATTENDEE"));
+    assert!(document.contains("X-GOOGLE-CONFERENCE:https://meet.google.com/abc-defg-hij"));
+    assert!(document.contains("Join with Google Meet: https://meet.google.com/abc-defg-hij"));
+}
+
+#[tokio::test]
+async fn event_forward_invites_the_recipients_to_an_outside_organizers_meeting() {
+    let requested = Uuid::now_v7();
+    let export = crate::domain::ics::CalendarEventExport {
+        ical_uid: "040000008200E00074C5B7101A82E008000000001".to_string(),
+        organizer_name: Some("Outside Organizer".to_string()),
+        ..forward_export(crate::domain::ics::CalendarEventExportAccess::OwnCopy)
+    };
+
+    let forward = forward_service(export, outside_invitation(), requested)
+        .event_forward("macro|guest@example.com", requested, &invitees())
+        .await
+        .unwrap()
+        .expect("the requester's own copy can be forwarded");
+
+    assert_eq!(
+        forward.kind,
+        crate::domain::ics::CalendarEventForwardKind::Invitation {
+            organizer: crate::domain::ics::IcsParticipant {
+                email: "organizer@example.org".to_string(),
+                name: Some("Outside Organizer".to_string()),
+            },
+        }
+    );
+    let document = forward.ics.document.replace("\r\n ", "");
+    assert!(document.contains("METHOD:REQUEST"));
+    assert!(document.contains("ORGANIZER;CN=\"Outside Organizer\":mailto:organizer@example.org"));
+    assert!(document.contains(
+        "ATTENDEE;CN=\"A Friend\";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:friend@example.net"
+    ));
+    assert_eq!(document.matches("ATTENDEE").count(), 1);
+    assert!(!document.contains("guest@example.com"));
+    assert!(document.contains(
+        "CONFERENCE;VALUE=URI;FEATURE=VIDEO:https://teams.microsoft.com/l/meetup-join/abc"
+    ));
+    assert!(!document.contains("X-GOOGLE-CONFERENCE"));
+}
+
+#[tokio::test]
+async fn event_forward_falls_back_to_the_event_file_without_evidence_of_an_outside_organizer() {
+    let exchange = crate::domain::ics::CalendarEventExport {
+        ical_uid: "040000008200E00074C5B7101A82E008000000001".to_string(),
+        ..forward_export(crate::domain::ics::CalendarEventExportAccess::OwnCopy)
+    };
+    let cases = [
+        (
+            "a copy Google does not mark private",
+            exchange.clone(),
+            crate::domain::ics::ForwardedCopy {
+                google_private_copy: false,
+                ..outside_invitation()
+            },
+        ),
+        (
+            "a snapshot Macro imported",
+            exchange.clone(),
+            crate::domain::ics::ForwardedCopy {
+                is_snapshot: true,
+                ..outside_invitation()
+            },
+        ),
+        (
+            "an imported copy of a Google meeting",
+            crate::domain::ics::CalendarEventExport {
+                ical_uid: "abc123@GOOGLE.com".to_string(),
+                ..exchange.clone()
+            },
+            outside_invitation(),
+        ),
+        (
+            "a copy naming no organizer",
+            crate::domain::ics::CalendarEventExport {
+                organizer_email: None,
+                ..exchange.clone()
+            },
+            outside_invitation(),
+        ),
+    ];
+
+    for (case, export, forwarded) in cases {
+        let requested = Uuid::now_v7();
+        let forward = forward_service(export, forwarded, requested)
+            .event_forward("macro|guest@example.com", requested, &invitees())
+            .await
+            .unwrap()
+            .expect("the requester's own copy can be forwarded");
+
+        assert_eq!(
+            forward.kind,
+            crate::domain::ics::CalendarEventForwardKind::EventFile,
+            "{case}"
+        );
+        assert!(forward.ics.document.contains("METHOD:PUBLISH"), "{case}");
+        assert!(!forward.ics.document.contains("ATTENDEE"), "{case}");
+    }
 }
 
 #[tokio::test]
@@ -1973,11 +2123,12 @@ async fn event_forward_refuses_an_event_none_of_the_requesters_inboxes_holds() {
         export: Some(forward_export(
             crate::domain::ics::CalendarEventExportAccess::OwnCopy,
         )),
+        forwarded: Some(outside_invitation()),
         ..FakeRepo::default()
     });
 
     let forward = service
-        .event_forward("macro|guest@example.com", Uuid::now_v7())
+        .event_forward("macro|guest@example.com", Uuid::now_v7(), &invitees())
         .await
         .unwrap();
 
@@ -1992,11 +2143,12 @@ async fn event_forward_refuses_a_copy_the_export_no_longer_resolves_as_owned() {
         export: Some(forward_export(
             crate::domain::ics::CalendarEventExportAccess::ChannelShared,
         )),
+        forwarded: Some(outside_invitation()),
         ..FakeRepo::default()
     });
 
     let forward = service
-        .event_forward("macro|guest@example.com", requested)
+        .event_forward("macro|guest@example.com", requested, &invitees())
         .await
         .unwrap();
 

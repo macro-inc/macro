@@ -136,7 +136,9 @@ export function AgentComposer(props: {
   const busy = () => {
     const state = turn();
     return (
-      (state !== 'idle' && state !== 'disconnected' && state !== 'stopping') ||
+      state === 'starting' ||
+      state === 'running' ||
+      state === 'blocked' ||
       resuming()
     );
   };

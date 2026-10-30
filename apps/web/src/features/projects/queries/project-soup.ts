@@ -30,6 +30,7 @@ export function projectSoupInput(filters: ProjectFilters): SoupInput {
   );
   if (!input?.initial) throw new Error('Initiative Soup input is unavailable');
   const predicates: GraphqlInitiativeExpr[] = [{ literal: { include: true } }];
+  if (filters.owner) predicates.push({ literal: { owner: filters.owner } });
   if (filters.query)
     predicates.push({ literal: { nameContains: filters.query } });
   if (filters.dueBefore)

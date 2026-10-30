@@ -1479,7 +1479,8 @@ export type InitiativeFilters = {
     /**
      * Opt this query into initiatives at all. Initiatives are off by
      * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
-     * Asking for specific `initiative_ids` or `owners` also opts in.
+     * Asking for specific `initiative_ids`, `owners` or `notification_filters`
+     * also opts in.
      */
     include?: boolean;
     /**
@@ -1491,9 +1492,13 @@ export type InitiativeFilters = {
      */
     name?: string | null;
     /**
-     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-     * owner.
+     * Filter by initiative notification state.
+     */
+    notification_filters?: NotificationFilters;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user@example.com'), a
+     * bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+     * every owner.
      */
     owners?: Array<string>;
 };

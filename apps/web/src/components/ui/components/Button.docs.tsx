@@ -12,11 +12,12 @@ import { ButtonGroup } from './ButtonGroup';
 
 const VARIANTS: ButtonVariant[] = [
   'primary',
-  'neutral',
+  'accent',
   'secondary',
   'outline',
   'ghost',
   'danger',
+  'danger-ghost',
   'success',
   'link',
 ];
@@ -28,7 +29,7 @@ function VariantsDemo() {
       <For each={VARIANTS}>
         {(variant) => (
           <div class="flex flex-wrap items-center gap-4">
-            <span class="w-20 font-mono text-xs text-ink-muted">{variant}</span>
+            <span class="w-24 font-mono text-xs text-ink-muted">{variant}</span>
             <Button variant={variant}>Button</Button>
             <Button variant={variant}>
               <PlusIcon class="size-4" aria-hidden="true" />
@@ -244,7 +245,7 @@ export default defineDoc({
   name: 'Button',
   category: 'Actions',
   description:
-    'Shared action control with semantic materials, automatic desktop elevation and touch glass, explicit icon sizes, and configurable tooltips.',
+    'Shared action control with solid neutral primary, explicit accent emphasis, automatic desktop elevation and touch glass, explicit icon sizes, and configurable tooltips.',
   status: 'beta',
   exports: ['Button', 'ButtonGroup'],
   import: "import { Button, ButtonGroup } from '@ui';",

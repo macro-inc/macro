@@ -46,6 +46,10 @@ sender/generic-address checks.
 - Outlook mobile and Outlook on the web start the quoted thread at `<hr>` plus
   `div#divRplyFwdMsg` (plaintext: a line of underscores, then `From:`). Cut
   there. A later `border-top` "From:" block is a nested quote.
+- "On [date] [sender] wrote:" can share an element, or a text node, with the
+  reply in some clients. Cut at the text node, never the shared element, and
+  never return an empty reply: an empty cut falls through to the next
+  splitter. Gmail writes a narrow no-break space before AM/PM.
 - Sanitization is security-sensitive (XSS via email HTML): any allowlist
   change needs a test proving the previously-dangerous input is now stripped,
   not just that benign input survives.

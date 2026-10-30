@@ -28,6 +28,7 @@ import {
   createEffect,
   createSignal,
   ErrorBoundary,
+  type JSX,
   on,
   onCleanup,
   type ParentProps,
@@ -38,6 +39,7 @@ import {
   ProjectsProvider,
   useProjectsContext,
 } from './context/projects-context';
+import type { ProjectScope } from './core/project';
 import {
   createProjectCollection,
   type ProjectListActivation,
@@ -48,10 +50,6 @@ import { ProjectShareLauncher } from './project-share';
 import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
-import {
-  ProjectsSidebar,
-  type ProjectsSidebarProps,
-} from './views/projects-sidebar';
 
 function createProjectReadGate() {
   // Each source invokes this under its own owner, which can outlive this view.
@@ -107,20 +105,15 @@ function ProjectsContent(props: ParentProps) {
 type ProjectsTabProps = {
   onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
   search?: Parameters<typeof createProjectCollection>[0]['search'];
+  scope?: () => ProjectScope;
+  title?: string;
+  mobileNavigation?: JSX.Element;
 };
 
 export function ProjectsTab(props: ProjectsTabProps) {
   return (
     <Projects>
       <ProjectsCollectionHost {...props} />
-    </Projects>
-  );
-}
-
-export function ProjectsSidebarSection(props: ProjectsSidebarProps) {
-  return (
-    <Projects>
-      <ProjectsSidebar {...props} />
     </Projects>
   );
 }
@@ -152,6 +145,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
         ...createProjectCollectionPersistence(panel.handle),
         createSource: context.createCollectionSource,
         search: props.search,
+        scope: () => props.scope?.() ?? 'all',
         userId: context.userId,
         onOpen: (id, metadata) => activation.current?.(id, metadata),
       })
@@ -185,6 +179,8 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
         }
         onOpen={open}
         collection={displayCollection}
+        title={props.title}
+        mobileNavigation={props.mobileNavigation}
         ganttEnabled={ganttFlag().enabled}
         createAssigneeName={(id) => usePropertyUserDisplay(id).name}
         onCreate={(initialDraft) =>

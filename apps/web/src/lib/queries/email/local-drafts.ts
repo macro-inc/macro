@@ -503,6 +503,24 @@ export async function beginDraftAttempt(
   return attempt;
 }
 
+/**
+ * A delete that never reached the queue returns the working copy to its
+ * editor. Clearing the attempt also refuses a replay of an enqueue whose
+ * outcome was uncertain.
+ */
+export async function abandonDraftDelete(attempt: DraftAttempt): Promise<void> {
+  const owner = await emailStorageSession();
+  if (owner.accountId !== attempt.accountId) return;
+  await localDraftStore.update(owner, attempt.draftKey, (draft) =>
+    draft.generation !== attempt.generation ||
+    draft.latestAttemptId !== attempt.id ||
+    draft.queuedAttemptId === attempt.id ||
+    draft.status !== 'deleting'
+      ? draft
+      : { ...draft, latestAttemptId: undefined, status: 'dirty' }
+  );
+}
+
 /** Admission is separate from intent: two stores cannot enqueue atomically. */
 export async function markDraftAttemptQueued(
   attempt: DraftAttempt

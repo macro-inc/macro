@@ -1,3 +1,4 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { match } from 'ts-pattern';
 import type {
   GroupedSoupInitialInput,
@@ -21,12 +22,19 @@ export function localSoupGroupKeys(
     match(input.groupBy.field)
       // Entity type cannot change for a normalized identity. Retain its server key.
       .with('ENTITY_TYPE', () => undefined)
-      .with('PROJECT', () => {
-        if ('projectId' in item) return [item.projectId ?? ''];
-        if (item.__typename === 'GraphqlSoupProject')
-          return [item.parentId ?? ''];
-        return undefined;
-      })
+      .with('PROJECT', () =>
+        localSoupGroupKeys(
+          item,
+          {
+            ...input,
+            groupBy: {
+              field: 'PROPERTY',
+              propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+            },
+          },
+          now
+        )
+      )
       .with('PROPERTY', () => {
         if (!('properties' in item)) return undefined;
         const entityType = match(item)
@@ -195,6 +203,7 @@ export function projectLocalGroupedSoup(
   );
   return bins.map((bin) => ({
     key: bin.key,
+    label: bin.label ?? null,
     totalCount: bin.totalCount,
     nextCursor: bin.nextCursor,
     items: bin.itemIds.flatMap((key) => {

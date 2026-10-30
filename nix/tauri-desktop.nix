@@ -397,6 +397,7 @@
         nativeBuildInputs = [ pkgs.makeWrapper ];
         postBuild = ''
           wrapProgram "$out/bin/app" \
+            --prefix PATH : ${lib.makeBinPath [ pkgs.desktop-file-utils ]} \
             --prefix LD_LIBRARY_PATH : ${
               lib.makeLibraryPath [
                 pkgs.webkitgtk_4_1

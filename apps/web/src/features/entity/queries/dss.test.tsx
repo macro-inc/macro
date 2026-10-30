@@ -4,7 +4,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/solid-query';
-import { err, ok } from 'neverthrow';
+import { err, errAsync, ok, okAsync } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TaskEntity } from '../types/entity';
@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   deleteCallGraphql: vi.fn(),
   deleteReminder: vi.fn(),
   deleteSchedule: vi.fn(),
+  trashDatabase: vi.fn(),
+  graphqlClient: { mutation: vi.fn() },
   moveToFolder: vi.fn(),
   copyItem: vi.fn(),
   removeSoup: vi.fn(),
@@ -24,6 +26,9 @@ const mocks = vi.hoisted(() => ({
   rollbackSearch: vi.fn(),
   refresh: vi.fn(),
   failure: vi.fn(),
+}));
+vi.mock('@block-database/queries/trash-database', () => ({
+  trashDatabase: mocks.trashDatabase,
 }));
 vi.mock('@core/component/FileList/itemOperations', () => ({
   deleteItem: mocks.deleteItem,
@@ -71,6 +76,9 @@ vi.mock('@service-scheduled-action/client', () => ({
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { reminders: { deleteReminder: mocks.deleteReminder } },
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getEntityGraphqlClient: () => mocks.graphqlClient,
 }));
 
 import { scheduledActionKeys } from '@app/features/routines/queries/keys';
@@ -134,6 +142,7 @@ beforeEach(() => {
   mocks.removeSearch.mockReturnValue({ rollback: mocks.rollbackSearch });
   mocks.refresh.mockResolvedValue(undefined);
   mocks.deleteItem.mockResolvedValue(true);
+  mocks.trashDatabase.mockReturnValue(okAsync(undefined));
   mocks.moveToFolder.mockResolvedValue(true);
   mocks.copyItem.mockResolvedValue('copied-task');
   onlineManager.setOnline(true);
@@ -374,6 +383,34 @@ describe('bulk delete GraphQL optimism', () => {
       'Deleted 2 of 4 items; 2 failed'
     );
   });
+
+  it('trashes databases through the database API instead of DSS delete', async () => {
+    const { mutation } = mount();
+    await expect(
+      mutation.mutateAsync([entity('db-1', 'database')])
+    ).resolves.toEqual([true]);
+    expect(mocks.trashDatabase).toHaveBeenCalledWith(
+      mocks.graphqlClient,
+      'db-1'
+    );
+    expect(mocks.deleteItem).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])(
+    'restores a refused database deletion with GraphQL Soup enabled=%s',
+    async (enabled) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      mocks.graphqlEnabled.mockReturnValue(enabled);
+      mocks.trashDatabase.mockReturnValue(errAsync({ kind: 'unreachable' }));
+      const { mutation } = mount();
+      await expect(
+        mutation.mutateAsync([entity('db-1', 'database')])
+      ).rejects.toBeDefined();
+      expect(mocks.rollbackSoup).toHaveBeenCalled();
+      expect(mocks.rollbackSearch).toHaveBeenCalled();
+      expect(mocks.failure).toHaveBeenCalled();
+    }
+  );
 
   it('does not remove or invalidate unsuccessful side-effect entities', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});

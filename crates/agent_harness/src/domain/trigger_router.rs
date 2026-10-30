@@ -72,6 +72,10 @@ pub fn route_agent_trigger(
                 .as_user()
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
+            let mut context = event.context;
+            links.link_context_attachments(context.as_mut());
+            let attachments =
+                links.prompt_attachments_for(&event.message.attachments, context.as_ref());
             Ok(RoutedTrigger::Command(
                 event.session_id,
                 HarnessCommand::ConversationMessage(OpenSession {
@@ -84,8 +88,8 @@ pub fn route_agent_trigger(
                         message_id: event.message.message_id,
                         sender,
                         content: event.message.content,
-                        attachments: links.prompt_attachments(&event.message.attachments),
-                        context: event.context,
+                        attachments,
+                        context,
                     }),
                 }),
             ))
@@ -119,7 +123,7 @@ pub fn route_agent_trigger(
             let Some(OpeningMention {
                 bot_id,
                 message,
-                context,
+                mut context,
             }) = event.mention()
             else {
                 return Err(Skipped::Unrecognized);
@@ -132,6 +136,8 @@ pub fn route_agent_trigger(
                 .as_user()
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
+            links.link_context_attachments(context.as_mut());
+            let attachments = links.prompt_attachments_for(&message.attachments, context.as_ref());
             Ok(RoutedTrigger::Command(
                 AgentSessionId::new(),
                 HarnessCommand::Open(OpenSession {
@@ -146,7 +152,7 @@ pub fn route_agent_trigger(
                         message_id: message.message_id,
                         sender,
                         content: message.content,
-                        attachments: links.prompt_attachments(&message.attachments),
+                        attachments,
                         context,
                     }),
                 }),
@@ -158,7 +164,7 @@ pub fn route_agent_trigger(
                 session_id,
                 kind: _,
                 message,
-                context,
+                mut context,
             }) = event.session_message()
             else {
                 return Err(Skipped::Unrecognized);
@@ -173,16 +179,16 @@ pub fn route_agent_trigger(
             let kind = runtime
                 .as_ref()
                 .map_or(AgentKind::External, |runtime| runtime.kind);
+            links.link_context_attachments(context.as_mut());
             if kind.is_managed() {
+                // The session already saw its thread's files on its first turn.
+                let attachments = links.prompt_attachments_for(&message.attachments, None);
                 return Ok(RoutedTrigger::Command(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction {
                         context,
                         ..DeliverAction::prompt(
-                            AgentAction::prompt_with_attachments(
-                                message.content,
-                                links.prompt_attachments(&message.attachments),
-                            ),
+                            AgentAction::prompt_with_attachments(message.content, attachments),
                             message.sender.as_user().cloned(),
                             Some(origin),
                         )

@@ -38,6 +38,18 @@ fn android_native_check_is_an_unconditional_required_merge_check() {
         version_step.contains("if: steps.labels.outputs.skip != 'true'"),
         "the version check runs only without the skip label: {android}"
     );
+    // A skipped PR never releases, so it may not raise the Android floor.
+    let floor = android
+        .find("--skip-release")
+        .expect("skip-label floor check step");
+    let floor_step = android[..floor]
+        .rsplit("\n    - ")
+        .next()
+        .expect("floor check step body");
+    assert!(
+        floor_step.contains("if: steps.labels.outputs.skip == 'true'"),
+        "the floor check runs only with the skip label: {android}"
+    );
     assert!(
         !android.contains("!steps.labels"),
         "never negate a comparison with a leading `!`: {android}"

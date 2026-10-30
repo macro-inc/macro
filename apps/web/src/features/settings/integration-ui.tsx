@@ -2,6 +2,7 @@ import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import { settingsTarget } from './core/settings-target';
 
 export function HarnessIcon(props: { children: JSX.Element }) {
   return (
@@ -45,7 +46,7 @@ export function ConnectAction(props: {
   const inert = () => Boolean(props.disabled || props.loading);
   const className = () =>
     cn(
-      'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-sm font-medium',
+      'inline-flex items-center gap-1.5 h-7 touch:min-h-11 px-2 rounded-md text-sm font-medium whitespace-nowrap',
       'cursor-default transition-colors',
       'outline-none focus-visible:bg-ink/6',
       inert() && 'opacity-50 pointer-events-none',
@@ -119,5 +120,39 @@ export function StatusDot(props: { state: ConnectionState; label?: string }) {
         props.state === 'disconnected' && 'bg-ink-muted'
       )}
     />
+  );
+}
+
+/**
+ * A titled group on the Integrations page: one full-width row per
+ * integration, each on its own surface, so every row reads the same way.
+ */
+export function IntegrationGroup(props: {
+  title: string;
+  description?: string;
+  /** Right-aligned controls beside the heading. */
+  actions?: JSX.Element;
+  children: JSX.Element;
+}) {
+  return (
+    <section
+      aria-label={props.title}
+      data-settings-target={settingsTarget(props.title)}
+      tabIndex={-1}
+      class="flex min-w-0 flex-col gap-3 outline-none"
+    >
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div class="flex min-w-0 flex-col gap-1">
+          <h2 class="text-lg font-medium text-ink">{props.title}</h2>
+          <Show when={props.description}>
+            <p class="text-sm text-ink-muted">{props.description}</p>
+          </Show>
+        </div>
+        <Show when={props.actions}>
+          <div class="shrink-0">{props.actions}</div>
+        </Show>
+      </div>
+      <div class="flex flex-col gap-2">{props.children}</div>
+    </section>
   );
 }

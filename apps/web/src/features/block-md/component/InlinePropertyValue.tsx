@@ -68,7 +68,6 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       }
       canEdit={ctx.canEdit}
       onSave={ctx.saveHandler.saveProperty}
-      onRefresh={ctx.onRefresh}
       onEdit={
         props.entityId && usesInlineEditor()
           ? (property, anchor) =>

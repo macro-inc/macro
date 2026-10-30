@@ -206,6 +206,16 @@ pub trait MailboxAttachmentClient: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
 }
 
+/// Original message source capability.
+pub trait MailboxRawMessageClient: Send + Sync + 'static {
+    /// Fetches a message's original RFC 822 bytes.
+    fn get_raw_message(
+        &self,
+        access_token: &AccessToken,
+        provider_message_id: &str,
+    ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
+}
+
 /// Mailbox contact synchronization capabilities.
 pub trait MailboxContactsClient: Send + Sync + 'static {
     /// Fetches and normalizes the mailbox owner's contact record.
@@ -520,6 +530,12 @@ impl MailboxAttachmentClient for NoOpMailboxClient {
         _: &str,
         _: &str,
     ) -> Result<Vec<u8>, EmailApiError> {
+        Err(unavailable())
+    }
+}
+
+impl MailboxRawMessageClient for NoOpMailboxClient {
+    async fn get_raw_message(&self, _: &AccessToken, _: &str) -> Result<Vec<u8>, EmailApiError> {
         Err(unavailable())
     }
 }

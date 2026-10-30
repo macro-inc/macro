@@ -19,6 +19,8 @@ pub struct CreateProjectArgs {
     pub parent_id: Option<String>,
     /// Initial sharing configuration.
     pub share_permission: SharePermissionV2,
+    /// Last-edit timestamp; `None` takes now.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Arguments for editing a project.

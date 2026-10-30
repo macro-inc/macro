@@ -89,7 +89,15 @@ async fn authorize<I: InflightAuthStore + 'static>(
     Query(params): Query<AuthorizeRequest>,
 ) -> Response {
     match auth_proxy.start_authorization(params).await {
-        Ok(url) => Redirect::temporary(&url).into_response(),
+        // The browser carries the MCP client page's Referer across this
+        // redirect, and FusionAuth rejects any Referer outside its first-party
+        // origin list with "Invalid origin uri". The redirect URI policy has
+        // already vetted the client, so the client's origin is withheld.
+        Ok(url) => (
+            [(header::REFERRER_POLICY, "no-referrer")],
+            Redirect::temporary(&url),
+        )
+            .into_response(),
         Err(StartAuthorizationError::UnsupportedResponseType) => (
             axum::http::StatusCode::BAD_REQUEST,
             "unsupported response_type",
@@ -380,7 +388,14 @@ where
     S::Response: axum::response::IntoResponse,
     S::Future: Send + 'static,
 {
-    mcp_router_with_oauth(oauth_router(auth_proxy), jwt_args, mcp_service)
+    {
+        let clients = auth_proxy.access_token_clients();
+        mcp_router_with_oauth(
+            oauth_router(auth_proxy),
+            super::middleware::BearerAuth { jwt_args, clients },
+            mcp_service,
+        )
+    }
 }
 
 /// MCP routes for a shared HTTP listener whose process owns health checks.
@@ -399,10 +414,21 @@ where
     S::Response: axum::response::IntoResponse,
     S::Future: Send + 'static,
 {
-    mcp_router_with_oauth(oauth_routes(auth_proxy), jwt_args, mcp_service)
+    {
+        let clients = auth_proxy.access_token_clients();
+        mcp_router_with_oauth(
+            oauth_routes(auth_proxy),
+            super::middleware::BearerAuth { jwt_args, clients },
+            mcp_service,
+        )
+    }
 }
 
-fn mcp_router_with_oauth<S>(oauth: Router, jwt_args: JwtValidationArgs, mcp_service: S) -> Router
+fn mcp_router_with_oauth<S>(
+    oauth: Router,
+    auth: super::middleware::BearerAuth,
+    mcp_service: S,
+) -> Router
 where
     S: tower::Service<axum::http::Request<axum::body::Body>, Error = std::convert::Infallible>
         + Clone
@@ -416,7 +442,7 @@ where
         Router::new()
             .nest_service("/mcp", mcp_service)
             .layer(axum_mw::from_fn_with_state(
-                jwt_args,
+                auth,
                 super::middleware::validate_bearer,
             ));
 

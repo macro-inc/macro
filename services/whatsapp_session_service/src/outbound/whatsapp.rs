@@ -474,6 +474,9 @@ fn rejected(error: &ClientError) -> Option<&'static str> {
         ClientError::RecipientAdJid
         | ClientError::BroadcastListUnsupported
         | ClientError::UnknownServer => Some("invalid_recipient"),
+        ClientError::RecipientNotOnWhatsApp => Some("recipient_not_on_provider"),
+        // Only the queries before the message (recipient lookups) are IQs.
+        _ if error.is_iq_code(429) => Some("rate_limited"),
         _ => None,
     }
 }

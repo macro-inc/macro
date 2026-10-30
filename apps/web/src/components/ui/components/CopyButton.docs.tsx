@@ -13,7 +13,7 @@ function VariantsDemo() {
             variant={variant}
             onClick={() => navigator.clipboard.writeText('Copied from Macro')}
           >
-            <CopyIcon />
+            <CopyIcon class="size-4" />
             Copy {variant}
           </CopyButton>
         )}
@@ -36,7 +36,7 @@ function SizesDemo() {
             variant="secondary"
             onClick={() => navigator.clipboard.writeText('Copied from Macro')}
           >
-            <CopyIcon />
+            <CopyIcon class="size-4" />
             {size !== 'icon-md' && 'Copy'}
           </CopyButton>
         )}

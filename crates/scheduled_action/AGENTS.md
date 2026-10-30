@@ -29,8 +29,10 @@ each run.
 - An authenticated caller with a routine ID can read its detail; listing,
   run history, and mutations stay owner-scoped.
 - Templates: the owner shares a snapshot of a routine (keyed by the routine's
-  ID) with its references marked as variables; any authenticated caller reads
-  it, and activating creates the caller's own routine with `template_id`
+  ID) with its references marked as variables; publishing, reading, and activation
+  require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
+  missing configuration, and failed evaluations return 404. Owner unsharing
+  stays available. Activating creates the caller's own routine with `template_id`
   pointing back. Filling variables happens in the client.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.

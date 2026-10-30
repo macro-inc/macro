@@ -32,8 +32,14 @@ const BUTTON_VARIANTS = [
   'secondary',
   'danger',
   'primary',
+  'accent',
 ] as const;
-const BUTTON_CONTENT_VARIANTS = ['outline', 'secondary', 'primary'] as const;
+const BUTTON_CONTENT_VARIANTS = [
+  'outline',
+  'secondary',
+  'primary',
+  'accent',
+] as const;
 const BUTTON_ICON_SIZES = {
   sm: 'icon-sm',
   md: 'icon-md',

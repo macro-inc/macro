@@ -132,7 +132,7 @@ export function DocxFindBar(props: DocxFindBarProps) {
           aria-pressed={props.matchCase}
           onClick={() => props.onToggleMatchCase()}
         >
-          <TextAa />
+          <TextAa class="size-4" />
         </Toolbar.Button>
         <Toolbar.Button
           aria-label="Whole words only"
@@ -140,7 +140,7 @@ export function DocxFindBar(props: DocxFindBarProps) {
           aria-pressed={props.wholeWord}
           onClick={() => props.onToggleWholeWord()}
         >
-          <TextT />
+          <TextT class="size-4" />
         </Toolbar.Button>
         <Toolbar.Button
           aria-label="Previous match"
@@ -148,7 +148,7 @@ export function DocxFindBar(props: DocxFindBarProps) {
           disabled={!props.count}
           onClick={() => props.onPrevious()}
         >
-          <CaretUp />
+          <CaretUp class="size-4" />
         </Toolbar.Button>
         <Toolbar.Button
           aria-label="Next match"
@@ -156,7 +156,7 @@ export function DocxFindBar(props: DocxFindBarProps) {
           disabled={!props.count}
           onClick={() => props.onNext()}
         >
-          <CaretDown />
+          <CaretDown class="size-4" />
         </Toolbar.Button>
         <Show when={props.canEdit}>
           <Toolbar.Button
@@ -166,7 +166,7 @@ export function DocxFindBar(props: DocxFindBarProps) {
             onClick={() => props.onToggleReplace()}
             data-docx-find-replace-toggle
           >
-            <Swap />
+            <Swap class="size-4" />
           </Toolbar.Button>
         </Show>
         <Toolbar.Button
@@ -174,7 +174,7 @@ export function DocxFindBar(props: DocxFindBarProps) {
           tooltip={{ content: 'Close', shortcut: 'Escape' }}
           onClick={() => props.onClose()}
         >
-          <X />
+          <X class="size-4" />
         </Toolbar.Button>
       </div>
       <Show when={props.canEdit && props.replacing}>

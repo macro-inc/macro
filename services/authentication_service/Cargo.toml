@@ -136,6 +136,7 @@ maud = { version = "0.27.0" }
 miniserde = "0.1.45"
 microsoft_oauth_grant_db_utils = { path = "../../crates/microsoft_oauth_grant_db_utils" }
 mobile_welcome_email_db_client = { path = "../../crates/mobile_welcome_email_db_client" }
+models_email = { path = "../../crates/models_email" }
 mockall = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
@@ -190,6 +191,7 @@ database_env_vars = { path = "../../crates/database_env_vars" }
 
 [dev-dependencies]
 cool_asserts = "2"
+macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 serde_urlencoded = { workspace = true }
 wiremock = { workspace = true }

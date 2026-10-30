@@ -1038,16 +1038,21 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self, access), err)]
+    /// Logs by cause rather than with `err`: callers look up whatever address
+    /// they were given, so one that is not an email is theirs to fix, while a
+    /// repository failure stays at ERROR.
+    #[tracing::instrument(skip(self, access))]
     async fn get_contact_by_email(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         email: &str,
     ) -> Result<Option<CrmContact>, CrmError> {
-        let email = normalize_contact_email(email)?;
+        let email =
+            normalize_contact_email(email).inspect_err(|error| tracing::info!(error = %error))?;
         self.companies_repository
             .get_contact_by_email_for_team(&access.team_id(), &email, access.include_hidden())
             .await
+            .inspect_err(|error| tracing::error!(error = %error))
     }
 
     #[tracing::instrument(skip(self, access), err)]

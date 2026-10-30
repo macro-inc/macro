@@ -7,6 +7,10 @@ import type { RoutineTarget } from './core/routine-target';
 import { Routine } from './routine-detail';
 import type { HistoryRecord } from './views/routine-history';
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
+
 vi.mock('@app/lib/split-router', () => ({
   createSearchParamsCodec: () => ({}),
   createSearchParams: () => {

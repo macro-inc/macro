@@ -181,34 +181,39 @@ const INLINE: Array<{
   icon: () => JSX.Element;
   shortcut?: string;
 }> = [
-  { format: 'bold', label: 'Bold', icon: () => <TextB />, shortcut: 'Mod+B' },
+  {
+    format: 'bold',
+    label: 'Bold',
+    icon: () => <TextB class="size-4.5" />,
+    shortcut: 'Mod+B',
+  },
   {
     format: 'italic',
     label: 'Italic',
-    icon: () => <TextItalic />,
+    icon: () => <TextItalic class="size-4.5" />,
     shortcut: 'Mod+I',
   },
   {
     format: 'underline',
     label: 'Underline',
-    icon: () => <TextUnderline />,
+    icon: () => <TextUnderline class="size-4.5" />,
     shortcut: 'Mod+U',
   },
   {
     format: 'strike',
     label: 'Strikethrough',
-    icon: () => <TextStrikethrough />,
+    icon: () => <TextStrikethrough class="size-4.5" />,
   },
   {
     format: 'superscript',
     label: 'Superscript',
-    icon: () => <TextSuperscript />,
+    icon: () => <TextSuperscript class="size-4.5" />,
     shortcut: 'Mod+Shift+=',
   },
   {
     format: 'subscript',
     label: 'Subscript',
-    icon: () => <TextSubscript />,
+    icon: () => <TextSubscript class="size-4.5" />,
     shortcut: 'Mod+=',
   },
 ];
@@ -262,14 +267,26 @@ const ALIGNMENTS: Array<{
   label: string;
   icon: () => JSX.Element;
 }> = [
-  { alignment: 'left', label: 'Align left', icon: () => <TextAlignLeft /> },
+  {
+    alignment: 'left',
+    label: 'Align left',
+    icon: () => <TextAlignLeft class="size-4.5" />,
+  },
   {
     alignment: 'center',
     label: 'Align center',
-    icon: () => <TextAlignCenter />,
+    icon: () => <TextAlignCenter class="size-4.5" />,
   },
-  { alignment: 'right', label: 'Align right', icon: () => <TextAlignRight /> },
-  { alignment: 'justify', label: 'Justify', icon: () => <TextAlignJustify /> },
+  {
+    alignment: 'right',
+    label: 'Align right',
+    icon: () => <TextAlignRight class="size-4.5" />,
+  },
+  {
+    alignment: 'justify',
+    label: 'Justify',
+    icon: () => <TextAlignJustify class="size-4.5" />,
+  },
 ];
 
 /**
@@ -292,7 +309,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
       <Toolbar
         size="icon-sm"
         aria-label="Document formatting"
-        class="flex h-10 w-full min-w-0 gap-0.5 overflow-x-auto overscroll-x-contain rounded-none border-0 bg-transparent px-3 py-0 touch:h-[48px] touch:touch-pan-x touch:px-1 [&_[data-button]]:size-7 [&_[data-button]>svg]:size-[18px]! [&_select]:h-7"
+        class="flex h-10 w-full min-w-0 gap-0.5 overflow-x-auto overscroll-x-contain rounded-none border-0 bg-transparent px-3 py-0 touch:h-[48px] touch:touch-pan-x touch:px-1 [&_[data-button]]:size-7 [&_select]:h-7"
       >
         <Show when={props.canEdit}>
           <Toolbar.Group>
@@ -301,14 +318,14 @@ export function DocxToolbar(props: DocxToolbarProps) {
               tooltip={{ content: 'Undo', shortcut: 'Mod+Z' }}
               onClick={() => props.onUndo()}
             >
-              <ArrowCounterClockwise />
+              <ArrowCounterClockwise class="size-4.5" />
             </Toolbar.Button>
             <Toolbar.Button
               aria-label="Redo"
               tooltip={{ content: 'Redo', shortcut: 'Mod+Shift+Z' }}
               onClick={() => props.onRedo()}
             >
-              <ArrowClockwise />
+              <ArrowClockwise class="size-4.5" />
             </Toolbar.Button>
           </Toolbar.Group>
           <Toolbar.Divider class="mx-1.5 my-2.5" />
@@ -403,7 +420,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
             </For>
             <ToolbarMenu
               label="Text color"
-              icon={<TextAUnderline />}
+              icon={<TextAUnderline class="size-4.5" />}
               testId="color"
               onClose={props.onRefocus}
             >
@@ -425,7 +442,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
             </ToolbarMenu>
             <ToolbarMenu
               label="Highlight"
-              icon={<Highlighter />}
+              icon={<Highlighter class="size-4.5" />}
               testId="highlight"
               onClose={props.onRefocus}
             >
@@ -450,7 +467,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               tooltip="Clear formatting"
               onClick={() => props.onClearFormat()}
             >
-              <TextTSlash />
+              <TextTSlash class="size-4.5" />
             </Toolbar.Button>
           </Toolbar.Group>
           <Toolbar.Divider class="mx-1.5 my-2.5" />
@@ -460,14 +477,14 @@ export function DocxToolbar(props: DocxToolbarProps) {
               tooltip="Bulleted list"
               onClick={() => props.onList('bullet')}
             >
-              <ListBullets />
+              <ListBullets class="size-4.5" />
             </Toolbar.Button>
             <Toolbar.Button
               aria-label="Numbered list"
               tooltip="Numbered list"
               onClick={() => props.onList('number')}
             >
-              <ListNumbers />
+              <ListNumbers class="size-4.5" />
             </Toolbar.Button>
           </Toolbar.Group>
           <Toolbar.Divider class="mx-1.5 my-2.5" />
@@ -488,18 +505,18 @@ export function DocxToolbar(props: DocxToolbarProps) {
               tooltip={{ content: 'Decrease indent', shortcut: 'Shift+Tab' }}
               onClick={() => props.onIndent(false)}
             >
-              <TextOutdent />
+              <TextOutdent class="size-4.5" />
             </Toolbar.Button>
             <Toolbar.Button
               aria-label="Increase indent"
               tooltip="Increase indent"
               onClick={() => props.onIndent(true)}
             >
-              <TextIndent />
+              <TextIndent class="size-4.5" />
             </Toolbar.Button>
             <ToolbarMenu
               label="Line spacing"
-              icon={<ArrowsDownUp />}
+              icon={<ArrowsDownUp class="size-4.5" />}
               testId="line-spacing"
               onClose={props.onRefocus}
             >
@@ -526,12 +543,12 @@ export function DocxToolbar(props: DocxToolbarProps) {
             tooltip="Insert table"
             onClick={() => props.onInsertTable()}
           >
-            <Table />
+            <Table class="size-4.5" />
           </Toolbar.Button>
           <Show when={props.inBody}>
             <ToolbarMenu
               label="Insert footnote or endnote"
-              icon={<AsteriskSimple />}
+              icon={<AsteriskSimple class="size-4.5" />}
               testId="notes"
               onClose={props.onRefocus}
             >
@@ -546,7 +563,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
           <Show when={props.inTable}>
             <ToolbarMenu
               label="Table rows and columns"
-              icon={<RowsPlusBottom />}
+              icon={<RowsPlusBottom class="size-4.5" />}
               testId="table"
               onClose={props.onRefocus}
             >
@@ -572,7 +589,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
               data-docx-track-changes
               onClick={() => props.onToggleTracking()}
             >
-              <GitDiff />
+              <GitDiff class="size-4.5" />
             </Toolbar.Button>
             <Toolbar.Button
               aria-label={
@@ -588,8 +605,11 @@ export function DocxToolbar(props: DocxToolbarProps) {
               aria-pressed={props.showMarkup}
               onClick={() => props.onToggleMarkup()}
             >
-              <Show when={props.showMarkup} fallback={<EyeSlash />}>
-                <Eye />
+              <Show
+                when={props.showMarkup}
+                fallback={<EyeSlash class="size-4.5" />}
+              >
+                <Eye class="size-4.5" />
               </Show>
             </Toolbar.Button>
             <Show when={props.tracking || props.onRevision}>
@@ -599,7 +619,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
                 disabled={!props.onRevision}
                 onClick={() => props.onAccept(false)}
               >
-                <Check />
+                <Check class="size-4.5" />
               </Toolbar.Button>
               <Toolbar.Button
                 aria-label="Reject change"
@@ -607,21 +627,21 @@ export function DocxToolbar(props: DocxToolbarProps) {
                 disabled={!props.onRevision}
                 onClick={() => props.onReject(false)}
               >
-                <X />
+                <X class="size-4.5" />
               </Toolbar.Button>
               <Toolbar.Button
                 aria-label="Accept all changes"
                 tooltip="Accept all changes"
                 onClick={() => props.onAccept(true)}
               >
-                <Checks />
+                <Checks class="size-4.5" />
               </Toolbar.Button>
               <Toolbar.Button
                 aria-label="Reject all changes"
                 tooltip="Reject all changes"
                 onClick={() => props.onReject(true)}
               >
-                <XCircle />
+                <XCircle class="size-4.5" />
               </Toolbar.Button>
             </Show>
           </Toolbar.Group>
@@ -633,7 +653,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
             tooltip={{ content: 'Comment on selection', shortcut: 'Mod+Alt+M' }}
             onClick={() => props.onComment()}
           >
-            <ChatCircleText />
+            <ChatCircleText class="size-4.5" />
           </Toolbar.Button>
         </Show>
         <Toolbar.Button
@@ -641,7 +661,7 @@ export function DocxToolbar(props: DocxToolbarProps) {
           tooltip={{ content: 'Find and replace', shortcut: 'Mod+F' }}
           onClick={() => props.onFind()}
         >
-          <MagnifyingGlass />
+          <MagnifyingGlass class="size-4.5" />
         </Toolbar.Button>
       </Toolbar>
     </div>

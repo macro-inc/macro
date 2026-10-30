@@ -91,13 +91,22 @@ where
     Edges: SoupEntityEdges,
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
+    let viewer = macro_user_id.clone();
     let request = input.into_request(macro_user_id)?;
     let sort_method = *request.cursor.sort_method();
     let filters = request.cursor.filter().clone();
+    let group_by = request.grouping.field.clone();
     let items = service.get_user_soup_grouped(request).await?;
     let groups: NestedSoupGroups<_, _> = items.collect();
+    let keys: Vec<String> = groups
+        .keys()
+        .filter(|key| !key.is_empty())
+        .cloned()
+        .collect();
+    let labels = service.group_labels(viewer, &group_by, &keys).await?;
     Ok(GroupedSoup::new(
         groups.with_next_cursors(sort_method, filters),
+        &labels,
     ))
 }
 
@@ -133,6 +142,39 @@ where
             "Soup returned a non-email entity for an email-thread request",
         )),
     }
+}
+
+/// Resolve email threads, in the given order, through the user-scoped Soup
+/// item loader. Missing or inaccessible threads are left out.
+pub async fn resolve_soup_email_threads<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    thread_ids: Vec<uuid::Uuid>,
+) -> async_graphql::Result<Vec<GraphqlSoupEmailThread<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = ctx.data::<SoupItemDataLoader>()?;
+    // Concurrent loads coalesce into one batched Soup request per user.
+    let items = futures::future::try_join_all(thread_ids.into_iter().map(|thread_id| {
+        loader.load_one((
+            user_id.clone(),
+            EntityType::EmailThread.with_entity_string(thread_id.to_string()),
+        ))
+    }))
+    .await?;
+    let mut threads = Vec::with_capacity(items.len());
+    for item in items.into_iter().flatten() {
+        match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
+            GraphqlSoupEntity::EmailThread(thread) => threads.push(thread),
+            _ => {
+                return Err(async_graphql::Error::new(
+                    "Soup returned a non-email entity for an email-thread request",
+                ));
+            }
+        }
+    }
+    Ok(threads)
 }
 
 /// Fetch one agent session the viewer can see, through the same access

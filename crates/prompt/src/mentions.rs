@@ -53,6 +53,8 @@ Exact `blockName`s, since any other value renders a broken or deleted chip:
 - An email thread is `email`, never `thread` or `email_thread`. A calendar event is `calendar`, never `calendar_event`, with the `eventId` as `documentId`; add a recurring event's `recurrenceId` as `occurrenceKey` to target one occurrence. Channel members without the event see a read-only preview. Private and confidential events are never shared.
 - When a tool returns a channel message id, mention that message, not just its channel.
 
+Whenever you name a task — one you created, linked, searched, or were assigned — emit the task mention chip. Do not use a Markdown URL, MACRO- id, or bare title, and do not repeat the title beside the chip. Use the `mention` field a task tool returned when you have it.
+
 ### People, groups, dates, agent sessions, pull requests, and booking links
 
 These use their own tags — never wrap them in `<m-document-mention>`:

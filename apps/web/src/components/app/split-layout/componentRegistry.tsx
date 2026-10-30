@@ -134,7 +134,7 @@ const ComposeSkill = lazyNamed(
   'ComposeSkill'
 );
 const ComposeTask = lazyNamed(
-  () => import('@block-md/component/ComposeTask'),
+  () => import('@app/features/task-composer/compose-task'),
   'ComposeTask'
 );
 const ComposeDocument = lazyNamed(

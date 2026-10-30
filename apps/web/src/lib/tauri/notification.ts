@@ -79,6 +79,8 @@ export function createTauriNotificationInterface(
             subtitle: sender ? conversation?.name : undefined,
             threadId: conversation?.id,
             sender,
+            // Older native builds ignore this and keep the system sound.
+            silent: data.options?.silent,
           });
         } catch (error) {
           // OTA frontend updates can reach an older native app. Its legacy

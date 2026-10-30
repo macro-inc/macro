@@ -132,7 +132,7 @@ describe('task CRM scope', () => {
   });
 });
 
-it('uses the initiative Project property for board columns without changing legacy list grouping', () => {
+it('uses explicit Project property grouping for board editing and Project grouping for lists', () => {
   const boardQuery = buildTaskQuery({
     ...options,
     groupBy: 'project',

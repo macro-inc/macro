@@ -1644,6 +1644,15 @@ impl CalendarRepository for PgCalendarRepository {
         export::event_export(&self.pool, requester_id, event_id).await
     }
 
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn forwarded_copy(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> Result<Option<crate::domain::ics::ForwardedCopy>, Report> {
+        export::forwarded_copy(&self.pool, requester_id, event_id).await
+    }
+
     #[tracing::instrument(skip(self, requester_id, requester_email), err)]
     async fn open_join_request(
         &self,

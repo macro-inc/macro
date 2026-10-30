@@ -14,6 +14,16 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
+In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V,
+use **Attach files**, or drop a file into the composer. Images show a removable
+preview and are sent inline beside the shared item to each selected person or
+channel. Share (including Cmd/Ctrl+Enter and the phone drawer's Share button)
+waits for uploads; Enter still inserts a newline. Removing an uploading image
+keeps it removed, and closing the dialog discards its attachment draft.
+Verify paste, file selection, drop, removal during upload, upload failure, and
+sending to both a person and a channel. On touch, attachment previews scroll
+horizontally and removal remains available without hover.
+
 With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
 panel also lists **Meeting links** (under the **Link** tab on mobile).
 Each shows its occurrence and optional team view grant. Toggle **Also share with
@@ -90,8 +100,12 @@ lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
 do not. Approved users appear in People with access, with controls to change or
-remove their direct grant. Opening a permission-request notification navigates
-to its item and opens Share.
+remove their direct grant. A pending request also puts the item, projects
+included, on the reviewer's Home feed until it is resolved. A project row has
+no Home preview: clicking it opens the project in place, Shift-click opens it
+in a new split, and when the project is already open in another split that
+split is focused. Opening a permission-request notification navigates to its
+item and opens Share.
 
 Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
 when the backend refuses a request with a usage-limit code. Free users can choose
@@ -866,7 +880,7 @@ must be saved before persistent comments are available.
 ## Ask Macro about a spreadsheet
 
 **Ask Macro** sits immediately left of **Share**. Select the relevant cells, then
-click it to open a new agent session in a split beside the workbook. The composer starts
+click it to open the agent composer in a split beside the workbook. The composer starts
 with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
@@ -1460,8 +1474,8 @@ and as colored dots on the thumbnails of slides they are on. A viewer who opens
 a deck nobody has shared yet, or anyone when the sync service is unreachable,
 gets the stored file read-only.
 
-**Ask Macro**, in the header beside **Share**, opens a new agent session in a
-split with the deck mentioned in the composer (nothing sends automatically).
+**Ask Macro**, in the header beside **Share**, opens the agent composer in a
+split with the deck mentioned (nothing sends automatically).
 Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
 sections, transitions, header and footer, and every shape with its id, kind,
 placeholder role, position in points, text, table cells with merges and style,
@@ -2384,8 +2398,12 @@ split. A PR mention always stays on one line: a long title truncates with an
 ellipsis before the `#N`, so read the full title from the hover card. In a sent
 message, a mention an agent wrote by URL alone shows `owner/repo#N` until its
 title loads and keeps the same width either way. A PR Macro has not synced
-stays an ordinary link, and pasting inside a code block or over a selection
-keeps the default behavior.
+stays an ordinary link, and pasting over a selection keeps the default
+behavior.
+
+Pasting inside a code block inserts the clipboard's plain text verbatim: links
+stay text instead of becoming mentions, long pastes do not collapse into a
+**pasted** chip, and Markdown syntax is kept. Pasted files still attach.
 
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.
@@ -2438,8 +2456,8 @@ filter, and tap a result to insert a single mention. The menu should remain
 visible above the keyboard while typing.
 
 `Ctrl+F` / `Cmd+F` opens the in-document find bar. Matches include paragraph
-text and inline mention chips (tasks, docs, channels, skills, …) by the title
-shown on the chip.
+text and every inline mention chip (people, groups, tasks, docs, channels,
+skills, dates, tags, …) by the title shown on the chip.
 
 On touch devices, the text-selection menu (Copy, Cut, Comment, Share, and other
 available actions) appears above the floating header, comment input, and bottom
@@ -2476,7 +2494,7 @@ With Projects enabled, type `@` followed by a project name in an editor,
 composer or spreadsheet cell. Projects (not folders) come from Quick Access, so
 they appear alongside documents and tasks in the **Documents, Agents, & Tasks**
 section and in entity property pickers that accept projects. The command menu
-keeps its own project search. Selecting one inserts a document mention with the
+searches the same Quick Access projects. Selecting one inserts a document mention with the
 project's icon and current name, like a channel mention. Clicking it or
 pressing Enter on it opens the project the way a task mention opens a task:
 in Tasks, under **Projects** › the project (on touch devices, as the project
@@ -2591,7 +2609,10 @@ after an expanded reference remains in separate paragraphs.
 Hover a document reference chip to open its preview without navigating. With
 the preview open, the compact header shows a tinted icon, title, and author/time
 byline. Click the title to open the document; the Reference actions ellipsis menu contains copy
-link, split, embed/collapse, AI, and delete actions when applicable. The preview
+link, split, embed/collapse, AI, and delete actions when applicable. In an editable
+editor it also offers **Convert to Plain Text**, which replaces the chip with the
+item's link as ordinary text, so sending it shares nothing; the `No Access` and
+`Deleted` cards show the menu there too. The preview
 stays open while this menu is active, and moving over other reference chips must
 not open their previews. Click outside or press Escape to dismiss the menu;
 other references can then be hovered again. Images use an inset frame and task chips
@@ -2968,9 +2989,8 @@ updates live and shows each collaborator's caret with their name
   `addComment` ones) are.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
-- **Ask Macro**, in the header beside **Share**, opens a new agent session in
-  a split with the document mentioned in the composer (nothing sends
-  automatically).
+- **Ask Macro**, in the header beside **Share**, opens the agent composer in
+  a split with the document mentioned (nothing sends automatically).
 - AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
   open editors patch agent edits in as they land. `ReadWordDocument` lists
   every paragraph, table cell and content control with its id. `EditWordDocument`
@@ -2991,6 +3011,10 @@ Scrub the graph to preview a point in time, or select a session to see its chang
 selected version into a separate document. **Close history** or Escape returns
 to the mounted editor without losing its scroll position. The two columns scroll
 independently, and other app splits remain available.
+
+Sessions, diffs, and blame tooltips name AI edits by who made them: an agent's
+edits show the agent's name, and other AI-editor writes show
+`<user> (AI)` for the user they were made for.
 
 ## Side panel
 
@@ -3060,6 +3084,15 @@ types do not show these tabs.
 In a disposable Markdown document, change several paragraphs in one edit, then
 undo and redo. Verify the text, paragraph count, and a second peer agree after
 each operation; wait for saving to finish and reload to check persistence.
+
+Undo timing has a backend-free browser regression over a 4,000-paragraph
+document (about the length of Moby-Dick): undoing typing and undoing the
+deletion of a thousand paragraphs each stay within a time budget.
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/collaboration/browser-test/playwright.config.ts`
+from `apps/web`. In traces, `editor.undo` / `editor.redo` carry
+`document.id` and `editor.node_count`; the `editor.history.loro` child covers
+Loro's undo and the mirror read, and `editor.history.apply` lasts until the
+reconciled editor update commits.
 
 ### Task mention status
 

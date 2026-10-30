@@ -52,12 +52,15 @@ where
                 "only regular events can be added to a calendar".to_string(),
             ));
         }
-        self.add_snapshot(requester_id, source.snapshot(), calendar_id)
-            .await
+        // A channel share shares the meeting, not a way into its call.
+        let snapshot = source.snapshot().without_macro_call();
+        self.add_snapshot(requester_id, snapshot, calendar_id).await
     }
 
     /// Import a snapshot into the selected calendar, or the requester's
-    /// primary inbox's primary calendar, and persist the provider echo.
+    /// primary inbox's primary calendar, and persist the provider echo. The
+    /// snapshot is imported as given: an event file someone forwarded keeps
+    /// the join link it carries.
     async fn add_snapshot(
         &self,
         requester_id: &str,
@@ -80,7 +83,6 @@ where
                 "shared events can be added to Google calendars only".to_string(),
             ));
         }
-        let snapshot = snapshot.without_macro_call();
         let access_token = self.fetch_token(&target.token_identity).await?;
         let outcome = self
             .provider

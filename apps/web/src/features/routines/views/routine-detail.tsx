@@ -28,8 +28,8 @@ export function RoutineDetailView(props: {
   onBack(): void;
   onDelete(): void;
   onCopyPrompt(prompt: string): Promise<void>;
-  onShareTemplate(): void;
-  onOpenTemplate(templateId: string): void;
+  onShareTemplate?(): void;
+  onOpenTemplate?(templateId: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
 }) {
   const {
@@ -120,10 +120,12 @@ export function RoutineDetailView(props: {
                       <CopyIcon class="size-4" />
                       Duplicate
                     </Dropdown.Item>
-                    <Dropdown.Item onSelect={props.onShareTemplate}>
-                      <ShareIcon class="size-4" />
-                      Share as template
-                    </Dropdown.Item>
+                    <Show when={props.onShareTemplate}>
+                      <Dropdown.Item onSelect={props.onShareTemplate}>
+                        <ShareIcon class="size-4" />
+                        Share as template
+                      </Dropdown.Item>
+                    </Show>
                     <Show when={isOwned()}>
                       <Dropdown.Item onSelect={props.onDelete}>
                         <TrashIcon class="size-4" />
@@ -136,15 +138,15 @@ export function RoutineDetailView(props: {
             )
           }
           properties={
-            <Show when={routine().templateId}>
+            <Show when={props.onOpenTemplate && routine().templateId}>
               {(templateId) => (
                 <Button
-                  variant="primary"
+                  variant="ghost"
                   size="sm"
-                  onClick={() => props.onOpenTemplate(templateId())}
+                  onClick={() => props.onOpenTemplate?.(templateId())}
                 >
                   Created from template
-                  <ArrowUpRightIcon />
+                  <ArrowUpRightIcon class="size-3.5" />
                 </Button>
               )}
             </Show>

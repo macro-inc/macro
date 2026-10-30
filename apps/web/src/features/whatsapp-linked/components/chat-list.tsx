@@ -139,7 +139,7 @@ export function ChatList(props: {
                         disabled={props.adding.has(chat.jid)}
                         onClick={() => props.onAdd(chat)}
                       >
-                        <PlusIcon />
+                        <PlusIcon class="size-3.5" />
                         {/* Phones keep every row's action visible, so just the + there. */}
                         <span class="mobile:hidden">
                           {props.adding.has(chat.jid)

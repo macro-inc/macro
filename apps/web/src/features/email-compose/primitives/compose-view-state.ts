@@ -85,6 +85,7 @@ export interface ComposeState {
   // From-inbox selection: the inboxes the user can send from, the active one,
   // and a setter to change it.
   fromInboxes?: Accessor<FromInboxOption[]>;
+  inboxesLoading?: Accessor<boolean>;
   selectedInboxId?: Accessor<string | undefined>;
   onSelectInbox?: (inboxId: string, senderEmail?: string) => void;
   hasPaidAccess: Accessor<boolean>;

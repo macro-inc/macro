@@ -13,18 +13,13 @@ export const GUEST_LIST_HIDDEN =
 
 /**
  * Follows why a guest cannot add guests, where they may forward the
- * invitation instead: forwarded people get the event to add to their own
- * calendar, as Google says of its own forward, and stay off the guest list.
+ * invitation instead: forwarded people get the event by email and stay off
+ * the guest list, as Google says of its own forward. The server decides
+ * whether that is an invitation they answer to an organizer outside Google
+ * or a file they add to their calendar, so this says only what both share.
  */
 export const FORWARD_INVITATION_INSTEAD =
-  "You can forward the invitation instead. The people you send it to can add the event to their calendar but won't be on the guest list.";
-
-/**
- * Ends a forwarded invitation's email, for the people it goes to; the
- * server's default body says the same.
- */
-export const FORWARDED_INVITATION_NOTE =
-  "This invitation was forwarded to you. Add the event to your calendar from the attached file. You won't be on the organizer's guest list.";
+  "You can forward the invitation instead. The people you send it to get the event by email but won't be on the guest list.";
 
 /** Shown where a guest would change the event when the organizer does not allow it. */
 export const GUEST_EDITS_RESTRICTED =

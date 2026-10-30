@@ -76,8 +76,6 @@ function getEntityType(entity: EntityData): EntityType {
 interface EntityKeyPropertiesProps {
   /** Entity with properties attached */
   entity: EntityWithProperties<EntityData>;
-  /** Callback when properties are refreshed */
-  onRefresh?: () => void;
   /** Max visible user avatars in the assignees stack before collapsing to +N. */
   maxUserStackUsers?: number;
   /** Whether to show the edit affordance caret. */
@@ -136,14 +134,13 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
       entityType={entityType()}
       canEdit={true}
       properties={keyProperties}
-      onRefresh={props.onRefresh ?? (() => {})}
+      onRefresh={() => {}}
       onPropertyAdded={() => {}}
       onPropertyDeleted={() => {}}
       saveHandler={saveHandler}
     >
       <KeyPropertiesRow
         properties={keyProperties}
-        onRefresh={props.onRefresh}
         maxUserStackUsers={props.maxUserStackUsers}
         showCaret={props.showCaret}
       />
@@ -158,7 +155,6 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
 
 function KeyPropertiesRow(props: {
   properties: Accessor<PropertyT[]>;
-  onRefresh?: () => void;
   maxUserStackUsers?: number;
   showCaret?: boolean;
 }) {
@@ -168,86 +164,89 @@ function KeyPropertiesRow(props: {
   return (
     <div class="flex items-center gap-1 justify-start text-xs">
       <For each={props.properties()}>
-        {(property) => {
-          const isEmpty = () => !hasValue(property);
+        {(property) => (
+          <Property.Root
+            property={property}
+            canEdit={ctx.canEdit}
+            onSave={ctx.saveHandler.saveProperty}
+          >
+            {(shown) => {
+              const isEmpty = () => !hasValue(shown());
 
-          const isUserEntity = () =>
-            property.valueType === 'ENTITY' &&
-            property.specificEntityType === 'USER';
+              const isUserEntity = () =>
+                shown().valueType === 'ENTITY' &&
+                shown().specificEntityType === 'USER';
 
-          const isMultiUserEntity = () =>
-            isUserEntity() && getEntityValues(property).length > 1;
+              const isMultiUserEntity = () =>
+                isUserEntity() && getEntityValues(shown()).length > 1;
 
-          return (
-            <Property.Root
-              property={property}
-              canEdit={ctx.canEdit}
-              onSave={ctx.saveHandler.saveProperty}
-              onRefresh={ctx.onRefresh}
-            >
-              <Property.Tooltip property={property}>
-                <Layer depth={2}>
-                  <Property.EditTrigger
-                    class={cn(
-                      /* border, not ring: Tailwind rings are box-shadows and
-                         would fight the glass shadow */
-                      'flex items-center gap-1 min-w-0 border border-edge-muted/50 glass',
-                      'px-1.5 py-1 leading-tight text-left rounded-full',
-                      '@max-2xl/u-list:border-0 @max-2xl/u-list:glass-none @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
-                      {
-                        'hover:bg-hover': ctx.canEdit,
-                        'text-ink-extra-muted/50': isEmpty(),
-                      }
-                    )}
-                  >
-                    <div class="h-4" />
-                    <Switch
-                      fallback={
-                        <Property.Icon
-                          property={property}
-                          class="size-3 shrink-0 @max-2xl/u-list:size-4"
+              return (
+                <>
+                  <Property.Tooltip property={shown()}>
+                    <Layer depth={2}>
+                      <Property.EditTrigger
+                        class={cn(
+                          /* border, not ring: Tailwind rings are box-shadows and
+                             would fight the glass shadow */
+                          'flex items-center gap-1 min-w-0 border border-edge-muted/50 glass',
+                          'px-1.5 py-1 leading-tight text-left rounded-full',
+                          '@max-2xl/u-list:border-0 @max-2xl/u-list:glass-none @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
+                          {
+                            'hover:bg-hover': ctx.canEdit,
+                            'text-ink-extra-muted/50': isEmpty(),
+                          }
+                        )}
+                      >
+                        <div class="h-4" />
+                        <Switch
+                          fallback={
+                            <Property.Icon
+                              property={shown()}
+                              class="size-3 shrink-0 @max-2xl/u-list:size-4"
+                            />
+                          }
+                        >
+                          <Match when={isMultiUserEntity()}>
+                            <Property.UserStack
+                              property={shown()}
+                              maxUsers={props.maxUserStackUsers ?? 2}
+                              avatarClass="@max-2xl/u-list:size-5"
+                            />
+                          </Match>
+                          <Match when={isUserEntity()}>
+                            <Property.Icon
+                              property={shown()}
+                              class="@max-2xl/u-list:size-5"
+                            />
+                          </Match>
+                        </Switch>
+                        <Property.Text
+                          property={shown()}
+                          class="@max-2xl/u-list:hidden"
+                          fallback={
+                            <>
+                              <Property.Empty
+                                label="None"
+                                class="@max-2xl/u-list:hidden"
+                              />
+                              <Property.Empty class="hidden @max-2xl/u-list:inline-flex" />
+                            </>
+                          }
                         />
-                      }
-                    >
-                      <Match when={isMultiUserEntity()}>
-                        <Property.UserStack
-                          property={property}
-                          maxUsers={props.maxUserStackUsers ?? 2}
-                          avatarClass="@max-2xl/u-list:size-5"
-                        />
-                      </Match>
-                      <Match when={isUserEntity()}>
-                        <Property.Icon
-                          property={property}
-                          class="@max-2xl/u-list:size-5"
-                        />
-                      </Match>
-                    </Switch>
-                    <Property.Text
-                      property={property}
-                      class="@max-2xl/u-list:hidden"
-                      fallback={
-                        <>
-                          <Property.Empty
-                            label="None"
-                            class="@max-2xl/u-list:hidden"
-                          />
-                          <Property.Empty class="hidden @max-2xl/u-list:inline-flex" />
-                        </>
-                      }
-                    />
-                    <Show when={props.showCaret ?? true}>
-                      <Property.Caret class="@max-2xl/u-list:hidden" />
-                    </Show>
-                  </Property.EditTrigger>
-                </Layer>
-              </Property.Tooltip>
-              <Property.PopoverEditor
-                entitySelfFilter={{ entityType: ctx.entityType, blockId }}
-              />
-            </Property.Root>
-          );
-        }}
+                        <Show when={props.showCaret ?? true}>
+                          <Property.Caret class="@max-2xl/u-list:hidden" />
+                        </Show>
+                      </Property.EditTrigger>
+                    </Layer>
+                  </Property.Tooltip>
+                  <Property.PopoverEditor
+                    entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+                  />
+                </>
+              );
+            }}
+          </Property.Root>
+        )}
       </For>
     </div>
   );

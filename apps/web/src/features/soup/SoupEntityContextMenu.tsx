@@ -3,6 +3,7 @@ import type {
   EntityActionNavigationHandler,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
+import { makeAddTagAction } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
   ContextMenuContent,
@@ -12,6 +13,9 @@ import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { EntityData } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import type { TreeTag } from '@property/tags/core/tag-tree';
+import { DroppedTagApplier } from '@property/tags/DroppedTagApplier';
+import { createTagDropTarget } from '@property/tags/tag-drag-and-drop';
 import { cn } from '@ui';
 import {
   type Accessor,
@@ -72,6 +76,22 @@ export const SoupEntityContextMenu: FlowComponent<
     anchor: menuPosition,
   });
 
+  const addTagAction = makeAddTagAction();
+  const canEditTags = () => addTagAction.canExecute(props.entity);
+  const [droppedTag, setDroppedTag] = createSignal<{
+    tag: TreeTag;
+    entities: EntityData[];
+  }>();
+  // Dropping onto a selected row tags the whole selection, like the menu.
+  const tagDropTarget = createTagDropTarget({
+    disabled: () => isMobile() || !canEditTags(),
+    onDropTag: (tag) =>
+      setDroppedTag({
+        tag,
+        entities: menuEntities().filter(addTagAction.canExecute),
+      }),
+  });
+
   return (
     <Switch>
       <Match when={isMobile()}>
@@ -102,7 +122,13 @@ export const SoupEntityContextMenu: FlowComponent<
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenuTrigger
             as={props.as}
-            class={cn('h-full w-full group/cm-trigger', props.class)}
+            ref={(element: HTMLElement) => tagDropTarget?.ref(element)}
+            class={cn(
+              'h-full w-full group/cm-trigger',
+              tagDropTarget?.isOver() &&
+                'rounded-xl outline-2 -outline-offset-2 outline-accent',
+              props.class
+            )}
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }
@@ -130,6 +156,19 @@ export const SoupEntityContextMenu: FlowComponent<
           </ContextMenu.Portal>
         </ContextMenu>
         <pickers.Pickers />
+        <Show when={droppedTag()} keyed>
+          {(drop) => (
+            <DroppedTagApplier
+              tag={drop.tag}
+              entities={drop.entities}
+              onDone={() =>
+                setDroppedTag((current) =>
+                  current === drop ? undefined : current
+                )
+              }
+            />
+          )}
+        </Show>
       </Match>
     </Switch>
   );
