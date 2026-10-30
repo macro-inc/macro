@@ -1,5 +1,5 @@
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
-import MinusIcon from '@icon/system/regular/minus.svg';
+import MinusIcon from '@icon/system/regular/minus-circle.svg';
 import ProjectIcon from '@icon/system/regular/stack.svg';
 import PersonIcon from '@icon/system/regular/user.svg';
 import { cn } from '@ui';

@@ -1,6 +1,6 @@
+import StatusDone from '@icon/system/fill/check-circle-fill.svg';
 import StatusCanceled from '@icon/system/regular/task-cancelled.svg';
 import StatusCreated from '@icon/system/regular/task-created.svg';
-import StatusDone from '@icon/system/regular/task-done.svg';
 import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
 import StatusInReview from '@icon/system/regular/task-in-review.svg';
 import { PROPERTY_OPTION_IDS } from '@property/identifiers';

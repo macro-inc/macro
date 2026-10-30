@@ -58,6 +58,9 @@ staggered bottoms and open counters, following the familiar Phosphor silhouette.
 it is also listed in the regular icon gallery. Brand marks retain their existing assets.
 Icons introduced on main after the source PR retain their existing assets when
 this family has no matching drawing.
+Urgent priority uses a filled rounded-square exclamation badge; completed task
+status uses the filled check-circle through the shared property and task-status
+renderers. Empty priority uses a muted circled minus.
 
 Prefer one recognizable silhouette and only the detail needed to identify its
 action. Chat variants share one bubble, task variants one checked square,

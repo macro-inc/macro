@@ -1,8 +1,8 @@
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
+import PriorityUrgent from '@icon/system/fill/priority-urgent-fill.svg';
 import PriorityHigh from '@icon/wide-priority-high.svg';
 import PriorityLow from '@icon/wide-priority-low.svg';
 import PriorityMedium from '@icon/wide-priority-medium.svg';
-import PriorityUrgent from '@icon/wide-priority-urgent.svg';
 import { type Component, Match, Switch } from 'solid-js';
 import { twMerge } from 'tailwind-merge';
 import { PROPERTY_OPTION_IDS } from '../../constants';

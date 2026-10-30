@@ -17,7 +17,7 @@ current, so `Property.Root` editors never refetch properties after a save;
 side-panel collections own their refresh (below).
 
 `extractors/PropertyEmpty.tsx` shares empty-value glyphs across task list rows,
-board cards, group and column headers, and pickers: a dash for no priority, a
+board cards, group and column headers, and pickers: a circled minus for no priority, a
 dashed stack for no project, and a dashed person for no assignees. Other empty
 properties retain the dashed circle. Keep these state indicators static and
 readable in compact rows.
