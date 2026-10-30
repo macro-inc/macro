@@ -38,7 +38,6 @@ export function PropertyRemoveButton(props: Props) {
     try {
       const next = nextValue(property, props.valueToRemove);
       if (next) await save(property, next);
-      ctx.onRefresh?.();
     } finally {
       setIsSaving(false);
     }

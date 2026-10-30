@@ -7,7 +7,7 @@
 //!
 //! 1. Detects native changes: a path filter over `apps/web/tauri/**`,
 //!    minus what never reaches the iOS binary (anything Android-only by
-//!    name, the desktop updater manifest, editor config) — the same
+//!    name, the desktop updater manifest, editor config, Markdown) — the same
 //!    exclusions as the native tree hash in `scripts/ios_native_tree.sh` —
 //!    or a bump of the client cache wasm package version
 //!    (`crates/client/cache-wasm/Cargo.toml`): the app compiles the cache

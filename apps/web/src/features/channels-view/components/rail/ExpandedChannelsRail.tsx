@@ -52,7 +52,6 @@ import type {
 import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
-import { HideSupportChannelsButton } from '../HideSupportChannelsButton';
 import { ChannelFavoritesSection } from './ChannelFavoriteRows';
 import {
   ChannelLabelMenuItems,
@@ -459,7 +458,6 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             </ViewSidebar.Control>
           </Show>
         </ViewSidebar.Toolbar>
-        <HideSupportChannelsButton />
       </ViewSidebar.Primary>
       <Show when={isTouchDevice() && props.search.isOpen()}>
         <div class="px-(--sidebar-content-inset) pt-(--sidebar-gutter)">

@@ -68,6 +68,14 @@ trace context — timestamps + service are the only join for those.
 - Most frontend spans stop at the fetch: websocket-delivered results such as AI edits
   applying and message fan-out remain untraced. Call joining now has a user-action
   trace; see below.
+- `email_service` wraps its routes in tower-http's default `TraceLayer`, not
+  `macro_tower_layers`. Its request span is DEBUG level, below the INFO trace
+  filter. The span also ignores `traceparent`, so browser traces of email_service
+  requests end at the `http` client span. The gap is read from the code and not
+  yet confirmed in Tempo.
+- With `ENABLE_BEARER_TOKEN_AUTH` (Playwright e2e and the native test runner),
+  `fetchWithAuth` awaits the API token before `safeFetch`. Its `http` client spans
+  then start outside the calling span and root their own traces.
 
 ## Account WebSocket sessions
 
@@ -123,6 +131,30 @@ background and must not be added to the time spent waiting for credentials. Chan
 calls similarly launch `start_channel_call` for recording, transcription, and
 recipient notifications; these run concurrently outside the token response path.
 A slow recorder or push provider should not hold the creator on Connecting.
+
+## Email From switch
+
+The composer's From switch moves a saved draft to an inbox on another account.
+Search Tempo for `{ name="email.draft_transfer" }`. One browser trace covers the
+move:
+
+| Span | What it measures |
+| --- | --- |
+| `email.draft_transfer.save` | The save before the move. A retry of an unanswered move skips it. |
+| `email.draft_transfer.request` | The transfer until the server commits or refuses it. `email.draft_transfer.committed_by` is `response` or `recovery`. |
+| `email.draft_transfer.recover` | The recovery request after the transfer request failed or lost its response. |
+| `email.draft_transfer.refresh` | The detached refresh of both threads' caches. It can end after the root. |
+
+The root's attributes use the `email.draft_transfer.` prefix. They are
+`draft_id`, `operation_id`, `source_inbox_id`, `destination_inbox_id`,
+`destination_provider`, `attachment_count`, `retry`, and `outcome`. The outcome
+is `moved`, `aborted`, `failed`, `rejected`, or `skipped`. Aborted and failed
+moves are errors. A rejection is not an error. It adds `rejection`, which is
+`pending_other_inbox`, `attachment_limit`, or `unconfirmed_draft`. A retry shares
+the first attempt's `operation_id`, so search by it to join attempts across
+traces. Errors carry fixed messages. Never add addresses, subjects, bodies, or
+file names. The `http POST` spans carry `traceparent`, but email_service does not
+join the trace yet (see known gaps).
 
 ## Agent sessions
 

@@ -27,6 +27,7 @@ import {
 import type { MessageOperationSourceFactory } from '../../email-message/context/message-operation-source';
 import {
   operationBlocksEditing,
+  operationBlocksInboxSwitch,
   operationBlocksSending,
   operationSending,
 } from '../../email-message/core/message-operation';
@@ -50,6 +51,7 @@ import {
   convertContactInfoToEmailRecipient,
   convertEmailRecipientToContactInfo,
 } from '../core/recipient-conversion';
+import type { ReplyType } from '../core/reply-type';
 import { partitionByAttachmentLimit } from './attachment-limit';
 import { createAttachmentLinkOffer } from './attachment-links';
 import {
@@ -71,12 +73,14 @@ import type { EmailFormContextValue, FormAccessKey } from './email-form-types';
 import { createEmailSendSchedule } from './email-send-schedule';
 import { addUserMentionToCc } from './mention-to-cc';
 import {
+  appendedThreadKind,
   clearEmailBody,
   hasDraftContent,
   prepareEmailBody,
   prepareMacroBody,
   TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
 } from './prepare-email-body';
+import { announceQueuedSend } from './queued-send-notice';
 import {
   createReplyComposerFocus,
   takesFocusOnMount,
@@ -151,7 +155,7 @@ export type ReplyComposerOptions = {
     onUndoHandle?: (handle: EmailUndoHandle) => void;
     /** False keeps the view on this thread instead of opening the next one. */
     navigate?: boolean;
-    /** True once the send was undone; marking done may still be pending. */
+    /** True once the send was undone or failed; marking done may still be pending. */
     cancelled?: () => boolean;
   }) => void;
   setShowReply?: Setter<boolean>;
@@ -310,6 +314,9 @@ export function createReplyComposer(
   const deliveryBlocked = () =>
     operationSource?.needsReload?.() ||
     operationBlocksSending(currentOperation());
+  const inboxSwitchBlocked = () =>
+    operationSource?.needsReload?.() ||
+    operationBlocksInboxSwitch(currentOperation());
   function operationBlocked() {
     return (
       operationSource?.needsReload?.() ||
@@ -435,6 +442,7 @@ export function createReplyComposer(
     });
     restoreEnvelope(snapshot);
     setRestoredBodyHtml(snapshot.bodyHtml ?? plainTextToHtml(''));
+    if (snapshot.bodyHtml) form.restoreReplyType(snapshot.bodyHtml);
     const currentEditor = editor();
     if (currentEditor && snapshot.bodyHtml) {
       setEditorStateFromHtml(currentEditor, snapshot.bodyHtml);
@@ -454,6 +462,9 @@ export function createReplyComposer(
 
   const initialHtml = () =>
     restoredBodyHtml() ?? restoredSnapshot?.bodyHtml ?? props.preloadedHtml;
+  // The editor may load a local copy that is newer than the thread's draft.
+  const loadedHtml = untrack(initialHtml);
+  if (loadedHtml) form.restoreReplyType(loadedHtml);
   const [editorConnected, setEditorConnected] = createSignal(false);
   const handleEditorConnect = () => {
     const currentEditor = editor();
@@ -521,40 +532,65 @@ export function createReplyComposer(
     on(form.editRevision, () => scheduleDraftSave(), { defer: true })
   );
 
+  // A forward carries the forwarded message and a reply never does, so a
+  // kind change swaps whichever thread the other kind appended.
+  const matchAppendedThread = (
+    currentEditor: LexicalEditor,
+    message: EmailMessage,
+    rt: ReplyType,
+    kindChanged: boolean
+  ) => {
+    const forwarding = rt === 'forward';
+    const appended = kindChanged
+      ? appendedThreadKind(currentEditor, message.db_id)
+      : undefined;
+    if (appended && (appended === 'forward') !== forwarding) {
+      currentEditor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+        replyingTo: message,
+        replyType: rt,
+        visible: false,
+      });
+      if (!forwarding) form.setReplyAppended(false);
+    }
+    if (!forwarding || !form.replyAppended()) return;
+    if (appendedThreadKind(currentEditor, message.db_id)) return;
+    setQuoteCollapsed(true);
+    currentEditor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+      replyingTo: message,
+      replyType: rt,
+      visible: true,
+      isPersonal: ctx.isPersonalReply(),
+    });
+  };
+
   // The mounted composer owns focus, editor commands, and their cleanup.
+  let shownReplyType: ReplyType | undefined;
   createEffect(() => {
     const rt = form.replyType();
     if (!editorConnected()) return;
+    // A loaded body already matches its kind; only later changes swap threads.
+    const kindChanged = shownReplyType !== undefined && shownReplyType !== rt;
+    shownReplyType = rt;
     // Later reply-type changes are the user's, and always take focus.
     const takeFocus = mountFocus;
     mountFocus = true;
     untrack(() => {
       setComposerExpanded(false);
       if (rt === 'forward') {
-        setQuoteCollapsed(true);
         if (takeFocus) focus.forward();
-        const message = replyTarget;
-        const currentEditor = editor();
-        if (message && currentEditor && form.replyAppended()) {
-          // The editor's lazy command registration completes after this batch.
-          const timer = setTimeout(
-            () =>
-              currentEditor.dispatchCommand(
-                TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
-                {
-                  replyingTo: message,
-                  replyType: rt,
-                  visible: true,
-                  isPersonal: ctx.isPersonalReply(),
-                }
-              ),
-            0
-          );
-          onCleanup(() => clearTimeout(timer));
-        }
       } else if (takeFocus) {
         focus.reply();
       }
+      const message = replyTarget;
+      const currentEditor = editor();
+      if (!message || !currentEditor) return;
+      if (!kindChanged && (rt !== 'forward' || !form.replyAppended())) return;
+      // The editor's lazy command registration completes after this batch.
+      const timer = setTimeout(
+        () => matchAppendedThread(currentEditor, message, rt, kindChanged),
+        0
+      );
+      onCleanup(() => clearTimeout(timer));
     });
   });
 
@@ -571,12 +607,16 @@ export function createReplyComposer(
 
   function collectDraft(forDelivery = false) {
     if (!forDelivery) $removeAllWatermarkNodes(editor());
+    // A saved forward keeps its forwarded message even while it is hidden:
+    // the header is the only record that the draft is a forward.
+    const appendsToBody = forDelivery || form.replyType() === 'forward';
     const prepared = prepareEmailBody(
       editor(),
-      forDelivery && replyTarget && appendsQuotedThread()
+      appendsToBody && replyTarget && appendsQuotedThread()
         ? {
             replyType: form.replyType(),
             replyingTo: replyTarget,
+            reopenable: !forDelivery,
           }
         : undefined
     );
@@ -845,6 +885,7 @@ export function createReplyComposer(
     draftGeneration,
     onTransferred: () => setDraftGeneration(0),
     session,
+    persistence,
     drafts: props.drafts,
     attachments: form.attachments,
     save: () => executeSaveDraft(),
@@ -856,7 +897,7 @@ export function createReplyComposer(
   const saveSelectedInbox = async (inboxId: string, senderEmail?: string) => {
     if (
       restoring() ||
-      (!draftTransfer?.pending() && deliveryBlocked()) ||
+      (!draftTransfer?.pending() && inboxSwitchBlocked()) ||
       submitting() ||
       pendingDeletion() ||
       movingInbox() ||
@@ -1321,9 +1362,18 @@ export function createReplyComposer(
       // Each undo action retains this send's inbox, thread and mark-done, even
       // if the composer sends again or navigation disposes the view.
       let markDoneUndoHandle: EmailUndoHandle | undefined;
-      // Advancing may archive after a page loads; an undo before then must
-      // not leave the restored thread marked done.
-      let sendUndone = false;
+      // Advancing may archive after a page loads; an undo or failure before
+      // then must not leave the thread marked done.
+      let returnedToInbox = false;
+      const returnToInbox = async () => {
+        returnedToInbox = true;
+        const doneHandle = markDoneUndoHandle;
+        markDoneUndoHandle = undefined;
+        await doneHandle?.undo({
+          onError: () =>
+            props.notices.feedback.failure('Failed to restore thread to inbox'),
+        });
+      };
       const undoSend = (draftId: string) =>
         props.delivery.undoSend({
           sendAttemptId: result.sendAttemptId,
@@ -1331,47 +1381,30 @@ export function createReplyComposer(
           draftId,
           inboxId,
           onUndone: async (undo) => {
-            sendUndone = true;
+            returnedToInbox = true;
             await restoreAfterUndoSend(
               draftId,
               result.threadId,
               inboxId,
               undo?.draftRestored
             );
-            const doneHandle = markDoneUndoHandle;
-            markDoneUndoHandle = undefined;
-            await doneHandle?.undo({
-              onError: () =>
-                props.notices.feedback.failure(
-                  'Failed to restore thread to inbox'
-                ),
-            });
+            await returnToInbox();
           },
         });
       // The outbox delivers an online send right away; offline it waits on this device.
       const offline = props.connectivity.looksOffline();
-      try {
-        const toastId = props.notices.feedback.success(
-          offline ? 'Email queued to send' : 'Email sent',
-          {
-            actions: draftId
-              ? [
-                  {
-                    label: 'Undo',
-                    onClick: () => {
-                      if (toastId != null)
-                        props.notices.feedback.dismiss(toastId);
-                      void undoSend(draftId).catch(props.notices.reportError);
-                    },
-                  },
-                ]
-              : undefined,
-            duration: 5_000,
-          }
-        );
-      } catch (error) {
-        props.notices.reportError(error);
-      }
+      announceQueuedSend({
+        notices: props.notices,
+        delivery: props.delivery,
+        sendAttemptId: result.sendAttemptId,
+        queuedOffline: offline,
+        undo: draftId
+          ? () => {
+              void undoSend(draftId).catch(props.notices.reportError);
+            }
+          : undefined,
+        onUndelivered: () => fireAndForget(returnToInbox(), 'email-compose'),
+      });
       for (const mention of prepared.mentions) {
         try {
           props.recordMention(sourceEntityId, mention.documentId);
@@ -1387,10 +1420,13 @@ export function createReplyComposer(
             silent: true,
             onUndoHandle: (handle) => {
               markDoneUndoHandle = handle;
+              // Marking done can finish after the send was undone or failed.
+              if (returnedToInbox)
+                fireAndForget(returnToInbox(), 'email-compose');
             },
             navigate: markDone,
             cancelled: () =>
-              sendUndone || sendOperation !== sendOperationVersion,
+              returnedToInbox || sendOperation !== sendOperationVersion,
           });
         } catch (error) {
           props.notices.reportError(error);

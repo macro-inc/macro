@@ -103,6 +103,31 @@ export const CORE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   },
 };
 
+/** Task projects (initiatives), which Soup returns only when a filter opts in,
+ * so Quick Access can search them from the cache. */
+export const INITIATIVE_SOUP_BACKFILL_LANE: SoupBackfillParams = {
+  checkpointId: 'initiatives',
+  input: {
+    limit: PAGE_LIMIT,
+    expand: true,
+    sortMethod: 'VIEWED_UPDATED',
+    emailView: 'ALL',
+    filters: {
+      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
+      chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
+      emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
+      channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
+      channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
+      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
+      crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
+      initiativeFilter: { literal: { include: true } },
+    },
+  },
+};
+
 /**
  * Email threads and the first message page used by the thread view, excluding
  * every other entity variant with an impossible id filter.
@@ -212,6 +237,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
 /** Independently checkpointed backfills run serially in priority order. */
 export const DEFAULT_SOUP_BACKFILL_LANES = [
   CORE_SOUP_BACKFILL_LANE,
+  INITIATIVE_SOUP_BACKFILL_LANE,
   SIGNAL_EMAIL_FILTER_BACKFILL_LANE,
   NOISE_EMAIL_FILTER_BACKFILL_LANE,
   SHARED_EMAIL_FILTER_BACKFILL_LANE,

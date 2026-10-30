@@ -328,6 +328,14 @@ pub async fn run() -> anyhow::Result<()> {
                 ),
             }),
         )),
+        message_sources: Arc::new(email::domain::message_source::MessageSourceService {
+            repository: EmailPgRepo::new(db.clone()),
+            provider: crate::outbound::message_source::ProviderMessageSource {
+                gmail: email_api.clone(),
+                outlook: outlook_api.clone(),
+            },
+            access: entity_access_service.as_ref().clone(),
+        }),
         attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
             repository: EmailPgRepo::new(db.clone()),
             provider: crate::outbound::attachment_access::ProviderAttachmentBytes {

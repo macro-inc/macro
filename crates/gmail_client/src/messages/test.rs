@@ -305,3 +305,42 @@ async fn send_does_not_follow_a_redirect_and_repeat_submission() {
         .unwrap_err();
     assert_eq!(error.status().unwrap().as_u16(), 307);
 }
+
+#[tokio::test]
+async fn get_raw_message_decodes_base64url_mime() {
+    let server = MockServer::start().await;
+    let mime = b"Subject: hi\r\n\r\nbody with ? and /";
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages/message-1"))
+        .and(query_param("format", "raw"))
+        .and(header("authorization", "Bearer token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "message-1",
+            "raw": URL_SAFE_NO_PAD.encode(mime)
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let raw = get_raw_message(&client(&server), "token", "message-1")
+        .await
+        .expect("raw message should decode");
+
+    assert_eq!(raw.as_deref(), Some(&mime[..]));
+}
+
+#[tokio::test]
+async fn get_raw_message_maps_not_found_to_none() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/users/me/messages/missing"))
+        .respond_with(ResponseTemplate::new(StatusCode::NOT_FOUND.as_u16()))
+        .mount(&server)
+        .await;
+
+    let raw = get_raw_message(&client(&server), "token", "missing")
+        .await
+        .expect("not found should not be an error");
+
+    assert!(raw.is_none());
+}

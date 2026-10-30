@@ -114,3 +114,13 @@ fn maps_task_fields_and_keeps_unmapped_details_in_markdown() {
     assert!(body.contains("Estimate: 3"));
     assert!(body.contains("Labels: bug"));
 }
+
+#[test]
+fn target_ids_are_stable_random_uuids() {
+    let ledger = Uuid::now_v7();
+    let id = values::target_id(ledger);
+    assert_eq!(id, values::target_id(ledger));
+    assert_ne!(id, values::target_id(Uuid::now_v7()));
+    // Project descriptions are collab surfaces, which reject non-random ids.
+    assert_eq!(id.get_version(), Some(uuid::Version::Random));
+}

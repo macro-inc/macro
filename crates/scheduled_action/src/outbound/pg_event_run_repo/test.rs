@@ -81,7 +81,7 @@ async fn admit(repo: &PgEventRunRepo, action_id: Uuid, event: &EventReference) {
 fn authorized(pending: PendingEventRun) -> AuthorizedEventRun {
     let access = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
         MacroUserIdStr::parse_from_str(USER).unwrap(),
-        &pending.event.entity_id().to_string(),
+        &pending.event.entity_id().unwrap().to_string(),
         EntityType::Document,
     );
     AuthorizedEventRun {
@@ -217,12 +217,16 @@ async fn candidates_exact_recheck_activation_and_keyset_pages(pool: PgPool) {
         .candidate_actions(&event, first.next_after, page(1))
         .await
         .unwrap();
+    // Pages follow action id order, and v7 ids minted in the same millisecond
+    // need not sort in creation order.
+    let mut expected = [null_ids, exact];
+    expected.sort();
     assert_eq!(
         [
             first.configurations[0].action_id,
             second.configurations[0].action_id
         ],
-        [null_ids, exact]
+        expected
     );
     assert!(
         repo.candidate_actions(&event, Some(exact), page(1))
@@ -269,7 +273,7 @@ impl crate::domain::event_runs::CurrentOwnerAccess for AllowAccess {
             crate::domain::event_runs::EventAccessCapability::Document(
                 EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
                     owner.clone(),
-                    &event.entity_id().to_string(),
+                    &event.entity_id().unwrap().to_string(),
                     EntityType::Document,
                 ),
             ),
@@ -399,7 +403,7 @@ fn invalid_configuration_classifications_do_not_include_persisted_content() {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn two_workers_fifo_and_independent_actions(pool: PgPool) {
     let (repo, id, earlier_event) = setup(&pool).await;
-    let later_event = new_event(earlier_event.entity_id());
+    let later_event = new_event(earlier_event.entity_id().unwrap());
     // Admission order, deliberately opposite publication order.
     admit(&repo, id, &later_event).await;
     admit(&repo, id, &earlier_event).await;
@@ -485,7 +489,7 @@ async fn manual_claim_blocks_events_and_foreign_tokens_cannot_finalize(pool: PgP
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn expired_started_is_interrupted_and_never_requeued(pool: PgPool) {
     let (repo, id, first) = setup(&pool).await;
-    let second = new_event(first.entity_id());
+    let second = new_event(first.entity_id().unwrap());
     admit(&repo, id, &first).await;
     admit(&repo, id, &second).await;
     let pending = repo.pending_runs(page(1)).await.unwrap().remove(0);
@@ -603,7 +607,7 @@ async fn revision_disable_and_cancellation_rechecks(pool: PgPool) {
         state(&pool, pending.key()).await.1,
         Some(json!({"type": "cancelled", "reason": "superseded"}))
     );
-    let next_event = new_event(event.entity_id());
+    let next_event = new_event(event.entity_id().unwrap());
     assert_eq!(
         repo.admit(
             id,
@@ -641,7 +645,7 @@ async fn rejected_claims_release_locks_for_immediate_retry(pool: PgPool) {
         // flush a queued rollback by reusing the claim's connection.
         let mut observer = pool.begin().await.unwrap();
         let mut stale = pending.clone();
-        stale.event = new_event(event.entity_id());
+        stale.event = new_event(event.entity_id().unwrap());
         assert!(claim(&repo, stale).await.is_none());
         assert!(lock_action(&mut observer, id).await.unwrap());
         observer.rollback().await.unwrap();
@@ -779,8 +783,8 @@ async fn admission_waits_for_configuration_lock_and_rechecks_disable(pool: PgPoo
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn reconcile_is_bounded_and_stale_configuration_does_not_cancel_started(pool: PgPool) {
     let (repo, id, first) = setup(&pool).await;
-    let second = new_event(first.entity_id());
-    let third = new_event(first.entity_id());
+    let second = new_event(first.entity_id().unwrap());
+    let third = new_event(first.entity_id().unwrap());
     admit(&repo, id, &first).await;
     admit(&repo, id, &second).await;
     admit(&repo, id, &third).await;
@@ -1073,4 +1077,87 @@ async fn conditions_do_not_change_candidate_matching(pool: PgPool) {
     );
     assert!(page.configurations[0].filters.has_conditions());
     admit(&repo, id, &event).await;
+}
+
+fn github_event(event: &str) -> EventReference {
+    serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(),
+        "event_name": "github",
+        "github": {
+            "delivery_id": "d-1",
+            "event": event,
+            "action": "completed",
+            "installation_id": 77,
+            "repository": { "id": 42, "full_name": "macro-inc/macro" },
+            "payload": { "workflow_run": { "conclusion": "failure" } },
+        },
+    }))
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn github_candidates_narrow_on_the_event_and_keep_the_payload(pool: PgPool) {
+    let workflow_runs = action(
+        &pool,
+        json!([{"events": ["github"], "github": {"events": ["workflow_run"]}}]),
+    )
+    .await;
+    let everything = action(&pool, json!([{"events": ["github"], "github": {}}])).await;
+    action(
+        &pool,
+        json!([{"events": ["github"], "github": {"events": ["push"]}}]),
+    )
+    .await;
+    action(&pool, json!([{"events": ["document.updated"]}])).await;
+    let repo = PgEventRunRepo::new(pool.clone());
+    let event = github_event("workflow_run");
+
+    let candidates_page = repo
+        .candidate_actions(&event, None, page(10))
+        .await
+        .unwrap();
+    let mut candidates: Vec<_> = candidates_page
+        .configurations
+        .iter()
+        .map(|configuration| configuration.action_id)
+        .collect();
+    candidates.sort();
+    let mut expected = vec![workflow_runs, everything];
+    expected.sort();
+    assert_eq!(candidates, expected);
+
+    admit(&repo, workflow_runs, &event).await;
+    let pending = repo.pending_runs(page(10)).await.unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].event, event);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_finished_github_run_keeps_no_payload(pool: PgPool) {
+    let id = action(&pool, json!([{"events": ["github"], "github": {}}])).await;
+    let repo = PgEventRunRepo::new(pool.clone());
+    let event = github_event("workflow_run");
+
+    admit(&repo, id, &event).await;
+
+    let pending = repo.pending_runs(page(10)).await.unwrap();
+    assert_eq!(pending[0].event, event);
+
+    // A finished run is only a deduplication tombstone; it keeps no payload.
+    repo.cancel_pending(
+        pending[0].key(),
+        ConfigurationRevision::INITIAL,
+        CancellationReason::Disabled,
+    )
+    .await
+    .unwrap();
+    let context = sqlx::query_scalar!(
+        "SELECT event_context FROM scheduled_action_event_run WHERE action_id = $1",
+        id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(context["github"].get("payload").is_none());
+    assert_eq!(context["github"]["event"], "workflow_run");
 }

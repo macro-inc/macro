@@ -94,7 +94,7 @@ in
           firesWhen = "below";
           warning = 2000000000;
           critical = 1000000000;
-          description = "Freeable memory is {{ $values.B }} bytes. Normal is 7-18 GB; it fell to about 0.45 GB during the October overload. Each connection holds about 14 MB of private memory, so check connection count and swap first.";
+          description = "Freeable memory is {{ humanize $values.B.Value }} bytes. Normal is 7-18 GB; it fell to about 0.45 GB during the October overload. Each connection holds about 14 MB of private memory, so check connection count and swap first.";
           runbook = "macrodb.md#memory";
         }
         {
@@ -110,7 +110,7 @@ in
           firesWhen = "below";
           warning = 1500000000;
           critical = 750000000;
-          description = "Replica freeable memory is {{ $values.B }} bytes. Normal minimum is about 3 GB. The replica serves GraphQL reads, so memory pressure shows up as slow lists.";
+          description = "Replica freeable memory is {{ humanize $values.B.Value }} bytes. Normal minimum is about 3 GB. The replica serves GraphQL reads, so memory pressure shows up as slow lists.";
           runbook = "macrodb.md#memory";
         }
         {
@@ -126,7 +126,7 @@ in
           firesWhen = "above";
           warning = 2000000000;
           critical = 5000000000;
-          description = "{{ $labels.DBInstanceIdentifier }} is using {{ $values.B }} bytes of swap. Normal is under 0.6 GB. Swap above 5 GB preceded both October overloads by hours.";
+          description = "{{ $labels.DBInstanceIdentifier }} is using {{ humanize $values.B.Value }} bytes of swap. Normal is under 0.6 GB. Swap above 5 GB preceded both October overloads by hours.";
           runbook = "macrodb.md#memory";
         }
         {
@@ -142,7 +142,7 @@ in
           firesWhen = "above";
           warning = 2;
           critical = 4;
-          description = "{{ $labels.DBInstanceIdentifier }} has {{ $values.B }}x as many active sessions as vCPUs. Normal is under 1.3; the October overload reached 8. Look at Performance Insights top waits (locks, IO) and the services holding the most connections.";
+          description = "{{ $labels.DBInstanceIdentifier }} has {{ humanize $values.B.Value }}x as many active sessions as vCPUs. Normal is under 1.3; the October overload reached 8. Look at Performance Insights top waits (locks, IO) and the services holding the most connections.";
           runbook = "macrodb.md#load";
         }
         {
@@ -158,7 +158,7 @@ in
           firesWhen = "above";
           warning = 70;
           critical = 85;
-          description = "{{ $labels.DBInstanceIdentifier }} CPU averaged {{ $values.B }}% over 15 minutes. Normal peaks are about 30%.";
+          description = "{{ $labels.DBInstanceIdentifier }} CPU averaged {{ humanize $values.B.Value }}% over 15 minutes. Normal peaks are about 30%.";
           runbook = "macrodb.md#load";
         }
         {
@@ -174,7 +174,7 @@ in
           firesWhen = "above";
           warning = 1700;
           critical = 2200;
-          description = "macro-db-prod has {{ $values.B }} connections. Normal 15-minute peaks are about 1,100; max_connections is 3,439. Each connection costs about 14 MB, so this also drains freeable memory.";
+          description = "macro-db-prod has {{ humanize $values.B.Value }} connections. Normal 15-minute peaks are about 1,100; max_connections is 3,439. Each connection costs about 14 MB, so this also drains freeable memory.";
           runbook = "macrodb.md#connections";
         }
         {
@@ -189,7 +189,7 @@ in
           firesWhen = "above";
           warning = 550;
           critical = 700;
-          description = "The read replica has {{ $values.B }} connections. Normal peaks are about 460.";
+          description = "The read replica has {{ humanize $values.B.Value }} connections. Normal peaks are about 460.";
           runbook = "macrodb.md#connections";
         }
         {
@@ -205,7 +205,7 @@ in
           firesWhen = "above";
           warning = 60;
           critical = 300;
-          description = "The read replica is {{ $values.B }} seconds behind the primary. Normal is under 6 seconds. GraphQL reads use the replica, so users see stale data and missing new items.";
+          description = "The read replica is {{ humanize $values.B.Value }} seconds behind the primary. Normal is under 6 seconds. GraphQL reads use the replica, so users see stale data and missing new items.";
           runbook = "macrodb.md#replica-lag";
         }
         {
@@ -220,7 +220,7 @@ in
           firesWhen = "above";
           warning = 0.005;
           critical = 0.01;
-          description = "{{ $labels.DBInstanceIdentifier }} disk reads take {{ $values.B }} seconds on average. Normal is about 0.6 ms.";
+          description = "{{ $labels.DBInstanceIdentifier }} disk reads take {{ humanize $values.B.Value }} seconds on average. Normal is about 0.6 ms.";
           runbook = "macrodb.md#load";
         }
         {
@@ -236,7 +236,7 @@ in
           firesWhen = "below";
           warning = 1500000000000;
           critical = 1000000000000;
-          description = "{{ $labels.DBInstanceIdentifier }} has {{ $values.B }} bytes of free storage out of 5.37 TB.";
+          description = "{{ $labels.DBInstanceIdentifier }} has {{ humanize $values.B.Value }} bytes of free storage out of 5.37 TB.";
           runbook = "macrodb.md#storage";
         }
       ];
@@ -258,7 +258,7 @@ in
           firesWhen = "above";
           warning = 75;
           critical = 90;
-          description = "{{ $labels.CacheClusterId }} is using {{ $values.B }}% of maxmemory. Keys without a TTL are never evicted under volatile-lru, so at 100% writes fail.";
+          description = "{{ $labels.CacheClusterId }} is using {{ humanize $values.B.Value }}% of maxmemory. Keys without a TTL are never evicted under volatile-lru, so at 100% writes fail.";
           runbook = "redis.md#memory";
         }
         {
@@ -274,7 +274,7 @@ in
           firesWhen = "above";
           warning = 0;
           critical = 1000;
-          description = "{{ $labels.CacheClusterId }} evicted {{ $values.B }} keys in 10 minutes. Prod caches normally evict nothing.";
+          description = "{{ $labels.CacheClusterId }} evicted {{ humanize $values.B.Value }} keys in 10 minutes. Prod caches normally evict nothing.";
           runbook = "redis.md#memory";
         }
       ];
@@ -295,7 +295,7 @@ in
           firesWhen = "above";
           warning = 3600;
           critical = 10800;
-          description = "The oldest message in email-service-backfill-queue-prod is {{ $values.B }} seconds old. Normal peaks are about 50 minutes; new users wait this long for their mailbox to fill.";
+          description = "The oldest message in email-service-backfill-queue-prod is {{ humanize $values.B.Value }} seconds old. Normal peaks are about 50 minutes; new users wait this long for their mailbox to fill.";
           runbook = "queues.md#backlog";
         }
         {
@@ -311,7 +311,7 @@ in
           firesWhen = "above";
           warning = 1800;
           critical = 7200;
-          description = "The oldest message in {{ $labels.QueueName }} is {{ $values.B }} seconds old. These queues normally drain within minutes.";
+          description = "The oldest message in {{ $labels.QueueName }} is {{ humanize $values.B.Value }} seconds old. These queues normally drain within minutes.";
           runbook = "queues.md#backlog";
         }
       ];

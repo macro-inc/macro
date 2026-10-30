@@ -175,3 +175,42 @@ fn only_probed_models_load_tools_by_reference() {
         assert!(!loads_by_reference(id), "{id}");
     }
 }
+
+#[test]
+fn max_output_tokens_is_each_models_cap() {
+    let client = Arc::new(
+        anthropic::Client::builder()
+            .api_key("test-anthropic-key")
+            .build()
+            .unwrap(),
+    );
+    let cap = |id: &str| {
+        AnthropicModel::new(Model::try_from(id).unwrap(), client.clone()).max_output_tokens()
+    };
+    for id in [
+        "anthropic/claude-opus-5-5",
+        "anthropic/claude-opus-4-8",
+        "anthropic/claude-sonnet-5",
+        "anthropic/claude-sonnet-4-6",
+        "anthropic/claude-haiku-5-5",
+        "anthropic/claude-fable-5-1",
+    ] {
+        assert_eq!(cap(id), 128_000, "{id}");
+    }
+    for id in [
+        "anthropic/claude-haiku-4-5",
+        "anthropic/claude-opus-4-5",
+        "anthropic/claude-sonnet-4-5",
+        "anthropic/claude-sonnet-4-0",
+        "anthropic/claude-sonnet-4-20250514",
+    ] {
+        assert_eq!(cap(id), 64_000, "{id}");
+    }
+    for id in [
+        "anthropic/claude-opus-4-1",
+        "anthropic/claude-opus-4-0",
+        "anthropic/claude-opus-4-20250514",
+    ] {
+        assert_eq!(cap(id), 32_000, "{id}");
+    }
+}

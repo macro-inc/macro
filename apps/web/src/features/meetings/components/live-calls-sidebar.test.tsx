@@ -32,3 +32,25 @@ it('renders nothing without live calls', () => {
   render(() => <LiveCallsSidebar calls={[]} onSelect={vi.fn()} />);
   expect(screen.queryByText('Live')).toBeNull();
 });
+
+it('offers Dismiss only for ringing calls', async () => {
+  const onSelect = vi.fn();
+  const onDismiss = vi.fn();
+  render(() => (
+    <LiveCallsSidebar
+      calls={[
+        { id: 'ring', label: 'design', joined: false, ringing: true },
+        { id: 'quiet', label: 'standup', joined: false },
+      ]}
+      onSelect={onSelect}
+      onDismiss={onDismiss}
+    />
+  ));
+
+  expect(screen.queryByRole('button', { name: 'Dismiss standup' })).toBeNull();
+  await userEvent.click(screen.getByRole('button', { name: 'Dismiss design' }));
+  expect(onDismiss).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 'ring' })
+  );
+  expect(onSelect).not.toHaveBeenCalled();
+});

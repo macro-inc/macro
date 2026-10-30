@@ -161,6 +161,7 @@ members = [
   "services/document_text_extractor",
   "services/document_upload_finalizer_handler",
   "services/docx_unzip_handler",
+  "services/email_focus_worker",
   "services/email_refresh_handler",
   "services/email_scheduled_handler",
   "services/email_service",
@@ -415,6 +416,7 @@ symphonia = { version = "0.6.1", default-features = false, features = [
   "ogg",
   "wav",
 ] }
+tar = "0.4.46"
 tempfile = "3"
 thiserror = "2.0.0"
 time = "0.3.37"
@@ -432,6 +434,7 @@ tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", de
 tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
 tower = { version = "0.5.1", features = ["util"] }
+tower-service = "0.3"
 tower-http = { version = "0.6.1", features = [
   "compression-gzip",
   "cors",

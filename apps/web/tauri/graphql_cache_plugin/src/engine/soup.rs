@@ -126,6 +126,18 @@ pub(super) async fn filter(
         }
     }
     if let Some(mail_request) = request.mail {
+        let baseline = request
+            .baseline
+            .unwrap_or_default()
+            .into_iter()
+            .map(|entry| {
+                soup_filter_cache_adapter::reconciliation_baseline_entry(
+                    entry.key,
+                    &entry.sort_timestamp,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
         return mail::page_current(
             engine,
             generation,
@@ -134,6 +146,7 @@ pub(super) async fn filter(
             &request.sort_direction,
             request.limit,
             mail_request,
+            &baseline,
         )
         .await
         .map(EntityFilterResult::Mail)

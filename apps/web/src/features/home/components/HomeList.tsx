@@ -169,7 +169,10 @@ export function HomeList(props: HomeListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    if (!isTouchDevice() && !newSplit) {
+    // Projects have no Home preview, so activating one opens it in place
+    // instead of selecting a row that shows nothing.
+    const previewable = sourceRow.entity.type !== 'initiative';
+    if (!isTouchDevice() && !newSplit && previewable) {
       markEntitySeen(sourceRow.entity);
       showPreview(sourceRow.entity, { activate: true });
       props.onPreviewActivate?.();

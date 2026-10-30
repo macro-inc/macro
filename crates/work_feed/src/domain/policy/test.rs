@@ -9,6 +9,7 @@ fn no_types_means_every_type() {
             EntityType::Document,
             EntityType::Chat,
             EntityType::Project,
+            EntityType::Initiative,
             EntityType::EmailThread,
             EntityType::Channel,
             EntityType::ChannelMessage,
@@ -47,7 +48,10 @@ fn signal_filter_matches_home_signal() {
         filter.agent_session_filter.is_some(),
         "agent sessions are opted in"
     );
-    assert!(filter.initiative_filter.is_none(), "initiatives stay out");
+    assert!(
+        filter.initiative_filter.is_some(),
+        "task projects are opted in"
+    );
     assert!(filter.email_filter.tree.is_some());
     assert!(filter.channel_thread_filter.is_some());
     assert!(filter.foreign_entity_filter.is_some());

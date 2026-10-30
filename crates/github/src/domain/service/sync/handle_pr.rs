@@ -90,7 +90,7 @@ impl<
         }
 
         // Update status for all validated tasks
-        self.update_task_statuses(&resolved_all.doc_ids, "In Review")
+        self.update_task_statuses(event, &resolved_all.doc_ids, "In Review")
             .await;
 
         tracing::trace!("PR open handler complete");
@@ -171,7 +171,7 @@ impl<
         }
 
         // Update status for all validated tasks
-        self.update_task_statuses(&resolved_all.doc_ids, "In Review")
+        self.update_task_statuses(event, &resolved_all.doc_ids, "In Review")
             .await;
 
         tracing::trace!("PR edit handler complete");
@@ -252,7 +252,8 @@ impl<
             doc_count = resolved.doc_ids.len(),
             "updating task statuses for PR close"
         );
-        self.update_task_statuses(&resolved.doc_ids, status).await;
+        self.update_task_statuses(event, &resolved.doc_ids, status)
+            .await;
 
         tracing::trace!("PR close handler complete");
         Ok(())

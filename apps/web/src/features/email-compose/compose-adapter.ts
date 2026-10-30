@@ -65,6 +65,7 @@ import {
 import { confirmLocalDraftSave } from '@queries/email/local-draft-confirmation';
 import {
   clearLocalAttachmentReceipt,
+  forgetLocalDraft,
   readLocalDraft,
   recordLocalAttachment,
   reviveLocalDraft,
@@ -111,6 +112,7 @@ import {
 } from './queries/draft-lifecycle';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { queuedDraftSaveArgs } from './queries/queued-draft';
+import { watchEmailSendProgress } from './queries/send-progress';
 import {
   restoreDraftBodyAfterUndo,
   runQueuedUndoSend,
@@ -150,7 +152,7 @@ export function createEmailComposeContext(
       options.threadTransport?.() ??
         (graphqlSoupFlag().enabled ? 'graphql' : 'rest')
     );
-  const sends = useQueuedEmailSends(() => true);
+  const sends = useQueuedEmailSends();
   // Attach handlers run as event handlers, which have no Solid owner of
   // their own; the dialog needs the surface's.
   const dialogOwner = getOwner();
@@ -357,6 +359,7 @@ export function createEmailComposeContext(
       get retryDraft() {
         return queueActive() ? retryEmailDraftSynchronization : undefined;
       },
+      forgetLocalDraft: (draftId) => forgetLocalDraft(draftId),
       readDraft: readEmailDraft,
       watchDrafts: watchEmailDrafts,
       async saveDraft({
@@ -571,6 +574,7 @@ export function createEmailComposeContext(
                 emailSendMatchesDraft(intent, draftId) &&
                 emailSendLocked(intent)
             )),
+      watchSend: watchEmailSendProgress,
       async sendMessage({ inboxId, ...input }) {
         if (
           !inboxSource
@@ -597,7 +601,7 @@ export function createEmailComposeContext(
             !inbox.settings.signature_on_replies_forwards)
             ? ''
             : (inbox.settings.signature ?? '');
-        return await sendEmailQueued({
+        const queued = await sendEmailQueued({
           signatureHtml,
           expectedLocalVersion: input.expectedLocalVersion,
           draft: {
@@ -623,6 +627,10 @@ export function createEmailComposeContext(
           restoreBodyText: input.restoreBodyText,
           restoreBodyMacro: input.restoreBodyMacro,
         });
+        // The thread shown after Send renders from this snapshot on mount; it
+        // must already hold the send, or the thread shows the draft instead.
+        await sends.refresh();
+        return queued;
       },
       async unschedule({ draftId, threadId, inboxId, draftGeneration }) {
         const local = sends

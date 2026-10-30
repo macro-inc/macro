@@ -1,3 +1,8 @@
+import {
+  authorPrincipalId,
+  peerAuthorId,
+  useAuthorName,
+} from '@block-md/history/author';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayNameParts, macroIdToEmail, tryMacroId } from '@core/user';
 import { formatRelativeTimestamp } from '@entity';
@@ -17,15 +22,26 @@ import type { BlameTooltipState } from './blameTooltipPlugin';
 const FETCH_DELAY_MS = 400;
 const SHOW_DELAY_MS = 500;
 
-function UserLine(props: { userId: string; editedAt: Date }) {
-  const macroId = tryMacroId(props.userId);
-  const name = () =>
-    getDisplayNameParts(macroId).firstName ||
-    (macroId ? macroIdToEmail(macroId) : props.userId);
+function UserLine(props: { authorId: string; editedAt: Date }) {
+  const name = useAuthorName(
+    () => props.authorId,
+    (userId) => {
+      const macroId = tryMacroId(userId);
+      return (
+        getDisplayNameParts(macroId).firstName ||
+        (macroId ? macroIdToEmail(macroId) : userId)
+      );
+    }
+  );
 
   return (
     <span class="inline-flex items-center gap-1">
-      <UserIcon id={props.userId} size="sm" suppressClick showTooltip={false} />
+      <UserIcon
+        id={authorPrincipalId(props.authorId)}
+        size="sm"
+        suppressClick
+        showTooltip={false}
+      />
       {name()}, {formatRelativeTimestamp(props.editedAt)}
     </span>
   );
@@ -78,8 +94,20 @@ export function BlameTooltip(props: {
 
   onCleanup(hide);
 
+  const blame = () => {
+    const data = visible() ? query.data : undefined;
+    if (!data?.userId) return undefined;
+    return {
+      authorId: peerAuthorId(data.peerId, {
+        userId: data.userId,
+        actor: data.actor,
+      }),
+      editedAt: data.editedAt,
+    };
+  };
+
   return (
-    <Show when={visible() && query.data?.userId ? query.data : undefined}>
+    <Show when={blame()}>
       {(b) => (
         <div
           class="fixed z-tool-tip rounded-md bg-surface px-2 py-1 text-xs text-ink-muted/70 pointer-events-none"
@@ -88,7 +116,7 @@ export function BlameTooltip(props: {
             top: `${props.state.y + 12}px`,
           }}
         >
-          <UserLine userId={b().userId!} editedAt={b().editedAt} />
+          <UserLine authorId={b().authorId} editedAt={b().editedAt} />
         </div>
       )}
     </Show>

@@ -1,3 +1,5 @@
+mod telemetry;
+
 use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::folders_query::DssFoldersQueryReader;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -5,6 +7,7 @@ use async_graphql::{Data, http::GraphiQLSource};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     Router,
+    body::HttpBody,
     extract::{OriginalUri, State},
     http::{StatusCode, request::Parts},
     response::{Html, IntoResponse, Response},
@@ -48,7 +51,6 @@ fn graphiql_source(endpoint: &str) -> String {
         .finish()
 }
 
-#[tracing::instrument(skip_all, name = "graphql.execute")]
 async fn graphql_handler(
     State(state): State<ApiContext>,
     Cached(auth): Cached<
@@ -56,23 +58,34 @@ async fn graphql_handler(
     >,
     request_parts: Parts,
     request: GraphQLRequest,
-) -> GraphQLResponse {
+) -> Response {
     let acting_user = auth
         .authorization
         .as_ref()
         .and_then(UserOrInternalServiceAuthorization::acting_user);
-    let request = graphql_query_context_data(
-        request.into_inner(),
-        &state,
-        acting_user.map(|user| user.macro_user_id.clone()),
-        acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
-        acting_user.and_then(opaque_viewer_id),
-    );
-    state
-        .graphql_soup_schema
-        .execute(request.data(GraphqlRequestParts::new(request_parts)))
-        .await
-        .into()
+    let result = telemetry::observe(request.into_inner(), acting_user.is_some(), |request| {
+        let request = graphql_query_context_data(
+            request,
+            &state,
+            acting_user.map(|user| user.macro_user_id.clone()),
+            acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
+            acting_user.and_then(opaque_viewer_id),
+        );
+        state
+            .graphql_soup_schema
+            .execute(request.data(GraphqlRequestParts::new(request_parts)))
+    })
+    .await;
+    graphql_response(result)
+}
+
+#[tracing::instrument(skip_all, name = "graphql.serialize", fields(response_bytes = tracing::field::Empty))]
+fn graphql_response(result: async_graphql::Response) -> Response {
+    let response = GraphQLResponse::from(result).into_response();
+    if let Some(bytes) = response.body().size_hint().exact() {
+        tracing::Span::current().record("response_bytes", bytes);
+    }
+    response
 }
 
 async fn subscription_handler(
@@ -236,6 +249,13 @@ fn insert_graphql_context_data(
         viewer_id,
         email_content_reader,
     ));
+    data.insert(complete_graph::EmailFocusContext(
+        state.email_focus_reader.clone(),
+    ));
+    data.insert(complete_graph::email_thread_focus_loader(
+        macro_user_id.clone(),
+        state.email_focus_reader.clone(),
+    ));
     data.insert(complete_graph::entity_favorite_loader(
         macro_user_id.clone(),
         state.favorites_service.clone(),
@@ -257,3 +277,6 @@ fn insert_graphql_context_data(
         state.activity_reader.clone(),
     ));
 }
+
+#[cfg(test)]
+mod test;

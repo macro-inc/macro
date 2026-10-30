@@ -47,7 +47,7 @@ function RadioGroupItemIndicator(props: ItemIndicatorProps) {
   return (
     <KobalteRadioGroup.ItemIndicator
       class={cn(
-        'rounded-full bg-button-primary-ink',
+        'rounded-full bg-button-accent-ink',
         radioSizes[size()].indicator,
         local.class
       )}

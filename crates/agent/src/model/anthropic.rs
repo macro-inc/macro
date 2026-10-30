@@ -28,6 +28,19 @@ const TOOL_REFERENCE_MODELS: &[&str] = &[
     "claude-sonnet-5-5",
 ];
 
+/// Model id prefixes whose Messages API output cap is 32K (Opus 4 / 4.1).
+const OUTPUT_32K_PREFIXES: &[&str] = &["claude-opus-4-0", "claude-opus-4-1", "claude-opus-4-2"];
+
+/// Model id prefixes whose Messages API output cap is 64K. Every other Claude
+/// model (Opus and Sonnet 4.6 and later, Haiku 5.5, Fable, Mythos) allows 128K.
+const OUTPUT_64K_PREFIXES: &[&str] = &[
+    "claude-haiku-4-5",
+    "claude-opus-4-5",
+    "claude-sonnet-4-0",
+    "claude-sonnet-4-2",
+    "claude-sonnet-4-5",
+];
+
 /// A Claude model bound to the native Anthropic client that serves it.
 ///
 /// Carries the parsed [`Model`] id and a shared client. Which provider an id
@@ -47,6 +60,20 @@ impl<'a, H: HttpClientExt + Clone + Default + 'static> AnthropicModel<'a, H> {
     /// The routed id this model was bound to.
     pub fn model(&self) -> &Model<'a> {
         &self.model
+    }
+
+    /// The most output tokens one response may generate. Anthropic requires
+    /// `max_tokens` and rejects a value above the model's cap, so a turn that
+    /// sets no limit of its own asks for the whole cap.
+    pub(crate) fn max_output_tokens(&self) -> u64 {
+        let name = self.model.name();
+        if OUTPUT_32K_PREFIXES.iter().any(|p| name.starts_with(p)) {
+            32_000
+        } else if OUTPUT_64K_PREFIXES.iter().any(|p| name.starts_with(p)) {
+            64_000
+        } else {
+            128_000
+        }
     }
 
     /// Whether this model loads deferred tools through `tool_reference`.

@@ -117,7 +117,9 @@ pub fn run_view(catalog: JsValue, view: JsValue) -> Result<Query, JsValue> {
     let catalog: Catalog = read(Input::Catalog, catalog)?;
     let view: DatabaseView = read(Input::View, view)?;
     let select = view::compile_view(&view, &catalog).map_err(|problem| thrown(problem.into()))?;
-    Ok(Query::held(Engine::from_select(&catalog, select)))
+    Engine::from_select(&catalog, select)
+        .map(Query::held)
+        .map_err(thrown)
 }
 
 /// The `Board` a board view makes of `outcome`, what its `runView` query
@@ -227,11 +229,13 @@ fn read<Value: DeserializeOwned>(what: Input, value: JsValue) -> Result<Value, J
     })
 }
 
-/// The error as the value a driver catches.
+/// The error as the value a driver catches; a plain `Error` with its
+/// message should it not serialize.
 fn thrown(error: RunError) -> JsValue {
-    EngineError::from(error)
+    let error = EngineError::from(error);
+    error
         .serialize(&Serializer::json_compatible())
-        .expect("an EngineError is strings, numbers and ids, which always serialize")
+        .unwrap_or_else(|failure| JsError::new(&format!("{} ({failure})", error.message)).into())
 }
 
 /// Plain objects and arrays, as JSON would give them: maps become objects

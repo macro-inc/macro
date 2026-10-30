@@ -59,6 +59,7 @@ mod reusable_preview_service;
 mod runners;
 mod sdk_check;
 mod steps;
+mod test_macrod_update;
 mod vars;
 mod web_app_check_main;
 mod web_artifact_paths;
@@ -136,6 +137,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_agent_daemon_on_tag",
         file_name: "build_agent_daemon_on_tag.yml",
         render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
+    },
+    WorkflowFile {
+        slug: "test_macrod_update",
+        file_name: "test_macrod_update.yml",
+        render_yaml: || render_gh_workflow(test_macrod_update::test_macrod_update)(),
     },
     WorkflowFile {
         slug: "build_appimage_on_tag",
