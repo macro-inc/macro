@@ -41,34 +41,31 @@ export function ChannelSectionHeading(props: {
   children?: JSX.Element;
 }) {
   return (
-    <div class="group/sidebar-section flex h-10 items-center gap-1 pt-2">
-      <button
-        id={props.id}
-        type="button"
-        role="treeitem"
-        tabIndex={-1}
-        title={props.title}
-        aria-expanded={props.open}
-        class={cn(
-          'flex min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-left text-xs font-medium text-ink-muted',
-          props.focused && 'bg-hover text-ink'
-        )}
-        onClick={props.onToggle}
+    <WorkspaceSection.Root
+      open={props.open}
+      onOpenChange={props.onToggle}
+      class="pt-2"
+    >
+      <WorkspaceSection.Header
+        class={cn('rounded-lg', props.focused && 'bg-hover text-ink')}
       >
-        <span class="truncate">{props.label}</span>
-        <CaretDownIcon
-          class={cn(
-            'size-3 shrink-0 transition-transform',
-            !props.open && '-rotate-90'
-          )}
-        />
-        {props.badge}
-        <Show when={props.unreadCount > 0}>
-          <span class="text-xs text-accent">{props.unreadCount}</span>
-        </Show>
-      </button>
-      <div class="ml-auto flex shrink-0 items-center">{props.children}</div>
-    </div>
+        <WorkspaceSection.Trigger
+          id={props.id}
+          role="treeitem"
+          tabIndex={-1}
+          title={props.title}
+          class={cn('flex-1', props.focused && 'text-ink')}
+        >
+          <span class="min-w-0 truncate">{props.label}</span>
+          <WorkspaceSection.Indicator />
+          {props.badge}
+          <Show when={props.unreadCount > 0}>
+            <span class="text-xs text-accent">{props.unreadCount}</span>
+          </Show>
+        </WorkspaceSection.Trigger>
+        <div class="flex shrink-0 items-center">{props.children}</div>
+      </WorkspaceSection.Header>
+    </WorkspaceSection.Root>
   );
 }
 

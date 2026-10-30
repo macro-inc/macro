@@ -503,7 +503,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   require explicit confirmation before creating a duplicate visible channel name.
   Keep picker suggestions inside the dialog and retain typed names through blur and handoff.
   Align channel rows across built-in and custom sections without nested indentation.
-  Reuse compact section headers, with a neutral Shared badge after the caret and no scope icons; keep focus backgrounds content-sized.
+  Reuse shared collapsible section headers and their hidden-caret behavior, with a neutral Shared badge after the caret and no scope icons; apply focus backgrounds across the full header row.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep loaded channel rows visible while section changes refetch by-ID lookups.
   Show lock icons for private conversations and visible section options; share
