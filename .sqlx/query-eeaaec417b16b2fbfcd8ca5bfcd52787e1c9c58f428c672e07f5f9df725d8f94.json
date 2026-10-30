@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE agent_session_auto_archive\n                SET restored_at = NOW()\n                WHERE agent_session_id = $1 AND restored_at IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eeaaec417b16b2fbfcd8ca5bfcd52787e1c9c58f428c672e07f5f9df725d8f94"
+}

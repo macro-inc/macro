@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_session_auto_archive (agent_session_id, reason)\n            VALUES ($1, $2)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "644c4bd5ac91a4f03bbaca1ba2e8424f9e1cf55bb9270ab9e08a6b2cd68537ce"
+}

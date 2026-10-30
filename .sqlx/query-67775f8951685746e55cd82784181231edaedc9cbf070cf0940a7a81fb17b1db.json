@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT session.id\n            FROM agent_session session\n            LEFT JOIN agent_session_auto_archive_override override\n                ON override.agent_session_id = session.id\n            LEFT JOIN user_agent_session_auto_archive defaults\n                ON defaults.user_id = session.owner_id\n            WHERE session.id = $1\n              AND NOT session.is_archived\n              AND CASE $2::text\n                  WHEN 'pull_request_merged' THEN COALESCE(\n                      override.on_pull_request_merged, defaults.on_pull_request_merged, false)\n                  WHEN 'runtime_closed' THEN COALESCE(\n                      override.on_runtime_closed, defaults.on_runtime_closed, false)\n                  ELSE false\n              END\n              AND session.turn_state IS DISTINCT FROM 'starting'\n              AND session.turn_state IS DISTINCT FROM 'running'\n              AND session.turn_state IS DISTINCT FROM 'blocked'\n              AND NOT EXISTS (\n                  SELECT 1 FROM agent_session_auto_archive archive\n                  WHERE archive.agent_session_id = session.id\n              )\n              AND NOT EXISTS (\n                  SELECT 1 FROM agent_conversation_sessions conversation\n                  WHERE conversation.session_id = session.id AND conversation.is_current\n              )\n              AND NOT EXISTS (\n                  SELECT 1 FROM agent_session_queue queue\n                  WHERE queue.agent_session_id = session.id\n                    AND jsonb_array_length(queue.entries) > 0\n              )\n            FOR UPDATE OF session\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "67775f8951685746e55cd82784181231edaedc9cbf070cf0940a7a81fb17b1db"
+}

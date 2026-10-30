@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT on_pull_request_merged, on_runtime_closed\n            FROM user_agent_session_auto_archive\n            WHERE user_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "on_pull_request_merged",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "on_runtime_closed",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d714a93b00f6705c659f6113df20e1d799ece42147dbd45e27c2a11b6ad986d9"
+}
