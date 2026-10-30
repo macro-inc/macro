@@ -390,6 +390,14 @@ describe('CallOverlay muted microphone badges', () => {
       screen.getByRole('button', { name: 'Focus Second participant' })
     ).toBeTruthy();
     expect(screen.getByTestId('track-first-camera')).toBe(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Focus yourself' }));
+    expect(
+      screen.getByRole('button', { name: 'Focus First participant' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Focus Second participant' })
+    ).toBeTruthy();
+    expect(screen.getByTestId('track-first-camera')).toBe(video);
     fireEvent.click(
       screen.getByRole('button', { name: 'Focus First participant' })
     );
@@ -402,22 +410,49 @@ describe('CallOverlay muted microphone badges', () => {
     ).toBeNull();
   });
 
-  it('focuses the local picture-in-picture without replacing its video', () => {
-    const remote = createRemoteParticipant('remote', {}, 'Remote participant');
-    setUpCallState([remote]);
-    render(() => <CallOverlay onLeave={() => undefined} />);
-    const video = screen.getByTestId('track-local-camera');
-    fireEvent.click(screen.getByRole('button', { name: 'Focus yourself' }));
-    expect(
-      screen.queryByRole('button', { name: 'Focus Remote participant' })
-    ).toBeNull();
-    expect(screen.getByTestId('track-local-camera')).toBe(video);
-    fireEvent.click(screen.getByRole('button', { name: 'Unfocus yourself' }));
-    expect(
-      screen.getByRole('button', { name: 'Focus Remote participant' })
-    ).toBeTruthy();
-    expect(screen.getByTestId('track-local-camera')).toBe(video);
-  });
+  it.each([false, true])(
+    'swaps the local and remote views without remounting video (phone: %s)',
+    (mobile) => {
+      mocks.mobile = mobile;
+      const remote = createRemoteParticipant(
+        'remote',
+        {
+          camera: {
+            isMuted: false,
+            isSubscribed: true,
+            track: createTrack('remote-camera'),
+          },
+        },
+        'Remote participant'
+      );
+      setUpCallState([remote]);
+      render(() => <CallOverlay onLeave={() => undefined} />);
+      const localVideo = screen.getByTestId('track-local-camera');
+      const remoteVideo = screen.getByTestId('track-remote-camera');
+      fireEvent.click(screen.getByRole('button', { name: 'Focus yourself' }));
+      expect(
+        screen.getByRole('button', { name: 'Focus Remote participant' })
+      ).toBeTruthy();
+      expect(screen.getByTestId('track-local-camera')).toBe(localVideo);
+      expect(screen.getByTestId('track-remote-camera')).toBe(remoteVideo);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Focus Remote participant' })
+      );
+      expect(
+        screen.getByRole('button', { name: 'Focus yourself' })
+      ).toBeTruthy();
+      expect(screen.getByTestId('track-local-camera')).toBe(localVideo);
+      expect(screen.getByTestId('track-remote-camera')).toBe(remoteVideo);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Unfocus Remote participant' })
+      );
+      expect(
+        screen.getByRole('button', { name: 'Focus Remote participant' })
+      ).toBeTruthy();
+      expect(screen.getByTestId('track-local-camera')).toBe(localVideo);
+      expect(screen.getByTestId('track-remote-camera')).toBe(remoteVideo);
+    }
+  );
 });
 
 describe('CallParticipantsMenu live roster', () => {

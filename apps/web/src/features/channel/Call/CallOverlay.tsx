@@ -192,6 +192,7 @@ function LocalParticipantTile(props: {
 
 function ParticipantTile(props: {
   participant: RemoteParticipant;
+  avatarSize?: 'sm' | 'md';
   isFocused: boolean;
   hidden: boolean;
   onToggleFocus: () => void;
@@ -230,7 +231,11 @@ function ParticipantTile(props: {
       <Show
         when={cameraTrack()}
         fallback={
-          <ParticipantAvatar userId={macroId()} fallbackName={displayName()} />
+          <ParticipantAvatar
+            userId={macroId()}
+            fallbackName={displayName()}
+            avatarSize={props.avatarSize}
+          />
         }
       >
         <TrackView track={cameraTrack()} />
@@ -398,7 +403,8 @@ export function CallOverlay(props: {
     callCtx.isScreenSharing() || remoteScreenShares().length > 0;
 
   const gridCols = () => {
-    if (focusedParticipant()) return 'grid-cols-1';
+    if (focusedParticipant() && focusedParticipant() !== 'local')
+      return 'grid-cols-1';
     const count = participants().length;
     if (count <= 1) return 'grid-cols-1';
     if (count <= 4) return 'grid-cols-2';
@@ -489,18 +495,23 @@ export function CallOverlay(props: {
               {/* Remote participants grid */}
               <div
                 class={cn(
-                  `size-full grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
-                  focusedParticipant() === 'local' && 'hidden'
+                  `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
+                  focusedParticipant() === 'local'
+                    ? 'absolute bottom-4 right-4 z-20 w-40 aspect-video shadow-lg sm:w-48'
+                    : 'size-full'
                 )}
-                hidden={focusedParticipant() === 'local'}
               >
                 <For each={participants()}>
                   {(participant) => (
                     <ParticipantTile
                       participant={participant}
+                      avatarSize={
+                        focusedParticipant() === 'local' ? 'sm' : 'md'
+                      }
                       isFocused={focusedParticipant() === participant}
                       hidden={
                         !!focusedParticipant() &&
+                        focusedParticipant() !== 'local' &&
                         focusedParticipant() !== participant
                       }
                       onToggleFocus={() => toggleParticipantFocus(participant)}

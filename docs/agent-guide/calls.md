@@ -239,9 +239,12 @@ header; Invite remains available on setup screens, desktop, and tablets. Back
 returns to the app without hanging up; when a channel has no navigation history, Back opens its
 Messages tab instead. Only **Leave call** ends participation.
 
-Click or tap a participant, including your own tile, to focus them. Click or tap
-the focused tile again (**Back to grid**) to restore the grid. If that participant
-leaves, the grid returns automatically. Focus does not replace the video tracks.
+Click or tap a participant, including your own tile, to focus them. Focusing
+someone else keeps your own tile in the small picture-in-picture window;
+focusing yourself moves the remote participant grid into that window instead.
+Tap a tile in the small window to switch focus, or click or tap the focused tile
+again (**Back to grid**) to restore the grid. If that participant leaves, the grid
+returns automatically. Focus changes keep the existing video tracks mounted.
 A talking participant has an accent-colored border above their video or avatar.
 
 The **Participants** header button shows the live attendee count and opens a
