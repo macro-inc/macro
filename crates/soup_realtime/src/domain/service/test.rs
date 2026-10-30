@@ -397,10 +397,9 @@ async fn audience_users_receive_the_patch_alongside_current_accessors() {
         .await
         .expect("patch is published");
 
-    let recipients = harness
-        .messages
-        .lock()
-        .expect("messages lock")
+    let messages = harness.messages.lock().expect("messages lock");
+    assert_eq!(messages.len(), 2);
+    let recipients = messages
         .iter()
         .map(|message| message.user_id.clone())
         .collect::<HashSet<_>>();

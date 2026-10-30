@@ -129,6 +129,11 @@ impl<S: EntityAccessService> DocumentAudience for EntityAccessDocumentAudience<S
         &self,
         document_id: &str,
     ) -> Result<Vec<MacroUserIdStr<'static>>, DocumentError> {
+        // Entity access resolves users only for UUID ids. A legacy document id has
+        // none to read, and realtime could not resolve recipients for it either.
+        if uuid::Uuid::parse_str(document_id).is_err() {
+            return Ok(Vec::new());
+        }
         self.access
             .get_users_by_entity(document_id, EntityType::Document)
             .await
