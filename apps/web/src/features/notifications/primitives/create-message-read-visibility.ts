@@ -6,10 +6,13 @@ import {
   onCleanup,
 } from 'solid-js';
 
+type Observation = { time: number; rect?: DOMRectReadOnly };
+
 type Target = {
   publish: (visible: boolean) => void;
-  viewport?: DOMRectReadOnly;
-  scroller?: DOMRectReadOnly;
+  viewport?: Observation;
+  scroller?: Observation;
+  refreshing?: boolean;
 };
 
 // Avoid counting edge contact as seeing a message, including very tall replies.
@@ -54,13 +57,41 @@ export function createMessageReadVisibility(options: {
           for (const entry of entries) {
             const target = targets.get(entry.target);
             if (!target) continue;
-            target[kind] =
-              entry.isIntersecting &&
-              entry.intersectionRatio >= INTERSECTION_THRESHOLD
-                ? entry.intersectionRect
-                : undefined;
-            const viewport = target.viewport;
-            const scroller = root ? target.scroller : viewport;
+            target[kind] = {
+              time: entry.time,
+              rect:
+                entry.isIntersecting &&
+                entry.intersectionRatio >= INTERSECTION_THRESHOLD
+                  ? entry.intersectionRect
+                  : undefined,
+            };
+            const viewportObservation = target.viewport;
+            const scrollerObservation = root
+              ? target.scroller
+              : viewportObservation;
+            if (!viewportObservation || !scrollerObservation) {
+              target.publish(false);
+              continue;
+            }
+            if (viewportObservation.time !== scrollerObservation.time) {
+              target.publish(false);
+              // Only one observer may cross a threshold during a scroll. Get
+              // both rectangles from the same rendering update before clipping
+              // them, rather than combining new and old screen coordinates.
+              if (!target.refreshing) {
+                target.refreshing = true;
+                target.viewport = undefined;
+                target.scroller = undefined;
+                viewportObserver?.unobserve(entry.target);
+                scrollerObserver?.unobserve(entry.target);
+                viewportObserver?.observe(entry.target);
+                scrollerObserver?.observe(entry.target);
+              }
+              continue;
+            }
+            target.refreshing = false;
+            const viewport = viewportObservation.rect;
+            const scroller = scrollerObservation.rect;
             target.publish(
               !!viewport &&
                 !!scroller &&
@@ -102,6 +133,7 @@ export function createMessageReadVisibility(options: {
           for (const target of targets.values()) {
             target.viewport = undefined;
             target.scroller = undefined;
+            target.refreshing = false;
             target.publish(false);
           }
         });

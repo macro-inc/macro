@@ -62,6 +62,24 @@ test('standalone expanded threads keep offscreen replies unread', async ({
   await expect(page.locator('[data-notification="0"]')).toHaveText('Read');
 });
 
+test('a reply scrolled out from behind the composer becomes read', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const scroller = page.locator('[data-channel-scroll]');
+  await scroller.evaluate((el) => {
+    el.scrollTop = el.scrollHeight - el.clientHeight - 96;
+  });
+  await afterLayout(page);
+  await page.getByRole('button', { name: 'Notify covered reply' }).click();
+  await afterLayout(page);
+  await expect(page.locator('[data-notification="29"]')).toHaveText('Unread');
+  await scroller.evaluate((el) => {
+    el.scrollTop += 96;
+  });
+  await expect(page.locator('[data-notification="29"]')).toHaveText('Read');
+});
+
 test('a notification arriving in the same task as a scroll waits for fresh visibility', async ({
   page,
 }) => {

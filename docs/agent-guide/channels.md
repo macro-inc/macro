@@ -730,6 +730,10 @@ rule. New notifications on an already-mounted offscreen reply remain unread unti
 that reply comes into view. Explicit notification clicks and mark-read actions
 retain their existing behavior.
 
+Visibility is conservative: moving a partly off-window pane without crossing
+either observer's visibility threshold can leave a now-visible reply unread
+until the next intersection update or an explicit mark-read action.
+
 The backend-free regression uses the real message read marker and channel
 virtualizer on desktop, phone, and tablet:
 `bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
