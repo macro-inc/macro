@@ -128,11 +128,8 @@ export function createTemplateActivation(args: {
    * destination (`templateDestinations`), by item ID.
    */
   access: Accessor<ReadonlyMap<string, boolean>>;
-  /**
-   * Tag options the activator can apply: undefined while loading, null when
-   * they couldn't be loaded (tags are then kept as shared).
-   */
-  tags?: Accessor<ReadonlySet<string> | null | undefined>;
+  /** Tag options the activator can apply; undefined until they're known. */
+  tags?: Accessor<ReadonlySet<string> | undefined>;
 }) {
   const [choices, setChoices] = createSignal<
     ReadonlyMap<string, ReferenceChoice>
@@ -214,7 +211,7 @@ export function createTemplateActivation(args: {
       activator,
       keepAuthor: keepsAuthor(template.variables, template.author),
       inaccessible: new Set(unreachable().map((destination) => destination.id)),
-      tags: args.tags?.() ?? undefined,
+      tags: args.tags?.(),
     };
     let cleared = false;
     const task = filledTask(template.task, fill(activator), (stepArgs) => {

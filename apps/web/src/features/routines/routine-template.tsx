@@ -143,10 +143,14 @@ function ActivateTemplate(
     template: () => props.template,
     activator,
     access,
+    // Cached tags still say what the activator can apply after a failed
+    // refresh; with none, activation waits for a retry.
     tags: () =>
       match(tags.status())
         .with('pending', () => undefined)
-        .with('error', () => null)
+        .with('error', () =>
+          tags().length ? new Set(tags().map((tag) => tag.optionId)) : undefined
+        )
         .with('ready', () => new Set(tags().map((tag) => tag.optionId)))
         .exhaustive(),
   });
@@ -203,6 +207,11 @@ function ActivateTemplate(
       onChoose={activation.choose}
       undecided={activation.undecided().length}
       checking={activation.checking()}
+      onRetry={
+        activation.checking() && tags.status() === 'error'
+          ? () => tags.retry()
+          : undefined
+      }
       unreachable={
         activation.unreachable().length + activation.missingTags().length
       }

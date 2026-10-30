@@ -87,6 +87,8 @@ export function ActivateTemplateDialog(props: {
   undecided: number;
   /** Still checking access to the steps' channels, folders and documents. */
   checking: boolean;
+  /** Retry what checking needs after it failed to load. */
+  onRetry?(): void;
   /** Steps whose destination the activator can't open; they start empty. */
   unreachable: number;
   /** Documents steps act on that the activator can't open; can't activate. */
@@ -199,7 +201,9 @@ export function ActivateTemplateDialog(props: {
                   props.undecided > 0
                     ? `Decide on ${props.undecided} ${props.undecided === 1 ? 'reference' : 'references'} to activate.`
                     : props.checking
-                      ? 'Checking what you can open…'
+                      ? props.onRetry
+                        ? 'Couldn’t check which tags you can use.'
+                        : 'Checking what you can open…'
                       : props.blocked > 0
                         ? `${props.blocked === 1 ? 'A step acts on a document' : `Steps act on ${props.blocked} documents`} you can’t open. Ask its author to share ${props.blocked === 1 ? 'it' : 'them'} with you.`
                         : props.unreachable > 0
@@ -211,6 +215,13 @@ export function ActivateTemplateDialog(props: {
               </Show>
             </p>
             <div class="flex gap-2">
+              <Show when={props.onRetry}>
+                {(retry) => (
+                  <Button variant="secondary" onClick={() => retry()()}>
+                    Try again
+                  </Button>
+                )}
+              </Show>
               <Button
                 variant="secondary"
                 onClick={() => props.onOpenChange(false)}
