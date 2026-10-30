@@ -399,6 +399,8 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   /** Open the suggestions dropdown when the input gains focus (default true) */
   openOnFocus?: boolean;
   triggerMode?: ComboboxTriggerMode;
+  /** Retain a typed query when focus moves to an action beside the picker. */
+  noResetInputOnBlur?: boolean;
   hideBorder?: boolean;
   noPadding?: boolean;
   includeSelf?: boolean;
@@ -819,6 +821,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         value={props.selectedOptions as CombinedRecipientItem[]}
         onChange={handleChange}
         onInputChange={onInputChange}
+        noResetInputOnBlur={props.noResetInputOnBlur}
         shouldFocusWrap
         placeholder={
           props.selectedOptions?.length === 0 || isMobile()

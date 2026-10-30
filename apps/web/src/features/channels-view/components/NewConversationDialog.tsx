@@ -111,7 +111,7 @@ function NewConversationDialog(
       class="w-[min(36rem,90vw)]"
     >
       <form
-        class="flex flex-col gap-5 p-5"
+        class="flex min-h-[min(28rem,80dvh)] flex-col gap-5 p-5"
         onSubmit={(event) => fireAndForget(submit(event), 'new-conversation')}
       >
         <div>
@@ -140,6 +140,8 @@ function NewConversationDialog(
           }}
           onInputChange={setQuery}
           placeholder={t('channelSections.findConversation')}
+          portalScope="local"
+          noResetInputOnBlur
           disabled={pending()}
           inviteExternalEmails
         />
@@ -148,14 +150,14 @@ function NewConversationDialog(
             {error()}
           </p>
         </Show>
-        <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="mt-auto flex flex-wrap items-center justify-between gap-3">
           <Button
             type="button"
             variant="ghost"
             disabled={pending()}
             onClick={() => {
-              props.onOpenChange(false);
               props.onCreateChannel(query().trim());
+              props.onOpenChange(false);
             }}
           >
             <HashIcon class="size-4" />
