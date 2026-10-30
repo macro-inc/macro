@@ -129,6 +129,10 @@ tab skips the company pill. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
 below, and a **Create …** button that also submits on Command-Enter.
 
+Verify company domain validation by creating a company with an allowed business
+domain, then adding a contact whose email matches it. Personal email provider
+domains must still be rejected as company domains.
+
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
 the field; Close or Escape clears the query and returns to the icon.

@@ -57,6 +57,9 @@ tools/HTTP/GraphQL surfaces over them.
 
 ## Gotchas
 
+- `src/domain/generic_email_domains.rs` filters both manual company creation
+  and email-driven contact population. Cover legitimate company-domain
+  exceptions with regression tests when correcting the blocklist.
 - `resolve_association` also accepts `CrmAssociation::Activity`: all records in
   CRM-enabled teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned

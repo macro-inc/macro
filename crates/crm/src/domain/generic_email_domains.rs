@@ -510,7 +510,6 @@ const SAAS_VENDOR_DOMAINS: &[&str] = &[
     "stripe.com",
     "brex.com",
     "mercury.com",
-    "ramp.com",
     "tryramp.com",
     "pave.com",
     "guideline.com",
