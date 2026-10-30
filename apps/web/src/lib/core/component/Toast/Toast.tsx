@@ -215,6 +215,7 @@ function ActionButtons(props: {
           as={Button}
           size="sm"
           variant="secondary"
+          aria-label={t('common.dismiss')}
           onClick={() => props.onDismiss?.()}
         >
           {t('common.dismiss')}
