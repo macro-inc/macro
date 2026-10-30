@@ -21,9 +21,11 @@ export function ProjectLinkPill(props: {
   property: PropertyValue;
   fallback: JSX.Element;
   class?: string;
+  variant?: 'secondary' | 'ghost';
 }) {
   const ctx = useProperty();
   const layout = useSplitLayout();
+  const variant = () => props.variant ?? 'secondary';
   const reference = () => getEntityValues(props.property)[0];
   const { name, nativeProjectId, isLoading } = usePropertyEntityDisplay(
     () => reference()?.entity_id ?? '',
@@ -41,14 +43,14 @@ export function ProjectLinkPill(props: {
       fallback={props.fallback}
     >
       <ButtonGroup
-        finish="raised"
-        variant="secondary"
+        finish={variant() === 'secondary' ? 'raised' : undefined}
+        variant={variant()}
         size="xs"
         class={cn('min-w-0 max-w-full border-0', props.class)}
       >
         <ButtonGroup.Button
           aria-label={t('entityActions.openProjectNamed', { name: name() })}
-          class="group/project-link min-w-0 max-w-full"
+          class="group/project-link min-w-0 shrink justify-start"
           onClick={open}
         >
           <ProjectIcon class="size-3 shrink-0 not-touch:group-hover/project-link:hidden not-touch:group-focus-visible/project-link:hidden" />
