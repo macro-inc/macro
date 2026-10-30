@@ -2,10 +2,7 @@ import {
   DocumentAccessDenied,
   useSharedAccessUpdates,
 } from '@app/features/access-requests/access-requests';
-import {
-  matchesConfirmedAccess,
-  shareEntity,
-} from '@app/features/access-requests/core/types';
+import { shareEntity } from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import {
   DocumentFileSidePanelSections,
@@ -141,7 +138,7 @@ export function FileDetailLoadGate<
         return;
       }
       const loaded = document.state === 'ready' ? document.latest : undefined;
-      if (!matchesConfirmedAccess(loaded?.userAccessLevel, level)) reload();
+      if (loaded?.userAccessLevel !== level) reload();
     }
   );
   const accessDenied = () => {

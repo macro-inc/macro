@@ -16,6 +16,8 @@ axum = [
 ]
 default = ["axum", "inbound", "link", "outbound", "ports", "sync"]
 inbound = ["axum", "ports"]
+# Who may see an installation's deliveries, without the rest of the sync stack.
+installation_claims = ["dep:sqlx", "ports"]
 link = ["dep:entity_access", "github_pull_requests/ports", "ports"]
 outbound = [
   "dep:connection_gateway_client",
@@ -63,6 +65,8 @@ hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
 lru = { workspace = true }
 macro_env = { path = "../macro_env" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_env_var = { path = "../macro_env_var" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",

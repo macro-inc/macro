@@ -1,4 +1,5 @@
 import { agentsRouteId } from '@app/features/agents-view/core/route';
+import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
@@ -9,6 +10,10 @@ import {
 } from '@core/component/AI/util/chatAttachmentMention';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import {
+  enableChatV3Agents,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
@@ -63,6 +68,22 @@ async function createAndOpenAgent(seed: {
   if (!seed.replaceSplit && !manager) {
     toast.failure('Unable to open chat');
     return false;
+  }
+  // Unsent text with no session settings is a draft for the new-conversation
+  // composer, where the user picks Auto, Chat, or Code and the agent first.
+  if (
+    manager &&
+    seed.input !== undefined &&
+    !seed.message &&
+    !seed.model &&
+    !seed.instructions &&
+    isFeatureEnabled(enableChatV3Agents)
+  ) {
+    openAgentComposer(manager, !seed.replaceSplit, {
+      draft: seed.input,
+      handle: seed.replaceSplit,
+    });
+    return true;
   }
 
   const id = startPendingSession({

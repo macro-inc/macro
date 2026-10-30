@@ -9,6 +9,7 @@
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -463,10 +464,33 @@ pub enum RoutineTrigger {
         /// Only these entities, when the routine narrows to some.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         entity_ids: Vec<Uuid>,
+        /// Which GitHub deliveries, for the `github` event.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        github: Option<GithubWatch>,
+        /// Exact payload tests a GitHub delivery must pass, as a
+        /// reader would state them.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        payload_match: Vec<String>,
         /// A yes/no question the event's content must answer yes to.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         condition: Option<String>,
     },
+}
+
+/// The GitHub deliveries a routine watches. Empty lists match everything.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GithubWatch {
+    /// GitHub event names, such as `workflow_run`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<String>,
+    /// Payload actions, such as `completed`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<String>,
+    /// Repositories, as `owner/name`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repositories: Vec<String>,
+    /// Whether deliveries caused by bots also run it.
+    pub include_bots: bool,
 }
 
 /// What made a routine fire.
@@ -585,6 +609,31 @@ pub enum RoutineEvent {
         /// The call.
         call: CallSnapshot,
     },
+    /// Macro's GitHub App received a delivery.
+    Github {
+        /// The delivery.
+        delivery: GithubDelivery,
+    },
+}
+
+/// A delivery from Macro's GitHub App.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GithubDelivery {
+    /// The GitHub event, such as `workflow_run`.
+    pub event: String,
+    /// Its action, such as `completed`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    /// The repository, as `owner/name`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository: Option<String>,
+    /// The GitHub login that caused it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender: Option<String>,
+    /// GitHub's payload without its API links. Absent when it was too large
+    /// to carry. Untrusted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<Value>,
 }
 
 /// A call that just started, read under the routine owner's access.

@@ -9,6 +9,13 @@ in any layout, replacing the duplicated `PropertyValue` / `CondensedPropertyValu
 
 Debug page: `/props-debug` (LOCAL_ONLY).
 
+`Property.Root` shows a pick from the moment an editor saves it until the save
+settles and the source emits a newer property, and drops it if the save fails.
+Pass its children as a function (`{(property) => ...}`) and render from that
+property, not the prop you passed in. Save handlers keep their own caches
+current, so `Property.Root` editors never refetch properties after a save;
+side-panel collections own their refresh (below).
+
 ## Side-panel collections
 
 Property rows use a 4px vertical gap, including inline Tags and the boundary

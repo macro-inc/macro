@@ -48,6 +48,8 @@ pub enum WorkFeedItemType {
     Chat,
     /// Projects (folders).
     Project,
+    /// Task projects (initiatives).
+    Initiative,
     /// Email threads.
     Email,
     /// Channel activity outside a dedicated thread item.
@@ -64,11 +66,12 @@ pub enum WorkFeedItemType {
 
 impl WorkFeedItemType {
     /// Every item type, the default selection.
-    pub const ALL: [WorkFeedItemType; 10] = [
+    pub const ALL: [WorkFeedItemType; 11] = [
         Self::Document,
         Self::Task,
         Self::Chat,
         Self::Project,
+        Self::Initiative,
         Self::Email,
         Self::Channel,
         Self::ChannelThread,
@@ -83,6 +86,7 @@ impl WorkFeedItemType {
             Self::Document | Self::Task => EntityType::Document,
             Self::Chat => EntityType::Chat,
             Self::Project => EntityType::Project,
+            Self::Initiative => EntityType::Initiative,
             Self::Email => EntityType::EmailThread,
             Self::Channel => EntityType::Channel,
             Self::ChannelThread => EntityType::ChannelMessage,

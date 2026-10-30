@@ -464,6 +464,7 @@ pub async fn run() -> anyhow::Result<()> {
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
                         connection_gateway_client,
                     ),
+                    channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
             ),
         )

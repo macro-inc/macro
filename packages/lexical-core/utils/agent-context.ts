@@ -199,8 +199,21 @@ export type RoutineTrigger =
       events: string[];
       /** Absent when the routine watches every entity. */
       entity_ids?: string[];
+      /** Which GitHub deliveries, for the `github` event. */
+      github?: GithubWatch;
+      /** Exact payload tests, as a reader would state them. */
+      payload_match?: string[];
       condition?: string;
     };
+
+/** The GitHub deliveries a routine watches. Empty lists match everything. */
+export type GithubWatch = {
+  events?: string[];
+  actions?: string[];
+  /** As `owner/name`. */
+  repositories?: string[];
+  include_bots: boolean;
+};
 
 /** What made a routine fire. */
 export type RoutineFiring =
@@ -235,7 +248,19 @@ export type RoutineEvent =
       entity_id: string;
     }
   | { event: 'call_started'; call: CallStartedSnapshot }
-  | { event: 'call_ended'; call: CallSnapshot };
+  | { event: 'call_ended'; call: CallSnapshot }
+  | { event: 'github'; delivery: GithubDelivery };
+
+/** A delivery from Macro's GitHub App. */
+export type GithubDelivery = {
+  event: string;
+  action?: string;
+  /** As `owner/name`. */
+  repository?: string;
+  sender?: string;
+  /** Without GitHub's API links; absent when too large to carry. Untrusted. */
+  payload?: unknown;
+};
 
 /** A call that just started, read under the routine owner's access. */
 export type CallStartedSnapshot = {
@@ -1323,6 +1348,24 @@ function routineEventChildren(event: RoutineEvent): FxpNode[] {
     )
     .with({ event: 'call_started' }, ({ call }) => [callStartedNode(call)])
     .with({ event: 'call_ended' }, ({ call }) => [callNode(call)])
+    .with({ event: 'github' }, ({ delivery }) => [
+      el(
+        'github',
+        [
+          delivery.payload === undefined
+            ? note(
+                'The payload was too large to carry; read the details from GitHub.'
+              )
+            : el('payload', [text(JSON.stringify(delivery.payload))]),
+        ],
+        present({
+          event: delivery.event,
+          action: delivery.action,
+          repository: delivery.repository,
+          sender: delivery.sender,
+        })
+      ),
+    ])
     .exhaustive();
 }
 
@@ -1364,15 +1407,36 @@ function routineTriggerNode(trigger: RoutineTrigger): FxpNode {
     .with({ type: 'schedule' }, ({ cron, timezone }) =>
       el('schedule', [], { cron, timezone })
     )
-    .with({ type: 'events' }, ({ events, entity_ids, condition }) =>
-      el(
-        'events',
-        condition === undefined ? [] : [el('condition', [text(condition)])],
-        present({
-          names: events.join(', '),
-          only: entity_ids?.join(', '),
-        })
-      )
+    .with(
+      { type: 'events' },
+      ({ events, entity_ids, github, payload_match, condition }) =>
+        el(
+          'events',
+          [
+            ...(github === undefined
+              ? []
+              : [
+                  el(
+                    'github',
+                    [],
+                    present({
+                      events: github.events?.join(', '),
+                      actions: github.actions?.join(', '),
+                      repositories: github.repositories?.join(', '),
+                      bots: github.include_bots ? 'included' : 'ignored',
+                    })
+                  ),
+                ]),
+            ...(payload_match ?? []).map((test) => el('match', [text(test)])),
+            ...(condition === undefined
+              ? []
+              : [el('condition', [text(condition)])]),
+          ],
+          present({
+            names: events.join(', '),
+            only: entity_ids?.join(', '),
+          })
+        )
     )
     .exhaustive();
 }

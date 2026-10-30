@@ -358,16 +358,20 @@ Rename the channel.
 > **send**(`body`, `opts?`): `Promise`\<[`Message`](../../message/classes/Message.md)\>
 
 Post a message. Plain text, or a rich body composed with `msg`.
+`images` attaches static images, such as one from
+`macro.images.generate()`, below the text.
 
 Works with a channel webhook token as well as a normal one — see
 [postToChannel](../../post/functions/postToChannel.md) for which endpoint that picks and what it costs.
+The webhook endpoint takes no images.
 
 #### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
 | `body` | `string` \| [`RichMessage`](../../../../mentions/interfaces/RichMessage.md) |
-| `opts?` | \{ `thread?`: [`Thread`](../../thread/classes/Thread.md); \} |
+| `opts?` | \{ `images?`: [`StaticImage`](../../../images/image/classes/StaticImage.md)[]; `thread?`: [`Thread`](../../thread/classes/Thread.md); \} |
+| `opts.images?` | [`StaticImage`](../../../images/image/classes/StaticImage.md)[] |
 | `opts.thread?` | [`Thread`](../../thread/classes/Thread.md) |
 
 #### Returns

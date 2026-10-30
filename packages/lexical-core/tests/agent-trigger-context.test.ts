@@ -10,6 +10,96 @@ function hiddenContext(markdown: string): string | undefined {
   return (first as SerializedAgentContextNode).text;
 }
 
+describe('composeAgentContextPrompt with an external routine event', () => {
+  it('renders a GitHub delivery with the selector and payload tests that let it through', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Fix it.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-9',
+        name: 'Fix CI',
+        owner: { id: 'macro|julia@example.com', name: 'Julia' },
+        instructions: 'Find why CI failed.',
+        triggers: [
+          {
+            type: 'events',
+            events: ['github'],
+            github: {
+              events: ['workflow_run'],
+              actions: ['completed'],
+              repositories: ['macro-inc/macro'],
+              include_bots: false,
+            },
+            payload_match: ['workflow_run.conclusion in ["failure"]'],
+          },
+        ],
+        firing: {
+          type: 'event',
+          event: {
+            event: 'github',
+            delivery: {
+              event: 'workflow_run',
+              action: 'completed',
+              repository: 'macro-inc/macro',
+              sender: 'octocat',
+              payload: { workflow_run: { name: 'CI', conclusion: 'failure' } },
+            },
+          },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toBe(
+      [
+        '<trigger kind="routine">',
+        '  <note>The routine Fix CI, owned by Julia, fired. The prompt is what the routine asks you to do.</note>',
+        '  <routine id="r-9" name="Fix CI" owner="Julia" owner_id="macro|julia@example.com"/>',
+        '  <instructions>Find why CI failed.</instructions>',
+        '  <triggers>',
+        '    <events names="github">',
+        '      <github events="workflow_run" actions="completed" repositories="macro-inc/macro" bots="ignored"/>',
+        '      <match>workflow_run.conclusion in [&quot;failure&quot;]</match>',
+        '    </events>',
+        '  </triggers>',
+        '  <event type="github">',
+        '    <github event="workflow_run" action="completed" repository="macro-inc/macro" sender="octocat">',
+        '      <payload>{&quot;workflow_run&quot;:{&quot;name&quot;:&quot;CI&quot;,&quot;conclusion&quot;:&quot;failure&quot;}}</payload>',
+        '    </github>',
+        '  </event>',
+        '</trigger>',
+      ].join('\n')
+    );
+  });
+
+  it('says when a GitHub payload was too large to carry', () => {
+    const markdown = composeAgentContextPrompt({
+      promptMarkdown: 'Look.',
+      trigger: {
+        kind: 'routine',
+        routine_id: 'r-10',
+        name: 'Pushes',
+        owner: { id: 'macro|julia@example.com', name: 'Julia' },
+        instructions: 'Summarize the push.',
+        triggers: [
+          {
+            type: 'events',
+            events: ['github'],
+            github: { include_bots: true },
+          },
+        ],
+        firing: {
+          type: 'event',
+          event: { event: 'github', delivery: { event: 'push' } },
+        },
+      },
+    });
+
+    expect(hiddenContext(markdown)).toContain(
+      '<note>The payload was too large to carry; read the details from GitHub.</note>'
+    );
+  });
+});
+
 describe('composeAgentContextPrompt with a trigger', () => {
   it('renders a mention that opened the session with its document comment discussion', () => {
     const markdown = composeAgentContextPrompt({

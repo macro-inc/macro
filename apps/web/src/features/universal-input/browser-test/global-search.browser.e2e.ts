@@ -228,3 +228,58 @@ test('the shared global Search input keeps mention nodes when the host acknowled
     changes
   );
 });
+
+test('keeps Search facet text centered and unclipped inside each segment', async ({
+  page,
+}) => {
+  const dialog = await compose(
+    page,
+    'search in progress high priority tasks assigned to julia created by john about android'
+  );
+  const filters = dialog.getByLabel('Search filters');
+  await expect(filters.getByText('Tasks', { exact: true })).toBeVisible();
+  await expect(filters.getByText('High', { exact: true })).toBeVisible();
+  const bounds = await filters.locator('button').evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const frame = button.closest('[role="group"]')!.getBoundingClientRect();
+      const segment = button.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(button);
+      const text = range.getBoundingClientRect();
+      return {
+        label: button.textContent || button.getAttribute('aria-label'),
+        segmentTop: segment.top,
+        segmentBottom: segment.bottom,
+        textTop: text.top,
+        textBottom: text.bottom,
+        frameTop: frame.top,
+        frameBottom: frame.bottom,
+        centerOffset: Math.abs(
+          segment.top + segment.height / 2 - frame.top - frame.height / 2
+        ),
+      };
+    })
+  );
+  expect(bounds.length).toBeGreaterThan(0);
+  for (const bound of bounds) {
+    expect(bound.segmentTop, String(bound.label)).toBeGreaterThanOrEqual(
+      bound.frameTop
+    );
+    expect(bound.segmentBottom, String(bound.label)).toBeLessThanOrEqual(
+      bound.frameBottom
+    );
+    expect(bound.textTop, String(bound.label)).toBeGreaterThanOrEqual(
+      bound.frameTop
+    );
+    expect(bound.textBottom, String(bound.label)).toBeLessThanOrEqual(
+      bound.frameBottom
+    );
+    expect(bound.centerOffset, String(bound.label)).toBeLessThanOrEqual(1);
+  }
+  await filters
+    .getByRole('button', { name: 'Clear Priority filter', exact: true })
+    .click();
+  await expect(
+    filters.getByText('Any priority', { exact: true })
+  ).toBeVisible();
+});

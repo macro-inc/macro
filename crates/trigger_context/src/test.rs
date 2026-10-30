@@ -354,3 +354,57 @@ fn prompt_thread_attachments_put_the_prompt_message_first() {
         Some(3)
     );
 }
+
+#[test]
+fn github_events_have_a_stable_wire_shape() {
+    let github = RoutineEvent::Github {
+        delivery: GithubDelivery {
+            event: "workflow_run".into(),
+            action: Some("completed".into()),
+            repository: Some("macro-inc/macro".into()),
+            sender: Some("octocat".into()),
+            payload: Some(json!({ "workflow_run": { "name": "CI", "conclusion": "failure" } })),
+        },
+    };
+    let trigger = RoutineTrigger::Events {
+        events: vec!["github".into()],
+        entity_ids: Vec::new(),
+        github: Some(GithubWatch {
+            events: vec!["workflow_run".into()],
+            actions: vec!["completed".into()],
+            repositories: vec!["macro-inc/macro".into()],
+            include_bots: false,
+        }),
+        payload_match: vec!["workflow_run.conclusion in [\"failure\"]".into()],
+        condition: None,
+    };
+
+    // The same examples are in services/lexical-service/test/agent-context.test.ts.
+    assert_eq!(
+        serde_json::to_value(&github).unwrap(),
+        json!({
+            "event": "github",
+            "delivery": {
+                "event": "workflow_run",
+                "action": "completed",
+                "repository": "macro-inc/macro",
+                "sender": "octocat",
+                "payload": { "workflow_run": { "name": "CI", "conclusion": "failure" } },
+            },
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(&trigger).unwrap(),
+        json!({
+            "type": "events",
+            "events": ["github"],
+            "github": {
+                "events": ["workflow_run"],
+                "actions": ["completed"],
+                "repositories": ["macro-inc/macro"],
+                "include_bots": false,
+            },
+            "payload_match": ["workflow_run.conclusion in [\"failure\"]"],
+        })
+    );
+}

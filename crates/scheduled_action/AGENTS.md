@@ -14,6 +14,8 @@ each run.
   and the ports its adapters implement.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
+- `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
+  `github` selector and the exact payload `match` GitHub filters take.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
   `src/inbound/event_run_worker.rs`: the three inbound adapters.
 - `src/domain/templates.rs` + `src/inbound/template_router.rs`: sharing a
@@ -40,7 +42,8 @@ each run.
 ## Boundaries
 
 - Depends on: `agent_session`, `trigger_context`, `jev`, `channels`, `crm`,
-  `documents`, `macro_event_broker`/`macro_event_topics` (Kafka), `macro_db_client`.
+  `documents`, `github` (delivery fact and installation claims only),
+  `macro_event_broker`/`macro_event_topics` (Kafka), `macro_db_client`.
 - Used by: the web app's automations/routines UI and agent tooling, through
   the gateway.
 
@@ -74,7 +77,13 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `RoutineSessions::prepare` checks again on every run, then adds them to an
   agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
-
+- Macro events store only ids and are read again, as the owner, at dispatch.
+  GitHub deliveries can't be read again, so their event runs keep the bounded
+  payload in `event_context`; access for them is the owner's installation
+  claim, which needs a linked GitHub account and, for a personal installation,
+  that the linked account installed it.
+- Enabling a GitHub trigger needs the owner's GitHub link
+  (`with_github_links`); without it the service returns `GithubNotLinked`.
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,
   sharing/permissions) — check it before assuming a listed gap is unintentional.
 - A new configuration field needs `#[serde(default)]` in `ActionConfiguration`

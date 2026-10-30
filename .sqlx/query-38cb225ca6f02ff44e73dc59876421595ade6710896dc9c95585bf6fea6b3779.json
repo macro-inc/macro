@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM mcp_oauth_pending_authorizations WHERE expires_at <= now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "38cb225ca6f02ff44e73dc59876421595ade6710896dc9c95585bf6fea6b3779"
+}

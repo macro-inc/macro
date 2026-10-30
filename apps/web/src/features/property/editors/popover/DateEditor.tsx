@@ -33,7 +33,6 @@ function DateEditorBody() {
     setSelectedDate(date);
     try {
       await ctx.onSave?.(property, { valueType: 'DATE', value: date });
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     }

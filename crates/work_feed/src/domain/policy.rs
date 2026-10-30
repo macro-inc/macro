@@ -18,6 +18,7 @@ use item_filters::{
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
+        initiative::InitiativeLiteral,
     },
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -40,6 +41,8 @@ const GITHUB_PULL_REQUEST_SOURCE: &str = "github_pull_request";
 /// - Agent sessions are opted in (Soup excludes them by default), except
 ///   unlisted ones: a routine's runs, unless the routine lists them, live in
 ///   its history and the Agents list.
+/// - Task projects (initiatives) are opted in the same way; Soup leaves them
+///   out of any query that says nothing about them.
 /// - Snippets are documents only when the caller shows them.
 /// - Tasks are documents only when the scope asks for both; asking for one
 ///   of documents and tasks keeps the other out.
@@ -68,6 +71,7 @@ pub fn signal_filter(user: &MacroUserIdStr<'static>, scope: &WorkFeedScope) -> E
                 AgentSessionVisibility::Unlisted,
             ))),
         ))),
+        initiative_filter: Some(Arc::new(Expr::val(InitiativeLiteral::Include))),
         ..Default::default()
     }
 }
