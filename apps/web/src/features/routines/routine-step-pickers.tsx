@@ -128,7 +128,7 @@ function EntityPicker(props: {
         <CaretDownIcon class="size-3" />
       </Popover.Trigger>
       <Popover.Portal mount={menuMount(trigger)}>
-        <Popover.Content class="z-modal w-72 overflow-hidden rounded-xl border border-edge-muted bg-panel text-ink shadow-lg">
+        <Popover.Content class="menu-surface z-modal w-72 overflow-hidden text-ink outline-none">
           <Suspense
             fallback={<p class="p-3 text-sm text-ink-muted">Loading…</p>}
           >

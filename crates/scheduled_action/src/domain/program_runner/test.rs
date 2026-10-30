@@ -206,7 +206,7 @@ impl Fixture {
 fn email() -> Value {
     json!({
         "event": "email.message_received",
-        "email": { "subject": "Invoice #42", "from": { "name": "Ada", "email": "ada@acme.com" } },
+        "email": { "subject": "Invoice #42", "from": { "name": "Ada", "email": "sender@example.com" } },
     })
 }
 

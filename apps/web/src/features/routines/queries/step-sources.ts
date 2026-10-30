@@ -2,16 +2,23 @@ import { throwOnErr } from '@core/util/result';
 import { emailKeys } from '@queries/email/keys';
 import { useTagsQuery } from '@queries/properties/tags';
 import { emailClient } from '@service-email/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
+
+async function fetchEmailLabels() {
+  return await throwOnErr(async () => await emailClient.getUserLabels());
+}
+
+function emailLabelsQueryOptions() {
+  return queryOptions({
+    queryKey: emailKeys.labels.queryKey,
+    queryFn: fetchEmailLabels,
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 /** Custom Gmail label names across the user's inboxes, for label steps. */
 export function useEmailLabelNames() {
-  const query = useQuery(() => ({
-    queryKey: emailKeys.labels.queryKey,
-    queryFn: async () =>
-      await throwOnErr(async () => await emailClient.getUserLabels()),
-    staleTime: 5 * 60 * 1000,
-  }));
+  const query = useQuery(() => emailLabelsQueryOptions());
   return () => {
     const labels = query.isSuccess ? query.data.labels : [];
     return [
