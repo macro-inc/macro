@@ -45,7 +45,7 @@ const MAX_LIST_HEIGHT = 192;
 const pickerPlacement = () =>
   virtualKeyboardVisible() ? 'top-start' : 'bottom-start';
 const tagActionButtonClass =
-  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100';
+  'size-5 shrink-0 p-0.5 text-ink-extra-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100 touch:opacity-100';
 
 export type TagPickerSourceProps =
   | { docTags: DocTags; createDocTags?: never }
