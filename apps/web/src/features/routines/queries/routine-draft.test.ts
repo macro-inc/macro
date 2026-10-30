@@ -618,7 +618,12 @@ describe('routines with steps', () => {
     });
     const added = withDraftSteps(simple, [
       ...steps,
-      { id: 'x', kind: 'tool', tool: 'ArchiveEmail', arguments: {} },
+      {
+        id: 'x',
+        kind: 'tool',
+        tool: 'UpdateThreadLabels',
+        arguments: { label: 'INBOX', add: false },
+      },
     ]);
     expect(draftToUpdateBody(added, stored)?.task).toMatchObject({
       steps: [

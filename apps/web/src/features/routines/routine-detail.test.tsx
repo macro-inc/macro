@@ -818,7 +818,10 @@ describe('routine editor triggers', () => {
     const agent = screen.getByRole('region', { name: 'Ask AI', hidden: true });
     // Its card's header toggle comes first.
     fireEvent.click(
-      within(agent).getAllByRole('button', { expanded: false, hidden: true })[0]!
+      within(agent).getAllByRole('button', {
+        expanded: false,
+        hidden: true,
+      })[0]!
     );
     const editor = within(agent).getByRole<HTMLTextAreaElement>('textbox', {
       name: 'Instructions',

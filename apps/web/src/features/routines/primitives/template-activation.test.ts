@@ -130,6 +130,7 @@ describe('createTemplateActivation', () => {
               {
                 type: 'if',
                 condition: 'Is it urgent?',
+                // biome-ignore lint/suspicious/noThenProperty: the scheduler's step format names the yes branch `then`.
                 then: [agent(`Page ${author}`)],
                 else: [agent(`Tell ${author} tomorrow`)],
               },
