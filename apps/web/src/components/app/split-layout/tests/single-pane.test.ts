@@ -1,6 +1,7 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import { keepSinglePane } from '../single-pane';
 import { createRoutedSplitLayout } from './fixtures';
 
 vi.mock('../componentRegistry', () => ({
@@ -52,5 +53,36 @@ describe('single-pane browsing', () => {
 
   it('replaces the one pane a caller with no account browses', async () => {
     expect(await openBesideHome(true)).toEqual(['channels']);
+  });
+
+  it('keeps one pane of a linked URL that holds several', async () => {
+    const panes = await createRoot(async (dispose) => {
+      const manager = createRoutedSplitLayout(
+        createMockOrchestrator(),
+        '/home/~/channels',
+        { singlePane: () => true }
+      );
+      keepSinglePane(manager, () => true);
+      await vi.waitFor(() => expect(manager.splits()).toHaveLength(1));
+      const ids = manager.splits().map((split) => split.content.id);
+      dispose();
+      return ids;
+    });
+    expect(panes).toEqual(['channels']);
+  });
+
+  it("leaves an account's panes alone", async () => {
+    const panes = await createRoot(async (dispose) => {
+      const manager = createRoutedSplitLayout(
+        createMockOrchestrator(),
+        '/home/~/channels'
+      );
+      keepSinglePane(manager, () => false);
+      await Promise.resolve();
+      const ids = manager.splits().map((split) => split.content.id);
+      dispose();
+      return ids;
+    });
+    expect(panes).toEqual(['home', 'channels']);
   });
 });
