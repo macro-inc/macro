@@ -11,7 +11,7 @@ cache; the row does not search for related entities. Narrow rows compact these
 pills to icons, with full names available in tooltips and the overflow menu.
 
 Task list status and priority editing use `extractors-property/task-property-control.tsx`
-in the leading icon slots before the title, with 20px glyphs on desktop and mobile
+in the leading icon slots before the title, with 16px glyphs on desktop and mobile
 and unchanged hit targets. The controls share the property editor
 and mutation path across wide task rows and narrow entity rows, including optimistic
 values and rollback. Narrow rows omit duplicate trailing Status and Priority properties;

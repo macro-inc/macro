@@ -76,7 +76,7 @@ without rotating amber toward a tinted foreground's hue. Authored overrides stay
 unchanged.
 Status and Urgent property glyphs default to 16 px, including property pills and
 desktop and mobile edit menus. Leading task-list status and priority controls use
-20 px glyphs with unchanged hit targets; compact display callers can still set an
+16 px glyphs with unchanged hit targets; compact display callers can still set an
 explicit smaller size.
 
 Prefer one recognizable silhouette and only the detail needed to identify its
