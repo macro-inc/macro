@@ -226,6 +226,11 @@ export function ThreadList(props: ThreadListProps) {
   // Assigned once the virtualizer exists; its first range is computed inside
   // the constructor, before the binding below is initialized.
   let measured: { instance: typeof virtualizer } | undefined;
+  // The core reuses extracted indexes while the visible range holds still,
+  // so a pass that stopped at its unmeasured-row cap would not resume once
+  // those rows are measured. Measurements past such a pass start the next.
+  const [historyPass, setHistoryPass] = createSignal(0);
+  let resumeHistoryAfter: number | undefined;
 
   // A WebKit gesture cannot move the native top boundary, so rows above that
   // are taller than their estimate grow only the visual adjustment, and a
@@ -256,6 +261,8 @@ export function ThreadList(props: ThreadListProps) {
       top = item.start;
       if (!instance.itemSizeCache.has(item.key)) unmeasured += 1;
     }
+    resumeHistoryAfter =
+      unmeasured >= OVERSCAN ? instance.itemSizeCache.size : undefined;
     return added.length === 0 ? indexes : [...added, ...indexes];
   }
 
@@ -327,6 +334,7 @@ export function ThreadList(props: ThreadListProps) {
               )
           : 0,
     get rangeExtractor() {
+      historyPass();
       const index =
         props.targetId === undefined
           ? -1
@@ -406,7 +414,16 @@ export function ThreadList(props: ThreadListProps) {
           instance.scrollToEnd();
         }
       }),
-    onChange: scheduleScrollState,
+    onChange: (instance) => {
+      scheduleScrollState();
+      if (
+        resumeHistoryAfter !== undefined &&
+        instance.itemSizeCache.size > resumeHistoryAfter
+      ) {
+        resumeHistoryAfter = undefined;
+        queueMicrotask(() => setHistoryPass((pass) => pass + 1));
+      }
+    },
   });
 
   measured = { instance: virtualizer };
