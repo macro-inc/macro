@@ -600,6 +600,10 @@ fn shapes_reach_every_driver_and_phase() {
             r#"AND EXISTS (SELECT 1 FROM document_sub_type vk WHERE vk.document_id = uh."itemId""#,
         ),
         (
+            "viewed and owned by the viewer",
+            r#"AND EXISTS (SELECT 1 FROM "Document" vo WHERE vo.id = uh."itemId" AND vo.owner = $1"#,
+        ),
+        (
             "viewed documents by subtype",
             r#"AND NOT EXISTS (SELECT 1 FROM document_sub_type vk WHERE vk.document_id = uh."itemId""#,
         ),

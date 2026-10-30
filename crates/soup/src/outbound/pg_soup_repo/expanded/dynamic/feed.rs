@@ -548,22 +548,32 @@ impl FeedArm {
         )
     }
 
-    /// For a document arm of one kind, tests a viewed item's kind before its `source_items`
-    /// rows: `document_sub_type` is small and decides the kind, so views of the other kind cost
-    /// no probe of the table.
-    fn viewed_kind_clause(&self, id_sql: &str) -> String {
+    /// Tests what decides a viewed item cheaply before its `source_items` rows, so views that
+    /// cannot match cost no probe of the table: a one-kind document arm tests the kind in
+    /// `document_sub_type`, which is small, and the owner driver tests that the viewer owns the
+    /// live document through `"Document"`'s id index.
+    fn viewed_precheck(&self, id_sql: &str) -> String {
         let task = || {
             format!(
                 "EXISTS (SELECT 1 FROM document_sub_type vk WHERE vk.document_id = {id_sql} AND vk.sub_type = 'task')"
             )
         };
-        match (self.entity, self.kinds.as_slice()) {
+        let kind = match (self.entity, self.kinds.as_slice()) {
             (FeedEntity::Document, ["task"]) => format!("\n                    AND {}", task()),
             (FeedEntity::Document, ["document"]) => {
                 format!("\n                    AND NOT {}", task())
             }
             _ => String::new(),
-        }
+        };
+        let owner = if self.driver == Driver::Owner {
+            format!(
+                r#"
+                    AND EXISTS (SELECT 1 FROM "Document" vo WHERE vo.id = {id_sql} AND vo.owner = $1 AND vo."deletedAt" IS NULL)"#
+            )
+        } else {
+            String::new()
+        };
+        kind + &owner
     }
 
     /// Reads the user's history of this entity type, most recent view first.
@@ -584,7 +594,7 @@ impl FeedArm {
             item_type = self.entity.item_type(),
             access = self.access_lateral(id),
             filter = self.filter_lateral(id),
-            kind = self.viewed_kind_clause(id),
+            kind = self.viewed_precheck(id),
             frecency = self.frecency_clause(id, exclude_frecency),
             properties = self.properties_clause(id),
         )
