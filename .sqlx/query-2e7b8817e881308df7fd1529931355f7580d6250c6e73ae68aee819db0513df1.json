@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT values->'value'->0->>'entity_id' AS \"project_id?\"\n               FROM entity_properties\n               WHERE entity_id = $1\n                 AND entity_type = 'TASK'\n                 AND property_definition_id = '00000001-0000-0000-0000-000000000014'\n                 AND values->'value'->0->>'entity_type' = 'INITIATIVE'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2e7b8817e881308df7fd1529931355f7580d6250c6e73ae68aee819db0513df1"
+}

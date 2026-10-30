@@ -60,6 +60,12 @@ the entity-access domain service.
 - Document checks fall back to live calendar-note or optional team grants only
   when ordinary document access is absent; these grants are authenticated and
   view-only. Keep the shared SQL visibility policy aligned with calendar note reads.
+- A project contains its tasks: when a task (a document whose Project
+  property names an initiative) grants the caller nothing, the caller gets
+  View on it if they can view that project, by membership, team or channel
+  share, or link. Sessions on a task and team-scoped bots inherit the same
+  way. Soup listings and realtime recipients still read only `entity_access`
+  rows, so they don't see this path.
 - `#![deny(missing_docs)]`.
 - `EntityAccessReceipt<R: RequiredPermission>` is the only proof a caller
   checked access at the right level; domain code downstream (e.g.
