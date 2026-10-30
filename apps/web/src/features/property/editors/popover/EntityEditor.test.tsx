@@ -7,7 +7,7 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { createSignal, type ParentProps, Show } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SYSTEM_PROPERTY_IDS } from '../../constants';
 import {
   PropertyRootContext,
@@ -161,6 +161,11 @@ function setup(
   ));
   return onSave;
 }
+
+beforeAll(() => {
+  // A key press puts the list in keyboard mode, which scrolls its row into view.
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 afterEach(cleanup);
 
