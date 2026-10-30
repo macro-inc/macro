@@ -300,7 +300,7 @@ function buildJsonLd(route: string, seo: PageSeo, rootHtml: string): string[] {
       '@type': 'Organization',
       name: 'Macro',
       url: `${BASE_URL}/`,
-      logo: `${BASE_URL}/og-image.jpg`,
+      logo: `${BASE_URL}/logo.png`,
       sameAs: [
         'https://x.com/macrodotcom',
         'https://github.com/macro-inc/macro',

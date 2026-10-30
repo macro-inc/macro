@@ -35,6 +35,9 @@ pub(crate) async fn tool_result_with_media<R: MarkdownImageResolver>(
     static_file_base_url: &Url,
     mut value: Value,
 ) -> CallToolResult {
+    if tool_name == "RenderCanvas" {
+        return canvas_render_result(value);
+    }
     if !matches!(
         tool_name,
         "ReadChannelMessages" | "ReadChannelThread" | "ReadChannelMessageContext"
@@ -94,6 +97,38 @@ pub(crate) async fn tool_result_with_media<R: MarkdownImageResolver>(
             .content
             .push(Content::image(image.data, image.mime_type));
     }
+    result
+}
+
+/// Canvas pixels have an explicit, bounded contract; scene text cannot promote media.
+fn canvas_render_result(mut value: Value) -> CallToolResult {
+    let media = value
+        .as_object_mut()
+        .and_then(|object| object.remove("modelMedia"));
+    let Some(Value::Array(images)) = media else {
+        return CallToolResult::error(vec![Content::text("Invalid Canvas image result")]);
+    };
+    if images.is_empty() || images.len() > 2 {
+        return CallToolResult::error(vec![Content::text("Invalid Canvas image count")]);
+    }
+    let mut content = Vec::with_capacity(images.len());
+    for image in images {
+        let Some(data) = image.get("data").and_then(Value::as_str) else {
+            return CallToolResult::error(vec![Content::text("Missing Canvas image data")]);
+        };
+        if image["type"] != "image"
+            || image["mediaType"] != "image/png"
+            || data.len() > 4_000_000
+            || !data.starts_with("iVBORw0KGgo")
+        {
+            return CallToolResult::error(vec![Content::text("Invalid bounded Canvas PNG result")]);
+        }
+        content.push(Content::image(data, "image/png"));
+    }
+    // Keep the scene revision/crop/layout available to text-only clients without
+    // duplicating image bytes into their context or structured JSON histories.
+    let mut result = CallToolResult::structured(value);
+    result.content.extend(content);
     result
 }
 

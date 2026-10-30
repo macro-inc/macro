@@ -11,6 +11,7 @@ const webDirectory = fileURLToPath(
 );
 export default defineConfig({
   root: directory,
+  cacheDir: `${directory}/.vite`,
   plugins: [
     tailwindcss(),
     solid(),

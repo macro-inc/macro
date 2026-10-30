@@ -213,6 +213,23 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
     }
 }
 
+/// The dates a document was created with, when its creator supplied them
+/// rather than taking now.
+#[derive(Debug, Clone, Copy)]
+struct DocumentDates {
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl DocumentDates {
+    fn of(document: &NewDocument) -> Option<Self> {
+        document.created_at.map(|created_at| Self {
+            created_at,
+            updated_at: document.updated_at.unwrap_or(created_at),
+        })
+    }
+}
+
 fn short_id_for_entity_id(entity_id: &str) -> Result<String, DocumentError> {
     let uuid = macro_uuid::string_to_uuid(entity_id)
         .map_err(|e| DocumentError::BadRequest(format!("invalid entity_id: {e}")))?;
@@ -707,11 +724,16 @@ impl<
         })
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a created document carries its type, folder, dates, content hash, attribution and job"
+    )]
     async fn finish_created_document(
         &self,
         document_metadata: DocumentMetadata,
         file_type: Option<FileType>,
         project_id: Option<uuid::Uuid>,
+        dates: Option<DocumentDates>,
         sha: String,
         attribution: Attribution,
         job_id: Option<String>,
@@ -809,7 +831,20 @@ impl<
                 .entity_access_management_service
                 .add_entity_to_project(&document_uuid, EntityType::Document, project_id)
                 .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
-            let _ = self.repo.update_project_modified(&project_id_str).await.inspect_err(
+            // A document carrying its own dates dates its folders by them
+            // rather than by now.
+            let updated = match dates {
+                Some(DocumentDates {
+                    created_at,
+                    updated_at,
+                }) => {
+                    self.repo
+                        .extend_project_dates(&project_id_str, created_at, updated_at)
+                        .await
+                }
+                None => self.repo.update_project_modified(&project_id_str).await,
+            };
+            let _ = updated.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
         }
@@ -875,6 +910,34 @@ impl<
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         <Self as DocumentService>::create_document(self, principal, document, job_id).await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn initialize_canvas(&self, document_id: &str) -> Result<(), DocumentError> {
+        let result = async {
+            self.sync_service_client
+                .initialize_canvas(document_id)
+                .await
+                .map_err(DocumentError::Internal)?;
+            self.repo
+                .set_document_content(
+                    document_id,
+                    DocumentContent::ready(DocumentContentLocation::SyncService),
+                )
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))
+        }
+        .await;
+        if result.is_err()
+            && let Err(error) = self.sync_service_client.delete_document(document_id).await
+        {
+            tracing::error!(
+                ?error,
+                document_id,
+                "failed to clean up Canvas initialization"
+            );
+        }
+        result
     }
 
     async fn handle_task_properties(
@@ -1033,6 +1096,15 @@ impl<
 
         let document_id = entity_access_receipt.entity().entity_id.clone();
         let content = self.content_for_document(&document_id, file_type).await?;
+
+        if file_type == Some(FileType::Canvas)
+            && content.location == Some(DocumentContentLocation::SyncService)
+        {
+            return Ok(LocationResponseV3::SyncServiceContent {
+                metadata: document_context.clone(),
+                content,
+            });
+        }
 
         if matches!(file_type, Some(FileType::Md | FileType::Spreadsheet))
             && let Some(response) = self
@@ -1490,6 +1562,7 @@ impl<
         let owner = principal.owner();
         let file_type = document.file_type;
         let project_id = document.project_id;
+        let dates = DocumentDates::of(&document);
         let sha = document.sha.clone();
 
         let share_permission = match document.initial_link_share {
@@ -1516,6 +1589,7 @@ impl<
             document_metadata,
             file_type,
             project_id,
+            dates,
             sha,
             Attribution::from(principal),
             job_id,
@@ -1545,6 +1619,7 @@ impl<
 
         let file_type = args.document.file_type;
         let project_id = args.document.project_id;
+        let dates = DocumentDates::of(&args.document);
         let sha = args.document.sha.clone();
         let attribution = Attribution::direct(Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID));
 
@@ -1568,6 +1643,7 @@ impl<
                     document_metadata,
                     file_type,
                     project_id,
+                    dates,
                     sha,
                     attribution,
                     None,
@@ -1819,6 +1895,18 @@ impl<
             .as_deref()
             .and_then(|f| FileType::from_str(f).ok());
 
+        let native_canvas = if file_type == Some(FileType::Canvas) {
+            self.repo
+                .get_persisted_document_content(&original_metadata.document_id)
+                .await
+                .map_err(|error| DocumentError::Internal(error.into()))?
+                .is_some_and(|content| {
+                    content.location == Some(DocumentContentLocation::SyncService)
+                })
+        } else {
+            false
+        };
+
         // Validate DOCX has BOM
         if file_type == Some(FileType::Docx) && original_metadata.document_bom.is_none() {
             return Err(DocumentError::Internal(anyhow!("document bom is missing")));
@@ -1873,6 +1961,16 @@ impl<
                     build_docx_to_pdf_converted_document_key(new_owner, &new_document_id);
                 self.upload_url_service
                     .copy_object(&source_key, &dest_key)
+                    .await
+            }
+            Some(FileType::Canvas) if native_canvas => {
+                canvas_room = true;
+                self.sync_service_client
+                    .copy_document(
+                        &original_metadata.document_id,
+                        &new_document_id,
+                        sync_version_id,
+                    )
                     .await
             }
             Some(FileType::Md | FileType::Spreadsheet) => {
@@ -2016,7 +2114,11 @@ impl<
             return Err(DocumentError::Internal(e));
         }
 
-        let content = ready_content_for_file_type(file_type);
+        let content = if native_canvas {
+            DocumentContent::ready(DocumentContentLocation::SyncService)
+        } else {
+            ready_content_for_file_type(file_type)
+        };
         if let Err(e) = self
             .repo
             .set_document_content(&new_document_id, content.clone())

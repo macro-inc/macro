@@ -7,6 +7,7 @@ import {
   resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import { t } from '@app/lib/i18n';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -16,8 +17,8 @@ import {
 import type { HotkeyGroup } from '@core/hotkey/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import type { NotificationSource } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
   type NotificationEntityRef,
   toNotificationEntityRef,
@@ -52,8 +53,13 @@ const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   // Calendar lists invite threads from the "all" email view, so done rows
   // stay in place and flip to the done state exactly like mail "All".
   'mail-calendar',
+  // Focus rows are signal threads; done archives them like Signal does.
+  'mail-focus',
   'mail-shared',
   'mail-archived',
+  // Search lists done and open rows alike, like mail "All": a marked row flips
+  // to done (or drops out of a not-done filter) and focus moves on.
+  'search-all',
 ];
 
 export const canExecuteMarkDoneOnView = (view: ListView, tabId: string) => {
@@ -134,7 +140,9 @@ function delegatedDoneUndoLifecycle(
   const firstEntityId = variables.entities[0]?.id;
   const count = variables.entities.length;
   const message =
-    count > 1 ? `Marked ${count} items as done` : 'Marked as done';
+    count > 1
+      ? t('entityActions.toastMarkedDoneCount', { count })
+      : t('entityActions.toastMarkedDone');
   let toastId: number | undefined;
 
   const showToast = () => {
@@ -142,12 +150,13 @@ function delegatedDoneUndoLifecycle(
     toastId = toast.success(message, {
       actions: [
         {
-          label: 'Undo',
+          label: t('entityActions.undo'),
           icon: ArrowCounterClockwise,
           onClick: () => {
             fireAndForget(
               handle.undo({
-                onError: () => toast.failure('Failed to undo'),
+                onError: () =>
+                  toast.failure(t('entityActions.toastUndoFailed')),
               }),
               'next-soup'
             );
@@ -240,19 +249,28 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       const failed = context.operation?.hasFailures();
       const partial = failed || context.operation?.hasNoopRows();
       const message = partial
-        ? `Marked ${context.operation?.completedCount()} of ${total} items as done${failed ? '. Some changes could not be saved.' : ''}`
+        ? t(
+            failed
+              ? 'entityActions.toastMarkedDonePartialUnsaved'
+              : 'entityActions.toastMarkedDonePartial',
+            {
+              completed: String(context.operation?.completedCount()),
+              count: total,
+            }
+          )
         : total > 1
-          ? `Marked ${total} items as done`
-          : 'Marked as done';
+          ? t('entityActions.toastMarkedDoneCount', { count: total })
+          : t('entityActions.toastMarkedDone');
       toastId = (partial ? toast.alert : toast.success)(message, {
         actions: [
           {
-            label: 'Undo',
+            label: t('entityActions.undo'),
             icon: ArrowCounterClockwise,
             onClick: () => {
               fireAndForget(
                 handle.undo({
-                  onError: () => toast.failure('Failed to undo'),
+                  onError: () =>
+                    toast.failure(t('entityActions.toastUndoFailed')),
                 }),
                 'next-soup'
               );
@@ -387,9 +405,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             if (!context.pendingUndo.requested)
               context.registration?.showToast();
             else if (context.operation?.hasFailures()) {
-              toast.alert(
-                'Some changes could not be saved. Undo will reverse the accepted changes.'
-              );
+              toast.alert(t('entityActions.toastMarkDoneUnsaved'));
             }
           }
           context.pendingUndo.finish(accepted);
@@ -400,7 +416,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         context?.registration?.dismiss();
         context?.rollback();
         context?.pendingUndo?.finish(false);
-        toast.failure('Failed to mark as done');
+        toast.failure(t('entityActions.toastMarkDoneFailed'));
       },
     })
   );
@@ -421,7 +437,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     },
     onError: (_err, _variables, context) => {
       context?.show();
-      toast.failure('Failed to mark as done');
+      toast.failure(t('entityActions.toastMarkDoneFailed'));
     },
     undoFn: async (variables, context) => {
       context?.show();

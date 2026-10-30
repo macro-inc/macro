@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_messages m\n        SET\n            is_read = NOT EXISTS (\n                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                WHERE ml.message_id = m.id AND l.provider_label_id = $2\n            ),\n            is_starred = EXISTS (\n                SELECT 1 FROM email_message_labels ml JOIN email_labels l ON l.id = ml.label_id\n                WHERE ml.message_id = m.id AND l.provider_label_id = $3\n            ),\n            updated_at = now()\n        WHERE m.id = ANY($1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "36a51fc6aa5d7be8b96ab56176a5ca5dea5bc2cbde7a9b742c05b7bb3355ffb9"
+}

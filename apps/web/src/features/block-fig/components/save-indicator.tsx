@@ -1,6 +1,6 @@
-import CloudArrowUp from '@phosphor/cloud-arrow-up.svg';
-import CloudCheck from '@phosphor/cloud-check.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
+import CloudArrowUp from '@icon/system/regular/cloud-arrow-up.svg';
+import CloudCheck from '@icon/system/regular/cloud-check.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { match } from 'ts-pattern';
 import type { SaveState } from '../primitives/create-fig-editor';
 

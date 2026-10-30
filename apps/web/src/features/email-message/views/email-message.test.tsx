@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { CalendarInvitation } from '../core/calendar-invitation';
@@ -23,9 +29,12 @@ vi.mock('@app/features/email-message/components/collapsed-message', () => ({
 vi.mock('@app/features/email-message/components/attachment-pill', () => ({
   EmailAttachmentPill: (props: {
     attachment: { fileName: string };
-    onClick?: () => void;
+    onClick?: (chip: HTMLElement) => void;
   }) => (
-    <button type="button" onClick={() => props.onClick?.()}>
+    <button
+      type="button"
+      onClick={(event) => props.onClick?.(event.currentTarget)}
+    >
       {props.attachment.fileName}
     </button>
   ),
@@ -114,6 +123,29 @@ it('opens a calendar file as the event it holds and other files through the host
   expect(onOpenAttachment).toHaveBeenCalledWith(pdfFile);
 });
 
+it('tells the card when it is shown inside its calendar file', () => {
+  render(() => (
+    <EmailMessageView
+      message={message([invitationFixture])}
+      renderInvitation={(_message, invitation, options) => (
+        <div data-testid="card">
+          {options?.inCalendarFile ? 'in file' : 'inline'} {invitation.id}
+        </div>
+      )}
+      onOpenAttachment={vi.fn()}
+      onDownloadAttachment={vi.fn()}
+      isTouch={false}
+      isPersonal={false}
+      isSelected={false}
+      allowHover={false}
+      isExpanded
+    />
+  ));
+  expect(screen.getByTestId('card').textContent).toContain('inline');
+  fireEvent.click(screen.getByRole('button', { name: 'Planning.ics' }));
+  expect(screen.getByRole('dialog').textContent).toContain('in file');
+});
+
 it('hands a calendar file without a readable event to the host', () => {
   const onOpenAttachment = vi.fn();
   render(() => (
@@ -130,4 +162,136 @@ it('hands a calendar file without a readable event to the host', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Planning.ics' }));
   expect(screen.queryByRole('dialog')).toBeNull();
   expect(onOpenAttachment).toHaveBeenCalledWith(calendarFile);
+});
+
+it('keeps the opened calendar file card mounted when the thread refreshes the message', () => {
+  const [current, setCurrent] = createSignal(message([invitationFixture]));
+  render(() => (
+    <EmailMessageView
+      message={current()}
+      renderInvitation={(_message, invitation, options) => (
+        <div data-testid={options ? 'dialog-card' : 'card'}>
+          {invitation.id}
+        </div>
+      )}
+      onOpenAttachment={vi.fn()}
+      isTouch={false}
+      isPersonal={false}
+      isSelected={false}
+      allowHover={false}
+      isExpanded
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Planning.ics' }));
+  const card = screen.getByTestId('dialog-card');
+  setCurrent(message([structuredClone(invitationFixture)]));
+  expect(screen.getByTestId('dialog-card')).toBe(card);
+});
+
+it('returns focus to the calendar file chip when its dialog closes', async () => {
+  render(() => (
+    <EmailMessageView
+      message={message([invitationFixture])}
+      renderInvitation={(_message, invitation) => <div>{invitation.id}</div>}
+      onOpenAttachment={vi.fn()}
+      isTouch={false}
+      isPersonal={false}
+      isSelected={false}
+      allowHover={false}
+      isExpanded
+    />
+  ));
+  const chip = screen.getByRole('button', { name: 'Planning.ics' });
+  fireEvent.click(chip);
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(chip));
+
+  chip.blur();
+  fireEvent.click(chip);
+  fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(chip));
+});
+
+it('keeps the chip to return focus to when the thread refreshes its attachments', async () => {
+  const [current, setCurrent] = createSignal(message([invitationFixture]));
+  render(() => (
+    <EmailMessageView
+      message={current()}
+      renderInvitation={(_message, invitation) => <div>{invitation.id}</div>}
+      onOpenAttachment={vi.fn()}
+      isTouch={false}
+      isPersonal={false}
+      isSelected={false}
+      allowHover={false}
+      isExpanded
+    />
+  ));
+  const chip = screen.getByRole('button', { name: 'Planning.ics' });
+  fireEvent.click(chip);
+  setCurrent({
+    ...message([invitationFixture]),
+    attachments: [structuredClone(calendarFile), structuredClone(pdfFile)],
+  });
+  // The open dialog hides the page behind it from the accessibility tree.
+  expect(
+    screen.getByRole('button', { name: 'Planning.ics', hidden: true })
+  ).toBe(chip);
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(document.activeElement).toBe(chip));
+});
+
+it('closes the calendar file dialog when its card opens the calendar', async () => {
+  let navigate: (() => void) | undefined;
+  render(() => (
+    <EmailMessageView
+      message={message([invitationFixture])}
+      renderInvitation={(_message, invitation, options) => {
+        if (options) navigate = options.onNavigate;
+        return <div>{invitation.id}</div>;
+      }}
+      onOpenAttachment={vi.fn()}
+      isTouch={false}
+      isPersonal={false}
+      isSelected={false}
+      allowHover={false}
+      isExpanded
+    />
+  ));
+  const chip = screen.getByRole('button', { name: 'Planning.ics' });
+  fireEvent.click(chip);
+  expect(screen.getByRole('dialog')).toBeTruthy();
+  navigate?.();
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(document.activeElement).not.toBe(chip);
+});
+
+it('opens a cloud-reference calendar file through the host', () => {
+  const reference = {
+    ...calendarFile,
+    reference_url: 'https://outlook.office.com/mail/item',
+  };
+  const onOpenAttachment = vi.fn();
+  render(() => (
+    <EmailMessageView
+      message={
+        {
+          ...message([invitationFixture]),
+          attachments: [reference],
+        } as unknown as EmailMessage
+      }
+      renderInvitation={(_message, invitation) => <div>{invitation.id}</div>}
+      onOpenAttachment={onOpenAttachment}
+      isTouch={false}
+      isPersonal={false}
+      isSelected={false}
+      allowHover={false}
+      isExpanded
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Planning.ics' }));
+  expect(screen.queryByRole('dialog')).toBeNull();
+  expect(onOpenAttachment).toHaveBeenCalledWith(reference);
 });

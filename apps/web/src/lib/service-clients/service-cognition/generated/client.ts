@@ -6,7 +6,6 @@
  */
 import type {
   AddServerRequest,
-  AiAdmissionErrorBody,
   BrowsePipedreamMcpCatalogParams,
   CallToolRequest,
   CallToolResponse,
@@ -15,6 +14,8 @@ import type {
   ChatMessageError,
   CompleteOnboardingRequest,
   CreateChatRequest,
+  DatabaseQueryAnswer,
+  DatabaseQueryRequest,
   DecisionErrorBody,
   DecisionRequest,
   DecisionResponse,
@@ -30,15 +31,19 @@ import type {
   GetChatResponse,
   GetChatsForAttachmentResponse,
   HttpSendChatMessageRequest,
+  ImportSource,
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
+  NotionImportReport,
   OnboardingRow,
   OnboardingState,
   PatchChatRequest,
   PipedreamCatalogResponse,
   PipedreamCompleteRequest,
   PipedreamConnectionResponse,
+  PipedreamOverlayResponse,
+  PipedreamRecoverRequest,
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
   ProjectionStateResponse,
@@ -1188,6 +1193,87 @@ export const getCitationHandler = async (
   } as getCitationHandlerResponse;
 };
 
+export type generateDatabaseQueryResponse200 = {
+  data: DatabaseQueryAnswer;
+  status: 200;
+};
+
+export type generateDatabaseQueryResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type generateDatabaseQueryResponse402 = {
+  data: StructuredCompletionError;
+  status: 402;
+};
+
+export type generateDatabaseQueryResponse403 = {
+  data: StructuredCompletionError;
+  status: 403;
+};
+
+export type generateDatabaseQueryResponse500 = {
+  data: StructuredCompletionError;
+  status: 500;
+};
+
+export type generateDatabaseQueryResponse503 = {
+  data: StructuredCompletionError;
+  status: 503;
+};
+
+export type generateDatabaseQueryResponse504 = {
+  data: StructuredCompletionError;
+  status: 504;
+};
+
+export type generateDatabaseQueryResponseSuccess =
+  generateDatabaseQueryResponse200 & {
+    headers: Headers;
+  };
+export type generateDatabaseQueryResponseError = (
+  | generateDatabaseQueryResponse401
+  | generateDatabaseQueryResponse402
+  | generateDatabaseQueryResponse403
+  | generateDatabaseQueryResponse500
+  | generateDatabaseQueryResponse503
+  | generateDatabaseQueryResponse504
+) & {
+  headers: Headers;
+};
+
+export type generateDatabaseQueryResponse =
+  | generateDatabaseQueryResponseSuccess
+  | generateDatabaseQueryResponseError;
+
+export const getGenerateDatabaseQueryUrl = () => {
+  return `/database-query`;
+};
+
+export const generateDatabaseQuery = async (
+  databaseQueryRequest: DatabaseQueryRequest,
+  options?: RequestInit
+): Promise<generateDatabaseQueryResponse> => {
+  const res = await fetch(getGenerateDatabaseQueryUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(databaseQueryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: generateDatabaseQueryResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateDatabaseQueryResponse;
+};
+
 export type decisionsResponse200 = {
   data: DecisionResponse;
   status: 200;
@@ -1315,6 +1401,107 @@ export const healthHandler = async (
 };
 
 /**
+ * @summary Where the user's Notion workspace import stands.
+ */
+export type notionReportHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type notionReportHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type notionReportHandlerResponseSuccess =
+  notionReportHandlerResponse200 & {
+    headers: Headers;
+  };
+export type notionReportHandlerResponseError =
+  notionReportHandlerResponse500 & {
+    headers: Headers;
+  };
+
+export type notionReportHandlerResponse =
+  | notionReportHandlerResponseSuccess
+  | notionReportHandlerResponseError;
+
+export const getNotionReportHandlerUrl = () => {
+  return `/import/notion`;
+};
+
+export const notionReportHandler = async (
+  options?: RequestInit
+): Promise<notionReportHandlerResponse> => {
+  const res = await fetch(getNotionReportHandlerUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: notionReportHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as notionReportHandlerResponse;
+};
+
+/**
+ * @summary Stop planning or writing the user's Notion import. Objects already
+imported stay.
+ */
+export type cancelNotionHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type cancelNotionHandlerResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type cancelNotionHandlerResponseSuccess =
+  cancelNotionHandlerResponse200 & {
+    headers: Headers;
+  };
+export type cancelNotionHandlerResponseError =
+  cancelNotionHandlerResponse500 & {
+    headers: Headers;
+  };
+
+export type cancelNotionHandlerResponse =
+  | cancelNotionHandlerResponseSuccess
+  | cancelNotionHandlerResponseError;
+
+export const getCancelNotionHandlerUrl = () => {
+  return `/import/notion/cancel`;
+};
+
+export const cancelNotionHandler = async (
+  options?: RequestInit
+): Promise<cancelNotionHandlerResponse> => {
+  const res = await fetch(getCancelNotionHandlerUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelNotionHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelNotionHandlerResponse;
+};
+
+/**
  * @summary Accept staged imports (starts import jobs) and/or discard staged rows.
  */
 export type runImportHandlerResponse200 = {
@@ -1364,7 +1551,7 @@ export const runImportHandler = async (
 };
 
 /**
- * @summary Discover candidates for user selection without auto-importing them.
+ * @summary Discover candidates for user selection. Only Slack supports discovery.
  */
 export type discoverHandlerResponse204 = {
   data: void;
@@ -1419,132 +1606,7 @@ export const discoverHandler = async (
 };
 
 /**
- * @summary Dismiss one source's import section.
- */
-export type dismissRunHandlerResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type dismissRunHandlerResponse400 = {
-  data: void;
-  status: 400;
-};
-
-export type dismissRunHandlerResponse500 = {
-  data: void;
-  status: 500;
-};
-
-export type dismissRunHandlerResponseSuccess = dismissRunHandlerResponse204 & {
-  headers: Headers;
-};
-export type dismissRunHandlerResponseError = (
-  | dismissRunHandlerResponse400
-  | dismissRunHandlerResponse500
-) & {
-  headers: Headers;
-};
-
-export type dismissRunHandlerResponse =
-  | dismissRunHandlerResponseSuccess
-  | dismissRunHandlerResponseError;
-
-export const getDismissRunHandlerUrl = (source: string) => {
-  return `/import/runs/${source}/dismiss`;
-};
-
-export const dismissRunHandler = async (
-  source: string,
-  options?: RequestInit
-): Promise<dismissRunHandlerResponse> => {
-  const res = await fetch(getDismissRunHandlerUrl(source), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: dismissRunHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as dismissRunHandlerResponse;
-};
-
-/**
- * @summary Restart a failed (or dismissed) gather run for one source.
- */
-export type retryGatherHandlerResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type retryGatherHandlerResponse400 = {
-  data: void;
-  status: 400;
-};
-
-export type retryGatherHandlerResponse402 = {
-  data: AiAdmissionErrorBody;
-  status: 402;
-};
-
-export type retryGatherHandlerResponse500 = {
-  data: void;
-  status: 500;
-};
-
-export type retryGatherHandlerResponse503 = {
-  data: AiAdmissionErrorBody;
-  status: 503;
-};
-
-export type retryGatherHandlerResponseSuccess =
-  retryGatherHandlerResponse204 & {
-    headers: Headers;
-  };
-export type retryGatherHandlerResponseError = (
-  | retryGatherHandlerResponse400
-  | retryGatherHandlerResponse402
-  | retryGatherHandlerResponse500
-  | retryGatherHandlerResponse503
-) & {
-  headers: Headers;
-};
-
-export type retryGatherHandlerResponse =
-  | retryGatherHandlerResponseSuccess
-  | retryGatherHandlerResponseError;
-
-export const getRetryGatherHandlerUrl = (source: string) => {
-  return `/import/runs/${source}/retry`;
-};
-
-export const retryGatherHandler = async (
-  source: string,
-  options?: RequestInit
-): Promise<retryGatherHandlerResponse> => {
-  const res = await fetch(getRetryGatherHandlerUrl(source), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: retryGatherHandlerResponse['data'] = body ? JSON.parse(body) : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as retryGatherHandlerResponse;
-};
-
-/**
- * @summary Get the authenticated user's onboarding state. While the flow is active
-this also starts any gather runs that are due, so polling this endpoint
-is what keeps onboarding moving.
+ * @summary Get the authenticated user's onboarding state.
  */
 export type getStateHandlerResponse200 = {
   data: OnboardingState;
@@ -1587,6 +1649,88 @@ export const getStateHandler = async (
     status: res.status,
     headers: res.headers,
   } as getStateHandlerResponse;
+};
+
+/**
+ * @summary Report progress for one reviewed workspace source.
+ */
+export type workspaceReportHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type workspaceReportHandlerResponseSuccess =
+  workspaceReportHandlerResponse200 & {
+    headers: Headers;
+  };
+
+export type workspaceReportHandlerResponse =
+  workspaceReportHandlerResponseSuccess;
+
+export const getWorkspaceReportHandlerUrl = (source: ImportSource) => {
+  return `/import/workspaces/${source}`;
+};
+
+export const workspaceReportHandler = async (
+  source: ImportSource,
+  options?: RequestInit
+): Promise<workspaceReportHandlerResponse> => {
+  const res = await fetch(getWorkspaceReportHandlerUrl(source), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: workspaceReportHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as workspaceReportHandlerResponse;
+};
+
+/**
+ * @summary Cancel this source's plan or write, keeping completed entities.
+ */
+export type cancelWorkspaceHandlerResponse200 = {
+  data: NotionImportReport;
+  status: 200;
+};
+
+export type cancelWorkspaceHandlerResponseSuccess =
+  cancelWorkspaceHandlerResponse200 & {
+    headers: Headers;
+  };
+
+export type cancelWorkspaceHandlerResponse =
+  cancelWorkspaceHandlerResponseSuccess;
+
+export const getCancelWorkspaceHandlerUrl = (source: ImportSource) => {
+  return `/import/workspaces/${source}/cancel`;
+};
+
+export const cancelWorkspaceHandler = async (
+  source: ImportSource,
+  options?: RequestInit
+): Promise<cancelWorkspaceHandlerResponse> => {
+  const res = await fetch(getCancelWorkspaceHandlerUrl(source), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelWorkspaceHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelWorkspaceHandlerResponse;
 };
 
 /**
@@ -1707,11 +1851,17 @@ export const updateMcpServer = async (
 };
 
 /**
- * @summary Add a new MCP server for the authenticated user.
+ * @summary Add a new MCP server for the authenticated user. A URL the user already
+has is returned as stored, keeping its credentials.
  */
 export type addMcpServerResponse201 = {
   data: ServerResponse;
   status: 201;
+};
+
+export type addMcpServerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
 };
 
 export type addMcpServerResponse401 = {
@@ -1728,6 +1878,7 @@ export type addMcpServerResponseSuccess = addMcpServerResponse201 & {
   headers: Headers;
 };
 export type addMcpServerResponseError = (
+  | addMcpServerResponse400
   | addMcpServerResponse401
   | addMcpServerResponse500
 ) & {
@@ -2292,7 +2443,8 @@ export const browsePipedreamMcpCatalog = async (
 
 /**
  * Verifies with Pipedream that the account exists and was connected for
-the authenticated user before persisting anything.
+the authenticated user before persisting anything. An overlaid app is
+refused with 409: it connects through its own MCP server instead.
  * @summary Register a connected account reported by the Pipedream Connect UI.
  */
 export type completePipedreamMcpConnectionResponse200 = {
@@ -2308,6 +2460,11 @@ export type completePipedreamMcpConnectionResponse401 = {
 export type completePipedreamMcpConnectionResponse404 = {
   data: ErrorResponse;
   status: 404;
+};
+
+export type completePipedreamMcpConnectionResponse409 = {
+  data: ErrorResponse;
+  status: 409;
 };
 
 export type completePipedreamMcpConnectionResponse500 = {
@@ -2327,6 +2484,7 @@ export type completePipedreamMcpConnectionResponseSuccess =
 export type completePipedreamMcpConnectionResponseError = (
   | completePipedreamMcpConnectionResponse401
   | completePipedreamMcpConnectionResponse404
+  | completePipedreamMcpConnectionResponse409
   | completePipedreamMcpConnectionResponse500
   | completePipedreamMcpConnectionResponse501
 ) & {
@@ -2557,6 +2715,147 @@ export const deletePipedreamMcpConnection = async (
     status: res.status,
     headers: res.headers,
   } as deletePipedreamMcpConnectionResponse;
+};
+
+/**
+ * Clients connect these with the native MCP OAuth flow against
+`server_url`; Pipedream refuses to complete a connection for them.
+ * @summary List the catalog apps that connect through their own MCP server.
+ */
+export type listPipedreamMcpOverlaysResponse200 = {
+  data: PipedreamOverlayResponse[];
+  status: 200;
+};
+
+export type listPipedreamMcpOverlaysResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listPipedreamMcpOverlaysResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listPipedreamMcpOverlaysResponseSuccess =
+  listPipedreamMcpOverlaysResponse200 & {
+    headers: Headers;
+  };
+export type listPipedreamMcpOverlaysResponseError = (
+  | listPipedreamMcpOverlaysResponse401
+  | listPipedreamMcpOverlaysResponse500
+) & {
+  headers: Headers;
+};
+
+export type listPipedreamMcpOverlaysResponse =
+  | listPipedreamMcpOverlaysResponseSuccess
+  | listPipedreamMcpOverlaysResponseError;
+
+export const getListPipedreamMcpOverlaysUrl = () => {
+  return `/pipedream/mcp/overlays`;
+};
+
+export const listPipedreamMcpOverlays = async (
+  options?: RequestInit
+): Promise<listPipedreamMcpOverlaysResponse> => {
+  const res = await fetch(getListPipedreamMcpOverlaysUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listPipedreamMcpOverlaysResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listPipedreamMcpOverlaysResponse;
+};
+
+/**
+ * Called after the Connect UI closes without a success event. Answers 404
+when Pipedream has no new account for this user and app.
+An overlaid app is refused with 409, as in [`complete_connection`].
+ * @summary Register an account a Connect flow created but the Connect UI never
+reported.
+ */
+export type recoverPipedreamMcpConnectionResponse200 = {
+  data: PipedreamConnectionResponse;
+  status: 200;
+};
+
+export type recoverPipedreamMcpConnectionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type recoverPipedreamMcpConnectionResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type recoverPipedreamMcpConnectionResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type recoverPipedreamMcpConnectionResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type recoverPipedreamMcpConnectionResponse501 = {
+  data: ErrorResponse;
+  status: 501;
+};
+
+export type recoverPipedreamMcpConnectionResponseSuccess =
+  recoverPipedreamMcpConnectionResponse200 & {
+    headers: Headers;
+  };
+export type recoverPipedreamMcpConnectionResponseError = (
+  | recoverPipedreamMcpConnectionResponse401
+  | recoverPipedreamMcpConnectionResponse404
+  | recoverPipedreamMcpConnectionResponse409
+  | recoverPipedreamMcpConnectionResponse500
+  | recoverPipedreamMcpConnectionResponse501
+) & {
+  headers: Headers;
+};
+
+export type recoverPipedreamMcpConnectionResponse =
+  | recoverPipedreamMcpConnectionResponseSuccess
+  | recoverPipedreamMcpConnectionResponseError;
+
+export const getRecoverPipedreamMcpConnectionUrl = () => {
+  return `/pipedream/mcp/recover`;
+};
+
+export const recoverPipedreamMcpConnection = async (
+  pipedreamRecoverRequest: PipedreamRecoverRequest,
+  options?: RequestInit
+): Promise<recoverPipedreamMcpConnectionResponse> => {
+  const res = await fetch(getRecoverPipedreamMcpConnectionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pipedreamRecoverRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recoverPipedreamMcpConnectionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recoverPipedreamMcpConnectionResponse;
 };
 
 /**

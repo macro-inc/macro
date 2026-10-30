@@ -2,8 +2,8 @@
 
 Canvas Next uses this adapter with the shared collaboration runtime and SyncService.
 The package itself owns no network or storage: `createLoroGraphicsBackendFromDoc`
-binds an externally owned document, observes remote tree changes and disposes only
-its scene subscription/history/tree handle. The original snapshot-owning factory
+binds an externally owned document through `@loro-mirror/core`, observes remote
+scene changes and disposes its Mirror/subscription/history. The original snapshot-owning factory
 remains useful for standalone hosts and the in-memory test harness.
 Host bookkeeping uses `GRAPHICS_METADATA_ORIGIN` and is excluded from scene undo.
 The workspace pins Loro 1.16.3.
@@ -16,9 +16,11 @@ before its backend. Memory-backed hosts keep their original behavior.
 
 ## Representation
 
-- A LoroTree owns containment and sibling ordering. Node data retains the stable
+- Mirror's `schema.LoroTree` projects native containment and sibling ordering as
+  `{ data, children }`. Mirror owns generic tree creation, diffing, moves and deletion. Node data retains the stable
   graphics ID and immutable kind. The surface is the implicit root of the forest.
-- Each node has one coherent `pose` register: local matrix, geometry, coordinate
+- `schema.Value` keeps the deployed atomic registers unchanged. Each node has one
+  coherent `pose` register: local matrix, geometry, coordinate
   parent ID, and a captured world matrix. Fill and stroke are separate registers,
   so moving and restyling the same shape can merge independently.
 - Ordered Loro children project to unique core sort keys. These keys are derived,
@@ -40,6 +42,12 @@ pose. In that case the projection uses the pose's captured world matrix, express
 relative to the actual parent. This keeps both replicas valid and avoids interpreting
 an old local matrix in the wrong coordinate space. It is a derived interpretation:
 no repair operations or reconciliation loop are emitted.
+
+Canvas keeps coordinate projection and pose conflict handling in the graphics
+adapter; Mirror contains no Canvas-specific geometry logic. The host sync manager
+uses `mirror: false` because this graphics backend owns the single typed scene
+Mirror on the same host-owned document. Existing native snapshots open without
+conversion or node replacement.
 
 The Canvas host currently uses this conflict policy. Such a node stays
 anchored in world space through subsequent parent transforms until it receives a

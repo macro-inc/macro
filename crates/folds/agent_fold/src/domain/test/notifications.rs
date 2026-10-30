@@ -160,7 +160,9 @@ fn interrupted_delivery_keeps_one_event_attached_to_the_retry_turn() {
 #[test]
 fn stored_flat_notification_rows_keep_their_typed_payloads() {
     use crate::domain::model::SessionNotification;
-    use agent_runtime_protocol::domain::notification::{DecisionOutcome, DecisionVia, ItemStatus};
+    use agent_runtime_protocol::domain::notification::{
+        DecisionOutcome, DecisionVia, ItemStatus, ReviewSettlement,
+    };
 
     // These are the flat kind/payload rows emitted before the typed fold model.
     let stored = r#"[
@@ -177,7 +179,8 @@ fn stored_flat_notification_rows_keep_their_typed_payloads() {
     assert_eq!(decided.via, DecisionVia::Card);
     assert_eq!(decided.items[0].status, ItemStatus::Submitting);
     assert!(decided.items[0].edited);
-    let NotificationEvent::ReviewSettled(settled) = &rows[2].event else {
+    let NotificationEvent::ReviewSettled(ReviewSettlement::Actions(settled)) = &rows[2].event
+    else {
         panic!("stored settlement lost its kind");
     };
     assert_eq!(settled.items[0].error.as_deref(), Some("Provider rejected"));
@@ -187,4 +190,65 @@ fn stored_flat_notification_rows_keep_their_typed_payloads() {
         wire,
         serde_json::from_str::<serde_json::Value>(stored).unwrap()
     );
+}
+
+#[test]
+fn execution_context_is_model_only_and_user_authored_suffix_context_remains_visible() {
+    let original = "user request<m-agent-context>literal user text</m-agent-context>";
+    let turn = agent_runtime_protocol::domain::action::AgentActionId::mint();
+    let request = AgentAction::prompt(original)
+        .to_runtime(&SessionId::new("s"), turn.to_request_id())
+        .unwrap();
+    let mut machine = LifecycleFold::new();
+    let _ = machine.push(AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    });
+    let messages = machine.inner().messages();
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].last_text(), Some(original.to_owned()));
+}
+
+#[test]
+fn successful_notification_noop_does_not_restore_an_older_failure() {
+    use crate::domain::model::TurnState;
+
+    let mut machine = LifecycleFold::new();
+    for frame in parse_log(
+        r#"
+{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","error":{"code":-32603,"message":"Runtime failed"}}}
+"#,
+    ) {
+        let _ = machine.push(frame);
+    }
+    assert_eq!(machine.inner().metadata().turn, TurnState::Failed);
+
+    let request = AgentAction::notification(vec![Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "connection".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "Calendar".into(),
+        },
+    }])
+    .to_runtime(&SessionId::new("s"), RequestId::Str("event".into()))
+    .unwrap();
+    let _ = machine.push(AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::Notification(request),
+        logged_at: None,
+    });
+    for frame in parse_log(
+        r#"
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"<noop/>"}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"event","result":{"stopReason":"end_turn"}}}
+"#,
+    ) {
+        let _ = machine.push(frame);
+    }
+    assert_eq!(machine.inner().metadata().turn, TurnState::Idle);
 }

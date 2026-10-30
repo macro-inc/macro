@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_message SET notification_retry_at = now() + interval '30 seconds' WHERE message_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "64de7db0f29be22328063e6de192333dc16317ce08bdb17f3f8b41c46110b310"
+}

@@ -22,6 +22,7 @@ export type DownloadSource = {
   load: (options: {
     signal: AbortSignal;
     onProgress: (progress: FetchProgress) => void;
+    span: Span;
   }) => Promise<Result<{ blob: Blob; name?: string }, ResultError<string>[]>>;
 };
 
@@ -143,13 +144,7 @@ export function createFileDownload(
           toast.success(
             isPlatform('android') || nativeIos
               ? 'File saved'
-              : 'Download started',
-            {
-              subtext:
-                isPlatform('android') || nativeIos
-                  ? ready.name
-                  : `${ready.name} — check your browser or device downloads.`,
-            }
+              : 'Download started'
           );
         }
         finishTrace('handed_off');
@@ -241,6 +236,7 @@ export function createFileDownload(
         try {
           const result = await snapshot.load({
             signal: request.signal,
+            span,
             onProgress: (next) => {
               if (controller === request) setProgress(next);
             },

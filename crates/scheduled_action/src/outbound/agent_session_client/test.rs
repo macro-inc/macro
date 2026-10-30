@@ -1,6 +1,6 @@
 use super::*;
 use agent_runtime_protocol::domain::action::AgentActionId;
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentSessionId, SessionSource, SessionVisibility};
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
@@ -118,6 +118,10 @@ fn selection() -> ValidateRoutineSession {
         owner: MacroUserIdStr::parse_from_str("macro|routine@macro.com").unwrap(),
         bot_id: BotId::new_from_uuid(generate_uuid_v7()),
         model: Some("selected/runtime-model".into()),
+        mcp_servers: vec![bots::domain::models::AgentMcpServer {
+            app_slug: "linear".into(),
+            server_name: "Linear".into(),
+        }],
     }
 }
 
@@ -143,6 +147,8 @@ async fn all_commands_use_internal_auth_and_domain_wire_contract_at_both_prefixe
         let prepare = PrepareRoutineSession {
             selection: selection.clone(),
             session_id: identity.session_id,
+            source: SessionSource::Routine,
+            visibility: SessionVisibility::Unlisted,
         };
         let prompt = PromptRoutineSession {
             action: identity.clone(),
@@ -248,6 +254,8 @@ async fn typed_sanitized_domain_errors_are_preserved() {
             .prepare(PrepareRoutineSession {
                 selection: selection(),
                 session_id: identity().session_id,
+                source: SessionSource::User,
+                visibility: SessionVisibility::Listed,
             })
             .await
             .unwrap_err();

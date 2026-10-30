@@ -113,6 +113,7 @@ where
                     match mobile.send_voip_push(arn, &user_id, payload).await {
                         Ok(_) => Some((user_id, ios)),
                         Err(e) => {
+                            // infra/stacks/monitoring/monitors/calls.ts alerts on this message.
                             tracing::error!(
                                 error=?e,
                                 "voip push: SNS delivery failed"

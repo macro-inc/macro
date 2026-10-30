@@ -114,9 +114,53 @@ test('the shared Drive and standalone header downloads through its visible actio
   );
 });
 
-test('shares from a separate action after a transfer outlives browser activation', async ({
+test('downloads a linked video using its current version and original extension', async ({
   page,
 }) => {
+  const video = await readFile(videoPath);
+  await page.route('**/documents/linked-video', (route) =>
+    route.fulfill({
+      json: {
+        data: {
+          documentMetadata: {
+            documentId: 'linked-video',
+            documentVersionId: 42,
+            documentName: 'birds folder',
+            fileType: 'webm',
+          },
+          userAccessLevel: 'view',
+        },
+      },
+    })
+  );
+  await page.route('**/documents/linked-video/location_v3?*', (route) => {
+    expect(
+      new URL(route.request().url()).searchParams.get('document_version_id')
+    ).toBe('42');
+    return route.fulfill({
+      json: {
+        type: 'presignedUrl',
+        presignedUrl: new URL('/original-video', page.url()).href,
+        content: { state: 'ready' },
+      },
+    });
+  });
+  await page.route('**/original-video', (route) =>
+    route.fulfill({ body: video, contentType: 'video/webm' })
+  );
+  await page.goto('/?document');
+  const saved = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download', exact: true }).click();
+  const file = await saved;
+  expect(file.suggestedFilename()).toBe('birds folder.webm');
+  expect(await readFile((await file.path())!)).toEqual(video);
+});
+
+test('shares from the mobile Download menu after a transfer outlives browser activation', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, 'System sharing is inside the touch Download menu');
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'canShare', { value: () => true });
     Object.defineProperty(navigator, 'userActivation', {
@@ -132,7 +176,9 @@ test('shares from a separate action after a transfer outlives browser activation
     });
   });
   await page.reload();
-  const share = page.getByRole('button', { name: 'Share', exact: true });
+  const trigger = page.getByRole('button', { name: 'Download', exact: true });
+  await trigger.click();
+  const share = page.getByRole('menuitem', { name: 'Share', exact: true });
   await share.click();
   await expect(
     page.getByText('File ready — tap Share', { exact: true })
@@ -142,10 +188,14 @@ test('shares from a separate action after a transfer outlives browser activation
   ).toBeUndefined();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const saving = page.waitForEvent('download');
-  const download = page.getByRole('button', { name: 'Download', exact: true });
+  const download = page.getByRole('menuitem', {
+    name: 'Download',
+    exact: true,
+  });
   await download.click();
   expect((await saving).suggestedFilename()).toBe('Team demo.webm');
-  await expect(download).toBeFocused();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
   await share.click();
   await expect(
     page.getByText('File ready — tap Share', { exact: true })
@@ -154,7 +204,7 @@ test('shares from a separate action after a transfer outlives browser activation
   await expect
     .poll(() => page.evaluate(() => Reflect.get(window, 'sharedFileName')))
     .toBe('Team demo.webm');
-  await expect(share).toBeFocused();
+  await expect(trigger).toBeFocused();
   await expect(page.locator('body')).toHaveJSProperty(
     'scrollWidth',
     await page.locator('body').evaluate((body) => body.clientWidth)

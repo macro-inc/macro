@@ -12,6 +12,7 @@ An entity the favorites API can address, and so can be (un)favorited.
 - [`Message`](../../channels/message/classes/Message.md)
 - [`Contact`](../../crm/contact/classes/Contact.md)
 - [`PropertiedEntity`](PropertiedEntity.md)
+- [`ExternalChat`](../../external-chat/chat/classes/ExternalChat.md)
 - [`ForeignEntity`](../../foreign/foreign-entity/classes/ForeignEntity.md)
 
 ## Type Parameters
@@ -28,7 +29,7 @@ An entity the favorites API can address, and so can be (un)favorited.
 
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
-| <a id="property-entitytype"></a> `entityType` | `abstract readonly` | `"project"` \| `"user"` \| `"team"` \| `"chat"` \| `"channel"` \| `"channel_message"` \| `"document"` \| `"email_thread"` \| `"calendar_event"` \| `"call"` \| `"foreign_entity"` \| `"static_file"` \| `"crm_company"` \| `"crm_contact"` \| `"crm_pipeline"` \| `"reminder"` \| `"skill"` \| `"agent_session"` \| `"scheduled_action"` \| `"initiative"` \| `"database"` \| `"database_row"` \| `"form"` | How the entity-addressed APIs (favorites) identify this entity's type. | - |
+| <a id="property-entitytype"></a> `entityType` | `abstract readonly` | `"project"` \| `"user"` \| `"team"` \| `"chat"` \| `"channel"` \| `"channel_message"` \| `"document"` \| `"email_thread"` \| `"calendar_event"` \| `"call"` \| `"foreign_entity"` \| `"static_file"` \| `"crm_company"` \| `"crm_contact"` \| `"crm_pipeline"` \| `"reminder"` \| `"skill"` \| `"agent_session"` \| `"scheduled_action"` \| `"initiative"` \| `"database"` \| `"database_row"` \| `"form"` \| `"external_chat"` | How the entity-addressed APIs (favorites) identify this entity's type. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](MacroEntity.md).[`id`](MacroEntity.md#property-id) |
 
 ## Methods

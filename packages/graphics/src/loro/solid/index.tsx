@@ -14,7 +14,11 @@ import type { Point, ShapeItem } from '../../core/model';
 import { nodeCorners, roots, worldBounds } from '../../core/scene';
 import { isShape, shapePayload } from '../../core/shapes/registry';
 import { createGraphicsProjection, GraphicsSurface } from '../../solid';
-import { defaultRenderers, ShapeView } from '../../solid/shape-renderers';
+import {
+  defaultRenderers,
+  type ItemRenderers,
+  ShapeView,
+} from '../../solid/shape-renderers';
 import type { GraphicsPresence } from '../presence';
 import {
   currentPresencePreview,
@@ -31,24 +35,49 @@ function GhostShape(props: {
   shape: PresenceShape;
   color: string;
   scale: number;
+  renderers?: Partial<ItemRenderers>;
 }) {
-  const item = (): ShapeItem => ({
-    id: props.shape.id,
-    ...shapePayload(
-      props.shape.kind,
-      props.shape.kind === 'pencil'
-        ? props.shape.pencil
-        : { width: props.shape.width, height: props.shape.height }
-    ),
-    placement: { parentId: 'presence-root', sortKey: 'a0' },
-    transform: props.shape.world,
-    appearance: {
-      fill: 'transparent',
-      stroke: props.color,
-      strokeWidth: props.shape.strokeWidth,
-      cornerRadius: props.shape.cornerRadius,
-    },
-  });
+  const payload = () => {
+    const value = props.shape.item;
+    if (!value) return undefined;
+    const geometry: unknown = JSON.parse(value.geometry);
+    return shapePayload(
+      value.type,
+      geometry && typeof geometry === 'object' && 'width' in geometry
+        ? {
+            ...geometry,
+            width: Math.max(0.01, props.shape.width),
+            height: Math.max(0.01, props.shape.height),
+          }
+        : geometry
+    );
+  };
+  const item = (): ShapeItem =>
+    props.shape.item
+      ? {
+          id: props.shape.id,
+          ...payload()!,
+          appearance: props.shape.item.appearance,
+          transform: props.shape.world,
+          placement: { parentId: 'presence-root', sortKey: 'a0' },
+        }
+      : {
+          id: props.shape.id,
+          ...shapePayload(
+            props.shape.kind,
+            props.shape.kind === 'pencil'
+              ? props.shape.pencil
+              : { width: props.shape.width, height: props.shape.height }
+          ),
+          placement: { parentId: 'presence-root', sortKey: 'a0' },
+          transform: props.shape.world,
+          appearance: {
+            fill: 'transparent',
+            stroke: props.color,
+            strokeWidth: props.shape.strokeWidth,
+            cornerRadius: props.shape.cornerRadius,
+          },
+        };
   return (
     <div
       data-presence-preview={props.shape.id}
@@ -64,7 +93,7 @@ function GhostShape(props: {
     >
       <ShapeView
         item={item()}
-        renderers={defaultRenderers}
+        renderers={{ ...defaultRenderers, ...props.renderers }}
         scale={
           props.scale * Math.hypot(props.shape.world[0], props.shape.world[1])
         }
@@ -78,17 +107,51 @@ function GhostShape(props: {
 export function GraphicsPresenceOverlay(props: {
   editor: GraphicsEditor;
   presence: GraphicsPresence;
+  renderers?: Partial<ItemRenderers>;
 }) {
   const projection = createGraphicsProjection(props.editor);
   const [peers, setPeers] = createSignal<PeerPresence[]>([]);
   const motion = createPresenceMotion(setPeers);
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
   const receive = () =>
     motion.update(
-      props.presence.getRemote().map((peer) => ({
-        ...peer,
-        preview: currentPresencePreview(peer, props.presence.getClock()),
-      }))
+      props.presence
+        .getRemote()
+        .map((peer) => ({
+          ...peer,
+          preview:
+            reducedMotion?.matches && peer.name.endsWith('(AI)')
+              ? null
+              : currentPresencePreview(
+                  peer,
+                  props.presence.getClock(),
+                  props.editor.document
+                ),
+        }))
+        .flatMap((peer) => {
+          if (!peer.name.endsWith('(AI)') || !peer.lanes?.length) return [peer];
+          return peer.lanes.map((lane) => ({
+            ...peer,
+            id: `${peer.id}:${lane.id}`,
+            name: `${peer.name.replace(/\s*\(AI\)$/, '')} · ${lane.name} (AI)`,
+            color: lane.color,
+            cursor: lane.cursor,
+            selectedIds: peer.selectedIds.filter((id) =>
+              lane.itemIds.includes(id)
+            ),
+            preview: peer.preview
+              ? {
+                  ...peer.preview,
+                  shapes: peer.preview.shapes.filter((shape) =>
+                    lane.itemIds.includes(shape.id)
+                  ),
+                }
+              : null,
+          }));
+        })
     );
+  reducedMotion?.addEventListener('change', receive);
+  onCleanup(() => reducedMotion?.removeEventListener('change', receive));
   onCleanup(props.presence.subscribe(receive));
   // Clear obsolete ghosts immediately, even while a spring is in flight.
   onCleanup(props.editor.subscribeDocument(receive));
@@ -146,6 +209,7 @@ export function GraphicsPresenceOverlay(props: {
                       }
                       color={peer().color}
                       scale={projection.camera().scale}
+                      renderers={props.renderers}
                     />
                   )}
                 </For>

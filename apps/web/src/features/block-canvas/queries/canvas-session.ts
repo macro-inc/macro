@@ -52,6 +52,7 @@ type CanvasConnection = {
 export type CanvasSessionOptions = {
   documentId: string;
   initial: CanvasFile;
+  requireShared?: boolean;
   userId?: string;
   canEdit: Accessor<boolean>;
   exists: () => Promise<boolean>;
@@ -172,6 +173,7 @@ export function createCanvasSession(options: CanvasSessionOptions) {
   }
   const manager = new CanvasManager(schema({}), {
     documentId: options.documentId,
+    // The graphics backend owns the typed scene Mirror on this same document.
     mirror: false,
   });
   const [state, setState] = createSignal<CanvasSessionState>({ t: 'loading' });
@@ -384,6 +386,10 @@ export function createCanvasSession(options: CanvasSessionOptions) {
     await options.authorize?.();
     if (disposed) return;
     if (!cached && !(await options.exists())) {
+      if (options.requireShared)
+        throw new Error(
+          'Canvas shared content is not initialized. Creation must complete before opening it.'
+        );
       if (disposed) return;
       if (!options.canEdit()) setState({ t: 'unshared' });
       else {
@@ -413,7 +419,9 @@ export function createCanvasSession(options: CanvasSessionOptions) {
     if (disposed) return;
     if (initial.isErr()) {
       if (!started && state().t !== 'unshared')
-        throw new Error('Unable to connect to this canvas.');
+        throw new Error(
+          `Canvas initial sync failed (${initial.error.type}; connection: ${SyncSourceStatus[opened.source.status()]}). Your local data was preserved.`
+        );
       return;
     }
     await accept(initial.value);

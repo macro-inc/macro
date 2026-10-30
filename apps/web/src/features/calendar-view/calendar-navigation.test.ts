@@ -103,4 +103,18 @@ describe('Calendar view navigation', () => {
       }
     );
   });
+
+  it('says whether the Calendar opened', () => {
+    const opened = {
+      getSplitByContent: vi.fn(),
+      openWithSplit: vi.fn(() => ({ status: 'navigating' })),
+    } as unknown as SplitManager;
+    const unavailable = {
+      getSplitByContent: vi.fn(),
+      openWithSplit: vi.fn(() => ({ status: 'unavailable' })),
+    } as unknown as SplitManager;
+
+    expect(openCalendarView({}, { manager: opened })).toBe(true);
+    expect(openCalendarView({}, { manager: unavailable })).toBe(false);
+  });
 });

@@ -1,7 +1,11 @@
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import { type QueryClient, useQuery } from '@tanstack/solid-query';
+import {
+  type QueryClient,
+  queryOptions,
+  useQuery,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
@@ -15,36 +19,37 @@ type WarmSession = {
   expires: number;
 };
 
+function warmAgentSessionQueryOptions(owner: string | undefined) {
+  return queryOptions({
+    queryKey: agentSessionWarmKeys.owner(owner).queryKey,
+    enabled: !!owner,
+    staleTime: CLIENT_WARM_TTL_MS,
+    gcTime: CLIENT_WARM_TTL_MS,
+    retry: false,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      if (!owner) return null;
+      // Keep one reservation in flight across Home -> Agents navigation.
+      // Aborting on unmount would abandon its server ID and warm another.
+      const result = await throwOnErr(() =>
+        agentHarnessServiceClient.warm(uuidv7())
+      );
+      if (result.session) {
+        return {
+          id: result.session.id,
+          model: result.session.model,
+          instructions: result.session.instructions,
+          expires: Date.now() + CLIENT_WARM_TTL_MS,
+        } satisfies WarmSession;
+      }
+      return null;
+    },
+  });
+}
+
 /** Best-effort speculation; never read its data into a Suspense boundary. */
 export function useWarmAgentSessionQuery(userId: Accessor<string | undefined>) {
-  return useQuery(() => {
-    const owner = userId();
-    return {
-      queryKey: agentSessionWarmKeys.owner(owner).queryKey,
-      enabled: !!owner,
-      staleTime: CLIENT_WARM_TTL_MS,
-      gcTime: CLIENT_WARM_TTL_MS,
-      retry: false,
-      refetchOnWindowFocus: false,
-      queryFn: async () => {
-        if (!owner) return null;
-        // Keep one reservation in flight across Home -> Agents navigation.
-        // Aborting on unmount would abandon its server ID and warm another.
-        const result = await throwOnErr(() =>
-          agentHarnessServiceClient.warm(uuidv7())
-        );
-        if (result.session) {
-          return {
-            id: result.session.id,
-            model: result.session.model,
-            instructions: result.session.instructions,
-            expires: Date.now() + CLIENT_WARM_TTL_MS,
-          } satisfies WarmSession;
-        }
-        return null;
-      },
-    };
-  });
+  return useQuery(() => warmAgentSessionQueryOptions(userId()));
 }
 
 /** Why a new session did or did not start on a warm reservation. */

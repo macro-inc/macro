@@ -22,4 +22,25 @@ describe('onboarding resume', () => {
     expect(restoreOnboardingStep(undefined, true)).toBe('plan');
     expect(restoreOnboardingStep('work', true)).toBe('plan');
   });
+
+  it('opens a valid step link when nothing is saved', () => {
+    expect(restoreOnboardingStep(undefined, false, 'plan')).toBe('plan');
+    expect(restoreOnboardingStep(undefined, false, 'work')).toBe('work');
+  });
+
+  it('ignores an unknown step link', () => {
+    expect(restoreOnboardingStep(undefined, false, 'nope')).toBe('welcome');
+    expect(restoreOnboardingStep(undefined, false, 'email')).toBe('welcome');
+    expect(restoreOnboardingStep(undefined, false, 'building')).toBe('welcome');
+  });
+
+  it('prefers saved progress over the step link', () => {
+    expect(restoreOnboardingStep('team', false, 'plan')).toBe('team');
+    expect(restoreOnboardingStep('email', false, 'plan')).toBe('work');
+  });
+
+  it('lets a checkout return beat saved progress and the step link', () => {
+    expect(restoreOnboardingStep('work', true, 'team')).toBe('plan');
+    expect(restoreOnboardingStep(undefined, true, 'welcome')).toBe('plan');
+  });
 });

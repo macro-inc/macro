@@ -1,7 +1,7 @@
 import { Bar } from '@core/component/TopBar/Bar';
 import { useContacts } from '@core/user';
-import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
-import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
+import Refresh from '@icon/system/regular/arrow-clockwise.svg?component-solid';
+import Copy from '@icon/system/regular/copy.svg?component-solid';
 import { useHistoryQuery } from '@queries/history/history';
 import { Button, Layer } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
@@ -90,8 +90,9 @@ const DataDebug: Component = () => {
           </div>
         }
         center={
-          <Button variant="outline" onClick={handleRefresh}>
-            <Refresh /> Refresh
+          <Button variant="secondary" onClick={handleRefresh}>
+            <Refresh class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
+            Refresh
           </Button>
         }
       ></Bar>

@@ -9,7 +9,7 @@ only through a channel share.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-createdat"></a> `createdAt` | `string` | When the request was made, or last reopened. |
+| <a id="property-createdat"></a> `createdAt` | `string` | When the request was made. |
 | <a id="property-eventid"></a> `eventId` | `string` | The sharer's event entity that was shared with the channel. |
 | <a id="property-id"></a> `id` | `string` | Request identifier. |
 | <a id="property-requesteremail"></a> `requesterEmail` | `string` | Address the sharer invites when accepting. |

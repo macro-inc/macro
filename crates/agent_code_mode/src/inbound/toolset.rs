@@ -1,7 +1,7 @@
 //! SDK discovery and one awaited code execution exposed as ordinary tools.
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionReceipt, SessionCodeMode, TaskDocumentation, UserCodeMode,
-    UserExecutionReceipt, documentation_for_task,
+    CodeModeError, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
+    TaskDocumentation, UserCodeMode, UserExecutionReceipt, documentation_for_task, read_symbols,
 };
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
@@ -36,6 +36,7 @@ pub fn toolset() -> AsyncToolCollection<CodeModeToolContext> {
     AsyncToolCollection::new()
         .add_tool::<ExecuteCode, CodeModeToolContext>()
         .add_tool::<DescribeCodeTools, CodeModeToolContext>()
+        .add_tool::<ReadCodeDocs, CodeModeToolContext>()
 }
 
 /// Facts supplied by an adapter that authenticated a user, not a session.
@@ -45,6 +46,9 @@ pub struct UserCodeModeToolContext {
     pub service: Arc<dyn UserCodeMode>,
     /// Jev, for selecting documentation by task; absent falls back to the catalog.
     pub cognition: Option<Arc<dyn Cognition>>,
+    /// Who the authenticated request came from; the adapter builds a context
+    /// per call, so there is no default.
+    pub caller: ai_toolset::ToolCaller,
 }
 
 /// Code mode for clients outside agent sessions, such as the public MCP.
@@ -52,6 +56,7 @@ pub fn user_toolset() -> AsyncToolCollection<UserCodeModeToolContext> {
     AsyncToolCollection::new()
         .add_tool::<UserExecuteCode, UserCodeModeToolContext>()
         .add_tool::<DescribeCodeTools, UserCodeModeToolContext>()
+        .add_tool::<ReadCodeDocs, UserCodeModeToolContext>()
 }
 
 /// Who discovery is written for.
@@ -83,6 +88,11 @@ pub struct ExecuteCode {
         description = "A fresh unique UUID for this execution, used to recover saved results if interrupted. Never use a placeholder, repeated-digit example, or an ID from another session. Reusing your existing ID with identical source returns its saved receipt without running again; different source is rejected. If an ID is unavailable, choose a fresh UUID."
     )]
     pub execution_id: ExecutionId,
+    /// Choose whose account authenticates every SDK operation in this execution.
+    pub acting_as: ai_toolset::actor::ToolActor,
+    /// Copy the current server-issued turn_id from the prompt's execution context.
+    /// Never reuse an ID from another turn or discover a replacement for a stale call.
+    pub turn_id: macro_uuid::Uuid,
     /// A JavaScript ES module, with imports and an exported async main function.
     #[schemars(
         description = "JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts}) { const macro = new Macro({token, hosts}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token and hosts are supplied by the runner; never return or log the token."
@@ -119,6 +129,8 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
             .execute(
                 &context.session,
                 self.execution_id,
+                self.acting_as,
+                self.turn_id,
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
@@ -175,6 +187,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
             .service
             .execute(
                 &request.user_id,
+                &context.caller,
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
@@ -191,19 +204,19 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "DescribeCodeTools",
-    description = "Look up Macro SDK documentation for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive every relevant SDK entity reference in one call; skip it only when the references you need are already in context. Request up to five entity names together for full declarations, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
+    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
 )]
 pub struct DescribeCodeTools {
     /// What the next program must do; selects relevant references.
     #[serde(default)]
     #[schemars(
-        description = "What the program you are about to write must do, in the user's terms, e.g. 'find unread emails from Acme this week and summarize them'. Returns every relevant SDK entity reference."
+        description = "What the program you are about to write must do, in the user's terms, e.g. 'find unread emails from Acme this week and summarize them'. Returns the index of every relevant SDK entity."
     )]
     pub task: Option<String>,
-    /// Exact method names; empty means list the catalog.
+    /// Entity names whose indexes to return; empty means list the catalog.
     #[serde(default)]
     #[schemars(
-        description = "Up to five SDK entity names such as documents, email, ai, or core. Empty names, topics and task list the compact entity catalog."
+        description = "Up to five SDK entity names such as documents, email, ai, or core, for their indexes. Empty names, topics and task list the compact entity catalog."
     )]
     pub names: Vec<String>,
     /// Workflow guides to read directly, without starting a code execution.
@@ -259,7 +272,7 @@ pub struct CodeToolsDescription {
     pub guides: Vec<CodeGuide>,
     /// How to execute methods and interpret discovery results.
     pub instructions: String,
-    /// SDK entities; full declarations are omitted in the compact catalog.
+    /// SDK entities; indexes are omitted in the compact catalog.
     pub tools: Vec<CodeToolDescription>,
 }
 
@@ -364,10 +377,10 @@ impl DescribeCodeTools {
                 .collect::<Result<Vec<_>, _>>()?
         } else if self.topics.is_empty() && !selected {
             catalog
-                .into_iter()
-                .map(|mut doc| {
-                    doc.documentation = None;
-                    doc
+                .iter()
+                .map(|doc| CodeToolDescription {
+                    index: None,
+                    ..doc.clone()
                 })
                 .collect()
         } else {
@@ -403,6 +416,62 @@ impl DescribeCodeTools {
             instructions: instructions.into(),
             tools,
         })
+    }
+}
+
+/// Read the references of SDK symbols an entity index or reference names.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "ReadCodeDocs",
+    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; symbols it names in backticks can be read the same way."
+)]
+pub struct ReadCodeDocs {
+    /// Symbols exactly as an index or reference names them.
+    #[schemars(
+        description = "Up to ten symbols exactly as an index or reference names them, e.g. [\"TaskNamespace.create\", \"Task\"]."
+    )]
+    pub symbols: Vec<String>,
+}
+
+impl ReadCodeDocs {
+    fn read(&self) -> Result<SymbolReferences, CodeModeError> {
+        if self.symbols.is_empty() || self.symbols.len() > 10 {
+            return Err(CodeModeError::Invalid(
+                "Request between one and ten SDK symbols.".into(),
+            ));
+        }
+        Ok(read_symbols(&self.symbols))
+    }
+}
+
+impl ToolAnnotated for ReadCodeDocs {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read SDK reference");
+}
+
+#[async_trait]
+impl AsyncTool<CodeModeToolContext> for ReadCodeDocs {
+    type Output = SymbolReferences;
+
+    async fn call(
+        &self,
+        _context: ServiceContext<CodeModeToolContext>,
+        _request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        self.read().map_err(tool_error)
+    }
+}
+
+#[async_trait]
+impl AsyncTool<UserCodeModeToolContext> for ReadCodeDocs {
+    type Output = SymbolReferences;
+
+    async fn call(
+        &self,
+        _context: ServiceContext<UserCodeModeToolContext>,
+        _request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        self.read().map_err(tool_error)
     }
 }
 

@@ -25,6 +25,13 @@ vi.mock(
 vi.mock('@app/features/soup/search/context', () => ({
   SearchProvider: (props: { children: unknown }) => props.children,
 }));
+vi.mock('@app/features/notification-sounds/use-notification-sounds', () => ({
+  notificationSoundFor: () => null,
+  useNotificationSounds: () => {},
+}));
+vi.mock('@app/lib/i18n/use-interface-language-sync', () => ({
+  useInterfaceLanguageSync: () => {},
+}));
 vi.mock('@app/lib/queries/calendar/graphql/use-calendar-cache', () => ({
   useCalendarCache: () => {},
 }));
@@ -51,6 +58,7 @@ vi.mock('@core/context/team', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'test-user',
+  useUserInfo: () => () => ({ userId: 'test-user' }),
   useIsAuthenticated: () => () => true,
 }));
 vi.mock('@core/orchestrator', () => ({

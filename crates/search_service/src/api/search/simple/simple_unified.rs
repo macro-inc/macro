@@ -1,4 +1,4 @@
-use crate::api::search::simple::filter::FilterVariantToSearchArgs;
+use crate::api::search::simple::filter::{FilterVariantToSearchArgs, ScopedCalendarEventFilters};
 
 use crate::api::search::crm_company;
 use crate::api::search::simple::{simple_channel, simple_chat};
@@ -129,7 +129,7 @@ fn compute_next_cursor(
     }
 }
 
-use crate::api::search::terms::split_search_terms;
+use crate::api::search::terms::{drop_wordless_terms, record_term_counts, split_search_terms};
 
 /// Per-request cap on whitespace-delimited search terms. Each term expands
 /// into its own `has_child` clause and is embedded in every clause's highlight
@@ -186,7 +186,16 @@ fn to_property_filter_args(filters: &[item_filters::PropertyFilter]) -> Vec<Prop
 
 /// Creates a unified search request and performs the search
 /// by calling individual simple search endpoints for each entity type
-#[tracing::instrument(skip(ctx, user_context, query_params), fields(user_id = %user_context.user_id), err)]
+#[tracing::instrument(
+    skip(ctx, user_context, query_params),
+    fields(
+        user_id = %user_context.user_id,
+        search.match_type = %req.match_type,
+        search.terms = tracing::field::Empty,
+        search.dropped_terms = tracing::field::Empty,
+    ),
+    err
+)]
 pub(in crate::api::search) async fn perform_unified_search(
     ctx: &SearchHandlerState,
     user_context: &UserContext,
@@ -235,9 +244,15 @@ pub(in crate::api::search) async fn perform_unified_search(
         return Err(SearchError::InvalidQuerySize);
     }
     let terms: Vec<String> = vec![query];
-    let search_terms = enforce_term_limits(split_search_terms(&terms))?;
-
     let match_type = req.match_type;
+    let split_terms = split_search_terms(&terms);
+    let split_count = split_terms.len();
+    let search_terms = enforce_term_limits(drop_wordless_terms(split_terms, match_type))?;
+    record_term_counts(
+        &tracing::Span::current(),
+        search_terms.len(),
+        split_count - search_terms.len(),
+    );
 
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
@@ -258,6 +273,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     let crm_company_filters = req.filters.crm_company_filters.clone();
     let should_include_crm = crm_access.is_some() && !tags_active;
 
+    let calendar_event_scope = req.calendar_event_scope;
     let search_filters = SearchEntityFilters::from(req.filters);
     let requested_sessions = search_filters
         .agent_session_filters
@@ -284,7 +300,10 @@ pub(in crate::api::search) async fn perform_unified_search(
     let doc_filters = search_filters.document_filters;
     let project_filters = search_filters.project_filters;
     let call_filters = search_filters.call_filters;
-    let calendar_event_filters = search_filters.calendar_event_filters;
+    let calendar_event_filters = ScopedCalendarEventFilters {
+        filters: search_filters.calendar_event_filters,
+        scope: calendar_event_scope,
+    };
 
     let should_include_documents = search_filters.should_include_documents;
     // A tag filter drops channels (and CRM, below) because they aren't

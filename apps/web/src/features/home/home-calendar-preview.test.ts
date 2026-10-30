@@ -6,12 +6,13 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(async () => {}),
   openCalendarView: vi.fn(),
   calendarSplit: undefined as object | undefined,
+  homeCalendarParams: {} as { period?: string },
 }));
 
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   useNavigate: () => mocks.navigate,
-  useRouteParams: () => ({}),
+  useRouteParams: () => mocks.homeCalendarParams,
   createSearchParams: () => [{}],
 }));
 vi.mock('@app/routes/routes', () => ({ homeCalendarRoute: 'home-calendar' }));
@@ -55,6 +56,7 @@ function openFromHome(options?: { activate?: boolean }) {
 afterEach(() => {
   vi.clearAllMocks();
   mocks.calendarSplit = undefined;
+  mocks.homeCalendarParams = {};
 });
 
 describe('Home calendar preview', () => {
@@ -75,6 +77,16 @@ describe('Home calendar preview', () => {
       { activate: true, referredFrom: 'home' }
     );
     expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the event in Home's own calendar while it is open beside a Calendar split", () => {
+    mocks.calendarSplit = {};
+    mocks.homeCalendarParams = { period: 'week' };
+
+    expect(openFromHome({ activate: true })).toBe(true);
+
+    expect(mocks.navigate).toHaveBeenCalledOnce();
+    expect(mocks.openCalendarView).not.toHaveBeenCalled();
   });
 
   it('retargets the open Calendar without focusing it while browsing the list', () => {

@@ -1,5 +1,7 @@
+import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { CanvasDocument } from '@block-canvas/component/CanvasDocument';
+import { SidePanel } from '@components/app/side-panel';
 import {
   getPermissions,
   hasPermissions,
@@ -8,7 +10,7 @@ import {
 import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSearchParams } from '@solidjs/router';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import type { Accessor, JSX } from 'solid-js';
 import { FileDetailLayout, FileDetailLoadGate } from '../components/FileDetail';
 import { downloadFileOperation } from '../components/file-detail-operations';
@@ -32,8 +34,13 @@ function CanvasDetailContent(props: {
     id: `${props.data.documentMetadata.documentId}:${props.data.documentMetadata.documentVersionId}`,
     name: documentDownloadName(props.data.documentMetadata, 'Unknown Filename'),
     load: async () => {
+      const blob = props.savedFile() ?? props.data.file;
+      if (!blob)
+        return err([
+          { code: 'NOT_READY', message: 'Canvas content is still loading.' },
+        ]);
       analytics.track('download', { blockType: 'canvas' });
-      return ok({ blob: props.savedFile() ?? props.data.file });
+      return ok({ blob });
     },
   }));
   const operations = [
@@ -76,9 +83,21 @@ export function CanvasDetailDocument(props: {
       documentMetadata={props.data.documentMetadata}
       userAccessLevel={props.data.userAccessLevel}
     >
+      <SidePanel.HeaderActions>
+        <AskMacroButton
+          entity={{
+            type: 'document',
+            id: props.documentId,
+            name:
+              props.data.documentMetadata.documentName ?? 'Unknown Filename',
+            fileType: 'canvas',
+          }}
+        />
+      </SidePanel.HeaderActions>
       <CanvasDocument
         documentId={props.documentId}
         file={props.data.file}
+        shared={props.data.shared}
         canEdit={canEdit()}
         locationParams={searchParams}
       >
@@ -102,6 +121,7 @@ export function CanvasDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="canvas"
       label="canvas"
       load={loadCanvasDocument}
     >

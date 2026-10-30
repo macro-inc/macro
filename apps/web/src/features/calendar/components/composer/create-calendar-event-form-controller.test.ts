@@ -173,6 +173,44 @@ describe('recurrence submission', () => {
     ]);
   });
 
+  // October 1, 2026 is a Thursday.
+  it('reads a weekly rule without weekdays as the weekly preset and keeps its text', () => {
+    const controller = controllerFor(
+      { ...recurringValue, recurrenceLines: ['RRULE:FREQ=WEEKLY'] },
+      { isEdit: true }
+    );
+    expect(controller.recurrenceChoice()).toBe('weekly');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY',
+    ]);
+
+    // The rule follows the start, as the preset does.
+    controller.setStart('2026-10-02T18:00');
+    controller.setField('end', '2026-10-02T18:30');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY',
+    ]);
+  });
+
+  it('opens a weekly rule with an end but no weekdays on the start’s weekday', () => {
+    const controller = controllerFor(
+      { ...recurringValue, recurrenceLines: ['RRULE:FREQ=WEEKLY;COUNT=3'] },
+      { isEdit: true }
+    );
+    expect(controller.recurrenceChoice()).toBe('custom');
+    expect(controller.customConfig().byDay).toEqual(['TH']);
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY;COUNT=3',
+    ]);
+
+    // Moved to Friday, the series keeps the Thursday the editor shows.
+    controller.setStart('2026-10-02T18:00');
+    controller.setField('end', '2026-10-02T18:30');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=TH;COUNT=3',
+    ]);
+  });
+
   it('converts UNTIL when changing a timed event to all-day', () => {
     const controller = controllerFor(
       {

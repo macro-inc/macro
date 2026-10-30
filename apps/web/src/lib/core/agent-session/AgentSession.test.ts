@@ -143,6 +143,8 @@ function invalidate(id = SESSION) {
   for (const listener of updates.listeners) listener({ agentSessionId: id });
 }
 
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@app/lib/analytics', () => ({ analytics }));
 vi.mock('@core/agent-fold/client', () => fold);
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: harness,
@@ -307,6 +309,55 @@ describe('AgentSession', () => {
     // Same id back: nothing to reconcile.
     expect(inputs().filter((input) => input.kind === 'retracted')).toEqual([]);
     expect(events).toEqual([[speculated]]);
+    live.release();
+  });
+
+  it('counts an accepted prompt as an agent AI message, and nothing else', async () => {
+    harness.get.mockResolvedValue(ok({ ...session, botId: 'bot-id' }));
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({ type: 'stop' });
+    await live.issue({ type: 'prompt', prompt: 'hi' });
+    harness.control.mockResolvedValueOnce(err([{ code: 'FORBIDDEN' }]));
+    await live.issue({ type: 'prompt', prompt: 'refused' });
+    await settle();
+
+    expect(analytics.track.mock.calls).toEqual([
+      [
+        'ai_message_sent',
+        {
+          surface: 'agent',
+          agentSessionId: SESSION,
+          agentId: 'bot-id',
+          newSession: false,
+          submitSurface: 'agent_session',
+          queued: false,
+          attachmentCount: 0,
+        },
+      ],
+    ]);
+    live.release();
+  });
+
+  it('reports the files an accepted prompt carries on its AI message', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await live.issue({
+      type: 'prompt',
+      prompt: 'see these',
+      attachments: [
+        { uri: 'https://files.test/a', name: 'a.pdf' },
+        { uri: 'https://files.test/b', name: 'b.png' },
+      ],
+    });
+    await settle();
+
+    expect(analytics.track).toHaveBeenCalledExactlyOnceWith(
+      'ai_message_sent',
+      expect.objectContaining({ surface: 'agent', attachmentCount: 2 })
+    );
     live.release();
   });
 

@@ -31,6 +31,7 @@ import { operationSettled } from '../email-message/core/message-operation';
 import { EmailMessageOperation } from '../email-message/email-message-operation';
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
+import type { InvitationRenderOptions } from '../email-message/views/email-message';
 import {
   type CalendarInvitationOpenTarget,
   EmailCalendarInvitation,
@@ -121,7 +122,8 @@ export function EmailThread(props: EmailThreadProps) {
       ),
       renderInvitation: (
         message: EmailMessage,
-        invitation: CalendarInvitation
+        invitation: CalendarInvitation,
+        options?: InvitationRenderOptions
       ) => (
         <EmailCalendarInvitation
           threadId={props.threadId()}
@@ -129,6 +131,8 @@ export function EmailThread(props: EmailThreadProps) {
           invitation={invitation}
           hour12={calendarPreferences.timeFormat !== '24-hour'}
           openCalendar={props.openCalendar}
+          onNavigate={options?.onNavigate}
+          inCalendarFile={options?.inCalendarFile}
         />
       ),
       openAttachment: createEmailAttachmentOpener(),

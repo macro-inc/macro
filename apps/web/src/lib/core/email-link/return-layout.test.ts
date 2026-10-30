@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   consumeInboxLinkReturn,
+  readInboxLinkReturn,
   rememberInboxLinkReturn,
 } from './return-layout';
 
@@ -19,6 +20,45 @@ describe('inbox link return layout', () => {
 
     expect(consumeInboxLinkReturn(LINK_ID)).toEqual({
       url: '/calendar/view/component/documents?preview=0#sel',
+    });
+  });
+
+  it('round-trips the permissions the flow asked consent for', () => {
+    rememberInboxLinkReturn(LINK_ID, {
+      url: '/calendar/week',
+      scopes: 'gmail_and_calendar',
+    });
+
+    expect(consumeInboxLinkReturn(LINK_ID)).toEqual({
+      url: '/calendar/week',
+      scopes: 'gmail_and_calendar',
+    });
+  });
+
+  it('drops permissions it does not recognize', () => {
+    sessionStorage.setItem(
+      'macro:inbox-link:return-layout',
+      JSON.stringify({ linkId: LINK_ID, url: '/home', scopes: 'everything' })
+    );
+
+    expect(consumeInboxLinkReturn(LINK_ID)).toEqual({ url: '/home' });
+  });
+
+  it('reads without clearing, so the callback can look before it leaves', () => {
+    rememberInboxLinkReturn(LINK_ID, { url: '/home', scopes: 'gmail' });
+
+    expect(readInboxLinkReturn(LINK_ID)).toEqual({
+      url: '/home',
+      scopes: 'gmail',
+    });
+    expect(readInboxLinkReturn(LINK_ID)).toEqual({
+      url: '/home',
+      scopes: 'gmail',
+    });
+    expect(readInboxLinkReturn('other-link')).toBeUndefined();
+    expect(consumeInboxLinkReturn(LINK_ID)).toEqual({
+      url: '/home',
+      scopes: 'gmail',
     });
   });
 

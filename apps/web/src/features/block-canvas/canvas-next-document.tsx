@@ -74,6 +74,7 @@ function CanvasDocumentSession(
   const session = createCanvasSession({
     documentId,
     initial,
+    requireShared: props.shared,
     userId: userId(),
     canEdit,
     ...sync,
@@ -158,6 +159,8 @@ function CanvasDocumentSession(
                 );
               props.registerMethods?.({
                 exportCanvas: async () => {
+                  if (props.shared && !doc)
+                    throw new Error('Shared Canvas content is not loaded');
                   if (canEdit()) finishText();
                   return doc
                     ? readSharedCanvas(doc, documentId)
@@ -287,6 +290,7 @@ function CanvasDocumentSession(
           const current = editor();
           if (!current) return;
           const doc = sharedDoc();
+          if (props.shared && !doc) return;
           return new Blob(
             [
               JSON.stringify(

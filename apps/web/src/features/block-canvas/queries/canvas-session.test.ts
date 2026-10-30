@@ -309,3 +309,18 @@ it('replays undelivered edits before exposing a replacement document after sync 
     readSharedCanvas(await replacement).document.items['welcome-rectangle']
   ).toMatchObject({ appearance: { fill: 'gold' } });
 });
+
+it('never invents an empty seed when native content was declared ready but is missing', async () => {
+  const server = room();
+  const initialize = vi.fn(async () => {});
+  const session = open({
+    ...server,
+    requireShared: true,
+    exists: async () => false,
+    initialize,
+  });
+  await expect(ready(session)).rejects.toThrow(
+    'shared content is not initialized'
+  );
+  expect(initialize).not.toHaveBeenCalled();
+});

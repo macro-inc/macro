@@ -119,7 +119,7 @@ impl ConnectionRepo for MockConnectionRepo {
         &self,
         _entity: &EntityConnection<'_>,
         _timestamp: u64,
-    ) -> anyhow::Result<StoredConnectionEntity> {
+    ) -> anyhow::Result<Option<StoredConnectionEntity>> {
         unimplemented!()
     }
     async fn update_user_connection_last_ping(
@@ -483,6 +483,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         "test-internal-api-key".to_string(),
         call_tool_context.service.clone(),
         macro_service_urls::AppServiceUrl::local(),
+        true,
     );
     let forms_tool_context = ai_tools::build_forms_tool_context(
         pool.clone(),
@@ -499,7 +500,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let tool_service_context = ai_tools::ToolServiceContext {
         cognition_tool_context: Default::default(),
-        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None),
+        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
@@ -532,6 +533,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             "test-internal-api-key".to_string(),
             call_tool_context.service.clone(),
             macro_service_urls::AppServiceUrl::local(),
+            true,
         ),
         team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(pool.clone(), true),
         notification_tool_context: notification_tool_context.clone(),
@@ -541,6 +543,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
+        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
@@ -608,15 +611,18 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     properties_service.clone(),
                 ),
             team_repository: ai_tools::build_team_repository(pool.clone()),
+            initiative_service: tool_service_context.initiative_tool_context.service.clone(),
+            project_service: tool_service_context.project_tool_context.service.clone(),
+            databases_service: tool_service_context.databases_tool_context.service.clone(),
+            document_service: document_tool_context.service.clone(),
         };
+        let pipedream_connections = Arc::new(
+            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
+        );
         let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
             Arc::new(mcp_select::McpToolSelector::new(
                 Arc::new(mcp_repo.clone()),
-                Arc::new(
-                    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
-                        pool.clone(),
-                    ),
-                ),
+                pipedream_connections.clone(),
                 Arc::new(None),
             ));
         let import_service = Arc::new(
@@ -629,13 +635,17 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             .with_slack_source(Arc::new(
                 import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
             ))
+            .with_notion_connections(Arc::new(
+                import_notion::outbound::pipedream::PipedreamNotionConnections::new(
+                    pipedream_connections,
+                    None,
+                ),
+            ))
             .with_admission(admission.clone()),
         );
         let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(pool.clone()),
             Arc::new(mcp_repo),
-            import_service.clone(),
-            mcp_selector.clone(),
         ));
         (import_service, onboarding_service, mcp_selector)
     };
@@ -706,8 +716,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         search_service_client,
         email_service_client_external,
         authorization_state: authorization_state.clone(),
+
         decisions: Arc::new(jev::domain::decisions::DecisionServiceImpl::<
-            jev::domain::JevClassifier<jev::outbound::TypesafeJev>,
+            jev::domain::JevClassifier<jev::outbound::SystemOneJev>,
         >::new(None, admission.clone())),
         tool_free_completions: Arc::new(
             crate::cognition::service::structured_completion::ToolFreeCompletionService::new(

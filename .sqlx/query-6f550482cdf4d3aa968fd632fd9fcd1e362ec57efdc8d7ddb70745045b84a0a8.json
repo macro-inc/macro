@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_pairing (id, account_id, user_id, generation, state, expected_identity_jid, expires_at)\n            SELECT $1, a.id, a.user_id, a.generation, 'waiting', $3, clock_timestamp() + make_interval(secs => $4)\n            FROM whatsapp_linked_account a WHERE a.id = $2\n            RETURNING id, account_id, state, expires_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6f550482cdf4d3aa968fd632fd9fcd1e362ec57efdc8d7ddb70745045b84a0a8"
+}

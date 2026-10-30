@@ -144,6 +144,9 @@ export function createDriveState(options: {
     setFavoritesOpen: (favoritesOpen: boolean) =>
       setState((current) => ({ ...current, favoritesOpen })),
 
+    setDatabasesOpen: (databasesOpen: boolean) =>
+      setState((current) => ({ ...current, databasesOpen })),
+
     setRootOpen: (rootOpen: boolean) =>
       setState((current) => ({ ...current, rootOpen })),
   };

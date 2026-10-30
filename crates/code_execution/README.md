@@ -46,7 +46,8 @@ for a user to submit those reviews.
 | Additional queued executions | 16 (public MCP: 8 more) |
 | Total execution lifetime, including queueing and API calls | 30 seconds |
 | JavaScript source | 64 KiB |
-| Final result / child frame | 256 KiB |
+| Model-facing result (larger `data` is summarized) | 64 KiB |
+| Child frame | 256 KiB |
 | Combined program stdout/stderr | 2 MiB |
 | Additional bounded SDK progress frames | 64 KiB |
 | Regular / advisory progress events | 1024 each |
@@ -72,8 +73,9 @@ Timeout, cancellation, a dropped caller, and harness shutdown kill and reap the
 child before deleting scratch. API writes already accepted by a service may
 complete afterward and must not be blindly retried. SDK operation events carry only an operation name, request identity and status.
 They are bounded diagnostics, not proof of a committed action. Console output
-and progress are program-authored and may be incomplete. W3C trace context is
-forwarded to configured service origins on authenticated requests only.
+and progress are program-authored and may be incomplete. W3C trace context and
+`x-macro-code-execution: 1` are sent to configured service origins on
+authenticated requests only.
 
 Deno shares the harness container. The heap setting does not hard-limit native
 memory, ArrayBuffers, or CPU; a container OOM can affect the harness and other

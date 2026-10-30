@@ -49,6 +49,8 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
     name: string;
     json: unknown;
     response?: { json: unknown };
+    error?: string;
+    stopped?: boolean;
     isComplete: boolean;
     renderContext: {
       renderContext: { grouped?: boolean; isStreaming: boolean };
@@ -57,6 +59,9 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
     <div
       data-testid="macro-tool"
       data-response={JSON.stringify(props.response?.json)}
+      data-error={props.error}
+      data-stopped={String(props.stopped ?? false)}
+      data-complete={String(props.isComplete)}
       data-grouped={String(props.renderContext.renderContext.grouped)}
       data-streaming={String(props.renderContext.renderContext.isStreaming)}
     >
@@ -412,25 +417,31 @@ describe('ToolCallPart Macro tools', () => {
       { name: 'ReadContent', status: 'running', ...overrides }
     );
 
-  it('keeps a running Macro tool on the compact active row', () => {
+  it('renders a running Macro tool through its renderer while it runs', () => {
     const rendered = render(() => (
       <ToolCallPart part={readContent()} context={context(true)} />
     ));
-    expect(rendered.getByTestId('title').textContent).toBe('ReadContent');
-    expect(rendered.getAllByTestId('tool-card')).toHaveLength(1);
-    expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.dataset.complete).toBe('false');
+    expect(richTool.dataset.streaming).toBe('true');
+    expect(richTool.dataset.stopped).toBe('false');
+    expect(richTool.dataset.response).toBeUndefined();
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 
   it('marks a Macro call cut off by the turn as stopped', () => {
     // The turn ended with this call still `running` in the log; it settles
-    // and, with no response to show, keeps the labelled card.
+    // and renders through its renderer as stopped, with no response.
     const rendered = render(() => (
       <ToolCallPart part={readContent()} context={context(false)} />
     ));
-    expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.dataset.stopped).toBe('true');
+    expect(richTool.dataset.complete).toBe('true');
+    expect(richTool.dataset.streaming).toBe('false');
   });
 
-  it('keeps a stopped call labelled even when it already has renderable output', () => {
+  it('withholds the output of a stopped call even when it would render', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={readContent({
@@ -444,8 +455,9 @@ describe('ToolCallPart Macro tools', () => {
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('trailing').textContent).toBe('Stopped');
-    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.dataset.stopped).toBe('true');
+    expect(richTool.dataset.response).toBeUndefined();
   });
 
   it('reuses the registered result renderer without an outer tool disclosure', () => {
@@ -530,24 +542,75 @@ describe('ToolCallPart Macro tools', () => {
     expect(rendered.getByTestId('tool-card')).not.toBeNull();
   });
 
-  it('shows a failed Macro tool as a faded summary', () => {
+  it('shows a failed Macro tool through its renderer with the reason and no result', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse(
           {
             kind: 'macro',
             input: { limit: 5 },
-            output: null,
-            error: 'permission denied',
+            output: 'Failed to list entities: permission denied',
+            error: 'Failed to list entities: permission denied',
           },
           { name: 'ListEntities', status: 'failed' }
         )}
         context={context(false)}
       />
     ));
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.textContent).toBe('ListEntities');
+    expect(richTool.dataset.error).toBe(
+      'Failed to list entities: permission denied'
+    );
+    expect(richTool.dataset.response).toBeUndefined();
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it('treats a result that reports no success as a failure with its message', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'macro',
+            input: {
+              documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
+              documentName: 'Plan',
+            },
+            output: {
+              success: false,
+              documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
+              message: 'Only the owner can rename',
+            },
+            error: null,
+          },
+          { name: 'RenameDocument' }
+        )}
+        context={context(false)}
+      />
+    ));
+    const richTool = rendered.getByTestId('macro-tool');
+    expect(richTool.dataset.error).toBe('Only the owner can rename');
+    expect(richTool.dataset.response).toBeUndefined();
+  });
+
+  it('keeps a failed call whose arguments do not fit its schema on the card', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={readContent({
+          status: 'failed',
+          detail: {
+            kind: 'macro',
+            input: { documentId: 'not-a-uuid' },
+            output: null,
+            error: 'not found',
+          },
+        })}
+        context={context(false)}
+      />
+    ));
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
-    expect(rendered.getByTestId('tool-card').dataset.expandable).toBe('false');
   });
 });
 
@@ -1137,8 +1200,12 @@ describe('ToolCallPart result summaries', () => {
   it.each([
     {
       name: 'MoveToProject',
-      input: {},
+      input: {
+        entityType: 'document',
+        entityId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46',
+      },
       output: { success: false, message: 'Denied' },
+      reason: 'Denied',
     },
     {
       name: 'WebFetch',
@@ -1150,6 +1217,7 @@ describe('ToolCallPart result summaries', () => {
           error_code: 'url_not_accessible',
         },
       },
+      reason: 'url_not_accessible',
     },
     {
       name: 'WebSearch',
@@ -1161,10 +1229,11 @@ describe('ToolCallPart result summaries', () => {
           error_code: 'unavailable',
         },
       },
+      reason: 'unavailable',
     },
   ])(
     'shows a validated $name response failure even if the call completed',
-    ({ name, input, output }) => {
+    ({ name, input, output, reason }) => {
       const rendered = render(() => (
         <ToolCallPart
           part={toolUse(
@@ -1174,9 +1243,10 @@ describe('ToolCallPart result summaries', () => {
           context={context(false)}
         />
       ));
-      expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
-      expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
-      expect(rendered.queryByTestId('macro-tool')).toBeNull();
+      const richTool = rendered.getByTestId('macro-tool');
+      expect(richTool.dataset.error).toBe(reason);
+      expect(richTool.dataset.response).toBeUndefined();
+      expect(rendered.queryByTestId('tool-card')).toBeNull();
     }
   );
 
@@ -1408,6 +1478,17 @@ describe('coding agent dispatch', () => {
 });
 
 describe('code execution results', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+  });
+
   const executionId = '019a0000-0000-7000-8000-000000000001';
   const codePart = (server: string): ToolUsePart => ({
     kind: 'tool_use',
@@ -1471,7 +1552,7 @@ describe('code execution results', () => {
     };
   });
 
-  it('hides source and shows observed parallel operation counts', () => {
+  it('hides source and folds observed SDK ops into the peek window', () => {
     codeQuery.record = {
       ...codeQuery.record!,
       activity: [
@@ -1490,42 +1571,61 @@ describe('code execution results', () => {
     expect(rendered.container.textContent).not.toContain(
       'return { count: 1 };'
     );
-    const rows = rendered.getAllByTestId('tool-card');
-    const classification = rows.find((row) =>
-      row.textContent?.includes('Classify content')
-    );
-    expect(classification?.textContent).toContain(
-      '1 completed · 1 outcome unknown'
-    );
-    expect(classification?.dataset.status).toBe('completed');
-    const read = rows.find((row) =>
-      row.textContent?.includes('Read documents')
-    );
-    expect(read?.textContent).toContain('1 failed');
-    expect(read?.dataset.status).toBe('failed');
+    const group = rendered.getByRole('button', { name: /Called 3 tools/ });
+    expect(group.getAttribute('aria-expanded')).toBe('false');
+    expect(
+      rendered
+        .queryAllByTestId('tool-card')
+        .filter((row) =>
+          /Classify content|Read documents/.test(row.textContent ?? '')
+        )
+    ).toHaveLength(0);
+
+    group.click();
+    expect(group.getAttribute('aria-expanded')).toBe('true');
+    const activity = rendered
+      .getAllByTestId('tool-card')
+      .filter((row) =>
+        /Classify content|Read documents/.test(row.textContent ?? '')
+      );
+    expect(activity).toHaveLength(3);
+    expect(activity[0].textContent).toContain('Classify content');
+    expect(activity[0].dataset.status).toBe('completed');
+    expect(activity[1].textContent).toContain('Outcome unknown');
+    expect(activity[2].dataset.status).toBe('failed');
     expect(rendered.container.textContent).not.toContain('API calls');
     expect(rendered.container.textContent).toContain('first 128 requests');
   });
 
-  it('shows active SDK operations as tool rows without an extra wrapper', () => {
+  it('opens the peek window for live SDK operations', () => {
+    vi.useFakeTimers();
     codeQuery.record = {
       ...codeQuery.record!,
       status: 'running',
       error: null,
       calls: [],
-      activity: [{ id: 1, label: 'Browse workspace', status: 'running' }],
+      activity: [
+        { id: 1, label: 'Browse workspace', status: 'completed' },
+        { id: 2, label: 'Search email', status: 'running' },
+      ],
     };
     const part = codePart('macro_internal');
     part.status = 'running';
     const rendered = render(() => (
       <ToolCallPart part={part} context={context(true)} />
     ));
-    const rows = rendered.getAllByTestId('tool-card');
-    expect(rows).toHaveLength(1);
-    expect(rows[0].textContent).toContain('Browse workspace');
-    expect(rows[0].textContent).toContain('1 running');
-    expect(rows[0].dataset.status).toBe('running');
+    const group = rendered.getByRole('button');
+    expect(group.textContent).toContain('Calling 2 tools');
     expect(rendered.container.textContent).not.toContain('Workspace activity');
+    vi.advanceTimersByTime(150);
+    expect(group.getAttribute('aria-expanded')).toBe('true');
+    const rows = rendered.getAllByTestId('tool-card');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Browse workspace');
+    expect(rows[0].dataset.status).toBe('completed');
+    expect(rows[1].textContent).toContain('Search email');
+    expect(rows[1].dataset.status).toBe('running');
+    vi.useRealTimers();
   });
 
   it('loads trusted records and keeps custom components after a script failure', () => {

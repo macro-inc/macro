@@ -25,6 +25,7 @@ name = "scheduled_action_openapi"
 path = "src/scheduling_openapi.rs"
 
 [dependencies]
+universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false }
 agent = { path = "../../crates/agent", features = ["debug-messages"] }
@@ -41,10 +42,12 @@ agent_session_realtime = { path = "../../crates/agent_session_realtime" }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 aho-corasick = "1.1.3"
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
+agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_projections = { path = "../../crates/ai_projections", features = ["agent"] }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 ai_usage = { path = "../../crates/ai_usage" }
+analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
 async-openai = { workspace = true }
 async-stream = { workspace = true }
@@ -106,6 +109,9 @@ harnesses = { path = "../../crates/harnesses", default-features = false, feature
 http = { workspace = true }
 http-body-util = { workspace = true }
 import = { path = "../../crates/import" }
+import_notion = { path = "../../crates/import_notion" }
+import_linear = { path = "../../crates/import_linear" }
+import_jira = { path = "../../crates/import_jira" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
 kafka_util = { path = "../../crates/kafka_util" }
@@ -114,6 +120,7 @@ lazy_static = { workspace = true }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 log = { workspace = true }
+lru = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = ["axum", "outbound", "postgres"] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }

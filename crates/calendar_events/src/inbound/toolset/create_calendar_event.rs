@@ -10,9 +10,9 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{
-    AttendeeInput, CalendarEventTypeInput, CalendarToolContext, EventRemindersInput,
-    EventTimeInput, OutOfOfficeInput, ToolCalendarEvent, macro_call_create_tool_error,
-    mutation_tool_error,
+    AttendeeInput, CalendarEventTypeInput, CalendarLabels, CalendarToolContext,
+    EventRemindersInput, EventTimeInput, OutOfOfficeInput, ToolCalendarEvent,
+    macro_call_create_tool_error, mutation_tool_error,
 };
 use crate::domain::{
     meeting_links::create_event_with_macro_call,
@@ -243,7 +243,10 @@ where
             )
             .await
             .map_err(macro_call_create_tool_error)?;
-            return Ok(ToolCalendarEvent::from_event_with_macro_call(&created));
+            let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
+            return Ok(ToolCalendarEvent::from_event_with_macro_call(
+                &created, &labels,
+            ));
         }
 
         let event = service_context
@@ -252,6 +255,7 @@ where
             .await
             .map_err(|error| mutation_tool_error("create the calendar event", error))?;
 
-        Ok(ToolCalendarEvent::from_event(&event))
+        let labels = CalendarLabels::load(&*service_context.mutations, &requester_id).await;
+        Ok(ToolCalendarEvent::from_event(&event, &labels))
     }
 }

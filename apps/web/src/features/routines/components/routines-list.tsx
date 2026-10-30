@@ -5,7 +5,7 @@ import {
 } from '@app/components/view-shell/ListHeader';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ClockIcon from '@phosphor/clock-clockwise.svg';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
@@ -16,6 +16,8 @@ export function RoutinesList(props: {
   loading: boolean;
   error: boolean;
   pendingId?: string;
+  /** False where the host already titles the page, as Settings does. */
+  showTitle?: boolean;
   registerSearchFocus?: (focus: () => void) => void;
   onCreate: () => void;
   onOpen: (id: string, history?: boolean) => void;
@@ -36,9 +38,11 @@ export function RoutinesList(props: {
         when={!isTouchDevice()}
         fallback={
           <ViewShell.Header>
-            <h1 class="mb-3 text-xl font-semibold tracking-[-0.03em] text-ink">
-              Routines
-            </h1>
+            <Show when={props.showTitle !== false}>
+              <h1 class="mb-3 text-xl font-semibold tracking-[-0.03em] text-ink">
+                Routines
+              </h1>
+            </Show>
             <div class="flex min-w-0 items-center justify-between gap-3">
               <SearchBar
                 ref={(input) =>
@@ -55,7 +59,7 @@ export function RoutinesList(props: {
                 class="max-w-md flex-1"
                 hotkey="cmd+f"
               />
-              <Button variant="outline" onClick={props.onCreate}>
+              <Button variant="secondary" onClick={props.onCreate}>
                 Create Routine
               </Button>
             </div>
@@ -96,9 +100,12 @@ export function RoutinesList(props: {
         aria-label="Routines"
         aria-busy={props.loading}
         tabIndex={-1}
-        class="min-h-0 min-w-0 flex-1 overflow-auto outline-none"
+        class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto outline-none"
       >
-        <div role="rowgroup" class="sticky top-0 z-1 min-w-[748px] bg-panel">
+        <div
+          role="rowgroup"
+          class="sticky top-0 z-1 min-w-[748px] bg-panel @max-[760px]/routines:hidden"
+        >
           <RoutineRowLayout
             role="row"
             class="text-xs font-medium text-ink-extra-muted"
@@ -112,7 +119,10 @@ export function RoutinesList(props: {
             </span>
           </RoutineRowLayout>
         </div>
-        <div role="rowgroup" class="min-w-[748px]">
+        <div
+          role="rowgroup"
+          class="min-w-[748px] @max-[760px]/routines:min-w-0"
+        >
           <For each={filtered()}>
             {(row) => (
               <RoutineListRow

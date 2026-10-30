@@ -477,3 +477,20 @@ in the same transform, selection, connector, clipboard, grouping and Loro paths 
 other shapes. `insertShapesCommand` inserts an ordered batch in one undo step.
 Default Solid renderers show placeholders; hosts provide asset and preview views.
 No upload, storage-service, player or application preview dependency enters core.
+
+
+### Host-measured text fitting
+
+Canvas loads Inter Variable, Playfair Display Variable and Roboto Mono Variable
+for the shared sans/serif/mono map, keeping browser and headless glyphs consistent.
+Other hosts can use the declared system fallbacks when those fonts are unavailable.
+
+`fitTextLayout(document, requests, textMeasurer)` uses the host's actual text
+renderer and returns an immutable candidate plus measured effects. The persistent
+`fitText` policy on text/labels is `grow` (preserve font and increase height),
+`contain` (explicit fixed geometry and scaling), or `error` (reject overflow).
+Shape labels reuse `measureShapeLabel` and `shapeLabelLayout`, including the safe
+ellipse interior. Hosts must remeasure text/font/wrapping-width changes and
+revalidate asynchronous measurements against concurrent edits before committing.
+AI awareness previews may carry bounded validated geometry/text and per-target
+preconditions; human previews retain their document-clock guard.

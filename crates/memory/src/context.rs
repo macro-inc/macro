@@ -15,12 +15,14 @@ pub async fn build_tool_service_context(
     pool: sqlx::PgPool,
     config: &Config,
     event_task_tracker: TaskTracker,
+    import_jobs: ai_tools::ImportJobs,
 ) -> anyhow::Result<ToolServiceContext> {
     let recorder =
         ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
     build_tool_service_context_from_env(
         pool,
         event_task_tracker,
+        import_jobs,
         config.enable_ai_usage_enforcement,
         config.ai_pricing,
         recorder,

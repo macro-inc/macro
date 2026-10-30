@@ -275,6 +275,25 @@ A handle to a user by id.
 
 ***
 
+### fromName()
+
+> `static` **fromName**(`client`, `name`): `User`
+
+A user handle seeded with an already loaded auth-service name.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+| `name` | [`UserName`](../../../../../generated/auth/types.gen/type-aliases/UserName.md) |
+
+#### Returns
+
+`User`
+
+***
+
 ### me()
 
 > `static` **me**(`client`): `Promise`\<`User`\>

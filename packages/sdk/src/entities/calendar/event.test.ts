@@ -71,3 +71,60 @@ describe('CalendarEvent', () => {
     await expect(event.title()).rejects.toBeInstanceOf(MacroError);
   });
 });
+
+/** A client whose calendar mutations record their requests and echo `record`. */
+function recordingClient() {
+  const requests: { operation: string; options: unknown }[] = [];
+  const echo =
+    (operation: string) =>
+    async (options: unknown): Promise<{ data: CalendarEventRecord }> => {
+      requests.push({ operation, options });
+      return { data: record };
+    };
+  const client = {
+    calendar: {
+      updateCalendarEvent: echo('update'),
+      deleteCalendarEvent: echo('delete'),
+      inviteCalendarEventGuests: echo('invite'),
+    },
+  } as unknown as MacroClient;
+  return { client, requests };
+}
+
+describe('naming the copy of a meeting held by several inboxes', () => {
+  test('update, delete and inviteGuests send the copy inbox', async () => {
+    const { client: recording, requests } = recordingClient();
+    const event = CalendarEvent.byId(recording, 'event-1');
+
+    await event.update({ title: 'Renamed', inbox: 'owner@example.com' });
+    await event.delete({ inbox: 'owner@example.com' });
+    await event.inviteGuests({
+      guests: [{ email: 'new@example.com' }],
+      inbox: 'owner@example.com',
+    });
+
+    expect(requests).toEqual([
+      {
+        operation: 'update',
+        options: expect.objectContaining({
+          body: expect.objectContaining({
+            title: 'Renamed',
+            inbox: 'owner@example.com',
+          }),
+        }),
+      },
+      {
+        operation: 'delete',
+        options: expect.objectContaining({
+          query: expect.objectContaining({ inbox: 'owner@example.com' }),
+        }),
+      },
+      {
+        operation: 'invite',
+        options: expect.objectContaining({
+          body: expect.objectContaining({ inbox: 'owner@example.com' }),
+        }),
+      },
+    ]);
+  });
+});

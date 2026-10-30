@@ -52,6 +52,11 @@ import {
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../database-mentions';
+import { createDatabaseDocumentNavigation } from '../navigation-adapter';
+import {
+  type DatabaseGridHost,
+  trackQueryRuns,
+} from '../primitives/track-query-runs';
 import { createColumnCasts } from '../queries/column-casts';
 import {
   addDatabaseColumnOptions,
@@ -76,6 +81,8 @@ export type DatabaseGridProps = {
   /** Host framing for the records area, below the toolbar. */
   contentClass?: string;
   databaseId: string;
+  /** Where the grid is shown, for analytics. */
+  host: DatabaseGridHost;
   table: TableDetail;
   canEdit: boolean;
   /** The view on screen: a stored one, or the table's own All records. */
@@ -157,6 +164,7 @@ function RelatedDatabaseSync(props: {
 
 function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
   const queryClient = useQueryClient();
+  const openDocumentMention = createDatabaseDocumentNavigation();
   // Keep the final schema for this table available to already-queued writes
   // after its tab is closed; a new selected table must never redirect them.
   let ownedTable = props.table;
@@ -188,6 +196,12 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     targets: linkTargets,
     onTableChanged: (listener) =>
       useDatabaseTableChanges((change) => listener(change.tableId)),
+  });
+  trackQueryRuns({
+    databaseId,
+    tableId: props.tableId,
+    host: props.host,
+    view: () => props.view,
   });
   const source = withRelationLabels(
     createDatabaseRowsSource({
@@ -347,6 +361,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 renderTextValue={renderTextValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
+                onOpenDocumentMention={openDocumentMention}
                 renderRelationCell={(cell) => (
                   <DatabaseRelationCell
                     {...cell}

@@ -40,13 +40,15 @@ import {
 } from '../utils/calendar-label';
 import {
   addedGuestEmails,
+  canForwardInvitation,
   type EventGuestEditing,
   eventGuestEditing,
+  FORWARD_INVITATION_INSTEAD,
   GUEST_EDITS_RESTRICTED,
-  GUEST_INVITES_RESTRICTED,
   guestEditsRestricted,
-  guestInvitesRestricted,
+  guestInvitesRestrictedReason,
   guestListChanged,
+  guestListHidden,
   viewerReplacesGuests,
 } from '../utils/event-guest-editing';
 import {
@@ -116,6 +118,8 @@ interface UseEventEditorProps {
    * when omitted.
    */
   guestInvitesEnabled?: Accessor<boolean>;
+  /** Whether a guest who cannot add guests may forward the invitation. */
+  invitationForwardEnabled?: Accessor<boolean>;
   /**
    * The edited event as the calendar now holds it. The lock on its details
    * follows this copy, so a guest whose organizer stops letting guests
@@ -202,9 +206,12 @@ export function useEventEditor(props: UseEventEditorProps) {
   });
   const guestsReadOnlyReason = () => {
     const event = props.event();
-    return event && guestInvitesRestricted(event)
-      ? GUEST_INVITES_RESTRICTED
-      : undefined;
+    const reason = event && guestInvitesRestrictedReason(event);
+    if (!reason) return undefined;
+    return (props.invitationForwardEnabled?.() ?? false) &&
+      canForwardInvitation(event)
+      ? `${reason} ${FORWARD_INVITATION_INSTEAD}`
+      : reason;
   };
   // A refusal means the stored guest policy was newer than the event shown,
   // so the details lock without waiting for the refetch.
@@ -512,6 +519,10 @@ export function useEventEditor(props: UseEventEditorProps) {
     disabledFields,
     addOnlyGuests: () => guestEditing() === 'add',
     guestsReadOnlyReason,
+    guestListHidden: () => {
+      const event = props.event();
+      return event !== undefined && guestListHidden(event);
+    },
     /** The organizer sets what guests may do; a new event is the viewer's own. */
     guestPolicyEditable: () =>
       (props.guestInvitesEnabled?.() ?? false) &&

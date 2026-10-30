@@ -1,4 +1,5 @@
 import { DraftTransferAborted } from '@app/features/email-compose/context/compose-capabilities';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
@@ -6,6 +7,7 @@ import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
   CreateDraftResponse,
+  TransferDraftResponse,
 } from '@service-email/generated/schemas';
 import { getGraphqlCacheHost } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
@@ -165,22 +167,24 @@ export async function transferEmailDraft(input: {
     result = recovery.committed;
   }
   // Cache refresh errors must not turn a committed move into a failed write.
-  try {
-    await getGraphqlCacheHost()?.deleteRecords([
-      `GraphqlSoupEmailMessage:${result.source_id}`,
-    ]);
-    await Promise.all([
-      refreshEmailThreadCache(result.source_thread_id),
-      refreshEmailThreadCache(result.thread_id),
-    ]);
-    for (const threadId of [result.source_thread_id, result.thread_id]) {
-      await queryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(threadId).queryKey,
-      });
-    }
-    invalidateAllSoup();
-  } catch (error) {
-    Telemetry.error(error);
-  }
+  // The caller shows the moved draft first. Evicting the source thread
+  // replaces a route that still shows it with the not-found page.
+  fireAndForget(refreshTransferredThreads(result), 'email-draft-transfer');
   return result;
+}
+
+async function refreshTransferredThreads(result: TransferDraftResponse) {
+  await getGraphqlCacheHost()?.deleteRecords([
+    `GraphqlSoupEmailMessage:${result.source_id}`,
+  ]);
+  await Promise.all([
+    refreshEmailThreadCache(result.source_thread_id),
+    refreshEmailThreadCache(result.thread_id),
+  ]);
+  for (const threadId of [result.source_thread_id, result.thread_id]) {
+    await queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(threadId).queryKey,
+    });
+  }
+  invalidateAllSoup();
 }

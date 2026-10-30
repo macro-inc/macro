@@ -9,9 +9,17 @@ import * as schemas from './schemas';
 import type * as types from './types';
 
 type ToolParserMap = {
+  AddSharedCalendarEvent: {
+    call: types.AddSharedCalendarEvent;
+    response: types.ToolCalendarEvent;
+  };
   AddToPipeline: {
     call: types.AddToPipeline;
     response: types.AddToPipelineResponse;
+  };
+  ApplyCanvasEdits: {
+    call: types.ApplyCanvasEdits;
+    response: types.CanvasResponse;
   };
   BashCodeExecution: {
     call: types.BashCodeExecution;
@@ -38,6 +46,10 @@ type ToolParserMap = {
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
+  };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
   };
   ContentSearch: {
     call: types.ContentSearch;
@@ -156,6 +168,7 @@ type ToolParserMap = {
     call: types.EditBookingLink;
     response: types.BookingLinkResult;
   };
+  EditCanvas: { call: types.EditCanvas; response: types.CanvasResponse };
   EditChannelMessage: {
     call: types.EditChannelMessage;
     response: types.EditChannelMessageResponse;
@@ -225,6 +238,18 @@ type ToolParserMap = {
   ImportCompaniesCsv: {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
+  };
+  ImportFromJira: {
+    call: types.ImportFromJira;
+    response: types.TrackerImportResponse;
+  };
+  ImportFromLinear: {
+    call: types.ImportFromLinear;
+    response: types.TrackerImportResponse;
+  };
+  ImportFromNotion: {
+    call: types.ImportFromNotion;
+    response: types.ImportFromNotionResponse;
   };
   ImportNotionPage: {
     call: types.ImportNotionPage;
@@ -354,10 +379,15 @@ type ToolParserMap = {
     call: types.ReadBookingSettings;
     response: types.BookingSettingsResult;
   };
+  ReadCalendarEvent: {
+    call: types.ReadCalendarEvent;
+    response: types.ReadCalendarEventResponse;
+  };
   ReadCallRecord: {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
   };
+  ReadCanvas: { call: types.ReadCanvas; response: types.CanvasResponse };
   ReadChannelMessageContext: {
     call: types.ReadChannelMessageContext;
     response: types.ReadChannelMessageContextResponse;
@@ -371,6 +401,7 @@ type ToolParserMap = {
     response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
+  ReadCodeDocs: { call: types.ReadCodeDocs; response: types.SymbolReferences };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadDiscussion: {
@@ -427,6 +458,7 @@ type ToolParserMap = {
     response: types.RenameDocumentResponse;
   };
   RenameItem: { call: types.RenameItem; response: types.RenameItemResponse };
+  RenderCanvas: { call: types.RenderCanvas; response: types.CanvasRender };
   ResolveComment: {
     call: types.ResolveComment;
     response: types.ResolveCommentResponse;
@@ -523,9 +555,17 @@ type ToolParserMap = {
 };
 
 const toolParserMap = {
+  AddSharedCalendarEvent: {
+    call: schemas.AddSharedCalendarEvent,
+    response: schemas.ToolCalendarEvent,
+  },
   AddToPipeline: {
     call: schemas.AddToPipeline,
     response: schemas.AddToPipelineResponse,
+  },
+  ApplyCanvasEdits: {
+    call: schemas.ApplyCanvasEdits,
+    response: schemas.CanvasResponse,
   },
   BashCodeExecution: {
     call: schemas.BashCodeExecution,
@@ -552,6 +592,10 @@ const toolParserMap = {
   ConfigureBot: {
     call: schemas.ConfigureBot,
     response: schemas.ConfigureBotResponse,
+  },
+  ConnectMcpServer: {
+    call: schemas.ConnectMcpServer,
+    response: schemas.ConnectMcpServerResponse,
   },
   ContentSearch: {
     call: schemas.ContentSearch,
@@ -676,6 +720,7 @@ const toolParserMap = {
     call: schemas.EditBookingLink,
     response: schemas.BookingLinkResult,
   },
+  EditCanvas: { call: schemas.EditCanvas, response: schemas.CanvasResponse },
   EditChannelMessage: {
     call: schemas.EditChannelMessage,
     response: schemas.EditChannelMessageResponse,
@@ -754,6 +799,18 @@ const toolParserMap = {
   ImportCompaniesCsv: {
     call: schemas.ImportCompaniesCsv,
     response: schemas.ImportCompaniesCsvResponse,
+  },
+  ImportFromJira: {
+    call: schemas.ImportFromJira,
+    response: schemas.TrackerImportResponse,
+  },
+  ImportFromLinear: {
+    call: schemas.ImportFromLinear,
+    response: schemas.TrackerImportResponse,
+  },
+  ImportFromNotion: {
+    call: schemas.ImportFromNotion,
+    response: schemas.ImportFromNotionResponse,
   },
   ImportNotionPage: {
     call: schemas.ImportNotionPage,
@@ -904,10 +961,15 @@ const toolParserMap = {
     call: schemas.ReadBookingSettings,
     response: schemas.BookingSettingsResult,
   },
+  ReadCalendarEvent: {
+    call: schemas.ReadCalendarEvent,
+    response: schemas.ReadCalendarEventResponse,
+  },
   ReadCallRecord: {
     call: schemas.ReadCallRecord,
     response: schemas.ReadCallRecordResponse,
   },
+  ReadCanvas: { call: schemas.ReadCanvas, response: schemas.CanvasResponse },
   ReadChannelMessageContext: {
     call: schemas.ReadChannelMessageContext,
     response: schemas.ReadChannelMessageContextResponse,
@@ -921,6 +983,10 @@ const toolParserMap = {
     response: schemas.ReadChannelThreadResponse,
   },
   ReadChat: { call: schemas.ReadChat, response: schemas.ReadChatResponse },
+  ReadCodeDocs: {
+    call: schemas.ReadCodeDocs,
+    response: schemas.SymbolReferences,
+  },
   ReadContent: {
     call: schemas.ReadContent,
     response: schemas.ReadContentResponse,
@@ -989,6 +1055,7 @@ const toolParserMap = {
     call: schemas.RenameItem,
     response: schemas.RenameItemResponse,
   },
+  RenderCanvas: { call: schemas.RenderCanvas, response: schemas.CanvasRender },
   ResolveComment: {
     call: schemas.ResolveComment,
     response: schemas.ResolveCommentResponse,
@@ -1105,9 +1172,17 @@ type NamedRawTool = {
 };
 
 type ToolDataMap = {
+  AddSharedCalendarEvent: {
+    call: types.AddSharedCalendarEvent;
+    response: types.ToolCalendarEvent;
+  };
   AddToPipeline: {
     call: types.AddToPipeline;
     response: types.AddToPipelineResponse;
+  };
+  ApplyCanvasEdits: {
+    call: types.ApplyCanvasEdits;
+    response: types.CanvasResponse;
   };
   BashCodeExecution: {
     call: types.BashCodeExecution;
@@ -1134,6 +1209,10 @@ type ToolDataMap = {
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
+  };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
   };
   ContentSearch: {
     call: types.ContentSearch;
@@ -1252,6 +1331,7 @@ type ToolDataMap = {
     call: types.EditBookingLink;
     response: types.BookingLinkResult;
   };
+  EditCanvas: { call: types.EditCanvas; response: types.CanvasResponse };
   EditChannelMessage: {
     call: types.EditChannelMessage;
     response: types.EditChannelMessageResponse;
@@ -1321,6 +1401,18 @@ type ToolDataMap = {
   ImportCompaniesCsv: {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
+  };
+  ImportFromJira: {
+    call: types.ImportFromJira;
+    response: types.TrackerImportResponse;
+  };
+  ImportFromLinear: {
+    call: types.ImportFromLinear;
+    response: types.TrackerImportResponse;
+  };
+  ImportFromNotion: {
+    call: types.ImportFromNotion;
+    response: types.ImportFromNotionResponse;
   };
   ImportNotionPage: {
     call: types.ImportNotionPage;
@@ -1450,10 +1542,15 @@ type ToolDataMap = {
     call: types.ReadBookingSettings;
     response: types.BookingSettingsResult;
   };
+  ReadCalendarEvent: {
+    call: types.ReadCalendarEvent;
+    response: types.ReadCalendarEventResponse;
+  };
   ReadCallRecord: {
     call: types.ReadCallRecord;
     response: types.ReadCallRecordResponse;
   };
+  ReadCanvas: { call: types.ReadCanvas; response: types.CanvasResponse };
   ReadChannelMessageContext: {
     call: types.ReadChannelMessageContext;
     response: types.ReadChannelMessageContextResponse;
@@ -1467,6 +1564,7 @@ type ToolDataMap = {
     response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
+  ReadCodeDocs: { call: types.ReadCodeDocs; response: types.SymbolReferences };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadDiscussion: {
@@ -1523,6 +1621,7 @@ type ToolDataMap = {
     response: types.RenameDocumentResponse;
   };
   RenameItem: { call: types.RenameItem; response: types.RenameItemResponse };
+  RenderCanvas: { call: types.RenderCanvas; response: types.CanvasRender };
   ResolveComment: {
     call: types.ResolveComment;
     response: types.ResolveCommentResponse;

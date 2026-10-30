@@ -13,6 +13,12 @@ pub trait DocumentSyncPort: Send + Sync + 'static {
         document_id: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
+    /// Initialize a native Canvas with the canonical browser-compatible empty snapshot.
+    fn initialize_canvas(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
     /// Whether durable collaborative content exists for a document.
     fn exists(&self, document_id: &str) -> impl Future<Output = anyhow::Result<bool>> + Send;
 

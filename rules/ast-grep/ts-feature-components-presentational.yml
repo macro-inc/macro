@@ -13,10 +13,17 @@ note: |-
   untyped wire JSON for property-changed rows. In block-agent, `ui/` is
   the presentation layer and `component/` is the composition layer.
 files:
+  - apps/web/src/features/command/components/**
+  - apps/web/src/features/document-composer/components/**
+  - apps/web/src/features/task-composer/components/**
+  - apps/web/src/features/universal-input/components/**
+  - apps/web/src/features/saved-views/components/**
+  - apps/web/src/features/calendar-notes/components/**
   - apps/web/src/features/access-requests/components/**
   - apps/web/src/features/agent-activity/components/**
   - apps/web/src/features/agent-dms/components/**
   - apps/web/src/features/agent-conversations/components/**
+  - apps/web/src/features/local-runtime/components/**
   - apps/web/src/features/agent-interactions/components/**
   - apps/web/src/features/billing-lab/components/**
   - apps/web/src/features/paywall/components/ai-usage-limit-dialog*

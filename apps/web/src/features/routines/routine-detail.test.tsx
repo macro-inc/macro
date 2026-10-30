@@ -7,6 +7,10 @@ import type { RoutineTarget } from './core/routine-target';
 import { Routine } from './routine-detail';
 import type { HistoryRecord } from './views/routine-history';
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
+
 vi.mock('@app/lib/split-router', () => ({
   createSearchParamsCodec: () => ({}),
   createSearchParams: () => {
@@ -69,6 +73,12 @@ vi.mock('./queries/routines', () => ({
 }));
 vi.mock('./routine-triggers', () => ({
   RoutineTriggers: () => <div>Triggers</div>,
+}));
+vi.mock('./routine-template', () => ({
+  RoutineTemplatePage: (props: { scheduleId: string }) => (
+    <div>Template for {props.scheduleId}</div>
+  ),
+  openShareTemplateDialog: vi.fn(),
 }));
 vi.mock('@core/block', () => ({ useBlockId: () => 'routine-id' }));
 vi.mock('@core/component/AI/constant', () => ({
@@ -143,17 +153,23 @@ vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
 vi.mock('./routine-prompt-editor', () => ({
   RoutinePromptEditor: (props: {
     initialValue: string;
+    disabled?: boolean;
     onChange: (value: string) => void;
   }) => {
     mocks.changePrompt = props.onChange;
     return (
       <textarea
         aria-label="Instructions"
+        disabled={props.disabled}
         value={props.initialValue}
         onInput={(event) => props.onChange(event.currentTarget.value)}
       />
     );
   },
+}));
+vi.mock('./routine-apps', () => ({
+  RoutineApps: () => null,
+  createRoutineConnectedApps: () => () => new Set(),
 }));
 vi.mock('./routine-execution-picker', () => ({
   RoutineExecutionPicker: (props: {
@@ -268,6 +284,7 @@ const cron: ScheduledAction = {
     prompt: '',
   },
   enabled: true,
+  run_visibility: 'unlisted',
   configuration_revision: 1,
   created_at: '2026-09-22T12:00:00Z',
   updated_at: '2026-09-22T12:00:00Z',
@@ -363,6 +380,20 @@ function deferredSave(): {
 }
 
 describe('routine execution target autosave', () => {
+  it('shows another owner’s routine as its template, without its controls', () => {
+    setSchedules([{ ...cron, owner: 'macro|someone-else@example.com' }]);
+    render(() => <Routine />);
+    expect(screen.getByText('Template for routine-id')).toBeTruthy();
+    expect(screen.queryByLabelText('Instructions')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Run now' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Routine actions' })
+    ).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Run History' })).toBeNull();
+    mocks.changePrompt('Changed');
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   it('copies the current prompt, including unsaved edits, from the run menu', async () => {
     render(() => <Routine />);
     mocks.changePrompt('Use my latest instructions');
@@ -762,6 +793,7 @@ describe('routine editor triggers', () => {
           user_prompt: 'New instructions',
           prompt: '',
         },
+        run_visibility: 'unlisted',
       },
     });
     openActions();
@@ -774,6 +806,7 @@ describe('routine editor triggers', () => {
       enabled: true,
       task: cron.task,
       trigger: cron.trigger,
+      run_visibility: 'unlisted',
     });
     await vi.advanceTimersByTimeAsync(300);
     fireEvent.click(screen.getByText('Run now'));
@@ -786,6 +819,25 @@ describe('routine editor triggers', () => {
       { type: 'chat', id: 'chat-id' },
       { activate: true, preferNewSplit: false }
     );
+  });
+
+  it('saves whether the routine’s runs show in Home and Agents', async () => {
+    render(() => <Routine />);
+    const visibility = screen.getByRole('button', { name: 'Runs hidden' });
+    visibility.focus();
+    fireEvent.keyDown(visibility, { key: 'Enter' });
+    fireEvent.keyDown(
+      await screen.findByRole('menuitemradio', { name: 'Show runs' }),
+      { key: 'Enter' }
+    );
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledExactlyOnceWith({
+      scheduleId: 'routine-id',
+      body: expect.objectContaining({
+        task: cron.task,
+        run_visibility: 'listed',
+      }),
+    });
   });
 
   it('cancels pending saves when the editor unmounts', async () => {

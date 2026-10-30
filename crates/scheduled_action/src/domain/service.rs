@@ -24,7 +24,7 @@ use super::models::{
 use super::ports::{
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
 };
-use super::target_validation::{ModelOnlyTargets, require_explicit_agent};
+use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -138,6 +138,53 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         Ok(())
     }
 
+    async fn create(
+        &self,
+        principal: &CreationPrincipal,
+        input: CreateScheduledAction,
+        template_id: Option<Uuid>,
+    ) -> Result<ScheduledAction>
+    where
+        Targets: TaskTargetValidator,
+    {
+        let owner = principal.owner();
+        let owner_user = owner.as_user().ok_or(OwnerNotUserError {
+            owner_type: owner.owner_type(),
+        })?;
+        let input = ActionConfiguration::from(input);
+        self.check_event_management(&input.trigger)?;
+        self.check_conditions(&input.trigger)?;
+        self.targets.validate_task(&input.task, owner_user).await?;
+        let now = Utc::now();
+        let next_run_at = next_run(&input.trigger)?;
+        let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
+        let created = self
+            .repo
+            .create_action(ScheduledAction {
+                id: None,
+                owner,
+                name: input.name,
+                trigger: input.trigger,
+                kind: input.kind,
+                task: input.task,
+                enabled: input.enabled,
+                run_visibility: input.run_visibility,
+                created_at: now,
+                updated_at: now,
+                configuration_revision: ConfigurationRevision::INITIAL,
+                event_activated_at,
+                next_run_at,
+                claimed: None,
+                template_id,
+            })
+            .await?;
+        self.dispatcher_tx
+            .send(DispatchEvent::Create(created.clone()))
+            .await
+            .map_err(|e| anyhow::anyhow!("failed to dispatch create event: {e}"))?;
+        Ok(created)
+    }
+
     async fn replace_configuration(
         &self,
         mut action: ScheduledAction,
@@ -146,12 +193,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
     where
         Targets: TaskTargetValidator,
     {
-        require_explicit_agent(&action.task, &input.task)?;
+        require_explicit_selection(&action.task, &input.task)?;
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
         let configuration_changed = trigger_changed
             || action.name != input.name
             || action.kind != input.kind
-            || action.task != input.task;
+            || action.task != input.task
+            || action.run_visibility != input.run_visibility;
         let disable_only = !input.enabled && !configuration_changed;
         // A rollout gate must not prevent an owner from stopping an existing
         // event action. Deletion, history and explicit manual runs also remain available.
@@ -187,6 +235,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         action.kind = input.kind;
         action.task = input.task;
         action.enabled = input.enabled;
+        action.run_visibility = input.run_visibility;
         action.updated_at = now;
 
         let updated = self.repo.update_action(action).await?;
@@ -250,11 +299,11 @@ where
     Targets: TaskTargetValidator,
     Exe: ScheduledActionExecutor + Send + Sync + 'static,
 {
-    async fn get_action(
-        &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<ScheduledAction> {
-        self.load_granted(&receipt).await
+    async fn get_action(&self, id: Uuid) -> Result<ScheduledAction> {
+        self.repo
+            .get_action(&id)
+            .await?
+            .ok_or_else(|| ActionPolicyError::NotFound.into())
     }
 
     async fn delete_user_actions(&self, user_id: MacroUserIdStr<'static>) -> Result<()> {
@@ -297,40 +346,16 @@ where
         principal: &CreationPrincipal,
         input: CreateScheduledAction,
     ) -> Result<ScheduledAction> {
-        let owner = principal.owner();
-        let owner_user = owner.as_user().ok_or(OwnerNotUserError {
-            owner_type: owner.owner_type(),
-        })?;
-        let input = ActionConfiguration::from(input);
-        self.check_event_management(&input.trigger)?;
-        self.check_conditions(&input.trigger)?;
-        self.targets.validate_task(&input.task, owner_user).await?;
-        let now = Utc::now();
-        let next_run_at = next_run(&input.trigger)?;
-        let event_activated_at = input.trigger.event_filters().is_some().then_some(now);
-        let created = self
-            .repo
-            .create_action(ScheduledAction {
-                id: None,
-                owner,
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task: input.task,
-                enabled: input.enabled,
-                created_at: now,
-                updated_at: now,
-                configuration_revision: ConfigurationRevision::INITIAL,
-                event_activated_at,
-                next_run_at,
-                claimed: None,
-            })
-            .await?;
-        self.dispatcher_tx
-            .send(DispatchEvent::Create(created.clone()))
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to dispatch create event: {e}"))?;
-        Ok(created)
+        self.create(principal, input, None).await
+    }
+
+    async fn create_action_from_template(
+        &self,
+        principal: &CreationPrincipal,
+        input: CreateScheduledAction,
+        template_id: Uuid,
+    ) -> Result<ScheduledAction> {
+        self.create(principal, input, Some(template_id)).await
     }
 
     async fn get_actions(
@@ -355,7 +380,7 @@ where
         input: UpdateScheduledAction,
     ) -> Result<ScheduledAction> {
         let action = self.load_granted(&receipt).await?;
-        let input = input.into_configuration(action.enabled);
+        let input = input.into_configuration(&action);
         self.replace_configuration(action, input).await
     }
 
@@ -374,6 +399,7 @@ where
             kind: action.kind.clone(),
             task: action.task.clone(),
             enabled,
+            run_visibility: action.run_visibility,
         };
         self.replace_configuration(action, input).await
     }

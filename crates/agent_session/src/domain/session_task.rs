@@ -109,6 +109,8 @@ pub struct LinkedTask {
     pub url: String,
     /// Put this in the pull request description so GitHub activity reaches the task.
     pub reference: String,
+    /// Paste this `<m-document-mention>` chip whenever you name the task.
+    pub mention: String,
     /// The session's pull request, now linked to the task, if it has one.
     pub pull_request: Option<String>,
 }
@@ -321,11 +323,17 @@ where
                 if let Some(url) = &pull_request {
                     self.link_pull_request(url, &facts).await?;
                 }
+                let mention =
+                    mention_utils::serialize::task_mention(facts.id.as_str(), &facts.title)
+                        .map_err(|error| {
+                            SessionTaskError::Unavailable(rootcause::report!("{error}"))
+                        })?;
                 Ok(LinkedTask {
                     url: format!("{}/{}", self.task_url_base, facts.id.as_str()),
                     task_id: facts.id.0,
                     title: facts.title,
                     reference: facts.reference,
+                    mention,
                     pull_request,
                 })
             }

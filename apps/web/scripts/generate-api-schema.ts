@@ -175,6 +175,10 @@ const processService = async (
 		await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
 		console.log(`[${service.name}] Orval finished (${elapsed(stepStart)})`);
 
+		if (service.name === "notification-service") {
+			await $`bun ${path.resolve(import.meta.dirname, "generate-push-schema.ts")}`;
+		}
+
 		// Orval bug workaround: with input.filters, excluded schemas are not
 		// generated, but the schemas barrel still re-exports them. Drop barrel
 		// exports whose target file does not exist.

@@ -576,3 +576,43 @@ fn notification_prompt_survives_queue_persistence_and_is_identified_on_the_wire(
     assert!(!xml.contains("</m-notification>injected"));
     assert!(xml.contains("&lt;/m-notification&gt;injected"));
 }
+
+#[test]
+fn each_prompt_carries_its_own_hidden_execution_turn_without_replacing_user_content() {
+    let session = SessionId::new("acp-turn-fence");
+    let original =
+        "<m-agent-context>{\"version\":1,\"text\":\"origin\"}</m-agent-context>\nuser request";
+    let first = AgentActionId::mint();
+    let second = AgentActionId::mint();
+    for turn in [first, second] {
+        let message = AgentAction::prompt(original)
+            .to_runtime(&session, turn.to_request_id())
+            .unwrap();
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message else {
+            panic!("expected ACP prompt");
+        };
+        let ClientRequest::PromptRequest(parsed) =
+            ClientRequest::parse_message(&request.method, &request.params).unwrap()
+        else {
+            panic!("expected prompt payload");
+        };
+        let ContentBlock::Text(user_text) = &parsed.prompt[0] else {
+            panic!("expected user text")
+        };
+        assert_eq!(user_text.text, original);
+        let ContentBlock::Text(hidden) = &parsed.prompt[1] else {
+            panic!("expected hidden context")
+        };
+        let hidden = hidden.text.as_str();
+        let envelope = hidden
+            .strip_prefix("<m-agent-context>")
+            .unwrap()
+            .strip_suffix("</m-agent-context>")
+            .unwrap();
+        let context: serde_json::Value = serde_json::from_str(envelope).unwrap();
+        assert_eq!(context["version"], 1);
+        let text = context["text"].as_str().unwrap();
+        assert!(text.contains(&format!("turn_id=\"{turn}\"")));
+        assert!(!text.contains(&if turn == first { second } else { first }.to_string()));
+    }
+}

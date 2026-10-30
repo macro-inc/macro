@@ -7,6 +7,7 @@
 import type { InitiativeFiltersDueAfter } from './initiativeFiltersDueAfter';
 import type { InitiativeFiltersDueBefore } from './initiativeFiltersDueBefore';
 import type { InitiativeFiltersName } from './initiativeFiltersName';
+import type { NotificationFilters } from './notificationFilters';
 
 /**
  * Filters for initiatives.
@@ -18,14 +19,17 @@ export interface InitiativeFilters {
   due_before?: InitiativeFiltersDueBefore;
   /** Opt this query into initiatives at all. Initiatives are off by
 default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
-Asking for specific `initiative_ids` or `owners` also opts in. */
+Asking for specific `initiative_ids`, `owners` or `notification_filters`
+also opts in. */
   include?: boolean;
   /** Initiative ids to filter by. Empty to include all accessible initiatives. */
   initiative_ids?: string[];
   /** Case-insensitive name substring. */
   name?: InitiativeFiltersName;
-  /** Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-owner. */
+  /** Filter by initiative notification state. */
+  notification_filters?: NotificationFilters;
+  /** Filter by initiative owner principal — a user ('macro|user@example.com'), a
+bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+every owner. */
   owners?: string[];
 }

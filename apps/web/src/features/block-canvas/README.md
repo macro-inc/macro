@@ -3,11 +3,22 @@
 Canvas Next is the default editor for saved canvases, drive details, and embeds.
 No rollout flag or local override is required.
 
+Both the Drive detail and block hosts use `queries/document.ts` to authorize and
+select shared content before fetching a legacy file seed. Native canvases never
+require a presigned blob URL.
+
+**Ask Macro** in the Drive header and standalone title menu attaches the canvas to an agent conversation
+on desktop and mobile. `ReadCanvas` inspects its live scene; `EditCanvas` runs
+bounded SDK commands as a peer in that same Loro room. Results show acknowledged
+operation counts and expandable outcomes. Unrelated concurrent edits survive.
+Text remains a whole-string register; new media/document references and deletion
+of embedded items stay in the authorized UI flow. See the worker
+[Canvas flow](../../../../../services/ai-editing-worker/AI_EDITING.md#canvas).
+
 The frontend treats unversioned JSON (and explicit version 1) as legacy Canvas.
 It converts supported records on load to `{ version: 2, document, legacy? }`.
 `document` is the graphics scene; `legacy` retains the original JSON and migration
-notes for recovery. No migration is saved merely by viewing a file. The first editor opening a canvas initializes one versioned Loro snapshot in
-SyncService. The server serializes initialization; competing openers import only
+notes for recovery. No migration is saved merely by viewing a file. Native Canvas creation initializes the canonical versioned Loro snapshot on the backend and marks content ready in SyncService before returning. `POST /documents/create_canvas` and CreateDocument with empty Canvas content share this lifecycle. Native loading uses the content location and does not request an S3 presigned URL. The first editor opening a legacy S3 canvas migrates its scene into one versioned Loro snapshot in SyncService. The server serializes initialization; competing openers import only
 the winning seed. Subsequent opens use the shared scene and never replay the
 original JSON over live edits. JSON remains the import/export format and retains
 the legacy source for recovery.
@@ -277,6 +288,12 @@ before ending editing. Mentions retain their typed
 Lexical nodes through reopening, copy/paste, and undo, and render with the shared
 mention decorators. Canvas Next currently disables backend mention tracking and
 notifications; mentions remain part of the same whole-content LWW string.
+AI editing uses `editor.mentionUser(itemId, at, {userId, email, displayName?})`
+to insert the same chip into text or a label while preserving its rich content.
+ReadCanvas returns bounded `userMentions` identities and offsets; offsets count
+UTF-16 text, newlines, and one U+FFFC per chip. The agent resolves real people
+through supplied identities or `macro.users.search` and disambiguates matches.
+The host remeasures and revalidates the complete batch before committing.
 
 Canvas Next stores a stringified Lexical editor tree in `TextGeometry.content`,
 including shape labels. `core/text-codec.ts` owns bounded tree validation, seed
@@ -441,3 +458,26 @@ selection, and group movement. Scene hierarchy, paint order, and picking bounds
 are indexed on immutable snapshots; edits and undo replace those indexes.
 Selection outlines share a camera transform so panning does not rewrite every
 outline. Mutable scene builders continue to bypass caches.
+
+On touch layouts, keep the floating zoom/inspector below the split header so the details button and document-title file menu remain reachable.
+
+
+## AI snapshot rendering and measured fitting
+
+`canvas-render.html` mounts a read-only GraphicsSurface with the same
+CanvasTextContent/StaticLexical, CSS and text measurer as the live app. It has no
+session or persistence host and returns measured DOM text bounds. The worker uses
+it for immutable vision reads and asynchronous fitText measurements, then
+revalidates targets before its atomic write. Embedded references are explicit
+unavailable placeholders. `browser-test/render.playwright.config.ts` runs actual
+DOM fitting regressions on desktop and phone viewports.
+AI presence renders bounded validated geometry/text with per-target guards;
+reduced-motion receivers suppress AI action previews even with other observers.
+
+Precise AI changes use ApplyCanvasEdits: revision-checked CanvasEditor batches
+without a nested model. One batch can animate up to three spatial/group lanes;
+all lane previews share one dependency guard and one final atomic commit. The
+receiver expands validated lane metadata into ordinary smoothed named cursors.
+Reduced motion hides transient geometry and avoids presentation delays. The
+read-only render surface exposes resetCanvasSnapshot to dispose scene roots and
+closures before an isolated warm page is leased to another authorized request.

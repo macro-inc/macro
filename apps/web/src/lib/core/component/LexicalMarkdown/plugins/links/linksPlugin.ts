@@ -136,11 +136,39 @@ function $handleAppendToMatch(
     return;
   }
 
-  // append to the autolink node, and shift chars from the text node for each aggregate match
+  // Grow the existing autolink by shifting chars from the following text node.
+  // A non-positive shift means the rematch is not longer than the current
+  // label; applying it would shrink the label (JS substring(n<0) → 0) and can
+  // drop the character the user just typed (e.g. o after j@m.c → m.co).
   const numCharsToShift = rematch.raw.length - prevText.length;
+  if (numCharsToShift <= 0) {
+    return;
+  }
   textNode.setTextContent(nodeText.substring(numCharsToShift));
   prevLinkTextNode.setTextContent(rematch.text);
   prevSibling.setURL(rematch.url);
+}
+
+/**
+ * True when the collapsed caret sits inside or at the end of a match in
+ * `textNode`. Wrapping then fights the keystroke that completed the URL
+ * (j@m.c| → j@m.co|), which can swallow the typed character and blocks
+ * continuing into a longer TLD like .com.
+ */
+function $isCaretInsideAutoLinkMatch(
+  textNode: TextNode,
+  matchOffset: number,
+  matchLength: number
+): boolean {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || !selection.isCollapsed()) {
+    return false;
+  }
+  if (selection.anchor.key !== textNode.getKey()) {
+    return false;
+  }
+  const offset = selection.anchor.offset;
+  return offset >= matchOffset && offset <= matchOffset + matchLength;
 }
 
 function $matchAndCreateAutoLink(
@@ -149,7 +177,6 @@ function $matchAndCreateAutoLink(
 ) {
   const nodeText = textNode.getTextContent();
   const matchedLink = findNextAutoLinkMatch(nodeText, autoLinkMatchMode);
-  let currentNode = textNode;
 
   if (!matchedLink) {
     return;
@@ -157,33 +184,51 @@ function $matchAndCreateAutoLink(
 
   const matchOffset = matchedLink.index;
   const matchLength = matchedLink.raw.length;
-  let matchedNode;
 
+  if ($isCaretInsideAutoLinkMatch(textNode, matchOffset, matchLength)) {
+    return;
+  }
+
+  const selection = $getSelection();
+  const restoreAfter =
+    $isRangeSelection(selection) &&
+    selection.isCollapsed() &&
+    selection.anchor.key === textNode.getKey() &&
+    selection.anchor.offset > matchOffset + matchLength
+      ? selection.anchor.offset - (matchOffset + matchLength)
+      : null;
+
+  let matchedNode: TextNode;
+  let afterNode: TextNode | undefined;
   if (matchOffset === 0) {
-    [matchedNode, currentNode] = currentNode.splitText(matchLength);
+    [matchedNode, afterNode] = textNode.splitText(matchLength);
   } else {
-    [, matchedNode, currentNode] = currentNode.splitText(
+    [, matchedNode, afterNode] = textNode.splitText(
       matchOffset,
       matchOffset + matchLength
     );
   }
 
   const linkNode = $createAutoLinkNode(matchedLink.url);
-  linkNode.append($createTextNode(matchedLink.text));
   matchedNode.replace(linkNode);
+  linkNode.append(matchedNode);
+
+  // splitText + replace can drop the caret; put it back in the trailing text.
+  if (restoreAfter !== null && afterNode) {
+    afterNode.select(restoreAfter, restoreAfter);
+  }
 }
 
 function $convertAutoLinkToLinkNode(node: AutoLinkNode): LinkNode {
   const url = node.getURL();
-  const text = node.getTextContent();
   const linkNode = $createLinkNode(url);
-  linkNode.append($createTextNode(text));
+  const children = node.getChildren();
   node.replace(linkNode);
+  linkNode.append(...children);
   return linkNode;
 }
 
-// TODO (seamus): Improve this logic. This function should correctly dissolve any links that
-// are touched by the selection while maintaining all children and text formatting.
+// Dissolve touched links while preserving their labels and text formatting.
 function $unlinkSelection(): boolean {
   const selection = $getSelection();
   let unlinkSuccess = false;
@@ -205,7 +250,7 @@ function $unlinkSelection(): boolean {
   // Process all selected nodes
   nodes.forEach((node) => {
     const parent = node.getParent();
-    if (!node || !parent) return;
+    if (!parent?.isAttached()) return;
 
     if ($isAutoLinkNode(parent)) {
       parent.setIsUnlinked(true);
@@ -216,20 +261,17 @@ function $unlinkSelection(): boolean {
 
     if ($isLinkNode(parent)) {
       unlinkSuccess = true;
-      let newNode;
-      let text = node.getTextContent();
-      if (strictLinkifier.test(text)) {
-        newNode = $createUnlinkedTextNode(text);
-      } else {
-        newNode = $createTextNode(text);
+      // Preserve the explicit removal even when the current editor's URL
+      // policy is narrower than the importer, and retain the whole label.
+      for (const child of parent.getChildren()) {
+        const unlinked = $isTextNode(child)
+          ? $createUnlinkedTextNode().updateFromJSON(child.exportJSON())
+          : child;
+        if (child.getKey() === anchor.key) anchor.key = unlinked.getKey();
+        if (child.getKey() === focus.key) focus.key = unlinked.getKey();
+        parent.insertBefore(unlinked);
       }
-      if (node.getKey() === anchor.key) {
-        anchor.key = newNode.getKey();
-      }
-      if (node.getKey() === focus.key) {
-        focus.key = newNode.getKey();
-      }
-      parent.replace(newNode);
+      parent.remove();
     }
   });
 

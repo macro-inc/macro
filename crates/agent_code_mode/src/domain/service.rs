@@ -13,11 +13,13 @@ use super::*;
 /// Session-bound execution and reads. Inbound adapters supply authenticated facts.
 #[async_trait]
 pub trait SessionCodeMode: Send + Sync + 'static {
-    /// Execute as the authenticated session's owner, retaining source and final results.
+    /// Execute as the selected account, bound to the originating prompt's turn.
     async fn execute(
         &self,
         session: &AgentSession,
         execution: ExecutionId,
+        acting_as: ai_toolset::actor::ToolActor,
+        turn: macro_uuid::Uuid,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<ExecutionReceipt, CodeModeError>;
@@ -68,6 +70,8 @@ impl CodeModeService {
     ) -> Result<ExecutionReceipt, CodeModeError> {
         let mut record = ExecutionRecord {
             execution_id: execution,
+            acting_as: Some(identity.acting_as),
+            turn_id: Some(identity.turn),
             source: request.source.clone(),
             status: ExecutionStatus::Running,
             result: None,
@@ -91,11 +95,20 @@ impl CodeModeService {
                         ),
                         other => other,
                     })?;
-                if existing.source == request.source {
+                if existing.source == request.source
+                    && existing.acting_as == Some(identity.acting_as)
+                    && existing.turn_id == Some(identity.turn)
+                {
                     return Ok(receipt(&existing));
                 }
             }
             return Err(error);
+        }
+        if !active_turn(&self.0, &identity).await || cancel.is_cancelled() {
+            record.status = ExecutionStatus::Cancelled;
+            record.error = Some("Execution cancelled before authorization.".into());
+            self.0.store.save(identity.session, &record).await?;
+            return Ok(receipt(&record));
         }
         let environment = match self
             .0
@@ -249,6 +262,8 @@ impl SessionCodeMode for CodeModeService {
         &self,
         session: &AgentSession,
         execution: ExecutionId,
+        acting_as: ai_toolset::actor::ToolActor,
+        turn: macro_uuid::Uuid,
         request: ExecuteRequest,
         cancel: CancellationToken,
     ) -> Result<ExecutionReceipt, CodeModeError> {
@@ -256,6 +271,9 @@ impl SessionCodeMode for CodeModeService {
             return Err(CodeModeError::Unavailable);
         }
         if session.is_archived {
+            return Err(CodeModeError::Forbidden);
+        }
+        if self.0.turns.active(session.id).await? != Some(turn) || cancel.is_cancelled() {
             return Err(CodeModeError::Forbidden);
         }
         let owner = session
@@ -268,31 +286,46 @@ impl SessionCodeMode for CodeModeService {
             .map_err(|_| CodeModeError::Busy)?;
         let identity = ExecutionIdentity {
             execution,
+            acting_as,
             session: session.id,
             agent_id: session.bot_id,
             owner,
-            turn: self
-                .0
-                .turns
-                .active(session.id)
-                .await?
-                .ok_or(CodeModeError::Forbidden)?,
+            turn,
         };
         let cancel = cancel.child_token();
         let _cancel_on_drop = cancel.clone().drop_guard();
         let service = self.clone();
+        let span = tracing::info_span!(
+            "code_mode.execution",
+            agent_session_id = %session.id,
+            execution_id = %execution,
+            source_bytes = request.source.len(),
+            status = tracing::field::Empty,
+            activity = tracing::field::Empty,
+            result_bytes = tracing::field::Empty,
+        );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
         tokio::spawn(
             async move {
                 let _permit = permit;
                 let result = service.run(identity, execution, request, cancel).await;
-                if let Err(error) = &result {
-                    tracing::error!(?error, "could not finish code execution journal");
+                match &result {
+                    Ok(receipt) => {
+                        let span = tracing::Span::current();
+                        span.record("status", tracing::field::debug(receipt.status));
+                        span.record("activity", receipt.activity.len());
+                        if let Some(value) = &receipt.result {
+                            span.record("result_bytes", value.to_string().len());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::error!(?error, "could not finish code execution journal");
+                    }
                 }
                 result
             }
-            .in_current_span(),
+            .instrument(span.or_current()),
         )
         .await
         .map_err(CodeModeError::Task)?

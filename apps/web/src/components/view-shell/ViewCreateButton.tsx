@@ -1,5 +1,5 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button, type ButtonProps, cn } from '@ui';
 import { Show, splitProps } from 'solid-js';
 import { ViewSidebar } from './ViewSidebar';
@@ -22,7 +22,8 @@ export function ViewCreateButton(
   return (
     <Button
       {...rest}
-      variant="outline"
+      variant="secondary"
+      finish="raised"
       size="md"
       class={cn(
         sidebar() &&

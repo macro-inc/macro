@@ -5,10 +5,10 @@ import {
   createFileDownload,
   type FileDownloadController,
 } from '@core/util/createFileDownload';
+import ChevronLeftIcon from '@icon/system/regular/caret-left.svg';
+import ChevronRightIcon from '@icon/system/regular/caret-right.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
-import ChevronLeftIcon from '@phosphor/caret-left.svg';
-import ChevronRightIcon from '@phosphor/caret-right.svg';
-import XIcon from '@phosphor/x.svg';
 import { Button, cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
 import { mediaDownloadSource } from '../queries/static-media-download';
@@ -92,14 +92,15 @@ function VideoViewerContent(props: {
         }}
       >
         <LightboxToolbar isVisible={true}>
-          <FileDownloadButton download={props.download} />
+          <FileDownloadButton download={props.download} iconOnly />
           <Dialog.CloseButton
+            aria-label="Close"
+            tooltip="Close"
             as={Button}
             variant="ghost"
             size="icon-md"
-            label="Close"
           >
-            <XIcon />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
         </LightboxToolbar>
 

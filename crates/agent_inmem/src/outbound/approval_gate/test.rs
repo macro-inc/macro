@@ -91,9 +91,13 @@ async fn the_owners_own_turn_runs_without_asking() {
     prompted_by(&rig, Some(owner())).await;
     let verdict = rig
         .gate
-        .check(rig.session, "ListEmails", &serde_json::json!({}))
+        .check(
+            rig.session,
+            "ListEmails",
+            &serde_json::json!({"acting_as":"owner"}),
+        )
         .await;
-    assert_eq!(verdict, NativeToolVerdict::Run);
+    assert_eq!(verdict, NativeToolVerdict::RunAs(owner()));
     assert!(rig.store.all().is_empty());
 }
 
@@ -105,28 +109,31 @@ async fn somebody_elses_turn_runs_only_once_the_owner_approves() {
         Some(MacroUserIdStr::try_from_email("asker@example.com").unwrap()),
     )
     .await;
-    let arguments = serde_json::json!({ "limit": 3 });
+    let arguments = serde_json::json!({ "limit": 3, "acting_as":"owner" });
     let check = rig.gate.check(rig.session, "ListEmails", &arguments);
     let answer = async {
         rig.heard.requested.notified().await;
         let held = rig.store.all().remove(0);
         assert_eq!(held.tool_name, "ListEmails");
         assert_eq!(held.server_slug, "macro");
-        assert_eq!(held.arguments, serde_json::json!({ "limit": 3 }));
+        assert_eq!(
+            held.arguments,
+            serde_json::json!({ "limit": 3, "acting_as":"owner" })
+        );
         rig.approvals
             .answer(rig.session, held.id, ApprovalAnswer::Approve, &owner())
             .await
             .unwrap();
     };
     let (verdict, ()) = tokio::join!(check, answer);
-    assert_eq!(verdict, NativeToolVerdict::Run);
+    assert_eq!(verdict, NativeToolVerdict::RunAs(owner()));
 }
 
 #[tokio::test]
 async fn a_declined_call_is_refused_in_words_the_model_can_relay() {
     let rig = rig();
     prompted_by(&rig, None).await;
-    let arguments = serde_json::json!({});
+    let arguments = serde_json::json!({"acting_as":"owner"});
     let check = rig.gate.check(rig.session, "SendEmail", &arguments);
     let answer = async {
         rig.heard.requested.notified().await;
@@ -149,8 +156,108 @@ async fn a_public_web_search_runs_without_asking_even_for_somebody_else() {
     prompted_by(&rig, None).await;
     let verdict = rig
         .gate
-        .check(rig.session, "WebSearch", &serde_json::json!({}))
+        .check(
+            rig.session,
+            "WebSearch",
+            &serde_json::json!({"acting_as":"owner"}),
+        )
         .await;
     assert_eq!(verdict, NativeToolVerdict::Run);
     assert!(rig.store.all().is_empty());
+}
+
+#[tokio::test]
+async fn requester_access_runs_without_asking_the_session_owner() {
+    let rig = rig();
+    let asker = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    prompted_by(&rig, Some(asker.clone())).await;
+    let verdict = rig
+        .gate
+        .check(
+            rig.session,
+            "ListEmails",
+            &serde_json::json!({"acting_as":"requester"}),
+        )
+        .await;
+    assert_eq!(verdict, NativeToolVerdict::RunAs(asker));
+    assert!(rig.store.all().is_empty());
+}
+
+#[tokio::test]
+async fn missing_actor_and_system_requester_are_refused_without_using_owner_access() {
+    let rig = rig();
+    prompted_by(&rig, Some(owner())).await;
+    assert!(matches!(
+        rig.gate
+            .check(rig.session, "ListEmails", &serde_json::json!({}))
+            .await,
+        NativeToolVerdict::Refuse(_)
+    ));
+    rig.sessions
+        .set_turn_prompter(
+            rig.session,
+            &TurnPrompter {
+                kind: agent_session::domain::model::PrompterKind::System,
+                action_id: AgentActionId::mint(),
+                user: Some(owner()),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        rig.gate
+            .check(
+                rig.session,
+                "ListEmails",
+                &serde_json::json!({"acting_as":"requester"})
+            )
+            .await,
+        NativeToolVerdict::Refuse(_)
+    ));
+    assert!(rig.store.all().is_empty());
+}
+
+#[tokio::test]
+async fn code_execution_cannot_resolve_the_requester_of_a_replacement_turn() {
+    let rig = rig();
+    prompted_by(&rig, Some(owner())).await;
+    let old = rig
+        .sessions
+        .turn_prompter(rig.session)
+        .await
+        .unwrap()
+        .unwrap();
+    let requester = MacroUserIdStr::try_from_email("requester@example.com").unwrap();
+    prompted_by(&rig, Some(requester.clone())).await;
+    let current = rig
+        .sessions
+        .turn_prompter(rig.session)
+        .await
+        .unwrap()
+        .unwrap();
+    for turn in [serde_json::Value::Null, serde_json::json!(old.action_id)] {
+        let verdict = rig
+            .gate
+            .check(
+                rig.session,
+                "ExecuteCode",
+                &serde_json::json!({
+                    "acting_as": "requester", "turn_id": turn,
+                }),
+            )
+            .await;
+        assert!(matches!(verdict, NativeToolVerdict::Refuse(_)));
+    }
+    let verdict = rig
+        .gate
+        .check(
+            rig.session,
+            "ExecuteCode",
+            &serde_json::json!({
+                "acting_as": "requester", "turn_id": current.action_id,
+            }),
+        )
+        .await;
+    assert_eq!(verdict, NativeToolVerdict::RunAs(requester));
+    assert!(rig.heard.statuses.lock().unwrap().is_empty());
 }

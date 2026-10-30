@@ -165,9 +165,25 @@ fn bound_json_strings(value: &mut serde_json::Value, max_part_chars: usize) -> b
         serde_json::Value::Array(items) => items.iter_mut().fold(false, |cut, item| {
             bound_json_strings(item, max_part_chars) || cut
         }),
-        serde_json::Value::Object(map) => map.values_mut().fold(false, |cut, item| {
-            bound_json_strings(item, max_part_chars) || cut
-        }),
+        serde_json::Value::Object(map) => {
+            // Tool media has a public JSON envelope for UI/history, but inline
+            // pixels never belong in span content, even when capture is on.
+            let mut media_omitted = false;
+            if let Some(serde_json::Value::Array(media)) = map.get_mut("modelMedia") {
+                for image in media {
+                    if let Some(image) = image.as_object_mut()
+                        && let Some(serde_json::Value::String(data)) = image.remove("data")
+                    {
+                        image.insert("encodedBytes".to_owned(), data.len().into());
+                        image.insert("source".to_owned(), "inline".into());
+                        media_omitted = true;
+                    }
+                }
+            }
+            map.values_mut().fold(media_omitted, |cut, item| {
+                bound_json_strings(item, max_part_chars) || cut
+            })
+        }
         _ => false,
     }
 }

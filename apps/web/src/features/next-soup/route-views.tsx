@@ -6,6 +6,7 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { lazy, Show } from 'solid-js';
@@ -30,6 +31,7 @@ const SoupView = lazy(async () => ({
 }));
 
 function TrackedRecentView() {
+  useViewRestoration();
   usePageViewTracking('recent');
   const preset = getViewPreset('recent');
   return (
@@ -61,11 +63,13 @@ export const RecentRouteView = withAuth(() => {
 });
 
 export const CallsRouteView = withAuth(() => {
+  useViewRestoration();
   usePageViewTracking('calls');
   return <CallsView />;
 });
 
 export const FoldersRouteView = withAuth(() => {
+  useViewRestoration();
   usePageViewTracking('folders');
   const user = useUserContext();
   const preset = getViewPreset('folders', undefined, {
@@ -90,6 +94,7 @@ type SearchRouteViewParams = {
 };
 
 export const SearchRouteView = withAuth(() => {
+  useViewRestoration();
   const panel = useSplitPanelOrThrow();
   const params = (): SearchRouteViewParams => {
     const content = panel.handle.content();

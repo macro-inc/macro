@@ -243,7 +243,8 @@ function LoadedEmailComposeView(
     <ComposeProvider value={ctxValue}>
       {/* On touch devices the composer fills the screen and keeps its send
           actions in the header, so it holds the bottom accessory slot empty
-          and the page's New button cannot float over the message. */}
+          and the page's New button cannot float over the message. Persistent
+          prompts wait too, as they do over the full-screen reply composer. */}
       <FloatRegion region="accessory" />
       <Show when={!composeContext.presentation.isMobile()}>
         <SplitHeaderLeft>
@@ -260,7 +261,10 @@ function LoadedEmailComposeView(
           />
         </SplitHeaderLeft>
       </Show>
-      <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
+      <div
+        class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm"
+        data-holds-prompts
+      >
         <Show when={state.operationSource}>
           {(source) => (
             <MessageOperationRecovery

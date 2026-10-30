@@ -1,9 +1,9 @@
 import { getCallExitPath } from '@channel/Call/call-exit';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import Phone from '@icon/system/regular/phone-call.svg';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import Phone from '@phosphor/phone-call.svg';
 import { Button, Input } from '@ui';
 import {
   type Accessor,

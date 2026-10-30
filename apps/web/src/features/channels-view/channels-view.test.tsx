@@ -9,7 +9,14 @@ import {
   waitFor,
 } from '@solidjs/testing-library';
 import { CombinedError } from '@urql/core';
-import { batch, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  batch,
+  createSignal,
+  For,
+  type JSX,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,14 +31,23 @@ const mocks = vi.hoisted(() => ({
   active: (): boolean => true,
   searchOpen: (): boolean => false,
   searchText: (): string => '',
+  authenticated: (): boolean | undefined => true,
+  target: (): { messageId: string; threadId?: string } | undefined => undefined,
   sourceEnabled: (_scope: string): boolean => false,
   selectedQuery: vi.fn(),
   markRead: vi.fn(),
   resolveTarget: vi.fn(() => ({ kind: 'message', messageId: 'unread' })),
   refresh: vi.fn(async () => {}),
+  prefetchTarget: vi.fn(async () => {}),
   favoriteIds: (): string[] => [],
 }));
 
+vi.mock('@core/context/user', () => ({
+  useIsAuthenticated: () => () => mocks.authenticated(),
+}));
+vi.mock('@channel/queries/prefetch-channel-target', () => ({
+  prefetchChannelTarget: mocks.prefetchTarget,
+}));
 vi.mock('./queries/channel-list-search-pool', () => ({
   useChannelListSearchPool: () => () => [],
 }));
@@ -70,6 +86,7 @@ vi.mock('@app/components/view-shell', () => ({
     Main: mocks.pass,
     TopBar: mocks.pass,
   },
+  ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
 }));
 vi.mock('@app/features/next-soup/utils', () => ({
   getChannelEntityTarget: mocks.resolveTarget,
@@ -168,7 +185,11 @@ vi.mock('./channels-view-context', () => ({
     mobileLayout: () => mocks.mobileLayout(),
     selectedChannel: () =>
       mocks.selectedId()
-        ? { type: 'channel', id: mocks.selectedId() }
+        ? {
+            type: 'channel',
+            id: mocks.selectedId(),
+            target: mocks.target(),
+          }
         : undefined,
     setAsideWidth: vi.fn(),
   }),
@@ -189,6 +210,7 @@ vi.mock('./queries', () => ({
   useChannelsSources: (enabled: (scope: string) => boolean) => {
     mocks.sourceEnabled = enabled;
     return {
+      team_channels: { items: () => mocks.rows() },
       channels: { items: () => mocks.rows() },
       direct_messages: { items: () => mocks.rows() },
       recents: { items: () => mocks.rows() },
@@ -246,6 +268,8 @@ beforeEach(() => {
   mocks.active = () => true;
   mocks.searchOpen = () => false;
   mocks.searchText = () => '';
+  mocks.authenticated = () => true;
+  mocks.target = () => undefined;
   [mocks.selectedId, setSelectedId] = createSignal<string | undefined>('one');
   [mocks.rows, setRows] = createSignal([row('one', 'new'), row('two')]);
   const [query, update] = createStore<QueryState>({
@@ -326,6 +350,45 @@ describe('mobile dock search wiring', () => {
 });
 
 describe('channel selection loading and recovery', () => {
+  it('prefetches an explicit target while uncached channel metadata is loading', () => {
+    const target = { messageId: 'reply', threadId: 'root' };
+    mocks.target = () => target;
+    setRows([]);
+    setQuery({ isLoading: true, isFetching: true, data: undefined });
+    render(() => <ChannelsView />);
+    expect(mocks.prefetchTarget).toHaveBeenCalledExactlyOnceWith('one', target);
+    expect(
+      screen.getByRole('status', { name: 'Loading conversation' })
+    ).toBeTruthy();
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
+    setQuery({
+      isLoading: false,
+      isFetching: false,
+      data: { entities: [full('one', [])] },
+    });
+    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
+    expect(mocks.prefetchTarget).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, undefined])(
+    'waits for confirmed authentication before prefetching a target from %s',
+    (initial) => {
+      const [authenticated, setAuthenticated] = createSignal<
+        boolean | undefined
+      >(initial);
+      mocks.authenticated = authenticated;
+      const target = { messageId: 'root', threadId: 'root' };
+      mocks.target = () => target;
+      render(() => <ChannelsView />);
+      expect(mocks.prefetchTarget).not.toHaveBeenCalled();
+      setAuthenticated(true);
+      expect(mocks.prefetchTarget).toHaveBeenCalledExactlyOnceWith(
+        'one',
+        target
+      );
+    }
+  );
+
   it.each(['pointerDown', 'keyDown', 'wheel'] as const)(
     'stays at latest after %s and notification hydration',
     (event) => {

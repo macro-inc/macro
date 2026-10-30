@@ -22,8 +22,8 @@ import {
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserContext } from '@core/context/user';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { useIsTeamAdmin } from '@queries/team/teams';
 import { Dropdown, type TabOption, Tabs } from '@ui';
 import { batch, createMemo, For, Match, Show, Switch } from 'solid-js';
@@ -264,7 +264,7 @@ export const CollapsedSoupViewTabs = () => {
 
   return (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger variant="outline" size="md">
+      <Dropdown.Trigger variant="secondary" size="md">
         {selected()?.label}
         <CaretDownIcon class="size-3 text-ink-extra-muted" />
       </Dropdown.Trigger>

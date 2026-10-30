@@ -2,6 +2,7 @@ import { MediaPreview } from '@channel/Message/MediaPreview';
 import { mediaDownloadSource } from '@channel/queries/static-media-download';
 import { FileDownloadHeader } from '@components/app/FileDownloadHeader';
 import { SidePanel } from '@components/app/side-panel/SidePanel';
+import { DocumentDownloadButton } from '@core/component/DocumentDownloadButton';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -40,18 +41,28 @@ render(
       <Show
         when={location.search.includes('header')}
         fallback={
-          <MediaPreview
-            items={[
-              {
-                id: 'download-video',
-                kind: 'video',
-                width: 480,
-                height: 270,
-                src: staticFileIdEndpoint('download-video'),
-                fullSrc: staticFileIdEndpoint('download-video'),
-              },
-            ]}
-          />
+          <Show
+            when={location.search.includes('document')}
+            fallback={
+              <MediaPreview
+                items={[
+                  {
+                    id: 'download-video',
+                    kind: 'video',
+                    width: 480,
+                    height: 270,
+                    src: staticFileIdEndpoint('download-video'),
+                    fullSrc: staticFileIdEndpoint('download-video'),
+                  },
+                ]}
+              />
+            }
+          >
+            <div class="flex items-center gap-2">
+              <span>birds folder</span>
+              <DocumentDownloadButton documentId="linked-video" />
+            </div>
+          </Show>
         }
       >
         <HeaderFixture />

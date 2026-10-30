@@ -146,4 +146,9 @@ VALUES
 -- Archiving thread-S after sending must not move it from its send.
 ('0190c000-0000-7000-8000-000000000018', 'macro|user-1@test.com', 'macro|user-1@test.com', 'edited', NULL, 'email_thread', '44444444-5555-5555-5555-555555555555', '2024-06-01 10:18:00+00');
 
+-- doc-B (attention) and doc-C (own work) are tasks.
+INSERT INTO document_sub_type (document_id, sub_type)
+VALUES ('11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'task'),
+       ('11111111-cccc-cccc-cccc-cccccccccccc', 'task');
+
 SET session_replication_role = 'origin';

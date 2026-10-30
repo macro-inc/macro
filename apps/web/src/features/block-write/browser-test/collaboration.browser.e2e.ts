@@ -192,9 +192,10 @@ test('two people edit the same DOCX live through the sync service', async ({
     if (SHOTS) await bob.screenshot({ path: `${SHOTS}/03-comments.png` });
 
     // Download produces a clean .docx carrying everyone's edits.
+    await bob.getByRole('button', { name: 'Document options' }).click();
     const [download] = await Promise.all([
       bob.waitForEvent('download'),
-      bob.getByRole('button', { name: 'Download .docx' }).click(),
+      bob.getByRole('menuitem', { name: 'Download' }).click(),
     ]);
     if (SHOTS) await download.saveAs(`${SHOTS}/edited.docx`);
     const files = unzipSync(
@@ -392,9 +393,10 @@ test('headers and footers are edited in place and shared', async ({
     await expect.poll(() => joined(bob)).toContain('[body]');
 
     // Bob's download carries the new header.
+    await bob.getByRole('button', { name: 'Document options' }).click();
     const [download] = await Promise.all([
       bob.waitForEvent('download'),
-      bob.getByRole('button', { name: 'Download .docx' }).click(),
+      bob.getByRole('menuitem', { name: 'Download' }).click(),
     ]);
     const files = unzipSync(
       new Uint8Array(await readFile((await download.path())!))
@@ -526,9 +528,10 @@ test('comments in the file show beside their text', async ({ browser }) => {
     ).toBeVisible();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/06-word-comments.png` });
     // The comments stay in the downloaded file.
+    await page.getByRole('button', { name: 'Document options' }).click();
     const [download] = await Promise.all([
       page.waitForEvent('download'),
-      page.getByRole('button', { name: 'Download .docx' }).click(),
+      page.getByRole('menuitem', { name: 'Download' }).click(),
     ]);
     const files = unzipSync(
       new Uint8Array(await readFile((await download.path())!))
@@ -609,9 +612,10 @@ test('footnotes are edited where they are and shared', async ({ browser }) => {
     await expect.poll(() => story(alice)).toBe('body');
 
     // Bob's download carries the edited note and keeps the separators.
+    await bob.getByRole('button', { name: 'Document options' }).click();
     const [download] = await Promise.all([
       bob.waitForEvent('download'),
-      bob.getByRole('button', { name: 'Download .docx' }).click(),
+      bob.getByRole('menuitem', { name: 'Download' }).click(),
     ]);
     const files = unzipSync(
       new Uint8Array(await readFile((await download.path())!))

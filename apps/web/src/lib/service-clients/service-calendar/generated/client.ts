@@ -16,12 +16,20 @@ import type {
   CopyCalendarEventRequest,
   CreateCalendarEventRequest,
   DeleteCalendarEventParams,
+  DocumentNoteLink,
+  EventNotesParams,
   InviteCalendarEventGuestsRequest,
+  LinkEventNoteParams,
+  LinkNoteRequest,
   ListCalendarsResponse,
+  MeetingNote,
+  NoteDocumentsParams,
+  NotePicker,
   PrepareCalendarReplacementRequest,
   RespondToJoinRequestRequest,
   RsvpCalendarEventRequest,
   TeamCalendarSharingBody,
+  UnlinkEventNoteParams,
   UpdateCalendarEventRequest,
 } from './schemas';
 
@@ -423,6 +431,9 @@ export const updateCalendarEvent = async (
 one of their Google calendars and return the synced snapshot. The
 snapshot keeps the meeting's iCalendar UID and organizer, lists only the
 requester as a guest, and carries no join link; nobody is notified.
+While the requester's request to join the event is pending or accepted,
+the copy is refused with `join_request_open`: the meeting reaches their
+calendar as the invitation, which a copy would otherwise take in.
  */
 export type copyCalendarEventResponse201 = {
   data: CalendarEvent;
@@ -588,6 +599,169 @@ export const inviteCalendarEventGuests = async (
     status: res.status,
     headers: res.headers,
   } as inviteCalendarEventGuestsResponse;
+};
+
+/**
+ * @summary List notes visible through this meeting occurrence.
+ */
+export type eventNotesResponse200 = {
+  data: MeetingNote[];
+  status: 200;
+};
+
+export type eventNotesResponseSuccess = eventNotesResponse200 & {
+  headers: Headers;
+};
+
+export type eventNotesResponse = eventNotesResponseSuccess;
+
+export const getEventNotesUrl = (eventId: string, params: EventNotesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/events/${eventId}/notes?${stringifiedParams}`
+    : `/events/${eventId}/notes`;
+};
+
+export const eventNotes = async (
+  eventId: string,
+  params: EventNotesParams,
+  options?: RequestInit
+): Promise<eventNotesResponse> => {
+  const res = await fetch(getEventNotesUrl(eventId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: eventNotesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as eventNotesResponse;
+};
+
+/**
+ * @summary Idempotently link a markdown document and its optional team audience.
+ */
+export type linkEventNoteResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type linkEventNoteResponseSuccess = linkEventNoteResponse204 & {
+  headers: Headers;
+};
+
+export type linkEventNoteResponse = linkEventNoteResponseSuccess;
+
+export const getLinkEventNoteUrl = (
+  eventId: string,
+  documentId: string,
+  params: LinkEventNoteParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/events/${eventId}/notes/${documentId}?${stringifiedParams}`
+    : `/events/${eventId}/notes/${documentId}`;
+};
+
+export const linkEventNote = async (
+  eventId: string,
+  documentId: string,
+  linkNoteRequest: LinkNoteRequest,
+  params: LinkEventNoteParams,
+  options?: RequestInit
+): Promise<linkEventNoteResponse> => {
+  const res = await fetch(getLinkEventNoteUrl(eventId, documentId, params), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(linkNoteRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: linkEventNoteResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as linkEventNoteResponse;
+};
+
+/**
+ * @summary Remove this meeting's grant without deleting the document.
+ */
+export type unlinkEventNoteResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type unlinkEventNoteResponseSuccess = unlinkEventNoteResponse204 & {
+  headers: Headers;
+};
+
+export type unlinkEventNoteResponse = unlinkEventNoteResponseSuccess;
+
+export const getUnlinkEventNoteUrl = (
+  eventId: string,
+  documentId: string,
+  params: UnlinkEventNoteParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/events/${eventId}/notes/${documentId}?${stringifiedParams}`
+    : `/events/${eventId}/notes/${documentId}`;
+};
+
+export const unlinkEventNote = async (
+  eventId: string,
+  documentId: string,
+  params: UnlinkEventNoteParams,
+  options?: RequestInit
+): Promise<unlinkEventNoteResponse> => {
+  const res = await fetch(getUnlinkEventNoteUrl(eventId, documentId, params), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: unlinkEventNoteResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as unlinkEventNoteResponse;
 };
 
 /**
@@ -902,6 +1076,92 @@ export const respondToJoinRequest = async (
     status: res.status,
     headers: res.headers,
   } as respondToJoinRequestResponse;
+};
+
+/**
+ * @summary Suggest the caller's markdown documents and extra team audiences.
+ */
+export type noteDocumentsResponse200 = {
+  data: NotePicker;
+  status: 200;
+};
+
+export type noteDocumentsResponseSuccess = noteDocumentsResponse200 & {
+  headers: Headers;
+};
+
+export type noteDocumentsResponse = noteDocumentsResponseSuccess;
+
+export const getNoteDocumentsUrl = (params?: NoteDocumentsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/meeting-notes/documents?${stringifiedParams}`
+    : `/meeting-notes/documents`;
+};
+
+export const noteDocuments = async (
+  params?: NoteDocumentsParams,
+  options?: RequestInit
+): Promise<noteDocumentsResponse> => {
+  const res = await fetch(getNoteDocumentsUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: noteDocumentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as noteDocumentsResponse;
+};
+
+/**
+ * @summary List a document's visible meeting links; owners also see unavailable grants.
+ */
+export type documentNoteLinksResponse200 = {
+  data: DocumentNoteLink[];
+  status: 200;
+};
+
+export type documentNoteLinksResponseSuccess = documentNoteLinksResponse200 & {
+  headers: Headers;
+};
+
+export type documentNoteLinksResponse = documentNoteLinksResponseSuccess;
+
+export const getDocumentNoteLinksUrl = (documentId: string) => {
+  return `/meeting-notes/documents/${documentId}/links`;
+};
+
+export const documentNoteLinks = async (
+  documentId: string,
+  options?: RequestInit
+): Promise<documentNoteLinksResponse> => {
+  const res = await fetch(getDocumentNoteLinksUrl(documentId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: documentNoteLinksResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as documentNoteLinksResponse;
 };
 
 /**

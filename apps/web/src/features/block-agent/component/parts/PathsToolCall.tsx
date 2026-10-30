@@ -1,8 +1,8 @@
 /** A read, delete, or move: path (or count) in the row, full list in the body. */
 
-import MoveIcon from '@phosphor/arrows-left-right.svg';
-import ReadIcon from '@phosphor/file-text.svg';
-import TrashIcon from '@phosphor/trash.svg';
+import MoveIcon from '@icon/system/regular/arrows-left-right.svg';
+import ReadIcon from '@icon/system/regular/file-text.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';

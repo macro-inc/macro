@@ -18,6 +18,8 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
         .create(
             session,
             &ExecutionRecord {
+                acting_as: None,
+                turn_id: None,
                 execution_id: execution,
                 source: String::new(),
                 status: ExecutionStatus::Running,
@@ -39,6 +41,7 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
     let mut record = ReviewRecord {
         id: ReviewId(macro_uuid::generate_uuid_v7()),
         session_id: session,
+        acting_user: None,
         execution_id: Some(execution),
         presented_at: None,
         kind: ReviewKind::Email,

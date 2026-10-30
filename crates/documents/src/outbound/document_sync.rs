@@ -19,6 +19,14 @@ impl DocumentSyncPort for SyncServiceClient {
             .await
     }
 
+    async fn initialize_canvas(&self, document_id: &str) -> anyhow::Result<()> {
+        self.initialize_from_snapshot(
+            document_id,
+            include_bytes!("../../../../static_assets/canvas-golden.1.bin"),
+        )
+        .await
+    }
+
     async fn exists(&self, document_id: &str) -> anyhow::Result<bool> {
         SyncServiceClient::exists(self, document_id).await
     }

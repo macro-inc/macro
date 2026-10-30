@@ -19,14 +19,17 @@ const mocks = vi.hoisted(() => ({
   legacy: vi.fn(),
   legacyUnread: vi.fn(),
   notifiedSort: vi.fn(),
+  userId: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: mocks.notifiedSort() }),
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: mocks.client,
+  hasGraphqlCacheHost: () => false,
 }));
 vi.mock('./use-home-query', () => ({ useHomeEntitiesQuery: mocks.legacy }));
+vi.mock('@core/context/user', () => ({ useUserId: () => mocks.userId }));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
   createWebSocketJob: vi.fn(),
@@ -68,6 +71,8 @@ function setup(initialNotifiedSort = false) {
     mocks.notifiedSort.mockImplementation(notifiedSort);
     const [state, setState] = createSignal<'unseen' | 'seen' | 'done'>();
     const [pending, setPending] = createSignal(false);
+    const [userId, setUserId] = createSignal<string | undefined>('viewer');
+    mocks.userId.mockImplementation(userId);
     mocks.legacyUnread.mockReturnValue(true);
     mocks.legacy.mockReturnValue({
       query: {
@@ -91,7 +96,7 @@ function setup(initialNotifiedSort = false) {
         tab: 'signal',
         facets: { read: ['unread'] },
         facetContext: {},
-        userId: 'viewer',
+        userId: userId(),
         capabilities: {
           calendar: true,
           snippets: true,
@@ -101,7 +106,14 @@ function setup(initialNotifiedSort = false) {
       }),
     });
     const unread = useHomeUnreadQuery(enabled);
-    return { unread, setEnabled, setState, setNotifiedSort, setPending };
+    return {
+      unread,
+      setEnabled,
+      setState,
+      setNotifiedSort,
+      setPending,
+      setUserId,
+    };
   });
   const queries = () => operations.filter((op) => op.kind === 'query');
   const respond = (state: 'UNSEEN' | 'SEEN', error?: CombinedError) =>
@@ -201,6 +213,22 @@ describe('Home unread presence query', () => {
     f.setEnabled(false);
     expect(f.unread()).toBe(true);
     expect(getActiveGraphqlSoupRevalidations(f.client)).toEqual([]);
+  });
+
+  it('waits for the viewer before querying GraphQL', async () => {
+    const f = setup();
+    f.setUserId(undefined);
+    // The legacy query waits for the viewer too, so it has no page yet.
+    f.setPending(true);
+    f.setEnabled(true);
+    expect(f.unread()).toBe(false);
+    expect(f.queries()).toHaveLength(0);
+    f.setPending(false);
+    f.setUserId('viewer');
+    await vi.waitFor(() => expect(f.queries()).toHaveLength(1));
+    expect(JSON.stringify(f.queries()[0].variables)).toContain(
+      '"participant":"viewer"'
+    );
   });
 
   it('keeps notified-at sorting on REST, including while GraphQL is disabled', async () => {

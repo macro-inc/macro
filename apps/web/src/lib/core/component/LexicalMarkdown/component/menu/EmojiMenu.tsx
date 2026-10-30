@@ -261,12 +261,14 @@ export function EmojiMenu(props: EmojiMenuProps) {
     <Show when={props.menu.isOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="cursor-default select-none w-48 z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(mountSelection),
             reactiveOnContainer: props.editor.getRootElement(),
             useBlockBoundary: props.useBlockBoundary,
             onAvailableHeight: setMenuAvailableHeight,
+            fullHeight: MAX_EMOJI_LIST_HEIGHT + MENU_DECORATION_HEIGHT,
           }}
           use:clickOutside={() => {
             closeMenu();

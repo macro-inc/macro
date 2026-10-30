@@ -11,15 +11,15 @@ async fn link(pool: &PgPool, entity_id: &str, entity_type: &str, definition: Uui
         .iter()
         .map(|id| serde_json::json!({ "entity_id": id.to_string(), "entity_type": "COMPANY" }))
         .collect();
-    sqlx::query(
+    sqlx::query!(
         r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
-           VALUES ($1, $2, $3::property_entity_type, $4, $5)"#,
+           VALUES ($1, $2, $3::text::property_entity_type, $4, $5)"#,
+        Uuid::now_v7(),
+        entity_id,
+        entity_type,
+        definition,
+        serde_json::json!({ "type": "EntityReference", "value": refs }),
     )
-    .bind(Uuid::now_v7())
-    .bind(entity_id)
-    .bind(entity_type)
-    .bind(definition)
-    .bind(serde_json::json!({ "type": "EntityReference", "value": refs }))
     .execute(pool)
     .await
     .unwrap();

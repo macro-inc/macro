@@ -1,4 +1,3 @@
-import type { LoroTree, LoroTreeNode } from 'loro-crdt';
 import {
   IDENTITY,
   inverse,
@@ -18,49 +17,24 @@ import {
   children,
   freezeDocument,
   paintOrder,
-  roots,
   worldMatrix,
 } from '../core/scene';
-import { canLabel, type ShapeLabel } from '../core/shapes/label';
+import { canLabel } from '../core/shapes/label';
 import { isShape, shapePayload } from '../core/shapes/registry';
+import type { CanvasForest, NodeData } from './schema';
 
-/** Experimental merge unit: geometry and its coordinate frame always win together. */
-export type NodeData = {
-  id: string;
-  kind: ShapeKind | 'group';
-  pose: {
-    parentId: string;
-    transform: Matrix;
-    world: Matrix;
-    geometry: ShapeGeometryMap[ShapeKind] | null;
-  };
-  /** One LWW string, deliberately not a LoroText or nested CRDT tree. */
-  textContent: string | null;
-  labelStyle: Omit<ShapeLabel, 'content'> | null;
-  fill: string;
-  stroke: string;
-  strokeWidth: number;
-  strokeStyle?: 'solid' | 'dashed' | 'dotted';
-  opacity: number;
-  cornerRadius: number;
-};
-
-export function readScene(tree: LoroTree<NodeData>, rootId: string) {
+export function readScene(forest: CanvasForest, rootId: string) {
   const items: Record<string, GraphicsItem> = {
     [rootId]: { id: rootId, type: 'surface' },
   };
   const frameConflicts: string[] = [];
-  function visit(
-    nodes: LoroTreeNode<NodeData>[],
-    parentId: string,
-    parentWorld: Matrix
-  ) {
+  function visit(nodes: CanvasForest, parentId: string, parentWorld: Matrix) {
     // Loro owns durable ordering. These keys are a disposable core projection.
     const keys = sortKeysBetween(null, null, nodes.length);
     nodes.forEach((node, index) => {
-      const id = node.data.get('id'),
-        kind = node.data.get('kind'),
-        pose = node.data.get('pose');
+      const id = node.data.id,
+        kind = node.data.kind,
+        pose = node.data.pose;
       if (!id || !kind || !pose || Object.hasOwn(items, id))
         throw new Error('Invalid shared scene node');
       const matchingFrame = pose.parentId === parentId;
@@ -75,8 +49,8 @@ export function readScene(tree: LoroTree<NodeData>, rootId: string) {
       };
       if (kind === 'group') items[id] = { ...spatial, type: 'group' };
       else {
-        const fill = node.data.get('fill'),
-          stroke = node.data.get('stroke');
+        const fill = node.data.fill,
+          stroke = node.data.stroke;
         if (!pose.geometry || fill === undefined || stroke === undefined)
           throw new Error('Invalid shared shape');
         items[id] = {
@@ -86,24 +60,24 @@ export function readScene(tree: LoroTree<NodeData>, rootId: string) {
             restoreText(
               kind,
               pose.geometry,
-              node.data.get('textContent') ?? null,
-              node.data.get('labelStyle') ?? null
+              node.data.textContent ?? null,
+              node.data.labelStyle ?? null
             )
           ),
           appearance: {
             fill,
             stroke,
-            strokeWidth: node.data.get('strokeWidth') ?? 2,
-            strokeStyle: node.data.get('strokeStyle') ?? 'solid',
-            opacity: node.data.get('opacity') ?? 1,
-            cornerRadius: node.data.get('cornerRadius') ?? 0,
+            strokeWidth: node.data.strokeWidth ?? 2,
+            strokeStyle: node.data.strokeStyle ?? 'solid',
+            opacity: node.data.opacity ?? 1,
+            cornerRadius: node.data.cornerRadius ?? 0,
           },
         };
       }
-      visit(node.children() ?? [], id, multiply(parentWorld, transform));
+      visit(node.children, id, multiply(parentWorld, transform));
     });
   }
-  visit(tree.roots() as LoroTreeNode<NodeData>[], rootId, IDENTITY);
+  visit(forest, rootId, IDENTITY);
   return { document: freezeDocument({ rootId, items }), frameConflicts };
 }
 
@@ -141,120 +115,95 @@ function labelStyle(node: GraphicsItem | undefined): NodeData['labelStyle'] {
   return style;
 }
 
-function writeNodeData(
-  handle: LoroTreeNode<NodeData>,
-  node: Exclude<GraphicsItem, { type: 'surface' }>,
-  old: GraphicsItem | undefined,
-  next: GraphicsDocument,
-  parentChanged: boolean
-) {
-  const geometry = poseGeometry(node);
-  const oldGeometry = poseGeometry(old);
-  if (!old || textContent(node) !== textContent(old))
-    handle.data.set('textContent', textContent(node));
-  if (
-    !old ||
-    JSON.stringify(labelStyle(node)) !== JSON.stringify(labelStyle(old))
-  )
-    handle.data.set('labelStyle', labelStyle(node));
-  if (
-    !old ||
-    old.type === 'surface' ||
-    parentChanged ||
-    !sameMatrix(old.transform, node.transform) ||
-    JSON.stringify(geometry) !== JSON.stringify(oldGeometry)
-  ) {
-    handle.data.set('pose', {
-      parentId: node.placement.parentId,
-      transform: node.transform,
-      world: worldMatrix(next, node.id),
-      geometry,
-    });
-  }
-  if (isShape(node)) {
-    const appearance = resolveAppearance(node.appearance);
-    const previous = isShape(old)
-      ? resolveAppearance(old.appearance)
-      : undefined;
-    for (const key of [
-      'strokeWidth',
-      'strokeStyle',
-      'opacity',
-      'cornerRadius',
-    ] as const) {
-      if (!previous || previous[key] !== appearance[key])
-        handle.data.set(key, appearance[key]);
-    }
-    if (!isShape(old) || old.appearance.fill !== node.appearance.fill)
-      handle.data.set('fill', node.appearance.fill);
-    if (!isShape(old) || old.appearance.stroke !== node.appearance.stroke)
-      handle.data.set('stroke', node.appearance.stroke);
-  }
-}
-
-/** Diff a validated proposal; never replace whole nodes or write unchanged fields. */
+/** Build a typed proposal. Mirror owns all generic tree and map operations. */
 export function writeScene(
-  tree: LoroTree<NodeData>,
+  forest: CanvasForest,
   before: GraphicsDocument,
   next: GraphicsDocument
-) {
+): CanvasForest {
   if (before.rootId !== next.rootId || next.surface)
     throw new Error('Shared graphics backend supports one unbounded surface');
-  const handles = new Map(
-    tree.getNodes().map((node) => [node.data.get('id'), node])
-  );
-  const order = paintOrder(next);
-  const reposition = new Set<string>();
-  const reparent = new Set<string>();
-  // Reject unsupported proposals before producing any CRDT operations.
-  for (const id of order) {
+  const data = new Map<string, NodeData>();
+  function collect(nodes: CanvasForest) {
+    for (const node of nodes) {
+      data.set(node.data.id, node.data);
+      collect(node.children);
+    }
+  }
+  collect(forest);
+  for (const id of paintOrder(next)) {
     if (before.items[id] && before.items[id]!.type !== next.items[id]!.type)
       throw new Error('Shared node kinds are immutable');
   }
-  for (const id of order) {
-    const node = next.items[id]!,
-      old = before.items[id];
-    if (node.type === 'surface') continue;
-    let handle = handles.get(id);
-    if (!handle) {
-      handle = tree.createNode();
-      handle.data.set('id', id);
-      handle.data.set('kind', node.type);
-      handles.set(id, handle);
-    }
-    if (
-      !old ||
-      old.type === 'surface' ||
-      old.placement.parentId !== node.placement.parentId
-    ) {
-      reparent.add(id);
-      reposition.add(id);
-    } else if (old.placement.sortKey !== node.placement.sortKey)
-      reposition.add(id);
-    writeNodeData(handle, node, old, next, reparent.has(id));
+  function project(parent: string): CanvasForest {
+    return children(next, parent).map((id) => {
+      const node = next.items[id]!,
+        old = before.items[id],
+        previous = data.get(id);
+      if (node.type === 'surface')
+        throw new Error('Surface cannot be a tree node');
+      const geometry = poseGeometry(node);
+      const poseChanged =
+        !previous ||
+        !old ||
+        old.type === 'surface' ||
+        old.placement.parentId !== node.placement.parentId ||
+        !sameMatrix(old.transform, node.transform) ||
+        JSON.stringify(poseGeometry(old)) !== JSON.stringify(geometry);
+      const appearance = isShape(node)
+        ? resolveAppearance(node.appearance)
+        : {
+            fill: 'transparent',
+            stroke: 'transparent',
+            strokeWidth: 2,
+            strokeStyle: 'solid' as const,
+            opacity: 1,
+            cornerRadius: 0,
+          };
+      const nextData: NodeData = previous
+        ? { ...previous }
+        : {
+            id,
+            kind: node.type,
+            pose: {
+              parentId: node.placement.parentId,
+              transform: node.transform,
+              world: worldMatrix(next, id),
+              geometry,
+            },
+            textContent: textContent(node),
+            labelStyle: labelStyle(node),
+            ...appearance,
+          };
+      if (poseChanged)
+        nextData.pose = {
+          parentId: node.placement.parentId,
+          transform: node.transform,
+          world: worldMatrix(next, id),
+          geometry,
+        };
+      nextData.textContent = textContent(node);
+      nextData.labelStyle = labelStyle(node);
+      if (isShape(node)) {
+        const oldAppearance = isShape(old)
+          ? resolveAppearance(old.appearance)
+          : undefined;
+        if (!oldAppearance || oldAppearance.fill !== appearance.fill)
+          nextData.fill = appearance.fill;
+        if (!oldAppearance || oldAppearance.stroke !== appearance.stroke)
+          nextData.stroke = appearance.stroke;
+        if (
+          !oldAppearance ||
+          oldAppearance.strokeStyle !== appearance.strokeStyle
+        )
+          nextData.strokeStyle = appearance.strokeStyle;
+        for (const key of ['strokeWidth', 'opacity', 'cornerRadius'] as const) {
+          if (!oldAppearance || oldAppearance[key] !== appearance[key])
+            nextData[key] = appearance[key];
+        }
+      }
+      return { data: nextData, children: project(id) };
+    });
   }
-  // Lift first so a valid final hierarchy cannot hit an intermediate local cycle.
-  for (const id of reparent) handles.get(id)!.move();
-  for (const id of order) {
-    if (!reparent.has(id)) continue;
-    const node = next.items[id]!;
-    if (node.type !== 'surface')
-      handles.get(id)!.move(handles.get(node.placement.parentId));
-  }
-  const removed = Object.keys(before.items).filter((id) => !next.items[id]);
-  for (const id of roots(before, removed)) {
-    const handle = handles.get(id);
-    if (handle) tree.delete(handle.id);
-  }
-  for (const parent of [next.rootId, ...order]) {
-    const siblings = children(next, parent);
-    for (let i = siblings.length - 1; i >= 0; i--) {
-      const id = siblings[i]!;
-      if (!reposition.has(id)) continue;
-      const handle = handles.get(id)!;
-      const after = siblings[i + 1];
-      if (after) handle.moveBefore(handles.get(after)!);
-      else handle.move(handles.get(parent));
-    }
-  }
+  return project(next.rootId);
 }

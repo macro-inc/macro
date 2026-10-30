@@ -1,23 +1,29 @@
 import type { HomeTypeFilter } from '../types';
-import type { WorkFeedItemType, WorkFeedScope } from './core/work-feed';
+import type {
+  WorkFeedItemType,
+  WorkFeedPageState,
+  WorkFeedScope,
+} from './core/work-feed';
 
-/** Item kinds each Home type filter selects. Documents and tasks share the
- * document kind; the client-side facet tells them apart. */
+/** Item kinds each Home type filter selects. */
 const ITEM_TYPES: Record<HomeTypeFilter, WorkFeedItemType[]> = {
   documents: ['document'],
-  tasks: ['document'],
+  tasks: ['task'],
   email: ['email'],
   channels: ['channel', 'channel_thread'],
   agents: ['agent_session', 'chat'],
-  projects: ['project'],
+  folders: ['project'],
+  initiatives: ['initiative'],
   github: ['pull_request'],
   calendar: ['calendar_event'],
 };
 
 const ALL_ITEM_TYPES: WorkFeedItemType[] = [
   'document',
+  'task',
   'chat',
   'project',
+  'initiative',
   'email',
   'channel',
   'channel_thread',
@@ -62,4 +68,14 @@ export function homeWorkFeedScope(
     types: types.length === ALL_ITEM_TYPES.length ? [] : types,
     includeSnippets: capabilities.snippets,
   };
+}
+
+/** The page state Home's read filter selects; without one, every state. */
+export function homeWorkFeedPageState(
+  readFilters: readonly string[] | undefined
+): WorkFeedPageState | undefined {
+  const filter = readFilters?.[0];
+  if (filter === 'unread') return 'unseen';
+  if (filter === 'read') return 'seen';
+  return undefined;
 }
