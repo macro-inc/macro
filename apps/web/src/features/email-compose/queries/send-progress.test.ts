@@ -8,11 +8,16 @@ import {
   cancelEmailSendQueued,
   type EmailSendIntent,
 } from '@queries/email/send-queue';
+import { readEmailSendStatus } from '@service-storage/email-send';
 import type { EmailSendAttemptFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { CombinedError } from '@urql/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { EmailSendProgress } from '../context/compose-capabilities';
 import { watchEmailSendProgress } from './send-progress';
+
+vi.mock('@service-storage/email-send', () => ({
+  readEmailSendStatus: vi.fn(),
+}));
 
 vi.mock('@queries/email/local-drafts', async () => {
   const { createLocalDraftStore } = await import(
@@ -141,6 +146,29 @@ function dispatch(
   return runner;
 }
 
+/** Another tab delivers the send and retires it before this tab reads the outbox again. */
+async function deliverInAnotherTab(
+  session: Awaited<ReturnType<typeof emailStorageSession>>,
+  queued: EmailSendIntent
+) {
+  const claimed = await localDraftStore.claimSend(
+    session,
+    queued.uuid,
+    'other-tab',
+    Date.now()
+  );
+  if (!claimed?.dispatch) throw new Error('The other tab did not claim it');
+  const settled = localDraftStore.settleSend(
+    session,
+    queued.uuid,
+    'other-tab',
+    claimed.dispatch.generation,
+    { attempt: attempt(queued, 'SENT'), nextAttemptAt: Date.now() }
+  );
+  await localDraftStore.removeSend(session, queued.uuid);
+  await settled;
+}
+
 it.each(inboxes)(
   'reports a $provider send as undoable until the server deadline, then failed',
   async (inbox) => {
@@ -243,6 +271,41 @@ it.each(inboxes)(
       { state: 'pending' },
       { state: 'accepted', undoUntil: '2026-10-20T19:00:10.640Z' },
       { state: 'sent' },
+    ]);
+  }
+);
+
+it.each(inboxes)(
+  'reports a $provider send another tab delivered and retired as sent',
+  async (inbox) => {
+    const { session, queued, progress } = await queue(inbox);
+    await progress.reached('pending');
+    vi.mocked(readEmailSendStatus).mockImplementation(async (input) =>
+      input.attemptId === queued.uuid && input.linkId === inbox.linkId
+        ? attempt(queued, 'SENT')
+        : null
+    );
+    await deliverInAnotherTab(session, queued);
+    await progress.reached('sent');
+
+    expect(progress.updates).toEqual([{ state: 'pending' }, { state: 'sent' }]);
+  }
+);
+
+it.each(inboxes)(
+  'stops following a $provider send that left the outbox when the server cannot say how',
+  async (inbox) => {
+    const { session, queued, progress } = await queue(inbox);
+    await progress.reached('pending');
+    vi.mocked(readEmailSendStatus).mockRejectedValue(
+      new TypeError('Failed to fetch')
+    );
+    await deliverInAnotherTab(session, queued);
+    await progress.reached('untracked');
+
+    expect(progress.updates).toEqual([
+      { state: 'pending' },
+      { state: 'untracked' },
     ]);
   }
 );

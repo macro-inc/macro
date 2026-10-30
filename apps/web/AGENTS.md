@@ -258,7 +258,13 @@ by default; keep saved per-capture choices and explicit toggles authoritative.
 Use `/app/debug/diff-view-ui` to exercise the 40/41-line boundary.
 
 Project grouping in Soup and its live cache projection uses the system Project
-property (initiative membership), with an empty key labeled No Project.
+property (initiative membership), with an empty key labeled No Project. The
+server labels each project group with the initiative name the viewer can read;
+headers resolve a name themselves only while a group is still labeled by its
+key, and projects sort by name with No Project last. Data a grouped list shows
+about its groups (labels, order, membership) is computed on the server and
+mirrored by the cache's local grouping projection; never add a side cache in
+feature code to cover a remount.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
@@ -821,3 +827,7 @@ Keep existing tags and apply to the selected rows when the drop row is selected.
 Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
+
+Use `features/channel/channel-icon.tsx` for conversation identity in rows,
+favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
+and bot personas share one renderer; keep surface sizing in the caller.

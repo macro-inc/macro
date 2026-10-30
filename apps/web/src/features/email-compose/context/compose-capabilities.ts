@@ -238,7 +238,8 @@ export interface OutgoingEmail {
 /**
  * One queued send as this device's outbox last recorded it. `accepted` is
  * cancellable until the server's `undoUntil`; `pending` covers waiting,
- * delivering, and cancellation in progress.
+ * delivering, and cancellation in progress. `untracked` means the send left
+ * the outbox and the server could not say whether it was delivered.
  */
 export type EmailSendProgress =
   | { state: 'pending' }
@@ -246,7 +247,8 @@ export type EmailSendProgress =
   | { state: 'sent' }
   | { state: 'failed' }
   | { state: 'cancelled' }
-  | { state: 'unconfirmed' };
+  | { state: 'unconfirmed' }
+  | { state: 'untracked' };
 
 export interface EmailDelivery {
   /** Whether sends can be persisted and replayed without connectivity. */

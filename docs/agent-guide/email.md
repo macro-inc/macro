@@ -622,6 +622,9 @@ without the forwarded message. A reply quoting a message that was itself
 forwarded stays a reply. Collapsed content is named: **Show forwarded message**
 on a forward, **Show quoted text** on a reply. The toggle beside the editor keeps
 the name `forwarded message` or `quoted text` and reports whether it is pressed.
+With **Add to replies & forwards** on, the **Signature** bar sits between the
+written message and these controls on desktop and mobile, where sending inserts
+the signature above the quoted thread on Gmail and Outlook.
 Check recipient suggestions from a Gmail and an Outlook inbox. Typing a full
 address and pressing Enter commits that address, ahead of longer matches such
 as `teo+123456@macro.com`, whether or not it is a saved contact. A name or
@@ -826,7 +829,10 @@ conversation and a reply closes its composer, and the message appears as sent
 there immediately, before the server or provider confirms it. Once the server
 accepts the send, **Undo** stays on offer until the server's undo deadline (the
 accepted attempt's `sendTime`), not for a fixed client duration. The notice says
-**Email sent** only after delivery. A send that fails after it was queued shows
+**Email sent** only after delivery. This holds when another Mail tab delivers or
+cancels the send first, and a cancelled reply still returns its thread to Inbox.
+When the server cannot say how such a send ended, the notice only withdraws
+**Undo**. A send that fails after it was queued shows
 a persistent **Email failed to send**, and **Delivery unconfirmed** reports a
 send the provider did not confirm. An offline send shows **Email queued to
 send** and returns to the email list. The status panel shows a send only while it waits on this

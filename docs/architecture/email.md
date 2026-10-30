@@ -287,7 +287,10 @@ The send notice follows each queued send through `EmailDelivery.watchSend`,
 which reads the device outbox. Undo stays on offer until the deadline the server
 returned with the accepted attempt. A reply whose send fails, is cancelled, or is
 restored reverses its mark-done through the same undo handle, including when
-marking done finishes later.
+marking done finishes later. A send can leave the outbox before the watcher reads
+it again, as when another tab delivers or restores it. The watcher then asks the
+server how the send ended. When the server cannot say, it reports the send as
+`untracked` and the notice withdraws Undo.
 
 `EmailThreadSource.refresh()` and `fetchOlder()` require `Promise<void>`. Their
 adapters await the underlying query, and callers that need fresh messages await

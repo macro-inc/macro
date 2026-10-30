@@ -83,6 +83,7 @@ export function announceQueuedSend(options: {
           subtext: 'Check your sent mail. We will not resend automatically.',
         });
       })
+      .with({ state: 'untracked' }, withdrawUndo)
       .exhaustive()
   );
 }

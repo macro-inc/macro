@@ -7297,6 +7297,12 @@ type GraphqlSoupBin {
 	"""
 	key: String!
 	"""
+	Display text for a group whose key alone does not identify it client
+	side, limited to what the viewer can read. Null when the client labels
+	the key itself or the viewer cannot read the entity behind it.
+	"""
+	label: String
+	"""
 	Total number of items in this group across all pages.
 	"""
 	totalCount: Int!

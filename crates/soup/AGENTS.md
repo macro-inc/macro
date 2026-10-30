@@ -68,6 +68,10 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
+  `SoupService::group_labels` names the groups a grouping field leaves
+  unlabeled (today, project groups, from the initiative names the caller can
+  read); REST group meta and GraphQL bins carry the result as `GroupLabels`,
+  and a key it leaves out keeps itself as its label.
 
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within

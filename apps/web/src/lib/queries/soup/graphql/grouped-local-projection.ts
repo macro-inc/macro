@@ -203,6 +203,7 @@ export function projectLocalGroupedSoup(
   );
   return bins.map((bin) => ({
     key: bin.key,
+    label: bin.label ?? null,
     totalCount: bin.totalCount,
     nextCursor: bin.nextCursor,
     items: bin.itemIds.flatMap((key) => {
