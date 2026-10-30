@@ -99,9 +99,14 @@ const PORTALED_EDITORS = '[role="dialog"], [role="listbox"]';
 const ROW_HEIGHT = 47;
 // Half a 500-record page: the next page is requested well before the last row.
 const PREFETCH_ROW_COUNT = 250;
-/** Rows mounted beyond the viewport in the scroll direction, and behind it. */
+/**
+ * Rows mounted beyond the viewport in the scroll direction, and behind it.
+ * Generous behind too: reversing a fast scroll must find rows already there.
+ */
 const ROWS_AHEAD = 60;
-const ROWS_BEHIND = 4;
+const ROWS_BEHIND = 40;
+/** Row lines extend this far past the mounted rows, moving in steps this size. */
+const ROW_LINES_STEP = 100;
 /**
  * Main-thread time per frame spent turning row previews into live rows. Large
  * enough to finish the rows in view in a frame or two: each frame of upgrades
@@ -488,12 +493,17 @@ export function DatabaseTable(props: DatabaseTableProps) {
           );
       if (entry && size && !rowHeightMeasured) {
         rowHeightMeasured = true;
-        setRowHeight(size);
+        // Rows mounted before this were cached at the old estimate; correcting
+        // them one by one would move every row below each, many times over.
+        if (size !== rowHeight()) {
+          setRowHeight(size);
+          queueMicrotask(() => instance.measure());
+        }
       }
       return size || rowHeight();
     },
     // The compositor scrolls while the main thread mounts rows, so mount well
-    // ahead in the scroll direction and only a few rows behind.
+    // ahead in the scroll direction and a good way behind.
     overscan: 0,
     onChange: (instance) => changeScrolling(instance.isScrolling),
     get rangeExtractor() {
@@ -518,6 +528,42 @@ export function DatabaseTable(props: DatabaseTableProps) {
   // The adapter reconciles items by index; copies let rows key by record.
   const virtualItems = () =>
     virtualizer.getVirtualItems().map((item) => ({ ...item }));
+  // Empty row lines around the mounted rows, anchored on one of them, so a
+  // frame that outruns mounting shows grid rows instead of bare panel. Steps
+  // keep it from repainting every frame; one as tall as the table made
+  // Firefox drop a quarter of its scroll frames.
+  const rowLines = createMemo(
+    () => {
+      const items = virtualizer.getVirtualItems();
+      const first = items[0];
+      const last = items.at(-1);
+      if (!first || !last) return undefined;
+      const height = rowHeight();
+      const start = Math.max(
+        0,
+        Math.floor(first.index / ROW_LINES_STEP - 1) * ROW_LINES_STEP
+      );
+      const end = Math.min(
+        virtualizer.options.count,
+        Math.ceil(last.index / ROW_LINES_STEP + 1) * ROW_LINES_STEP
+      );
+      return {
+        top:
+          first.start -
+          virtualizer.options.scrollMargin -
+          (first.index - start) * height,
+        height: (end - start) * height,
+        rowHeight: height,
+      };
+    },
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.top === b?.top &&
+        a?.height === b?.height &&
+        a?.rowHeight === b?.rowHeight,
+    }
+  );
   createEffect(() => {
     // Reruns as the mounted rows change; the range is the rows in view.
     const lastMounted = virtualizer.getVirtualItems().at(-1);
@@ -893,8 +939,7 @@ export function DatabaseTable(props: DatabaseTableProps) {
               >
                 {/* Keep unchanged records and their editors mounted across reads. */}
                 {/* A fast scroll can outrun mounting rows; the compositor then
-                    shows the panel and column lines. A row-line gradient here
-                    made Firefox drop a quarter of its scroll frames. */}
+                    shows the column lines and the row lines below. */}
                 <div
                   class="relative grid shrink-0 bg-panel"
                   style={{
@@ -906,6 +951,21 @@ export function DatabaseTable(props: DatabaseTableProps) {
                     aria-hidden="true"
                     class="border-r border-edge-muted/40"
                   />
+                  <Show when={rowLines()}>
+                    {(lines) => (
+                      <div
+                        aria-hidden="true"
+                        class="pointer-events-none absolute inset-x-0 top-0"
+                        style={{
+                          transform: `translateY(${Math.max(0, lines().top)}px)`,
+                          height: `${lines().height}px`,
+                          'background-image':
+                            'linear-gradient(to bottom, transparent calc(100% - 1px), color-mix(in srgb, var(--color-edge-muted) 60%, transparent) 0)',
+                          'background-size': `100% ${lines().rowHeight}px`,
+                        }}
+                      />
+                    )}
+                  </Show>
                   <For each={columns()}>
                     {() => (
                       <div
@@ -1000,9 +1060,13 @@ export function DatabaseTable(props: DatabaseTableProps) {
                             height: live() ? undefined : `${rowHeight()}px`,
                             'grid-template-columns': template(),
                           }}
-                          onPointerDown={() =>
-                            previewRows.get(rowId)?.upgrade()
-                          }
+                          // A touch may start a swipe; turning the row live then
+                          // would repaint it as the scroll begins. Taps click.
+                          onPointerDown={(event) => {
+                            if (event.pointerType !== 'touch')
+                              previewRows.get(rowId)?.upgrade();
+                          }}
+                          onClick={() => previewRows.get(rowId)?.upgrade()}
                         >
                           <div
                             role="gridcell"
