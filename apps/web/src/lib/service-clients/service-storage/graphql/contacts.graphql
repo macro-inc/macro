@@ -1,0 +1,18 @@
+fragment ContactDirectoryFields on GraphqlContact {
+  id
+  userId
+  email
+  name
+}
+
+query ContactDirectoryPage($limit: Int, $after: String) {
+  user {
+    id
+    contacts(limit: $limit, after: $after) {
+      nodes {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}

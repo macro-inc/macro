@@ -1,3 +1,4 @@
+use crate::domain::models::contact::{ContactName, ContactPage};
 use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -44,6 +45,28 @@ pub trait ContactsPageService: Send + Sync + 'static {
         after: Option<&ContactCursor>,
         limit: ContactPageSize,
     ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
+}
+
+/// Resolves names only for the authorized, bounded IDs selected by the directory.
+pub trait ContactNameReader: Send + Sync + 'static {
+    /// Resolve at most MAX_CONTACT_PAGE_SIZE IDs with Macro profile names taking
+    /// precedence over this viewer's address book. Missing names are not errors.
+    fn contact_names(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        contacts: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<ContactName>, Report>> + Send;
+}
+
+/// Enriched directory reads for authenticated inbound adapters.
+pub trait ContactDirectory: Send + Sync + 'static {
+    /// Read and enrich only one authorized page, preserving its continuation.
+    fn contact_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactPage, Report>> + Send;
 }
 
 /// Port trait for notifying users about contact changes.

@@ -77,6 +77,7 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
+- `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
 - `contacts_connections` has a `(user2, user1)` index for reverse keyset paging; the existing unique `(user1, user2)` index covers forward paging. Bounded directory reads belong to `crates/contacts`, not this client.
 
 - Migrations deploy before service code: never drop a column/table in the

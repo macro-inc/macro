@@ -15,6 +15,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::instrument;
 
+/// Bounded name enrichment of the viewer's contact graph.
+pub mod directory;
+
 #[cfg(test)]
 mod test;
 
