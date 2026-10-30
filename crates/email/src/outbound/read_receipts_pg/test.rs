@@ -134,8 +134,11 @@ async fn thread_receipts_list_sent_messages_of_the_given_inboxes(
     fixtures(path = "../../../fixtures", scripts("email_message"))
 )]
 async fn accessible_inboxes_include_the_owners_link(pool: Pool<Postgres>) -> Result<(), Report> {
-    let repo = ReadReceiptPgRepository(pool);
-    let owner = MacroUserIdStr::try_from("macro|user1@test.com").unwrap();
-    assert_eq!(repo.accessible_inboxes(&owner).await?, [id(LINK)]);
+    let repo = ReadReceiptPgRepository(pool.clone());
+    let link = email_db_client::links::get::fetch_link_by_id(&pool, id(LINK))
+        .await
+        .into_rootcause()?
+        .expect("fixture link exists");
+    assert_eq!(repo.accessible_inboxes(&link.macro_id).await?, [id(LINK)]);
     Ok(())
 }
