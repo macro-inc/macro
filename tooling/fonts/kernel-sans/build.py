@@ -191,11 +191,16 @@ def main():
 
         for path in build_variable(out_dir):
             print("variable ->", os.path.relpath(path, HERE))
-        if set(weights) == set(P.WEIGHTS):
+        # The specimen reads every static OTF. Only a default build refreshes
+        # the committed page, so a scratch --out never rewrites it.
+        if set(weights) == set(P.WEIGHTS) and "otf" in formats:
             from kernel_sans.specimen import build_specimen
 
-            page = build_specimen(out_dir, os.path.join(HERE, "specimen", "index.html"))
-            print("specimen ->", os.path.relpath(page, HERE))
+            if os.path.abspath(out_dir) == os.path.join(HERE, "fonts"):
+                page = build_specimen(
+                    out_dir, os.path.join(HERE, "specimen", "index.html")
+                )
+                print("specimen ->", os.path.relpath(page, HERE))
             if args.specimen_embed:
                 print(
                     "specimen (embedded font) ->",

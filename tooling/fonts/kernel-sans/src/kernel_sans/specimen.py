@@ -208,8 +208,19 @@ def _glyph_table(fonts_by_weight):
     return rows, alternates
 
 
+STANDALONE_HEAD = (
+    '<!doctype html>\n<html lang="en">\n<meta charset="utf-8">\n'
+    '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
+)
+
+
 def build_specimen(fonts_dir, out_html, embed=False):
-    """fonts_dir holds otf/ ttf/ variable/ from build.py."""
+    """fonts_dir holds otf/ ttf/ variable/ from build.py.
+
+    The default page links the variable font by relative path and is a full
+    HTML document to open from the repository. With embed=True the font is
+    inlined and the page is a fragment for publishing as a claude.ai
+    artifact, whose viewer supplies the document wrapper."""
     static = {}
     for w, style in P.WEIGHTS.items():
         static[w] = TTFont(os.path.join(fonts_dir, "otf", f"{P.PS_FAMILY}-{style}.otf"))
@@ -270,6 +281,12 @@ def build_specimen(fonts_dir, out_html, embed=False):
         .replace("{{ENCODED_COUNT}}", str(len(glyph_rows)))
         .replace("{{VERSION}}", P.VERSION)
     )
+    if embed:
+        page = page.replace("{{STANDALONE_HEAD}}", "")
+    else:
+        page = page.replace("{{STANDALONE_HEAD}}", STANDALONE_HEAD).replace(
+            '<meta name="claude:viewport-fit-sides" content="cover">\n', ""
+        )
     os.makedirs(os.path.dirname(out_html), exist_ok=True)
     with open(out_html, "w", encoding="utf-8") as f:
         f.write(page)

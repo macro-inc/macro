@@ -1,4 +1,4 @@
-<title>Kernel Sans</title>
+{{STANDALONE_HEAD}}<title>Kernel Sans</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -145,6 +145,7 @@ section { padding-block: clamp(48px, 8vw, 96px); border-top: 1px solid var(--rul
   position: relative;
   caret-color: var(--advance);
 }
+.word:focus-visible { outline: 2px dashed var(--metric); outline-offset: 4px; }
 .hero-row {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
@@ -324,7 +325,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var
       <div class="mline x" data-m="540"><span>x 540</span></div>
       <div class="mline base" data-m="0"><span>0</span></div>
       <div class="mline desc" data-m="-200"><span>desc −200</span></div>
-      <div class="word" id="heroWord" contenteditable="true" spellcheck="false" aria-label="Editable sample word">Kernel</div>
+      <div class="word" id="heroWord" contenteditable="true" spellcheck="false" role="textbox" aria-label="Editable sample word">Kernel</div>
     </div>
     <div class="hero-row">
       <p class="lede">A neo-grotesque in the Inter and SF Pro mould, cut with squircle curves, 45° chamfers, ink traps and square dots.</p>
@@ -380,7 +381,7 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var
         <button class="toggle" type="button" data-feat="tnum" aria-pressed="false">tnum tabular</button>
       </div>
     </div>
-    <div class="tester" id="tester" contenteditable="true" spellcheck="false">Quarterly sync: 1,024 nodes online — latency 0.42 ms (−18%). Ship build Il1 at 09:30?</div>
+    <div class="tester" id="tester" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Type tester">Quarterly sync: 1,024 nodes online — latency 0.42 ms (−18%). Ship build Il1 at 09:30?</div>
   </section>
 
   <section id="compare">
@@ -520,13 +521,13 @@ body {
     var n = weightName(w);
     heroOut.textContent = Math.round(w) + (n ? " " + n : "");
   }
-  heroW.addEventListener("input", function () { setHero(Number(heroW.value)); });
+  var stopped = false;
+  heroW.addEventListener("input", function () { stopped = true; setHero(Number(heroW.value)); });
   setHero(400);
   if (!reduceMotion) {
     var t0 = null;
     var keys = [[0, 400], [0.15, 300], [0.55, 800], [1, 400]];
     var dur = 2600;
-    var stopped = false;
     heroW.addEventListener("pointerdown", function () { stopped = true; });
     var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
     requestAnimationFrame(function step(ts) {
