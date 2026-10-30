@@ -6,7 +6,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type ChannelEntity, Entity } from '@entity';
-import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import {
@@ -14,7 +13,7 @@ import {
   createDroppable,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
-import { Button, cn, Dropdown, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
@@ -28,7 +27,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
-import type { ChannelsGroup, ChannelsRailSection } from '../../types';
+import type { ChannelsGroup } from '../../types';
 import { formatDetailedTimestamp } from '../../utils';
 import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
 import { ChannelFavoriteRow } from './ChannelFavoriteRows';
@@ -44,7 +43,7 @@ import {
   IncomingCallActions,
   isPrimaryMouseDown,
 } from './ChannelRailItems';
-import { ChannelSectionMenuItems } from './ChannelSectionMenu';
+import { ChannelSectionDropdown } from './ChannelSectionMenu';
 import {
   type ChannelLabelDragData,
   type ChannelLabelDropData,
@@ -78,28 +77,6 @@ type ChannelRailSearch = {
   registerInput: (element: HTMLInputElement) => void;
   retry: () => Promise<void>;
 };
-
-function ChannelSectionDropdown(props: {
-  group: ChannelsRailSection;
-  label: string;
-}) {
-  return (
-    <Dropdown placement="bottom-end">
-      <Dropdown.Trigger
-        aria-label={t('channelSections.optionsFor', { name: props.label })}
-        tooltip={t('channelSections.optionsFor', { name: props.label })}
-        as={ViewSidebar.Control}
-        variant="ghost"
-        size="icon-sm"
-      >
-        <SortIcon class="size-3.5" />
-      </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-40">
-        <ChannelSectionMenuItems section={props.group} />
-      </Dropdown.Content>
-    </Dropdown>
-  );
-}
 
 /**
  * Drag a channel between labels. Registered once per Channels-section row: a
@@ -389,7 +366,7 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
       unreadCount={unreadCount()}
       onToggle={() => rail.toggleGroup(props.group)}
     >
-      <ChannelSectionDropdown group={props.group} label={title()} />
+      <ChannelSectionDropdown section={props.group} label={title()} />
     </ChannelSectionHeading>
   );
 }

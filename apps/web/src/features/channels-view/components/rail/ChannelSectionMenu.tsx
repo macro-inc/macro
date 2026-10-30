@@ -1,11 +1,38 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
+import CheckIcon from '@icon/system/regular/check.svg';
+import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import { Dropdown } from '@ui';
 import { For } from 'solid-js';
 import type { ChannelSectionKey } from '../../types';
 import { useChannelsRail } from './ChannelsRailContext';
 
+export function ChannelSectionDropdown(props: {
+  section: ChannelSectionKey;
+  label: string;
+}) {
+  const label = () =>
+    t('channelSections.sortAndFilterFor', { name: props.label });
+  return (
+    <Dropdown placement="bottom-end">
+      <Dropdown.Trigger
+        aria-label={label()}
+        tooltip={label()}
+        as={ViewSidebar.Control}
+        variant="ghost"
+        size="icon-sm"
+      >
+        <SortIcon class="size-3.5" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-40">
+        <ChannelSectionMenuItems section={props.section} />
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+
 /** Shared personal sort and unread controls for built-in and custom sections. */
-export function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
+function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
   const rail = useChannelsRail();
   const preferences = () => rail.sectionPreferences(props.section);
   const options = () => [
@@ -17,34 +44,39 @@ export function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
     { value: 'created_at' as const, label: t('channelSections.dateCreated') },
   ];
   return (
-    <Dropdown.Group>
-      <Dropdown.GroupLabel>{t('channelSections.sortBy')}</Dropdown.GroupLabel>
-      <Dropdown.RadioGroup
-        value={preferences().sort}
-        onChange={(value) => {
-          const option = options().find((option) => option.value === value);
-          if (option)
-            rail.setSectionPreferences(props.section, { sort: option.value });
-        }}
-      >
-        <For each={options()}>
-          {(option) => (
-            <Dropdown.RadioItem value={option.value}>
-              <Dropdown.ItemIndicator />
-              <span>{option.label}</span>
-            </Dropdown.RadioItem>
-          )}
-        </For>
-      </Dropdown.RadioGroup>
-      <Dropdown.Separator />
-      <Dropdown.CheckboxItem
-        checked={preferences().unreadOnly ?? false}
-        onChange={(unreadOnly) =>
-          rail.setSectionPreferences(props.section, { unreadOnly })
-        }
-      >
-        <span>{t('channelSections.unreadOnly')}</span>
-      </Dropdown.CheckboxItem>
-    </Dropdown.Group>
+    <>
+      <Dropdown.Group>
+        <Dropdown.GroupLabel>{t('channelSections.sortBy')}</Dropdown.GroupLabel>
+        <Dropdown.RadioGroup
+          value={preferences().sort}
+          onChange={(value) => {
+            const option = options().find((option) => option.value === value);
+            if (option)
+              rail.setSectionPreferences(props.section, { sort: option.value });
+          }}
+        >
+          <For each={options()}>
+            {(option) => (
+              <Dropdown.RadioItem closeOnSelect value={option.value}>
+                <span class="flex-1">{option.label}</span>
+                <Dropdown.ItemIndicator>
+                  <CheckIcon class="size-3.5 text-accent" />
+                </Dropdown.ItemIndicator>
+              </Dropdown.RadioItem>
+            )}
+          </For>
+        </Dropdown.RadioGroup>
+      </Dropdown.Group>
+      <Dropdown.Group>
+        <Dropdown.CheckboxItem
+          checked={preferences().unreadOnly ?? false}
+          onChange={(unreadOnly) =>
+            rail.setSectionPreferences(props.section, { unreadOnly })
+          }
+        >
+          <span>{t('channelSections.unreadOnly')}</span>
+        </Dropdown.CheckboxItem>
+      </Dropdown.Group>
+    </>
   );
 }

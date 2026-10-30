@@ -23,6 +23,7 @@ export default {
   manageSections: 'Manage sections',
   sections: 'Sections',
   optionsFor: 'Options for {{name}}',
+  sortAndFilterFor: 'Sort and filter {{name}}',
   expandSection: 'Expand section',
   collapseSection: 'Collapse section',
   expandAllSections: 'Expand all sections',

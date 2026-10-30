@@ -928,11 +928,12 @@ retain the team's existing label permissions and accept only channels from that
 team. Neither kind accepts DMs. A personal assignment never changes a shared
 assignment. Names are unique within each scope, case-insensitively.
 
-Each heading has an options menu with independent sorting and **Unread only**.
-Custom sections also offer editing, Mark all as read, and a destructive Delete
-action. Use the heading's caret to expand/collapse it; this is not repeated in
-its menu. The same custom-section actions appear in **Manage sections**. Sorting
-and unread filters are personal, even for a team-shared section. Date ordering
+Each heading has a sort/filter menu with independent sorting and **Unread only**.
+Custom sections have a separate **More** menu for editing, Mark all as read, and
+a destructive Delete action. Both menus use the standard dropdown groups and
+selection indicators. Use the heading's caret to expand/collapse it; this is not
+repeated in either menu. The same custom-section actions appear in **Manage sections**.
+Sorting and unread filters are personal, even for a team-shared section. Date ordering
 follows each paginated source; Favorites and custom sections also offer A–Z.
 Filtered-out channels retain their membership and do not reappear ungrouped.
 Shared name and rule edits apply to the team; personal edits affect only the account.

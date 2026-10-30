@@ -510,6 +510,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   section actions with Manage sections, and keep empty sections usable as drop targets.
   Create all section types through New → New section and one dialog; keep collapse on the header and style deletion as destructive.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
+  Keep each section's sort/filter dropdown separate from More actions, using shared Dropdown groups, selection indicators, and item styling.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
   never retry failed GraphQL writes through REST. Preserve non-owner history removal

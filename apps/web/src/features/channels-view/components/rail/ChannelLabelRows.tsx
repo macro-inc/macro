@@ -23,9 +23,9 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { Badge, cn, Dropdown } from '@ui';
-import { type Component, For, type JSX, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
-import { ChannelSectionMenuItems } from './ChannelSectionMenu';
+import { ChannelSectionDropdown } from './ChannelSectionMenu';
 import {
   type ChannelLabelDropData,
   rowKeyForLabel,
@@ -33,42 +33,6 @@ import {
 } from './ChannelsRailContext';
 import { ChannelSectionHeading } from './ChannelsRailSection';
 import { useChannelRailLabelState } from './hooks/useChannelRailState';
-
-type MenuIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
-
-/** A dropdown row in the house style: muted icon, muted label. */
-function MenuRow(props: {
-  icon: MenuIcon;
-  label: string;
-  disabled?: boolean;
-  danger?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <Dropdown.Item
-      disabled={props.disabled}
-      onSelect={props.onSelect}
-      class={props.danger ? 'text-failure' : undefined}
-    >
-      <span
-        class={cn(
-          'flex size-3.5 shrink-0 items-center justify-center',
-          props.danger ? 'text-failure' : 'text-ink-muted'
-        )}
-      >
-        <props.icon class="size-3.5" />
-      </span>
-      <span
-        class={cn(
-          'flex-1 truncate',
-          props.danger ? 'text-failure' : 'text-ink-muted'
-        )}
-      >
-        {props.label}
-      </span>
-    </Dropdown.Item>
-  );
-}
 
 /** A custom section with the same heading and controls as built-in sections. */
 export function ChannelLabelRow(props: { label: ChannelLabel }) {
@@ -130,6 +94,10 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
           </Show>
         }
       >
+        <ChannelSectionDropdown
+          section={rowKeyForLabel(props.label.id)}
+          label={props.label.name}
+        />
         <Dropdown placement="bottom-end">
           <Dropdown.Trigger
             aria-label={t('channelSections.optionsFor', {
@@ -179,38 +147,35 @@ function ChannelLabelActions(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
   return (
     <>
-      <ChannelSectionMenuItems section={rowKeyForLabel(props.label.id)} />
-      <Dropdown.Separator />
       <Dropdown.Group>
-        <MenuRow
-          icon={PencilSimpleIcon}
-          label={
-            props.label.rule
-              ? t('channelLabels.editSmartLabel')
-              : t('channelSections.renameSection')
-          }
+        <Dropdown.Item
           onSelect={() =>
             fireAndForget(rail.renameLabel(props.label), 'channels-view')
           }
-        />
-
-        <MenuRow
-          icon={ChecksIcon}
-          label={t('channelLabels.markAllAsRead')}
+        >
+          <PencilSimpleIcon class="size-3.5 text-ink-muted" />
+          {props.label.rule
+            ? t('channelLabels.editSmartLabel')
+            : t('channelSections.renameSection')}
+        </Dropdown.Item>
+        <Dropdown.Item
           disabled={rail.labelUnreadCount(props.label) === 0}
           onSelect={() => rail.markLabelRead(props.label)}
-        />
+        >
+          <ChecksIcon class="size-3.5 text-ink-muted" />
+          {t('channelLabels.markAllAsRead')}
+        </Dropdown.Item>
       </Dropdown.Group>
-      <Dropdown.Separator />
       <Dropdown.Group>
-        <MenuRow
-          icon={TrashIcon}
-          danger
-          label={t('channelSections.deleteSection')}
+        <Dropdown.Item
+          class="text-failure"
           onSelect={() =>
             fireAndForget(rail.deleteLabel(props.label), 'channels-view')
           }
-        />
+        >
+          <TrashIcon class="size-3.5" />
+          {t('channelSections.deleteSection')}
+        </Dropdown.Item>
       </Dropdown.Group>
     </>
   );
@@ -278,16 +243,14 @@ export function ChannelsSectionsMenu() {
           </Show>
           <Dropdown.Separator />
           <Dropdown.Group>
-            <MenuRow
-              icon={CaretDownIcon}
-              label={t('channelSections.expandAllSections')}
-              onSelect={() => setExpanded(true)}
-            />
-            <MenuRow
-              icon={CaretUpIcon}
-              label={t('channelSections.collapseAllSections')}
-              onSelect={() => setExpanded(false)}
-            />
+            <Dropdown.Item onSelect={() => setExpanded(true)}>
+              <CaretDownIcon class="size-3.5 text-ink-muted" />
+              {t('channelSections.expandAllSections')}
+            </Dropdown.Item>
+            <Dropdown.Item onSelect={() => setExpanded(false)}>
+              <CaretUpIcon class="size-3.5 text-ink-muted" />
+              {t('channelSections.collapseAllSections')}
+            </Dropdown.Item>
           </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>
