@@ -745,7 +745,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
           const row = current?.item;
           if (direction !== 1 || row?.kind !== 'conversation') return true;
 
-          const source = props.sources[row.scope];
+          const source = sources[row.scope];
           const renderedCount =
             row.scope === 'team_channels'
               ? channelSectionRows().length

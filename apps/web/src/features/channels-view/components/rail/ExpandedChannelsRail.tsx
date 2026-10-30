@@ -1000,7 +1000,7 @@ function ExpandedUnread() {
           scope="unread"
           topAligned
           action={{
-            label: 'Show all conversations',
+            label: t('channels.showAllConversations'),
             icon: ListIcon,
             onClick: () => rail.selectTab('browse'),
           }}

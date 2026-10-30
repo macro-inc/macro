@@ -3,6 +3,7 @@ import {
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
+import { t } from '@app/lib/i18n';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
 import BookOpenIcon from '@icon/system/regular/book-open.svg';
@@ -46,8 +47,8 @@ function emptyStateContent(
 
   if (scope === 'unread') {
     return {
-      title: 'No unread conversations',
-      description: 'New messages and mentions will appear here.',
+      title: t('channels.noUnreadConversations'),
+      description: t('channels.noUnreadConversationsDescription'),
     };
   }
 
