@@ -1,12 +1,18 @@
+import { reloadApp } from '@app/observability/reload';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   cancelEmailSend,
   readEmailSendStatus,
   submitEmailSend,
 } from '@service-storage/email-send';
+import { queryPersistence } from '../client';
 import { createEmailSendDispatcher } from './email-send-dispatcher';
 import { createEmailSendRecovery } from './email-send-recovery';
-import { emailStorageSession, localDraftStore } from './local-drafts';
+import {
+  emailStorageSession,
+  localDraftStore,
+  watchEmailStorageEnded,
+} from './local-drafts';
 import {
   emailSendFailureKind,
   recordEmailSend,
@@ -19,6 +25,7 @@ let generation = 0;
 let dispatcher: ReturnType<typeof createEmailSendDispatcher> | undefined;
 let retry: ReturnType<typeof setTimeout> | undefined;
 let recovery: ReturnType<typeof createEmailSendRecovery> | undefined;
+let stopWatching: (() => void) | undefined;
 
 /** Called by the authenticated app shell, not by individual email surfaces. */
 export function setEmailOutboxSession(accountId: string | undefined): void {
@@ -30,8 +37,26 @@ export function setEmailOutboxSession(accountId: string | undefined): void {
   recovery?.dispose();
   recovery = undefined;
   dispatcher = undefined;
+  stopWatching?.();
+  stopWatching = undefined;
   setServerSendSession(accountId);
-  if (accountId) fireAndForget(start(accountId, current), 'email-outbox');
+  if (!accountId) return;
+  // This page's draft session ended outside it; only a new page can reopen
+  // drafts. This page's own sign-out clears the account first, so it never
+  // reloads here.
+  stopWatching = watchEmailStorageEnded(accountId, () =>
+    fireAndForget(reloadForNewSession(), 'email-outbox')
+  );
+  fireAndForget(start(accountId, current), 'email-outbox');
+}
+
+/** Persist the current identity first, or the new page could restore the old one and reload again. */
+async function reloadForNewSession() {
+  try {
+    await queryPersistence.flush();
+  } finally {
+    reloadApp('logout');
+  }
 }
 
 async function start(accountId: string, current: number) {

@@ -20,7 +20,10 @@ import type { OperationResult } from '@urql/core';
 import { authKeys } from '../auth/keys';
 import type { UserInfoData } from '../auth/user-info';
 import { queryClient } from '../client';
-import { createLocalDraftStore } from './local-draft-store';
+import {
+  createLocalDraftStore,
+  type DraftStorageSession,
+} from './local-draft-store';
 
 import type { EmailSendIntent } from './send-intent';
 
@@ -42,6 +45,7 @@ const nativeUploadLocks = new Map<string, Promise<void>>();
 const pendingWrites = new Set<Promise<LocalDraft>>();
 const EPOCH_KEY = 'email-working-copies:epoch';
 let documentSession: { accountId: string; epoch: string } | undefined;
+let documentSessionOpened = false;
 let retiredSession = false;
 
 function storageEpoch() {
@@ -109,21 +113,85 @@ export async function emailStorageSession() {
   }
   documentSession ??= { accountId: user.id, epoch };
   const expected = documentSession;
-  return await localDraftStore.activate(
-    expected.accountId,
-    expected.epoch,
-    () => {
-      const current = queryClient.getQueryData<UserInfoData>(
-        authKeys.userInfo.queryKey
-      );
-      return (
-        !retiredSession &&
-        current?.authenticated === true &&
-        current.id === expected.accountId &&
-        localStorage.getItem(EPOCH_KEY) === expected.epoch
-      );
-    }
-  );
+  let session: DraftStorageSession;
+  try {
+    session = await localDraftStore.activate(
+      expected.accountId,
+      expected.epoch,
+      () => {
+        const current = queryClient.getQueryData<UserInfoData>(
+          authKeys.userInfo.queryKey
+        );
+        return (
+          !retiredSession &&
+          current?.authenticated === true &&
+          current.id === expected.accountId &&
+          localStorage.getItem(EPOCH_KEY) === expected.epoch
+        );
+      },
+      // Signing in over another account skips the sign-out that would end
+      // its session, so it still owns this epoch. Take over only from a
+      // document that has not opened storage (one that has is that account's
+      // stale tab) and whose account this document confirmed with the server
+      // (a restored identity can still name the previous account).
+      () =>
+        !documentSessionOpened &&
+        (queryClient.getQueryState(authKeys.userInfo.queryKey)?.dataUpdatedAt ??
+          0) >= performance.timeOrigin
+    );
+  } catch (error) {
+    // A concurrent call in this document took the storage over meanwhile.
+    if (documentSession !== expected) return await emailStorageSession();
+    throw error;
+  }
+  if (session.epoch !== expected.epoch) {
+    const current = localStorage.getItem(EPOCH_KEY);
+    // A sign-out that ran meanwhile owns the epoch; never write over it.
+    if (
+      retiredSession ||
+      (current !== expected.epoch && current !== session.epoch)
+    )
+      throw new Error('This draft session is no longer active');
+    localStorage.setItem(EPOCH_KEY, session.epoch);
+    documentSession = { accountId: session.accountId, epoch: session.epoch };
+  }
+  documentSessionOpened = true;
+  return session;
+}
+
+/**
+ * Calls `ended` when this document's session can never reopen: another tab
+ * moved the epoch off it (a sign-out or another account's takeover), or the
+ * signed-in account is no longer the session's. A document signing itself
+ * out is excluded.
+ */
+export function watchEmailStorageEnded(
+  accountId: string,
+  ended: () => void
+): () => void {
+  const check = () => {
+    if (
+      documentSession &&
+      !retiredSession &&
+      (documentSession.accountId !== accountId ||
+        localStorage.getItem(EPOCH_KEY) !== documentSession.epoch)
+    )
+      ended();
+  };
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === EPOCH_KEY || event.key === null) check();
+  };
+  // A document restored from the back/forward cache missed storage events.
+  const onShow = (event: PageTransitionEvent) => {
+    if (event.persisted) check();
+  };
+  window.addEventListener('storage', onStorage);
+  window.addEventListener('pageshow', onShow);
+  check();
+  return () => {
+    window.removeEventListener('storage', onStorage);
+    window.removeEventListener('pageshow', onShow);
+  };
 }
 
 export async function listLocalDrafts(): Promise<LocalDraft[]> {
@@ -568,6 +636,7 @@ export function localDraftQueueLifecycle(
   let initialized: Promise<void> | undefined;
   const legacy = new Map<string, DraftAttempt>();
   const migrated = new Map<string, number>();
+  const previousAccount = new Set<string>();
   async function ownedBySend(mutation: ClaimedMutation | MutationInspection) {
     if (
       mutation.operationName !== 'SaveEmailDraft' &&
@@ -612,6 +681,12 @@ export function localDraftQueueLifecycle(
     const known = legacy.get(mutation.transactionId);
     if (known) return known;
     const owner = await emailStorageSession();
+    // Queued before this account took the storage over: the previous account
+    // never signed out, and its sign-out would have discarded this intent.
+    if (owner.replaced && !((mutation.enqueuedAtMs ?? 0) > owner.replaced.at)) {
+      previousAccount.add(mutation.transactionId);
+      return;
+    }
     const storageGeneration = await host.currentStorageGeneration();
     const saved = (await localDraftStore.attempts(owner)).find(
       (entry) =>
@@ -826,7 +901,7 @@ export function localDraftQueueLifecycle(
         return 'defer';
       if (await ownedBySend(mutation)) return false;
       const attempt = await resolveAttempt(mutation);
-      if (!attempt) return true;
+      if (!attempt) return !previousAccount.has(mutation.transactionId);
       const owner = await emailStorageSession();
       if (owner.accountId !== attempt.accountId) return false;
       const local = await localDraftStore.read(owner, attempt.draftKey);

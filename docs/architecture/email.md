@@ -530,6 +530,18 @@ fences the prior local lifetime, and retires send authority atomically. Newer
 local edits and file bytes survive restoration. Sign-out retains approved sends
 under their original account and stops dispatch; ordinary drafts retain their
 existing sign-out policy.
+Signing into another account without signing out ends the previous account's
+draft session the same way: the first page that opens draft storage with an
+identity it confirmed with the server retires the old epoch, starts a new one,
+clears the previous working copies, keeps approved sends, and discards draft
+saves the previous account queued before the takeover. Pages that already
+opened storage, or whose identity is only restored, stay fenced. When a page's
+draft session ends outside it (another tab's sign-out, expiry, or takeover,
+including one missed in the back/forward cache, or a different signed-in
+account), the outbox session reloads that page; a page signing itself out does
+not. A confirmed
+session expiry loads `/welcome` as a new page, as sign-out does, because a
+cleared draft session never reopens in the same page.
 
 The server accepts the frozen message, attachment set, send attempt, and delivery
 job in one Postgres transaction. The existing recovery scanner and Gmail/Outlook
