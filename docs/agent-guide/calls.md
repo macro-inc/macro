@@ -252,10 +252,10 @@ speaking indicator. This is the current call roster, not the channel member list
 Dismiss with the backdrop or Escape to return focus to the header button.
 
 Open live chat with **Open chat** alongside the media controls. On phones, the
-fully rounded control bar fills the available space beside a separate chat button,
-while the media buttons stay together in a compact, centered group. The row keeps
-side gutters, an 8px gap (4px on the smallest phones), and a 48px chat tap target.
-Without chat, the controls fill the row without an empty chat column.
+fully rounded control bar fits its buttons instead of filling the available width,
+with small gaps between controls when space allows. Chat stays separate on the
+right with a 48px tap target. The row keeps its side gutters; without chat, the
+control bar stays centered without an empty chat column.
 On desktop, chat stays at the bottom-right and Copy Meeting Url stays at the
 bottom-left. On phones, Copy Meeting Url uses the shared `CopyButton` in a
 standard 40px header island, without custom button colors or sizing. Media
