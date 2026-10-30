@@ -54,6 +54,65 @@ function render(root: HTMLElement, value: string, scope: StepScope) {
   root.replaceChildren(...nodes);
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+/** `value` as markup: its fields as chips, its new lines as breaks. */
+function fieldHtml(value: string, scope: StepScope): string {
+  const text = (part: string) => escapeHtml(part).replaceAll('\n', '<br>');
+  let html = '';
+  let last = 0;
+  for (const found of value.matchAll(FIELD_PATTERN)) {
+    const at = found.index ?? 0;
+    html += text(value.slice(last, at));
+    html += fieldChip(found[0], fieldLabel(found[0], scope)).outerHTML;
+    last = at + found[0].length;
+  }
+  html += text(value.slice(last));
+  // A chip at the end needs text after it to put the caret on.
+  return last === value.length && last > 0 ? html + CARET_ANCHOR : html;
+}
+
+/**
+ * Edit through the browser so each change joins its undo history; false
+ * where it can't (tests), and the caller edits the DOM itself.
+ */
+function editCommand(
+  root: HTMLElement,
+  saved: Range | undefined,
+  command: 'insertHTML' | 'insertLineBreak' | 'delete',
+  value?: string
+): boolean {
+  if (typeof document.execCommand !== 'function') return false;
+  root.focus();
+  if (saved && root.contains(saved.startContainer)) {
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(saved);
+  }
+  try {
+    return document.execCommand(command, false, value);
+  } catch {
+    return false;
+  }
+}
+
+/** The selected text, with its fields as their `{{…}}` placeholders. */
+function selectedValue(root: HTMLElement): string | undefined {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return undefined;
+  const range = selection.getRangeAt(0);
+  if (!root.contains(range.commonAncestorContainer)) return undefined;
+  const copy = document.createElement('div');
+  copy.append(range.cloneContents());
+  return serialize(copy);
+}
+
 /** Put `nodes` where the caret was, else at the end, and the caret after them. */
 function insertAt(root: HTMLElement, nodes: Node[], saved: Range | undefined) {
   const range =
@@ -125,9 +184,11 @@ export function FieldText(props: {
       { defer: true }
     )
   );
-  const insertText = (text: string) => {
+  /** Insert `value` (text with `{{…}}` fields) at the caret. */
+  const insertValue = (value: string) => {
     if (!root) return;
-    insertAt(root, [document.createTextNode(text)], saved);
+    if (!editCommand(root, saved, 'insertHTML', fieldHtml(value, props.scope)))
+      insertAt(root, [document.createTextNode(value)], saved);
     remember();
     emit();
   };
@@ -167,16 +228,38 @@ export function FieldText(props: {
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.isComposing) return;
             event.preventDefault();
-            if (props.multiline) {
+            if (props.multiline && root) {
               remember();
-              insertText('\n');
+              if (!editCommand(root, saved, 'insertLineBreak'))
+                insertAt(root, [document.createTextNode('\n')], saved);
+              remember();
+              emit();
             }
+          }}
+          // Fields travel as their placeholders, so a pasted copy keeps them.
+          onCopy={(event) => {
+            const value = root && selectedValue(root);
+            if (value === undefined) return;
+            event.preventDefault();
+            event.clipboardData?.setData('text/plain', value);
+          }}
+          onCut={(event) => {
+            const value = root && selectedValue(root);
+            if (!root || value === undefined) return;
+            event.preventDefault();
+            event.clipboardData?.setData('text/plain', value);
+            remember();
+            if (!editCommand(root, saved, 'delete'))
+              window.getSelection()?.deleteFromDocument();
+            emit();
           }}
           onPaste={(event) => {
             event.preventDefault();
             const text = event.clipboardData?.getData('text/plain') ?? '';
             remember();
-            insertText(props.multiline ? text : text.replace(/\s*\n\s*/g, ' '));
+            insertValue(
+              props.multiline ? text : text.replace(/\s*\n\s*/g, ' ')
+            );
           }}
           onDrop={(event) => event.preventDefault()}
         />
@@ -185,14 +268,24 @@ export function FieldText(props: {
         scope={props.scope}
         onInsert={(field) => {
           if (!root) return;
-          insertAt(
-            root,
-            [
-              fieldChip(field, fieldLabel(field, props.scope)),
-              document.createTextNode(CARET_ANCHOR),
-            ],
-            saved
-          );
+          // Through the browser, so Undo takes back the chip, not earlier text.
+          if (
+            !editCommand(
+              root,
+              saved,
+              'insertHTML',
+              fieldChip(field, fieldLabel(field, props.scope)).outerHTML +
+                CARET_ANCHOR
+            )
+          )
+            insertAt(
+              root,
+              [
+                fieldChip(field, fieldLabel(field, props.scope)),
+                document.createTextNode(CARET_ANCHOR),
+              ],
+              saved
+            );
           remember();
           emit();
         }}
