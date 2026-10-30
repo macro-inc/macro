@@ -71,12 +71,12 @@ export function createFolderDropTargets(
   const move = async (
     entities: EntityData[],
     folderId: string,
-    clearSelection?: () => void
+    clearSelection: () => void
   ) => {
     const name = folders().get(folderId)?.name ?? folderId;
     try {
       await moveEntities(entities, { id: folderId, name });
-      clearSelection?.();
+      clearSelection();
       toast.success(
         entities.length > 1
           ? t('entityActions.toastMovedCount', { count: entities.length })
@@ -88,17 +88,20 @@ export function createFolderDropTargets(
   };
 
   onDragEnd(({ draggable, droppable }) => {
+    const data = draggable.data;
     const folderId = droppable && targets.get(droppable.id)?.();
-    if (!folderId) return;
-    const entities = droppableEntities(draggable.data, folderId);
+    if (!folderId || !isEntityDragData(data)) return;
+    const entities = droppableEntities(data, folderId);
     if (entities.length === 0) return;
+
     // Read now: the moved rows can leave the list before the server answers.
-    const selection = isEntityDragData(draggable.data)
-      ? draggable.data.selection
-      : undefined;
-    const clearSelection = selection?.isSelected()
-      ? selection.clear
-      : undefined;
+    const held = new Set(data.selection?.selected().map(({ id }) => id));
+    const clearSelection = () => {
+      const rowsAdded = data.selection
+        ?.selected()
+        .some(({ id }) => !held.has(id));
+      if (held.has(data.id) && !rowsAdded) data.selection?.clear();
+    };
     fireAndForget(move(entities, folderId, clearSelection), 'folder-drop');
   });
 

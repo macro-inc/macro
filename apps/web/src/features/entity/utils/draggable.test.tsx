@@ -113,7 +113,7 @@ describe('createEntityDraggable', () => {
     const other: ChannelEntity = { ...entity, id: 'other', name: 'Another' };
     const selection = {
       entities: () => [entity, other],
-      isSelected: () => true,
+      selected: () => [entity, other],
       clear: vi.fn(),
     };
     const { state } = setup(undefined, entity, selection);

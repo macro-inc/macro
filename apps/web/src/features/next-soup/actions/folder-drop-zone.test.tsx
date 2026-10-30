@@ -50,6 +50,7 @@ function dragData(
   options: {
     splitId?: string;
     selected?: EntityData[];
+    currentSelection?: () => EntityData[];
     clear?: () => void;
     operation?: 'move' | 'copy';
   }
@@ -61,7 +62,7 @@ function dragData(
     splitId: options.splitId ?? 'list-split',
     selection: options.selected && {
       entities: () => options.selected ?? [],
-      isSelected: () => true,
+      selected: options.currentSelection ?? (() => options.selected ?? []),
       clear: options.clear ?? (() => {}),
     },
   };
@@ -293,6 +294,53 @@ describe('FolderDropZone', () => {
 
     finishMove();
     await vi.waitFor(() => expect(clear).toHaveBeenCalled());
+  });
+
+  it('keeps a selection made while the move was in flight', async () => {
+    let finishMove = () => {};
+    mocks.moveEntities.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishMove = resolve;
+      })
+    );
+    const clear = vi.fn();
+    const row = doc('row');
+    let selection = [row];
+    const { start, drop } = setup(
+      dragData(row, {
+        selected: [row],
+        currentSelection: () => selection,
+        clear,
+      })
+    );
+
+    start();
+    drop();
+    await vi.waitFor(() => expect(mocks.moveEntities).toHaveBeenCalled());
+    selection = [row, doc('picked-later')];
+    finishMove();
+    await vi.waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
+
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it('leaves another selection alone when an unselected row moves', async () => {
+    mocks.moveEntities.mockResolvedValue(undefined);
+    const clear = vi.fn();
+    const row = doc('row');
+    const { start, drop } = setup(
+      dragData(row, {
+        selected: [row],
+        currentSelection: () => [doc('someone-else')],
+        clear,
+      })
+    );
+
+    start();
+    drop();
+    await vi.waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
+
+    expect(clear).not.toHaveBeenCalled();
   });
 
   it('reports a failed move and keeps the selection', async () => {
