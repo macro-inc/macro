@@ -593,7 +593,8 @@ describe('channel selection loading and recovery', () => {
     expect(mocks.markRead).not.toHaveBeenCalled();
 
     setQuery('isFetching', true);
-    expect(screen.getByTestId('channel-detail').textContent).toBe('one');
+    expect(screen.queryByTestId('channel-detail')).toBeNull();
+    expect(screen.getByText('Conversation unavailable')).toBeTruthy();
     batch(() => {
       setQuery('data', { entities: [full('one', ['new'])] });
       setQuery('isFetching', false);
