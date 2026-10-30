@@ -478,11 +478,11 @@ function StepCard(props: StepCardProps) {
           props.onMove(event.key === 'ArrowUp' ? -1 : 1);
         }}
       >
-        <div class="flex min-w-0 items-center gap-1 pr-1.5">
+        <div class="flex min-w-0 items-center gap-1 pr-2.5">
           <button
             type="button"
             aria-expanded={open()}
-            class="flex min-h-12 min-w-0 flex-1 items-center gap-2.5 rounded-xl py-1.5 pl-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
+            class="flex min-h-13 min-w-0 flex-1 items-center gap-2.5 rounded-xl py-2 pl-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
             onClick={() => setOpen(!open())}
           >
             <span class="w-4.5 shrink-0 text-right text-xs tabular-nums text-ink-extra-muted">
@@ -509,7 +509,9 @@ function StepCard(props: StepCardProps) {
           <StepMenu {...props} open={open()} />
         </div>
         <Show when={open()}>
-          <div class="grid min-w-0 gap-3 pb-3.5 pl-[3.5rem] pr-3 pt-1 @max-[30rem]/step:pl-3">
+          {/* Fields start under the title (padding, number, icon and their gaps)
+            and keep the card's padding on the right and bottom. */}
+          <div class="grid min-w-0 gap-3 pb-4 pl-20 pr-4 pt-1 @max-[30rem]/step:pl-4">
             <StepBody
               step={props.step}
               path={props.path}

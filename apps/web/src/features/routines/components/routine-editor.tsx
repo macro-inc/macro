@@ -138,6 +138,8 @@ export function RoutineEditor(props: {
   hasTriggers?: boolean;
   /** Under the title: Enabled, owner, last run. */
   meta?: JSX.Element;
+  /** At the right end of the meta line, e.g. Compose with agent. */
+  metaAction?: JSX.Element;
   /** The Connections surface's rows; the section shows only with them. */
   connections?: JSX.Element;
   /** The Runs & notifications surface's rows. */
@@ -315,6 +317,9 @@ export function RoutineEditor(props: {
                     <Show when={props.meta}>
                       <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-muted">
                         {props.meta}
+                        <Show when={props.metaAction}>
+                          <div class="ml-auto shrink-0">{props.metaAction}</div>
+                        </Show>
                       </div>
                     </Show>
                   </header>

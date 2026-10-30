@@ -206,18 +206,6 @@ export function RoutineDetailView(props: {
                     failed={Boolean(autosave.error())}
                   />
                 </Show>
-                <Show when={props.onCompose}>
-                  {(compose) => (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => compose()()}
-                    >
-                      <SparkleIcon class="size-3.5" />
-                      Compose with agent
-                    </Button>
-                  )}
-                </Show>
                 <RoutineRunButton
                   enabled={isActive()}
                   runDisabled={runDisabled() || needsEvent()}
@@ -338,6 +326,22 @@ export function RoutineDetailView(props: {
             </>
           }
           nextRun={nextRun()}
+          metaAction={
+            isOwned() && (
+              <Show when={props.onCompose}>
+                {(compose) => (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => compose()()}
+                  >
+                    <SparkleIcon class="size-3.5" />
+                    Compose with agent
+                  </Button>
+                )}
+              </Show>
+            )
+          }
           meta={
             <>
               <ToggleSwitch
