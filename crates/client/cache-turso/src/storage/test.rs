@@ -33,8 +33,10 @@ impl TursoStorage {
         bucket: &str,
     ) -> Result<Vec<SearchDocument>, TursoStorageError> {
         let mut rows = Vec::new();
-        self.visit_search_documents(profile, bucket, &SearchQuery::new(""), |row| rows.push(row))
-            .await?;
+        self.visit_search_documents(profile, bucket, &SearchQuery::new(""), |row| {
+            rows.push(row.into_owned())
+        })
+        .await?;
         Ok(rows)
     }
 }

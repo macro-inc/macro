@@ -1,7 +1,7 @@
 use crate::{PhysicalResetReason, TursoStorageError};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
-use turso_core::{Connection, LimboError, Statement, StepResult, Value};
+use turso_core::{Connection, LimboError, Row, Statement, StepResult, Value};
 
 pub(crate) type Values = Vec<Value>;
 pub(crate) type Rows = Vec<Values>;
@@ -68,7 +68,7 @@ pub(crate) fn query_each(
     connection: &Arc<Connection>,
     sql: &str,
     values: Values,
-    visit: impl FnMut(Values) -> Result<(), TursoStorageError>,
+    visit: impl FnMut(&Row) -> Result<(), TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
     let mut statement = prepare(connection, sql)?;
     query_each_prepared(&mut statement, values, visit)
@@ -77,7 +77,7 @@ pub(crate) fn query_each(
 pub(crate) fn query_each_prepared(
     statement: &mut Statement,
     values: Values,
-    visit: impl FnMut(Values) -> Result<(), TursoStorageError>,
+    visit: impl FnMut(&Row) -> Result<(), TursoStorageError>,
 ) -> Result<(), TursoStorageError> {
     visit_prepared(statement, values, visit)
         .map(|_| ())
@@ -112,7 +112,7 @@ pub(crate) fn query_prepared(
 fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64), RunFailure> {
     let mut rows = Vec::new();
     let changed = visit_prepared(statement, values, |row| {
-        rows.push(row);
+        rows.push(row.get_values().cloned().collect());
         Ok(())
     })?;
     Ok((rows, changed))
@@ -121,7 +121,7 @@ fn run_prepared(statement: &mut Statement, values: Values) -> Result<(Rows, i64)
 fn visit_prepared(
     statement: &mut Statement,
     values: Values,
-    mut visit: impl FnMut(Values) -> Result<(), TursoStorageError>,
+    mut visit: impl FnMut(&Row) -> Result<(), TursoStorageError>,
 ) -> Result<i64, RunFailure> {
     // Time binding, stepping/I/O, row processing, and cleanup, not worker queue
     // wait or statement preparation. Reused statements are timed per execution.
@@ -158,7 +158,7 @@ fn visit_prepared(
                     let row = statement
                         .row()
                         .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Corruption))?;
-                    visit(row.get_values().cloned().collect())?;
+                    visit(row)?;
                 }
                 StepResult::IO => {
                     #[cfg(all(test, not(target_arch = "wasm32")))]

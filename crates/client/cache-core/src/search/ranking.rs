@@ -2,8 +2,8 @@
 //! Only winners are cloned; the heap owns at most limit + 1 documents.
 
 use super::{
-    SearchCursor, SearchDocument, SearchPage, SearchQuery, SearchRequest, compare_recent,
-    score_normalized_query,
+    SearchCursor, SearchDocument, SearchDocumentRef, SearchPage, SearchQuery, SearchRequest,
+    compare_recent_rows, score_normalized_query,
 };
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -15,7 +15,12 @@ struct Scored {
 
 impl Ord for Scored {
     fn cmp(&self, other: &Self) -> Ordering {
-        compare(&self.document, self.score, &other.document, other.score)
+        compare(
+            self.document.as_borrowed(),
+            self.score,
+            other.document.as_borrowed(),
+            other.score,
+        )
     }
 }
 impl PartialOrd for Scored {
@@ -31,15 +36,15 @@ impl PartialEq for Scored {
 impl Eq for Scored {}
 
 fn compare(
-    left: &SearchDocument,
+    left: SearchDocumentRef<'_>,
     left_score: f64,
-    right: &SearchDocument,
+    right: SearchDocumentRef<'_>,
     right_score: f64,
 ) -> Ordering {
     // Better results are smaller, so the heap keeps its worst result at the root.
     right_score
         .total_cmp(&left_score)
-        .then_with(|| compare_recent(left, right))
+        .then_with(|| compare_recent_rows(left, right))
 }
 
 pub(crate) struct SearchRanker<'a> {
@@ -57,7 +62,7 @@ impl<'a> SearchRanker<'a> {
         }
     }
 
-    pub(crate) fn push(&mut self, document: &SearchDocument) {
+    pub(crate) fn push(&mut self, document: SearchDocumentRef<'_>) {
         let score = if self.query.0.is_empty() {
             Some(0.0)
         } else {
@@ -66,14 +71,14 @@ impl<'a> SearchRanker<'a> {
         let Some(score) = score else { return };
         if self.best.len() < self.request.limit + 1 {
             self.best.push(Scored {
-                document: document.clone(),
+                document: document.into_owned(),
                 score,
             });
         } else if let Some(mut worst) = self.best.peek_mut()
-            && compare(document, score, &worst.document, worst.score).is_lt()
+            && compare(document, score, worst.document.as_borrowed(), worst.score).is_lt()
         {
             *worst = Scored {
-                document: document.clone(),
+                document: document.into_owned(),
                 score,
             };
         }

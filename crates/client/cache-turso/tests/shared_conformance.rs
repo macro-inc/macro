@@ -236,7 +236,7 @@ async fn search_projection_contract<S: Storage>(storage: &mut S) {
     let query = cache_core::search::SearchQuery::new("qtrly plan");
     storage
         .visit_search_documents(SearchProfile::QuickAccessV1, "document", &query, |row| {
-            loaded.push(row)
+            loaded.push(row.into_owned())
         })
         .await
         .unwrap();
@@ -259,7 +259,7 @@ async fn search_projection_contract<S: Storage>(storage: &mut S) {
     loaded.clear();
     storage
         .visit_search_documents(SearchProfile::QuickAccessV1, "document", &query, |row| {
-            loaded.push(row)
+            loaded.push(row.into_owned())
         })
         .await
         .unwrap();

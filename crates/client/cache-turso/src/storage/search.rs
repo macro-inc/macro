@@ -2,6 +2,48 @@
 //! Values are bound; rows stream to the core for final scoring without a limit.
 
 use super::{SEARCH_LOAD, SearchProfile, SearchQuery, driver, text};
+use crate::{PhysicalResetReason, TursoStorageError, key::RecordKey};
+use cache_core::search::SearchDocumentRef;
+use turso_core::{Numeric, Row, Value};
+
+pub(super) fn visit_row(
+    row: &Row,
+    profile: SearchProfile,
+    key_buffer: &mut String,
+    visit: &mut impl FnMut(SearchDocumentRef<'_>),
+) -> Result<(), TursoStorageError> {
+    let mut values = row.get_values();
+    let (
+        Some(Value::Text(typename)),
+        Some(Value::Text(id)),
+        Some(Value::Text(bucket)),
+        Some(Value::Text(search_text)),
+        Some(Value::Numeric(Numeric::Integer(timestamp_ms))),
+        Some(Value::Text(source_hash)),
+        None,
+    ) = (
+        values.next(),
+        values.next(),
+        values.next(),
+        values.next(),
+        values.next(),
+        values.next(),
+        values.next(),
+    )
+    else {
+        return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
+    };
+    let record_key = RecordKey::borrow_entity(typename.as_str(), id.as_str(), key_buffer)?;
+    visit(SearchDocumentRef {
+        profile,
+        record_key: &record_key,
+        bucket: bucket.as_str(),
+        search_text: search_text.as_str(),
+        timestamp_ms: *timestamp_ms,
+        source_hash: source_hash.as_str(),
+    });
+    Ok(())
+}
 
 pub(super) fn statement(
     profile: SearchProfile,

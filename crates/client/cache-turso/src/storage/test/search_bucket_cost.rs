@@ -49,7 +49,7 @@ fn text_search_filters_in_sql_and_uses_the_bucket_index() {
             let mut documents = Vec::new();
             storage
                 .visit_search_documents(SearchProfile::QuickAccessV1, "document", &query, |row| {
-                    documents.push(row)
+                    documents.push(row.into_owned())
                 })
                 .await
                 .unwrap();

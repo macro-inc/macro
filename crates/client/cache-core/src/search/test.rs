@@ -246,7 +246,7 @@ fn email_projection_matches_subject_and_all_senders_but_never_bodies() {
         let normalized = SearchQuery::new(query);
         let mut ranker = SearchRanker::new(&request, &normalized);
         for document in &documents {
-            ranker.push(document);
+            ranker.push(document.as_borrowed());
         }
         let page = ranker.finish();
         assert_eq!(page.documents.len(), 1, "{query}");

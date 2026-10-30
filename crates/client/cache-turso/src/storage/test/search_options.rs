@@ -50,15 +50,19 @@ fn compare_search_scan_options() {
             eprintln!("covering plan: {plan:?}");
             let mut baseline = driver::prepare(&connection, &sql).unwrap();
             let mut indexed = driver::prepare(&connection, &covering).unwrap();
-            let mut times = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+            let mut times: [Vec<Duration>; 6] = std::array::from_fn(|_| Vec::new());
             let mut prepare_time = Duration::ZERO;
             for round in 0..9 {
                 // Alternate order, discarding the first two rounds for cache warming.
-                for mode in (0..4).map(|n| (n + round) % 4) {
+                for mode in (0..6).map(|n| (n + round) % 6) {
                     let started = Instant::now();
-                    let text = if mode >= 2 { &covering } else { &sql };
+                    let text = if matches!(mode, 2 | 3 | 5) {
+                        &covering
+                    } else {
+                        &sql
+                    };
                     let mut prepared;
-                    let statement = if mode % 2 == 0 {
+                    let statement = if !matches!(mode, 1 | 3) {
                         let prepare_start = Instant::now();
                         prepared = driver::prepare(&connection, text).unwrap();
                         prepare_time += prepare_start.elapsed();
@@ -69,11 +73,23 @@ fn compare_search_scan_options() {
                         &mut baseline
                     };
                     let mut rows = 0;
+                    let mut key_buffer = String::new();
                     driver::query_each_prepared(statement, parameters.clone(), |row| {
-                        std::hint::black_box(parse_search_document(
-                            &row,
-                            SearchProfile::QuickAccessV1,
-                        )?);
+                        if mode >= 4 {
+                            search::visit_row(
+                                row,
+                                SearchProfile::QuickAccessV1,
+                                &mut key_buffer,
+                                &mut |document| {
+                                    std::hint::black_box(document);
+                                },
+                            )?;
+                        } else {
+                            std::hint::black_box(parse_search_document(
+                                &row.get_values().cloned().collect::<Vec<_>>(),
+                                SearchProfile::QuickAccessV1,
+                            )?);
+                        }
                         rows += 1;
                         Ok(())
                     })
@@ -89,8 +105,8 @@ fn compare_search_scan_options() {
                 values[values.len() / 2]
             });
             eprintln!(
-                "query={query:?}: [baseline, reused, covering, covering+reused]={medians:?}; mean prepare={:?}",
-                prepare_time / 18
+                "query={query:?}: [baseline, reused, covering, covering+reused, borrowed, covering+borrowed]={medians:?}; mean prepare={:?}",
+                prepare_time / 36
             );
         }
     });

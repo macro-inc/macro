@@ -21,7 +21,7 @@ use cache_core::queue::{
 };
 use cache_core::search::{
     QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
-    SearchProfile, SearchQuery, project_search_documents,
+    SearchDocumentRef, SearchProfile, SearchQuery, project_search_documents,
 };
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
@@ -1040,13 +1040,13 @@ impl Storage for TursoStorage {
         profile: SearchProfile,
         bucket: &str,
         query: &SearchQuery,
-        mut visit: impl FnMut(SearchDocument) + maybe_send::MaybeSend,
+        mut visit: impl FnMut(SearchDocumentRef<'_>) + maybe_send::MaybeSend,
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let (sql, values) = search::statement(profile, bucket, query);
+        let mut key = String::new();
         let result = driver::query_each(&self.connection(), &sql, values, |row| {
-            visit(parse_search_document(&row, profile)?);
-            Ok(())
+            search::visit_row(row, profile, &mut key, &mut visit)
         });
         self.latch_result(result)
     }

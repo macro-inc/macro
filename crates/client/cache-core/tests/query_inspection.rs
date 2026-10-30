@@ -94,7 +94,7 @@ impl Storage for OwnerOnlyStorage {
         profile: cache_core::search::SearchProfile,
         bucket: &str,
         query: &cache_core::search::SearchQuery,
-        visit: impl FnMut(cache_core::search::SearchDocument) + maybe_send::MaybeSend,
+        visit: impl FnMut(cache_core::search::SearchDocumentRef<'_>) + maybe_send::MaybeSend,
     ) -> Result<(), Self::Error> {
         self.0
             .visit_search_documents(profile, bucket, query, visit)

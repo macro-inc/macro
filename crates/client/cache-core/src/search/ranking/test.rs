@@ -1,5 +1,5 @@
 use super::*;
-use crate::search::{SearchProfile, fuzzy_freshness_score};
+use crate::search::{SearchProfile, compare_recent, fuzzy_freshness_score};
 use crate::value::EntityKey;
 
 fn documents() -> Vec<SearchDocument> {
@@ -79,7 +79,7 @@ fn bounded_heap_matches_full_sort_for_text_browse_unicode_ties_and_dm_boost() {
                 let normalized = SearchQuery::new(query);
                 let mut ranker = SearchRanker::new(&request, &normalized);
                 for document in &corpus {
-                    ranker.push(document);
+                    ranker.push(document.as_borrowed());
                     assert!(ranker.best.len() <= limit + 1);
                 }
                 let actual = ranker.finish();

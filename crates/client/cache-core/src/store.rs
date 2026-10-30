@@ -21,7 +21,8 @@ use crate::queue::{
     MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
 };
 use crate::search::{
-    SearchCursor, SearchDocument, SearchProfile, SearchQuery, project_search_documents,
+    SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
+    project_search_documents,
 };
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
@@ -95,7 +96,7 @@ pub trait Storage: MaybeSend {
         profile: SearchProfile,
         bucket: &str,
         query: &SearchQuery,
-        visit: impl FnMut(SearchDocument) + MaybeSend,
+        visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Reads one bucket in indexed recent order. `after` is exclusive.
@@ -456,7 +457,7 @@ impl Storage for InMemoryStorage {
         profile: SearchProfile,
         bucket: &str,
         query: &SearchQuery,
-        mut visit: impl FnMut(SearchDocument) + MaybeSend,
+        mut visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
     ) -> Result<(), Self::Error> {
         self.search_query_count.fetch_add(1, Ordering::Relaxed);
         for document in self.search_documents.values().filter(|document| {
@@ -465,7 +466,7 @@ impl Storage for InMemoryStorage {
                 && query.matches(&document.search_text)
         }) {
             self.search_rows_visited.fetch_add(1, Ordering::Relaxed);
-            visit(document.clone());
+            visit(document.as_borrowed());
         }
         Ok(())
     }

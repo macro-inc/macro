@@ -52,8 +52,8 @@ use crate::record_selection::{
 };
 use crate::revision::{CacheRevision, Revisioned};
 use crate::search::{
-    SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile, SearchQuery,
-    SearchRanker, SearchRequest, collect_search_changes, project_search_documents,
+    SearchCursor, SearchDocument, SearchDocumentRef, SearchError, SearchPage, SearchProfile,
+    SearchQuery, SearchRanker, SearchRequest, collect_search_changes, project_search_documents,
     snapshot_search_fields, validate_search_request,
 };
 use crate::store::{QueueDiagnostics, Storage};
@@ -1215,11 +1215,11 @@ impl<S: Storage> Engine<S> {
             }
             // A shadow removes its durable counterpart even if its new value
             // is deleted, moved to another bucket, or no longer matches.
-            let mut visit = |document: SearchDocument| {
-                if !overlay.contains_key(&document.record_key)
-                    && cursor_allows(request.cursor.as_ref(), &document)
+            let mut visit = |document: SearchDocumentRef<'_>| {
+                if !overlay.contains_key(document.record_key)
+                    && cursor_allows(request.cursor.as_ref(), document)
                 {
-                    ranker.push(&document);
+                    ranker.push(document);
                 }
             };
             if request.query.trim().is_empty() {
@@ -1238,7 +1238,7 @@ impl<S: Storage> Engine<S> {
                     .await
                     .map_err(EngineError::Storage)?;
                 for document in rows {
-                    visit(document);
+                    visit(document.as_borrowed());
                 }
             } else {
                 self.storage
@@ -1249,9 +1249,9 @@ impl<S: Storage> Engine<S> {
         }
         for document in overlay.values().filter_map(Option::as_ref) {
             if bucket_set.contains(document.bucket.as_str())
-                && cursor_allows(request.cursor.as_ref(), document)
+                && cursor_allows(request.cursor.as_ref(), document.as_borrowed())
             {
-                ranker.push(document);
+                ranker.push(document.as_borrowed());
             }
         }
         Ok(ranker.finish())
@@ -3299,11 +3299,11 @@ fn layer_keys(layers: &[OptimisticLayer]) -> BTreeSet<EntityKey<'static>> {
         .collect()
 }
 
-fn cursor_allows(cursor: Option<&SearchCursor>, document: &SearchDocument) -> bool {
+fn cursor_allows(cursor: Option<&SearchCursor>, document: SearchDocumentRef<'_>) -> bool {
     cursor.is_none_or(|cursor| {
         document.timestamp_ms < cursor.timestamp_ms
             || (document.timestamp_ms == cursor.timestamp_ms
-                && document.record_key > cursor.record_key)
+                && document.record_key > &cursor.record_key)
     })
 }
 

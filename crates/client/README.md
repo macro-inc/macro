@@ -252,9 +252,10 @@ the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
 stops at NUL; Rust verifies them without truncation. Searching documents does not
 read cached email buckets. Empty bucket selection still means every profile bucket.
 
-The driver visits one compact row at a time instead of collecting results. One
-Rust ranker retains at most `limit + 1` owned documents across all requested
-buckets; there is no retained text-search catalog. Do not limit SQL matches before
+The driver borrows each Turso row directly instead of collecting or copying it.
+The adapter validates every row and reuses one canonical-key buffer; only winning
+rows become owned documents. One Rust ranker retains at most `limit + 1` owned
+documents across all requested buckets; there is no retained text-search catalog. Do not limit SQL matches before
 ranking. Fuzzy/freshness scoring, DM priority and recency/key tie breaks remain
 unchanged. Optimistic shadows suppress their durable counterparts before ranking,
 including deleted and nonmatching replacements. Empty-query browsing retains its
@@ -269,6 +270,12 @@ measurement with `cargo test -p cache-turso --test search -- --ignored --nocaptu
 The `web` test target exercises the same parity contract over real browser OPFS;
 its ignored `search_100k_rows_over_opfs` measurement runs with
 `-- --include-ignored --nocapture` under the browser runner.
+The ignored native `compare_search_scan_options` test separately compares prepared
+statement reuse, covering-index scans, and borrowed-row decoding against the same
+100k rows (release build, alternating order, seven warm samples). Covering indexes
+exist only in its disposable fixture: do not change the frozen on-disk layout
+without a queue-preserving compatibility/rollout design. Statement reuse has not
+shown a material benefit and is not enabled in production.
 
 ## Browser OPFS writes
 
