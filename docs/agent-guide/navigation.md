@@ -1041,19 +1041,21 @@ four template cards (icon, name, one line and its trigger → first step, such a
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. Rows are grouped under **When something happens** and **On a
-schedule**, each with a count. Each row has an
-on/off switch (pause or resume without opening it; turned-off rows are dimmed),
-the name, **When** (an icon for the trigger's kind and its triggers in a line,
-such as **New email received** or **Weekdays at 9:00 AM**, with an AI check
-after " · "), **Then** (an **AI picks** chip and the options for a choice, an
-**Ask AI** chip and the gist of the instructions for an agent, otherwise the
-actions, such as **Create task · Set priority**) and **Last run**: a dot (green
+scroll sideways. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
+Rows are grouped under **When something happens** and **On a schedule**, each a
+band like the tasks list's group headers, with a count. Each row has an icon for
+its trigger's kind, the name with its description below it when it has one,
+**Trigger** (its triggers in a line, such as **New email received** or
+**Weekdays at 9:00 AM**, with an AI check after " · "), **Steps** (an **AI
+picks** chip and the options for a choice, an **Ask AI** chip and the gist of the
+instructions for an agent, otherwise the actions, such as **Create task · Set
+priority**), **Last run**, and at the end an on/off switch (pause or resume
+without opening it; turned-off rows are dimmed). Last run is a dot (green
 for a run that acted, red for a failure, grey for a skipped run or one that
 changed nothing), the time (today) or day, and what it did or why it failed or
 was skipped (**Skipped: condition not met**), or **Not run yet**. Last run comes
 with the list and only for routines you own. Click a row to open it in the same
-pane. Below 760px wide (a phone, or the Settings sheet) rows drop When and Then,
+pane. Below 760px wide (a phone, or the Settings sheet) rows drop Trigger and Steps,
 and Last run shows only the dot and time.
 
 Open the routine and use its **Runs** tab to see past runs. **Show runs in
@@ -1220,7 +1222,7 @@ A routine's top bar uses the task breadcrumb layout: **Routines → routine name
 with its three-dot menu (**Duplicate**, **Share**, **Delete**)
 right after the name, then the **Overview** / **Runs** tabs (Runs with a count),
 and at the right the save state (**Saving…** / **Saved**), **Run now** with its
-**Run options** menu, and the details toggle.
+**Run options** menu.
 Overview is the routine as a page:
 its icon, an editable title, an editable description (**Add a description…**;
 saves on blur or Enter, Escape discards, up to 1000 characters; a drafted
@@ -1235,13 +1237,9 @@ the **Who** model or agent token and the instructions); **Connections**, shown
 when the routine has an **Ask AI** step or apps, lists its apps or **No
 connections added** with **Add connection**; and **Runs & notifications** has
 **Show runs in Home and Agents** and **Runs as** (the owner, whose access steps
-and AI use). The details panel, like a task's or document's, holds Owner,
-Created, Next run and **Last 7 days** (runs, skipped, failed, from the loaded
-history) on a card, then a **Template** section (**Not shared · Share…**, or **Created
-from template ↗**). It is a column beside the page when the pane is at least
-1224px wide (the shared side panel's split width), open by default and
-remembered; narrower panes float it over the page from the toggle, as tasks and
-documents do. The **Run options** menu
+and AI use). There is no details panel: next run sits beside **Trigger**, the
+last run under the title, and a routine made from a template links to it there
+(**From a template ↗**). The **Run options** menu
 contains **Turn on** / **Turn off** and **Copy prompt**, which copies the
 instructions of the first **Ask AI** step, including unsaved edits.
 
@@ -1333,7 +1331,7 @@ reference is decided, then creates the viewer's own enabled routine and opens
 it. A left-out reference becomes plain text. References come from the
 instructions (a routine with steps: its **Ask AI** step's); its actions and
 required apps carry over as they are. That routine behaves like any other, with
-a **Template** section in its details panel that links back.
+**From a template ↗** under its title linking back.
 
 A channel message that mentions a shared routine shows a template card under
 its text: name, author, description, triggers, activation count, **View

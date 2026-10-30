@@ -15,8 +15,9 @@ import type { TriggerKind } from '../core/routine-triggers';
 import type { RoutineRow } from '../core/types';
 
 /**
- * Shared geometry keeps routine properties aligned with their column headers.
- * A narrow list (a phone) drops the headers, When and Then.
+ * Shared geometry keeps routine properties aligned with their column headers:
+ * name, trigger, steps, last run, and the on/off switch at the end. A narrow
+ * list (a phone) drops the headers, Trigger and Steps.
  */
 export function RoutineRowLayout(
   props: ParentProps<Pick<JSX.HTMLAttributes<HTMLDivElement>, 'class' | 'role'>>
@@ -25,7 +26,7 @@ export function RoutineRowLayout(
     <EntityLayout
       role={props.role}
       class={cn(
-        'grid min-h-11 min-w-[760px] grid-cols-[minmax(13rem,1.3fr)_minmax(12rem,1fr)_minmax(12rem,1fr)_minmax(10rem,13rem)] items-center gap-3 px-3 @max-[760px]/routines:min-w-0 @max-[760px]/routines:grid-cols-[minmax(0,1fr)_minmax(0,auto)]',
+        'grid min-h-11 min-w-[760px] grid-cols-[minmax(14rem,1.6fr)_minmax(11rem,1fr)_minmax(11rem,1fr)_minmax(9rem,12rem)_2.25rem] items-center gap-4 px-3 @max-[760px]/routines:min-w-0 @max-[760px]/routines:grid-cols-[minmax(0,1fr)_minmax(0,auto)_2.25rem]',
         props.class
       )}
     >
@@ -49,7 +50,7 @@ function TriggerIcon(props: { kind?: TriggerKind }) {
     <Dynamic
       component={icon()}
       aria-hidden="true"
-      class="size-3.5 shrink-0 text-ink-muted"
+      class="size-4 shrink-0 text-ink-muted"
     />
   );
 }
@@ -99,34 +100,27 @@ export function RoutineListRow(props: {
       onClick={() => props.onOpen(props.row.id)}
     >
       <RoutineRowLayout class="px-2 text-sm">
-        <EntitySlot role="cell" class="flex min-w-0 items-center gap-2.5">
-          {/* The switch acts on the routine without opening it. */}
-          <span
-            class="flex shrink-0"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <Tooltip label={toggleDescription()}>
-              <ToggleSwitch
-                label={`Enabled for ${props.row.name}`}
-                labelClass="sr-only"
-                aria-busy={props.pending}
-                checked={props.row.enabled}
-                disabled={toggleDisabled()}
-                onChange={() => props.onToggle(props.row)}
-              />
+        <EntitySlot role="cell" class="flex min-w-0 items-center gap-3 py-2">
+          <TriggerIcon kind={props.row.whenKind} />
+          <span class="flex min-w-0 flex-col">
+            <Tooltip label={props.row.name} class="min-w-0 max-w-full">
+              <button
+                type="button"
+                class="block min-w-0 max-w-full truncate text-left font-medium text-ink outline-none focus-visible:underline"
+              >
+                {props.row.name}
+              </button>
             </Tooltip>
+            <Show when={props.row.description}>
+              {(description) => (
+                <span class="truncate text-[13px] text-ink-muted">
+                  {description()}
+                </span>
+              )}
+            </Show>
           </span>
-          <Tooltip label={props.row.name} class="min-w-0 max-w-full">
-            <button
-              type="button"
-              class="block min-w-0 max-w-full truncate text-left font-medium text-ink outline-none focus-visible:underline"
-            >
-              {props.row.name}
-            </button>
-          </Tooltip>
         </EntitySlot>
         <Cell label={props.row.when} class="@max-[760px]/routines:hidden">
-          <TriggerIcon kind={props.row.whenKind} />
           <span class="truncate">{props.row.when}</span>
         </Cell>
         <Cell label={doesLabel()} class="@max-[760px]/routines:hidden">
@@ -180,6 +174,23 @@ export function RoutineListRow(props: {
             </Cell>
           )}
         </Show>
+        {/* The switch acts on the routine without opening it. */}
+        <EntitySlot
+          role="cell"
+          class="flex justify-end"
+          onClick={(event: MouseEvent) => event.stopPropagation()}
+        >
+          <Tooltip label={toggleDescription()}>
+            <ToggleSwitch
+              label={`Enabled for ${props.row.name}`}
+              labelClass="sr-only"
+              aria-busy={props.pending}
+              checked={props.row.enabled}
+              disabled={toggleDisabled()}
+              onChange={() => props.onToggle(props.row)}
+            />
+          </Tooltip>
+        </EntitySlot>
       </RoutineRowLayout>
     </div>
   );

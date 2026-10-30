@@ -5,6 +5,8 @@ import type { RunOutcome } from './step-history';
 export type RoutineRow = {
   id: string;
   name: string;
+  /** What it is for, in the owner's words; absent when unset. */
+  description?: string;
   createdAt: string;
   /** What starts it, e.g. "New email received" or "Weekdays at 9:00 AM". */
   when: string;

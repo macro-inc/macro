@@ -66,6 +66,7 @@ export function createRoutineRows(
         return {
           id: routine.id,
           name: routine.name,
+          description: draft?.description?.trim() || undefined,
           createdAt: routine.createdAt,
           when: describeWhen(draft?.triggers ?? []),
           whenKind: first ? triggerKind(first) : undefined,

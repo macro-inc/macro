@@ -6,7 +6,7 @@ import {
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
-import { Button, Tabs } from '@ui';
+import { Button, ComposerSurface, Layer, Tabs } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { RoutineTemplate } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
@@ -169,10 +169,13 @@ export function RoutinesList(props: {
               role="row"
               class="min-h-8 px-2 text-xs font-medium text-ink-extra-muted"
             >
-              <span role="columnheader">Routine</span>
-              <span role="columnheader">When</span>
-              <span role="columnheader">Then</span>
+              <span role="columnheader">Name</span>
+              <span role="columnheader">Trigger</span>
+              <span role="columnheader">Steps</span>
               <span role="columnheader">Last run</span>
+              <span role="columnheader" class="sr-only">
+                On
+              </span>
             </RoutineRowLayout>
           </div>
           <div
@@ -182,14 +185,21 @@ export function RoutinesList(props: {
             <For each={groups()}>
               {(group) => (
                 <>
-                  <div
-                    role="row"
-                    class="mx-1 flex items-center px-2 pb-1.5 pt-4 text-xs font-medium text-ink-extra-muted"
-                  >
-                    <span role="cell" aria-colspan={4} class="flex gap-2">
-                      {group.title}
-                      <span class="tabular-nums">{group.rows.length}</span>
-                    </span>
+                  {/* A band like the tasks list's group headers. */}
+                  <div role="row" class="pb-0.5 pt-3">
+                    <div role="cell" aria-colspan={5}>
+                      <Layer depth={3}>
+                        <ComposerSurface
+                          as="div"
+                          class="mx-1 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold tracking-tight text-ink-muted touch:rounded-lg touch:border touch:border-edge-muted touch:bg-surface"
+                        >
+                          {group.title}
+                          <span class="font-normal tabular-nums text-ink-extra-muted">
+                            {group.rows.length}
+                          </span>
+                        </ComposerSurface>
+                      </Layer>
+                    </div>
                   </div>
                   <For each={group.rows}>
                     {(row) => (
