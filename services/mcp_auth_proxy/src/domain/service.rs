@@ -12,6 +12,7 @@ use std::{
 };
 
 use super::{
+    access_token_clients::AccessTokenClients,
     models::{
         AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, ClientRegistrationResponse,
         IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
@@ -145,6 +146,7 @@ pub struct McpAuthProxyServiceImpl<I> {
     inflight_auth: Arc<I>,
     client_registrations: Arc<dyn ClientRegistrationStore>,
     refresh_token_bindings: Arc<dyn RefreshTokenBindingStore>,
+    access_token_clients: AccessTokenClients,
     oauth_provider: Arc<dyn OAuthProvider>,
     redirect_uri_policy: RedirectUriPolicy,
     public_url: String,
@@ -156,6 +158,7 @@ impl<I> Clone for McpAuthProxyServiceImpl<I> {
             inflight_auth: Arc::clone(&self.inflight_auth),
             client_registrations: Arc::clone(&self.client_registrations),
             refresh_token_bindings: Arc::clone(&self.refresh_token_bindings),
+            access_token_clients: self.access_token_clients.clone(),
             oauth_provider: Arc::clone(&self.oauth_provider),
             redirect_uri_policy: self.redirect_uri_policy.clone(),
             public_url: self.public_url.clone(),
@@ -180,12 +183,38 @@ where
 
         Self {
             inflight_auth,
+            access_token_clients: AccessTokenClients::new(
+                Arc::clone(&refresh_token_bindings),
+                Arc::clone(&client_registrations),
+            ),
             client_registrations,
             refresh_token_bindings,
             oauth_provider,
             redirect_uri_policy,
             public_url,
         }
+    }
+
+    /// The record of which client each issued access token went to, for the
+    /// MCP route to label what a client writes.
+    pub fn access_token_clients(&self) -> AccessTokenClients {
+        self.access_token_clients.clone()
+    }
+
+    /// Records the client an access token was issued to. Like a failed
+    /// rebind, a failed write costs only the label on that token's writes, so
+    /// it is logged rather than withholding a token the user approved.
+    async fn bind_access_token(&self, access_token: &str, binding: &RefreshTokenBinding) {
+        self.access_token_clients
+            .bind(access_token, binding)
+            .await
+            .unwrap_or_else(|error| {
+                tracing::error!(
+                    error=?error,
+                    client_id = %binding.client_id,
+                    "failed to record the client an access token was issued to"
+                );
+            });
     }
 
     /// Refreshes an upstream token for the client the refresh token belongs to.
@@ -252,6 +281,9 @@ where
                 tracing::error!(error=?error, %client_id, "failed to bind rotated refresh token");
             })
             .is_ok();
+
+        self.bind_access_token(tokens.access_token.as_str(), &binding)
+            .await;
 
         if rebound && rotated_digest != presented_digest {
             self.refresh_token_bindings
@@ -325,16 +357,16 @@ where
             None => return Err(TokenExchangeError::CodeVerifierRequired),
         }
 
+        let binding = RefreshTokenBinding {
+            client_id: issued.client_id,
+            grant_id: uuid::Uuid::new_v4().to_string(),
+        };
         self.refresh_token_bindings
-            .bind(
-                &refresh_token_digest(&issued.refresh_token),
-                &RefreshTokenBinding {
-                    client_id: issued.client_id,
-                    grant_id: uuid::Uuid::new_v4().to_string(),
-                },
-            )
+            .bind(&refresh_token_digest(&issued.refresh_token), &binding)
             .await
             .map_err(TokenExchangeError::RefreshTokenBindingStore)?;
+        self.bind_access_token(issued.access_token.as_str(), &binding)
+            .await;
 
         Ok(TokenResponse {
             access_token: issued.access_token,

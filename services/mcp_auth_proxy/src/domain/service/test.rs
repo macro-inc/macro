@@ -878,3 +878,46 @@ fn protected_resource_metadata_does_not_double_the_mcp_path() {
         })
     );
 }
+
+// --- Access token clients ------------------------------------------------
+
+#[tokio::test]
+async fn both_token_exchanges_record_the_client_behind_the_access_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    let refresh_token = obtain_refresh_token(&harness, &client_id).await;
+    harness
+        .service
+        .exchange_token(refresh_request(refresh_token, &client_id))
+        .await
+        .expect("refreshed");
+
+    let clients = harness.service.access_token_clients();
+    for access_token in [UPSTREAM_ACCESS_TOKEN, REFRESHED_ACCESS_TOKEN] {
+        assert_eq!(
+            clients.client_name(access_token).await.unwrap().as_deref(),
+            Some("test-client"),
+            "{access_token}"
+        );
+    }
+}
+
+/// The access token's record shares the refresh binding store, under a digest
+/// no refresh token produces, so it can never be refreshed with.
+#[tokio::test]
+async fn an_access_token_cannot_be_presented_as_a_refresh_token() {
+    let harness = Harness::new();
+    let client_id = harness.register(&[TRUSTED_REDIRECT_URI]).await;
+    obtain_refresh_token(&harness, &client_id).await;
+
+    let error = harness
+        .service
+        .exchange_token(refresh_request(
+            RefreshToken::from(UPSTREAM_ACCESS_TOKEN),
+            &client_id,
+        ))
+        .await
+        .expect_err("an access token is not a refresh token");
+
+    assert!(matches!(error, TokenExchangeError::UnboundRefreshToken));
+}

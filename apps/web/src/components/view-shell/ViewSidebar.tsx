@@ -77,7 +77,7 @@ function Header(
           )}
           data-view-sidebar-header=""
         >
-          {local.children}
+          <div class="min-w-0 flex-1">{local.children}</div>
           <div class="ml-auto flex shrink-0 items-center gap-1">
             {local.actions}
             <Show when={!isTouchDevice() && local.search}>
@@ -141,7 +141,7 @@ function Title(
     <h1
       {...rest}
       class={cn(
-        'flex min-w-0 items-center text-sm font-semibold tracking-[-0.03em] text-ink',
+        'flex min-w-0 max-w-full flex-1 items-center text-sm font-semibold tracking-[-0.03em] text-ink',
         local.class
       )}
     >

@@ -1,13 +1,15 @@
 import type { EntityBucket } from '@core/context/quickAccess';
-import { createFreshSearch, type FreshSortConfig } from '@core/util/freshSort';
+import {
+  createFreshSearch,
+  type FreshSortConfig,
+  NAME_MATCH_RANKING,
+} from '@core/util/freshSort';
 import type { MentionItem } from '../../../../utils/mentionsUtils';
 
 type MentionRankingProfile = {
   search: FreshSortConfig<MentionItem>;
   kindBoosts: Partial<Record<MentionItem['kind'], number>>;
   bucketBoosts: Partial<Record<EntityBucket, number>>;
-  exactNameBoost: number;
-  prefixNameBoost: number;
 };
 
 /** Additive boosts: 0.5 means a 1.5x multiplier on the blended score.
@@ -18,12 +20,11 @@ export const MENTION_RANKING_CONFIG: Record<
 > = {
   query: {
     search: {
+      ...NAME_MATCH_RANKING,
       useViewedAt: true,
       fuzzyWeight: 0.7,
       timeWeight: 0.2,
       brevityWeight: 0.1,
-      gapPenaltyWeight: 0.4,
-      startBonusDecay: 0.2,
       dmBoost: 1.4,
     },
     kindBoosts: { user: 0.6, group: 0.2 },
@@ -33,8 +34,6 @@ export const MENTION_RANKING_CONFIG: Record<
       database: 0.2,
       snippet: 0.15,
     },
-    exactNameBoost: 2,
-    prefixNameBoost: 0.25,
   },
   browse: {
     search: {
@@ -46,8 +45,6 @@ export const MENTION_RANKING_CONFIG: Record<
     },
     kindBoosts: { user: 0.2, group: 0.1 },
     bucketBoosts: {},
-    exactNameBoost: 0,
-    prefixNameBoost: 0,
   },
 };
 
@@ -58,6 +55,12 @@ function getMentionName(item: MentionItem): string {
     return item.data.title;
   if (item.kind === 'externalChat') return item.data.name;
   return item.searchText;
+}
+
+/** Entity and user search text can add emails or aliases after the name. */
+function getMentionDisplayName(item: MentionItem): string {
+  if (item.kind === 'entity' || item.kind === 'user') return item.data.name;
+  return getMentionName(item);
 }
 
 function getMentionTimestamps(item: MentionItem) {
@@ -71,8 +74,7 @@ export function rankMentions<T extends MentionItem>(
   query: string,
   preserveMatches = false
 ): T[] {
-  const term = query.trim().toLocaleLowerCase();
-  const profile = MENTION_RANKING_CONFIG[term ? 'query' : 'browse'];
+  const profile = MENTION_RANKING_CONFIG[query.trim() ? 'query' : 'browse'];
   const search = createFreshSearch<T>({
     config: {
       ...profile.search,
@@ -80,14 +82,11 @@ export function rankMentions<T extends MentionItem>(
         let boost = profile.kindBoosts[item.kind] ?? 0;
         if (item.kind === 'entity')
           boost += profile.bucketBoosts[item.bucket] ?? 0;
-        const name = getMentionName(item).trim().toLocaleLowerCase();
-        if (term && name === term) boost += profile.exactNameBoost;
-        else if (term && name.startsWith(term))
-          boost += profile.prefixNameBoost;
         return boost;
       },
     },
     getName: getMentionName,
+    getDisplayName: getMentionDisplayName,
     isDmItem: (item) => item.kind === 'entity' && item.bucket === 'dm',
     getTimestamp: getMentionTimestamps,
   });

@@ -92,6 +92,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import type { ComposeTaskSuccess } from '../../task-composer/core/types';
 import { URL_PARAMS } from '../constants';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
@@ -103,7 +104,6 @@ import {
   $insertAtSavedPoint,
   type SavedPoint,
 } from '../util/insertAtSavedPoint';
-import type { ComposeTaskSuccess } from './ComposeTask';
 import { FormatTools } from './FormatTools';
 import { TouchSelectionToolbar } from './TouchSelectionToolbar';
 

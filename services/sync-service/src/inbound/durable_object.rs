@@ -226,7 +226,14 @@ impl<'a> Wsm<'a> {
             // if user is not-anon
             if let Some(user_id) = meta.user_id {
                 let db = self.dss.env.d1(USER_PEER_D1_BINDING)?;
-                insert_user_mapping(db, &user_id, peerid, document_id).await?;
+                let span = tracing::info_span!(
+                    "peer.register",
+                    document.id = document_id,
+                    peer.id = peerid
+                );
+                insert_user_mapping(db, &user_id, meta.actor.as_deref(), peerid, document_id)
+                    .instrument(span)
+                    .await?;
             }
         }
         Ok(())
@@ -381,7 +388,8 @@ impl SyncSession {
             let writers = writing_peers(&body.snapshot)
                 .map_err(|error| Error::from(format!("invalid initial snapshot: {error}")))?;
             let db = self.env.d1(USER_PEER_D1_BINDING)?;
-            insert_missing_user_mappings(&db, document_id, SYSTEM_AUTHOR_ID, &writers).await?;
+            insert_missing_user_mappings(&db, document_id, SYSTEM_AUTHOR_ID, None, &writers)
+                .await?;
             storage.store_snapshot(&body.snapshot).await?;
             *self
                 .document_id

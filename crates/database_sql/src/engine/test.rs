@@ -1055,6 +1055,17 @@ fn a_feed_of_the_wrong_kind_is_refused() {
 }
 
 #[test]
+fn a_select_resolved_against_another_catalog_is_refused() {
+    let Query::Select(select) = compile(&catalog(), "SELECT name FROM crm.deals").unwrap() else {
+        panic!("expected a select");
+    };
+    assert_eq!(
+        Engine::from_select(&issues_catalog(), select).map(|(_, step)| step),
+        Err(RunError::TableNotInCatalog { table: DEALS })
+    );
+}
+
+#[test]
 fn a_join_past_the_hint_limit_fetches_the_joined_relation_whole() {
     let assigned = |count: usize| -> Vec<Row> {
         (0..count)

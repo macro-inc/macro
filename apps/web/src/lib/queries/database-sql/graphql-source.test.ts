@@ -365,7 +365,11 @@ describe('the GraphQL row source', () => {
       [],
       null,
       500,
-      { request: () => {}, headers: () => ({}) }
+      {
+        decode: (_rows, operation) => operation(),
+        request: () => {},
+        headers: () => ({}),
+      }
     );
 
     expect(page._unsafeUnwrap().rows).toEqual([

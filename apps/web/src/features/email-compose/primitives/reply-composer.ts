@@ -845,6 +845,7 @@ export function createReplyComposer(
     draftGeneration,
     onTransferred: () => setDraftGeneration(0),
     session,
+    persistence,
     drafts: props.drafts,
     attachments: form.attachments,
     save: () => executeSaveDraft(),

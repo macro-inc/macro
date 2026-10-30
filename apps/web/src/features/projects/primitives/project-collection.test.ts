@@ -45,6 +45,73 @@ describe('project collection', () => {
     });
   });
 
+  it('keeps assigned and created scopes independent of editable filters and follows viewer changes', () => {
+    createRoot((dispose) => {
+      const [scope, setScope] = createSignal<
+        'all' | 'assigned-to-me' | 'created-by-me'
+      >('all');
+      const [userId, setUserId] = createSignal<string | undefined>(
+        'first-user'
+      );
+      let filters: () => ProjectFilters = () => ({});
+      let enabled: () => boolean = () => false;
+      const collection = createProjectCollection({
+        scope,
+        userId,
+        createSource: (input = () => ({}), isEnabled = () => true) => {
+          filters = input;
+          enabled = isEnabled;
+          return emptySource();
+        },
+      });
+      expect(filters()).toMatchObject({
+        assignee: undefined,
+        owner: undefined,
+      });
+      collection.setStatus('active');
+      collection.setPriority('high');
+      collection.setSearch('release');
+      setScope('assigned-to-me');
+      expect(filters()).toMatchObject({
+        assignee: 'first-user',
+        owner: undefined,
+        status: 'active',
+        priority: 'high',
+      });
+      expect(enabled()).toBe(true);
+      collection.setMine(false);
+      collection.setStatus('');
+      collection.setPriority('');
+      expect(filters().assignee).toBe('first-user');
+      setUserId('next-user');
+      expect(filters().assignee).toBe('next-user');
+      setScope('created-by-me');
+      expect(filters()).toMatchObject({
+        owner: 'next-user',
+        assignee: undefined,
+      });
+      collection.setMine(true);
+      expect(filters()).toMatchObject({
+        owner: 'next-user',
+        assignee: 'next-user',
+      });
+      collection.setMine(false);
+      expect(filters().owner).toBe('next-user');
+      setUserId(undefined);
+      expect(enabled()).toBe(false);
+      setUserId('third-user');
+      expect(enabled()).toBe(true);
+      expect(filters().owner).toBe('third-user');
+      setScope('all');
+      expect(filters()).toMatchObject({
+        owner: undefined,
+        assignee: undefined,
+      });
+      expect(enabled()).toBe(true);
+      dispose();
+    });
+  });
+
   it('distinguishes initial failure from a failed refresh with usable rows', () => {
     createRoot((dispose) => {
       const [rows, setRows] = createSignal<readonly ProjectRow[]>();

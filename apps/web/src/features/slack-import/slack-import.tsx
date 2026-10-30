@@ -1,5 +1,8 @@
 import { hideImportPromotion } from '@app/features/connector-import/primitives/promotion';
-import { IntegrationRow } from '@app/features/settings/primitives';
+import {
+  IntegrationRow,
+  SettingsSurface,
+} from '@app/features/settings/primitives';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableSlackArchiveImport } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
@@ -8,7 +11,7 @@ import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import { requestConnectApp } from '@core/pipedream/pendingConnect';
 import { SLACK_CONNECT_SLUG } from '@core/pipedream/slugs';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
-import SlackIcon from '@icon/mcp-slack.svg';
+import SlackIcon from '@icon/slack-color.svg';
 import {
   invalidateListChannels,
   useListChannelsQuery,
@@ -50,12 +53,14 @@ export function SlackImport(props: Props): JSX.Element {
               // A host-supplied trigger lives elsewhere (the Chat rail card);
               // only the Settings row has a loading placeholder.
               props.trigger ? null : (
-                <IntegrationRow
-                  icon={<SlackIcon />}
-                  title="Slack"
-                  description="Loading Slack import…"
-                  muted
-                />
+                <SettingsSurface>
+                  <IntegrationRow
+                    icon={<SlackIcon />}
+                    title="Slack export"
+                    description="Loading Slack import…"
+                    muted
+                  />
+                </SettingsSurface>
               )
             }
           >

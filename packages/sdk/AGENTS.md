@@ -87,6 +87,10 @@ the existing gateway prefixes.
 - Handles must serialize identity or loaded detail, never authenticated clients.
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
+- Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
+  or `initiatives.summaries` (the list response); `name()` per handle loads each
+  entity. Task create `propertyValues` replace the service defaults (creator
+  assigned, Not started), so `Task.create` spells them out when it sends any.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.

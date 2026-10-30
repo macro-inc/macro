@@ -10,6 +10,8 @@ import type { LocalDraft } from '../core/local-draft';
 import type { DraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
 
+export type DraftPersistence = ReturnType<typeof createDraftPersistence>;
+
 /** Sent from another device: the server outcome supersedes the local draft. */
 export const isAlreadySentRejection = (error: unknown) =>
   error instanceof DraftPersistRejected && error.code === 'DRAFT_ALREADY_SENT';

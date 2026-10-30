@@ -351,6 +351,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bot_id",
  "bytes",
  "chrono",
  "futures",
@@ -842,6 +843,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
+ "mention_utils",
  "messages",
  "mockall",
  "model-entity",
@@ -1242,6 +1244,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-macros",
+ "bot_id",
  "genai_telemetry",
  "macro_user_id",
  "opentelemetry",
@@ -2205,6 +2208,7 @@ dependencies = [
  "model",
  "model-entity",
  "model_notifications",
+ "models_email",
  "models_permissions",
  "native_app_service",
  "non_empty",
@@ -4585,9 +4589,11 @@ dependencies = [
  "crossterm 0.28.1",
  "dashmap",
  "eventsource-stream",
+ "flate2",
  "futures",
  "harness_id",
  "harnesses",
+ "hex",
  "lazy-regex",
  "macro_env_var",
  "macro_event_broker",
@@ -4602,8 +4608,10 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "shell-words",
  "strum 0.27.2",
+ "tar",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -4621,6 +4629,7 @@ dependencies = [
  "webhook",
  "windows-sys 0.61.2",
  "workspace-hack",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -7315,6 +7324,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "email_focus_worker"
+version = "0.1.0"
+dependencies = [
+ "ai_usage",
+ "chrono",
+ "doppler-config",
+ "email",
+ "jev",
+ "kafka_util",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_event_broker",
+ "macro_user_id",
+ "memory",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "email_formatting"
 version = "0.1.0"
 dependencies = [
@@ -7827,7 +7865,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8122,6 +8160,16 @@ dependencies = [
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
+ "libc",
 ]
 
 [[package]]
@@ -9095,6 +9143,7 @@ dependencies = [
  "futures",
  "graphql_common",
  "macro_user_id",
+ "rootcause",
  "serde_json",
  "tokio",
  "tracing",
@@ -10157,7 +10206,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -10958,7 +11007,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -12369,6 +12418,7 @@ name = "macro_sha_count_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_env_var",
  "model",
  "redis",
  "tokio",
@@ -12554,9 +12604,11 @@ version = "0.1.0"
 name = "mcp_auth_proxy"
 version = "0.1.0"
 dependencies = [
+ "ai_toolset",
  "anyhow",
  "axum",
  "base64 0.22.1",
+ "bot_id",
  "fusionauth",
  "macro_auth",
  "macro_user_id",
@@ -13668,6 +13720,8 @@ dependencies = [
  "model_user",
  "models_pagination",
  "notification_state",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rate_limit",
  "rdkafka",
  "redis",
@@ -13686,6 +13740,8 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "url",
  "utoipa",
  "uuid",
@@ -13844,7 +13900,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -14539,7 +14595,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.45.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -15719,7 +15775,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22505a5c94da8e3b7c2996394d1c933236c4d743e81a410bcca4e6989fc066a4"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -15739,7 +15795,7 @@ version = "0.14.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "343d3bd7056eda839b03204e68deff7d1b13aba7af2b2fd16890697274262ee7"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.14.0",
  "log",
  "multimap",
@@ -15907,7 +15963,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.2",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -15945,7 +16001,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -17085,7 +17141,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -17144,7 +17200,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -17292,6 +17348,7 @@ dependencies = [
  "entity_access_management",
  "entity_registry",
  "entity_registry_db_utils",
+ "feature_flags",
  "frecency",
  "futures",
  "jev",
@@ -18204,6 +18261,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
+ "macro_sha_count_client",
  "mockall",
  "redis",
  "sqlx",
@@ -19742,6 +19800,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "55937e1799185b12863d447f42597ed69d9928686b8d88a1df17376a097d8369"
 
 [[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
+ "libc",
+ "xattr",
+]
+
+[[package]]
 name = "target-lexicon"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19860,7 +19929,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -22050,7 +22119,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -22944,6 +23013,16 @@ dependencies = [
  "curve25519-dalek 5.0.0",
  "rand_core 0.10.1",
  "zeroize",
+]
+
+[[package]]
+name = "xattr"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
+dependencies = [
+ "libc",
+ "rustix 1.1.4",
 ]
 
 [[package]]

@@ -70,8 +70,16 @@ later chunks can arrive in batches. Reasoning or a tool row should not delay the
 first prose. Verify a second prompt and a reload preserve the complete answer.
 A model selected before the first prompt is part of the create request, and the
 runtime starts on it; no model change appears in the new session's transcript.
-A selected effort is confirmed before the first prompt; settings the runtime
-already reports do not need another control request.
+Resuming or reconnecting a session also applies its saved model without a
+line — that is not a switch the user made. A selected effort is confirmed
+before the first prompt; settings the runtime already reports do not need
+another control request.
+A model the user picks mid-session is a line between turns. Work from before
+the change stays above it; anything the agent says after appears below it.
+With `enable-first-prompt-on-create` on, the default agent's first prompt rides
+on the create (`prompt` + `promptActionId`) and no `/control` request follows;
+a persona, effort, or speed keeps the control request. Either way the prompt
+shows as one bubble that the logged row confirms in place.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
@@ -285,18 +293,23 @@ or stop.
 
 **Ask AI** in desktop search (including Tab) and the command menu opens
 an agent session. A nonempty search query is sent as the first prompt once the
-session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split into the Agents workspace, while command-menu actions open a new split.
+session is ready. With the Agents workspace enabled, an empty search replaces its
+split with the Agents workspace's new-conversation composer; otherwise it opens an
+empty session there. Command-menu actions open a new split.
 
 **Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
-code files, images, canvases, spreadsheets, email, channels, calls, and projects
-also open agent sessions. Like command-menu Ask AI, they open the bare session in
-a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
-in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
-and selected range; channel-message actions retain the referenced message. On
+code files, images, canvases, spreadsheets, email, channels, calls, and projects,
+and the channel message hover menu, open the Agents workspace's new-conversation
+composer in a new split, the same centered composer as Home and **Create → Agent**,
+with its Auto/Chat/Code switch and agent, model, and effort pickers. Their entity
+mention fills the composer as an unsent draft; an Agents split that is already open
+returns to its composer with that draft. Spreadsheet mentions retain the current
+sheet and selected range; channel-message actions retain the referenced message. On
 phones, the channel message long-press drawer offers the same action as **Ask Macro**.
-Add a question and press Send to submit that context. These actions do not create
-legacy cognition chats, regardless of the Agents workspace feature flag.
+Add a question and press Send to start the conversation. Handoffs that carry hidden
+instructions or a fixed model (database chat, booking-link setup, connector import)
+still open a bare session directly, as does every action while the Agents workspace
+flag is off. These actions do not create legacy cognition chats.
 
 ## Dispatching coding agents from chat
 
@@ -1109,18 +1122,22 @@ provider usage and completed writes may remain after cancellation.
 
 The public workspace MCP (`mcp-server[-dev].macro.com`) evaluates the same
 `ai-code-mode` flag for the OAuth user on `initialize`, `tools/list` and
-`tools/call`, cached per user for a minute. Enabled users see `ExecuteCode`,
-`DescribeCodeTools` and `ReadCodeDocs` in place of the SDK-covered native tools,
-and the server instructions tell the client to call `DescribeCodeTools` with a
-`task`, then `ReadCodeDocs` for the symbols it uses, before writing a program. Programs export `async function main({macro})` and return
-exactly `{data}` (an empty `reviews: []` is dropped). There is no session,
-execution journal, review stack or `execution_id`; the receipt carries status,
-observed SDK activity, result and error. Runs act as the user with no agent
-attribution and no owner approval card: the MCP client asks before each tool
-call. SDK writes, including email sends, take effect immediately. Every native
-tool stays callable; MCP clients cache tool lists, so a flag change appears after
-reconnecting. Public runs use their own Deno budget (four running, eight queued
-per replica) so external traffic cannot take agent sessions' slots.
+`tools/call`, cached per user for a minute. Enabled users see only
+`ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
+individual Macro tools — and the server instructions tell the client to call
+`DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,
+before writing a program. Programs export `async function main({macro})` and
+return exactly `{data}` (an empty `reviews: []` is dropped). There is no
+session, execution journal, review stack or `execution_id`; the receipt carries
+status, observed SDK activity, result and error. Runs act as the user with no
+agent attribution and no owner approval card: the MCP client asks before each
+tool call. SDK writes, including email sends, take effect immediately. Hidden
+native tools stay callable if a client already knows their names; MCP clients
+cache tool lists, so a flag change appears after reconnecting. Public runs use
+their own Deno budget (four running, eight queued per replica) so external
+traffic cannot take agent sessions' slots. Agent-session code mode is
+unchanged: it still keeps a reduced direct toolset for search, document
+editing, and other work outside the SDK.
 
 To verify locally, run Claude Code against the stack's MCP with
 `tooling/scripts/claude-local-mcp.sh --instance <name> --email <email>`. It mints
@@ -1848,6 +1865,10 @@ must stay hidden; subsequent live messages must still appear.
   it scrolls on its own and starts scrolled to the bottom, so the next-to-send row stays
   visible. Scroll up inside the list to reach newer entries; no extra count row hides
   messages. Each prompt starts as a single-line preview, including long messages.
+  The preview is rendered markdown: links and `@` mention chips appear as they do
+  in the transcript, never as their `<m-link>` / `<m-document-mention>` markup, and
+  clicking one opens the row rather than the link. The expanded editor has the
+  composer's `@` mentions, links, emoji, and code.
   Click a preview (or press Enter/Space on it) to open its editor; opening another
   row collapses the previous one. The expanded editor scrolls within the smaller of
   32% of the viewport and 16rem. Click the preview again or press Escape to collapse
