@@ -2191,8 +2191,11 @@ impl<
     }
 
     #[tracing::instrument(
-        skip(self, credited_user),
-        fields(credit_requested = credited_user.is_some()),
+        skip(self, entity_access_receipt, credited_user),
+        fields(
+            task_id = %entity_access_receipt.entity().entity_id,
+            credit_requested = credited_user.is_some()
+        ),
         err
     )]
     async fn update_task_status(
