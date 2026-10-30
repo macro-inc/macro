@@ -18,7 +18,7 @@ use serde::Deserialize;
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search items by their name or title: document name, email subject, agent session title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).",
+    description = "Search items by their name or title: document name, email subject, agent session title, channel name, project name, call-record name, or CRM company name or domain. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).",
     title = "NameSearch"
 )]
 pub struct NameSearch {
@@ -34,7 +34,7 @@ pub struct NameSearch {
     pub match_type: SearchMatchType,
 
     #[schemars(
-        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']."
+        description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']. CRM companies are searched only when this is empty."
     )]
     #[serde(default)]
     pub entity_types: Vec<SearchEntityType>,
@@ -52,7 +52,7 @@ against the user's own tags; only set scope (\"personal\" or \"team\") when the 
 distinguishes between their personal and team tags. An unknown label fails with the list of \
 available tags — call ListTags first when unsure what tags exist. Only taggable items \
 (documents, emails, projects, call records, calendar events) can match, so \
-channels are dropped \
+channels and CRM companies are dropped \
 while a tag filter is active.")]
     #[serde(default)]
     pub tags: Option<Vec<TagFilter>>,
@@ -64,6 +64,39 @@ exists in both the personal and team sets is ambiguous — set scope on that ent
 Ignored unless tags is set.")]
     #[serde(default)]
     pub tags_match: TagMatch,
+}
+
+impl NameSearch {
+    /// The non-channel half of a name search, or `None` if only channels
+    /// were requested. CRM companies have no entity type, so they are
+    /// included only when no type filter is set.
+    fn unified_request(&self, base_filters: EntityFilters) -> Option<UnifiedSearchRequest> {
+        let non_channel_types = if self.entity_types.is_empty() {
+            vec![
+                SearchEntityType::Documents,
+                SearchEntityType::AgentSessions,
+                SearchEntityType::Emails,
+                SearchEntityType::Projects,
+                SearchEntityType::CallRecords,
+                SearchEntityType::CalendarEvents,
+            ]
+        } else {
+            self.entity_types
+                .iter()
+                .filter(|entity_type| **entity_type != SearchEntityType::Channels)
+                .cloned()
+                .collect()
+        };
+        (!non_channel_types.is_empty()).then(|| UnifiedSearchRequest {
+            query: self.name.to_owned(),
+            match_type: self.match_type.into(),
+            filters: search_filters(&non_channel_types, base_filters),
+            search_on: models_search::SearchOn::Name,
+            include_crm: self.entity_types.is_empty(),
+            calendar_event_scope: Default::default(),
+            collapse: None,
+        })
+    }
 }
 
 impl ToolAnnotated for NameSearch {
@@ -136,34 +169,10 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             tag_filter_mode: tag_filter_mode(self.tags_match),
             ..Default::default()
         };
-        let non_channel_types = if self.entity_types.is_empty() {
-            vec![
-                SearchEntityType::Documents,
-                SearchEntityType::AgentSessions,
-                SearchEntityType::Emails,
-                SearchEntityType::Projects,
-                SearchEntityType::CallRecords,
-                SearchEntityType::CalendarEvents,
-            ]
-        } else {
-            self.entity_types
-                .iter()
-                .filter(|entity_type| **entity_type != SearchEntityType::Channels)
-                .cloned()
-                .collect()
-        };
         let include_channels = !tag_filter_active
             && (self.entity_types.is_empty()
                 || self.entity_types.contains(&SearchEntityType::Channels));
-        let search_request = (!non_channel_types.is_empty()).then(|| UnifiedSearchRequest {
-            query: self.name.to_owned(),
-            match_type: self.match_type.into(),
-            filters: search_filters(&non_channel_types, base_filters),
-            search_on: models_search::SearchOn::Name,
-            include_crm: false,
-            calendar_event_scope: Default::default(),
-            collapse: None,
-        });
+        let search_request = self.unified_request(base_filters);
         let channel_request = include_channels.then(|| ChannelNameSearchRequest {
             query: self.name.to_owned(),
             match_type: self.match_type.into(),
@@ -233,3 +242,6 @@ impl AsyncTool<SearchToolContext> for NameSearch {
         Ok(SearchToolResponse { results })
     }
 }
+
+#[cfg(test)]
+mod test;
