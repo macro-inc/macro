@@ -1,8 +1,8 @@
 //! [`NativeToolGate`] over the egress proxy's approvals.
 //!
-//! The same rule and the same record as a sandbox's MCP calls: a turn
-//! somebody other than the owner prompted waits on the owner for each of
-//! Macro's own tools, and the hold shows in the session like any other.
+//! Native calls resolve their explicit account choice just like sandbox MCP
+//! tool calls. A choice that differs from the verified requester waits for
+//! owner approval, using the same session approval record.
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -23,7 +23,7 @@ mod test;
 const UNDECIDED: &str = "This tool did not run: whether it may run in this turn could not be \
     checked. Tell the person who asked, and do not try to do the same thing another way.";
 
-/// Holds native tool calls for the owner in turns somebody else prompted.
+/// Resolve native actors and hold calls that need owner approval.
 pub struct OwnerApprovalGate<Sessions, Store, Signals, Announcer> {
     sessions: Sessions,
     approvals: Arc<ToolApprovalService<Store, Signals, Announcer>>,
@@ -63,10 +63,39 @@ where
             return Ok(NativeToolVerdict::Refuse(UNDECIDED.to_owned()));
         };
         let prompter = self.sessions.turn_prompter(session).await?;
-        let Some(prompter) = prompter.filter(|prompter| prompter.acting_user() != Some(&owner))
-        else {
-            return Ok(NativeToolVerdict::Run);
+        if prompter.is_none() {
+            return Ok(NativeToolVerdict::Refuse(
+                "There is no active turn authorizing this tool; nothing was done.".into(),
+            ));
+        }
+        if tool == "ExecuteCode"
+            && arguments.get("turn_id").and_then(serde_json::Value::as_str)
+                != prompter
+                    .as_ref()
+                    .map(|turn| turn.action_id.to_string())
+                    .as_deref()
+        {
+            return Ok(NativeToolVerdict::Refuse(
+                "The original execution turn is no longer active; nothing was done.".into(),
+            ));
+        }
+        let (actor, _) = match ai_toolset::actor::ToolActor::take(arguments) {
+            Ok(selection) => selection,
+            Err(error) => return Ok(NativeToolVerdict::Refuse(error.to_string())),
         };
+        let user = match actor.resolve(
+            &owner,
+            prompter.as_ref().and_then(|turn| turn.acting_user()),
+        ) {
+            Ok(user) => user.clone(),
+            Err(error) => return Ok(NativeToolVerdict::Refuse(error.to_string())),
+        };
+        tracing::info!(%session, tool, ?actor, "resolved tool actor");
+        let Some(prompter) = prompter.filter(|prompter| prompter.acting_user() != Some(&user))
+        else {
+            return Ok(NativeToolVerdict::RunAs(user));
+        };
+        let original_turn = prompter.clone();
         let status = self
             .approvals
             .hold_in_process(InProcessCall {
@@ -79,8 +108,13 @@ where
                 arguments: arguments.clone(),
             })
             .await?;
+        if self.sessions.turn_prompter(session).await?.as_ref() != Some(&original_turn) {
+            return Ok(NativeToolVerdict::Refuse(
+                "The original turn ended; this tool did not run.".into(),
+            ));
+        }
         Ok(match refusal(status, owner.email_str(), tool) {
-            None => NativeToolVerdict::Run,
+            None => NativeToolVerdict::RunAs(user),
             Some(text) => NativeToolVerdict::Refuse(text),
         })
     }

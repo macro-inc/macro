@@ -348,3 +348,93 @@ describe('Home document comment row', () => {
     expect(row.textContent).not.toContain('Someone');
   });
 });
+
+describe('Home calendar join request row', () => {
+  const joinRequest = (
+    overrides: Partial<UnifiedNotification> = {}
+  ): UnifiedNotification => ({
+    id: 'join-request',
+    entity_id: 'event-1',
+    entity_type: 'calendar_event',
+    sender_id: 'macro|teo@macro.com',
+    state: 'unseen',
+    created_at: '2026-10-23T17:21:50Z',
+    updated_at: '2026-10-23T17:21:50Z',
+    sent: true,
+    viewed_at: null,
+    notification_event_type: 'calendar_event_join_request',
+    notification_metadata: {
+      tag: 'calendar_event_join_request',
+      content: { eventId: 'event-1', requestId: 'request-1', title: 'Sync' },
+    },
+    ...overrides,
+  });
+  const reminder: UnifiedNotification = {
+    ...joinRequest(),
+    id: 'reminder',
+    sender_id: null,
+    created_at: '2026-10-23T17:30:00Z',
+    updated_at: '2026-10-23T17:30:00Z',
+    notification_event_type: 'calendar_event_reminder',
+    notification_metadata: {
+      tag: 'calendar_event_reminder',
+      content: {
+        eventId: 'event-1',
+        occurrenceKey: '2026-10-23T18:00:00Z',
+        title: 'Sync',
+        startsAt: '2026-10-23T18:00:00Z',
+        endsAt: '2026-10-23T18:30:00Z',
+        startDate: null,
+        timeZone: null,
+        minutesBefore: 30,
+      },
+    },
+  } as UnifiedNotification;
+
+  const renderEvent = (
+    initial: UnifiedNotification[],
+    notificationDisplayCutoff?: string
+  ) => {
+    const [notifications, setNotifications] = createSignal(initial);
+    const view = render(() => (
+      <HomeListEntity
+        entity={
+          {
+            type: 'calendar_event',
+            id: 'event-1',
+            name: 'Sync',
+            ownerId: 'test-user',
+            status: 'confirmed',
+            isReadOnly: false,
+            notifications,
+            notificationDisplayCutoff,
+          } as never
+        }
+        occurrenceKey="event-1"
+      />
+    ));
+    const row = view.container.querySelector<HTMLElement>('[data-home-item]')!;
+    return { row, setNotifications };
+  };
+
+  it('says who asked to join', () => {
+    const { row } = renderEvent([joinRequest()]);
+    expect(row.textContent).toContain('Teo asked to join Recent chat');
+  });
+
+  it('keeps the plain title when the newest outstanding notification is not a request', () => {
+    const { row, setNotifications } = renderEvent([reminder, joinRequest()]);
+    expect(row.textContent).not.toContain('asked to join');
+
+    setNotifications([joinRequest({ state: 'done' })]);
+    expect(row.textContent).not.toContain('asked to join');
+
+    setNotifications([joinRequest()]);
+    expect(row.textContent).toContain('Teo asked to join Recent chat');
+  });
+
+  it('does not let newer own activity borrow an older request', () => {
+    const { row } = renderEvent([joinRequest()], '2026-10-23T18:00:00Z');
+    expect(row.textContent).not.toContain('asked to join');
+  });
+});

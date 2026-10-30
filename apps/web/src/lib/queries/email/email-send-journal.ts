@@ -218,13 +218,25 @@ export function createEmailSendJournal(
       session: Session,
       uuid: string
     ): Promise<RestoredEmailSend | undefined> {
+      // Kept across replays so one can recognize a restore that already landed.
+      let landed: RestoredEmailSend | undefined;
       const result = await transaction<RestoredEmailSend | Error | undefined>(
         'readwrite',
         (tx, finish) =>
           withSession(
             tx,
             session,
-            () => restoreEmailSendTransaction(tx, session, uuid, finish),
+            () =>
+              restoreEmailSendTransaction(
+                tx,
+                session,
+                uuid,
+                (value) => {
+                  if (value && !(value instanceof Error)) landed = value;
+                  finish(value);
+                },
+                landed
+              ),
             finish,
             undefined
           )

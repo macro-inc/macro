@@ -33,6 +33,7 @@ import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
+import { useNotificationCoverTimeout } from '@macro/tauri/notification-launch';
 import { TauriRouteListener } from '@macro/tauri/TauriProvider';
 import { Telemetry } from '@macro-inc/observability';
 import { BrowserNotificationModal } from '@notifications';
@@ -179,8 +180,11 @@ const BOOT_SHELL_MAX_WAIT_MS = 8000;
 function AppRouteFrame(props: RouteSectionProps) {
   useUserInfoSideEffects();
   useSessionWebsockets();
+  useNotificationCoverTimeout();
   onMount(() => {
-    const cap = setTimeout(dismissBootShell, BOOT_SHELL_MAX_WAIT_MS);
+    const cap = setTimeout(() => {
+      dismissBootShell();
+    }, BOOT_SHELL_MAX_WAIT_MS);
     onCleanup(() => clearTimeout(cap));
   });
   return <RootFrame>{props.children}</RootFrame>;

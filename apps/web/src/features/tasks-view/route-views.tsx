@@ -23,6 +23,7 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableProjects } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -43,6 +44,7 @@ function TasksLegacyRouteView() {
 }
 
 export const TasksRouteView = withAuth(() => {
+  useViewRestoration();
   const params = useParams<{ taskId?: string; projectId?: string }>();
   return (
     <AppView

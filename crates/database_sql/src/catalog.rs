@@ -24,6 +24,9 @@ pub use schema::{
 pub struct Catalog {
     /// The visible tables.
     pub tables: Vec<Table>,
+    /// The database whose tables win when an unqualified name matches several.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<DatabaseId>,
 }
 
 /// One table and its columns, in display order.
@@ -145,6 +148,9 @@ pub enum ColumnKind {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    #[strum(serialize = "date range")]
+    DateRange,
     /// A URL.
     Link,
     /// One or more of a fixed set of options.
@@ -294,6 +300,7 @@ impl ColumnKind {
             CastKind::Number => ColumnKind::Number,
             CastKind::Boolean => ColumnKind::Boolean,
             CastKind::Date => ColumnKind::Date,
+            CastKind::DateRange => ColumnKind::DateRange,
             CastKind::Link => ColumnKind::Link,
             CastKind::Select { multi } => ColumnKind::Select { multi, options },
             CastKind::Entity { target, multi } => ColumnKind::Entity {
@@ -314,6 +321,7 @@ impl ColumnKind {
             ColumnKind::Number => CastKind::Number,
             ColumnKind::Boolean => CastKind::Boolean,
             ColumnKind::Date => CastKind::Date,
+            ColumnKind::DateRange => CastKind::DateRange,
             ColumnKind::Link => CastKind::Link,
             ColumnKind::Select { multi, .. } => CastKind::Select { multi: *multi },
             ColumnKind::Entity { multi, target } => match OpEntityKind::try_from(*target) {

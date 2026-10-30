@@ -4,7 +4,10 @@
 use crate::cognition::{
     api::{self, context::ApiContext},
     config::{Config, Environment},
-    service,
+    service::{
+        self,
+        integration_analytics::{IntegrationAnalytics, IntegrationChange, IntegrationEvent},
+    },
 };
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
@@ -90,10 +93,15 @@ impl CognitionRuntime {
 }
 
 /// Compose chat, completions, integrations, and workers in the harness process.
+///
+/// `import_jobs` are the harness's import jobs: this runtime's Notion imports
+/// and the stalled-import sweeper run on them, and the harness hands them
+/// over on shutdown.
 pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     event_broker_tracker: TaskTracker,
+    import_jobs: ai_tools::ImportJobs,
 ) -> anyhow::Result<CognitionRuntime> {
     let public_url = macro_service_urls::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
@@ -373,6 +381,7 @@ pub async fn build(
         ),
     )
     .with_presentation_files(Arc::new(document_files.clone()))
+    .with_word_document_files(Arc::new(document_files.clone()))
     .with_design_files(Arc::new(document_files.clone()))
     .with_photoshop_files(Arc::new(document_files.clone()))
     .with_illustrator_files(Arc::new(document_files));
@@ -549,7 +558,7 @@ pub async fn build(
     let decision_classifier = config
         .typesafe_api_key
         .value()
-        .map(jev::outbound::TypesafeJev::new)
+        .map(jev::outbound::SystemOneJev::typesafe)
         .transpose()
         .context("failed to configure the decision classifier")?
         .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone()));
@@ -563,9 +572,9 @@ pub async fn build(
         ),
     );
 
-    // The import pipeline: staged/imported external items, gather jobs over
-    // the user's connectors, and the Haiku import job. Built before the tool
-    // service context so the chat toolset gets a wired import context.
+    // The import pipeline: staged/imported external items, Slack discovery,
+    // and the Notion page import job. Built before the tool service context
+    // so the chat toolset gets a wired import context.
     let mcp_encryption_key = mcp_client::domain::models::AesKey::try_from(
         config.mcp_credentials_key_secret_name.as_ref(),
     )
@@ -693,33 +702,6 @@ pub async fn build(
         channels_connection_gateway.clone(),
     );
 
-    let entity_creator = ai_tools::ToolEntityCreator {
-        document_creator: document_tool_context.creator.clone(),
-        entity_access_service: entity_access_service.clone(),
-        channel_service: channel_tool_context.service.clone(),
-        task_properties: task_properties_for_import,
-        document_properties: document_properties_for_import,
-        team_repository: ai_tools::build_team_repository(db.clone()),
-    };
-    let import_service = Arc::new(
-        import::domain::service::ImportServiceImpl::new(
-            import::outbound::pg_import_repo::PgImportRepo::new(db.clone()),
-            mcp_selector.clone(),
-            Arc::new(entity_creator),
-            recorder.clone(),
-        )
-        .with_slack_source(Arc::new(
-            import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
-        ))
-        .with_admission(admission.clone())
-        .with_notifier(import_notify),
-    );
-
-    // No boot-time recovery: running batches heartbeat their rows, and the
-    // read path reaps rows whose heartbeat stopped — safe with multiple
-    // replicas, where a boot-time sweep would clobber other instances' jobs.
-    tracing::info!("initialized import service");
-
     let project_tool_context = ai_tools::build_project_tool_context(
         db.clone(),
         macro_event_broker.clone(),
@@ -746,6 +728,66 @@ pub async fn build(
         ),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
+
+    let entity_creator = ai_tools::ToolEntityCreator {
+        document_creator: document_tool_context.creator.clone(),
+        entity_access_service: entity_access_service.clone(),
+        channel_service: channel_tool_context.service.clone(),
+        task_properties: task_properties_for_import,
+        document_properties: document_properties_for_import,
+        team_repository: ai_tools::build_team_repository(db.clone()),
+        initiative_service: initiative_tool_context.service.clone(),
+        project_service: project_tool_context.service.clone(),
+        databases_service: databases_tool_context.service.clone(),
+        document_service: document_tool_context.service.clone(),
+    };
+    let import_service = Arc::new(
+        import::domain::service::ImportServiceImpl::new(
+            ai_tools::build_import_repo(db.clone()),
+            mcp_selector.clone(),
+            Arc::new(entity_creator),
+            recorder.clone(),
+        )
+        .with_slack_source(Arc::new(
+            import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector.clone()),
+        ))
+        .with_tracker_connections(
+            Arc::new(
+                import_linear::outbound::client::PipedreamLinearConnections::new(
+                    Arc::new(pipedream_repo.clone()),
+                    pipedream_client.clone(),
+                ),
+            ),
+            Arc::new(
+                import_jira::outbound::client::PipedreamJiraConnections::new(
+                    Arc::new(pipedream_repo.clone()),
+                    pipedream_client.clone(),
+                ),
+            ),
+        )
+        .with_notion_connections(Arc::new(
+            import_notion::outbound::pipedream::PipedreamNotionConnections::new(
+                Arc::new(pipedream_repo.clone()),
+                pipedream_client.clone(),
+            ),
+        ))
+        .with_admission(admission.clone())
+        .with_notifier(import_notify)
+        .with_job_shutdown(import_jobs.shutdown.clone(), import_jobs.tracker.clone()),
+    );
+
+    // Notion workspace imports outlive the process running them: on shutdown
+    // a running job hands its run over, and the sweeper adopts runs whose
+    // process stopped holding them (other replicas' live runs are leased, so
+    // it leaves them alone). Slack and single-page jobs heal on read. This is
+    // the process's only sweeper.
+    import_jobs.tracker.spawn({
+        let import_service = import_service.clone();
+        let shutdown = import_jobs.shutdown.clone();
+        async move { import_service.sweep_stalled_notion_imports(shutdown).await }
+    });
+    tracing::info!("initialized import service");
+
     let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
         &databases_tool_context,
         soup_service.clone(),
@@ -769,6 +811,9 @@ pub async fn build(
         internal_api_key.clone(),
         call_tool_context.service.clone(),
         AppServiceUrl::new()?,
+        macro_env_var::maybe_read_env("ENABLE_CALENDAR_ADD_SHARED_EVENT")
+            .and_then(|value| value.parse::<bool>().ok())
+            .unwrap_or(false),
     );
     let forms_tool_context = ai_tools::build_forms_tool_context(
         db.clone(),
@@ -785,7 +830,7 @@ pub async fn build(
 
     let tool_service_context = ai_tools::ToolServiceContext {
         cognition_tool_context: ai_tools::build_cognition_tool_context()?,
-        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None),
+        connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
@@ -829,6 +874,9 @@ pub async fn build(
         databases_sql_tool_context,
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
+        ),
+        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::wired(
+            mcp_client::domain::service::ServerDirectory::new(Arc::new(mcp_server_repo.clone())),
         ),
         chat_tool_context,
         channel_tool_context,
@@ -940,14 +988,9 @@ pub async fn build(
 
     tracing::info!("initialized ai projections service");
 
-    // The onboarding flow drives the import pipeline: reads/hooks start
-    // auto-importing gather runs for authenticated connectors, and
-    // completion deletes unreserved onboarding-staged candidates.
     let onboarding_service = Arc::new(onboarding::domain::service::OnboardingServiceImpl::new(
         onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
         Arc::new(mcp_server_repo.clone()),
-        import_service.clone(),
-        mcp_selector.clone(),
     ));
 
     tracing::info!("initialized onboarding service");
@@ -967,21 +1010,29 @@ pub async fn build(
         mcp_client_metadata.clone(),
         mcp_pre_registered,
     );
-    // The moment a connector finishes OAuth, reconcile onboarding for that
-    // user — gather jobs start before the user even returns to their
-    // original tab. Spawned so the callback response never waits on them.
-    let onboarding_for_auth_hook = onboarding_service.clone();
+    // Record connector connects and disconnects for product analytics.
+    let integration_analytics = IntegrationAnalytics::from_config(&config, &db);
+    let analytics_for_auth_hook = integration_analytics.clone();
     let mcp_auth_hook: mcp_client::inbound::axum_router::McpAuthCompletedHook =
         Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
-            let service = onboarding_for_auth_hook.clone();
-            Box::pin(async move {
-                tokio::spawn(async move {
-                    use onboarding::domain::service::OnboardingService;
-                    if let Err(e) = service.reconcile(record.user_id).await {
-                        tracing::warn!(error = ?e, "post-auth onboarding reconcile failed");
-                    }
-                });
-            })
+            analytics_for_auth_hook.record(
+                record.user_id,
+                IntegrationChange::Connected,
+                IntegrationEvent::mcp_server(&record.url),
+            );
+            Box::pin(async {})
+        });
+    let analytics_for_mcp_removed_hook = integration_analytics.clone();
+    let mcp_removed_hook: mcp_client::inbound::axum_router::McpServerRemovedHook =
+        Arc::new(move |record: mcp_client::domain::models::McpServerRecord| {
+            if let Some(event) = IntegrationEvent::removed_mcp_server(&record) {
+                analytics_for_mcp_removed_hook.record(
+                    record.user_id,
+                    IntegrationChange::Disconnected,
+                    event,
+                );
+            }
+            Box::pin(async {})
         });
     let mcp_state = mcp_client::inbound::McpRouterState::new(
         mcp_server_repo,
@@ -989,23 +1040,30 @@ pub async fn build(
         authorization_state.clone(),
         mcp_client_metadata,
     )
-    .with_auth_completed_hook(mcp_auth_hook);
+    .with_auth_completed_hook(mcp_auth_hook)
+    .with_server_removed_hook(mcp_removed_hook);
 
-    // The Pipedream stack gets the same post-connect reconcile hook as the
-    // native one: a finished Connect flow starts gather jobs immediately.
-    let onboarding_for_pipedream_hook = onboarding_service.clone();
+    let analytics_for_pipedream_hook = integration_analytics.clone();
     let pipedream_auth_hook: pipedream_mcp::inbound::axum_router::PipedreamAuthCompletedHook =
         Arc::new(
             move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
-                let service = onboarding_for_pipedream_hook.clone();
-                Box::pin(async move {
-                    tokio::spawn(async move {
-                        use onboarding::domain::service::OnboardingService;
-                        if let Err(e) = service.reconcile(connection.user_id).await {
-                            tracing::warn!(error = ?e, "post-connect onboarding reconcile failed");
-                        }
-                    });
-                })
+                analytics_for_pipedream_hook.record(
+                    connection.user_id,
+                    IntegrationChange::Connected,
+                    IntegrationEvent::pipedream(&connection.app_slug),
+                );
+                Box::pin(async {})
+            },
+        );
+    let pipedream_disconnected_hook: pipedream_mcp::inbound::axum_router::PipedreamDisconnectedHook =
+        Arc::new(
+            move |connection: pipedream_mcp::domain::models::PipedreamConnection| {
+                integration_analytics.record(
+                    connection.user_id,
+                    IntegrationChange::Disconnected,
+                    IntegrationEvent::pipedream(&connection.app_slug),
+                );
+                Box::pin(async {})
             },
         );
     let pipedream_state = pipedream_mcp::inbound::PipedreamRouterState::new(
@@ -1013,7 +1071,8 @@ pub async fn build(
         pipedream_client,
         authorization_state.clone(),
     )
-    .with_auth_completed_hook(pipedream_auth_hook);
+    .with_auth_completed_hook(pipedream_auth_hook)
+    .with_disconnected_hook(pipedream_disconnected_hook);
 
     let cancellation = tokio_util::sync::CancellationToken::new();
     super::refresh::start(

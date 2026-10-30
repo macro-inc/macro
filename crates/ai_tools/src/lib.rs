@@ -17,6 +17,9 @@ mod deferred;
 mod display_results;
 pub mod email_attachments;
 mod import_channels;
+mod import_jobs;
+mod import_trackers;
+mod import_workspace;
 mod mcp_app_catalog;
 mod schemas;
 pub mod search;
@@ -47,6 +50,7 @@ use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
 use favorites::inbound::toolset::favorites_toolset;
 use import::inbound::toolset::import_toolset;
 use initiative::inbound::toolset::initiative_toolset;
+use mcp_client::inbound::toolset::mcp_server_toolset;
 use messages::inbound::toolset::message_toolset;
 use notification::inbound::ai_tool::{item_notification_preference_toolset, notification_toolset};
 use projects::inbound::toolset::project_toolset;
@@ -67,6 +71,7 @@ pub use build_context::{
     build_tool_service_context_from_env,
 };
 pub use deferred::{DeferredToolSet, deferred_tools};
+pub use import_jobs::{IMPORT_JOBS_HANDOVER_TIMEOUT, ImportJobs};
 pub use mcp_app_catalog::{PipedreamMcpAppCatalog, pipedream_client_from_env};
 pub use search::search_toolset;
 pub use tool_context::{
@@ -87,12 +92,13 @@ pub use tool_context::{
     ToolFavoritesService, ToolFavoritesToolContext, ToolForeignEntityService, ToolFormsToolContext,
     ToolFrecencyService, ToolGithubPullRequestService, ToolImageGenerationToolContext,
     ToolImportService, ToolImportToolContext, ToolInitiativeToolContext,
-    ToolItemNotificationPreferenceToolContext, ToolMcpSelector, ToolMessageToolContext,
-    ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
-    ToolPipedreamConnection, ToolPipelineService, ToolPipelineToolContext, ToolPipelineWorkflows,
-    ToolProjectService, ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext,
-    ToolReadAgentSessionContext, ToolServiceContext, ToolSkillService, ToolSkillToolContext,
-    ToolSoupService, ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
+    ToolItemNotificationPreferenceToolContext, ToolMcpSelector, ToolMcpServerToolContext,
+    ToolMessageToolContext, ToolNotificationQueue, ToolNotificationService,
+    ToolNotificationToolContext, ToolPipedreamConnection, ToolPipelineService,
+    ToolPipelineToolContext, ToolPipelineWorkflows, ToolProjectService, ToolProjectToolContext,
+    ToolPropertiesService, ToolPropertiesToolContext, ToolReadAgentSessionContext,
+    ToolServiceContext, ToolSkillService, ToolSkillToolContext, ToolSoupService,
+    ToolSystemPropertiesService, ToolTableEventPublisher, ToolTeamCalendarService,
     ToolTeamCalendarToolContext, ToolTeamService, ToolTeamToolContext, ToolUserEmailService,
     ToolViewOnlyDatabasesSqlToolContext, build_activity_tool_context,
     build_booking_link_tool_context, build_booking_management_tool_context, build_bot_tool_context,
@@ -101,11 +107,11 @@ pub use tool_context::{
     build_channel_tool_context_without_side_effects, build_coding_agent_tool_context,
     build_crm_tool_context, build_crm_transfer_tool_context, build_databases_sql_tool_context,
     build_databases_tool_context, build_favorites_service, build_favorites_tool_context,
-    build_forms_tool_context, build_image_generation_tool_context, build_initiative_tool_context,
-    build_item_notification_preference_tool_context, build_message_service_with_side_effects,
-    build_message_service_without_side_effects, build_message_tool_context,
-    build_pipeline_tool_context, build_project_tool_context, build_properties_service,
-    build_properties_service_with_broker, build_properties_tool_context,
+    build_forms_tool_context, build_image_generation_tool_context, build_import_repo,
+    build_initiative_tool_context, build_item_notification_preference_tool_context,
+    build_message_service_with_side_effects, build_message_service_without_side_effects,
+    build_message_tool_context, build_pipeline_tool_context, build_project_tool_context,
+    build_properties_service, build_properties_service_with_broker, build_properties_tool_context,
     build_read_agent_session_context, build_routine_tool_context, build_skill_tool_context,
     build_task_properties_adapter, build_team_calendar_tool_context, build_team_repository,
     build_team_tool_context,
@@ -298,6 +304,15 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_subtoolset::<ToolCodingAgentToolContext>(coding_agent_toolset())
         .add_tool::<Subagent, SubagentContext>();
+    // Only Macro's own agents connect servers for the user.
+    let toolset = match host {
+        AiHost::Chat | AiHost::AgentSession => {
+            toolset.add_subtoolset::<ToolMcpServerToolContext>(mcp_server_toolset::<
+                mcp_client::outbound::pg_server_repo::PgServerRepo,
+            >())
+        }
+        AiHost::ChannelBot | AiHost::Mcp => toolset,
+    };
     let toolset = match host {
         AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
             .add_tool::<SearchTools, ToolServiceContext>()

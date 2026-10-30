@@ -36,7 +36,7 @@ async fn join_requests_open_once_and_resolve_once(pool: PgPool) {
     assert_eq!(again, first);
     assert_eq!(
         repo.list_pending_join_requests(event_id).await.unwrap(),
-        [first.clone()]
+        std::slice::from_ref(&first)
     );
 
     let declined = repo
@@ -59,36 +59,44 @@ async fn join_requests_open_once_and_resolve_once(pool: PgPool) {
             .is_empty()
     );
 
-    // Asking after a decline reopens the same request at the new address.
-    let (reopened, opened) = repo
+    // A declined request stands: asking again changes nothing, keeps the
+    // original address and is not news.
+    let (after_decline, opened) = repo
         .open_join_request(event_id, member_id, "member@other.example.com")
         .await
         .unwrap();
-    assert!(opened);
-    assert_eq!(reopened.id, first.id);
-    assert_eq!(reopened.status, CalendarJoinRequestStatus::Pending);
-    assert_eq!(reopened.requester_email, "member@other.example.com");
+    assert!(!opened);
+    assert_eq!(after_decline, declined);
+    assert_eq!(after_decline.requester_email, "member@work.example.com");
     assert_eq!(
         repo.find_join_request(event_id, member_id).await.unwrap(),
-        Some(reopened.clone())
+        Some(declined.clone())
     );
 
+    // Another member's request is accepted.
+    let second_id = "macro|join-second@example.com";
+    insert_user(&pool, second_id).await;
+    let (second, opened) = repo
+        .open_join_request(event_id, second_id, "second@work.example.com")
+        .await
+        .unwrap();
+    assert!(opened);
     let accepted = repo
-        .resolve_join_request(first.id, CalendarJoinRequestStatus::Accepted)
+        .resolve_join_request(second.id, CalendarJoinRequestStatus::Accepted)
         .await
         .unwrap()
-        .expect("the reopened request resolves");
+        .expect("a pending request resolves");
     assert_eq!(accepted.status, CalendarJoinRequestStatus::Accepted);
     // A decline that arrives after the invitation was written changes nothing.
     assert_eq!(
-        repo.resolve_join_request(first.id, CalendarJoinRequestStatus::Declined)
+        repo.resolve_join_request(second.id, CalendarJoinRequestStatus::Declined)
             .await
             .unwrap(),
         None
     );
     // An accepted request is not reopened by asking again.
     let (after_accept, opened) = repo
-        .open_join_request(event_id, member_id, "member@work.example.com")
+        .open_join_request(event_id, second_id, "second@work.example.com")
         .await
         .unwrap();
     assert!(!opened);
@@ -96,21 +104,22 @@ async fn join_requests_open_once_and_resolve_once(pool: PgPool) {
 
     // An acceptance whose invitation was written while a decline landed
     // still records the grant the guest list now holds.
-    sqlx::query("UPDATE calendar_event_join_requests SET status = 'declined' WHERE id = $1")
-        .bind(first.id)
-        .execute(&pool)
-        .await
-        .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_event_join_requests SET status = 'declined' WHERE id = $1",
+        second.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let granted = repo
-        .resolve_join_request(first.id, CalendarJoinRequestStatus::Accepted)
+        .resolve_join_request(second.id, CalendarJoinRequestStatus::Accepted)
         .await
         .unwrap()
         .expect("the acceptance overrides the decline");
     assert_eq!(granted.status, CalendarJoinRequestStatus::Accepted);
 
     // Requests go with the shared event.
-    sqlx::query("DELETE FROM calendar_events WHERE id = $1")
-        .bind(event_id)
+    sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
         .execute(&pool)
         .await
         .unwrap();

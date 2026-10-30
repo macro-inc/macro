@@ -1,5 +1,5 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import TrashIcon from '@phosphor/trash.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { createSignal } from 'solid-js';
 import { HoldButton } from './HoldButton';
 
@@ -13,7 +13,7 @@ function HoldDemo() {
         duration={2000}
         onConfirm={() => setConfirmed((count) => count + 1)}
       >
-        <TrashIcon />
+        <TrashIcon class="size-4" />
         Hold to delete
       </HoldButton>
       <span class="text-sm text-ink-muted">Confirmed {confirmed()} times</span>

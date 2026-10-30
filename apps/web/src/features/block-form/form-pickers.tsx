@@ -8,9 +8,9 @@ import {
   DatabaseMentionValue,
 } from '@block-database/database-mentions';
 import { createDatabaseRelations } from '@block-database/queries/database-relations';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import Plus from '@phosphor/plus.svg';
-import X from '@phosphor/x.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import X from '@icon/system/regular/x.svg';
 import { useDatabaseTableChanges } from '@queries/storage/databases-sync';
 import { Checkbox, cn, Input } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
@@ -211,7 +211,7 @@ export function FormRelationPicker(props: RelationPickerProps) {
                     onChange={(checked) => toggle(row.id, checked)}
                     class="flex min-h-8 gap-2.5 rounded-md px-1.5 text-sm text-ink hover:bg-hover"
                   >
-                    <Checkbox.Control class="border-ink-extra-muted" />
+                    <Checkbox.Control />
                     <Checkbox.Label class="flex min-h-8 min-w-0 flex-1 items-center">
                       <span class="truncate">{row.name || 'Untitled'}</span>
                     </Checkbox.Label>

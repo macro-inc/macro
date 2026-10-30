@@ -197,6 +197,36 @@ describe('useUploadDraftAttachmentsMutation', () => {
     expect(onAttachmentUploadFailed).toHaveBeenCalledWith(attachment);
     expect(toastFailureMock).toHaveBeenCalledWith('Failed to save attachments');
   });
+
+  it('fails with readable copy when S3 rejects the content upload', async () => {
+    const storage = await vi.importActual<
+      typeof import('@service-storage/util/uploadToPresignedUrl')
+    >('@service-storage/util/uploadToPresignedUrl');
+    uploadToPresignedUrlMock.mockImplementation(storage.uploadToPresignedUrl);
+    fetchMock.mockResolvedValue(
+      new Response(
+        '<?xml version="1.0" encoding="UTF-8"?>\n<Error><Code>AccessDenied</Code><Message>no VPC endpoint policy allows the s3:PutObject action</Message><RequestId>9T8VG69R5KVNCQFK</RequestId></Error>',
+        { status: 403 }
+      )
+    );
+    const onAttachmentUploadFailed = vi.fn();
+    const attachment = file();
+
+    const mutation = mountEmailMutation(useUploadDraftAttachmentsMutation);
+    await expect(
+      mutation.mutateAsync({
+        draftID: 'draft-1',
+        attachments: [attachment],
+        onAttachmentUploadFailed,
+      })
+    ).rejects.toThrow(/^Upload failed$/);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://bucket/att-1',
+      expect.objectContaining({ method: 'PUT' })
+    );
+    expect(onAttachmentUploadFailed).toHaveBeenCalledWith(attachment);
+  });
+
   it('uploads native clipboard bytes with the real size and checksum', async () => {
     const attachment = createNativeStagedUploadFile('pasteboard', {
       token: 'paste-stage-fixture',

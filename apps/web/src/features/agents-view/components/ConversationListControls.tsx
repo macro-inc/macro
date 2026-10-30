@@ -4,10 +4,10 @@ import {
   type ListFilterGroup,
   ListGroupDropdown,
 } from '@app/components/view-shell';
-import ChatIcon from '@phosphor/chat-circle.svg';
-import CodeIcon from '@phosphor/code.svg';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import GitMergeIcon from '@icon/system/regular/git-merge.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import {
@@ -127,6 +127,7 @@ export function ConversationListControls(props: ConversationListControlsProps) {
           class="size-(--sidebar-control-size)"
           groups={FILTER_GROUPS}
           isSelected={isSelected}
+          selectedIds={(group) => props.filters[group]}
           onSelectionChange={props.onFilterChange}
           onClear={props.onClearFilters}
         />

@@ -7,7 +7,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
-use jev::{domain::JevClassifier, outbound::TypesafeJev};
+use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -15,6 +15,7 @@ use macro_authorization::{
 };
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 pub mod config;
+mod routine_analytics;
 use config::Config;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
@@ -24,9 +25,13 @@ use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
+use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
 use scheduled_action::inbound::event_run_worker::run_event_worker;
 use scheduled_action::inbound::kafka_consumer::run_scheduled_action_event_consumer;
+use scheduled_action::inbound::template_router::{
+    RoutineTemplateRouterState, routine_template_router,
+};
 use scheduled_action::outbound::agent_session_client::AgentSessionClient;
 use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
 use scheduled_action::outbound::event_access::EventAccessAdapter;
@@ -36,6 +41,7 @@ use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
+use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::swagger::ApiDoc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -131,7 +137,15 @@ pub async fn build(
         lifecycle.executions.clone(),
         lifecycle.stop_executions.clone(),
     )
-    .with_admission(ai_admission);
+    .with_admission(ai_admission)
+    .with_observer(Arc::new(routine_analytics::RoutineAnalytics(
+        agent_harness_service::product_analytics::ProductAnalytics::new(
+            config.posthog_api_key.value(),
+            config.posthog_host.value(),
+            environment,
+            &db,
+        ),
+    )));
     let service_executor = Arc::new(dispatcher_executor.clone());
 
     let jwt_args = JwtValidationArgs::new_with_secret_manager(environment, &secretsmanager_client)
@@ -167,7 +181,7 @@ pub async fn build(
     let typesafe = config
         .typesafe_api_key
         .value()
-        .map(TypesafeJev::new)
+        .map(SystemOneJev::typesafe)
         .transpose()
         .context("invalid TYPESAFE_API_KEY")?;
     let conditions_enabled = typesafe.is_some();
@@ -251,12 +265,37 @@ pub async fn build(
             config.routine_agents_enabled,
         )),
     );
+    let template_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                Duration::from_secs(3),
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
+    let template_state = RoutineTemplateRouterState {
+        service: Arc::new(RoutineTemplateServiceImpl::new(
+            Arc::clone(&service),
+            Arc::new(PgRoutineTemplateRepo::new(db.clone())),
+            template_flags,
+        )),
+        access_service: Arc::clone(&access),
+        authorization_state: authorization_state.clone(),
+    };
     let state = ScheduledActionRouterState {
         service,
         access_service: access,
         authorization_state,
     };
-    let authed_routes = scheduled_action_router::<_, _, _, ()>(state);
+    let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
+        .merge(routine_template_router::<_, _, _, ()>(template_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())

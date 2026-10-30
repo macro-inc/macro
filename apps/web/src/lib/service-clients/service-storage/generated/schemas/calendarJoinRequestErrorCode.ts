@@ -16,5 +16,6 @@ export const CalendarJoinRequestErrorCode = {
   not_found: 'not_found',
   already_on_calendar: 'already_on_calendar',
   sharer_cannot_invite: 'sharer_cannot_invite',
+  request_declined: 'request_declined',
   internal: 'internal',
 } as const;

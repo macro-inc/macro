@@ -32,7 +32,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// properties and references make an item associated with it: a company
     /// with every contact the viewer may see, or a single contact. Scoped
     /// like [`Self::list_contacts_for_soup`]; a record the viewer cannot see
-    /// is reported as not found.
+    /// is reported as not found. Activity resolves all visible records across
+    /// CRM-enabled teams without hidden rows or contact-email deduplication;
+    /// team-scoped bot receipts limit it to their verified team.
     fn resolve_association(
         &self,
         user_id: &str,
@@ -957,12 +959,18 @@ where
     ) -> Result<super::association::CrmRecordAssociation, CrmError> {
         use super::association::CrmAssociation;
         let scope = viewer_scope(user_id, access)?;
+        if record == CrmAssociation::Activity {
+            return self.companies_repository.resolve_activity(scope).await;
+        }
         self.companies_repository
             .resolve_association(scope, record)
             .await?
             .ok_or(match record {
                 CrmAssociation::Company(_) => CrmError::CompanyNotFoundForTeam,
                 CrmAssociation::Contact(_) => CrmError::ContactNotFoundForTeam,
+                CrmAssociation::Activity => {
+                    CrmError::InvalidRequest("activity scope unavailable".into())
+                }
             })
     }
 
@@ -1140,6 +1148,9 @@ impl CrmService for NoOpCrmService {
         Err(match record {
             CrmAssociation::Company(_) => CrmError::CompanyNotFoundForTeam,
             CrmAssociation::Contact(_) => CrmError::ContactNotFoundForTeam,
+            CrmAssociation::Activity => {
+                CrmError::InvalidRequest("activity scope unavailable".into())
+            }
         })
     }
 

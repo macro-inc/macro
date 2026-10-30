@@ -155,6 +155,10 @@ async fn initiative_listing_and_candidate_gate_share_access_rules(
         ]
     );
 
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "checks the gate SQL that initiative_gate generates"
+    )]
     let gated: Vec<Uuid> = sqlx::query_scalar(&format!(
         r#"WITH user_source_ids AS (
             SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp

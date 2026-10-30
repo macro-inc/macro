@@ -10,7 +10,9 @@ anyhow.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 axum.workspace = true
+chrono.workspace = true
 futures.workspace = true
+http.workspace = true
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ] }
@@ -31,5 +33,7 @@ utoipa.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 tokio.workspace = true
 tower = { workspace = true }
+wiremock = { workspace = true }

@@ -1,6 +1,7 @@
 import { onCleanup } from 'solid-js';
 import { useCallContext } from './CallContext';
 import type { CallSessionDisconnectOptions } from './CallSessionController';
+import type { JoinSource } from './call-lifecycle';
 
 type UseCallOptions = {
   /** Select the call tab when Join is requested, including a refused join. */
@@ -23,7 +24,8 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   }
 
   return {
-    joinCall: () => lifecycle.join(channelId(), options?.onJoin),
+    joinCall: (source?: JoinSource) =>
+      lifecycle.join(channelId(), options?.onJoin, source),
     leaveCall: (options?: CallSessionDisconnectOptions) =>
       lifecycle.leave(channelId(), options),
     isJoining: () => {

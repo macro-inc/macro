@@ -1074,8 +1074,12 @@ names and fail on missing/ambiguous entries. Product logos carry intrinsic 20px
 dimensions. The production product checks hold scripts and verify styled heroes
 and correctly sized logos before releasing them.
 
-The homepage includes a silent dark orbit MP4 in its prerendered Open Graph tags.
-Keep it homepage-only, with `og:type=website`, the existing `og:image`, and an
+The homepage uses a silent dark unification MP4 and its clean opening frame as
+Open Graph media. Keep the image free of navigation and CTA buttons, and keep
+the headline above the bottom quarter, where X overlays its title label. The video
+ends in a unified Macro mark; it is not a seamless loop. Use versioned asset URLs
+and retain earlier files for cached previews. Keep video homepage-only, with
+`og:type=website`, the matching `og:image`, and an
 explicit `twitter:card=summary_large_image` plus `twitter:image`. Product and
 article pages retain their own image cards; remove video metadata when navigating
 away. The video is metadata-only, never preloaded or added to the page player.

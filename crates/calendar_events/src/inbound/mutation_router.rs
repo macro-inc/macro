@@ -12,7 +12,7 @@ use std::sync::Arc;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, patch, post, put},
 };
@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::domain::{
+    copies::{CopyChange, CopyRefusal},
     join_requests::CalendarJoinRequest,
     meeting_links::{
         CreateEventWithMacroCallError, MeetingLinkError, create_event_with_macro_call,
@@ -33,8 +34,8 @@ use crate::domain::{
         EventVisibility, GuestPolicy, OutOfOfficeProperties, VisibleCalendar,
     },
     ports::{
-        CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
-        CalendarUpdateScope, MeetingLinkProvider,
+        CalendarCopyConfirmation, CalendarDeletionScope, CalendarMutationError,
+        CalendarMutationService, CalendarRsvpScope, CalendarUpdateScope, MeetingLinkProvider,
     },
 };
 
@@ -85,7 +86,7 @@ pub fn calendar_mutation_router<S, L, Auth, T>(
     state: CalendarMutationRouterState<S, L, Auth>,
 ) -> Router<T>
 where
-    S: CalendarMutationService,
+    S: CalendarMutationService + CalendarCopyConfirmation,
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
     T: Send + Sync + 'static,
@@ -233,6 +234,11 @@ pub struct UpdateCalendarEventRequest {
     pub scope: Option<CalendarUpdateScopeParam>,
     /// Original-start key of the occurrence the update targets.
     pub recurrence_id: Option<String>,
+    /// Inbox address holding the copy this request changes. An agent run
+    /// must name it when the meeting is on more than one of the requester's
+    /// inboxes, and it must be the inbox holding the addressed copy; a
+    /// mismatch is refused whoever sends it.
+    pub inbox: Option<String>,
 }
 
 /// How much of a recurring series an update applies to.
@@ -278,6 +284,11 @@ pub struct DeleteCalendarEventQuery {
     pub scope: CalendarDeletionScopeParam,
     /// Original-start key of the occurrence a scoped deletion targets.
     pub recurrence_id: Option<String>,
+    /// Inbox address holding the copy this request deletes. An agent run
+    /// must name it when the meeting is on more than one of the requester's
+    /// inboxes, and it must be the inbox holding the addressed copy; a
+    /// mismatch is refused whoever sends it.
+    pub inbox: Option<String>,
 }
 
 /// How much of a recurring series an RSVP applies to.
@@ -354,6 +365,11 @@ pub struct InviteCalendarEventGuestsRequest {
     pub scope: Option<CalendarUpdateScopeParam>,
     /// Original-start key of the occurrence the guests are added to.
     pub recurrence_id: Option<String>,
+    /// Inbox address holding the copy this request changes. An agent run
+    /// must name it when the meeting is on more than one of the requester's
+    /// inboxes, and it must be the inbox holding the addressed copy; a
+    /// mismatch is refused whoever sends it.
+    pub inbox: Option<String>,
 }
 
 /// Machine-readable failure category for calendar mutations.
@@ -382,6 +398,9 @@ pub enum CalendarMutationErrorCode {
     GuestsCannotModify,
     /// The meeting is already on one of the requester's calendars.
     AlreadyOnCalendar,
+    /// The requester asked to join the event and the request is pending or
+    /// accepted, so the meeting reaches their calendar as an invitation.
+    JoinRequestOpen,
     /// The provider refused to add a copy of the event to the calendar.
     CopyRefused,
     /// The event is a snapshot of a shared meeting, so an answer or a new
@@ -401,6 +420,10 @@ pub enum CalendarMutationErrorCode {
     /// The Macro call for a new event could not be created; nothing was
     /// written to the calendar.
     MacroCallFailed,
+    /// The meeting is on several of the requester's inboxes and the agent
+    /// run did not name the inbox of the copy it changes, or named another
+    /// copy's; the message lists each copy's inbox, role and id.
+    CopyChoiceRequired,
 }
 
 /// HTTP error body returned by calendar mutation endpoints.
@@ -423,6 +446,51 @@ impl std::fmt::Display for CalendarMutationApiError {
 impl IntoResponse for CalendarMutationApiError {
     fn into_response(self) -> Response {
         (self.status, Json(&self)).into_response()
+    }
+}
+
+impl From<CopyRefusal> for CalendarMutationApiError {
+    fn from(refusal: CopyRefusal) -> Self {
+        Self {
+            code: CalendarMutationErrorCode::CopyChoiceRequired,
+            message: refusal.message().to_string(),
+            status: StatusCode::CONFLICT,
+        }
+    }
+}
+
+/// Set by the code-mode runtime (`code_execution`'s `bootstrap.mjs`) on every
+/// authenticated SDK request a program makes, in agent sessions and for
+/// public MCP clients alike.
+const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
+
+/// Whether a request comes from an agent's program rather than a person in
+/// the app: a code-mode run, or a token carrying an agent's attribution.
+fn is_agent_run(agent_attributed: bool, headers: &HeaderMap) -> bool {
+    agent_attributed || headers.contains_key(CODE_EXECUTION_HEADER)
+}
+
+/// Make an agent run name the copy it changes when the meeting is on several
+/// of the requester's inboxes. The web picks a copy by opening it, so a
+/// request that is not an agent run and names no `inbox` is not checked; a
+/// request naming `inbox` is checked whoever sends it.
+async fn confirm_copy<S: CalendarCopyConfirmation>(
+    service: &S,
+    requester_id: &str,
+    is_agent_run: bool,
+    event_id: Uuid,
+    inbox: Option<&str>,
+    change: CopyChange,
+) -> Result<(), CalendarMutationApiError> {
+    if !is_agent_run && inbox.is_none() {
+        return Ok(());
+    }
+    match service
+        .confirm_copy(requester_id, event_id, inbox, change)
+        .await?
+    {
+        None => Ok(()),
+        Some(refusal) => Err(refusal.into()),
     }
 }
 
@@ -479,7 +547,16 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
             CalendarMutationError::AlreadyOnCalendar => (
                 StatusCode::CONFLICT,
                 CalendarMutationErrorCode::AlreadyOnCalendar,
-                "this event is already on one of your calendars".to_string(),
+                "This meeting is already on one of your calendars, so it can't be added to \
+                 another one."
+                    .to_string(),
+            ),
+            CalendarMutationError::JoinRequestOpen => (
+                StatusCode::CONFLICT,
+                CalendarMutationErrorCode::JoinRequestOpen,
+                "You've asked to join this event, so it reaches your calendar as an invitation \
+                 once you're added as a guest."
+                    .to_string(),
             ),
             CalendarMutationError::CopyRefused(_) => (
                 StatusCode::CONFLICT,
@@ -705,11 +782,12 @@ fn update_scope(
 pub async fn update_calendar_event<S, L, Auth>(
     State(state): State<CalendarMutationRouterState<S, L, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
     Path(event_id): Path<Uuid>,
     Json(request): Json<UpdateCalendarEventRequest>,
 ) -> Result<Json<CalendarEvent>, CalendarMutationApiError>
 where
-    S: CalendarMutationService,
+    S: CalendarMutationService + CalendarCopyConfirmation,
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
@@ -730,15 +808,25 @@ where
         out_of_office: request.out_of_office,
         guest_policy: request.guest_policy,
     };
+    let requester_id = user.authorization.user.macro_user_id.as_ref();
+    // Reminders and availability belong to one copy, so only a change that
+    // reaches the meeting needs the copy named.
+    if patch.reaches_meeting() || request.inbox.is_some() {
+        confirm_copy(
+            &*state.service,
+            requester_id,
+            is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+            event_id,
+            request.inbox.as_deref(),
+            CopyChange::Update {
+                changes_guests: patch.attendees.is_some(),
+            },
+        )
+        .await?;
+    }
     let event = state
         .service
-        .update_event(
-            user.authorization.user.macro_user_id.as_ref(),
-            event_id,
-            request.calendar_id,
-            patch,
-            scope,
-        )
+        .update_event(requester_id, event_id, request.calendar_id, patch, scope)
         .await?;
     Ok(Json(event))
 }
@@ -765,11 +853,12 @@ where
 pub async fn delete_calendar_event<S, L, Auth>(
     State(state): State<CalendarMutationRouterState<S, L, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
     Path(event_id): Path<Uuid>,
     Query(query): Query<DeleteCalendarEventQuery>,
 ) -> Result<StatusCode, CalendarMutationApiError>
 where
-    S: CalendarMutationService,
+    S: CalendarMutationService + CalendarCopyConfirmation,
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
@@ -789,14 +878,19 @@ where
             recurrence_id: scoped_occurrence("this-and-following")?,
         },
     };
+    let requester_id = user.authorization.user.macro_user_id.as_ref();
+    confirm_copy(
+        &*state.service,
+        requester_id,
+        is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+        event_id,
+        query.inbox.as_deref(),
+        CopyChange::Delete,
+    )
+    .await?;
     state
         .service
-        .delete_event(
-            user.authorization.user.macro_user_id.as_ref(),
-            event_id,
-            query.calendar_id,
-            scope,
-        )
+        .delete_event(requester_id, event_id, query.calendar_id, scope)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -878,11 +972,12 @@ where
 pub async fn invite_calendar_event_guests<S, L, Auth>(
     State(state): State<CalendarMutationRouterState<S, L, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
     Path(event_id): Path<Uuid>,
     Json(request): Json<InviteCalendarEventGuestsRequest>,
 ) -> Result<Json<CalendarEvent>, CalendarMutationApiError>
 where
-    S: CalendarMutationService,
+    S: CalendarMutationService + CalendarCopyConfirmation,
     L: MeetingLinkProvider,
     Auth: MacroAuthorizationService,
 {
@@ -898,10 +993,20 @@ where
             });
         }
     };
+    let requester_id = user.authorization.user.macro_user_id.as_ref();
+    confirm_copy(
+        &*state.service,
+        requester_id,
+        is_agent_run(user.authorization.user.agent_id.is_some(), &headers),
+        event_id,
+        request.inbox.as_deref(),
+        CopyChange::InviteGuests,
+    )
+    .await?;
     let event = state
         .service
         .invite_guests(
-            user.authorization.user.macro_user_id.as_ref(),
+            requester_id,
             event_id,
             request.calendar_id,
             request.guests.into_iter().map(Into::into).collect(),
@@ -911,7 +1016,7 @@ where
     Ok(Json(event))
 }
 
-/// Request body adding a channel-shared event to the requester's calendar.
+/// Request body adding a shared event to the requester's calendar.
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyCalendarEventRequest {
@@ -924,6 +1029,9 @@ pub struct CopyCalendarEventRequest {
 /// one of their Google calendars and return the synced snapshot. The
 /// snapshot keeps the meeting's iCalendar UID and organizer, lists only the
 /// requester as a guest, and carries no join link; nobody is notified.
+/// While the requester's request to join the event is pending or accepted,
+/// the copy is refused with `join_request_open`: the meeting reaches their
+/// calendar as the invitation, which a copy would otherwise take in.
 #[tracing::instrument(skip_all, fields(event_id = %event_id), err)]
 #[utoipa::path(
     post,
@@ -937,7 +1045,7 @@ pub struct CopyCalendarEventRequest {
         (status = 401, description = "Authentication required"),
         (status = 403, description = "Calendar is read-only or needs reauthorization", body = CalendarMutationApiError),
         (status = 404, description = "Event not found or not shared with the requester", body = CalendarMutationApiError),
-        (status = 409, description = "Already on the requester's calendar, no writable calendar, or the provider refused the copy", body = CalendarMutationApiError),
+        (status = 409, description = "Already on the requester's calendar, a request to join it is pending or accepted, no writable calendar, or the provider refused the copy", body = CalendarMutationApiError),
         (status = 503, description = "Transient provider failure", body = CalendarMutationApiError),
     )
 )]

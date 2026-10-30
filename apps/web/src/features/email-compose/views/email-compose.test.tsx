@@ -1,9 +1,12 @@
+import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
 import {
   cleanup,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from '@solidjs/testing-library';
 import {
   type ComponentProps,
@@ -84,7 +87,30 @@ vi.mock('./compose-layout', () => ({
     );
   },
 }));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
 afterEach(cleanup);
+
+it('keeps the page’s New button from floating over the full-screen composer', () => {
+  const slot = document.createElement('div');
+  document.body.append(slot);
+  FloatRegions.setMount('accessory', slot);
+  const page = render(() => (
+    <FloatRegion region="accessory" priority={-1}>
+      <button type="button">New</button>
+    </FloatRegion>
+  ));
+  expect(within(slot).getByRole('button', { name: 'New' })).toBeDefined();
+
+  const composer = render(() => (
+    <EmailComposeView context={createComposeContext()} />
+  ));
+  expect(within(slot).queryByRole('button', { name: 'New' })).toBeNull();
+
+  composer.unmount();
+  expect(within(slot).getByRole('button', { name: 'New' })).toBeDefined();
+  page.unmount();
+  slot.remove();
+});
 
 it('keeps a draft sync failure visible without a connected inbox', () => {
   const context = createComposeContext();

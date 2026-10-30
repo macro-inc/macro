@@ -1,4 +1,4 @@
-//! Session-bound code execution, SDK discovery, and durable tool-rendering records.
+//! Session- and user-scoped code execution, SDK discovery, and durable tool-rendering records.
 #![deny(missing_docs)]
 
 /// Execution policy and replaceable capabilities.

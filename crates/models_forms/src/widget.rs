@@ -8,8 +8,8 @@ use models_databases::ColumnKind;
 use serde::{Deserialize, Serialize};
 
 /// How a question is asked. Each column kind takes a few, the first its
-/// default; kinds asked one way only (numbers, checkboxes, entity and row
-/// pickers) take none.
+/// default; kinds asked one way only (numbers, checkboxes, date ranges,
+/// entity and row pickers) take none.
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[derive(
     Debug,
@@ -62,6 +62,7 @@ impl Widget {
             ColumnKind::SelectNumber { .. } => &[Widget::Dropdown],
             ColumnKind::Number
             | ColumnKind::Boolean
+            | ColumnKind::DateRange
             | ColumnKind::Entity { .. }
             | ColumnKind::Relation { .. } => &[],
         }

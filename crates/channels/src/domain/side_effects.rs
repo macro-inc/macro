@@ -23,6 +23,8 @@ use std::collections::HashSet;
 use tracing::Instrument as _;
 use uuid::Uuid;
 
+mod dm_email;
+
 /// Parse a mention entity id in the canonical `bot|<uuid>` principal form.
 fn mention_bot_id(entity_id: &str) -> Option<BotId> {
     BotIdStr::parse_from_str(entity_id)
@@ -208,6 +210,8 @@ pub enum ChannelNotificationEffect {
     },
     /// Participants were invited to a channel.
     Invite {
+        /// Stable identity for a DM email; ordinary invitations have no message key.
+        message_id: Option<Uuid>,
         /// Channel receiving participants.
         channel_id: Uuid,
         /// User that invited the participants.
@@ -236,6 +240,7 @@ pub struct ChannelSideEffectService<C, R, N, K, B = NoopMacroEventBroker> {
 }
 
 struct InviteNotificationRequest {
+    message_id: Option<Uuid>,
     channel_id: Uuid,
     invited_by_user_id: MacroUserIdStr<'static>,
     recipient_user_ids: Vec<MacroUserIdStr<'static>>,
@@ -507,7 +512,7 @@ where
         } else {
             return;
         };
-        let context = match self
+        let mut context = match self
             .build_posted_message_context(
                 channel_id,
                 metadata,
@@ -524,6 +529,11 @@ where
                 return;
             }
         };
+
+        if notification_policy == PostMessageNotificationPolicy::Default {
+            self.send_unregistered_dm_email(channel_id, &message, &mut context)
+                .await;
+        }
 
         self.send_user_mention_notifications(channel_id, &message, has_attachments, &context)
             .await;
@@ -786,6 +796,8 @@ where
             }
         };
         self.send_invite_notification(InviteNotificationRequest {
+            message_id: (context.metadata.channel_type == ChannelType::DirectMessage)
+                .then_some(message.id),
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -843,6 +855,7 @@ where
         };
 
         self.send_invite_notification(InviteNotificationRequest {
+            message_id: None,
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -856,6 +869,7 @@ where
 
     async fn send_invite_notification(&self, req: InviteNotificationRequest) {
         let InviteNotificationRequest {
+            message_id,
             channel_id,
             invited_by_user_id,
             recipient_user_ids,
@@ -870,6 +884,7 @@ where
                 .partition(|id| existing_user_ids.contains(id.as_ref()));
 
         self.send_notification(ChannelNotificationEffect::Invite {
+            message_id,
             channel_id,
             invited_by_user_id,
             registered_recipient_ids,

@@ -26,6 +26,7 @@ fn resolve_group_label_and_order(key: &str, group_by: &GroupByField) -> (String,
             entity_type_labels::label(key).to_string(),
             Some(entity_type_labels::display_order(key)),
         ),
+        // Project keys are initiative IDs; keep the dedicated unassigned label.
         GroupByField::Project if key.is_empty() => ("No Project".to_string(), Some(i32::MAX)),
         GroupByField::Property { .. } if key.is_empty() => ("Not Set".to_string(), Some(i32::MAX)),
         _ => (key.to_string(), None),

@@ -1,5 +1,8 @@
 use super::*;
+use email_api_client::domain::models::RateLimitOrigin;
+use email_db_client::attachments::provider::upload::new_email_media_atts;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use std::time::Duration;
 
 fn id(s: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(s.to_string()).unwrap()
@@ -388,7 +391,7 @@ async fn inserting_into_a_concurrently_deleted_thread_is_retryable(pool: PgPool)
         .unwrap();
 
     let mut message = received_message(link_id, thread_db_id);
-    let result = process_and_insert_message(&pool, link_id, thread_db_id, &mut message).await;
+    let result = process_and_insert_message(&pool, link_id, thread_db_id, &mut message, None).await;
 
     match result {
         Err(ProcessingError::Retryable(e)) => assert!(
@@ -398,4 +401,77 @@ async fn inserting_into_a_concurrently_deleted_thread_is_retryable(pool: PgPool)
         ),
         other => panic!("expected a retryable insert failure, got {other:?}"),
     }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../../../crates/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn a_refused_attachment_fetch_is_claimed_again_by_the_retry(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
+    let image = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0201")?;
+    let video = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0202")?;
+    let animation = Uuid::parse_str("00000000-0000-0000-0000-00000c2a0203")?;
+    sqlx::query!(
+        "INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type)
+         VALUES ($1, '00000000-0000-0000-0000-0000000ec201', 'claim-test-media-att-3', 'animation.gif', 'image/gif')",
+        animation
+    )
+    .execute(&pool)
+    .await?;
+
+    let claimed = new_email_media_atts(&pool, link_id, "claim-test-media-msg").await?;
+    assert_eq!(
+        claimed
+            .iter()
+            .map(|a| a.attachment_db_id)
+            .collect::<Vec<_>>(),
+        vec![image, video, animation]
+    );
+    let uploads = claimed
+        .into_iter()
+        .map(|attachment_metadata| AttachmentUploadArgs {
+            recipient_emails: vec![],
+            attachment_metadata,
+            backfill: false,
+            upload_destination: AttachmentUploadDestination::Sfs,
+        })
+        .collect();
+
+    // The image uploads; the gate then refuses the video's fetch.
+    let refusal = EmailApiError::RateLimited {
+        retry_after: Some(Duration::from_secs(1)),
+        origin: RateLimitOrigin::Local,
+    };
+    let mut attempted = Vec::new();
+    let refused = upload_claimed_attachments(&pool, uploads, |args| {
+        let attachment_id = args.attachment_metadata.attachment_db_id;
+        attempted.push(attachment_id);
+        let result = if attachment_id == image {
+            Ok("sfs-image".to_string())
+        } else {
+            Err(UploadAttachmentError::RateLimited(refusal.clone()))
+        };
+        async move { result }
+    })
+    .await;
+
+    assert!(matches!(refused, Ok(Some(ref error)) if *error == refusal));
+    assert_eq!(attempted, vec![image, video]);
+    // The retried upsert claims the refused and untried attachments, not the uploaded one.
+    let reclaimed = new_email_media_atts(&pool, link_id, "claim-test-media-msg").await?;
+    assert_eq!(
+        reclaimed
+            .iter()
+            .map(|a| a.attachment_db_id)
+            .collect::<Vec<_>>(),
+        vec![video, animation]
+    );
+
+    Ok(())
 }

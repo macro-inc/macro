@@ -162,6 +162,7 @@ fn error_from_response(status: StatusCode, body: Option<String>) -> CalendarMuta
         "guest_list_hidden" => CalendarMutationError::GuestListHidden,
         "guests_cannot_modify" => CalendarMutationError::GuestsCannotModify,
         "already_on_calendar" => CalendarMutationError::AlreadyOnCalendar,
+        "join_request_open" => CalendarMutationError::JoinRequestOpen,
         "copy_refused" => CalendarMutationError::CopyRefused(error.message),
         "snapshot" => CalendarMutationError::Snapshot,
         "invalid_input" => CalendarMutationError::InvalidInput(error.message),

@@ -17,6 +17,7 @@ const notification: SoupNotificationFieldsFragment = {
   __typename: 'GraphqlNotification',
   id: 'notification',
   entityType: 'CHANNEL',
+  targetEntityType: 'CHANNEL',
   entityId: 'channel',
   eventType: 'channel_message_send',
   state: 'UNSEEN',

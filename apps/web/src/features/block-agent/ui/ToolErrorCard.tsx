@@ -9,9 +9,9 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import Check from '@phosphor/check.svg';
-import Copy from '@phosphor/copy.svg';
-import Prohibit from '@phosphor/prohibit.svg';
+import Check from '@icon/system/regular/check.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Prohibit from '@icon/system/regular/prohibit.svg';
 import { Button } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { ToolCard } from './ToolCard';
@@ -106,7 +106,6 @@ export function ToolErrorCard(props: ToolErrorCardProps) {
           type="button"
           variant="ghost"
           size="sm"
-          noTouchResize
           class="shrink-0 px-1 text-ink-extra-muted hover:text-ink-muted"
           aria-label={copied() ? 'Copied' : 'Copy error'}
           onMouseDown={(event) => event.preventDefault()}

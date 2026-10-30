@@ -1,11 +1,12 @@
 # Type Alias: UnifiedSearchRequest
 
-> **UnifiedSearchRequest** = \{ `collapse?`: `boolean` \| `null`; `filters?`: [`EntityFilters`](EntityFilters.md); `include_crm?`: `boolean`; `match_type`: [`MatchType`](MatchType.md); `query`: `string`; `search_on?`: [`SearchOn`](SearchOn.md); \}
+> **UnifiedSearchRequest** = \{ `calendar_event_scope?`: [`CalendarEventSearchScope`](CalendarEventSearchScope.md); `collapse?`: `boolean` \| `null`; `filters?`: [`EntityFilters`](EntityFilters.md); `include_crm?`: `boolean`; `match_type`: [`MatchType`](MatchType.md); `query`: `string`; `search_on?`: [`SearchOn`](SearchOn.md); \}
 
 ## Properties
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-calendar_event_scope"></a> `calendar_event_scope?` | [`CalendarEventSearchScope`](CalendarEventSearchScope.md) | Which calendar events to search. Defaults to `own`: events on the caller's own and delegated calendars. `shared_with_you` searches only events shared with a channel the caller belongs to that are on none of their calendars. |
 | <a id="property-collapse"></a> `collapse?` | `boolean` \| `null` | - |
 | <a id="property-filters"></a> `filters?` | [`EntityFilters`](EntityFilters.md) | Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search. |
 | <a id="property-include_crm"></a> `include_crm?` | `boolean` | Opt in to searching the caller's team CRM companies (name/domain). Off by default: CRM results are only included when this is true and the caller has a qualifying team membership. CRM has no content index, so it is searched only under Name / NameContent. |

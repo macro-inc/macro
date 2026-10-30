@@ -1,7 +1,7 @@
 import { type PaidPlanTier, PLAN_BY_TIER } from '@app/features/paywall/plans';
 import { plural } from '@core/util/string';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import { Button, Layer } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { type BillingState, describeSeatPlans } from '../core/billing-state';
@@ -140,8 +140,7 @@ export function BillingSettingsView(props: {
                 <Button
                   class="ml-auto bg-active"
                   size="sm"
-                  depth={2}
-                  variant="outline"
+                  variant="secondary"
                   onClick={props.onManage}
                 >
                   Manage
@@ -196,9 +195,8 @@ export function BillingSettingsView(props: {
                   }
                 >
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    depth={2}
                     disabled={props.state.pending}
                     onClick={() => {
                       const tier = props.state.tier;

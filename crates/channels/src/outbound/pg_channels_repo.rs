@@ -2390,6 +2390,13 @@ impl ChannelRepo for PgChannelsRepo {
         resolve_channel_display_name(&self.pool, info, viewer_user_id).await
     }
 
+    async fn get_user_display_names(
+        &self,
+        user_ids: &[MacroUserIdStr<'static>],
+    ) -> Result<NameLookup, Self::Err> {
+        Ok(load_user_display_names(&self.pool, user_ids).await?)
+    }
+
     async fn user_has_team(&self, user_id: String, team_id: Uuid) -> Result<bool, Self::Err> {
         let has_team = sqlx::query_scalar!(
             r#"

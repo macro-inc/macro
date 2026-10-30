@@ -373,6 +373,7 @@ export const createAppViteConfig = (): UserConfigFn => {
           input: {
             app: resolve(__dirname, 'index.html'),
             pipedreamConnect: resolve(__dirname, 'pipedream-connect.html'),
+            canvasRender: resolve(__dirname, 'canvas-render.html'),
           },
           // KaTeX and PDF.js are now reachable through lazy boundaries. Let
           // Rollup place them naturally; forcing lazy code into named chunks

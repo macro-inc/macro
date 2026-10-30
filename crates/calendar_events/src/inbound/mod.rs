@@ -3,6 +3,9 @@
 /// Axum routes for authenticated calendar queries.
 #[cfg(feature = "inbound")]
 pub mod axum_router;
+/// Markdown meeting-note links.
+#[cfg(all(feature = "inbound", feature = "notes"))]
+pub mod notes_router;
 
 /// Queue worker driving calendar reminder dispatch.
 #[cfg(feature = "dispatch")]

@@ -1,4 +1,12 @@
+import type { ConsentScopes } from '@service-auth/client';
+
 const RETURN_LAYOUT_KEY = 'macro:inbox-link:return-layout';
+
+const CONSENT_SCOPES: ReadonlyArray<ConsentScopes> = [
+  'gmail',
+  'gmail_and_calendar',
+  'calendar',
+];
 
 /** Where the app should land once the inbox consent round trip comes back. */
 export type InboxLinkReturn = {
@@ -8,6 +16,12 @@ export type InboxLinkReturn = {
    * survives with it.
    */
   url: string;
+  /**
+   * The permissions the flow asked consent for, so a refused consent can be
+   * retried with the same request (a calendar entry point asks for the
+   * mailbox and calendar together).
+   */
+  scopes?: ConsentScopes;
 };
 
 type StoredInboxLinkReturn = InboxLinkReturn & { linkId: string };
@@ -40,11 +54,11 @@ export function rememberInboxLinkReturn(
 }
 
 /**
- * Read and clear the layout stashed by {@link rememberInboxLinkReturn} for
- * this link. Returns undefined when nothing was stashed or the stash belongs
- * to a different flow.
+ * Read the layout stashed by {@link rememberInboxLinkReturn} for this link
+ * without clearing it. Returns undefined when nothing was stashed or the stash
+ * belongs to a different flow.
  */
-export function consumeInboxLinkReturn(
+export function readInboxLinkReturn(
   linkId: string
 ): InboxLinkReturn | undefined {
   let raw: string | null;
@@ -62,15 +76,29 @@ export function consumeInboxLinkReturn(
     stored = undefined;
   }
 
+  if (!stored || stored.linkId !== linkId || typeof stored.url !== 'string') {
+    return undefined;
+  }
+  const scopes = CONSENT_SCOPES.find((value) => value === stored.scopes);
+  return scopes ? { url: stored.url, scopes } : { url: stored.url };
+}
+
+/**
+ * Read and clear the layout stashed by {@link rememberInboxLinkReturn} for
+ * this link. Returns undefined when nothing was stashed or the stash belongs
+ * to a different flow.
+ */
+export function consumeInboxLinkReturn(
+  linkId: string
+): InboxLinkReturn | undefined {
+  const stored = readInboxLinkReturn(linkId);
+
   // A stash that can't be matched is dead weight either way, so drop it.
   try {
     sessionStorage.removeItem(RETURN_LAYOUT_KEY);
   } catch {
-    // Nothing to do — the read already succeeded.
+    // Nothing to do — the read already happened.
   }
 
-  if (!stored || stored.linkId !== linkId || typeof stored.url !== 'string') {
-    return undefined;
-  }
-  return { url: stored.url };
+  return stored;
 }

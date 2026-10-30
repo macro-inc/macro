@@ -1,5 +1,4 @@
 import { storageServiceClient } from '@service-storage/client';
-import type { CanvasFile } from '../core/document-format';
 
 export type CanvasViewLocation = {
   x?: number;
@@ -27,21 +26,6 @@ export async function fetchCanvasViewLocation(
     y: numberOrUndefined(params.get('y')),
     scale: numberOrUndefined(params.get('s')),
   };
-}
-
-export async function saveCanvasDocument(
-  documentId: string,
-  canvas: CanvasFile
-): Promise<{ file: Blob; saved: boolean }> {
-  const buffer = new TextEncoder().encode(JSON.stringify(canvas));
-  const file = new Blob([buffer], {
-    type: 'application/x-macro-canvas',
-  });
-  const result = await storageServiceClient.simpleSave({
-    documentId,
-    file,
-  });
-  return { file, saved: result.isOk() };
 }
 
 export async function saveCanvasViewLocation(

@@ -13,6 +13,7 @@ type Wording = (whose: string) => string;
  * `null` for the tools that use nobody's access and so are never held.
  */
 const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
+  AddSharedCalendarEvent: (whose) => `add a shared event to ${whose} calendar`,
   AddToPipeline: (whose) => `add deals to ${whose} pipelines`,
   BashCodeExecution: (whose) => `run code with ${whose} access`,
   BulkSetEntityPropertyOptions: (whose) =>
@@ -23,6 +24,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   CommentOnText: (whose) => `comment on ${whose} documents`,
   ConfigureAgent: (whose) => `change ${whose} agents`,
   ConfigureBot: (whose) => `change ${whose} bots`,
+  ConnectMcpServer: (whose) => `connect an MCP server to ${whose} account`,
   ContentSearch: (whose) => `search ${whose} workspace`,
   CreateBookingLink: (whose) => `create a booking link for ${whose} calendar`,
   CreateBot: (whose) => `create a bot in ${whose} workspace`,
@@ -57,6 +59,8 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   DisplayResults: (whose) => `show results from ${whose} workspace`,
   DuplicateItem: (whose) => `duplicate items in ${whose} workspace`,
   EditBookingLink: (whose) => `edit ${whose} booking links`,
+  ApplyCanvasEdits: (whose) => `edit ${whose} canvases`,
+  EditCanvas: (whose) => `edit ${whose} canvases`,
   EditChannelMessage: (whose) => `edit messages from ${whose} account`,
   EditDocument: (whose) => `edit ${whose} documents`,
   EditComment: (whose) => `edit comments on ${whose} items`,
@@ -82,6 +86,11 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   GetTeamAvailability: (whose) => `check availability for ${whose} team`,
   GetThread: (whose) => `read ${whose} email`,
   ImportCompaniesCsv: (whose) => `import companies into ${whose} CRM`,
+  ImportFromLinear: (whose) =>
+    `import a Linear workspace into ${whose} workspace`,
+  ImportFromJira: (whose) => `import a Jira workspace into ${whose} workspace`,
+  ImportFromNotion: (whose) =>
+    `import a Notion workspace into ${whose} workspace`,
   ImportNotionPage: (whose) => `import a Notion page into ${whose} workspace`,
   ImportPipelineCsv: (whose) => `import deals into ${whose} pipelines`,
   IssueBotCredential: (whose) => `issue credentials for ${whose} bots`,
@@ -121,6 +130,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   ReactToChannelMessage: (whose) => `react to messages from ${whose} account`,
   ReadActivity: (whose) => `read ${whose} recent activity`,
   ReadBookingSettings: (whose) => `read ${whose} booking settings`,
+  ReadCalendarEvent: (whose) => `read ${whose} calendar`,
   ReadCallRecord: (whose) => `read ${whose} call recordings`,
   ReadChannelMessageContext: (whose) => `read ${whose} channel messages`,
   ReadChannelMessages: (whose) => `read ${whose} channel messages`,
@@ -131,6 +141,9 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   UpdateAgentSessionSharing: (whose) => `change ${whose} session sharing`,
   ReadAgentSession: (whose) => `read ${whose} agent sessions`,
   ReadChat: (whose) => `read ${whose} chats`,
+  ReadCodeDocs: null,
+  ReadCanvas: (whose) => `read ${whose} canvases`,
+  RenderCanvas: (whose) => `view ${whose} canvases`,
   ReadContent: (whose) => `read ${whose} documents`,
   ReadDiscussion: (whose) => `read comments on ${whose} items`,
   ReadDesign: (whose) => `read ${whose} designs`,

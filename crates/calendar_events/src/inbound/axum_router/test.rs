@@ -49,6 +49,7 @@ fn mention_preview_items_serialize_the_preview_contract() {
         kind: CalendarMentionPreviewKind::Access,
         event: Some(CalendarMentionEvent {
             viewer_event_id: Some(event_id),
+            viewer_copy: Some(crate::domain::models::CalendarMentionViewerCopy::Snapshot),
             title: "Smart Macro Discussion".to_string(),
             description: Some("Agenda: <b>roadmap</b>".to_string()),
             time: crate::domain::models::EventTime::Timed {
@@ -71,6 +72,7 @@ fn mention_preview_items_serialize_the_preview_contract() {
     assert_eq!(json["type"], "access");
     assert_eq!(json["eventId"], event_id.to_string());
     assert_eq!(json["event"]["viewerEventId"], event_id.to_string());
+    assert_eq!(json["event"]["viewerCopy"], "snapshot");
     assert_eq!(json["event"]["time"]["kind"], "timed");
     assert_eq!(json["event"]["attendeeCount"], 3);
     assert_eq!(json["event"]["description"], "Agenda: <b>roadmap</b>");
@@ -79,10 +81,12 @@ fn mention_preview_items_serialize_the_preview_contract() {
     let mut shared = accessible;
     if let Some(event) = shared.event.as_mut() {
         event.viewer_event_id = None;
+        event.viewer_copy = None;
     }
     let json = serde_json::to_value(&shared).unwrap();
     assert_eq!(json["type"], "access");
     assert!(json["event"]["viewerEventId"].is_null());
+    assert!(json["event"].get("viewerCopy").is_none());
     assert_eq!(json["event"]["title"], "Smart Macro Discussion");
 
     let no_access = CalendarMentionPreviewItem {

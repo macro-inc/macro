@@ -1,8 +1,8 @@
 import { PLANS } from '@app/features/paywall/plans';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
@@ -64,6 +64,7 @@ export function TeamSeatPlanSelect(props: {
         )}
       >
         <Select.Trigger
+          variant="ghost"
           as={Button}
           class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
           disabled={props.disabled}
@@ -83,7 +84,7 @@ export function TeamSeatPlanSelect(props: {
       <Show when={props.value === 'max' && props.pendingDowngrade}>
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           disabled={props.disabled}
           onClick={() => props.onChange('max')}
         >

@@ -1,5 +1,6 @@
 import { SaveEmailDraftDocument } from '@service-storage/graphql/generated/graphql';
 import {
+  CombinedError,
   createClient,
   createRequest,
   makeOperation,
@@ -20,8 +21,14 @@ import {
 import {
   createMutationQueueRunner,
   type MutationQueueRunner,
+  type MutationQueueRunnerDeps,
   queueAttemptOf,
+  withQueueRequestTimeout,
 } from './mutation-queue-runner';
+import {
+  type MutationAttemptTelemetry,
+  NOOP_MUTATION_QUEUE_TELEMETRY,
+} from './mutation-queue-telemetry';
 
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
@@ -68,7 +75,7 @@ function enqueue(
       : { kind: 'not-runnable' },
   };
 }
-function fixture() {
+function fixture(options: MutationQueueRunnerDeps['options'] = {}) {
   const forwarded: Operation[] = [];
   const commit = vi.fn<CacheHost['commitOptimisticWrite']>(
     async () =>
@@ -83,6 +90,15 @@ function fixture() {
   );
   const host = {
     commitOptimisticWrite: commit,
+    deferOptimisticWrite: vi.fn(async () => ({ kind: 'deferred' })),
+    rollbackOptimisticWrite: vi.fn(async () => ({
+      kind: 'rolled-back',
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    })),
     currentRevision: async () => INITIAL_CACHE_REVISION,
     claimNextMutation: async () => undefined,
   } as unknown as CacheHost;
@@ -103,7 +119,7 @@ function fixture() {
           ),
       ],
     }),
-    options: {},
+    options,
     owner: 'owner',
     forward: (op) => forwarded.push(op),
     writeThrough: (result) =>
@@ -234,4 +250,112 @@ it('preserves a pump claim when its unclaimed enqueue acknowledgement arrives af
     { owner: 'owner', generation: '5' },
     expect.anything()
   );
+});
+
+function recordingTelemetry() {
+  const attempts: Array<{ sent: string[]; finished: unknown[][] }> = [];
+  const run = vi.fn((send: () => unknown) => send());
+  const telemetry = {
+    ...NOOP_MUTATION_QUEUE_TELEMETRY,
+    attempt: () => {
+      const record = { sent: [] as string[], finished: [] as unknown[][] };
+      attempts.push(record);
+      return {
+        run: <T>(send: () => T) => run(send) as T,
+        sent: (mode) => {
+          record.sent.push(mode);
+        },
+        finish: (...args) => {
+          record.finished.push(args);
+        },
+      } satisfies MutationAttemptTelemetry;
+    },
+  };
+  return { telemetry, attempts, run };
+}
+
+const savedDraft = { saveEmailDraft: { draftId: 'draft', subject: 'Draft' } };
+
+it('ends a live attempt once, as committed', async () => {
+  const { telemetry, attempts } = recordingTelemetry();
+  const { runner, forwarded } = fixture({ mutationQueueTelemetry: telemetry });
+  await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(attempts).toEqual([{ sent: ['live'], finished: [['committed', {}]] }]);
+});
+
+it('sends a queued request inside its attempt span', async () => {
+  const { telemetry, run } = recordingTelemetry();
+  const { runner, forwarded } = fixture({ mutationQueueTelemetry: telemetry });
+  await runner.admit(operation(), enqueue(operation(), '1'), runner.epoch());
+  const transport = vi.fn(async () => new Response('{}', { status: 200 }));
+  const op = makeOperation(forwarded[0].kind, forwarded[0], {
+    ...forwarded[0].context,
+    fetch: transport,
+  });
+  await withQueueRequestTimeout(op).context.fetch!('http://test', {});
+  expect(run).toHaveBeenCalledOnce();
+  expect(transport).toHaveBeenCalledOnce();
+});
+
+it('reports a retried server failure with its backoff', async () => {
+  const { telemetry, attempts } = recordingTelemetry();
+  const { runner, forwarded } = fixture({
+    mutationQueueTelemetry: telemetry,
+    shouldRetryMutation: () => true,
+  });
+  await runner.admit(operation(), enqueue(operation(), '2'), runner.epoch());
+  const attempt = queueAttemptOf(forwarded[0])!;
+  attempt.response = new Response(null, { status: 503 });
+  await runner.settle(
+    { operation: forwarded[0], data: savedDraft, stale: false, hasNext: false },
+    attempt
+  );
+  expect(attempts[0]?.finished).toEqual([
+    [
+      'retry-scheduled',
+      {
+        failure: 'server',
+        errorCode: undefined,
+        httpStatus: 503,
+        retryDelayMs: 2_000,
+      },
+    ],
+  ]);
+});
+
+it('reports retry exhaustion apart from a permanent rollback', async () => {
+  const { telemetry, attempts } = recordingTelemetry();
+  const { runner, forwarded } = fixture({
+    mutationQueueTelemetry: telemetry,
+    shouldRetryMutation: () => true,
+  });
+  const exhausted = enqueue(operation(), '10');
+  if (exhausted.initialClaim.kind !== 'claimed')
+    throw new Error('Missing claim');
+  exhausted.initialClaim.mutation.serverFailureCount = 9;
+  await runner.admit(operation(), exhausted, runner.epoch());
+  await runner.settle(
+    {
+      operation: forwarded[0],
+      data: undefined,
+      error: new CombinedError({
+        graphQLErrors: [
+          { message: 'boom', extensions: { code: 'INTERNAL' }, path: ['x'] },
+        ],
+      }),
+      stale: false,
+      hasNext: false,
+    },
+    queueAttemptOf(forwarded[0])!
+  );
+  expect(attempts[0]?.finished).toEqual([
+    [
+      'retry-exhausted',
+      { failure: 'server', errorCode: 'INTERNAL', httpStatus: undefined },
+    ],
+  ]);
 });

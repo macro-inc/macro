@@ -34,7 +34,7 @@ nested model specifies otherwise.
 | `property_option.created` | An option is added to a SELECT or TAG definition. | `option_id`, `property_definition_id`, `actor_user_id`, `value`, `color`, `display_order` |
 | `property_option.updated` | An option is renamed, recolored, reordered, or moved to another definition by a tag promotion. The metadata is the full post-update state, not a delta, so `property_definition_id` is the definition that owns the option *after* the change. | `option_id`, `property_definition_id`, `actor_user_id`, `value`, `color`, `display_order` |
 | `property_option.deleted` | An option is deleted. `value` is the pre-delete snapshot. | `option_id`, `property_definition_id`, `actor_user_id`, `value` |
-| `entity_property.updated` | An entity value is set, replaced, attached with a null value, or changed by an option add/remove. Bulk operations emit one event for each actual `(entity, property_definition)` mutation. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id`, `value`, `updated_at` |
+| `entity_property.updated` | An entity value is set, replaced, attached with a null value, changed by an option add/remove, or has a deleted option stripped from it. Bulk operations emit one event for each actual `(entity, property_definition)` mutation. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id`, `value`, `updated_at` |
 | `entity_property.deleted` | One entity-property row is deleted. | `entity_property_id`, `entity_id`, `entity_type`, `property_definition_id`, `actor_user_id` |
 | `entity_properties.cleared` | `delete_entity_properties` successfully wipes all property values for an entity, including the document-deletion path. One clear event replaces per-value deletion events. | `entity_id`, `entity_type`, `actor_user_id` |
 
@@ -109,9 +109,10 @@ Definition and option deletion have effects beyond the single event:
 - `property.deleted` implies removal of every option and every entity-property
   value under that definition. The database cascade does not emit
   `property_option.deleted` or per-entity deletion events.
-- `property_option.deleted` implies that the option ID was stripped from every
-  entity value that referenced it. This does not fan out
-  `entity_property.updated` records.
+- `property_option.deleted` (single delete and option-set replace) is followed
+  by one `entity_property.updated` per entity value the option was stripped
+  from, including a value left empty. A database column's option delete
+  reports through the `databases` change events instead.
 
 Consumers maintaining derived state must apply these implications. Definition
 and entity records use different keys, so the lack of cross-key ordering also
@@ -126,9 +127,7 @@ in one transaction, and reports that as a label event plus one
   `property_definition_id` is the *team* definition. An option changing its
   owning definition is the only case where that field moves; consumers keyed on
   the previous definition must re-read rather than assume it is stable.
-- A merge emits `property_option.deleted` for the retired personal option, with
-  the same "stripped from every entity value" implication as any option
-  deletion.
+- A merge emits `property_option.deleted` for the retired personal option.
 - Both emit one `entity_property.updated` per affected entity, carrying the
   entity's team-definition row. There is no event for the personal-definition
   row the option was stripped from; the entity event is enough for consumers

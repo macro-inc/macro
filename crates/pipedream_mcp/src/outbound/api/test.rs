@@ -1,4 +1,10 @@
-use super::{AppResponse, connectable_catalog_entry};
+use super::{AppResponse, PipedreamClient, PipedreamConfig, connectable_catalog_entry};
+use crate::domain::models::{MacroUserIdStr, PipedreamConnection};
+use crate::domain::ports::{ConnectedAppProxy, PipedreamConnect};
+use http::{HeaderMap, HeaderValue, Method, StatusCode};
+use std::time::Duration;
+use wiremock::matchers::{body_json, header, method, path, query_param};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn app(slug: &str, auth_type: Option<&str>) -> AppResponse {
     AppResponse {
@@ -40,96 +46,119 @@ fn app_categories_are_optional_for_older_directory_responses() {
 }
 
 #[tokio::test]
-async fn proxy_routes_the_connected_user_and_preserves_provider_status() {
-    use super::{
-        ApiProxy, CachedToken, PipedreamClient, PipedreamConfig, PipedreamConnection, ProxyMethod,
-    };
-    use axum::{
-        Router,
-        body::Bytes,
-        extract::OriginalUri,
-        http::{HeaderMap, Method, StatusCode},
-        routing::any,
-    };
-    use base64::Engine;
-    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-    use std::{
-        sync::{Arc, Mutex},
-        time::{Duration, Instant},
-    };
-    let received = Arc::new(Mutex::new(Vec::new()));
-    let requests = received.clone();
-    let router = Router::new().fallback(any(
-        move |method: Method, uri: OriginalUri, headers: HeaderMap, body: Bytes| {
-            let requests = requests.clone();
-            async move {
-                requests
-                    .lock()
-                    .unwrap()
-                    .push((method, uri.0, headers, body));
-                (
-                    StatusCode::TOO_MANY_REQUESTS,
-                    axum::Json(serde_json::json!({"error":"rate limited"})),
-                )
-            }
-        },
-    ));
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let server = tokio::spawn(async move {
-        axum::serve(listener, router).await.unwrap();
-    });
+async fn the_proxy_addresses_the_upstream_url_for_the_connected_account() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/oauth/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"access_token": "project-token", "expires_in": 3600}),
+        ))
+        .mount(&server)
+        .await;
+    // base64url (no padding) of https://api.notion.com/v1/search
+    Mock::given(method("POST"))
+        .and(path(
+            "/v1/connect/proj_fixture/proxy/aHR0cHM6Ly9hcGkubm90aW9uLmNvbS92MS9zZWFyY2g",
+        ))
+        .and(query_param("external_user_id", "macro|caller@example.com"))
+        .and(query_param("account_id", "apn_notion"))
+        .and(header("authorization", "Bearer project-token"))
+        .and(header("x-pd-environment", "development"))
+        .and(header("x-pd-proxy-notion-version", "2026-03-11"))
+        .and(body_json(serde_json::json!({"page_size": 100})))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("retry-after", "3")
+                .set_body_string(r#"{"object":"error","code":"rate_limited"}"#),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
     let client = PipedreamClient::new(PipedreamConfig {
-        client_id: "client".into(),
-        client_secret: "secret".into(),
-        project_id: "proj_test".into(),
+        client_id: "fixture".into(),
+        client_secret: "fixture".into(),
+        project_id: "proj_fixture".into(),
         environment: "development".into(),
         allowed_origins: vec![],
-        api_url: format!("http://{address}"),
-        mcp_url: "https://unused.test".into(),
+        api_url: server.uri(),
+        mcp_url: format!("{}/mcp", server.uri()),
     })
     .unwrap();
-    *client.access_token.lock().unwrap() = Some(CachedToken {
-        token: "test-token".into(),
-        valid_until: Instant::now() + Duration::from_secs(3600),
-    });
-    let account = PipedreamConnection {
-        user_id: MacroUserIdStr::parse_from_str("macro|owner@test.com")
-            .unwrap()
-            .into_owned(),
-        app_slug: "granola".into(),
-        server_name: "Granola".into(),
-        account_id: "apn_123".into(),
+    let connection = PipedreamConnection {
+        user_id: MacroUserIdStr::try_from_email("caller@example.com").unwrap(),
+        app_slug: "notion".into(),
+        server_name: "Notion".into(),
+        account_id: "apn_notion".into(),
         enabled: true,
     };
-    let target = "https://public-api.granola.ai/v1/webhook-endpoints";
-    let body = serde_json::json!({"url":"https://macro.test/webhook"});
-    let result = client
-        .proxy(&account, ProxyMethod::Post, target, Some(body.clone()))
+
+    let response = client
+        .proxy(
+            &connection,
+            Method::POST,
+            "https://api.notion.com/v1/search",
+            &HeaderMap::from_iter([(
+                http::HeaderName::from_static("notion-version"),
+                HeaderValue::from_static("2026-03-11"),
+            )]),
+            Some(&serde_json::json!({"page_size": 100})),
+        )
         .await
         .unwrap();
-    assert_eq!(result.status, 429);
-    let requests = received.lock().unwrap();
-    let (method, uri, headers, bytes) = &requests[0];
-    assert_eq!(*method, Method::POST);
+
+    assert_eq!(response.status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.retry_after(), Some(Duration::from_secs(3)));
+    assert_eq!(response.body, r#"{"object":"error","code":"rate_limited"}"#);
+}
+
+#[tokio::test]
+async fn listing_accounts_filters_by_user_and_app_and_keeps_creation_times() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/oauth/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"access_token": "project-token", "expires_in": 3600}),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/connect/proj_fixture/accounts"))
+        .and(query_param("external_user_id", "macro|caller@example.com"))
+        .and(query_param("app", "linear"))
+        .and(header("authorization", "Bearer project-token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "page_info": {"total_count": 1},
+            "data": [{
+                "id": "apn_1",
+                "external_id": "macro|caller@example.com",
+                "healthy": true,
+                "created_at": "2026-10-27T18:54:23.000Z",
+                "app": {"name_slug": "linear", "name": "Linear"}
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = PipedreamClient::new(PipedreamConfig {
+        client_id: "fixture".into(),
+        client_secret: "fixture".into(),
+        project_id: "proj_fixture".into(),
+        environment: "development".into(),
+        allowed_origins: vec![],
+        api_url: server.uri(),
+        mcp_url: format!("{}/mcp", server.uri()),
+    })
+    .unwrap();
+
+    let accounts = client
+        .list_accounts("macro|caller@example.com", "linear")
+        .await
+        .unwrap();
+
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts[0].id, "apn_1");
     assert_eq!(
-        uri.path(),
-        format!(
-            "/v1/connect/proj_test/proxy/{}",
-            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(target)
-        )
+        accounts[0].created_at,
+        Some("2026-10-27T18:54:23Z".parse().unwrap())
     );
-    let query: std::collections::HashMap<_, _> =
-        url::form_urlencoded::parse(uri.query().unwrap().as_bytes())
-            .into_owned()
-            .collect();
-    assert_eq!(query["external_user_id"], "macro|owner@test.com");
-    assert_eq!(query["account_id"], "apn_123");
-    assert_eq!(headers["authorization"], "Bearer test-token");
-    assert_eq!(headers["x-pd-environment"], "development");
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(bytes).unwrap(),
-        body
-    );
-    server.abort();
 }

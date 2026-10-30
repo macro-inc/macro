@@ -144,6 +144,8 @@ export interface EmailDraftStorage {
     }
   ): Promise<LocalDraft>;
   retryDraft?(draftId: string): Promise<void>;
+  /** Drop the working copy of a draft whose server row no longer exists. */
+  forgetLocalDraft?(draftId: string): Promise<void>;
   /** Resolve durable local drafts before mounting an editor. */
   readDraft?(
     draftId: string,
@@ -421,6 +423,10 @@ export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;
   showThread?: (id: string) => void;
   showDraft?: (id: string) => void;
+  /** A From switch moved the draft to a new id and thread; the old ones are gone. */
+  showMovedDraft?: (moved: { draftId: string; threadId: string }) => void;
+  /** The draft a reload should reopen, or undefined when there is none. */
+  recordDraft?: (draftId: string | undefined) => void;
   goBack?: () => void;
   registerBack?: (handler: () => boolean) => void;
 }

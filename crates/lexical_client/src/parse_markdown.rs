@@ -451,7 +451,7 @@ impl From<LexicalResponseItem> for MarkdownParseResult {
     }
 }
 
-async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
+pub(crate) async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
     if response.status() == reqwest::StatusCode::OK {
         return Ok(response);
     }

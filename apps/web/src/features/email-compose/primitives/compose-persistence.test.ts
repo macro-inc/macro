@@ -131,6 +131,26 @@ it('discards a reply draft at its server generation', async () => {
   );
 });
 
+it('sends a reloaded reply without appending its quoted thread again', async () => {
+  const composeContext = createComposeContext();
+  // The server keeps the quote's class but strips the editor's markers.
+  const root = mountReplyComposer(composeContext, () => message('parent'), {
+    draft: message('draft', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      thread_db_id: 'thread',
+      body_html_sanitized:
+        '<p>Reply</p><div class="macro_quote gmail_quote"><blockquote>Earlier</blockquote></div>',
+    }),
+  });
+  await root.sendEmail();
+  root.dispose();
+  const sent = vi.mocked(composeContext.delivery.sendMessage).mock.calls[0][0];
+  expect(decodeBase64Utf8(sent.message.body_html ?? '')).not.toContain(
+    'macro_quote'
+  );
+});
+
 it('keeps the draft editable after failed deletion and saves later edits', async () => {
   const composeContext = createComposeContext();
   const goBack = vi.fn();
@@ -1125,11 +1145,7 @@ it.each(['standalone', 'reply'] as const)(
         code: 'DRAFT_ALREADY_SENT',
       });
       await vi.advanceTimersByTimeAsync(1000);
-      expect(context.notices.feedback.alert).toHaveBeenCalledExactlyOnceWith(
-        surface === 'standalone'
-          ? 'This email was already sent'
-          : 'This reply was already sent'
-      );
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
       expect(context.notices.feedback.failure).not.toHaveBeenCalled();
       expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
@@ -1167,7 +1183,7 @@ function localSnapshot(
 }
 
 it.each(['standalone', 'reply'] as const)(
-  'keeps one %s local-save warning until recovery or disposal',
+  'keeps one %s local-save warning until recovery and briefly warns when the write on close fails',
   async (surface) => {
     const context = createComposeContext();
     let diskFailed = true;
@@ -1209,7 +1225,50 @@ it.each(['standalone', 'reply'] as const)(
     } finally {
       root.dispose();
     }
+    await vi.advanceTimersByTimeAsync(0);
+    const closing = vi.mocked(context.drafts.saveLocalDraft!).mock.lastCall;
+    expect(decodeBase64Utf8(closing?.[0].draft.body_html ?? '')).toContain(
+      'Another failure'
+    );
     expect(context.notices.feedback.dismiss).toHaveBeenLastCalledWith(8);
+    expect(context.notices.feedback.failure).toHaveBeenCalledTimes(3);
+    expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+      'Draft could not be saved on this device',
+      { subtext: 'Error: Disk full', persistent: false }
+    );
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'writes the unsaved %s edit once more on close',
+  async (surface) => {
+    const context = createComposeContext();
+    let diskFailed = true;
+    context.drafts.saveLocalDraft = vi.fn(async (input) => {
+      if (diskFailed) throw new Error('Draft storage transaction aborted');
+      return localSnapshot(input);
+    });
+    vi.mocked(context.notices.feedback.failure).mockReturnValueOnce(7);
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Typed before backgrounding');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+    } finally {
+      diskFailed = false;
+      root.dispose();
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    const closing = vi.mocked(context.drafts.saveLocalDraft!).mock.lastCall;
+    expect(decodeBase64Utf8(closing?.[0].draft.body_html ?? '')).toContain(
+      'Typed before backgrounding'
+    );
+    expect(context.notices.feedback.dismiss).toHaveBeenCalledExactlyOnceWith(7);
+    expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
+    expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
   }
 );
 

@@ -4,7 +4,7 @@
  * that helps. Presentational.
  */
 
-import WarningCircle from '@phosphor/warning-circle.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 
 export function SessionNotice(props: {
@@ -21,7 +21,7 @@ export function SessionNotice(props: {
       <WarningCircle class="size-3.5 shrink-0 text-warning" />
       <span class="min-w-0 flex-1">{props.message}</span>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         data-testid="psd-session-action"
         onClick={() => props.onAction()}

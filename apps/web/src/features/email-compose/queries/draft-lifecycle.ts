@@ -8,7 +8,12 @@ import {
 import { emailKeys } from '@queries/email/keys';
 import { fetchFreshEmailThread } from '@queries/email/thread';
 import type { ApiMessage } from '@service-email/generated/schemas';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import {
+  type QueryKey,
+  queryOptions,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/solid-query';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   EmailDraftLifecycleSource,
@@ -92,6 +97,47 @@ function refreshInterval(state: EmailDraftLifecycleState | undefined) {
     : DUE_REFRESH_INTERVAL_MS;
 }
 
+type DraftIdentity = Parameters<typeof fetchLifecycle>[0];
+/** The observer's latest refresh; a read started before it is stale. */
+type RefreshVersion = { current: number };
+
+async function readLifecycle(identity: DraftIdentity, version: RefreshVersion) {
+  const started = version.current;
+  const state = await fetchLifecycle(identity);
+  return { state, version: started };
+}
+
+function lifecycleReadOptions(
+  queryKey: QueryKey,
+  identity: DraftIdentity,
+  version: RefreshVersion
+) {
+  return {
+    queryKey,
+    queryFn: () => readLifecycle(identity, version),
+    staleTime: 0,
+  };
+}
+
+function lifecycleQueryOptions(
+  queryKey: QueryKey,
+  identity: DraftIdentity,
+  version: RefreshVersion
+) {
+  return queryOptions({
+    ...lifecycleReadOptions(queryKey, identity, version),
+    enabled: identity.draftId.length > 0 && identity.threadId.length > 0,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
+    refetchInterval: (stateQuery) =>
+      refreshInterval(
+        stateQuery.state.data?.version === version.current
+          ? stateQuery.state.data.state
+          : undefined
+      ),
+  });
+}
+
 export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
   observe(input) {
     const queryClient = useQueryClient();
@@ -112,31 +158,17 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
       threadId: string;
       inboxId?: string;
     }>();
-    let refreshVersion = 0;
+    const refreshVersion: RefreshVersion = { current: 0 };
     const [requiredReadVersion, setRequiredReadVersion] = createSignal(0);
-    const read = async (identity: Parameters<typeof fetchLifecycle>[0]) => {
-      const version = refreshVersion;
-      const state = await fetchLifecycle(identity);
-      return { state, version };
-    };
     const query = useQuery(() => {
       const draftId = input.draftId() ?? '';
       const threadId = input.threadId() ?? '';
       const inboxId = input.inboxId();
-      return {
-        queryKey: observerQueryKey(draftId, threadId, inboxId),
-        enabled: draftId.length > 0 && threadId.length > 0,
-        queryFn: () => read({ draftId, threadId, inboxId }),
-        staleTime: 0,
-        refetchOnWindowFocus: 'always' as const,
-        refetchOnReconnect: 'always' as const,
-        refetchInterval: (stateQuery) =>
-          refreshInterval(
-            stateQuery.state.data?.version === refreshVersion
-              ? stateQuery.state.data.state
-              : undefined
-          ),
-      };
+      return lifecycleQueryOptions(
+        observerQueryKey(draftId, threadId, inboxId),
+        { draftId, threadId, inboxId },
+        refreshVersion
+      );
     });
 
     const refresh = async () => {
@@ -145,7 +177,7 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
       const inboxId = input.inboxId();
       if (!draftId || !threadId) return undefined;
 
-      const version = ++refreshVersion;
+      const version = ++refreshVersion.current;
       // Once a mutation needs reconciliation, no earlier observation is
       // authoritative again, even if the fresh read fails or query-store
       // notifications are delayed. A later successful poll can satisfy this
@@ -158,12 +190,14 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
         // read. Explicit cancellation prevents its late result from entering
         // this observer's cache; the REST query below starts independently.
         await queryClient.cancelQueries({ queryKey, exact: true });
-        const result = await queryClient.fetchQuery({
-          queryKey,
-          queryFn: () => read({ draftId, threadId, inboxId }),
-          staleTime: 0,
-        });
-        return version === refreshVersion &&
+        const result = await queryClient.fetchQuery(
+          lifecycleReadOptions(
+            queryKey,
+            { draftId, threadId, inboxId },
+            refreshVersion
+          )
+        );
+        return version === refreshVersion.current &&
           result.version === version &&
           draftId === input.draftId() &&
           threadId === input.threadId() &&
@@ -171,7 +205,7 @@ export const emailDraftLifecycleSource: EmailDraftLifecycleSource = {
           ? result.state
           : undefined;
       } finally {
-        if (version === refreshVersion) setRefreshing(undefined);
+        if (version === refreshVersion.current) setRefreshing(undefined);
       }
     };
 

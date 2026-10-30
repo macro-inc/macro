@@ -31,33 +31,16 @@ pub(super) async fn open_join_request(
     requester_id: &str,
     requester_email: &str,
 ) -> Result<(CalendarJoinRequest, bool), Report> {
-    // A declined request reopens with a fresh time and address; a pending or
-    // accepted one is left as it is. `previous` reads the row before the
-    // upsert, so `opened` is true only when this call made it pending.
-    let row = sqlx::query!(
+    // An existing request, pending, accepted or declined, is left as it is:
+    // only the first ask inserts, so `opened` is true only for that call.
+    let row = sqlx::query_as!(
+        JoinRequestRow,
         r#"
-        WITH previous AS (
-            SELECT status
-            FROM calendar_event_join_requests
-            WHERE event_id = $2 AND requester_id = $3
-        )
         INSERT INTO calendar_event_join_requests
             (id, event_id, requester_id, requester_email, status)
         VALUES ($1, $2, $3, $4, 'pending')
-        ON CONFLICT (event_id, requester_id) DO UPDATE SET
-            status = 'pending',
-            requester_email = EXCLUDED.requester_email,
-            created_at = now(),
-            resolved_at = NULL
-        WHERE calendar_event_join_requests.status = 'declined'
-        RETURNING
-            id,
-            event_id,
-            requester_id,
-            requester_email,
-            status,
-            created_at,
-            COALESCE((SELECT status FROM previous), 'declined') = 'declined' AS "opened!"
+        ON CONFLICT (event_id, requester_id) DO NOTHING
+        RETURNING id, event_id, requester_id, requester_email, status, created_at
         "#,
         Uuid::now_v7(),
         event_id,
@@ -68,18 +51,9 @@ pub(super) async fn open_join_request(
     .await
     .map_err(report)?;
     if let Some(row) = row {
-        let request = CalendarJoinRequest {
-            id: row.id,
-            event_id: row.event_id,
-            requester_id: row.requester_id,
-            requester_email: row.requester_email,
-            status: CalendarJoinRequestStatus::from_db(&row.status),
-            created_at: row.created_at,
-        };
-        return Ok((request, row.opened));
+        return Ok((row.into(), true));
     }
-    // The conflict update was skipped: the request is already pending or
-    // accepted, and asking again changes nothing.
+    // The request already exists; asking again changes nothing.
     let existing = find_join_request(pool, event_id, requester_id)
         .await?
         .ok_or_else(|| rootcause::report!("join request vanished during the ask"))?;

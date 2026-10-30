@@ -20,7 +20,7 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { useGetFileBlob } from '../signal/blockData';
 

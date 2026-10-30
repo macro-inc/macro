@@ -1,17 +1,31 @@
 use super::*;
 use crate::{
-    BotOnly, InternalAuthConfig, JwtValidator, MacroAuthorizationExtractor,
+    BotOnly, CredentialOrigin, InternalAuthConfig, JwtValidator, MacroAuthorizationExtractor,
     MacroAuthorizationServiceImpl, NoBotAuthorizer, NoUserApiKeyAuthorizer, UserOnly,
-    ValidatedIdentity,
+    ValidatedCredential, ValidatedIdentity,
 };
 use std::sync::Arc;
 
 #[derive(Clone)]
 struct Validator;
 impl JwtValidator for Validator {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.validate(jwt).map(|identity| ValidatedCredential {
+            identity,
+            origin: if jwt == "user" {
+                CredentialOrigin::Session
+            } else {
+                CredentialOrigin::MacroApiJwt
+            },
+        })
+    }
+
     fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
         match jwt {
-            "execution" | "user" => Ok(ValidatedIdentity {
+            "execution" | "api" | "user" => Ok(ValidatedIdentity {
                 agent_id: (jwt == "execution").then_some(bot_id::MACRO_NEW_BOT_ID),
                 user_id: "macro|owner@example.com".into(),
                 fusion_user_id: "fusion-owner".into(),
@@ -38,6 +52,7 @@ async fn bearer_agent_attribution_survives_user_policy_without_becoming_bot_auth
     )));
     for (token, agent) in [
         ("execution", Some(bot_id::MACRO_NEW_BOT_ID)),
+        ("api", None),
         ("user", None),
     ] {
         let (mut parts, _) = axum::http::Request::builder()
@@ -52,6 +67,14 @@ async fn bearer_agent_attribution_survives_user_policy_without_becoming_bot_auth
         .await
         .unwrap();
         assert_eq!(caller.authorization.agent_id, agent);
+        assert_eq!(
+            caller.authorization.origin,
+            if token == "user" {
+                CredentialOrigin::Session
+            } else {
+                CredentialOrigin::MacroApiJwt
+            }
+        );
         assert_eq!(
             caller.authorization.macro_user_id.as_ref(),
             "macro|owner@example.com"

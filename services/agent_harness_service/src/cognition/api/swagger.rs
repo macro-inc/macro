@@ -1,7 +1,7 @@
 use crate::cognition::api::{
     attachments::get_chats_for_attachment,
     chats::{chat_history, chat_history_batch_messages},
-    citations, decisions, health,
+    citations, database_query, decisions, health,
     preview::get_batch_preview,
     stream::chat_message::{
         self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
@@ -31,8 +31,8 @@ use memory::inbound::axum_router::{self as memory_api, MemoryErrorBody, MemoryRe
 use onboarding::inbound::axum_router::{self as onboarding_api, CompleteOnboardingRequest};
 use pipedream_mcp::inbound::axum_router::{
     self as pipedream_api, PipedreamCatalogEntryResponse, PipedreamCatalogResponse,
-    PipedreamCompleteRequest, PipedreamConnectionResponse, PipedreamTokenResponse,
-    PipedreamUpdateRequest,
+    PipedreamCompleteRequest, PipedreamConnectionResponse, PipedreamOverlayResponse,
+    PipedreamRecoverRequest, PipedreamTokenResponse, PipedreamUpdateRequest,
 };
 
 use crate::cognition::api::preview::get_batch_preview::{
@@ -93,12 +93,15 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             decisions::decide,
+            database_query::generate_database_query,
             memory_api::get_memory_handler,
             import_api::get_state_handler,
             import_api::run_import_handler,
-            import_api::retry_gather_handler,
             import_api::discover_handler,
-            import_api::dismiss_run_handler,
+            import_api::notion_report_handler,
+            import_api::workspace_report_handler,
+            import_api::cancel_workspace_handler,
+            import_api::cancel_notion_handler,
             onboarding_api::get_state_handler,
             onboarding_api::complete_handler,
             onboarding_api::dismissed_prompts_handler,
@@ -118,7 +121,9 @@ use utoipa::OpenApi;
             pipedream_api::delete_connection,
             pipedream_api::create_connect_token,
             pipedream_api::complete_connection,
-            pipedream_api::browse_catalog_handler
+            pipedream_api::recover_connection,
+            pipedream_api::browse_catalog_handler,
+            pipedream_api::list_overlays
         ),
         components(
             schemas(
@@ -208,11 +213,17 @@ use utoipa::OpenApi;
                 import::domain::models::ImportEntity,
                 import::domain::models::ImportRun,
                 import::domain::models::ImportSource,
+                import::domain::models::ImportKind,
                 import::domain::models::ImportStatus,
                 import::domain::models::Initiator,
                 import::domain::models::RunStatus,
                 import::domain::models::LinearIssueMeta,
                 import::domain::models::NotionDocMeta,
+                import::domain::models::NotionPlanItem,
+                import::domain::models::NotionDecision,
+                import::domain::models::NotionTaskFields,
+                import::domain::models::NotionImportReport,
+                import::domain::models::NotionReportItem,
                 import::domain::models::SlackChannelMeta,
                 import::domain::models::SlackParticipant,
                 import::domain::service::RunImportOutcome,
@@ -257,8 +268,10 @@ use utoipa::OpenApi;
                 PipedreamUpdateRequest,
                 PipedreamTokenResponse,
                 PipedreamCompleteRequest,
+                PipedreamRecoverRequest,
                 PipedreamCatalogResponse,
                 PipedreamCatalogEntryResponse,
+                PipedreamOverlayResponse,
                 model_error_response::ErrorResponse,
             ),
         ),

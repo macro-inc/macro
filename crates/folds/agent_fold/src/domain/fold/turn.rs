@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 
-use super::convert::{deserialize_params, user_content_part};
+use super::convert::{deserialize_params, same_attachment, user_content_part};
 use super::state::{Changed, FoldState, Turn};
 
 impl FoldState {
@@ -26,6 +26,13 @@ impl FoldState {
             && let Some(message) = self.messages.last_mut()
             && matches!(message.author, Author::User { .. })
         {
+            if message
+                .parts
+                .iter()
+                .any(|existing| same_attachment(existing, &part))
+            {
+                return None;
+            }
             match part {
                 MessagePart::Text { text } => match message.parts.get_mut(0) {
                     Some(MessagePart::Text { text: held }) => held.push_str(&text),
@@ -50,6 +57,26 @@ impl FoldState {
             posted_at: None,
         });
         Some(Changed::new(message))
+    }
+
+    /// Add an image fetched after the prompt was sent onto that prompt.
+    ///
+    /// The same URI already on the message is left alone: a resource link and
+    /// the image frame fetched from it are one picture.
+    pub(super) fn append_prompt_attachment(&mut self, part: MessagePart) -> Option<Changed> {
+        let turn_id = self.turn.as_ref()?.id;
+        let message = self.messages.iter().position(|message| {
+            message.id == turn_id && matches!(message.author, Author::User { .. })
+        })?;
+        if self.messages[message]
+            .parts
+            .iter()
+            .any(|existing| same_attachment(existing, &part))
+        {
+            return None;
+        }
+        self.messages[message].parts.push(part);
+        Some(Changed::updated(message))
     }
 
     /// Handle a `session/prompt`: emit the user's message, open a turn.
@@ -121,7 +148,14 @@ impl FoldState {
                 }
                 match user_content_part(block) {
                     Some(MessagePart::Text { text: chunk }) => text.push_str(&chunk),
-                    Some(part) => attachments.push(part),
+                    Some(part)
+                        if !attachments
+                            .iter()
+                            .any(|existing| same_attachment(existing, &part)) =>
+                    {
+                        attachments.push(part)
+                    }
+                    Some(_) => {}
                     None => {}
                 }
             }

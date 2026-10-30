@@ -19,9 +19,9 @@ import type {
   TextStyle,
 } from '@core/psd-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { AdjustmentControls } from '../components/adjustment-controls';
 import { ColorSwatch } from '../components/color-swatch';

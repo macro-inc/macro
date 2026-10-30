@@ -47,6 +47,14 @@ export function isSharerCannotInvite(error: unknown): boolean {
   );
 }
 
+/** Whether the person who shared the event declined the viewer's request. */
+export function isJoinRequestDeclined(error: unknown): boolean {
+  return thrownResultErrorHasCode(
+    error,
+    CalendarJoinRequestErrorCode.request_declined
+  );
+}
+
 async function requestToJoinCalendarEvent(
   eventId: string
 ): Promise<CalendarJoinRequest> {
@@ -60,12 +68,15 @@ async function requestToJoinCalendarEvent(
       span.setAttr('calendar.join_request.outcome', 'requested');
       return request;
     } catch (error) {
-      const refused = isSharerCannotInvite(error);
-      span.setAttr(
-        'calendar.join_request.outcome',
-        refused ? 'sharer_cannot_invite' : 'failed'
+      const outcome = isSharerCannotInvite(error)
+        ? 'sharer_cannot_invite'
+        : isJoinRequestDeclined(error)
+          ? 'declined'
+          : 'failed';
+      span.setAttr('calendar.join_request.outcome', outcome);
+      span.error(
+        outcome === 'failed' ? 'Join request failed' : 'Join request refused'
       );
-      span.error(refused ? 'Join request refused' : 'Join request failed');
       throw error;
     }
   });

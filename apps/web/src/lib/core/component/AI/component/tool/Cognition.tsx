@@ -1,5 +1,5 @@
-import CaretRight from '@phosphor/caret-right.svg';
-import Sparkle from '@phosphor/sparkle.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
 import { createSignal, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { createToolRenderer, type RenderContext } from './ToolRenderer';

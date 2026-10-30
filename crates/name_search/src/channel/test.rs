@@ -605,7 +605,7 @@ async fn results_match_the_names_the_viewer_sees(pool: Pool<Postgres>) -> anyhow
         "teo",
         "nys",
         "nameless",
-        "claude",
+        "codex",
         "deal",
         "des",
         "an",

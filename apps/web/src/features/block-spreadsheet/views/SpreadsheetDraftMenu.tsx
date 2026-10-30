@@ -3,9 +3,9 @@ import type { SplitFileMenuActionGroups } from '@components/app/split-layout/con
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Share from '@icon/share.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import Rename from '@phosphor/pencil-line.svg';
-import Sparkle from '@phosphor/sparkle.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import Rename from '@icon/system/regular/pencil-line.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
 import { Dropdown } from '@ui';
 import { createEffect, createMemo, For, on, onCleanup, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -45,8 +45,13 @@ export function SpreadsheetDraftMenu(props: {
       when={isTouchDevice()}
       fallback={
         <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
-          <Dropdown.Trigger label="File actions" size="icon-sm" variant="ghost">
-            <DotsThree />
+          <Dropdown.Trigger
+            aria-label="File actions"
+            tooltip="File actions"
+            size="icon-sm"
+            variant="ghost"
+          >
+            <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
           <Dropdown.Content class="w-64">
             <Dropdown.Group>

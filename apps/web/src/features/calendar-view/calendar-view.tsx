@@ -27,7 +27,7 @@ import {
   Show,
 } from 'solid-js';
 import { CalendarFocusContextProvider } from './calendar-focus-target';
-import { resolveCalendarTarget } from './calendar-target';
+import { createCalendarFocusTarget } from './calendar-target';
 import { createCalendarTargetAim } from './calendar-target-request';
 import { calendarSearch, calendarSearchTarget } from './calendar-url';
 import { CalendarViewSkeleton } from './calendar-view-skeleton';
@@ -180,13 +180,10 @@ export function CalendarView(props: CalendarViewProps) {
       };
     }
   );
-  const focusTarget = createMemo(() => {
-    const request = targetRequest();
-    if (!request || !occurrencesQuery.isSuccess) {
-      return undefined;
-    }
-    return resolveCalendarTarget(occurrencesQuery.data?.items ?? [], request);
-  });
+  const focusTarget = createCalendarFocusTarget(
+    targetRequest,
+    occurrencesQuery
+  );
 
   const setFocusedEventId = (eventId: string | undefined) => {
     const next = eventId ?? '';

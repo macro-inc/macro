@@ -1,3 +1,4 @@
+import { NotificationSoundSettingsView } from '@app/features/notification-sounds/views/NotificationSoundSettingsView';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -155,6 +156,8 @@ export function Notifications() {
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
+
+      <NotificationSoundSettingsView />
 
       <For each={NOTIFICATION_EVENT_GROUPS}>
         {(group) => (

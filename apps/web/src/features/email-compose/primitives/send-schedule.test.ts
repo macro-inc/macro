@@ -173,9 +173,7 @@ describe('send and schedule ordering', () => {
         expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
           'Scheduled email sent'
         );
-        expect(context.notices.feedback.alert).toHaveBeenCalledWith(
-          'This email was already sent'
-        );
+        expect(context.notices.feedback.alert).not.toHaveBeenCalled();
         pending.resolve({
           draftId: 'draft',
           threadId: 'thread',
@@ -438,14 +436,10 @@ describe('send and schedule ordering', () => {
       expect(state.selectedTime()).toEqual(new Date(scheduled.sendTime));
       pending.resolve();
       await scheduling;
-      if (kind === 'standalone') {
-        expect(state.confirmedTime()).toEqual(new Date(scheduled.sendTime));
-        expect(state.disabled()).toBe(true);
-      } else {
-        // Inline reply follows its normal successful-submit convention and
-        // collapses; a stale editing observation must not surface a cancel.
-        expect(state.scheduleState().type).toBe('editing');
-      }
+      // Both keep showing the scheduled draft; a stale editing observation
+      // must not surface a cancel.
+      expect(state.confirmedTime()).toEqual(new Date(scheduled.sendTime));
+      expect(state.disabled()).toBe(true);
       expect(context.notices.feedback.success).not.toHaveBeenCalledWith(
         'Schedule cancelled. This email is editable again.'
       );

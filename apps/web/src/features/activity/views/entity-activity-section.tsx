@@ -1,5 +1,5 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
-import CaretUpDownIcon from '@phosphor/caret-up-down.svg';
+import CaretUpDownIcon from '@icon/system/regular/caret-up-down.svg';
 import { cn } from '@ui';
 import {
   createMemo,

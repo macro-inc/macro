@@ -5,6 +5,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+// Only the Postgres send-attempt repository reads approval snapshots.
+#[cfg(feature = "outbound")]
 mod approval;
 
 use super::models::{

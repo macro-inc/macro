@@ -1,5 +1,5 @@
 use crate::api::search::simple::{SearchError, simple_channel};
-use crate::api::search::terms::split_search_terms;
+use crate::api::search::terms::{drop_wordless_terms, record_term_counts, split_search_terms};
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use std::collections::HashMap;
@@ -383,6 +383,15 @@ pub async fn name_handler(
         (status = 500, body=model::response::ErrorResponse),
     )
 )]
+#[tracing::instrument(
+    skip_all,
+    fields(
+        search.match_type = %req.match_type,
+        search.terms = tracing::field::Empty,
+        search.dropped_terms = tracing::field::Empty,
+    ),
+    err
+)]
 pub async fn handler(
     State(ctx): State<SearchHandlerState>,
     authorization: MacroAuthorizationExtractor<SearchAuthorizationService, UserOrInternal>,
@@ -420,6 +429,13 @@ pub async fn handler(
     } else {
         split_search_terms(&raw_terms)
     };
+    let split_count = terms.len();
+    let terms = drop_wordless_terms(terms, req.match_type);
+    record_term_counts(
+        &tracing::Span::current(),
+        terms.len(),
+        split_count - terms.len(),
+    );
     if terms.is_empty() {
         return Err(SearchError::NoQueryOrTermsProvided);
     }

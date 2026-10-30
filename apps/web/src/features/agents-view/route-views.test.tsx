@@ -33,6 +33,9 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     },
   }),
 }));
+vi.mock('@components/app/split-layout/view-restoration', () => ({
+  useViewRestoration: () => {},
+}));
 vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
   withAuth: (view: unknown) => view,
   usePageViewTracking: () => {},

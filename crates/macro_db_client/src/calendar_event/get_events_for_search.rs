@@ -31,7 +31,8 @@ pub struct CalendarEventSearchInfo {
     pub time_zone: Option<String>,
     /// Whether the series carries any recurrence rule.
     pub is_recurring: bool,
-    /// Direct conference join URL.
+    /// Direct conference join URL. Withheld from a channel share, whose
+    /// copies and exports never carry the join link either.
     pub conference_url: Option<String>,
     /// Organizer email, when the source names one.
     pub organizer_email: Option<String>,
@@ -55,10 +56,12 @@ pub struct CalendarEventSearchInfo {
 /// Fetch search metadata for `event_ids` the requester may see, resolving one
 /// contextual occurrence per event.
 ///
-/// Visibility mirrors the soup predicate: the requester owns the projection,
-/// or the event's source link is delegated to them through `macro_user_links`.
-/// An id the requester cannot see is simply absent from the result, which
-/// drops the hit during enrichment.
+/// Visibility mirrors the event's access check: the requester owns the
+/// projection, the event's source link is delegated to them through
+/// `macro_user_links`, or it was shared with a channel they currently belong
+/// to and is still live and neither private nor confidential. An id the
+/// requester cannot see is simply absent from the result, which drops the hit
+/// during enrichment.
 ///
 /// A recurring series is indexed once, as its master, so the instance a row
 /// should display is decided here rather than baked into the index. The
@@ -68,7 +71,7 @@ pub struct CalendarEventSearchInfo {
 /// Occurrences are materialized only inside a rolling window, so a series can
 /// legitimately resolve to no occurrence at all; callers fall back to the
 /// master span.
-#[tracing::instrument(skip(db, event_ids), fields(event_count = event_ids.len()), err)]
+#[tracing::instrument(skip(db, requester_id, event_ids), fields(event_count = event_ids.len()), err)]
 pub async fn get_calendar_events_for_search(
     db: &Pool<Postgres>,
     requester_id: &str,
@@ -92,7 +95,7 @@ pub async fn get_calendar_events_for_search(
             event.end_date,
             event.time_zone,
             (cardinality(event.recurrence_lines) > 0) AS "is_recurring!",
-            event.conference_url,
+            CASE WHEN viewer.on_calendar THEN event.conference_url END AS conference_url,
             event.organizer_email,
             event.organizer_name,
             event.description,
@@ -105,6 +108,17 @@ pub async fn get_calendar_events_for_search(
             occurrence.start_date AS "occurrence_start_date?",
             occurrence.end_date AS "occurrence_end_date?"
         FROM calendar_events event
+        CROSS JOIN LATERAL (
+            SELECT (
+                event.owner_id = $1
+                OR EXISTS (
+                    SELECT 1
+                    FROM macro_user_links link
+                    WHERE link.link_id = event.source_link_id
+                      AND link.primary_macro_id = $1
+                )
+            ) AS on_calendar
+        ) viewer
         LEFT JOIN LATERAL (
             SELECT
                 instance.occurrence_key,
@@ -130,12 +144,21 @@ pub async fn get_calendar_events_for_search(
         ) occurrence ON true
         WHERE event.id = ANY($2)
           AND (
-                event.owner_id = $1
-                OR EXISTS (
-                    SELECT 1
-                    FROM macro_user_links link
-                    WHERE link.link_id = event.source_link_id
-                      AND link.primary_macro_id = $1
+                viewer.on_calendar
+                OR (
+                    event.status <> 'cancelled'
+                    AND event.visibility IN ('default', 'public')
+                    AND EXISTS (
+                        SELECT 1
+                        FROM entity_access grant_row
+                        JOIN comms_channel_participants participant
+                          ON participant.channel_id::text = grant_row.source_id
+                         AND participant.user_id = $1
+                         AND participant.left_at IS NULL
+                        WHERE grant_row.entity_id = event.id
+                          AND grant_row.entity_type = 'calendar_event'
+                          AND grant_row.source_type = 'channel'
+                    )
                 )
           )
         "#,
@@ -179,3 +202,56 @@ pub async fn get_calendar_events_for_search(
         })
         .collect())
 }
+
+/// Ids of the events shared with a channel the requester currently belongs to
+/// that they hold on none of their calendars: what a search scoped to shared
+/// events may match.
+///
+/// A grant counts only under the event's access check (live, neither private
+/// nor confidential). A meeting the requester also holds, owned or through a
+/// delegated inbox, is left out: a mention of it resolves to their own copy,
+/// which their own scope already finds.
+#[tracing::instrument(skip(db, requester_id), fields(shared_event_count), err)]
+pub async fn get_channel_shared_calendar_event_ids(
+    db: &Pool<Postgres>,
+    requester_id: &str,
+) -> anyhow::Result<Vec<Uuid>> {
+    let ids = sqlx::query_scalar!(
+        r#"
+        SELECT DISTINCT event.id AS "id!"
+        FROM comms_channel_participants participant
+        JOIN entity_access grant_row
+          ON grant_row.source_id = participant.channel_id::text
+         AND grant_row.source_type = 'channel'
+         AND grant_row.entity_type = 'calendar_event'
+        JOIN calendar_events event ON event.id = grant_row.entity_id
+        WHERE participant.user_id = $1
+          AND participant.left_at IS NULL
+          AND event.status <> 'cancelled'
+          AND event.visibility IN ('default', 'public')
+          AND NOT EXISTS (
+                SELECT 1
+                FROM calendar_events held
+                WHERE held.ical_uid = event.ical_uid
+                  AND held.status <> 'cancelled'
+                  AND (
+                        held.owner_id = $1
+                        OR EXISTS (
+                            SELECT 1
+                            FROM macro_user_links link
+                            WHERE link.link_id = held.source_link_id
+                              AND link.primary_macro_id = $1
+                        )
+                  )
+          )
+        "#,
+        requester_id,
+    )
+    .fetch_all(db)
+    .await?;
+    tracing::Span::current().record("shared_event_count", ids.len());
+    Ok(ids)
+}
+
+#[cfg(test)]
+mod test;

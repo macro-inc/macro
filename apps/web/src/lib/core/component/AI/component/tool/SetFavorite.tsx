@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import Star from '@phosphor-icons/core/regular/star.svg';
+import Star from '@icon/system/regular/star.svg';
 import type { FavoritableEntityType } from '@service-cognition/generated/tools/types';
 import type { ItemType } from '@service-storage/client';
 import { Suspense } from 'solid-js';

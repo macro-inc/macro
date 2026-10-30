@@ -36,12 +36,13 @@ export function DocumentPreviewSheet(
             <Suspense fallback={<DocumentPreviewSkeleton />}>
               <DocumentPreviewContent
                 delete={props.delete}
+                convertToText={props.convertToText}
                 collapseInfo={props.collapseInfo}
                 documentInfo={props.documentInfo}
                 previewInfo={props.previewInfo}
                 snapshotInfo={props.snapshotInfo}
                 useFallbackData={props.useFallbackData}
-                onAddedToCalendar={() => props.onOpenChange(false)}
+                onOpened={() => props.onOpenChange(false)}
               />
             </Suspense>
           </MobileDrawer.ScrollBody>

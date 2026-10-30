@@ -6,8 +6,8 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import XIcon from '@phosphor/x.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -105,7 +105,7 @@ export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
             <div class="flex flex-col text-ink">
               <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
                 <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-                  <XIcon />
+                  <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 </Dialog.CloseButton>
                 <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
                   New Call
@@ -123,7 +123,7 @@ export function NewCallButton(props: { presentation?: 'sidebar' | 'toolbar' }) {
                 />
                 <div class="flex justify-end">
                   <Button
-                    variant="strong"
+                    variant="primary"
                     size="sm"
                     disabled={isSubmitting()}
                     onClick={handleStartCall}

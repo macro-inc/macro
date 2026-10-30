@@ -21,6 +21,10 @@ ignores:
   # not transport leakage. What this rule exists to catch — IntoResponse
   # impls and status-code mapping — stays in that crate's inbound adapter.
   - 'crates/agent_egress/src/domain/**'
+  # pipedream_mcp's Connect proxy port relays an HTTP request to a connected
+  # app and hands back its status and headers: that request is the port's
+  # subject matter, so `http` is its domain language here too.
+  - 'crates/pipedream_mcp/src/domain/**'
 rule:
   any:
     - kind: scoped_identifier

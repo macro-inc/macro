@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
-import LinkIcon from '@phosphor/link.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
 import {
   useCreateTeamInviteLinkMutation,
   useDeleteTeamInviteLinkMutation,
@@ -86,7 +86,7 @@ export function TeamInviteLinkSection(props: {
           when={!unknown()}
           fallback={
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               class="shrink-0"
               onClick={() =>
@@ -98,7 +98,7 @@ export function TeamInviteLinkSection(props: {
           }
         >
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="shrink-0"
             disabled={busy()}

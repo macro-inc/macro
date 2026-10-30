@@ -5,7 +5,10 @@ use agent_changes::inbound::axum_router::{
     CaptureAttemptDto, CaptureOutcomeDto, ChangedFileDto, ChangesetDto, ChangesetSourceDto,
     FileChangeKindDto, GitRefDto,
 };
+use agent_harness::domain::mode_choice::AgentMode;
+use agent_harness::inbound::app_connections::{self, AppConnectedRequest};
 use agent_harness::inbound::capability_discovery;
+use agent_harness::inbound::mode_choice::{self, AgentModeChoiceRequest, AgentModeChoiceResponse};
 use agent_harness::inbound::model_load::{
     self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
     ModelHarnessDto,
@@ -58,6 +61,8 @@ impl Modify for SecurityAddon {
     modifiers(&SecurityAddon),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
+        universal_input::inbound::axum_router::classify,
+        universal_input::inbound::axum_router::extract,
         agent_code_mode::inbound::axum_router::get_code_execution,
         agent_code_mode::inbound::axum_router::create_review,
         agent_code_mode::inbound::axum_router::get_review,
@@ -96,10 +101,12 @@ impl Modify for SecurityAddon {
         agent_harness::inbound::conversations::start_fresh_agent_conversation,
         repositories::list_agent_repositories_handler,
         repositories::list_agent_repository_branches_handler,
+        mode_choice::choose_agent_mode_handler,
         changes_router::get_agent_session_changes_handler,
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
         tool_approvals::answer_tool_approval_handler,
+        app_connections::app_connected_handler,
     ),
     components(schemas(
         CreateAgentSessionRequest,
@@ -147,6 +154,9 @@ impl Modify for SecurityAddon {
         AgentModelsStatusDto,
         ModelHarnessDto,
         AgentRepositoriesResponse,
+        AgentModeChoiceRequest,
+        AgentModeChoiceResponse,
+        AgentMode,
         AgentRepositoryBranchesResponse,
         AgentRepositoryDto,
         AgentSessionChangesResponse,
@@ -159,6 +169,7 @@ impl Modify for SecurityAddon {
         ChangesetSourceDto,
         FileChangeKindDto,
         AnswerToolApprovalRequest,
+        AppConnectedRequest,
         AnswerToolApprovalResponse,
         ToolApprovalAnswerDto,
         ToolApprovalStatusDto,
@@ -166,7 +177,8 @@ impl Modify for SecurityAddon {
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
         (name = "agent-models", description = "Fresh provider model discovery"),
-        (name = "agent-repositories", description = "Repositories a coding session can work on")
+        (name = "agent-repositories", description = "Repositories a coding session can work on"),
+        (name = "agent-mode-choice", description = "Whether a composer prompt goes to a chat or a coding agent")
     )
 )]
 pub struct ApiDoc;

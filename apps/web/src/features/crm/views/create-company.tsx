@@ -1,8 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import XIcon from '@phosphor/x.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, EntityComposer, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { isCompanyDomain } from '../core/pipeline-record';
@@ -123,14 +123,15 @@ export function CreateCompanyModal(props: {
                   />
                 </EntityComposer.Title>
                 <Button
+                  variant="ghost"
                   tabIndex={-1}
                   aria-label="Close"
                   tooltip="Close"
-                  size="icon-composer"
+                  size="icon-md"
                   disabled={createCompanyMutation.isPending}
                   onClick={close}
                 >
-                  <XIcon />
+                  <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </EntityComposer.Header>
               <EntityComposer.Main class="gap-4">

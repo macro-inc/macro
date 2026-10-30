@@ -20,7 +20,7 @@ import {
   serverEmailSendsError,
 } from '@queries/email/server-sends';
 import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, on, Show } from 'solid-js';
 
 /**
  * Routine delivery is silent. A send shows here only while it waits on this
@@ -85,12 +85,21 @@ export function QueuedSendStatus(props: {
         (!props.threadId || row.attempt.threadId === props.threadId) &&
         (!props.inboxIds?.length || props.inboxIds.includes(row.linkId))
     );
+  // The last server poll can still list a send this device just retired.
+  createEffect(
+    on(
+      () => sends.intents().map((intent) => intent.uuid),
+      (ids, previous) => {
+        if (previous?.some((id) => !ids.includes(id)))
+          fireAndForget(refreshServerEmailSends(), 'email-server-sends');
+      }
+    )
+  );
   return (
     <Show
       when={
         visible().length > 0 ||
         visibleServer().length > 0 ||
-        serverEmailSendsError() ||
         emailSendStorageWarning()
       }
     >
@@ -113,13 +122,14 @@ export function QueuedSendStatus(props: {
         <For each={visibleServer()}>
           {(row) => <ServerSendStatus row={row} />}
         </For>
-        <Show when={serverEmailSendsError()}>
+        <Show when={visibleServer().length > 0 && serverEmailSendsError()}>
           <p class="text-xs text-ink-muted" role="status">
             {serverEmailSendsError()}
           </p>
         </Show>
         <Show when={hasMoreServerEmailSends()}>
           <Button
+            variant="secondary"
             onClick={() =>
               fireAndForget(loadMoreServerEmailSends(), 'email-more-sends')
             }
@@ -179,6 +189,7 @@ function ServerSendStatus(props: { row: ServerEmailSend }) {
         </Show>
       </div>
       <Button
+        variant="ghost"
         disabled={working()}
         onClick={() => fireAndForget(action(), 'email-server-send')}
       >
@@ -279,6 +290,7 @@ function SendStatus(props: {
         when={status() !== 'SENDING' && status() !== 'DELIVERY_UNCONFIRMED'}
       >
         <Button
+          variant="ghost"
           disabled={
             working() ||
             (emailSendLocked(props.intent) &&
@@ -295,6 +307,7 @@ function SendStatus(props: {
         }
       >
         <Button
+          variant="ghost"
           disabled={working()}
           onClick={() =>
             fireAndForget(checkStatus(), 'email-compose-check-send')
