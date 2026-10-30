@@ -40,6 +40,8 @@ const compositionSchema = z.object({
       z.object({
         type: z.literal('event'),
         events: z.array(z.string()).min(1),
+        // Limits the trigger to these items; dropping them would widen it.
+        ids: z.array(z.uuid()).nullish(),
         condition: z.string().nullish(),
       }),
     ])
@@ -69,7 +71,7 @@ const compositionOutputSchema = {
         items: {
           type: 'object',
           description:
-            '{type:"event",events,condition?} | {type:"cron",expression,timezone} | {type:"once",at}',
+            '{type:"event",events,ids?,condition?} | {type:"cron",expression,timezone} | {type:"once",at}',
           properties: {
             type: { type: 'string', enum: ['event', 'cron', 'once'] },
           },
@@ -92,7 +94,7 @@ export function compositionInstructions(context: ComposerContext): string {
   return `You turn a person's description of an automation into a Macro routine. Return only the routine.
 
 Triggers:
-- {"type":"event","events":[...],"condition"?: "yes/no question the triggering item must answer yes"}. Events: ${events}.
+- {"type":"event","events":[...],"ids"?: [ids of the specific channels, tasks or documents it watches, from the lists below; omit to watch all],"condition"?: "yes/no question the triggering item must answer yes"}. Events: ${events}.
 - {"type":"cron","expression":"six-field cron: sec min hour day month weekday","timezone":"${context.timezone}"} for repeating schedules.
 - {"type":"once","at":"RFC3339 timestamp"} for a single future run. Now is ${context.now.toISOString()} (${context.timezone}).
 
@@ -139,12 +141,14 @@ export function draftFromComposition(
   if (!parsed.success) return 'The draft came back incomplete. Try rephrasing.';
   const { name, triggers, steps } = parsed.data;
   const schedules: ActionTrigger[] = [];
-  const filters: { events: string[]; condition?: string }[] = [];
+  const filters: { events: string[]; ids?: string[]; condition?: string }[] =
+    [];
   for (const trigger of triggers) {
     if (trigger.type === 'event') {
       const condition = trigger.condition?.trim();
       filters.push({
         events: trigger.events,
+        ...(trigger.ids?.length ? { ids: trigger.ids } : {}),
         ...(condition ? { condition } : {}),
       });
     } else if (trigger.type === 'cron') {

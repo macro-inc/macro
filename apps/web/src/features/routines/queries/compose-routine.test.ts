@@ -3,6 +3,7 @@ import {
   compositionInstructions,
   draftFromComposition,
 } from './compose-routine';
+import { draftToCreateBody } from './routine-draft';
 
 vi.mock('@service-cognition/client', () => ({ cognitionApiServiceClient: {} }));
 vi.mock('@core/constant/allBlocks', () => ({
@@ -55,6 +56,37 @@ describe('routine composition', () => {
       { kind: 'event', events: ['email.message_received'] },
     ]);
     expect(draft.steps?.[0]?.kind).toBe('choose');
+  });
+
+  it('keeps a trigger limited to the items it names', () => {
+    const channel = '0195f5d1-4c4b-7a3e-9b3f-2d6a1c8e9f01';
+    const draft = draftFromComposition(
+      {
+        name: 'Copy launches',
+        triggers: [
+          {
+            type: 'event',
+            events: ['channel.message_posted'],
+            ids: [channel],
+          },
+        ],
+        steps: [
+          {
+            type: 'tool',
+            tool: 'CreateDocument',
+            arguments: {
+              documentName: 'Launch note',
+              fileContent: '',
+              fileExtension: 'md',
+            },
+          },
+        ],
+      },
+      context
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    // Saving it watches that one channel, not every channel.
+    expect(JSON.stringify(draftToCreateBody(draft))).toContain(channel);
   });
 
   it('keeps choices that apply every fitting option', () => {
