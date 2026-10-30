@@ -112,7 +112,7 @@ enum Command {
         /// Requested ownership for the next pairing.
         #[arg(long, value_enum)]
         scope: Option<service::ServiceScope>,
-        /// Whether the next pairing may enable permission bypass.
+        /// Whether this machine allows permission bypass; reported on every connect.
         #[arg(long)]
         allow_permission_bypass: Option<bool>,
     },

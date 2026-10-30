@@ -62,7 +62,7 @@ pub struct ServiceOptions {
     pub name: Option<String>,
     /// Requested ownership for the next pairing.
     pub scope: Option<ServiceScope>,
-    /// Whether the next pairing may enable permission bypass.
+    /// Whether this machine allows permission bypass; reported on every connect.
     pub allow_permission_bypass: Option<bool>,
 }
 
