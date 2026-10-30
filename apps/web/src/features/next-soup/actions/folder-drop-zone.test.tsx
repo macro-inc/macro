@@ -5,6 +5,7 @@ import {
   DragDropProvider,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
+import { For, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -28,13 +29,14 @@ vi.mock('@queries/storage/folder-list', () => ({
     folders: () => [
       { id: 'folder', name: 'Folder', parentId: 'parent', userId: 'macro|me' },
       { id: 'parent', name: 'Parent', userId: 'macro|me' },
+      { id: 'other', name: 'Other', userId: 'macro|me' },
     ],
     isPending: () => false,
   }),
 }));
 vi.mock('../utils', () => ({ restoreSoupFocus: vi.fn() }));
 
-import { FolderDropZone } from './folder-drop-zone';
+import { createFolderDropTargets, FolderDropZone } from './folder-drop-zone';
 
 const doc = (id: string, ownerId = 'macro|me'): EntityData => ({
   id,
@@ -59,7 +61,7 @@ function dragData(
   };
 }
 
-function setup(data: EntityDragData) {
+function setup(data: EntityDragData, target: () => JSX.Element = FolderBody) {
   let actions!: NonNullable<ReturnType<typeof useDragDropContext>>[1];
   function Harness() {
     const context = useDragDropContext();
@@ -69,7 +71,7 @@ function setup(data: EntityDragData) {
     return (
       <>
         <div ref={draggable}>Row</div>
-        <FolderDropZone folderId="folder">Folder contents</FolderDropZone>
+        {target()}
       </>
     );
   }
@@ -89,6 +91,29 @@ function setup(data: EntityDragData) {
     start: () => actions.dragStart('row'),
     drop: () => actions.dragEnd(),
   };
+}
+
+function FolderBody() {
+  return <FolderDropZone folderId="folder">Folder contents</FolderDropZone>;
+}
+
+/** Folder rows as Drive's sidebar builds them: one controller, one target each. */
+function FolderRows() {
+  const createTarget = createFolderDropTargets();
+  return (
+    <For each={['folder', 'other']}>
+      {(id) => {
+        const target = createTarget?.(() => id);
+        return (
+          <div
+            ref={(element) => target?.ref(element)}
+            data-testid={id}
+            data-over={target?.isOver()}
+          />
+        );
+      }}
+    </For>
+  );
 }
 
 afterEach(() => {
@@ -180,6 +205,58 @@ describe('FolderDropZone', () => {
     drop();
 
     expect(mocks.moveEntities).not.toHaveBeenCalled();
+  });
+
+  it('moves a row into a sidebar folder from the split it sits in', async () => {
+    mocks.moveEntities.mockResolvedValue(undefined);
+    const row = doc('row');
+    const { start, drop } = setup(
+      dragData(row, { splitId: 'folder-split' }),
+      FolderRows
+    );
+
+    start();
+    drop();
+    await vi.waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
+
+    expect(mocks.moveEntities).toHaveBeenCalledTimes(1);
+    expect(mocks.moveEntities.mock.calls[0]?.[1]).toEqual({
+      id: 'folder',
+      name: 'Folder',
+    });
+  });
+
+  it('skips a sidebar folder that already holds the row', async () => {
+    mocks.moveEntities.mockResolvedValue(undefined);
+    const held = { ...doc('held'), projectId: 'folder' };
+    const { start, drop } = setup(dragData(held, {}), FolderRows);
+
+    start();
+    expect(screen.getByTestId('folder').dataset.over).toBe('false');
+    expect(screen.getByTestId('other').dataset.over).toBe('true');
+    drop();
+    await vi.waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
+
+    expect(mocks.moveEntities.mock.calls[0]?.[1]).toEqual({
+      id: 'other',
+      name: 'Other',
+    });
+  });
+
+  it('moves once when a folder pane and sidebar rows share the drag', async () => {
+    mocks.moveEntities.mockResolvedValue(undefined);
+    const { start, drop } = setup(dragData(doc('row'), {}), () => (
+      <>
+        <FolderRows />
+        <FolderBody />
+      </>
+    ));
+
+    start();
+    drop();
+    await vi.waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
+
+    expect(mocks.moveEntities).toHaveBeenCalledTimes(1);
   });
 
   it('reports a failed move', async () => {

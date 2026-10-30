@@ -16,20 +16,35 @@ import {
   type Accessor,
   createMemo,
   createUniqueId,
+  onCleanup,
   type ParentProps,
   Show,
 } from 'solid-js';
 import { makeMoveToProjectAction } from './make-move-to-project-action';
 
+export type FolderDropTarget = {
+  ref: (element: HTMLElement) => void;
+  count: Accessor<number>;
+  isOver: Accessor<boolean>;
+};
+
+export type CreateFolderDropTarget = (
+  folderId: Accessor<string | undefined>
+) => FolderDropTarget;
+
 /**
- * Registers an element showing a folder as a place to drop dragged rows, under
- * the same rules as Move to folder. A row dragged within its own split is not
- * a move: the split already shows where it lives.
+ * Drop handling for one surface's folders, under the same rules as Move to
+ * folder. Its targets share one folder list and mutation, so a long folder tree
+ * costs a droppable per row. Returns undefined outside the app's
+ * DragDropProvider, where there is nothing to drag.
+ *
+ * A surface showing a folder's contents passes its split as `ownSplitId`: a row
+ * dragged within that split is not a move, as the split already shows where it
+ * lives.
  */
-function createFolderDropTarget(options: {
-  folderId: Accessor<string | undefined>;
-  splitId: Accessor<string | undefined>;
-}) {
+export function createFolderDropTargets(
+  options: { ownSplitId?: Accessor<string | undefined> } = {}
+): CreateFolderDropTarget | undefined {
   const context = useDragDropContext();
   if (!context) return undefined;
   const [state, { onDragEnd }] = context;
@@ -38,21 +53,19 @@ function createFolderDropTarget(options: {
   const moveEntities = createMoveEntitiesToFolder('folder_drop');
   const moveToProjectAction = makeMoveToProjectAction({ userId: useUserId() });
   const folders = createMemo(() => indexFolders(folderList.folders()));
+  const targets = new Map<string | number, Accessor<string | undefined>>();
 
-  const droppableEntities = (data: unknown): EntityData[] => {
-    const folderId = options.folderId();
+  const droppableEntities = (
+    data: unknown,
+    folderId: string | undefined
+  ): EntityData[] => {
     if (!folderId || !isEntityDragData(data)) return [];
-    if (data.splitId === options.splitId()) return [];
+    const ownSplitId = options.ownSplitId?.();
+    if (ownSplitId && data.splitId === ownSplitId) return [];
     const dragged = data.selection?.entities() ?? [data];
     if (!dragged.every(moveToProjectAction.canExecute)) return [];
     return entitiesToMove(dragged, folderId, folders());
   };
-
-  const droppableId = `folder-drop:${createUniqueId()}`;
-  const droppable = createDroppable(droppableId, {
-    isDropTargetDisabled: () =>
-      droppableEntities(state.active.draggable?.data).length === 0,
-  });
 
   const move = async (entities: EntityData[], folderId: string) => {
     const name = folders().get(folderId)?.name ?? folderId;
@@ -68,19 +81,30 @@ function createFolderDropTarget(options: {
     }
   };
 
-  onDragEnd(({ draggable, droppable: target }) => {
-    const folderId = options.folderId();
-    if (target?.id !== droppableId || !folderId) return;
-    const entities = droppableEntities(draggable.data);
+  onDragEnd(({ draggable, droppable }) => {
+    const folderId = droppable && targets.get(droppable.id)?.();
+    if (!folderId) return;
+    const entities = droppableEntities(draggable.data, folderId);
     if (entities.length === 0) return;
     if (isEntityDragData(draggable.data)) draggable.data.selection?.clear();
     fireAndForget(move(entities, folderId), 'folder-drop');
   });
 
-  return {
-    ref: droppable.ref,
-    count: () => droppableEntities(state.active.draggable?.data).length,
-    isOver: () => droppable.isActiveDroppable,
+  return (folderId) => {
+    const count = () =>
+      droppableEntities(state.active.draggable?.data, folderId()).length;
+    const droppableId = `folder-drop:${createUniqueId()}`;
+    const droppable = createDroppable(droppableId, {
+      isDropTargetDisabled: () => count() === 0,
+    });
+    targets.set(droppableId, folderId);
+    onCleanup(() => targets.delete(droppableId));
+
+    return {
+      ref: droppable.ref,
+      count,
+      isOver: () => droppable.isActiveDroppable,
+    };
   };
 }
 
@@ -89,10 +113,10 @@ export function FolderDropZone(
   props: ParentProps<{ folderId: string | undefined }>
 ) {
   const panel = useSplitPanel();
-  const target = createFolderDropTarget({
-    folderId: () => props.folderId,
-    splitId: () => panel?.handle.id,
+  const createTarget = createFolderDropTargets({
+    ownSplitId: () => panel?.handle.id,
   });
+  const target = createTarget?.(() => props.folderId);
 
   return (
     <div

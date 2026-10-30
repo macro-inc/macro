@@ -11,7 +11,11 @@ export {
   toEntityActionListState,
   toSingleEntityActionListState,
 } from './entity-action-context';
-export { FolderDropZone } from './folder-drop-zone';
+export {
+  type CreateFolderDropTarget,
+  createFolderDropTargets,
+  FolderDropZone,
+} from './folder-drop-zone';
 export { makeAddTagAction } from './make-add-tag-action';
 export { makeArchiveSessionAction } from './make-archive-session-action';
 export { makeBlockSenderAction } from './make-block-sender-action';
