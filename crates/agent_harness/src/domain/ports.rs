@@ -5,6 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::domain::model::PermissionPolicyConfig;
+use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
@@ -103,6 +104,15 @@ pub trait HarnessBindings: Send + Sync + 'static {
         &self,
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+
+    /// The sessions holding one of `acp_sessions` whose bot is bound to
+    /// `harness` now. Scoping by binding is the authorization: a runtime
+    /// naming another harness's ACP sessions reattaches nothing.
+    fn sessions_on_harness(
+        &self,
+        harness: HarnessId,
+        acp_sessions: &[SessionId],
+    ) -> impl Future<Output = anyhow::Result<Vec<AgentSessionId>>> + Send;
 }
 
 /// Loads facts for the domain to resolve a bot's permission policy.
@@ -356,8 +366,8 @@ impl<T: HeldToolCallObserver + ?Sized> HeldToolCallObserver for Arc<T> {
 /// A self-hosted runtime dials once and carries every session its bot is
 /// serving, so binding a session to a connection happens when work arrives for
 /// it rather than when the runtime dials. That is what keeps a reconnect cheap:
-/// sessions nobody is prompting are never restored at all, and the one being
-/// prompted restores itself on the way to being prompted.
+/// only sessions the runtime reports as still running are restored when it
+/// dials, and any other one restores itself on the way to being prompted.
 /// Only binding: taking a dialed-in socket into the registry is the inbound
 /// adapter's business, and the type it hands over is not the type a session
 /// talks through.
@@ -386,6 +396,14 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 
     /// Whether this process currently holds `harness`'s physical runtime socket.
     fn is_connected(&self, harness: HarnessId) -> bool;
+
+    /// The sessions a runtime dialing in for `harness` reported as live, as
+    /// [`HarnessBindings::sessions_on_harness`] resolves them.
+    fn sessions_on_harness(
+        &self,
+        harness: HarnessId,
+        acp_sessions: &[SessionId],
+    ) -> impl Future<Output = anyhow::Result<Vec<AgentSessionId>>> + Send;
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at

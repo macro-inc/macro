@@ -111,6 +111,26 @@ where
         Ok(session)
     }
 
+    /// Load a live external session onto its runtime's new connection.
+    ///
+    /// Safe to repeat: a session already attached here keeps its actor, and
+    /// an archived or managed one is never started by a runtime's dial.
+    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = false))]
+    pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<()> {
+        if self.sessions.attached_mcp_servers(session_id).is_some() {
+            return Ok(());
+        }
+        let session = self.sessions.get_session(session_id).await?;
+        if session.is_archived
+            || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
+        {
+            return Ok(());
+        }
+        self.reconnect(session_id).await?;
+        tracing::Span::current().record("agent.session.reattached", true);
+        Ok(())
+    }
+
     /// Reconcile a prior invocation before deciding whether a batch may run.
     async fn recover_batch(
         &self,

@@ -629,6 +629,10 @@ pub enum HarnessCommand {
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
     Delete,
+    /// Load an external session whose agent is still running on a runtime
+    /// that dialed in again, so its local activity reaches Macro without a
+    /// prompt. Internal: the runtime registry asks for these on each dial.
+    Reattach,
 }
 
 /// What executing a command did with it, beyond succeeding.
