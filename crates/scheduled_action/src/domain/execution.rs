@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use macro_uuid::{Uuid, generate_uuid_v7};
 use routine_program::{RoutineProgram, StepRecord};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument;
 
 use crate::domain::event_runs::{
     ClaimedEventRun, EventExecutionResult, EventExecutor, EventRunOutcome,
@@ -317,7 +318,9 @@ where
         // a claim or abandon a run after creating its resource.
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let executor = self.clone();
-        self.tracker.spawn(async move {
+        // The run outlives the request that started it; keep it on that trace.
+        let span = tracing::info_span!("routine.execute", action_id = %id);
+        let run = async move {
             let claim = bounded(
                 deadline,
                 executor.cancellation.cancelled(),
@@ -360,25 +363,38 @@ where
             let record = execution_record(&action, &handle, start_time, &result);
             let end_time = record.end_time;
             let bookkeeping = async {
-                let _ = executor.repo.create_execution_record(record).await.inspect_err(|error| {
-                    tracing::error!(?error, action_id=?id, "failed to save execution record");
-                });
+                let _ = executor
+                    .repo
+                    .create_execution_record(record)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(?error, action_id=?id, "failed to save execution record");
+                    });
                 let _ = executor.repo.update_last_executed(&id, end_time).await.inspect_err(|error| {
                     tracing::error!(?error, action_id=?id, "failed to update last executed time");
                 });
-                let _ = executor.repo.update_next_run_at(&id).await.inspect_err(|error| {
-                    tracing::error!(?error, action_id=?id, "failed to update next run time");
-                });
+                let _ = executor
+                    .repo
+                    .update_next_run_at(&id)
+                    .await
+                    .inspect_err(|error| {
+                        tracing::error!(?error, action_id=?id, "failed to update next run time");
+                    });
             };
-            if tokio::time::timeout(BOOKKEEPING_TIMEOUT, bookkeeping).await.is_err() {
+            if tokio::time::timeout(BOOKKEEPING_TIMEOUT, bookkeeping)
+                .await
+                .is_err()
+            {
                 tracing::error!(action_id=?id, "execution bookkeeping timed out");
             }
             // Always attempt fenced release, even after failed preparation or
             // stalled history persistence. Never retry model/tool execution.
             let release = executor.repo.release_action(&id, token);
             match tokio::time::timeout(BOOKKEEPING_TIMEOUT, release).await {
-                Ok(Ok(())) => {},
-                Ok(Err(error)) => tracing::error!(?error, action_id=?id, "failed to release action claim"),
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    tracing::error!(?error, action_id=?id, "failed to release action claim")
+                }
                 Err(error) => tracing::error!(?error, action_id=?id, "claim release timed out"),
             }
             let _ = tokio::time::timeout(
@@ -392,7 +408,8 @@ where
                     let _ = ready_tx.send(Err(error));
                 }
             }
-        });
+        };
+        self.tracker.spawn(run.instrument(span));
         ready_rx
             .await
             .context("failed to prepare scheduled action resource")?
