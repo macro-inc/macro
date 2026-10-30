@@ -125,6 +125,18 @@ const APPROVED_STATES = new Set([
   "PROCESSING_FOR_APP_STORE",
 ]);
 
+// What the merge gate accepts: an approved version that reaches the App Store
+// with nothing left but the prod deploy's `publish` (held) or nothing at all
+// (releasing, live). Not ACCEPTED: another item of the submission was
+// rejected, and the version cannot publish until that is resolved. Not
+// PENDING_APPLE_RELEASE: Apple holds it until an unreleased iOS version ships.
+const MERGEABLE_STATES = new Set([
+  HELD_STATE,
+  "PROCESSING_FOR_DISTRIBUTION",
+  "PROCESSING_FOR_APP_STORE",
+  ...LIVE_STATES,
+]);
+
 // Versions that shipped and were superseded or pulled — never in flight.
 const RETIRED_STATES = new Set([
   "REPLACED_WITH_NEW_VERSION",
@@ -1153,9 +1165,9 @@ ${distributionUrl}`);
       "mismatch", state,
     );
   }
-  if (!APPROVED_STATES.has(state) && !LIVE_STATES.has(state)) {
+  if (!MERGEABLE_STATES.has(state)) {
     fail(
-      `App Store version ${version} is not approved yet (state ${state}).`,
+      `App Store version ${version} is not held for release or live yet (state ${state}).`,
       SUBMITTED_STATES.has(state) ? "waiting" : "release-required",
       state,
     );

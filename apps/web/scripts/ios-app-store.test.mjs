@@ -68,7 +68,10 @@ function runCli(args, env, { missingGit = false } = {}) {
 for (const [state, expected, attachedBuild, stamp, nativeTree = tree] of [
   ['MISSING', 'release-required', '188', tree],
   ['IN_REVIEW', 'waiting', '188', tree],
+  ['ACCEPTED', 'waiting', '188', tree],
+  ['PENDING_APPLE_RELEASE', 'waiting', '188', tree],
   ['PENDING_DEVELOPER_RELEASE', 'approved', '188', tree],
+  ['PROCESSING_FOR_DISTRIBUTION', 'approved', '188', tree],
   ['PENDING_DEVELOPER_RELEASE', 'mismatch', '187', tree],
   ['PENDING_DEVELOPER_RELEASE', 'mismatch', '188', 'b'.repeat(40)],
   ['REJECTED', 'release-required', '188', tree],
@@ -108,6 +111,7 @@ for (const [state, attachedBuild, releases] of [
   ['PENDING_DEVELOPER_RELEASE', '188', true],
   ['PENDING_DEVELOPER_RELEASE', '187', false],
   ['IN_REVIEW', '188', false],
+  ['ACCEPTED', '188', false],
   ['READY_FOR_DISTRIBUTION', '188', false],
   ['MISSING', '188', false],
 ]) {
