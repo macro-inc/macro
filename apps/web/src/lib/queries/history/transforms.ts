@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { formatDocumentName } from '@service-storage/util/filename';
@@ -28,6 +29,9 @@ export function transformHistoryItem(item: Item): HistoryItem {
         fileType: item.fileType,
         subType: item.subType,
         ownerId: item.owner,
+        appearance: readEntityAppearance(
+          'appearance' in item ? item.appearance : undefined
+        ),
       };
 
     case 'chat':

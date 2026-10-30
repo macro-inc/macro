@@ -4,6 +4,7 @@ import { canDeleteProject, canEditProject, type Project } from './project';
 export type ProjectMenuItem =
   | 'open-in-split'
   | 'rename'
+  | 'change-icon'
   | 'status'
   | 'priority'
   | 'copy-link'
@@ -23,6 +24,7 @@ export function projectMenuGroups(
     share: boolean;
     status: boolean;
     priority: boolean;
+    appearance?: boolean;
   }
 ): ProjectMenuItem[][] {
   if (projects.length === 0) return [];
@@ -33,6 +35,7 @@ export function projectMenuGroups(
     editable
       ? [
           ...(single ? (['rename'] as const) : []),
+          ...(single && surface.appearance ? (['change-icon'] as const) : []),
           ...(surface.status ? (['status'] as const) : []),
           ...(surface.priority ? (['priority'] as const) : []),
         ]

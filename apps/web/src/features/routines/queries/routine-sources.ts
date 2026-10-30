@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, onMount } from 'solid-js';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import type {
   RoutineCreatorSource,
   RoutineDetailSource,
@@ -32,6 +33,9 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
   return {
     id: schedule.id,
     name: schedule.name,
+    appearance: readEntityAppearance(
+      'appearance' in schedule ? schedule.appearance : undefined
+    ),
     ownerId: schedule.owner,
     createdAt: schedule.created_at,
     enabled: schedule.enabled,

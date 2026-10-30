@@ -1,9 +1,11 @@
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ScheduleDraft } from './draft';
 
 /** The editor's view of a routine, independent of scheduled-action wire fields. */
 export type RoutineSnapshot = {
   id: string;
   name: string;
+  appearance?: EntityAppearance | null;
   ownerId: string;
   createdAt: string;
   enabled: boolean;

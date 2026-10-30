@@ -53,6 +53,9 @@ import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Component, JSX } from 'solid-js';
+import { supportsEntityAppearance } from '../entity-appearance/core/appearance';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
+import { useAppearanceEditAccess } from '../entity-appearance/queries/access';
 
 type SoupEntityActionItem = {
   id: string;
@@ -105,6 +108,7 @@ export function createSoupEntityActions(
   options: {
     /** A list that completes its own rows, such as Home's work feed. */
     markDoneDelegate?: () => MarkDoneDelegate | undefined;
+    appearanceEntity?: () => EntityData | undefined;
   } = {}
 ): {
   buildActionGroups: BuildActionGroups;
@@ -113,6 +117,11 @@ export function createSoupEntityActions(
   const analytics = useAnalytics();
   const projectsFlag = useFeatureFlag(enableProjects);
   const userId = useUserId();
+  const changeIcon = useChangeEntityIcon();
+  const canEditIcon = useAppearanceEditAccess(
+    () => options.appearanceEntity?.(),
+    userId
+  );
   const notificationSource = useGlobalNotificationSource();
   const crmActions = createCrmEntityActionItems();
 
@@ -325,6 +334,20 @@ export function createSoupEntityActions(
         label: t('entityActions.rename'),
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
+      });
+    }
+    const appearanceEntity = entities.length === 1 ? entities[0] : undefined;
+    if (
+      appearanceEntity &&
+      supportsEntityAppearance(appearanceEntity) &&
+      (appearanceEntity.ownerId === userId() ||
+        (options.appearanceEntity?.()?.id === appearanceEntity.id &&
+          canEditIcon()))
+    ) {
+      middleItems.push({
+        id: 'change-icon',
+        label: t('appearance.title'),
+        onClick: () => changeIcon(appearanceEntity),
       });
     }
 

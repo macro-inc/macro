@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   enableGraphqlSoup,
@@ -345,6 +346,16 @@ export function setPreviewFileType(itemId: string, fileType: string) {
   }
   const prev = getPreviewData(itemId);
   if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, fileType }));
+}
+
+/** Patch a confirmed appearance without creating inaccessible or missing previews. */
+export function setPreviewAppearance(
+  itemId: string,
+  appearance: EntityAppearance
+) {
+  const previous = getPreviewData(itemId);
+  if (!previous || !isAccessiblePreviewItem(previous)) return;
+  setPreviewData(itemId, (item) => ({ ...item, appearance }));
 }
 
 /** Optimistically updates a preview name in the selected transport cache. */

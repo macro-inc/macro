@@ -28,6 +28,7 @@ import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   type Component,
+  children,
   createMemo,
   createSignal,
   For,
@@ -246,6 +247,7 @@ export function BlockItemSplitLabel(props: {
   const displayName = () => props.name?.() ?? fileName();
   const blockName = useBlockAliasedName();
   const isOwner = useIsDocumentOwner();
+  const suppliedIcon = children(() => props.icon);
 
   const targetType = () => {
     if (blockName === 'unknown') {
@@ -270,7 +272,7 @@ export function BlockItemSplitLabel(props: {
       <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 min-w-0 max-w-full h-full shrink">
           <Show
-            when={props.icon}
+            when={suppliedIcon.toArray().length > 0}
             fallback={
               <EntityIcon
                 class="shrink-0"
@@ -279,7 +281,7 @@ export function BlockItemSplitLabel(props: {
               />
             }
           >
-            {props.icon}
+            {suppliedIcon()}
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <Show

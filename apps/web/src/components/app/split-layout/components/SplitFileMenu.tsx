@@ -1,4 +1,6 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
 import {
   makeAddTagAction,
   makeCopyEntityIdAction,
@@ -42,6 +44,7 @@ import Clock from '@icon/system/regular/clock.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Link from '@icon/system/regular/link.svg';
+import PaletteIcon from '@icon/system/regular/palette.svg';
 import Rename from '@icon/system/regular/pencil-line.svg';
 import Stack from '@icon/system/regular/stack.svg';
 import Star from '@icon/system/regular/star.svg';
@@ -372,6 +375,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const addTagAction = makeAddTagAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const changeIcon = useChangeEntityIcon();
   // Read shortcut availability from row getters so focus changes update only
   // the hint, without recreating the action groups and losing menu focus.
   const activeHotkeyToken = (token: HotkeyToken): HotkeyToken | undefined => {
@@ -393,6 +397,24 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       blockName: props.entityKind,
     });
   });
+  const appearanceOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    if (!entity || !supportsEntityAppearance(entity)) return;
+    if (
+      props.permissions !== Permissions.OWNER &&
+      props.permissions !== Permissions.CAN_EDIT
+    )
+      return;
+    return {
+      label: t('appearance.title'),
+      icon: PaletteIcon,
+      group: 'file',
+      action: () => {
+        setOpen(false);
+        changeIcon(entity);
+      },
+    };
+  };
 
   const favoriteOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
@@ -657,6 +679,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       muteOp(),
       reminderOp(),
       addTagOp(),
+      appearanceOp(),
       ...(props.entityKind === 'task' &&
       projectsFlag().enabled &&
       (props.permissions === Permissions.OWNER ||

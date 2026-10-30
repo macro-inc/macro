@@ -110,6 +110,7 @@ describe('GraphQL item previews', () => {
       name: 'Roadmap',
       fileType: 'md',
       subType: { type: 'task', is_completed: true },
+      appearance: null,
     });
   });
 
@@ -342,6 +343,7 @@ describe('GraphQL item previews', () => {
       loading: false,
       rawName: 'Roadmap',
       name: 'Roadmap',
+      appearance: null,
     });
   });
 

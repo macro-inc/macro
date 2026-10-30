@@ -278,6 +278,7 @@ describe('project Soup source', () => {
           updatedAt: '2026-09-27',
           createdAt: '2026-09-26',
           access: 'edit',
+          appearance: null,
         },
         properties: [],
       },

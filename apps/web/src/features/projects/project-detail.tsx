@@ -21,11 +21,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import StackIcon from '@icon/system/regular/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Button, Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  EntityAppearanceTrigger,
+  useChangeEntityIcon,
+} from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
@@ -71,15 +74,30 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
       order={props.order}
     >
       {(item) => (
-        <ViewBreadcrumbs.Button
-          class="gap-1.5"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={name()}
-        >
-          <StackIcon class="size-3 shrink-0" />
-          <span class="truncate">{name()}</span>
-        </ViewBreadcrumbs.Button>
+        <div class="flex min-w-0 items-center">
+          <Show when={source.project()}>
+            {(project) => (
+              <EntityAppearanceTrigger
+                entity={{
+                  type: 'initiative',
+                  id: project().id,
+                  name: project().name,
+                  ownerId: project().ownerId,
+                  appearance: project().appearance,
+                }}
+                editable={canEditProject(project())}
+              />
+            )}
+          </Show>
+          <ViewBreadcrumbs.Button
+            class="gap-1.5"
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+            tooltip={name()}
+          >
+            <span class="truncate">{name()}</span>
+          </ViewBreadcrumbs.Button>
+        </div>
       )}
     </ViewBreadcrumbs.Item>
   );
@@ -111,6 +129,7 @@ function ProjectTitleMenu(props: {
   const layout = useSplitLayout();
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
+  const changeIcon = useChangeEntityIcon();
   const [renaming, setRenaming] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
   const [error, setError] = createSignal<string>();
@@ -163,6 +182,15 @@ function ProjectTitleMenu(props: {
           })
         }
         onRename={() => setRenaming(true)}
+        onChangeIcon={(row) =>
+          changeIcon({
+            type: 'initiative',
+            id: row.project.id,
+            name: row.project.name,
+            ownerId: props.project.ownerId,
+            appearance: row.project.appearance,
+          })
+        }
         onSetOption={(_, property, optionId) =>
           fireAndForget(setOption(property, optionId), 'projects')
         }

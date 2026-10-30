@@ -1,6 +1,7 @@
 import { type RoutineEntity, routineStatus } from '@entity/types/entity';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { createMemo } from 'solid-js';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import { isClaimActive } from '../core/claim';
 import { useSchedulesQuery } from './schedules';
 import { getCronTrigger } from './triggers';
@@ -16,6 +17,9 @@ export function scheduleToEntity(
     id: schedule.id,
     type: 'routine',
     name: schedule.name,
+    appearance: readEntityAppearance(
+      'appearance' in schedule ? schedule.appearance : undefined
+    ),
     ownerId: schedule.owner,
     createdAt: schedule.created_at,
     updatedAt: schedule.updated_at,

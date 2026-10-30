@@ -11,6 +11,10 @@ import { enableRoutineSharing } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { getOwner, onMount, Show } from 'solid-js';
+import {
+  EntityAppearanceTrigger,
+  useChangeEntityIcon,
+} from '../entity-appearance/entity-appearance';
 import type { ScheduleDraft } from './core/draft';
 import { getErrorMessage } from './core/routine-draft';
 import {
@@ -69,6 +73,7 @@ export function RoutineDetail(props: {
       open(id);
     },
   });
+  const changeIcon = useChangeEntityIcon();
   const remove = () => {
     const entity = source.entity();
     if (!entity || entity.ownerId !== userId()) return;
@@ -112,6 +117,20 @@ export function RoutineDetail(props: {
       <RoutineDetailView
         source={source}
         userId={userId}
+        identityIcon={
+          <Show when={source.entity()}>
+            {(entity) => (
+              <EntityAppearanceTrigger
+                entity={entity()}
+                editable={ownedByViewer()}
+              />
+            )}
+          </Show>
+        }
+        onChangeIcon={() => {
+          const entity = source.entity();
+          if (entity && ownedByViewer()) changeIcon(entity);
+        }}
         defaultModel={defaultModelForPlan(hasPaidAccess())}
         initialTab={props.initialTab}
         onBack={back}

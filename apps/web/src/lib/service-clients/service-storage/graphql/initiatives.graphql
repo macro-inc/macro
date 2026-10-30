@@ -1,6 +1,7 @@
 # Chips and previews must not select counts, task ids, members, or sharing:
 # those fields check access to every task in the project.
 fragment InitiativeIdentityFields on GraphqlSoupInitiative {
+  appearance
   __typename
   id
   displayName
@@ -16,6 +17,7 @@ fragment InitiativeIdentityFields on GraphqlSoupInitiative {
 # only fields every initiative write includes (create and update replies carry
 # no viewedAt), so a new or renamed project stays complete.
 fragment InitiativeQuickAccessFields on GraphqlSoupInitiative {
+  appearance
   __typename
   displayName
   metadata {
@@ -26,6 +28,7 @@ fragment InitiativeQuickAccessFields on GraphqlSoupInitiative {
 }
 
 fragment InitiativeDetailFields on GraphqlSoupInitiative {
+  appearance
   __typename
   id
   displayName

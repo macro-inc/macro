@@ -1,3 +1,5 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
@@ -92,6 +94,9 @@ export function TopBar(props: {
     name: detail.database.name,
     ownerId: detail.database.owner_id,
     grant: detail.grant,
+    appearance: readEntityAppearance(
+      'appearance' in detail.database ? detail.database.appearance : undefined
+    ),
   });
   const entityActions = (detail: DatabaseDetail): DatabaseEntityActions => ({
     favorited: favoriteAction.isFavorited(entity(detail)),
@@ -122,6 +127,16 @@ export function TopBar(props: {
       <SplitHeaderLeft>
         <BlockItemSplitLabel
           name={name}
+          icon={
+            <Show when={props.detail}>
+              {(detail) => (
+                <EntityAppearanceTrigger
+                  entity={entity(detail())}
+                  editable={props.canEdit}
+                />
+              )}
+            </Show>
+          }
           title={
             <Show when={props.detail}>
               <DatabaseTitle

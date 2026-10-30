@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
@@ -29,6 +30,8 @@ export function RoutineDetailView(props: {
   onDelete(): void;
   onCopyPrompt(prompt: string): Promise<void>;
   onShareTemplate?(): void;
+  onChangeIcon?(): void;
+  identityIcon?: import('solid-js').JSX.Element;
   onOpenTemplate?(templateId: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
 }) {
@@ -74,6 +77,7 @@ export function RoutineDetailView(props: {
     >
       {(routine) => (
         <RoutineEditor
+          identityIcon={props.identityIcon}
           draft={
             state() ?? {
               ...createEmptyDraft(props.defaultModel),
@@ -113,6 +117,11 @@ export function RoutineDetailView(props: {
                 </Dropdown.Trigger>
                 <Dropdown.Content portalScope="local">
                   <Dropdown.Group>
+                    <Show when={props.onChangeIcon}>
+                      <Dropdown.Item onSelect={props.onChangeIcon}>
+                        {t('appearance.title')}
+                      </Dropdown.Item>
+                    </Show>
                     <Dropdown.Item
                       disabled={!state() || props.source.duplicationPending()}
                       onSelect={() => props.source.duplicate()}

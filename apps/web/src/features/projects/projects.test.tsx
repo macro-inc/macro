@@ -44,6 +44,9 @@ vi.mock('./project-collection-persistence', () => ({}));
 vi.mock('./project-share', () => ({}));
 vi.mock('./views/project-assignment', () => ({}));
 vi.mock('./views/projects-collection', () => ({}));
+vi.mock('../entity-appearance/entity-appearance', () => ({
+  useChangeEntityIcon: () => vi.fn(),
+}));
 vi.mock('@app/features/tasks-view/tasks-create-action', () => ({
   TasksCreateAction: () => null,
 }));

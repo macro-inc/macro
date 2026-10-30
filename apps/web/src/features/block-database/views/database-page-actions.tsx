@@ -1,3 +1,6 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -59,6 +62,7 @@ export function DatabasePageActions(props: {
   const [exporting, setExporting] = createSignal(false);
   const [reading, setReading] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
+  const changeIcon = useChangeEntityIcon();
   const [deleting, setDeleting] = createSignal(false);
   const [deleteError, setDeleteError] = createSignal('');
   const [draft, setDraft] = createSignal<{ data: DatabaseCsv; name: string }>();
@@ -183,6 +187,29 @@ export function DatabasePageActions(props: {
             {(actions) => (
               <>
                 <Dropdown.Group>
+                  <Show when={editable()}>
+                    <Dropdown.Item
+                      onSelect={() =>
+                        changeIcon(
+                          {
+                            type: 'database',
+                            id: props.detail.database.id,
+                            name: props.detail.database.name,
+                            ownerId: props.detail.database.owner_id,
+                            grant: props.detail.grant,
+                            appearance: readEntityAppearance(
+                              'appearance' in props.detail.database
+                                ? props.detail.database.appearance
+                                : undefined
+                            ),
+                          },
+                          menuButton
+                        )
+                      }
+                    >
+                      {t('appearance.title')}
+                    </Dropdown.Item>
+                  </Show>
                   <Dropdown.Item onSelect={actions().onCopyLink}>
                     <LinkIcon class="size-4 shrink-0" />
                     Copy Link

@@ -18,6 +18,7 @@ import {
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { type Accessor, createMemo, onCleanup } from 'solid-js';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 import type { ProjectRow, ProjectsSource } from '../context/projects-context';
 import type { ProjectFilters } from '../core/project';
 import { projectProperties } from './project-properties';
@@ -100,6 +101,9 @@ export function projectSoupRows(
         project: {
           id: item.id,
           name: item.displayName ?? 'Untitled project',
+          appearance: readEntityAppearance(
+            'appearance' in item ? item.appearance : undefined
+          ),
           updatedAt: item.metadata.updatedAt ?? '',
           createdAt: item.metadata.createdAt ?? undefined,
           access:

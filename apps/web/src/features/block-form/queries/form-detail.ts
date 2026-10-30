@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
 /** The forms service's wire shapes, projected into the feature's vocabulary and back. */
 
 import type { Form } from '@service-storage/generated/schemas/form';
@@ -24,6 +25,9 @@ export function toFormMetadata(form: Form): FormMetadata {
   return {
     id: form.id,
     name: form.name,
+    appearance: readEntityAppearance(
+      'appearance' in form ? form.appearance : undefined
+    ),
     description: form.description,
     ownerId: form.ownerId,
     databaseId: form.databaseId,

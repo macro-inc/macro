@@ -26,6 +26,7 @@ export function RoutineEditor(props: {
   history: JSX.Element;
   showHistory?: boolean;
   actions?: JSX.Element;
+  identityIcon?: JSX.Element;
   feedback?: JSX.Element;
   /** More properties beside the execution target and run visibility. */
   properties?: JSX.Element;
@@ -52,13 +53,16 @@ export function RoutineEditor(props: {
       <ViewBreadcrumbs.Item value="routine" metadata={{}} order={1}>
         {(item) => (
           <div class="flex min-w-0 items-center">
+            {props.identityIcon}
             <ViewBreadcrumbs.Button
               class="gap-1.5"
               isActive={item.isActive()}
               onClick={item.onSelect}
               tooltip={props.draft.name}
             >
-              <ClockIcon class="size-3 shrink-0" />
+              <Show when={!props.identityIcon}>
+                <ClockIcon class="size-3 shrink-0" />
+              </Show>
               <span class="truncate">{props.draft.name}</span>
             </ViewBreadcrumbs.Button>
             <Show when={isTouchDevice()}>

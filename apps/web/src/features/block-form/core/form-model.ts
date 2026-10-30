@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 /**
  * The vocabulary of Macro Forms: a form is a view of one database table. Its
  * questions are the table's columns; the form owns only presentation
@@ -197,6 +198,7 @@ export type FormLayout = { sections: FormSection[] };
 export type FormMetadata = {
   id: string;
   name: string;
+  appearance?: EntityAppearance | null;
   description: string;
   ownerId: string;
   databaseId: string;

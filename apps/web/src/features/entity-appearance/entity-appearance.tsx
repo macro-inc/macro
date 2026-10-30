@@ -1,0 +1,90 @@
+import { t } from '@app/lib/i18n';
+import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
+import { useUserId } from '@core/context/user';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { Button } from '@ui/components/Button';
+import { openDialog } from '@ui/components/ImperativeDialog';
+import { Show } from 'solid-js';
+import type { EntityData } from '../entity/types/entity';
+import { supportsEntityAppearance } from './core/appearance';
+
+const AppearanceEditor = lazyNamed(
+  () => import('./views/appearance-editor'),
+  'AppearanceEditor'
+);
+
+/** Capture account context outside handlers; the editor survives its launching menu. */
+export function useChangeEntityIcon() {
+  const userId = useUserId();
+  return (entity: EntityData, element?: HTMLElement) => {
+    const actor = userId();
+    if (!actor || !supportsEntityAppearance(entity)) return;
+    const rect = element?.getBoundingClientRect();
+    openDialog(
+      AppearanceEditor,
+      {
+        entity,
+        anchor: rect
+          ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+          : undefined,
+        isCurrent: () => userId() === actor,
+        save: async (appearance) => {
+          const { saveEntityAppearance } = await import(
+            './save-entity-appearance'
+          );
+          return saveEntityAppearance(
+            entity,
+            appearance,
+            () => userId() === actor
+          );
+        },
+      },
+      { key: `entity-appearance:${actor}:${entity.type}:${entity.id}` }
+    );
+  };
+}
+
+/** Identity editing belongs in headers only. Row icons remain navigation targets. */
+export function EntityAppearanceTrigger(props: {
+  entity: EntityData;
+  editable: boolean;
+}) {
+  const icon = () => (
+    <EntityIcon
+      targetType={getEntityIconType(props.entity)}
+      appearance={props.entity.appearance}
+      size="xs"
+    />
+  );
+  return (
+    <Show
+      when={props.editable && supportsEntityAppearance(props.entity)}
+      fallback={icon()}
+    >
+      <EditableAppearanceTrigger entity={props.entity} />
+    </Show>
+  );
+}
+
+function EditableAppearanceTrigger(props: { entity: EntityData }) {
+  const changeIcon = useChangeEntityIcon();
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={t('appearance.title')}
+      tooltip={t('appearance.title')}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        changeIcon(props.entity, event.currentTarget);
+      }}
+    >
+      <EntityIcon
+        targetType={getEntityIconType(props.entity)}
+        appearance={props.entity.appearance}
+        size="xs"
+      />
+    </Button>
+  );
+}

@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import {
   type CacheHost,
   readRecordsByKeys,
@@ -165,6 +166,9 @@ export function graphqlRecordToPreview(
       return {
         id: record.id,
         type: 'document',
+        appearance: readEntityAppearance(
+          'appearance' in record ? record.appearance : undefined
+        ),
         access: 'access',
         loading: false,
         rawName: record.displayName ?? record.documentName,
@@ -231,6 +235,9 @@ export function graphqlRecordToPreview(
       return {
         id: record.id,
         type: 'initiative',
+        appearance: readEntityAppearance(
+          'appearance' in record ? record.appearance : undefined
+        ),
         access: 'access',
         loading: false,
         rawName: record.displayName ?? '',

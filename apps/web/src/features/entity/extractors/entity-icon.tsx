@@ -1,4 +1,5 @@
 import { PersonaAvatar } from '@app/features/agent-dms/components/persona-avatar';
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { ChannelAvatar } from '@channel/channel-avatar';
 import {
   EntityIcon as CoreEntityIcon,
@@ -123,6 +124,11 @@ export function EntityIcon(props: EntityIconProps) {
       fallback={
         <CoreEntityIcon
           targetType={iconType()}
+          appearance={
+            supportsEntityAppearance(props.entity)
+              ? props.entity.appearance
+              : undefined
+          }
           size="fill"
           class={props.class}
           weight={props.weight}

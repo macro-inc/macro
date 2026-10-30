@@ -34,6 +34,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import {
   ProjectsProvider,
   useProjectsContext,
@@ -174,6 +175,7 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
   };
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
+  const changeIcon = useChangeEntityIcon();
   const [sharing, setSharing] = createSignal<string>();
   return (
     <>
@@ -204,6 +206,15 @@ function ProjectsCollectionHost(props: ProjectsTabProps) {
         }
         onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
         onShare={(projectId) => setSharing(projectId)}
+        onChangeIcon={(project) =>
+          changeIcon({
+            type: 'initiative',
+            id: project.id,
+            name: project.name,
+            ownerId: '',
+            appearance: project.appearance,
+          })
+        }
       />
       <Show when={sharing()} keyed>
         {(projectId) => (

@@ -86,7 +86,16 @@ function ItemDragOverlay() {
         <div class="flex flex-row items-center gap-2">
           <Show
             when={overlayIcon()}
-            fallback={<EntityIcon size="xs" targetType={iconType()} />}
+            fallback={
+              <EntityIcon
+                size="xs"
+                targetType={iconType()}
+                appearance={
+                  (activeDraggable()?.data as EntityDragData | undefined)
+                    ?.appearance
+                }
+              />
+            }
           >
             {(icon) => icon()()}
           </Show>

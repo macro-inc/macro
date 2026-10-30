@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import {
   type CacheHost,
   type RecordSelection,
@@ -84,6 +85,9 @@ function historyItemFromSearchDocument(
       return {
         ...base,
         type: 'document',
+        appearance: readEntityAppearance(
+          'appearance' in record ? record.appearance : undefined
+        ),
         fileType: record.fileType ?? (markdown ? 'md' : undefined),
         subType,
       } as HistoryItem;

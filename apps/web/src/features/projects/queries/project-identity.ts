@@ -165,6 +165,7 @@ export function createProjectIdentityQuery(
       return {
         id: project.id,
         name: project.name,
+        appearance: project.appearance,
         access: project.userAccessLevel,
       };
     },

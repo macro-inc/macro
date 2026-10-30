@@ -48,6 +48,26 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## Entity icons and colors
+
+Ordinary Markdown, snippets, routines, task projects, forms, and databases support
+shared entity appearance. Users with edit access click the header icon or choose
+**Change icon** in an entity menu. Row icons still navigate; sidebar category
+icons do not change. Drive folders, tasks, skills, and internal descriptions do
+not have appearance editing.
+
+Desktop uses a compact popover; phones use the shared dialog sheet. Search
+Macro icons or emoji. Colors use a fixed theme-aware palette; emoji keep their
+native colors. **Default icon** and **Default color** reset independently;
+**Reset all** resets both. Draft choices preview only inside the picker.
+**Apply** saves both fields together, then closes. A failed save leaves choices
+available to retry; Cancel or dismiss discards only the unsaved draft.
+
+Readers, including public viewers, see saved appearance wherever an entity icon
+already appears. Appearance edits do not reorder content, update content recency,
+or send notifications. They create entity-history entries without entering
+broader activity feeds. Copies and template instances retain the appearance.
+
 ## Canonical desktop surfaces
 
 Use `not-touch:elevated` for existing desktop control surfaces other than Button

@@ -1,0 +1,14 @@
+# Confirmed REST writes update entity fields without replacing any query membership.
+subscription EntityAppearanceCacheWrite {
+  soupUpdates {
+    __typename
+    ... on SoupUpdated {
+      item {
+        __typename
+        id
+        ... on GraphqlSoupDocument { appearance }
+        ... on GraphqlSoupInitiative { appearance }
+      }
+    }
+  }
+}

@@ -39,6 +39,7 @@ type ProjectMenuProps = {
   priority?: Property;
   canOpenInNewSplit: boolean;
   onOpenInNewSplit(row: ProjectRow): void;
+  onChangeIcon?(row: ProjectRow): void;
   onRename(row: ProjectRow): void;
   onSetOption(
     rows: readonly ProjectRow[],
@@ -111,6 +112,7 @@ function projectMenuEntries(
     {
       splits: !isMobile(),
       share: Boolean(props.onShare),
+      appearance: Boolean(props.onChangeIcon),
       status: Boolean(props.status),
       priority: Boolean(props.priority),
     }
@@ -131,6 +133,9 @@ function projectMenuEntries(
         )
         .with('rename', (id) =>
           action(id, t('entityActions.rename'), single(props.onRename))
+        )
+        .with('change-icon', (id) =>
+          action(id, t('appearance.title'), single(props.onChangeIcon))
         )
         .with('status', (id) =>
           options(id, t('entityActions.setStatus'), props.status)
@@ -201,6 +206,7 @@ const initiativeEntity = (row: ProjectRow): InitiativeEntity => ({
   id: row.project.id,
   name: row.project.name,
   ownerId: '',
+  appearance: row.project.appearance,
 });
 
 /**
