@@ -1062,8 +1062,9 @@ and project creation, on a start screen: a **Describe your routine** box with
 "When an invoice arrives, label it Finance and make a task to pay it", using
 the workspace's label, tag, channel, folder, people and agent names), then
 **Templates**: cards by Macro (**Sort my inbox**, **Triage new tasks**,
-**Morning brief**, **Chase stuck tasks**, **Share updates**), each with its
-trigger beside a lightning icon and **Use template**, and **Start from scratch**
+**Morning brief**, **Chase stuck tasks**, and **Share updates** only where AI
+decisions are enabled), each with its trigger beside a lightning icon and
+**Use template**, and **Start from scratch**
 (no trigger and no steps). Every path opens the editor: the name, for a drafted
 routine a one-line quote of the description with **Change** (back to the start
 screen, description kept), **When** (**Add trigger** adds a trigger chip, with

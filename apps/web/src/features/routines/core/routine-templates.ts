@@ -27,6 +27,8 @@ export type RoutineTemplate = {
   when: string;
   /** Its steps let AI decide, so it is highlighted as an AI routine. */
   ai: boolean;
+  /** It only runs right when AI checks its trigger, so it needs decisions. */
+  needsDecisions?: true;
 };
 
 export const routineTemplates: RoutineTemplate[] = [
@@ -69,8 +71,16 @@ export const routineTemplates: RoutineTemplate[] = [
     description: 'Post finished tasks to a channel',
     kind: 'task',
     ai: false,
+    needsDecisions: true,
   },
 ];
+
+/** The templates a new routine can start from. */
+export function availableTemplates(decisions: boolean): RoutineTemplate[] {
+  return routineTemplates.filter(
+    (template) => decisions || !template.needsDecisions
+  );
+}
 
 export type TemplateContext = {
   /** Decision steps and trigger conditions are available. */
@@ -162,7 +172,7 @@ export function templateDraft(
       triggers: [
         eventTrigger(
           ['task.status_changed'],
-          context.decisions ? 'Was the task just marked completed?' : undefined
+          'Was the task just marked completed?'
         ),
       ],
       steps: [messageStep('Done: {{trigger.item.name}}')],

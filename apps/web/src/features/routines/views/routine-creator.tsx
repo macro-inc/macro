@@ -20,8 +20,8 @@ import {
 } from '../core/routine-draft';
 import { firstAgent } from '../core/routine-steps';
 import {
+  availableTemplates,
   type RoutineTemplate,
-  routineTemplates,
   templateDraft,
 } from '../core/routine-templates';
 import { createRoutineComposer } from '../primitives/routine-composer';
@@ -108,7 +108,7 @@ export function RoutineCreatorView(props: {
         <div class="min-h-0 overflow-y-auto px-2">
           <RoutineStart
             describe={props.renderComposer?.(begin, draft, described())}
-            templates={routineTemplates}
+            templates={availableTemplates(props.decisionsEnabled)}
             onTemplate={startFrom}
             onBlank={() => begin({ ...draft(), triggers: [], steps: [] })}
           />

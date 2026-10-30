@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createEmptyDraft, validateRoutineDraft } from './routine-draft';
-import { routineTemplates, templateDraft } from './routine-templates';
+import {
+  availableTemplates,
+  routineTemplates,
+  templateDraft,
+} from './routine-templates';
 
 vi.mock(
   '@property/identifiers',
@@ -68,5 +72,14 @@ describe('routine templates', () => {
     ]);
     // The channel is the person's to choose.
     expect(validateRoutineDraft(updates, true)).toMatch(/channel/);
+  });
+
+  it('offers templates that need decisions only when decisions are available', () => {
+    const keys = (decisions: boolean) =>
+      availableTemplates(decisions).map((template) => template.key);
+    expect(keys(true)).toContain('updates');
+    // Without decisions it would announce every status change as done.
+    expect(keys(false)).not.toContain('updates');
+    expect(keys(false)).toContain('inbox');
   });
 });
