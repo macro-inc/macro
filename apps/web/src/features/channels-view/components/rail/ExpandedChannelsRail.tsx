@@ -191,7 +191,7 @@ function ChannelOption(props: {
   channel: ChannelEntity;
   /** The list row this option stands for; defaults to the channel's own row. */
   rowId?: ChannelRailRow['id'];
-  /** Nest under a label heading, with the branch rail. */
+  /** Containing section for drag-and-drop targets. */
   labelId?: string;
   /** Make a team-channel row draggable between labels (Team channels section only). */
   draggable?: boolean;
@@ -244,8 +244,6 @@ function ChannelOption(props: {
       class={cn(
         'min-w-0',
         props.draggable && 'pb-0.5',
-        props.labelId !== undefined &&
-          'relative pl-(--sidebar-icon-slot) before:pointer-events-none before:absolute before:inset-y-0 before:left-(--sidebar-local-rail) before:w-px before:-translate-x-1/2 before:bg-edge-muted',
         isGroupingTarget() &&
           'rounded-lg bg-selected ring-1 ring-inset ring-accent',
         dnd?.draggable.isActiveDraggable && 'opacity-50'

@@ -502,6 +502,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Mobile retains the recent feed. Use the unified New conversation picker and
   require explicit confirmation before creating a duplicate visible channel name.
   Keep picker suggestions inside the dialog and retain typed names through blur and handoff.
+  Align channel rows across built-in and custom sections without nested indentation.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
   never retry failed GraphQL writes through REST. Preserve non-owner history removal
