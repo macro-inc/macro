@@ -1,3 +1,13 @@
 config:
   aws:region: us-east-1
   macro-connect:publicHost: connect-dev.macro.com
+  # Macro's existing VPC and subnets (read only; Connect creates its own
+  # security groups). Same ids as infra/packages/vpc get_coparse_api_vpc.
+  macro-connect:vpcId: vpc-0c7510191d4fc9263
+  macro-connect:publicSubnetIds:
+    - subnet-042a406ca5480af5d
+    - subnet-09bb402ca097d0aa9
+    - subnet-0b7efc5a66eef73e3
+  macro-connect:privateSubnetIds:
+    - subnet-03c3753c5342f434e
+    - subnet-0e2530cd19536fe10
