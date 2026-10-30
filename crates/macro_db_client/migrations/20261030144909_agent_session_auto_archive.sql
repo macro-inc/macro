@@ -22,6 +22,3 @@ CREATE TABLE agent_session_auto_archive (
     reason           TEXT NOT NULL CHECK (reason IN ('pull_request_merged', 'runtime_closed')),
     archived_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
--- Session pull request links match pull requests case-insensitively.
-CREATE INDEX idx_github_pull_request_lower_github_key ON github_pull_request (lower(github_key));
