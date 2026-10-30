@@ -1,3 +1,4 @@
+import ArrowClockwiseIcon from '@icon/system/regular/arrow-clockwise.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
@@ -20,11 +21,38 @@ import {
 import { SearchMenu } from './components/routine-search-menu';
 import { menuMount, type TagChoice } from './components/routine-tool-step';
 import type { RoutineEditorSlots } from './context/routine-slots';
-import { useEmailLabelNames, useRoutineTags } from './queries/step-sources';
+import {
+  type SourceStatus,
+  useEmailLabelNames,
+  useRoutineTags,
+} from './queries/step-sources';
 
 /** A token's caret, after its value. */
 function Caret() {
   return <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />;
+}
+
+/**
+ * A failed load as a row above whatever is cached, so a picker never claims
+ * there is nothing when it couldn't look.
+ */
+function loadState(
+  what: string,
+  source: { status: () => SourceStatus; retry(): void }
+) {
+  return {
+    items:
+      source.status() === 'error'
+        ? [
+            {
+              key: `retry:${what}`,
+              label: `Couldn’t load ${what}. Try again`,
+              icon: ArrowClockwiseIcon,
+              onSelect: () => source.retry(),
+            },
+          ]
+        : [],
+  };
 }
 
 /** Gmail labels by name, so a step works in each email's own inbox. */
@@ -47,6 +75,7 @@ function RoutineLabelPicker(props: {
       }
       placeholder="Search labels"
       sections={[
+        loadState('labels', names),
         {
           items: names().map((name) => ({
             key: name,
@@ -67,7 +96,11 @@ function RoutineLabelPicker(props: {
               onSelect: () => props.onChange(query),
             }
       }
-      empty="No labels yet. Type a label’s name."
+      empty={
+        names.status() === 'pending'
+          ? 'Loading labels…'
+          : 'No labels yet. Type a label’s name.'
+      }
     />
   );
 }
@@ -104,6 +137,7 @@ function RoutineTagPicker(props: {
       }
       placeholder="Search tags"
       sections={[
+        loadState('tags', tags),
         {
           items: tags().map((tag) => ({
             key: tag.optionId,
@@ -120,7 +154,11 @@ function RoutineTagPicker(props: {
           })),
         },
       ]}
-      empty="No tags yet. Create one from any item’s tags."
+      empty={
+        tags.status() === 'pending'
+          ? 'Loading tags…'
+          : 'No tags yet. Create one from any item’s tags.'
+      }
     />
   );
 }
