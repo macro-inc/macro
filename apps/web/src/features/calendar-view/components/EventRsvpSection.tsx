@@ -37,13 +37,10 @@ export function EventRsvpSection(props: {
   const isRecurring = () =>
     props.event.recurrenceLines.length > 0 ||
     props.event.recurrenceId !== undefined;
-  // A snapshot lists the viewer only so Google would take the copy; an answer
-  // there would never reach the organizer.
   const canRespond = () =>
+    props.event.viewerCan.rsvp &&
     selfAttendee() !== undefined &&
-    !props.event.isReadOnly &&
-    !props.event.isCancelled &&
-    !props.event.isSnapshot;
+    !props.event.isCancelled;
 
   const rsvp = createCalendarRsvpController(() =>
     canRespond()
@@ -78,7 +75,6 @@ export function EventRsvpSection(props: {
               <Button
                 variant="ghost"
                 size={props.buttonSize ?? 'sm'}
-                depth={3}
                 class="bg-ink/5 px-3 aria-pressed:bg-accent-bg aria-pressed:text-accent mobile:min-h-11"
                 aria-pressed={
                   selfAttendee()?.responseStatus === option.response
@@ -98,12 +94,7 @@ export function EventRsvpSection(props: {
           )}
         </Show>
       </div>
-      <Show
-        when={
-          props.event.calendar.provider === 'outlook' &&
-          !selfAttendee()?.isOrganizer
-        }
-      >
+      <Show when={props.event.calendar.provider === 'outlook'}>
         <OutlookRsvpAction
           target={{
             eventId: props.event.eventId,

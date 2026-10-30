@@ -154,12 +154,14 @@
       "source_paths": [
         "services/email_service/**",
         "services/email_refresh_handler/**",
-        "services/email_scheduled_handler/**"
+        "services/email_scheduled_handler/**",
+        "services/email_focus_worker/**"
       ],
       "stack_path": "infra/stacks/email-service/**",
       "deploy_binaries": [
         "email_service",
-        "pubsub_workers"
+        "pubsub_workers",
+        "email_focus_worker"
       ],
       "deploy_lambdas": [
         "email_refresh_handler",
@@ -304,8 +306,6 @@
       "stack_path": "infra/stacks/preview-gateway/**"
     },
     "whatsapp-session-service": {
-      "deploy_enabled": false,
-      "bootstrap_pending": "Needs the whatsapp-session-service Doppler project (dev/prd) with its keys, including WHATSAPP_SESSION_KMS_KEY_ID from the stack's first deploy, and an explicit go-ahead to run personal WhatsApp sessions.",
       "source_paths": [
         "services/whatsapp_session_service/**",
         "crates/whatsapp_linked/**",

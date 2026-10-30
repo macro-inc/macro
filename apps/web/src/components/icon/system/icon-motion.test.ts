@@ -165,6 +165,19 @@ it('limits hover to suitable icons and ignores touch hover', () => {
   expect(animate).not.toHaveBeenCalled();
 });
 
+it('keeps the agent sparkle still on hover or press', () => {
+  const button = control('sparkle');
+  pointer(button, 'pointerover');
+  vi.advanceTimersByTime(200);
+  pointer(button);
+  expect(animate).not.toHaveBeenCalled();
+});
+
+it('keeps the filled agent sparkle still', () => {
+  pointer(control('sparkle-fill'));
+  expect(animate).not.toHaveBeenCalled();
+});
+
 it('respects reduced motion immediately and cancels active animations on change', () => {
   const button = control();
   pointer(button);

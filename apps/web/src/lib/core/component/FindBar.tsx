@@ -105,7 +105,7 @@ function FindBarSubmitButton() {
           !controller.hasUnsubmittedChanges() && !!controller.query().trim(),
       }}
     >
-      <MagnifyingGlass />
+      <MagnifyingGlass class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -204,7 +204,7 @@ function FindBarPreviousButton() {
         direction() === 'desc' ? controller.next() : controller.previous()
       }
     >
-      <CaretUp />
+      <CaretUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -225,7 +225,7 @@ function FindBarNextButton() {
         direction() === 'desc' ? controller.previous() : controller.next()
       }
     >
-      <CaretDown />
+      <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }
@@ -239,7 +239,7 @@ function FindBarCloseButton() {
       aria-label="Close find bar"
       onClick={() => controller.close()}
     >
-      <X />
+      <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 }

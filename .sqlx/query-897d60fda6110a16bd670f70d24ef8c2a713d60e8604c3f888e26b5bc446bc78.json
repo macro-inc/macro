@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM mcp_oauth_pending_authorizations\n            WHERE session_id = $1\n            RETURNING client_id, code_challenge, client_state, client_redirect_uri, expires_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "code_challenge",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "client_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "client_redirect_uri",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "897d60fda6110a16bd670f70d24ef8c2a713d60e8604c3f888e26b5bc446bc78"
+}

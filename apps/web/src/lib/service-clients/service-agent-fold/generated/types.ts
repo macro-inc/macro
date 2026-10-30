@@ -502,7 +502,12 @@ export type FailureNoticeKind =
    */
   | 'provider_usage_limit'
   /**  The selected model cannot read image attachments in this conversation. */
-  | 'unsupported_image_input';
+  | 'unsupported_image_input'
+  /**
+   *  The provider ended the run in failure; its own page for the run is
+   *  where any detail it kept lives.
+   */
+  | 'provider_run_failed';
 
 /**  A file modification a tool reported. */
 export type FileDiff = {
@@ -929,6 +934,24 @@ export type MessagePart =
       kind: 'plan';
       /**  The tasks, in the order the agent listed them. */
       entries: PlanEntry[];
+    }
+  /**
+   *  A background task the harness reported on: a command, subagent or
+   *  monitor it started earlier finished or emitted an event. The harness
+   *  hands the agent this report as a user turn; it is shown as a system
+   *  fact, never as something a person said.
+   */
+  | {
+      kind: 'task_notification';
+      /**  Where the task ended up; absent for a monitor's mid-stream event. */
+      status: TaskStatus | null;
+      /**
+       *  The harness's one-line account, such as `Background command
+       *  "Run tests" completed (exit code 0)`.
+       */
+      summary: string;
+      /**  The line a monitor streamed, for a monitor event. */
+      event: string | null;
     }
   /**
    *  The agent asking the user a question.
@@ -1584,6 +1607,15 @@ export type SubagentResult = {
   stats: ToolStats | null;
 };
 
+/**  How a background task ended, per [`MessagePart::TaskNotification`]. */
+export type TaskStatus =
+  /**  It ran to the end. */
+  | 'completed'
+  /**  It ended with an error or a nonzero exit. */
+  | 'failed'
+  /**  It was stopped, or did not survive the previous session. */
+  | 'stopped';
+
 /**  Where a held call stands. */
 export type ToolApprovalStatus =
   /**  Held until the owner answers. */
@@ -1881,6 +1913,8 @@ export type TurnPhase =
 export type TurnState =
   /**  No turn is open. */
   | 'idle'
+  /**  No turn is open, and the newest agent reply failed. */
+  | 'failed'
   /**
    *  A prompt this client issued is on the wire, unconfirmed, and the agent
    *  has produced nothing. Only a speculative fold reports this.

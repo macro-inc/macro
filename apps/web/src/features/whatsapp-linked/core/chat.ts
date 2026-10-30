@@ -2,8 +2,8 @@ import { isSameDay } from '@core/util/time';
 import { match } from 'ts-pattern';
 /** Where a WhatsApp chat already is in Macro for this viewer. */
 export type InMacro =
-  | { kind: 'own'; groupId: string }
-  | { kind: 'shared'; groupId: string; ownerId: string; ownerName: string };
+  | { kind: 'own'; chatId: string }
+  | { kind: 'shared'; chatId: string; ownerId: string; ownerName: string };
 
 /** The WhatsApp community a group belongs to. */
 export type ChatCommunity = {

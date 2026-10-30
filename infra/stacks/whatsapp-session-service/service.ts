@@ -35,7 +35,6 @@ type WhatsappSessionServiceArgs = {
   };
   ecsClusterArn: pulumi.Input<string>;
   ecsClusterName: pulumi.Input<string>;
-  desiredCount: number;
   kmsDeletionWindowInDays: number;
   tags: { [key: string]: string };
 };
@@ -240,7 +239,7 @@ export class WhatsappSessionService extends pulumi.ComponentResource {
       BASE_NAME,
       {
         cluster: args.ecsClusterArn,
-        desiredCount: args.desiredCount,
+        desiredCount: stack === 'prod' ? 2 : 1,
         // Start the replacement before stopping the old task: the old task
         // drains and NOTIFYs `whatsapp_account_released` so a running replica
         // takes each account over at once.
@@ -274,7 +273,7 @@ export class WhatsappSessionService extends pulumi.ComponentResource {
                 // outlive the drain and its logs and spans still ship.
                 dependsOn: [
                   { containerName: 'log_router', condition: 'START' },
-                  { containerName: 'datadog-agent', condition: 'START' },
+                  { containerName: 'datadog_agent', condition: 'START' },
                 ],
                 secrets: [...dopplerEcsEnvironment.containerSecrets],
                 environment: [
@@ -291,6 +290,9 @@ export class WhatsappSessionService extends pulumi.ComponentResource {
                   options: {
                     Name: 'datadog',
                     Host: 'http-intake.logs.us5.datadoghq.com',
+                    // Egress allows only 443; Fluent Bit defaults to plain 80.
+                    TLS: 'on',
+                    Port: '443',
                     apikey: DATADOG_API_KEY,
                     dd_service: BASE_NAME,
                     dd_source: 'fargate',

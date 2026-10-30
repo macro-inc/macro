@@ -148,7 +148,7 @@ async fn ensure_referenced_item_visible_to_channel(
             .context("failed to insert thread share permissions")?;
     }
 
-    // Session, calendar event, database, form and WhatsApp group channel
+    // Session, calendar event, database, form and external chat channel
     // grants are canonical entity-access rows, and a reference keeps any grant
     // the owner already chose.
     if matches!(
@@ -157,7 +157,7 @@ async fn ensure_referenced_item_visible_to_channel(
             | ReferencedShareItemType::CalendarEvent
             | ReferencedShareItemType::Database
             | ReferencedShareItemType::Form
-            | ReferencedShareItemType::WhatsAppGroup
+            | ReferencedShareItemType::ExternalChat
     ) {
         let mut transaction = db.begin().await?;
         entity_access_db_utils::channel_share::insert_if_absent(
@@ -222,7 +222,7 @@ fn entity_access_type_for(item_type: ReferencedShareItemType) -> EntityType {
         ReferencedShareItemType::Call => EntityType::Call,
         ReferencedShareItemType::CalendarEvent => EntityType::CalendarEvent,
         ReferencedShareItemType::Form => EntityType::Form,
-        ReferencedShareItemType::WhatsAppGroup => EntityType::WhatsAppGroup,
+        ReferencedShareItemType::ExternalChat => EntityType::ExternalChat,
     }
 }
 
@@ -239,6 +239,6 @@ fn entity_access_db_type_for(
         ReferencedShareItemType::Call => entity_access_db_utils::EntityType::Call,
         ReferencedShareItemType::CalendarEvent => entity_access_db_utils::EntityType::CalendarEvent,
         ReferencedShareItemType::Form => entity_access_db_utils::EntityType::Form,
-        ReferencedShareItemType::WhatsAppGroup => entity_access_db_utils::EntityType::WhatsAppGroup,
+        ReferencedShareItemType::ExternalChat => entity_access_db_utils::EntityType::ExternalChat,
     }
 }

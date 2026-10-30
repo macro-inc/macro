@@ -35,6 +35,16 @@ export type ContextPerson = {
   email?: string;
 };
 
+/** A file attached to a context message. */
+export type ContextAttachment = {
+  /** What was attached, such as `static/image`, `static/video`, or `document`. */
+  entity_type: string;
+  /** Its id. For a static file, the file id used in `/file/{id}`. */
+  entity_id: string;
+  /** Where the agent can fetch it; only static files have one. */
+  url?: string;
+};
+
 /** A message the agent may read. */
 export type ContextMessage = {
   id: string;
@@ -42,6 +52,8 @@ export type ContextMessage = {
   /** Internal markdown. */
   content: string;
   posted_at: string;
+  /** Absent when empty. */
+  attachments?: ContextAttachment[];
 };
 
 /** Messages of one discussion, oldest first. */
@@ -187,8 +199,21 @@ export type RoutineTrigger =
       events: string[];
       /** Absent when the routine watches every entity. */
       entity_ids?: string[];
+      /** Which GitHub deliveries, for the `github` event. */
+      github?: GithubWatch;
+      /** Exact payload tests, as a reader would state them. */
+      payload_match?: string[];
       condition?: string;
     };
+
+/** The GitHub deliveries a routine watches. Empty lists match everything. */
+export type GithubWatch = {
+  events?: string[];
+  actions?: string[];
+  /** As `owner/name`. */
+  repositories?: string[];
+  include_bots: boolean;
+};
 
 /** What made a routine fire. */
 export type RoutineFiring =
@@ -223,7 +248,19 @@ export type RoutineEvent =
       entity_id: string;
     }
   | { event: 'call_started'; call: CallStartedSnapshot }
-  | { event: 'call_ended'; call: CallSnapshot };
+  | { event: 'call_ended'; call: CallSnapshot }
+  | { event: 'github'; delivery: GithubDelivery };
+
+/** A delivery from Macro's GitHub App. */
+export type GithubDelivery = {
+  event: string;
+  action?: string;
+  /** As `owner/name`. */
+  repository?: string;
+  sender?: string;
+  /** Without GitHub's API links; absent when too large to carry. Untrusted. */
+  payload?: unknown;
+};
 
 /** A call that just started, read under the routine owner's access. */
 export type CallStartedSnapshot = {
@@ -709,19 +746,52 @@ type DiscussionReading = {
 
 type MessageMarker = { attribute: string; messageId: string };
 
+function attachmentNodes(
+  attachments: ContextAttachment[] | undefined
+): FxpNode[] {
+  return (attachments ?? []).map((attachment) =>
+    el(
+      'attachment',
+      [],
+      present({
+        type: attachment.entity_type,
+        id: attachment.entity_id,
+        url: attachment.url,
+      })
+    )
+  );
+}
+
 function contextMessageNode(
   message: ContextMessage,
   marker: MessageMarker
 ): FxpNode {
   return el(
     'message',
-    [text(readable(message.content))],
+    [text(readable(message.content)), ...attachmentNodes(message.attachments)],
     present({
       id: message.id,
       ...personAttributes(message.author, 'author'),
       at: message.posted_at,
       [marker.attribute]: message.id === marker.messageId ? 'true' : undefined,
     })
+  );
+}
+
+function discussionHasAttachments(discussion: DiscussionContext): boolean {
+  const quoted =
+    discussion.reply_target.kind === 'quote'
+      ? discussion.reply_target.message
+      : undefined;
+  const threads = [
+    ...(discussion.thread ? [discussion.thread] : []),
+    ...(discussion.channel ?? []),
+  ];
+  return (
+    (quoted?.attachments?.length ?? 0) > 0 ||
+    threads.some((thread) =>
+      thread.messages.some((message) => (message.attachments?.length ?? 0) > 0)
+    )
   );
 }
 
@@ -951,6 +1021,13 @@ function discussionNode(
       : []),
     personNode('sender', discussion.sender),
     contextReplyTargetNode(discussion.reply_target, marker, reading.subject),
+    ...(discussionHasAttachments(discussion)
+      ? [
+          note(
+            'Attachments are listed on each message and can be fetched by their url.'
+          ),
+        ]
+      : []),
     ...(discussion.thread
       ? [contextThreadNode(discussion.thread, marker)]
       : []),
@@ -1271,6 +1348,24 @@ function routineEventChildren(event: RoutineEvent): FxpNode[] {
     )
     .with({ event: 'call_started' }, ({ call }) => [callStartedNode(call)])
     .with({ event: 'call_ended' }, ({ call }) => [callNode(call)])
+    .with({ event: 'github' }, ({ delivery }) => [
+      el(
+        'github',
+        [
+          delivery.payload === undefined
+            ? note(
+                'The payload was too large to carry; read the details from GitHub.'
+              )
+            : el('payload', [text(JSON.stringify(delivery.payload))]),
+        ],
+        present({
+          event: delivery.event,
+          action: delivery.action,
+          repository: delivery.repository,
+          sender: delivery.sender,
+        })
+      ),
+    ])
     .exhaustive();
 }
 
@@ -1312,15 +1407,36 @@ function routineTriggerNode(trigger: RoutineTrigger): FxpNode {
     .with({ type: 'schedule' }, ({ cron, timezone }) =>
       el('schedule', [], { cron, timezone })
     )
-    .with({ type: 'events' }, ({ events, entity_ids, condition }) =>
-      el(
-        'events',
-        condition === undefined ? [] : [el('condition', [text(condition)])],
-        present({
-          names: events.join(', '),
-          only: entity_ids?.join(', '),
-        })
-      )
+    .with(
+      { type: 'events' },
+      ({ events, entity_ids, github, payload_match, condition }) =>
+        el(
+          'events',
+          [
+            ...(github === undefined
+              ? []
+              : [
+                  el(
+                    'github',
+                    [],
+                    present({
+                      events: github.events?.join(', '),
+                      actions: github.actions?.join(', '),
+                      repositories: github.repositories?.join(', '),
+                      bots: github.include_bots ? 'included' : 'ignored',
+                    })
+                  ),
+                ]),
+            ...(payload_match ?? []).map((test) => el('match', [text(test)])),
+            ...(condition === undefined
+              ? []
+              : [el('condition', [text(condition)])]),
+          ],
+          present({
+            names: events.join(', '),
+            only: entity_ids?.join(', '),
+          })
+        )
     )
     .exhaustive();
 }

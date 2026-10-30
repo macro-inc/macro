@@ -287,6 +287,21 @@ fn render_part(part: &MessagePart) -> String {
                         .unwrap_or_default()
                 );
             }
+            MessagePart::TaskNotification {
+                status,
+                summary,
+                event,
+            } => {
+                let _ = writeln!(
+                    out,
+                    "[task {}] {summary}{}",
+                    status.map_or("event", |status| status.into()),
+                    event
+                        .as_deref()
+                        .map(|event| format!(": {event}"))
+                        .unwrap_or_default()
+                );
+            }
             MessagePart::Control { control, outcome } => {
                 let label = match control {
                     Control::SetModel { model } => format!("model changed to {model}"),

@@ -76,6 +76,27 @@ fn trial_keeps_team_and_conversion_metadata() {
 }
 
 #[test]
+fn max_checkout_payload_has_no_trial() {
+    let mut input = request();
+    input.plan = SeatPlan::Max;
+    let params = checkout_params(
+        "cus_test".parse().unwrap(),
+        &input,
+        "price_max",
+        CheckoutTerms::Paid,
+        None,
+    );
+    let json = serde_json::to_value(params).unwrap();
+    assert_eq!(json["line_items"][0]["price"], "price_max");
+    assert!(
+        json["subscription_data"]
+            .get("trial_period_days")
+            .is_none_or(serde_json::Value::is_null)
+    );
+    assert!(json.get("metadata").is_none_or(serde_json::Value::is_null));
+}
+
+#[test]
 fn ordinary_paid_checkout_does_not_acquire_a_trial() {
     let input = request();
     let params = checkout_params(
@@ -360,6 +381,24 @@ async fn history_includes_canceled_subscriptions_and_every_page() {
             .all(|request| request.contains("status=all"))
     );
     assert!(requests[1].contains("starting_after=sub_canceled"));
+}
+
+#[tokio::test]
+async fn max_trial_terms_never_reach_stripe() {
+    let (gateway, stub, task) = stub_gateway(vec![]).await;
+    let mut input = request();
+    input.plan = SeatPlan::Max;
+    let error = gateway
+        .checkout(
+            "cus_test".parse().unwrap(),
+            input,
+            CheckoutTerms::Trial,
+            None,
+        )
+        .await;
+    task.abort();
+    assert!(matches!(error, Err(StripeCheckoutError::TrialUnavailable)));
+    assert!(stub.requests.lock().unwrap().is_empty());
 }
 
 fn empty_history() -> serde_json::Value {

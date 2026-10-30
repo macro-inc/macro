@@ -1,11 +1,15 @@
 use super::*;
 use crate::domain::models::{NotifiedHydratableTypes, WorkFeedPagePosition};
 use chrono::Timelike;
+use document_sub_type::DocumentSubType;
+use filter_ast::Expr;
 use foreign_entity::domain::models::SourceId;
+use item_filters::ast::{EntityFilterAst, document::DocumentLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use sqlx::{Pool, Postgres};
+use std::sync::Arc;
 use uuid::Uuid;
 
 const USER_1: &str = "macro|user-1@test.com";
@@ -274,6 +278,54 @@ async fn types_narrow_both_streams(pool: Pool<Postgres>) -> anyhow::Result<()> {
             (EntityType::EmailThread, THREAD_S.to_string()),
             (EntityType::EmailThread, THREAD_Z.to_string()),
             (EntityType::Chat, CHAT_A.to_string()),
+        ]
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn task_subtype_narrows_documents_in_both_streams(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let is_task = || Expr::val(DocumentLiteral::SubType(DocumentSubType::Task));
+    let tasks = EntityFilterAst {
+        document_filter: Some(Arc::new(is_task())),
+        ..Default::default()
+    };
+    let documents = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::is_not(is_task()))),
+        ..Default::default()
+    };
+
+    let mut request = req(WorkFeedSoupMode::Work, &link_ids, &sources);
+    request.types = &[EntityType::Document];
+    request.filter = Some(&tasks);
+    let page = work_feed_soup_page(&pool, request).await?;
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::Document, DOC_B.to_string()),
+            (EntityType::Document, DOC_C.to_string()),
+        ]
+    );
+
+    let mut request = req(WorkFeedSoupMode::Work, &link_ids, &sources);
+    request.types = &[EntityType::Document];
+    request.filter = Some(&documents);
+    let page = work_feed_soup_page(&pool, request).await?;
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::Document, DOC_H.to_string()),
+            (EntityType::Document, DOC_A.to_string()),
+            (EntityType::Document, DOC_G.to_string()),
+            (EntityType::Document, DOC_E.to_string()),
         ]
     );
 

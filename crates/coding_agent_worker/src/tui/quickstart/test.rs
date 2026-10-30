@@ -180,9 +180,21 @@ fn quickstart_renders_permission_consent_and_warning() {
         }),
         Vec::new(),
     );
-    for allowed in [false, true] {
+    for (width, height, allowed, status) in [
+        (100, 40, false, false),
+        (100, 40, true, false),
+        (80, 26, false, false),
+        (80, 26, true, false),
+        (80, 26, false, true),
+        (80, 26, true, true),
+        (80, 24, false, false),
+        (80, 24, true, false),
+        (80, 24, false, true),
+        (80, 24, true, true),
+    ] {
         setup.allow_permission_bypass = allowed;
-        let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+        setup.status = status.then(|| ("Pairing failed".to_owned(), true));
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal
             .draw(|frame| {
                 crate::tui::ui::render_quickstart(
@@ -211,7 +223,7 @@ fn quickstart_renders_permission_consent_and_warning() {
             .backend()
             .buffer()
             .content()
-            .chunks(100)
+            .chunks(usize::from(width))
             .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
             .collect::<Vec<_>>();
         let workspace = rows.iter().find(|row| row.contains("Workspace")).unwrap();
@@ -220,8 +232,16 @@ fn quickstart_renders_permission_consent_and_warning() {
             .find(|row| row.contains("Access") && !row.contains("Full Access"))
             .unwrap();
         let full_access = rows.iter().find(|row| row.contains("Full Access")).unwrap();
-        assert_eq!(workspace.find("/existing/workspace"), scope.find("Team"));
-        assert_eq!(workspace.find("/existing/workspace"), full_access.find('['));
+        // Borders use multibyte glyphs; compare columns rather than UTF-8 offsets.
+        let workspace_column = workspace.chars().position(|character| character == '/');
+        assert_eq!(
+            workspace_column,
+            scope.chars().position(|character| character == 'T')
+        );
+        assert_eq!(
+            workspace_column,
+            full_access.chars().position(|character| character == '[')
+        );
     }
 }
 

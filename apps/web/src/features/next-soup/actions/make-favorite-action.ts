@@ -23,10 +23,10 @@ export const makeFavoriteAction = () => {
   const addMutation = useAddFavoriteMutation();
   const removeMutation = useRemoveFavoriteMutation();
 
+  // Foreign entities (pull requests included) are not offered; favorites
+  // already saved for them stay removable from the sidebar.
   const canExecute = (entity: EntityData): boolean =>
-    (entity.type !== 'foreign' ||
-      entity.foreignSource === 'github_pull_request') &&
-    favoriteEntityType(entity.type) !== undefined;
+    entity.type !== 'foreign' && favoriteEntityType(entity.type) !== undefined;
 
   const isFavorited = (entity: EntityData): boolean => {
     const type = favoriteEntityType(entity.type);

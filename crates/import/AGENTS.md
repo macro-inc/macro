@@ -33,7 +33,12 @@ undecided rows as `deciding`, and the write cannot start until the run is
 `ready`. A resumed plan stages the tree again, which is idempotent. On
 approval the harness starts the write:
 folders mirroring the page tree, documents, databases with rows, row bodies and
-relations, and task lists as Macro tasks. The Notion run row tracks it
+relations, and task lists as Macro tasks. Each page, row body and task is
+created with its Notion page's created and last-edited times (`SourceDates`),
+and folders are created dated by what is written into them
+(`ProjectService::create_project_dated_by_contents`), so an import of old
+pages stays out of Home, which lists documents and folders by `updatedAt`.
+The Notion run row tracks it
 (`running` → `ready` → `importing` → `completed`/`failed`/`dismissed`).
 
 Every plan carries the user's `sharing` (`team`, `personal`, or `ai`, where

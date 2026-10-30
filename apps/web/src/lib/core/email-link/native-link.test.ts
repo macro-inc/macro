@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   success: vi.fn(),
   failure: vi.fn(),
+  alert: vi.fn(),
+  links: [] as { id: string; email_address: string; provider: string }[],
+  linksLoaded: true,
   desktop: false,
   mobile: true,
   openDesktop: vi.fn(),
@@ -29,7 +32,7 @@ vi.mock('@core/auth/native-auth', () => ({
   }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: mocks.success, failure: mocks.failure },
+  toast: { success: mocks.success, failure: mocks.failure, alert: mocks.alert },
 }));
 vi.mock('@core/constant/PaywallState', () => ({
   PaywallKey: { MULTI_INBOX: 'multi-inbox' },
@@ -50,7 +53,11 @@ vi.mock('@queries/auth/outlook-link', () => ({
 vi.mock('@queries/auth/user-info', () => ({ invalidateUserInfo: vi.fn() }));
 vi.mock('@queries/email/link', () => ({
   invalidateEmailLinks: vi.fn(),
-  useEmailLinksQuery: () => ({ refetch: mocks.refetch }),
+  useEmailLinksQuery: () => ({
+    refetch: mocks.refetch,
+    isPending: !mocks.linksLoaded,
+    data: mocks.linksLoaded ? { links: mocks.links } : undefined,
+  }),
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: { init: mocks.provision },
@@ -88,8 +95,12 @@ beforeEach(() => {
     })
   );
   mocks.authenticate.mockResolvedValue({ success: true });
-  mocks.provision.mockResolvedValue(ok(undefined));
-  mocks.refetch.mockResolvedValue(undefined);
+  mocks.provision.mockResolvedValue(ok({ link_id: 'new-inbox' }));
+  mocks.refetch.mockImplementation(async () => ({
+    data: { links: mocks.links },
+  }));
+  mocks.links = [];
+  mocks.linksLoaded = true;
 });
 
 afterEach(() => {
@@ -122,6 +133,7 @@ describe('desktop account linking', () => {
       );
       expect(consumeInboxLinkReturn('pending-link')).toEqual({
         url: '/home/~/settings/connections?view=all#selection',
+        scopes,
       });
       expect(window.location.href).toBe(originalLocation);
       expect(mocks.authenticate).not.toHaveBeenCalled();
@@ -158,12 +170,34 @@ describe('desktop account linking', () => {
       );
       expect(consumeInboxLinkReturn('outlook-link')).toEqual({
         url: '/home/~/settings/connections?view=all#selection',
+        scopes,
       });
       expect(window.location.href).toBe(originalLocation);
       expect(mocks.authenticate).not.toHaveBeenCalled();
       expect(mocks.provision).not.toHaveBeenCalled();
     }
   );
+
+  it('stashes the connected inboxes for a plain add so the callback can recognize them', async () => {
+    mocks.links = [
+      {
+        id: 'gmail-inbox',
+        email_address: 'person@example.com',
+        provider: 'GMAIL',
+      },
+    ];
+    await useAddInboxFlow()({ provider: 'GMAIL' });
+    expect(consumeInboxLinkReturn('pending-link')).toEqual({
+      url: '/home/~/settings/connections?view=all#selection',
+      scopes: 'gmail',
+      addition: {
+        provider: 'GMAIL',
+        connectedInboxes: [
+          { id: 'gmail-inbox', emailAddress: 'person@example.com' },
+        ],
+      },
+    });
+  });
 
   it('reports a browser launch failure without provisioning the inbox', async () => {
     mocks.openDesktop.mockResolvedValue({ success: false });
@@ -260,6 +294,77 @@ describe('native account linking', () => {
     expect(mocks.provision).not.toHaveBeenCalled();
     expect(mocks.refetch).not.toHaveBeenCalled();
     expect(mocks.failure).not.toHaveBeenCalled();
+    expect(mocks.alert).toHaveBeenCalledOnce();
+  });
+
+  it('names the address when a plain add resolves to an inbox that was already connected', async () => {
+    mocks.links = [
+      {
+        id: 'gmail-inbox',
+        email_address: 'person@example.com',
+        provider: 'GMAIL',
+      },
+      {
+        id: 'workspace-inbox',
+        email_address: 'person@example.org',
+        provider: 'GMAIL',
+      },
+    ];
+    mocks.provision.mockResolvedValue(ok({ link_id: 'workspace-inbox' }));
+    await useAddInboxFlow()({ provider: 'GMAIL' });
+    expect(mocks.alert).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('person@example.org'),
+      expect.anything()
+    );
+    expect(mocks.success).not.toHaveBeenCalled();
+  });
+
+  it('loads the inbox list before a plain add when it has not loaded yet', async () => {
+    mocks.linksLoaded = false;
+    mocks.links = [
+      {
+        id: 'gmail-inbox',
+        email_address: 'person@example.com',
+        provider: 'GMAIL',
+      },
+    ];
+    mocks.provision.mockResolvedValue(ok({ link_id: 'gmail-inbox' }));
+    await useAddInboxFlow()({ provider: 'GMAIL' });
+    expect(mocks.alert).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('person@example.com'),
+      expect.anything()
+    );
+    expect(mocks.success).not.toHaveBeenCalled();
+  });
+
+  it('confirms a reconnect that resolves to the inbox it targeted', async () => {
+    mocks.links = [
+      {
+        id: 'gmail-inbox',
+        email_address: 'person@example.com',
+        provider: 'GMAIL',
+      },
+    ];
+    mocks.provision.mockResolvedValue(ok({ link_id: 'gmail-inbox' }));
+    await useAddInboxFlow()({
+      provider: 'GMAIL',
+      reconnectLinkId: 'gmail-inbox',
+      emailAddress: 'person@example.com',
+    });
+    expect(mocks.success).toHaveBeenCalledWith('Account connected');
+    expect(mocks.alert).not.toHaveBeenCalled();
+  });
+
+  it('says an already initialized inbox is already connected', async () => {
+    mocks.provision.mockResolvedValue(
+      err([
+        { code: 'ALREADY_INITIALIZED', message: 'User is already initialized' },
+      ])
+    );
+    await useAddInboxFlow()({ provider: 'GMAIL' });
+    expect(mocks.refetch).toHaveBeenCalledOnce();
+    expect(mocks.alert).toHaveBeenCalledOnce();
+    expect(mocks.success).not.toHaveBeenCalled();
   });
 });
 

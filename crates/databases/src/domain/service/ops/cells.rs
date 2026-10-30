@@ -102,6 +102,11 @@ impl Planner {
             CellValue::Date(date) if data_type == DataType::Date => {
                 Ok(Some(PropertyValue::Date(*date)))
             }
+            CellValue::DateRange(range) if data_type == DataType::DateRange => {
+                models_properties::shared::DateRange::new(range.start, range.end)
+                    .map(|range| Some(PropertyValue::DateRange(range)))
+                    .map_err(|_| place.refuse("a date range cannot end before it starts"))
+            }
             CellValue::Link(urls) if data_type == DataType::Link => {
                 single(urls.len())?;
                 if let Some(bad) = urls.iter().find(|url| !is_complete_url(url)) {
@@ -238,6 +243,7 @@ pub(super) fn column_kind_name(column: &ColumnEntry) -> &'static str {
         DataType::Number => "number",
         DataType::Boolean => "checkbox",
         DataType::Date => "date",
+        DataType::DateRange => "date range",
         DataType::Link => "link",
         DataType::SelectString => "select",
         DataType::SelectNumber => "numeric select",
@@ -253,6 +259,7 @@ fn value_kind_name(value: &CellValue) -> &'static str {
         CellValue::Number(_) => "a number",
         CellValue::Boolean(_) => "true or false",
         CellValue::Date(_) => "a date",
+        CellValue::DateRange(_) => "a date range",
         CellValue::Link(_) => "a link",
         CellValue::Options(_) => "an option",
         CellValue::Entities(_) => "a reference",

@@ -14,8 +14,12 @@ each run.
   and the ports its adapters implement.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
+- `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
+  `github` selector and the exact payload `match` GitHub filters take.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
   `src/inbound/event_run_worker.rs`: the three inbound adapters.
+- `src/domain/templates.rs` + `src/inbound/template_router.rs`: sharing a
+  routine as a template and activating it as someone else's routine.
 - `services/agent_harness_service/src/scheduling.rs`: the sole runtime host;
   this crate has no deployed binary.
 
@@ -26,13 +30,20 @@ each run.
   gateway.
 - An authenticated caller with a routine ID can read its detail; listing,
   run history, and mutations stay owner-scoped.
+- Templates: the owner shares a snapshot of a routine (keyed by the routine's
+  ID) with its references marked as variables; publishing, reading, and activation
+  require the caller's `enable-routine-sharing` PostHog flag. Missing flags,
+  missing configuration, and failed evaluations return 404. Owner unsharing
+  stays available. Activating creates the caller's own routine with `template_id`
+  pointing back. Filling variables happens in the client.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 
 ## Boundaries
 
 - Depends on: `agent_session`, `trigger_context`, `jev`, `channels`, `crm`,
-  `documents`, `macro_event_broker`/`macro_event_topics` (Kafka), `macro_db_client`.
+  `documents`, `github` (delivery fact and installation claims only),
+  `macro_event_broker`/`macro_event_topics` (Kafka), `macro_db_client`.
 - Used by: the web app's automations/routines UI and agent tooling, through
   the gateway.
 
@@ -66,7 +77,13 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `RoutineSessions::prepare` checks again on every run, then adds them to an
   agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
-
+- Macro events store only ids and are read again, as the owner, at dispatch.
+  GitHub deliveries can't be read again, so their event runs keep the bounded
+  payload in `event_context`; access for them is the owner's installation
+  claim, which needs a linked GitHub account and, for a personal installation,
+  that the linked account installed it.
+- Enabling a GitHub trigger needs the owner's GitHub link
+  (`with_github_links`); without it the service returns `GithubNotLinked`.
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,
   sharing/permissions) — check it before assuming a listed gap is unintentional.
 - A new configuration field needs `#[serde(default)]` in `ActionConfiguration`
@@ -74,6 +91,8 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
   which builds its own `ScheduledAction`.
+- `template_id` is a plain pointer, not a foreign key: activated routines keep
+  it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is
   prepared, so changing it affects later runs only.
 

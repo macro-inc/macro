@@ -1,12 +1,17 @@
 import { useCreateContext } from '@app/features/command/context/create-context';
+import {
+  resolveEntityActionViewContext,
+  toSingleEntityActionListState,
+} from '@app/features/next-soup/actions';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { SoupEntityContextMenu } from '@app/features/soup';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
-import type { Accessor } from 'solid-js';
-import { toTaskBoardGrouping } from './core/task-board';
+import { type Accessor, type JSX, Show } from 'solid-js';
+import { type TaskBoardTask, toTaskBoardGrouping } from './core/task-board';
 import { createTaskBoardQueries } from './queries/task-board-queries';
 import { taskBoardComposerContext } from './task-composer';
 import { useTasksView } from './tasks-view-context';
@@ -32,6 +37,31 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
     ...queries,
     createAssigneeName: (id: Accessor<string>) =>
       usePropertyUserDisplay(id).name,
+  };
+
+  const viewContext = () =>
+    resolveEntityActionViewContext({
+      activeListView: panel.handle.content().id,
+      activeTab: state.tab,
+    });
+  // Cards have no selection, so like Gantt bars the menu acts on its own task.
+  const renderCard = (task: Accessor<TaskBoardTask>, content: JSX.Element) => {
+    const entity = () => data.entity(task().id);
+    return (
+      <Show when={entity()} fallback={content}>
+        {(current) => (
+          <SoupEntityContextMenu
+            as="div"
+            entity={current()}
+            list={toSingleEntityActionListState(entity)}
+            selectedEntities={() => []}
+            viewContext={viewContext()}
+          >
+            {content}
+          </SoupEntityContextMenu>
+        )}
+      </Show>
+    );
   };
 
   const canCreate = () => !!context.createTask || !context.scopeKey;
@@ -60,6 +90,7 @@ export function TasksBoard(props: { ref?: (element: HTMLDivElement) => void }) {
         ref={props.ref}
         data={data}
         onCreate={canCreate() ? createTask : undefined}
+        renderCard={renderCard}
         onOpen={(task, event) => {
           const opened = openTask(
             { id: task.id, fallbackName: task.name },

@@ -43,7 +43,19 @@ unconfigured session reports the native default. Claude identifies the actual
 model when its first assistant record arrives.
 
 Unconfirmed prompt submission is reported as an error, never retried by pressing
-Enter. Cancellation sends Escape without a delayed input-clearing key.
+Enter. Cancellation (Stop in Macro, for a Macro prompt or an observed native
+turn) presses Escape until Herdr reports the agent stopped, at most three times
+(Claude Code's vim editor mode spends the first Escape leaving insert mode), and
+never sends an input-clearing key. The turn reports `cancelled` only once the
+agent has stopped; if it keeps running, macrod follows it to its real end.
+
+A prompt from Macro while the native agent is working or showing a dialog
+waits, like input typed into the TUI mid-turn. The running turn keeps streaming
+and its permission dialogs still reach Macro; the prompt is typed once the turn
+ends. Stopping from Macro while it waits interrupts the native turn and drops
+the prompt. Claude Code's exit confirmation, left by a second Ctrl-C while
+background work runs, is dismissed with Escape ("Stay") before the prompt is
+typed.
 
 New and reloaded sessions advertise `/compact`, `/init`, and `/fast` in Macro;
 Codex also advertises `/ultrafast`. Speed controls are delivered unchanged to
@@ -78,6 +90,14 @@ Remote permission answers require a recognized approval shortcut, the same
 visible dialog, and the same Herdr state generation. Sign-in prompts and other
 unknown dialogs require native interaction. Herdr does not offer an atomic
 compare-and-send-key operation, so native interaction remains the authority.
+
+Macro offers **Always allow** next to **Allow once**. When the dialog shows its
+own "Yes, and don't ask again ..." answer with a known shortcut, Always allow
+presses it and the native agent keeps the rule. Otherwise macrod approves the
+dialog and remembers the tool for the rest of the session: Claude Code's tool
+name (such as `Bash`) or Codex's exact command. Later dialogs for it are
+approved without asking Macro. These standing approvals live in macrod's memory
+and end when macrod restarts.
 
 Macro supplies the session's configured MCP connections when macrod binds it:
 owner-connection sessions include enabled connected apps and custom MCP servers;

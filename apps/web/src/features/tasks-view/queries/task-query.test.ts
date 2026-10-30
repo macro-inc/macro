@@ -61,6 +61,47 @@ describe('task reference scope', () => {
 });
 
 describe('task CRM scope', () => {
+  it('preserves activity membership in list, search, board and Gantt queries', () => {
+    const list = buildTaskQuery({
+      ...options,
+      crm: { type: 'activity' },
+      groupBy: 'date',
+    });
+    const search = buildTaskQuery({
+      ...options,
+      crm: { type: 'activity' },
+      groupBy: 'date',
+      nameContains: 'renewal',
+    });
+    const board = buildTaskQuery({
+      ...options,
+      crm: { type: 'activity' },
+      groupBy: 'project',
+      board: true,
+    });
+    const gantt = buildTaskQuery({
+      ...options,
+      crm: { type: 'activity' },
+      groupBy: 'status',
+    });
+    for (const query of [list, search, board, gantt]) {
+      expect(query.body.crma).toBe('activity');
+      expect(JSON.stringify(query.body)).not.toContain('company-1');
+    }
+    expect(list.groupBy).toEqual({ type: 'date' });
+    expect(search.body.df).toEqual({
+      '&': [{ l: { dst: 'task' } }, { l: { nc: 'renewal' } }],
+    });
+    expect(board.groupBy).toEqual({
+      type: 'property',
+      propertyDefinitionId: '00000001-0000-0000-0000-000000000014',
+    });
+    expect(gantt.groupBy).toEqual({
+      type: 'property',
+      propertyDefinitionId: '00000001-0000-0000-0000-000000000002',
+    });
+  });
+
   it('scopes the list to the record without a property-only filter', () => {
     const query = buildTaskQuery({
       ...options,
@@ -91,7 +132,7 @@ describe('task CRM scope', () => {
   });
 });
 
-it('uses the initiative Project property for board columns without changing legacy list grouping', () => {
+it('uses explicit Project property grouping for board editing and Project grouping for lists', () => {
   const boardQuery = buildTaskQuery({
     ...options,
     groupBy: 'project',

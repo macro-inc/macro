@@ -68,9 +68,8 @@ export function EventDetailsDialog(props: EventDetailsDialogProps) {
   const editButton = () => (
     <Button
       type="button"
-      variant="strong"
+      variant="secondary"
       size="lg"
-      depth={2}
       class="touch:w-full"
       disabled={props.saving}
       onClick={edit}
@@ -100,11 +99,14 @@ export function EventDetailsDialog(props: EventDetailsDialogProps) {
                 Booking link details
               </Dialog.Title>
               <Button
+                aria-label="Close booking link details"
+                tooltip={{
+                  content: 'Close booking link details',
+                  disabled: true,
+                }}
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                label="Close booking link details"
-                tooltipDisabled
                 onClick={close}
               >
                 <X class="size-4" aria-hidden="true" />

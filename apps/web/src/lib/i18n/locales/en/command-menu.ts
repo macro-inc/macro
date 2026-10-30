@@ -38,6 +38,7 @@ export default {
   contentAlreadyOpen: 'Content already open',
   unableToOpenConversation: 'Unable to open conversation. Please try again.',
   mobileSearchPlaceholder: 'Search…',
+  mobileSearchOrCreate: 'Search or create',
   closeSearch: 'Close search',
   searchFullTextFor: 'Search full text for “{{query}}”',
   searchResults: 'Search results',

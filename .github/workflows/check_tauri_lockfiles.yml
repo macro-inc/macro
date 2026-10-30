@@ -1,0 +1,39 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_tauri_lockfiles.rs
+name: check tauri lockfiles
+'on':
+  pull_request:
+    branches:
+    - main
+    paths:
+    - apps/web/tauri/**
+    - crates/**/Cargo.toml
+    - Cargo.toml
+    - nix/tauri-desktop.nix
+    - flake.nix
+    - flake.lock
+    - '.github/workflows/check_tauri_lockfiles.yml'
+permissions:
+  contents: read
+jobs:
+  check-tauri-lockfiles:
+    name: check Tauri lockfiles
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+    - name: Mount /nix cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        cache: nix
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+    - name: Resolve Tauri lockfiles offline
+      run: nix build --no-link -L .#checks.x86_64-linux.tauri-cargo-lockfiles
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'

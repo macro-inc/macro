@@ -31,7 +31,7 @@ export function ChannelJoinButton(props: {
   return (
     <Button
       type="button"
-      variant="accent"
+      variant="primary"
       size="sm"
       class={props.class ?? 'shrink-0'}
       disabled={joinMutation.isPending}

@@ -65,6 +65,7 @@ use utoipa::OpenApi;
     paths(
         crate::api::calendar_invitations::handler,
         crate::api::calendar_invitations::copy_handler,
+        crate::api::calendar_event_forward::handler,
         health::health_handler,
         email::attachments::get::handler,
         email::attachments::get_document_id::handler,
@@ -88,6 +89,7 @@ use utoipa::OpenApi;
         email::drafts::add_forwarded_attachment::handler,
         email::drafts::remove_forwarded_attachment::handler,
         email::messages::get::handler,
+        email::messages::eml::handler,
         email::messages::get::batch_handler,
         email::messages::labels::handler,
         inbound::axum::send_router::send_message_handler,

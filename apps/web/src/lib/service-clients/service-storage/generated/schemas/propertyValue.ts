@@ -7,6 +7,7 @@
 import type { PropertyValueOneOf } from './propertyValueOneOf';
 import type { PropertyValueOneOfFive } from './propertyValueOneOfFive';
 import type { PropertyValueOneOfNine } from './propertyValueOneOfNine';
+import type { PropertyValueOneOfOnefive } from './propertyValueOneOfOnefive';
 import type { PropertyValueOneOfOneone } from './propertyValueOneOfOneone';
 import type { PropertyValueOneOfOnethree } from './propertyValueOneOfOnethree';
 import type { PropertyValueOneOfSeven } from './propertyValueOneOfSeven';
@@ -25,4 +26,5 @@ export type PropertyValue =
   | PropertyValueOneOfSeven
   | PropertyValueOneOfNine
   | PropertyValueOneOfOneone
-  | PropertyValueOneOfOnethree;
+  | PropertyValueOneOfOnethree
+  | PropertyValueOneOfOnefive;

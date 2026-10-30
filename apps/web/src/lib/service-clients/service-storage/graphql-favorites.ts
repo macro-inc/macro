@@ -48,7 +48,7 @@ const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   database: 'DATABASE',
   database_row: 'DATABASE_ROW',
   form: 'FORM',
-  whatsapp_group: 'WHATSAPP_GROUP',
+  external_chat: 'EXTERNAL_CHAT',
 } satisfies Record<FavoriteEntityType, GraphqlEntityType>;
 
 const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
@@ -75,8 +75,12 @@ const GRAPHQL_ENTITY_TYPE_TO_FAVORITE = {
   STATIC_FILE: 'static_file',
   TEAM: 'team',
   USER: 'user',
-  WHATSAPP_GROUP: 'whatsapp_group',
-} satisfies Record<GraphqlEntityType, FavoriteEntityType>;
+  EXTERNAL_CHAT: 'external_chat',
+} satisfies Record<ReturnedGraphqlEntityType, FavoriteEntityType>;
+
+/** `WHATSAPP_GROUP` is a schema-only stub kept for released clients; the
+ * server never returns it. Remove with it after 2026-11-30. */
+type ReturnedGraphqlEntityType = Exclude<GraphqlEntityType, 'WHATSAPP_GROUP'>;
 
 /** Convert a REST favorite entity type into its GraphQL equivalent. */
 export function toGraphqlFavoriteEntityType(
@@ -88,7 +92,9 @@ export function toGraphqlFavoriteEntityType(
 /** Convert one GraphQL favorite into the shared favorites-list shape. */
 export function mapGraphqlFavorite(
   favorite: FavoriteFieldsFragment
-): Favorite & { id: string } {
+): (Favorite & { id: string }) | undefined {
+  const { entityType } = favorite;
+  if (entityType === 'WHATSAPP_GROUP') return undefined;
   return {
     // urql-solid reconciles lists by id. Preserve it so a mounted row's
     // preview/avatar subscriptions keep pointing at the same entity.
@@ -98,7 +104,7 @@ export function mapGraphqlFavorite(
     createdAt: favorite.createdAt,
     documentSubType: favorite.documentSubType,
     entityId: favorite.entityId,
-    entityType: GRAPHQL_ENTITY_TYPE_TO_FAVORITE[favorite.entityType],
+    entityType: GRAPHQL_ENTITY_TYPE_TO_FAVORITE[entityType],
     fileType: favorite.fileType,
     sortOrder: favorite.sortOrder,
   };
@@ -156,7 +162,7 @@ function favoriteSoupEffects(
     // Forms are not favoritable; the service refuses them.
     form: undefined,
     // Standalone groups have no Soup entity.
-    whatsapp_group: undefined,
+    external_chat: undefined,
   } as const satisfies Record<FavoriteEntityType, string | undefined>;
   const typename = typenames[args.entityType];
   return typename

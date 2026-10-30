@@ -2,6 +2,7 @@ export interface Settings {
   region: string;
   grafanaHost: string;
   otlpHost: string;
+  oncallHost: string;
   secretArn: string;
   alarmTopicArn: string;
   volumeId: string;
@@ -38,15 +39,18 @@ export function validateRegionalArn(
 
 // Validate runtime values before they reach the NixOS configuration renderer.
 export function validateSettings(settings: Settings): void {
-  for (const host of [settings.grafanaHost, settings.otlpHost]) {
+  const hosts = [settings.grafanaHost, settings.otlpHost, settings.oncallHost];
+  for (const host of hosts) {
     if (!/^[a-z0-9-]+\.macro-internal\.com$/.test(host)) {
       throw new Error(
         'Observability hostnames must be subdomains of macro-internal.com'
       );
     }
   }
-  if (settings.grafanaHost === settings.otlpHost) {
-    throw new Error('UI and ingestion require separate hostnames');
+  if (new Set(hosts).size !== hosts.length) {
+    throw new Error(
+      'Grafana, ingestion and on-call require separate hostnames'
+    );
   }
   if (
     !/^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+$/.test(

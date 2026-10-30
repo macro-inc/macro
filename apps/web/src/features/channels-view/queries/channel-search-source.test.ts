@@ -328,11 +328,14 @@ describe('shared channel search source', () => {
       'direct_message',
     ]);
     expect(ids(s.source)).toEqual(['dm']);
+    s.setScope('team_channels');
+    expect(s.request().body.filters?.channel_filters?.channel_types).toEqual([
+      'team',
+    ]);
     s.setScope('channels');
     expect(s.request().body.filters?.channel_filters?.channel_types).toEqual([
       'public',
       'private',
-      'team',
     ]);
     expect(ids(s.source)).toEqual(['channel']);
     s.setScope('recents');

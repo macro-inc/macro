@@ -1,11 +1,6 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FormulaBar } from './SpreadsheetToolbar';
-
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
 
 afterEach(cleanup);
 

@@ -61,3 +61,17 @@ impl email::domain::draft_transfer::DraftTransferFiles for DraftAttachmentS3 {
             .map_err(email::domain::models::EmailErr::RepoErr)
     }
 }
+
+/// Stores a file the email domain produced itself, such as a forwarded
+/// event's iCalendar file, as draft transfers store copied attachments: the
+/// draft attachment row carries its type.
+impl email::domain::ports::DraftAttachmentStorage for DraftAttachmentS3 {
+    async fn put_attachment(
+        &self,
+        key: &str,
+        _content_type: &str,
+        bytes: &[u8],
+    ) -> anyhow::Result<()> {
+        self.s3.put(&self.bucket, key, bytes).await
+    }
+}

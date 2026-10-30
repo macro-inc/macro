@@ -36,6 +36,7 @@ export function DocumentPreviewSheet(
             <Suspense fallback={<DocumentPreviewSkeleton />}>
               <DocumentPreviewContent
                 delete={props.delete}
+                convertToText={props.convertToText}
                 collapseInfo={props.collapseInfo}
                 documentInfo={props.documentInfo}
                 previewInfo={props.previewInfo}

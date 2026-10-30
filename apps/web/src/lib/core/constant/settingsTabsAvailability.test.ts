@@ -17,7 +17,11 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('../mobile/isTouchDevice', () => ({
   isTouchDevice: () => touch.current,
 }));
-vi.mock('../context/user', () => ({ useHasPermission: () => () => false }));
+vi.mock('../context/user', () => ({
+  useHasPermission: () => () => false,
+  useEmail: () => () => undefined,
+  useUserId: () => () => undefined,
+}));
 vi.mock('../util/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../util/platform')>()),
   isPlatform: (target: string) => target === platform.current,

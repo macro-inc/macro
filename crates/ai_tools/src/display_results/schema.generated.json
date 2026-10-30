@@ -103,7 +103,7 @@
                           "database",
                           "database_row",
                           "form",
-                          "whatsapp_group",
+                          "external_chat",
                           "email",
                           "routine",
                           "channel_thread"
@@ -202,7 +202,7 @@
                               "database",
                               "database_row",
                               "form",
-                              "whatsapp_group",
+                              "external_chat",
                               "email",
                               "routine",
                               "channel_thread"

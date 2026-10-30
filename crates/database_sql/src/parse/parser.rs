@@ -48,9 +48,35 @@ impl nom::error::ParseError<Tokens<'_>> for ParseError {
 
 /// Parse one statement from its tokens; `end` is the length of the source.
 pub fn statement(tokens: &[Token], end: usize) -> Result<Statement, ParseError> {
+    check_nesting(tokens)?;
     statement_rule(Tokens { tokens, end })
         .finish()
         .map(|(_, statement)| statement)
+}
+
+/// Bound condition recursion before entering nom, including unclosed conditions.
+/// Quoted parentheses are part of a string or identifier token and do not count.
+fn check_nesting(tokens: &[Token]) -> Result<(), ParseError> {
+    const MAX_NESTING_DEPTH: usize = 64;
+    let mut depth: usize = 0;
+    for token in tokens {
+        match token.kind {
+            TokenKind::LeftParen => {
+                depth += 1;
+                if depth > MAX_NESTING_DEPTH {
+                    return Err(ParseError {
+                        span: token.span.clone(),
+                        message: format!(
+                            "SQL nesting exceeds {MAX_NESTING_DEPTH} levels; simplify the condition"
+                        ),
+                    });
+                }
+            }
+            TokenKind::RightParen => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 fn statement_rule(input: Tokens<'_>) -> ParseResult<'_, Statement> {

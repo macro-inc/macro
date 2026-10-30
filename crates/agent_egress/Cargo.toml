@@ -18,6 +18,8 @@ axum = { workspace = true }
 # session-token extraction would otherwise hand-roll.
 axum-extra = { workspace = true, features = ["typed-header"] }
 base64 = { workspace = true }
+# The session's agent, signed into Macro's own MCP credential.
+bot_id = { path = "../bot_id" }
 bytes = { workspace = true }
 # Holding a tool call for the owner: the stream it answers with.
 futures = { workspace = true }
@@ -67,6 +69,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+bot_id = { path = "../bot_id", features = ["test-utils"] }
 futures = { workspace = true }
 # Building the stored OAuth grants the custom-server resolver reads.
 rmcp = { workspace = true, features = ["auth"] }

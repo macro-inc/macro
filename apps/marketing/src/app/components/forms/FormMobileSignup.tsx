@@ -178,28 +178,33 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
           spellcheck={false}
           aria-label="Email address"
           aria-invalid={error() ? 'true' : undefined}
-          placeholder={props.placeholder ?? 'Your work email'}
+          placeholder={props.placeholder ?? 'Your work email or Gmail'}
           value={email()}
           onInput={(event) => {
             setEmail(event.currentTarget.value);
             if (error()) setError(null);
           }}
-          style={card() ? undefined : {
-            'background-color':
-              'color-mix(in srgb, var(--b1) 88%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--b4) 46%, transparent)',
-            'border-radius': '999px',
-            'box-sizing': 'border-box',
-            color: 'var(--c0)',
-            'font-family': 'body',
-            // 16px minimum: iOS Safari zooms the page when focusing a smaller field.
-            'font-size': '16px',
-            height: inline() ? '32px' : '46px',
-            outline: 'none',
-            padding: inline() ? '0 96px 0 14px' : '0 18px',
-            transition: 'border-color 160ms ease',
-            width: '100%',
-          }}
+          style={
+            card()
+              ? undefined
+              : {
+                  'background-color':
+                    'color-mix(in srgb, var(--b1) 88%, transparent)',
+                  border:
+                    '1px solid color-mix(in srgb, var(--b4) 46%, transparent)',
+                  'border-radius': '999px',
+                  'box-sizing': 'border-box',
+                  color: 'var(--c0)',
+                  'font-family': 'body',
+                  // 16px minimum: iOS Safari zooms the page when focusing a smaller field.
+                  'font-size': '16px',
+                  height: inline() ? '32px' : '46px',
+                  outline: 'none',
+                  padding: inline() ? '0 96px 0 14px' : '0 18px',
+                  transition: 'border-color 160ms ease',
+                  width: '100%',
+                }
+          }
         />
 
         <button
@@ -212,38 +217,42 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
           }
           type="submit"
           disabled={pending()}
-          style={card() ? undefined : {
-            'align-items': 'center',
-            'background-color': 'var(--c1)',
-            border: '1px solid transparent',
-            'border-radius': '999px',
-            'box-sizing': 'border-box',
-            color: 'var(--b0)',
-            cursor: 'default',
-            display: 'inline-flex',
-            'font-family': 'body',
-            'font-size': inline() ? '13px' : '16px',
-            'font-weight': '700',
-            ...(inline()
-              ? {
-                  bottom: 'auto',
-                  height: '26px',
-                  padding: '0 12px',
-                  position: 'absolute',
-                  right: '3px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                }
+          style={
+            card()
+              ? undefined
               : {
-                  height: '46px',
-                  padding: '0 22px',
-                  width: '100%',
-                }),
-            'justify-content': 'center',
-            'letter-spacing': '0.01em',
-            'line-height': 1,
-            'white-space': 'nowrap',
-          }}
+                  'align-items': 'center',
+                  'background-color': 'var(--c1)',
+                  border: '1px solid transparent',
+                  'border-radius': '999px',
+                  'box-sizing': 'border-box',
+                  color: 'var(--b0)',
+                  cursor: 'default',
+                  display: 'inline-flex',
+                  'font-family': 'body',
+                  'font-size': inline() ? '13px' : '16px',
+                  'font-weight': '700',
+                  ...(inline()
+                    ? {
+                        bottom: 'auto',
+                        height: '26px',
+                        padding: '0 12px',
+                        position: 'absolute',
+                        right: '3px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                      }
+                    : {
+                        height: '46px',
+                        padding: '0 22px',
+                        width: '100%',
+                      }),
+                  'justify-content': 'center',
+                  'letter-spacing': '0.01em',
+                  'line-height': 1,
+                  'white-space': 'nowrap',
+                }
+          }
         >
           {buttonLabel()}
         </button>

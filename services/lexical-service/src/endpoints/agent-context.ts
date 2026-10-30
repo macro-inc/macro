@@ -91,11 +91,18 @@ const triggerPerson = z.object({
   email: z.string().optional(),
 });
 
+const triggerAttachment = z.object({
+  entity_type: z.string().min(1),
+  entity_id: z.string().min(1),
+  url: z.string().optional(),
+});
+
 const triggerMessage = z.object({
   id: z.string().min(1),
   author: triggerPerson,
   content: z.string(),
   posted_at: z.string().min(1),
+  attachments: z.array(triggerAttachment).optional(),
 });
 
 const triggerThread = z.object({
@@ -289,6 +296,16 @@ const routineEvent = z.discriminatedUnion('event', [
   }),
   z.object({ event: z.literal('call_started'), call: callStartedSnapshot }),
   z.object({ event: z.literal('call_ended'), call: callSnapshot }),
+  z.object({
+    event: z.literal('github'),
+    delivery: z.object({
+      event: z.string().min(1),
+      action: z.string().min(1).optional(),
+      repository: z.string().min(1).optional(),
+      sender: z.string().min(1).optional(),
+      payload: z.unknown().optional(),
+    }),
+  }),
 ]);
 
 const routineFiring = z.discriminatedUnion('type', [
@@ -318,6 +335,15 @@ const routineTrigger = z.discriminatedUnion('type', [
     type: z.literal('events'),
     events: z.array(z.string().min(1)),
     entity_ids: z.array(z.string().min(1)).optional(),
+    github: z
+      .object({
+        events: z.array(z.string().min(1)).optional(),
+        actions: z.array(z.string().min(1)).optional(),
+        repositories: z.array(z.string().min(1)).optional(),
+        include_bots: z.boolean(),
+      })
+      .optional(),
+    payload_match: z.array(z.string().min(1)).optional(),
     condition: z.string().optional(),
   }),
 ]);

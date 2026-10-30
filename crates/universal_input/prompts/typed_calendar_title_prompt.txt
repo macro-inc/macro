@@ -1,0 +1,1 @@
+The event name, excluding its date, time and location or an instruction to create an event.

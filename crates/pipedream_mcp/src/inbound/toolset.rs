@@ -1,7 +1,10 @@
 //! Thin AI adapter for connector discovery.
 
 use crate::domain::{
-    ports::{ConnectionStore, ConnectorCapabilities, ConnectorDirectory},
+    ports::{
+        ConnectionStore, ConnectorCapabilities, ConnectorDirectory, ConnectorOverlays,
+        OverlayConnections,
+    },
     service::discovery::{ConnectorDiscovery, DiscoveryRequest, DiscoveryResult},
 };
 use ai_toolset::{
@@ -14,12 +17,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// Dependencies for the discovery tool.
-pub struct ConnectorToolContext<D, S> {
+pub struct ConnectorToolContext<D, S, N> {
     /// Domain service, constructed by the host.
-    pub service: Arc<ConnectorDiscovery<D, S>>,
+    pub service: Arc<ConnectorDiscovery<D, S, N>>,
 }
 
-impl<D, S> Clone for ConnectorToolContext<D, S> {
+impl<D, S, N> Clone for ConnectorToolContext<D, S, N> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
@@ -52,15 +55,18 @@ impl ToolAnnotated for DiscoverConnectors {
 }
 
 #[async_trait]
-impl<D: ConnectorDirectory + ConnectorCapabilities, S: ConnectionStore>
-    AsyncTool<ConnectorToolContext<D, S>> for DiscoverConnectors
+impl<D, S, N> AsyncTool<ConnectorToolContext<D, S, N>> for DiscoverConnectors
+where
+    D: ConnectorDirectory + ConnectorCapabilities,
+    S: ConnectionStore + ConnectorOverlays,
+    N: OverlayConnections,
 {
     type Output = DiscoverConnectorsResponse;
 
     #[tracing::instrument(skip_all, err)]
     async fn call(
         &self,
-        context: ServiceContext<ConnectorToolContext<D, S>>,
+        context: ServiceContext<ConnectorToolContext<D, S, N>>,
         request: RequestContext,
     ) -> ToolResult<Self::Output> {
         let result = context
