@@ -4,7 +4,6 @@ import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { cn, Dialog, Panel } from '@ui';
 import {
-  type ComponentProps,
   createMemo,
   createSignal,
   For,
@@ -29,10 +28,6 @@ import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { focusPopoverInput } from '../utils/focusPopoverInput';
 
 false;
-
-type DrawerSnapPoint = NonNullable<
-  ComponentProps<typeof MobileDrawer>['activeSnapPoint']
->;
 
 type PopoverSplitData = {
   id: string;
@@ -165,16 +160,6 @@ function PopoverSplitModal(props: {
   const onOpenChange = (open: boolean) => {
     if (!open) props.onClose();
   };
-  // A drag that ends shut moves the drawer to its closed snap point before it
-  // asks to close. The split's owner can keep it open (asking before it
-  // discards changes), so each close request restores the open snap point;
-  // a close that goes through drives it shut again.
-  const [snapPoint, setSnapPoint] = createSignal<DrawerSnapPoint>(0);
-  const onDrawerOpenChange = (open: boolean) => {
-    if (open) return;
-    setSnapPoint(1);
-    props.onClose();
-  };
   const Content = () => (
     <SplitPanelContext.Provider value={stubPanelContext}>
       <SoupContextProvider>
@@ -211,9 +196,7 @@ function PopoverSplitModal(props: {
       <MobileDrawer
         side="bottom"
         open={props.popover.isOpen}
-        onOpenChange={onDrawerOpenChange}
-        activeSnapPoint={snapPoint()}
-        onActiveSnapPointChange={setSnapPoint}
+        onOpenChange={onOpenChange}
         onInitialFocus={(event) => focusPopoverInput(event, panelRef())}
       >
         <MobileDrawer.Portal>
