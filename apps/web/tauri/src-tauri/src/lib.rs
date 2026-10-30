@@ -43,6 +43,8 @@ mod linux_notification;
 mod logging;
 #[cfg(target_os = "macos")]
 mod macos_notification_permission;
+#[cfg(feature = "cef")]
+pub mod screen_capture;
 mod share_target;
 mod staged_upload;
 mod whatsapp_passkey;
@@ -131,7 +133,14 @@ type Type = std::sync::OnceLock<
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    run_with(tauri::Builder::default());
+    run_with(tauri::Builder::default(), configured_window);
+}
+
+/// The startup window as configured, for runtimes without extra window options.
+fn configured_window<'a>(
+    window: tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>,
+) -> tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>> {
+    window
 }
 
 /// The runtime type behind the default `tauri::Builder`: wry everywhere, except
@@ -141,10 +150,20 @@ pub type AppRuntime = tauri::Wry;
 #[cfg(feature = "cef")]
 pub type AppRuntime = tauri::DynRuntime;
 
+/// Applies runtime-specific options to each startup window before it is built.
+pub type ConfigureWindow =
+    for<'a> fn(
+        tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>,
+    ) -> tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>;
+
 /// Runs the app on a builder whose webview runtime is already selected.
-/// `desktop-cef` passes a Chromium builder; every other build calls [`run`].
-pub fn run_with(builder: tauri::Builder<AppRuntime>) {
+/// `desktop-cef` passes a Chromium builder and its window options; every other
+/// build calls [`run`].
+pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: ConfigureWindow) {
     use tracing_subscriber::EnvFilter;
+
+    #[cfg(mobile)]
+    let _ = configure_window;
 
     let diagnostics = diagnostics::Diagnostics::from_launch();
     let recording = diagnostics.is_recording();
@@ -382,6 +401,12 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
             macos_notification_permission::request_macos_notification_permission,
             #[cfg(target_os = "macos")]
             macos_notification_permission::send_macos_notification,
+            #[cfg(feature = "cef")]
+            screen_capture::list_screen_capture_sources,
+            #[cfg(feature = "cef")]
+            screen_capture::request_screen_capture_access,
+            #[cfg(feature = "cef")]
+            screen_capture::allow_screen_capture,
             graphql_cache_plugin::commands::graphql_cache_init,
             graphql_cache_plugin::commands::graphql_cache_init_with_schema,
             graphql_cache_plugin::commands::graphql_cache_current_revision,
@@ -439,9 +464,9 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
             for config in &startup_windows {
                 let navigation = navigation.clone();
                 let handle = app.handle().clone();
-                tauri::WebviewWindowBuilder::from_config(app, config)?
-                    .on_new_window(move |url, _features| navigation.on_new_window(&handle, &url))
-                    .build()?;
+                let window = tauri::WebviewWindowBuilder::from_config(app, config)?
+                    .on_new_window(move |url, _features| navigation.on_new_window(&handle, &url));
+                configure_window(window).build()?;
             }
             #[cfg(desktop)]
             desktop_update::setup(app, recording)?;
