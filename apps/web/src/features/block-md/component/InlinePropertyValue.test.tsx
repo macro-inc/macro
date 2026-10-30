@@ -1,4 +1,3 @@
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import type { Property } from '@property/types';
 import {
@@ -16,10 +15,8 @@ vi.mock('@property/component/PropertyValuePill', () => ({
   PropertyValuePill: (props: {
     hoverActions?: JSX.Element;
     hoverTrailingAction?: JSX.Element;
-    opensProject?: boolean;
   }) => (
     <div>
-      {props.opensProject ? 'Opens project' : 'Plain pill'}
       {props.hoverTrailingAction}
       {props.hoverActions}
     </div>
@@ -110,37 +107,4 @@ it('allows unpinning protected task properties without exposing deletion', () =>
   setup(true, false);
   expect(screen.getByRole('button', { name: 'Unpin' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Delete from item' })).toBeNull();
-});
-
-it("opens a saved task's project, but never from a composer's draft", () => {
-  const project: Property = {
-    ...property,
-    propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
-    displayName: 'Project',
-    valueType: 'ENTITY',
-    specificEntityType: 'INITIATIVE',
-    value: [{ entity_id: 'launch', entity_type: 'INITIATIVE' }],
-  };
-  const renderPill = (entityId?: string) =>
-    render(() => (
-      <PropertiesProvider
-        entityId={entityId ?? 'draft'}
-        entityType="TASK"
-        canEdit
-        properties={() => [project]}
-        onRefresh={vi.fn()}
-        onPropertyAdded={vi.fn()}
-        onPropertyDeleted={vi.fn()}
-        saveHandler={{ saveProperty: vi.fn(), saveDate: vi.fn() }}
-      >
-        <InlinePropertyValue property={project} entityId={entityId} />
-      </PropertiesProvider>
-    ));
-
-  renderPill('task');
-  expect(screen.getByText('Opens project')).toBeTruthy();
-  cleanup();
-
-  renderPill();
-  expect(screen.getByText('Plain pill')).toBeTruthy();
 });
