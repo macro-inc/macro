@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { formatDate } from '@core/util/date';
 import { useSessionAutoArchiveQuery } from '@queries/agent-session/auto-archive';
 import type { AutoArchiveReason } from '@service-agent-harness/generated/schemas';
@@ -8,13 +9,11 @@ import { changeSessionArchiveState } from '../queries/change-session-archive-sta
 
 const autoArchiveTitle = (reason: AutoArchiveReason) =>
   match(reason)
-    .with(
-      'pull_request_merged',
-      () => 'Archived automatically when its pull requests merged'
+    .with('pull_request_merged', () =>
+      t('agentAutoArchive.archivedWhenPullRequestsMerged')
     )
-    .with(
-      'runtime_closed',
-      () => 'Archived automatically when its machine session closed'
+    .with('runtime_closed', () =>
+      t('agentAutoArchive.archivedWhenSessionClosed')
     )
     .exhaustive();
 
@@ -43,7 +42,9 @@ export function ArchivedSessionFooter(props: { sessionId: string }) {
         <Show
           when={automatic()}
           fallback={
-            <p class="text-sm font-medium text-ink">This session is archived</p>
+            <p class="text-sm font-medium text-ink">
+              {t('agentAutoArchive.archived')}
+            </p>
           }
         >
           {(archived) => (
@@ -59,7 +60,7 @@ export function ArchivedSessionFooter(props: { sessionId: string }) {
           )}
         </Show>
         <p class="text-xs text-ink-muted">
-          Unarchive it to rename the session or send messages.
+          {t('agentAutoArchive.unarchiveToContinue')}
         </p>
       </div>
       <Button
@@ -68,7 +69,9 @@ export function ArchivedSessionFooter(props: { sessionId: string }) {
         disabled={pending()}
         onClick={unarchive}
       >
-        {pending() ? 'Unarchiving…' : 'Unarchive'}
+        {pending()
+          ? t('agentAutoArchive.unarchiving')
+          : t('entityActions.unarchive')}
       </Button>
     </div>
   );

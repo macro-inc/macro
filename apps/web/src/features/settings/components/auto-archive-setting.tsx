@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -21,7 +22,7 @@ export function AutoArchiveSetting() {
     try {
       await setPreferences.mutateAsync({ ...current, [preference]: enabled });
     } catch {
-      toast.failure('Could not update auto-archive');
+      toast.failure(t('entityActions.toastAutoArchiveFailed'));
     }
   };
 
@@ -50,19 +51,19 @@ export function AutoArchiveSetting() {
 
   return (
     <SettingsSection
-      title="Auto-archive"
-      description="A session you unarchive is never archived automatically again."
+      title={t('agentAutoArchive.title')}
+      description={t('agentAutoArchive.description')}
     >
       <SettingsCard>
         <PreferenceRow
           preference="onPullRequestMerged"
-          label="When its pull requests merge"
-          description="Once every linked pull request is closed and at least one merged"
+          label={t('agentAutoArchive.pullRequestsMerge')}
+          description={t('agentAutoArchive.pullRequestsMergeDescription')}
         />
         <PreferenceRow
           preference="onRuntimeClosed"
-          label="When its machine session closes"
-          description="Once the session running it is closed on purpose, like closing its Herdr tab"
+          label={t('agentAutoArchive.sessionCloses')}
+          description={t('agentAutoArchive.sessionClosesDescription')}
         />
       </SettingsCard>
     </SettingsSection>

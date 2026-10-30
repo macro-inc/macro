@@ -30,8 +30,8 @@ mod test;
     strum::EnumString,
     serde::Serialize,
     serde::Deserialize,
-    utoipa::ToSchema,
 )]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum AutoArchiveReason {
