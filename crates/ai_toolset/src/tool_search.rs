@@ -62,8 +62,8 @@ impl std::fmt::Debug for ToolLoader {
     }
 }
 
-/// A catalog tool as [`SEARCH_TOOLS`] and [`LOAD_TOOLS`] report it: just
-/// enough for the model to decide how to call it.
+/// A tool surfaced by [`SearchTools`] / [`LoadTools`] — just enough for the
+/// model to decide how to call it.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct ToolMatch {
     /// The exact name to call the tool by.
@@ -82,9 +82,9 @@ impl ToolMatch {
     }
 }
 
-/// Response from [`SEARCH_TOOLS`]: ranked matches, split into the top matches
+/// Response from [`SearchTools`]: ranked matches, split into the top matches
 /// (auto-loaded, callable on the next model turn) and the remainder (loadable
-/// via [`LOAD_TOOLS`]).
+/// via [`LoadTools`]).
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct SearchToolsResponse {
     /// Top matches, ranked by relevance. These are loaded: call them by exact
@@ -95,8 +95,8 @@ pub struct SearchToolsResponse {
     pub additional_matches: Vec<ToolMatch>,
 }
 
-/// Response from [`LOAD_TOOLS`]: which requested tools were loaded, and any
-/// names that weren't found.
+/// Response from [`LoadTools`]: which requested tools were loaded, and any names
+/// that weren't found.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 pub struct LoadToolsResponse {
     /// Tools that are now loaded and callable by name.
