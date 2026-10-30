@@ -35,7 +35,7 @@ const TOAST_STYLES: Record<
     iconClass: 'text-warning',
   },
   [ToastType.LOADING]: {
-    icon: (props) => <Spinner {...props} size="sm" decorative />,
+    icon: (props) => <Spinner {...props} size="md" decorative />,
     iconClass: 'text-accent',
   },
 };
@@ -279,7 +279,6 @@ export function ToastContent(props: {
     !props.embed && !hasBody() && (!hasActions() || inlineActions());
   const showDismiss = () => props.showCloseButton !== false;
   const showCloseButton = () => showDismiss() && !hasActions();
-  const loading = () => !props.custom && props.toastType === ToastType.LOADING;
   const [height, setHeight] = createSignal<number>();
   let surface!: HTMLDivElement;
 
@@ -338,9 +337,7 @@ export function ToastContent(props: {
                     >
                       <Dynamic
                         component={Icon()}
-                        class={
-                          props.custom || loading() ? 'size-4' : 'size-5'
-                        }
+                        class={props.custom ? 'size-4' : 'size-5'}
                       />
                     </span>
                   )}

@@ -238,7 +238,7 @@ function AsyncDemo() {
       onDismiss: () => cancel?.(),
       custom: {
         title: 'Downloading archive',
-        icon: (props) => <Spinner {...props} size="sm" decorative />,
+        icon: () => <Spinner size="md" decorative />,
         color: 'var(--color-accent)',
         content: () => (
           <div class="flex flex-col gap-2">
