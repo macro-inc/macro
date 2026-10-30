@@ -4,34 +4,41 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { enableReminders } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArchiveIcon from '@phosphor/archive.svg';
-import BellIcon from '@phosphor/bell-simple.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FileIcon from '@phosphor/file.svg';
-import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
-import StarIcon from '@phosphor/star.svg';
-import TrayIcon from '@phosphor/tray.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
-import SignalIcon from '@phosphor/wave-sine.svg';
-import NoiseIcon from '@phosphor/waveform.svg';
+import ArchiveIcon from '@icon/system/regular/archive.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import FocusIcon from '@icon/system/regular/crosshair.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import TrayIcon from '@icon/system/regular/tray.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
+import SignalIcon from '@icon/system/regular/wave-sine.svg';
+import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
-import { pressHandlers } from '@ui';
+import { Badge, pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
-import { EMAIL_TAB_IDS, EMAIL_TAB_LABELS, EMAIL_TABS } from '../constants';
+import {
+  EMAIL_FOCUS_TAB,
+  EMAIL_INBOX_TAB_IDS,
+  EMAIL_TAB_IDS,
+  EMAIL_TAB_LABELS,
+  EMAIL_TABS,
+  isEmailInboxTab,
+} from '../constants';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_TOUR } from '../tour';
 import type { EmailTab } from '../types';
+import { useVisibleEmailTab } from '../use-visible-email-tab';
 import { EmailInboxList } from './EmailInboxSelector';
 
 // Email is personal, so the sidebar lists only the user's own tags.
@@ -66,9 +73,15 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   shared: UsersThreeIcon,
   archived: ArchiveIcon,
   all: EnvelopeIcon,
+  focus: FocusIcon,
 };
 
-function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
+function Tab(props: {
+  id: EmailTab;
+  label?: string;
+  badge?: string;
+  onNavigate?: () => void;
+}) {
   const { state, setTab } = useEmailView();
 
   return (
@@ -83,22 +96,32 @@ function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
         <Dynamic component={TAB_ICONS[props.id]} class="size-4" />
       </ViewSidebar.Icon>
       <span class="truncate">{props.label ?? EMAIL_TAB_LABELS[props.id]}</span>
+      <Show when={props.badge}>
+        {(badge) => (
+          <Badge variant="outline" size="xs" class="ml-auto">
+            {badge()}
+          </Badge>
+        )}
+      </Show>
     </ViewSidebar.Item>
   );
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
   const { state, setTab } = useEmailView();
-  const reminders = useFeatureFlag(enableReminders);
-  const showTab = (id: EmailTab) =>
-    id !== 'reminders' ||
-    reminders().enabled ||
-    (reminders().loading && state.tab === 'reminders');
+  const isVisible = useVisibleEmailTab();
   return (
     <Show
       when={!isTouchDevice()}
       fallback={
         <ViewSidebar.Nav aria-label="Email tabs">
+          <Show when={isVisible('focus')}>
+            <Tab
+              id="focus"
+              badge={EMAIL_FOCUS_TAB.badge}
+              onNavigate={props.onNavigate}
+            />
+          </Show>
           <div
             ref={tourTarget(EMAIL_TOUR.signalNoise)}
             class="flex flex-col gap-(--sidebar-row-gap)"
@@ -107,7 +130,11 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
               {(item) => <Tab id={item.id} onNavigate={props.onNavigate} />}
             </For>
           </div>
-          <For each={EMAIL_TABS.slice(2).filter((tab) => showTab(tab.id))}>
+          <For
+            each={EMAIL_TABS.slice(2).filter(
+              (tab) => tab.id !== 'focus' && isVisible(tab.id)
+            )}
+          >
             {(item) => <Tab id={item.id} onNavigate={props.onNavigate} />}
           </For>
         </ViewSidebar.Nav>
@@ -116,9 +143,10 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
       <ViewSidebar.Nav aria-label="Email tabs">
         <ViewSidebar.Item
           ref={tourTarget(EMAIL_TOUR.inbox)}
-          active={state.tab === 'important' || state.tab === 'noise'}
+          active={isEmailInboxTab(state.tab)}
           {...pressHandlers(() => {
-            setTab(state.tab === 'noise' ? 'noise' : 'important');
+            // Reopen the Inbox view that was last open: Focus, Signal or Noise.
+            setTab(isEmailInboxTab(state.tab) ? state.tab : 'important');
             props.onNavigate?.();
           })}
         >
@@ -127,7 +155,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
           </ViewSidebar.Icon>
           <span class="truncate">Inbox</span>
         </ViewSidebar.Item>
-        <For each={PRIMARY_TAB_IDS.filter(showTab)}>
+        <For each={PRIMARY_TAB_IDS.filter(isVisible)}>
           {(id) => <Tab id={id} onNavigate={props.onNavigate} />}
         </For>
       </ViewSidebar.Nav>
@@ -155,7 +183,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
 }
 
 export function EmailSidebar() {
-  const reminders = useFeatureFlag(enableReminders);
+  const isVisible = useVisibleEmailTab();
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
   const {
@@ -167,18 +195,18 @@ export function EmailSidebar() {
     setSidebarSectionOpen,
   } = useEmailView();
 
+  const tabIds = () =>
+    (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(isVisible);
+
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
-    ids: () =>
-      (isTouchDevice() ? EMAIL_TAB_IDS : DESKTOP_TAB_IDS).filter(
-        (id) =>
-          id !== 'reminders' ||
-          reminders().enabled ||
-          (reminders().loading && state.tab === 'reminders')
-      ),
-    activeId: () =>
-      !isTouchDevice() && state.tab === 'noise' ? 'important' : state.tab,
+    ids: tabIds,
+    // Desktop groups the Inbox views under Inbox, so Tab moves between its
+    // header tabs instead of walking the sidebar.
+    sequentialIds: () =>
+      isTouchDevice() ? tabIds() : EMAIL_INBOX_TAB_IDS.filter(isVisible),
+    activeId: () => state.tab,
     setActiveId: setTab,
     shouldHandleSequentialKeyEvent: (event) =>
       !(

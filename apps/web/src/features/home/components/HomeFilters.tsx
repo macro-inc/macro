@@ -6,8 +6,8 @@ import {
 } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
 import { Accordion } from '@kobalte/core/accordion';
-import FilterIcon from '@phosphor/funnel-simple.svg';
 import { Dropdown } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
@@ -73,10 +73,21 @@ const FILTER_ICONS = new Map<string, () => JSX.Element>([
     ),
   ],
   [
-    'projects',
+    'folders',
     () => (
       <EntityIcon
         targetType="project"
+        size="xs"
+        theme="monochrome"
+        class="text-ink-muted"
+      />
+    ),
+  ],
+  [
+    'initiatives',
+    () => (
+      <EntityIcon
+        targetType="initiative"
         size="xs"
         theme="monochrome"
         class="text-ink-muted"
@@ -167,6 +178,7 @@ function useHomeFilters() {
           TYPE_IDS.length
         : (state.facets[groupId]?.length ?? 0) > 0,
     isSelected,
+    selectedIds: (groupId: string) => state.facets[groupId] ?? [],
     setSelected,
   };
 }
@@ -212,24 +224,25 @@ export function HomeFilterDropdown() {
   });
 
   return (
-    <div class="relative ml-auto shrink-0">
+    <div class="relative shrink-0">
       <ListFilterDropdown
         label="Filter Home"
         customTrigger={
           <Dropdown.Trigger
+            aria-label="Filter Home"
+            tooltip="Filter Home"
             ref={tourTarget(HOME_TOUR.filter)}
             variant="ghost"
-            size="sm"
-            square
-            label="Filter Home"
+            size="icon-xs"
           >
-            <FilterIcon />
+            <FilterIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
         }
         groups={HOME_FILTER_GROUPS}
         open={open()}
         onOpenChange={setOpen}
         isSelected={filters.isSelected}
+        selectedIds={filters.selectedIds}
         isGroupActive={filters.isGroupActive}
         onSelectionChange={filters.setSelected}
         onClear={filters.clear}

@@ -7,13 +7,15 @@ export type MentionBucketId =
   | 'all'
   | 'users'
   | 'documents'
+  | 'externalChats'
   | 'agentSessions'
   | 'channels'
   | 'companies'
   | 'emails'
   | 'dates'
   | 'openTabs'
-  | 'bookingLinks';
+  | 'bookingLinks'
+  | 'calendarEvents';
 
 export interface BucketConfig<T extends MentionItem = MentionItem> {
   id: MentionBucketId;

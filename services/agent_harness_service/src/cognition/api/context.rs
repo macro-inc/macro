@@ -116,17 +116,15 @@ pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
     DcsAuthorizationService,
 >;
 
-/// The import pipeline service, shared between the import router, the chat
-/// toolset, and the onboarding flow.
+/// The import pipeline service, shared between the import router and the
+/// chat toolset.
 pub type DcsImportService = ai_tools::ToolImportService;
 
-/// The onboarding orchestrator wired to the Postgres repo, the MCP server
-/// store, and the import service.
+/// The onboarding orchestrator wired to the Postgres repo and the MCP server
+/// store.
 pub type DcsOnboardingService = onboarding::domain::service::OnboardingServiceImpl<
     onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
     mcp_client::outbound::pg_server_repo::PgServerRepo,
-    DcsImportService,
-    ai_tools::ToolMcpSelector,
 >;
 
 /// Concrete Pipedream MCP router state for DCS: the Postgres connection

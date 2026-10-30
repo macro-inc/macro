@@ -48,7 +48,7 @@ fn explicit_provider_refusal_is_safe_to_restore() {
         },
         EmailApiError::RateLimited {
             retry_after: None,
-            origin: RateLimitOrigin::Provider,
+            origin: RateLimitOrigin::Provider { concurrency: false },
         },
     ] {
         assert!(matches!(

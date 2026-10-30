@@ -3,9 +3,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
+import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,
@@ -17,14 +17,14 @@ import {
 } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
-import { Button, confirmDialog, Dialog, Panel } from '@ui';
+import { ApiKeyInput, Button, confirmDialog, Dialog, Panel } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
 import {
   CURSOR_KEY_FORMAT_ERROR,
-  CURSOR_KEY_PLACEHOLDER,
+  CURSOR_KEY_PREFIX,
   isCursorApiKey,
 } from './core/cursor-api-key';
 import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
@@ -134,11 +134,11 @@ export function Harness(
           backLabel={props.backLabel ?? 'Agents'}
           actions={
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               onClick={() => setPairingDialog({})}
             >
-              <PlusIcon />
+              <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               New runtime
             </Button>
           }
@@ -212,31 +212,24 @@ export function Harness(
                             API key
                           </label>
                           <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
-                            <input
+                            <ApiKeyInput
                               id="cursor-harness-api-key"
-                              type="password"
-                              autocomplete="off"
-                              spellcheck={false}
-                              class="settings-input ph-no-capture min-w-0 flex-1"
-                              placeholder={CURSOR_KEY_PLACEHOLDER}
+                              class="flex-1"
+                              size="sm"
+                              prefix={CURSOR_KEY_PREFIX}
                               value={cursorApiKey()}
-                              onInput={(event) =>
-                                setCursorApiKey(event.currentTarget.value)
+                              onValueChange={setCursorApiKey}
+                              onSubmit={() =>
+                                fireAndForget(
+                                  handleSaveCursorApiKey(),
+                                  'cursor-connect'
+                                )
                               }
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter') {
-                                  fireAndForget(
-                                    handleSaveCursorApiKey(),
-                                    'cursor-connect'
-                                  );
-                                }
-                              }}
                             />
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
-                              depth={3}
                               disabled={
                                 cursorApiKey().trim().length === 0 ||
                                 saveCursorApiKey.isPending
@@ -276,7 +269,6 @@ export function Harness(
                           type="button"
                           variant="danger"
                           size="sm"
-                          depth={3}
                           class="shrink-0"
                           disabled={disconnectCursor.isPending}
                           onClick={handleDisconnectCursor}
@@ -419,7 +411,7 @@ function HarnessRemoveDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="strong"
+            variant="secondary"
             size="sm"
             disabled={props.pending}
             onClick={props.onConfirm}

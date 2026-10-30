@@ -22,10 +22,10 @@ import { deviceLooksOffline } from '@core/util/connectivity';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { handleFileFolderDrop } from '@core/util/upload';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
+import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
-import ExclamationIcon from '@phosphor-icons/core/regular/exclamation-mark.svg?component-solid';
 import { queryClient } from '@queries/client';
 import {
   completeDraftAttachment,
@@ -65,6 +65,7 @@ import {
 import { confirmLocalDraftSave } from '@queries/email/local-draft-confirmation';
 import {
   clearLocalAttachmentReceipt,
+  forgetLocalDraft,
   readLocalDraft,
   recordLocalAttachment,
   reviveLocalDraft,
@@ -357,6 +358,7 @@ export function createEmailComposeContext(
       get retryDraft() {
         return queueActive() ? retryEmailDraftSynchronization : undefined;
       },
+      forgetLocalDraft: (draftId) => forgetLocalDraft(draftId),
       readDraft: readEmailDraft,
       watchDrafts: watchEmailDrafts,
       async saveDraft({

@@ -2,17 +2,20 @@
  * @vitest-environment jsdom
  */
 
+import { FakeToaster } from '@core/component/Toast/tests/fake-toast';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FullScreenCallPrompt } from '../FullScreenCallPrompt';
-import { FakeToaster } from './fake-toast';
 
 const native = vi.hoisted(() => ({
   allowed: false as boolean | 'unavailable',
   invoke: vi.fn(),
 }));
 
-vi.mock('@core/component/Toast/Toast', () => import('./fake-toast'));
+vi.mock(
+  '@core/component/Toast/Toast',
+  () => import('@core/component/Toast/tests/fake-toast')
+);
 vi.mock('@core/util/platform', () => ({
   isPlatform: (platform: string) => platform === 'android',
 }));

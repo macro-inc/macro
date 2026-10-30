@@ -1,4 +1,4 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { ViewSwitcherContext } from '@app/components/view-shell';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
@@ -23,6 +23,7 @@ import {
   isAddInboxDialogOpen,
 } from '@app/features/inbox/AddInboxDialog';
 import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
+import { onboardingRedirectPath } from '@app/features/onboarding/core/next-target';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
@@ -33,6 +34,8 @@ import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
 import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
+import { SidebarPrefsProvider } from '@components/app/sidebar-next/use-sidebar-prefs';
+import { ViewSwitcher } from '@components/app/sidebar-next/view-switcher';
 import {
   isSidebarVisible,
   SidebarVisibilityContext,
@@ -49,7 +52,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { hasLoginCookie, updateCookie } from '@core/util/cookies';
 import { lazyNamed } from '@core/util/lazyNamed';
-import { isPlatform } from '@core/util/platform';
+import { isDesktopPlatform, isPlatform } from '@core/util/platform';
 import { useDesktopZoom } from '@macro/tauri/zoom';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
@@ -66,6 +69,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { installIconMotion } from '../icon/system/icon-motion';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -91,6 +95,10 @@ const StarterDatabase = lazy(async () => {
 const Paywall = lazyNamed(
   () => import('@app/features/paywall/Paywall'),
   'Paywall'
+);
+const LocalRuntimeHost = lazyNamed(
+  () => import('@app/features/local-runtime/local-runtime-host'),
+  'LocalRuntimeHost'
 );
 const PropertyEditorModal = lazyNamed(
   () => import('@app/features/property/editor/PropertyEditorModal'),
@@ -151,6 +159,7 @@ export function RootFrame(props: ParentProps) {
 
   onMount(() => {
     onCleanup(installGlassPress());
+    onCleanup(installIconMotion());
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -218,19 +227,12 @@ function useNewOnboardingRedirect() {
     if (data?.authenticated !== true || data.tutorialComplete !== false) {
       return;
     }
-    // Preserve the deep link the user arrived on (a shared doc, an invite):
-    // onboarding carries it as ?next and its finish() returns there instead of
-    // the post-setup landing. Base-relative so navigate() can resolve it
-    // against the router.
+    // Preserve the deep link the user arrived on (a shared doc, an invite)
+    // as ?next, and a lifecycle-email ?step, so finish() and the flow can
+    // resume. Base-relative so navigate() can resolve it against the router.
     const target =
       location.pathname.slice(ROUTER_BASE_CONCAT.length - 1) + location.search;
-    const isGenericEntry = target === '/' || target.startsWith(DEFAULT_ROUTE);
-    navigate(
-      isGenericEntry
-        ? '/onboarding'
-        : `/onboarding?next=${encodeURIComponent(target)}`,
-      { replace: true }
-    );
+    navigate(onboardingRedirectPath(target), { replace: true });
   });
 }
 
@@ -283,6 +285,9 @@ export function AppChrome(props: ParentProps) {
             <PropertyEditorModal />
           </Suspense>
           <GlobalBulkEditEntityModal />
+          <Show when={isDesktopPlatform()}>
+            <LocalRuntimeHost />
+          </Show>
           <NativeShareSheet />
           <MacroMcpSetupModal />
           <CreateChannelModal />
@@ -308,14 +313,19 @@ export function AppChrome(props: ParentProps) {
       </Suspense>
       <div class="min-h-0 flex-1 flex">
         <ItemDndProvider>
-          <Show when={isSidebarVisible()}>
-            <SidebarRail />
-          </Show>
-          <PageContent>
-            {/* Route loading must not detach the chrome or mobile navigation;
-                  the route draws its own loading state. */}
-            <Suspense>{props.children}</Suspense>
-          </PageContent>
+          {/* The rail and each view's switcher share the rail preferences. */}
+          <SidebarPrefsProvider>
+            <ViewSwitcherContext.Provider value={ViewSwitcher}>
+              <Show when={isSidebarVisible()}>
+                <SidebarRail />
+              </Show>
+              <PageContent>
+                {/* Route loading must not detach the chrome or mobile
+                    navigation; the route draws its own loading state. */}
+                <Suspense>{props.children}</Suspense>
+              </PageContent>
+            </ViewSwitcherContext.Provider>
+          </SidebarPrefsProvider>
         </ItemDndProvider>
       </div>
       <Show when={isTouchDevice() && isAuthenticated()}>

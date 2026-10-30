@@ -18,7 +18,8 @@ const tabTypes: Record<HomeTab, ReadonlySet<HomeTypeFilter>> = {
     'email',
     'channels',
     'agents',
-    'projects',
+    'folders',
+    'initiatives',
     'github',
     'calendar',
   ]),
@@ -130,12 +131,12 @@ export function buildHomeSearchRequest(
     }
 
     filters.channel_filters = channelFilters;
-  }
 
-  if (types.has('channels')) {
-    filters.channel_thread_filters = {
-      participant_ids: [context.userId ?? NIL_UUID],
-    };
+    if (context.userId) {
+      filters.channel_thread_filters = {
+        participant_ids: [context.userId],
+      };
+    }
   }
 
   if (documentTypes.length > 0) {
@@ -187,7 +188,7 @@ export function buildHomeSearchRequest(
     filters.foreign_entity_filters = foreignEntityFilters;
   }
 
-  if (types.has('projects')) {
+  if (types.has('folders')) {
     const projectFilters: NonNullable<EntityFilters['project_filters']> = {};
 
     if (hasNotificationFilter) {
@@ -195,6 +196,17 @@ export function buildHomeSearchRequest(
     }
 
     filters.project_filters = projectFilters;
+  }
+
+  if (types.has('initiatives')) {
+    const initiativeFilters: NonNullable<EntityFilters['initiative_filters']> =
+      { include: true };
+
+    if (hasNotificationFilter) {
+      initiativeFilters.notification_filters = notificationFilters;
+    }
+
+    filters.initiative_filters = initiativeFilters;
   }
 
   return {

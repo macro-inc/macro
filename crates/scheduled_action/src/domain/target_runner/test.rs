@@ -1,4 +1,5 @@
 use super::*;
+use agent_session::domain::model::SessionVisibility;
 use agent_session::domain::routines::{
     PreparedRoutineSession, RoutineFailureReason, RoutinePendingReason, RoutinePromptAccepted,
     ValidatedRoutineSession,
@@ -17,7 +18,9 @@ use crate::domain::{
         EventAccessCapability, EventExecutor, EventRunOutcome, PendingEventRun,
     },
     execution::InProcessExecutor,
-    models::{ActionExecutionRecord, ActionKind, ExecutionResult, ScheduledActionUpdate},
+    models::{
+        ActionExecutionRecord, ActionKind, ExecutionResult, RunVisibility, ScheduledActionUpdate,
+    },
     ports::{ScheduledActionLiveUpdate, ScheduledActionRepo},
 };
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel, ViewOnly};
@@ -213,6 +216,8 @@ fn action() -> ScheduledAction {
         event_activated_at: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
+        run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 
@@ -292,6 +297,7 @@ async fn model_targets_use_macro_sessions_with_the_selected_model_and_event_cont
         });
         let mut action = action();
         action.task.as_object_mut().unwrap().remove("agent");
+        action.run_visibility = RunVisibility::Listed;
         let mut handle = ExecutionHandle::default();
         runner.prepare(&action, &mut handle).await.unwrap();
         let firing = match &event {
@@ -313,6 +319,10 @@ async fn model_targets_use_macro_sessions_with_the_selected_model_and_event_cont
             action.owner_user().unwrap()
         );
         assert_eq!(preparations[0].session_id.as_uuid(), handle.session_id);
+        // The session records that a routine started it, and is listed the
+        // way the routine says.
+        assert_eq!(preparations[0].source, SessionSource::Routine);
+        assert_eq!(preparations[0].visibility, SessionVisibility::Listed);
 
         let prompts = runner.sessions.prompts.lock().unwrap();
         assert_eq!(prompts.len(), 1);
@@ -872,6 +882,8 @@ async fn a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedul
         event_activated_at: None,
         created_at: scheduled_for,
         updated_at: scheduled_for,
+        run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
@@ -978,6 +990,8 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
         event_activated_at: Some(at),
         created_at: at,
         updated_at: at,
+        run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let event: EventReference = serde_json::from_value(json!({
         "event_id": "01928f3e-6a2b-7c3d-8e4f-0123456789cd",
@@ -1085,6 +1099,8 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
         event_activated_at: Some(requested_at),
         created_at: requested_at,
         updated_at: requested_at,
+        run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     };
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
@@ -1118,4 +1134,37 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
             firing: RoutineFiring::Manual { requested_at },
         }))
     );
+}
+
+#[tokio::test]
+async fn preparation_carries_the_routine_apps_and_fails_when_one_is_disconnected() {
+    let connected = runner(Sessions::default());
+    let mut action = action();
+    action.task["mcp_servers"] = json!([{"app_slug": "linear", "server_name": "Linear"}]);
+    let mut handle = ExecutionHandle::default();
+    connected.prepare(&action, &mut handle).await.unwrap();
+    assert_eq!(
+        connected.sessions.preparations.lock().unwrap()[0]
+            .selection
+            .mcp_servers,
+        vec![bots::domain::models::AgentMcpServer {
+            app_slug: "linear".into(),
+            server_name: "Linear".into(),
+        }]
+    );
+
+    let disconnected = runner(Sessions {
+        prepare_error: Some(RoutineSessionError::AppNotConnected),
+        ..Default::default()
+    });
+    let mut handle = ExecutionHandle::default();
+    let error = disconnected
+        .prepare(&action, &mut handle)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&RoutineSessionError::AppNotConnected)
+    );
+    assert!(handle.resource.is_none());
 }

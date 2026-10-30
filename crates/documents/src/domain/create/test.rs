@@ -7,14 +7,15 @@ use model_owner::CreationPrincipal;
 
 use super::{
     DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
-    NewPlainTextDocument, RepoDocumentKind, RepoDocumentSubtype, file_shas,
+    NewNotionDocument, NewPlainTextDocument, RepoDocumentKind, RepoDocumentSubtype, file_shas,
 };
 use crate::domain::content::DocumentContent;
 use crate::domain::models::{CreateTaskRequest, DocumentError, InitialLinkShare, NewDocument};
+use crate::domain::notion_markdown::NotionMarkdown;
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
-use crate::domain::ports::markdown::MarkdownInitializationPort;
+use crate::domain::ports::markdown::{MarkdownInitializationPort, MarkdownSnapshot};
 use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
@@ -84,6 +85,16 @@ impl DocumentCreationService for FakeCreationService {
         })
     }
 
+    async fn initialize_canvas(&self, _document_id: &str) -> Result<(), DocumentError> {
+        self.lifecycle.lock().unwrap().push("canvas_ready");
+        if self.fail_content_update {
+            return Err(DocumentError::Internal(anyhow::anyhow!(
+                "Canvas initialization failed"
+            )));
+        }
+        Ok(())
+    }
+
     async fn handle_task_properties(
         &self,
         principal: &CreationPrincipal,
@@ -128,6 +139,17 @@ impl MarkdownInitializationPort for FakeMarkdownInitializer {
     ) -> Result<Vec<u8>, DocumentError> {
         Ok(vec![1, 2, 3])
     }
+
+    async fn initialize_existing_notion(
+        &self,
+        _document_id: &str,
+        notion: &NotionMarkdown,
+    ) -> Result<MarkdownSnapshot, DocumentError> {
+        Ok(MarkdownSnapshot {
+            snapshot: vec![4, 5, 6],
+            markdown: format!("converted: {}", notion.markdown),
+        })
+    }
 }
 
 struct RecordingMarkdownInitializer {
@@ -148,6 +170,14 @@ impl MarkdownInitializationPort for RecordingMarkdownInitializer {
             )));
         }
         Ok(vec![1, 2, 3])
+    }
+
+    async fn initialize_existing_notion(
+        &self,
+        _document_id: &str,
+        _notion: &NotionMarkdown,
+    ) -> Result<MarkdownSnapshot, DocumentError> {
+        panic!("unexpected initialize_existing_notion call")
     }
 }
 
@@ -320,6 +350,38 @@ async fn markdown_creation_tracks_the_seeded_mentions_once() {
             DOCUMENT_ID.to_string(),
             Some("macro|owner@example.com".to_string()),
             EMAIL_SEED.to_string(),
+        )]
+    );
+}
+
+#[tokio::test]
+async fn notion_creation_tracks_the_mentions_of_the_converted_markdown() {
+    let tracker = RecordingMentionTracker::default();
+
+    let created = creator(&tracker)
+        .create_notion_markdown(
+            &CreationPrincipal::User(owner()),
+            NewNotionDocument {
+                metadata: NewDocumentMetadata::new("Roadmap"),
+                notion: NotionMarkdown {
+                    markdown: "<mention-page url=\"https://www.notion.so/p\">Plan</mention-page>"
+                        .to_string(),
+                    ..NotionMarkdown::default()
+                },
+                subtype: MarkdownSubtype::Note,
+            },
+        )
+        .await
+        .expect("creation should succeed");
+
+    assert_eq!(created.initial_snapshot(), Some([4, 5, 6].as_slice()));
+    assert_eq!(
+        tracker.calls(),
+        vec![(
+            DOCUMENT_ID.to_string(),
+            Some("macro|owner@example.com".to_string()),
+            "converted: <mention-page url=\"https://www.notion.so/p\">Plan</mention-page>"
+                .to_string(),
         )]
     );
 }
@@ -521,5 +583,66 @@ fn test_file_shas() {
     assert_eq!(
         hashes.base64,
         "LPJNul+wow4m6DsqxbninhsWHlwfp0JecwQzYpOLmCQ="
+    );
+}
+
+#[tokio::test]
+async fn native_canvas_creation_finishes_shared_content_without_uploading() {
+    let tracker = RecordingMentionTracker::default();
+    let creator = creator(&tracker);
+    let created = creator
+        .create_plain_text(
+            &CreationPrincipal::User(owner()),
+            NewPlainTextDocument::new(
+                NewDocumentMetadata::new("Canvas"),
+                FileType::Canvas,
+                String::new(),
+                MarkdownSubtype::Note,
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        *creator.document_service.lifecycle.lock().unwrap(),
+        vec!["create", "canvas_ready"]
+    );
+    assert!(created.response().document_response.presigned_url.is_none());
+    assert_eq!(
+        created
+            .response()
+            .document_response
+            .document_metadata
+            .content,
+        crate::domain::content::DocumentContent::ready(
+            crate::domain::content::DocumentContentLocation::SyncService
+        )
+    );
+}
+
+#[tokio::test]
+async fn failed_native_canvas_creation_removes_its_metadata() {
+    let tracker = RecordingMentionTracker::default();
+    let lifecycle = Arc::new(Mutex::new(Vec::new()));
+    let creator = DocumentCreator::new(
+        FakeCreationService {
+            fail_content_update: true,
+            lifecycle: lifecycle.clone(),
+            ..Default::default()
+        },
+        FakeMarkdownInitializer,
+        FakeBytesUploader,
+        &tracker,
+    );
+    let result = creator
+        .create_canvas(
+            &CreationPrincipal::User(owner()),
+            NewDocumentMetadata::new("Canvas"),
+        )
+        .await;
+    assert!(result.is_err());
+    assert_eq!(
+        *lifecycle.lock().unwrap(),
+        vec!["create", "canvas_ready", "cleanup"]
     );
 }

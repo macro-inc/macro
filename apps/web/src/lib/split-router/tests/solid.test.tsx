@@ -36,7 +36,7 @@ import { Router } from '../solid/router';
 import { useBeforeLeave } from '../solid/use-before-leave';
 import { createTestPolicy } from './fixtures';
 
-const counts = { drive: 0, document: 0 };
+const counts = { drive: 0, document: 0, workspace: 0 };
 const documentTypeReads = vi.fn();
 let allowLeave = true;
 
@@ -60,6 +60,17 @@ function DocumentView() {
   return (
     <p data-testid="document">{`${params.documentType}:${params.documentId}`}</p>
   );
+}
+
+function WorkspaceView() {
+  const pane = usePane();
+  const router = useSplitRouter();
+  onMount(() => {
+    counts.workspace += 1;
+  });
+  const item = () =>
+    router.entry(pane())?.location.route.matches.at(-1)?.params.itemId;
+  return <p data-testid="workspace">{`item:${item() ?? 'none'}`}</p>;
 }
 
 function DriveView() {
@@ -160,6 +171,19 @@ const paneRoutes = [
     search: ['probe', 'other'],
     component: ProbeView,
   }),
+  defineRoute({
+    id: 'workspace',
+    path: 'workspace',
+    mountKey: 'workspace',
+    component: WorkspaceView,
+  }),
+  defineRoute({
+    id: 'workspace-item',
+    path: 'workspace/:itemId',
+    params: z.object({ itemId: z.string().min(1) }),
+    mountKey: 'workspace',
+    component: WorkspaceView,
+  }),
   defineRoute({ id: 'home', path: 'home', component: () => <p>home</p> }),
   defineRoute({ id: 'guarded', path: 'guarded', component: GuardedView }),
   defineRoute({
@@ -253,6 +277,7 @@ function renderPanes(
 beforeEach(() => {
   counts.drive = 0;
   counts.document = 0;
+  counts.workspace = 0;
   documentTypeReads.mockClear();
   allowLeave = true;
 
@@ -283,11 +308,26 @@ describe('split router Solid bindings', () => {
 
     await router.navigatePane(pane, '/drive/md/d2');
     expect(screen.getByTestId('document').textContent).toBe('md:d2');
-    expect(counts).toEqual({ drive: 1, document: 1 });
+    expect(counts).toMatchObject({ drive: 1, document: 1 });
     expect(documentTypeReads).toHaveBeenCalledTimes(1);
 
     await router.navigatePane(pane, '/drive/pdf/d2');
-    expect(counts).toEqual({ drive: 1, document: 2 });
+    expect(counts).toMatchObject({ drive: 1, document: 2 });
+  });
+
+  it('keeps one view mounted across routes that share a mount key', async () => {
+    const { router } = renderPanes('/workspace');
+    const pane = router.panes()[0]!;
+
+    await router.navigatePane(pane, '/workspace/a');
+    await router.navigatePane(pane, '/workspace/b');
+    expect(screen.getByTestId('workspace').textContent).toBe('item:b');
+    await router.navigatePane(pane, '/workspace');
+    expect(counts.workspace).toBe(1);
+
+    await router.navigatePane(pane, '/home');
+    await router.navigatePane(pane, '/workspace/a');
+    expect(counts.workspace).toBe(2);
   });
 
   it('lets panel chrome around a prop-less outlet use the hooks', async () => {

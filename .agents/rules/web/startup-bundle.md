@@ -26,6 +26,9 @@ alwaysApply: false
   background, the rail column, and the desktop app's content card — no app
   content. The first shell to mount dismisses it (`dismissBootShell`). Keep its
   rail width and desktop inset in step with `SidebarRail` and `SplitLayout`.
+- Read a supported iOS notification launch intent before mounting the router;
+  keep startup payload validators in the generated compact push-schema entry
+  rather than importing the full service schema bundle.
 - Do not register an asset-caching service worker. Keep `public/sw.js` at its
   deployed URL so existing workers can update, clear their shell and asset
   caches, and unregister; it must not intercept requests.

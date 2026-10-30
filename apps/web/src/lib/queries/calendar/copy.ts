@@ -23,6 +23,17 @@ export function isAlreadyOnCalendar(error: unknown): boolean {
   );
 }
 
+/**
+ * Whether the viewer's request to join the event is pending or accepted, so
+ * the meeting reaches their calendar as an invitation instead of a copy.
+ */
+export function isJoinRequestOpen(error: unknown): boolean {
+  return thrownResultErrorHasCode(
+    error,
+    CalendarMutationErrorCode.join_request_open
+  );
+}
+
 /** Whether Google refused to add the copy to the picked calendar. */
 export function isCopyRefused(error: unknown): boolean {
   return thrownResultErrorHasCode(
@@ -31,8 +42,10 @@ export function isCopyRefused(error: unknown): boolean {
   );
 }
 
-function copyFailureOutcome(error: unknown) {
+/** Span outcome of a failed Add to calendar. */
+export function copyFailureOutcome(error: unknown) {
   if (isAlreadyOnCalendar(error)) return 'already_on_calendar';
+  if (isJoinRequestOpen(error)) return 'join_request_open';
   if (isCopyRefused(error)) return 'copy_refused';
   return 'failed';
 }

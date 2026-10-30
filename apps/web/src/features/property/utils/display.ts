@@ -9,6 +9,7 @@ export const getPropertyDataTypeDropdownOptions = () => [
   { value: 'number' as const, label: 'Input (Number)' },
   { value: 'boolean' as const, label: 'Checkbox' },
   { value: 'date' as const, label: 'Date' },
+  { value: 'date_range' as const, label: 'Time range' },
   { value: 'link' as const, label: 'Link' },
   { value: 'select_string' as const, label: 'Option' },
   { value: 'select_number' as const, label: 'Option (Number)' },
@@ -101,6 +102,8 @@ const _getValueTypeDisplay = (
       return 'Number';
     case 'DATE':
       return 'Date';
+    case 'DATE_RANGE':
+      return 'Time range';
     case 'BOOLEAN':
       return 'Boolean';
     case 'ENTITY':

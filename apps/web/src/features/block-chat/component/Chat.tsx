@@ -41,11 +41,13 @@ import {
   getChatInputStoredState,
   type StoredStuff,
   storeChatState,
+  storeChatStateImmediate,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createMethodRegistration } from '@core/orchestrator';
 import {
   blockElementSignal,
@@ -261,7 +263,15 @@ function ChatInner(props: {
     const inputText = markdownText();
     const attached = input.attachments.attached();
     const model_ = input.model();
-    saveChatState({ attachments: attached, input: inputText, model: model_ });
+    const state = { attachments: attached, input: inputText, model: model_ };
+    // An empty composer is the sent state. Write it now and drop any
+    // debounced copy of the prompt, so a remount cannot put that prompt
+    // back in the box beside the message already in the transcript.
+    if (inputText.length === 0 && attached.length === 0) {
+      storeChatStateImmediate(props.data.chat.id, state);
+      return;
+    }
+    saveChatState(state);
   });
 
   const setPendingLocation = pendingLocationParamsSignal.set;
@@ -375,8 +385,12 @@ function ChatInner(props: {
         <FloatRegionOrInline region="accessory">
           {/* Same wrapper as the home composer, so the box is the same width
               and sits at the same offset whether a chat is being started or
-              continued. */}
-          <div class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
+              continued. Inline on desktop it is the pane's last row, so the
+              corner prompt waits. */}
+          <div
+            class="mx-auto w-full max-w-3xl shrink-0 px-4 pb-3 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0"
+            data-holds-prompts={isTouchDevice() ? undefined : ''}
+          >
             <ChatInput
               editor={editor}
               initialValue={props.loadedInputText}

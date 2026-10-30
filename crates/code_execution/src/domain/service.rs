@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::time::{Instant, sleep_until};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use tracing::Instrument;
 
 /// Domain service owning admission, queueing, deadlines, and shutdown policy.
 #[derive(Clone)]
@@ -69,28 +70,53 @@ impl ExecutionService {
             deadline: Instant::now() + duration,
         };
         let token = cancellation.clone();
-        self.tasks.spawn(async move {
-            let _admitted = admitted;
-            let outcome = match sink.emit(EventKind::Queued) {
-                Err(error) => error.into(),
-                Ok(()) => {
-                    tokio::select! {
-                        biased;
-                        _ = token.cancelled() => Outcome::Cancelled,
-                        _ = sink.closed() => Outcome::Cancelled,
-                        _ = sleep_until(job.deadline) => Outcome::TimedOut,
-                        permit = service.running.acquire() => {
-                            let _permit = permit.expect("execution semaphore is never closed");
-                            match sink.emit(EventKind::Started) {
-                                Err(error) => error.into(),
-                                Ok(()) => service.runner.run(job, &mut sink, token).await,
+        let span = tracing::info_span!(
+            "code_execution.run",
+            run_id = %run_id.0,
+            outcome = tracing::field::Empty,
+        );
+        self.tasks.spawn(
+            async move {
+                let _admitted = admitted;
+                let queued = tracing::info_span!("code_execution.queue");
+                let outcome = match sink.emit(EventKind::Queued) {
+                    Err(error) => error.into(),
+                    Ok(()) => {
+                        tokio::select! {
+                            biased;
+                            _ = token.cancelled() => Outcome::Cancelled,
+                            _ = sink.closed() => Outcome::Cancelled,
+                            _ = sleep_until(job.deadline) => Outcome::TimedOut,
+                            permit = service.running.acquire().instrument(queued) => {
+                                let _permit = permit.expect("execution semaphore is never closed");
+                                match sink.emit(EventKind::Started) {
+                                    Err(error) => error.into(),
+                                    Ok(()) => {
+                                        service
+                                            .runner
+                                            .run(job, &mut sink, token)
+                                            .instrument(tracing::info_span!(
+                                                "code_execution.process",
+                                                result_summarized_from_bytes = tracing::field::Empty,
+                                            ))
+                                            .await
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            };
-            sink.finish(outcome);
-        });
+                };
+                let label = match &outcome {
+                    Outcome::Succeeded { .. } => "succeeded",
+                    Outcome::Failed { .. } => "failed",
+                    Outcome::Cancelled => "cancelled",
+                    Outcome::TimedOut => "timed_out",
+                };
+                tracing::Span::current().record("outcome", label);
+                sink.finish(outcome);
+            }
+            .instrument(span.or_current()),
+        );
         Ok(ExecutionHandle {
             run_id,
             events,

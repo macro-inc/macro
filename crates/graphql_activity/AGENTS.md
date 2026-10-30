@@ -15,6 +15,10 @@ DataLoader) — plus database/form timelines and a realtime subscription.
 - `src/loaders.rs`: `EntityActivityLoader` — the batched per-entity edge;
   touch this when activity needs to appear on a new Soup entity type.
 - `src/feed.rs` / `src/overview.rs`: the viewer feed and yearly aggregate.
+  The feed's `scope` input picks the viewer's own activity (`MINE`) or their
+  teammates' (`TEAM`). `TEAM` rows are filtered to entities shared with the
+  viewer in storage (`activity`'s `teammate_feed`); its pages can come up
+  short, or empty, with a cursor, and clients keep paging.
 - `src/timeline.rs`: by-id, access-checked timelines for databases/forms
   (not Soup items, so not loader-batched).
 - `src/subscriptions.rs`: the realtime `activityUpdates` subscription.

@@ -5,7 +5,7 @@ beforeEach(() => {
   document.head.innerHTML = '';
 });
 
-it('includes the homepage MP4 without replacing its image or X image card', () => {
+it('pairs the homepage unification video with its clean image and X image card', () => {
   document.head.innerHTML = buildSeoTagsHtml({
     title: 'Macro',
     description: 'Team workspace',
@@ -13,7 +13,7 @@ it('includes the homepage MP4 without replacing its image or X image card', () =
   }).join('');
   expect(
     document.querySelector('meta[property="og:video"]')?.getAttribute('content')
-  ).toMatch(/\/og\/home-orbit-dark-2026-10-23\.mp4$/);
+  ).toMatch(/\/og\/home-unified-2026-10-27\.mp4$/);
   expect(
     document
       .querySelector('meta[property="og:video:type"]')

@@ -6,23 +6,32 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { EmailMessageBody } from '@app/features/email-message/views/email-message-body';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Key } from '@solid-primitives/keyed';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { CalendarFilePreview } from '../components/calendar-file-preview';
 import { CalendarInviteCard } from '../components/calendar-invite-card';
 import type { EmailMessageAction } from '../components/message-actions';
 import {
   type CalendarInvitation,
   groupCalendarInvitations,
 } from '../core/calendar-invitation';
-import type { EmailAttachment } from '../core/email-message';
+import { type EmailAttachment, isCalendarFile } from '../core/email-message';
 import { inlineContentIds, normalizeContentId } from '../core/inline-images';
+export interface InvitationRenderOptions {
+  /** Called before a card action opens something else in the app. */
+  onNavigate?: () => void;
+  /** The card is shown inside the calendar file it came from. */
+  inCalendarFile?: boolean;
+}
+
 export interface EmailMessageViewProps {
   message: EmailMessage;
   renderInvitation?: (
     message: EmailMessage,
-    invitation: CalendarInvitation
+    invitation: CalendarInvitation,
+    options?: InvitationRenderOptions
   ) => JSX.Element;
   renderOperation?: (message: EmailMessage) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
@@ -41,6 +50,7 @@ export interface EmailMessageViewProps {
   onFocus?: (element: HTMLElement) => void;
   onReply?: (action: EmailMessageAction) => void;
   onOpenAttachment?: (attachment: EmailAttachment) => void;
+  onDownloadAttachment?: (attachment: EmailAttachment) => void;
   children?: JSX.Element;
 }
 
@@ -55,11 +65,41 @@ export function EmailMessageView(props: EmailMessageViewProps) {
   const invitationGroups = createMemo(() =>
     groupCalendarInvitations(props.message.calendar_invitations ?? [])
   );
-  const renderInvitation = (invitation: CalendarInvitation) =>
+  // A calendar file whose event the message already shows opens as that
+  // event; any other file, and a cloud reference with no bytes to download,
+  // goes to the host.
+  const [calendarFile, setCalendarFile] = createSignal<EmailAttachment>();
+  // Closing the dialog returns focus to the chip that opened it.
+  let calendarFileChip: HTMLElement | undefined;
+  const openAttachment = (attachment: EmailAttachment, chip: HTMLElement) => {
+    if (
+      invitationGroups().length > 0 &&
+      !attachment.reference_url &&
+      isCalendarFile(attachment.filename, attachment.mime_type)
+    ) {
+      calendarFileChip = chip;
+      setCalendarFile(attachment);
+      return;
+    }
+    props.onOpenAttachment?.(attachment);
+  };
+  // A card action that opens the calendar closes the dialog first, so it
+  // neither covers the destination nor pulls focus back to the email.
+  const closeForNavigation = () => {
+    calendarFileChip = undefined;
+    setCalendarFile(undefined);
+  };
+  const renderInvitation = (
+    invitation: CalendarInvitation,
+    options?: InvitationRenderOptions
+  ) =>
     props.renderInvitation ? (
-      props.renderInvitation(props.message, invitation)
+      props.renderInvitation(props.message, invitation, options)
     ) : (
-      <CalendarInviteCard invitation={invitation} />
+      <CalendarInviteCard
+        invitation={invitation}
+        inCalendarFile={options?.inCalendarFile}
+      />
     );
   const body = () => (
     <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
@@ -216,21 +256,26 @@ export function EmailMessageView(props: EmailMessageViewProps) {
           {/* Other attachments (non-media or without sfs_id) */}
           <Show when={otherAttachments().length > 0}>
             <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
-              <For each={otherAttachments()}>
+              {/* Keyed so a thread refresh keeps each chip, and with it the
+                  calendar file dialog's focus target. */}
+              <Key
+                each={otherAttachments()}
+                by={(attachment) => attachment.db_id}
+              >
                 {(attachment) => (
                   <EmailAttachmentPill
                     attachment={{
-                      fileName: attachment.filename ?? '',
-                      mimeType: attachment.mime_type ?? undefined,
+                      fileName: attachment().filename ?? '',
+                      mimeType: attachment().mime_type ?? undefined,
                     }}
                     onClick={
                       props.onOpenAttachment
-                        ? () => props.onOpenAttachment?.(attachment)
+                        ? (chip) => openAttachment(attachment(), chip)
                         : undefined
                     }
                   />
                 )}
-              </For>
+              </Key>
             </div>
           </Show>
 
@@ -266,6 +311,30 @@ export function EmailMessageView(props: EmailMessageViewProps) {
           </Show>
         </div>
         {props.children}
+      </Show>
+      <Show when={calendarFile()}>
+        {(file) => (
+          <CalendarFilePreview
+            fileName={file().filename ?? ''}
+            open
+            onClose={() => setCalendarFile(undefined)}
+            returnFocus={() => calendarFileChip}
+            onDownload={
+              props.onDownloadAttachment
+                ? () => props.onDownloadAttachment?.(file())
+                : undefined
+            }
+          >
+            <Key each={invitationGroups()} by={(group) => group.primary.id}>
+              {(group) =>
+                renderInvitation(group().primary, {
+                  onNavigate: closeForNavigation,
+                  inCalendarFile: true,
+                })
+              }
+            </Key>
+          </CalendarFilePreview>
+        )}
       </Show>
     </MessageCard>
   );

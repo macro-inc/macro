@@ -25,9 +25,16 @@ admission and recording:
 | True, real user, billable feature | Check existing allowance; fail closed on validation error | `true` when existing producer records usage |
 | True, exempt feature | No quota billing I/O | `false` |
 | Genuinely system-owned work | No user quota billing I/O | `false` |
+| Paid for by an agent's own API key (`agent_api_key_id` set) | No admission for that turn | `false`, row references the key |
 | Rejected before execution | No provider work | No usage row for work not executed |
 | Historical rows / inserts omitting column | Never retrospectively classified | `false` |
 | Disabled after activation | Stop admission and new counting | Existing booleans unchanged |
+
+**Agent API keys:** turns of an in-memory agent with its own Anthropic or
+OpenAI key (see [agent API keys](../agent-guide/ai-chat.md#agent-api-keys))
+skip admission and record `ai_usage.agent_api_key_id`, which keeps them out
+of `count_usage`. Only the loop's own model calls run on the key; tools,
+opening lines, and summaries in those turns still use Macro's keys and count.
 
 **Exempt:** Memory, AiProjection, CallSummary, Dictation, ChatRename.
 **Billable:** Chat, Automation, DynamicCompletionsApi, ChannelBot, AiEditing,
@@ -267,6 +274,8 @@ inspect the content type and code rather than assuming every 503 is billing.
 - Optional chat/session naming is independently admitted as ChatRename, an exempt
   feature, so the gate does no quota billing I/O and never charges the user; a
   refusal retains the existing/default title without failing successful primary work.
+  Post-turn session retitling (the Jev check and the Haiku retitle) is admitted the
+  same way, once per finished turn, before either model runs.
   Optional bot/trigger inference (including image captions) skips classification
   on failure, without AI fallback or implied approval. Explicit mentions still
   route deterministically; downstream execution has its own gate and failures.
@@ -308,7 +317,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
 | Native Anthropic WebSearch/WebFetch/code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
 | AI document editing / AiEditing | [document orchestration](../../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/src/inbound/toolset/edit_document/test.rs) |
-| AI gather/Notion imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [initial/retry/delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
+| Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
 | Channel responder / ChannelBot | [bot service](../../crates/channel_bots/src/domain/service.rs) | [DSS main](../../services/document_storage_service/src/main.rs), common context T | [response refusal](../../crates/channel_bots/src/domain/service/tests.rs) |
 | Optional channel classification / ChannelBot | [trigger detector](../../crates/channel_bots/src/domain/trigger_detector.rs) | DSS main, independent R for classifier | [explicit routing and inference skip](../../crates/channel_bots/src/domain/trigger_detector/tests.rs) |
 | Trigger inference and image captions / Automation | [trigger service](../../crates/agent_trigger/src/domain/service.rs) | [standalone trigger main](../../services/agent_trigger_service/src/main.rs) R; [harness trigger](../../services/agent_harness_service/src/trigger.rs) receives the harness's settling recorder from harness main | [classification/caption refusal](../../crates/agent_trigger/src/domain/service/test/admission.rs), [no system fallback](../../crates/agent_trigger/src/outbound/fast_model_judge/test.rs) |

@@ -26,7 +26,10 @@ import { resetGraphqlSoupDoneSession } from '@queries/soup/graphql/done-session'
 import { clearDocumentQueryCache } from '@queries/storage/document-cache';
 import { clearOfflineDocumentContexts } from '@queries/storage/documentLoad/offline-context-runtime';
 import { authServiceClient } from '@service-auth/client';
-import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
+import {
+  recordGraphqlMutationQueueCleared,
+  setGraphqlSoupSessionActive,
+} from '@service-storage/graphql-soup';
 import { raceTimeout } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { useNavigate } from '@solidjs/router';
@@ -52,7 +55,9 @@ const unauthenticatedUserInfo: UserInfoData = {
   createdAt: undefined,
 };
 
-export async function clearLocalAuthSession() {
+export async function clearLocalAuthSession(
+  cause: 'logout' | 'session-expired' = 'logout'
+) {
   await clearNativeDiagnostics();
   clearPipedreamCallbacks();
   document.cookie =
@@ -64,6 +69,8 @@ export async function clearLocalAuthSession() {
   clearTeamCalendarQueries();
   // Start every wipe before waiting, including stores not hydrated this session.
   const results = await Promise.allSettled([
+    // Reads the queue before the cache wipe below deletes it.
+    recordGraphqlMutationQueueCleared(cause),
     Promise.resolve().then(clearComposerStorage),
     documentContextsCleared,
     clearRegisteredCaches(),

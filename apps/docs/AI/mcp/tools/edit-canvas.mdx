@@ -1,0 +1,16 @@
+---
+title: EditCanvas
+description: >-
+  Edit a Macro canvas live using natural-language instructions.
+---
+
+# EditCanvas
+
+Edit a Macro canvas live using natural-language instructions. Can create shapes, text and bound connectors; insert real person mentions using supplied userId/email; move, resize, style, relabel, group, reparent, reorder and delete ordinary items. Preserves unrelated concurrent edits through the live CRDT. Existing assets/references can move or be styled but cannot be created or deleted by this tool. Labels are whole-string last-write-wins. For precise known edits prefer ApplyCanvasEdits, which avoids a nested model. Use this tool for genuine design work. ReadCanvas first for IDs and context. Returns acknowledged operation count and outcome; cancellation or network failure may leave partial edits, so reread before retrying. Never send the same edit blindly twice.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `document_id` | string | Yes | Canvas document ID from an attachment or search. |
+| `instructions` | string | Yes | Specific desired changes. Include stable item IDs when referring to existing items. |

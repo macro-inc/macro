@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import {
   getDeletedItems,
@@ -80,17 +81,17 @@ export const useItemOperations = createSingletonRoot(() => {
   );
 
   const copyItem = createCallback(
-    async (args: {
-      itemType: Exclude<ItemType, 'project'>;
-      id: string;
-      name: string;
-    }) => {
+    async (args: { itemType: ItemType; id: string; name: string }) => {
       const id = await copyItemOp(args);
       const success = id !== null;
       if (success) {
         toast.success(`${args.name} copied`);
+      } else if (args.itemType === 'project') {
+        toast.failure(t('entityActions.toastDuplicateFolderFailed'), {
+          subtext: t('entityActions.folderDuplicateLimitHint'),
+        });
       } else {
-        toast.failure('Unable to copy item');
+        toast.failure(t('entityActions.toastCopyFailed', { count: 1 }));
       }
       return id;
     }

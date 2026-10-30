@@ -1,9 +1,9 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import UsersIcon from '@phosphor/users.svg';
-import XIcon from '@phosphor/x.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Checkbox, Dialog, Dropdown, EntityComposer, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -85,14 +85,15 @@ export function PipelineDialog(props: {
                   />
                 </EntityComposer.Title>
                 <Button
+                  variant="ghost"
                   tabIndex={-1}
                   aria-label="Close"
                   tooltip="Close"
-                  size="icon-composer"
+                  size="icon-md"
                   disabled={pending()}
                   onClick={close}
                 >
-                  <XIcon />
+                  <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </EntityComposer.Header>
               <EntityComposer.Main class="gap-4">

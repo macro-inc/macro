@@ -1,3 +1,5 @@
+/// Continuing a session once its owner connects the app it waited on.
+pub mod app_connections;
 /// Fresh ACP capability discovery without creating an agent session.
 pub mod capability_discovery;
 pub mod conversation_turns;
@@ -26,6 +28,8 @@ pub mod trigger_router;
 /// Per-owner hosted Codex runtime authorization.
 pub mod codex;
 
+/// Auto mode: whether a composer prompt goes to a chat or a coding agent.
+pub mod mode_choice;
 /// Compatible agent model discovery.
 pub mod model_load;
 /// Admitted model-backed repository choice, with deterministic paths kept free.

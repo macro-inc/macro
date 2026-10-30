@@ -100,7 +100,7 @@ test exercises this ordering.
 | `EmailRenderingContextValue` | Theme values, explicit image policy, link preparation, and image resolution with an abortable resource lifetime |
 | `EmailFormContextInputs` | Viewer address and available inbox identities for recipient selection |
 | `EmailReplySession` | Thread identity, recipient options, personal-reply classification, a targeted reply request, and host intents for leaving the composer or removing its draft |
-| `EmailDraftStorage` | Save/delete and restore an undone draft; inputs use domain inbox IDs and completion intent |
+| `EmailDraftStorage` | Save/delete and restore an undone draft, and drop a moved draft's working copy; inputs use domain inbox IDs and completion intent |
 | `EmailAttachmentStorage` | Upload, forward, and remove draft attachments |
 | `EmailDelivery` | Send, undo, schedule, unschedule, and archive operations |
 | `EmailComposeFeedback` | User notices and error reporting |
@@ -109,7 +109,7 @@ test exercises this ordering.
 | `EmailEditorFiles` | View-owned editor file upload and sharing integration |
 | `EmailComposeContext` | Compose capabilities supplied to views, which pass the narrow inputs each controller needs |
 | `PersistedEmailIdentity` | Successful save/send result: draft, thread, and inbox identity without a transport envelope |
-| `EmailComposeHost` | Optional navigation, back handling, and focus movement supplied by the host |
+| `EmailComposeHost` | Optional navigation, a moved draft's destination, the route's draft, back handling, and focus movement supplied by the host |
 
 Core types are owned by the features. Generated email service schemas and concrete
 query results stop at adapters. `email-thread/queries/thread-source.ts` uses
@@ -157,7 +157,7 @@ The compose controllers now assemble these smaller responsibilities:
 | `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Send Later and schedule updates save the draft first, then schedule it through the REST endpoint. Cancellation only unlocks editing after confirmation. |
 | `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; uploads and updates to existing legacy schedules wait for a committed save. |
 | `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. |
-| `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits on disposal, and exposes cancellation and completion for send/discard. |
+| `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits when visibility changes and on disposal, retries a failed local write on visibility changes and disposal unless cancelled, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
 | `views/reply-envelope.tsx` | Sender, recipients and subject presentation. One recipient input implementation supplies the desktop/mobile layouts while the parent keeps a single editor mounted. |
@@ -287,6 +287,14 @@ inbox ID is not a precomputed header: primary-inbox omission belongs to the adap
 Existing message/thread model fields retain their established snake_case spelling;
 this cleanup does not rename generated schemas or persisted URLs. In particular,
 the host still reads/writes the existing `draftID` compose route parameter.
+Those parameters live only in memory, so the compose route also records the
+composer's draft in its `email-compose.draft` pane search, replacing the
+current history entry, and reopens that draft ahead of `draftID`
+(`compose-route-draft.ts`). It records the draft the composer opened right
+away, since this device can read it while a save is queued, and records a draft
+the composer creates or moves to only once the server confirms it. A From switch that moves a draft keeps
+the compose route in place, while a thread route follows the moved draft to
+its new thread (`compose-host-adapter.ts`).
 
 `EmailThreadStateProvider` and `useEmailThreadState` name mounted thread state.
 `ThreadReplyInput` names the thread-owned reply entry point, while

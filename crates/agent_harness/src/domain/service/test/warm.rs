@@ -1,4 +1,5 @@
 use super::*;
+use agent_session::domain::model::{SessionSource, SessionVisibility};
 use agent_session::domain::warm::{WarmClaim, WarmMissReason};
 
 struct WarmLifecycleStub {
@@ -143,6 +144,8 @@ async fn warming_initializes_without_a_prompt_or_visible_created_event() {
                 bot_id: bot_id::MACRO_NEW_BOT_ID,
                 profile: None,
             }),
+            source: SessionSource::User,
+            visibility: SessionVisibility::Listed,
         })
         .await
         .expect("claim prepared session");
@@ -158,6 +161,72 @@ async fn warming_initializes_without_a_prompt_or_visible_created_event() {
         1,
         "claim reveals the conversation"
     );
+}
+
+/// A claimed warm session delivers the create's first prompt under the id the
+/// caller already shows it under, like a cold open.
+#[tokio::test]
+async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_warm_sessions(
+        Arc::new(WarmLifecycleStub {
+            claim: WarmClaim::Claimed,
+        }),
+        Arc::new(agent_session::domain::ports::NoOpToolCatalog),
+    );
+    let id = AgentSessionId::new();
+    let warm = service.warm_session(model_owner::Owner::User(sender()), id);
+    let drive = async {
+        let container = containers
+            .container(containers.first_spawned().await)
+            .expect("warm runtime");
+        complete_session_handshake(&container).await;
+    };
+    let (warmed, ()) = tokio::join!(warm, drive);
+    assert_eq!(warmed.unwrap().unwrap().id, id);
+
+    let action_id = AgentActionId::mint();
+    service
+        .open_managed_session(OpenManagedSession {
+            id: Some(id),
+            owner: model_owner::Owner::User(sender()),
+            prompt: Some(FirstPrompt {
+                action_id: Some(action_id),
+                prompt: "inspect".to_owned(),
+                attachments: Vec::new(),
+            }),
+            repo_url: None,
+            repo_branch: None,
+            instructions: None,
+            model: None,
+            profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+                bot_id: bot_id::MACRO_NEW_BOT_ID,
+                profile: None,
+            }),
+            source: SessionSource::User,
+            visibility: SessionVisibility::Listed,
+        })
+        .await
+        .expect("claim prepared session");
+    assert_eq!(
+        containers.spawned(),
+        1,
+        "claim must reuse the prepared runtime"
+    );
+
+    let prompt_ids: Vec<_> = repo
+        .list_by_session(id)
+        .await
+        .expect("session logs should be readable")
+        .into_iter()
+        .filter_map(|log| match log.entry.content {
+            Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(
+                request,
+            )))) if request.method.as_ref() == "session/prompt" => Some(request.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
 }
 
 fn span_exporter() -> (
@@ -222,6 +291,8 @@ async fn a_missed_warm_claim_records_why_on_the_open_span() {
                 bot_id: bot_id::MACRO_NEW_BOT_ID,
                 profile: None,
             }),
+            source: SessionSource::User,
+            visibility: SessionVisibility::Listed,
         })
         .await
         .expect("cold open after a missed claim");
@@ -273,6 +344,8 @@ async fn an_open_without_a_client_id_records_that_no_warm_id_was_sent() {
                 bot_id: bot_id::MACRO_NEW_BOT_ID,
                 profile: None,
             }),
+            source: SessionSource::User,
+            visibility: SessionVisibility::Listed,
         })
         .await
         .expect("cold open");
@@ -327,4 +400,45 @@ async fn warming_past_the_owner_cap_records_the_refusal() {
         Some(&opentelemetry::Value::from("refused_owner_cap"))
     );
     assert!(attributes.contains_key("agent.session.model"));
+}
+
+/// A warm row was created for a person, so claiming one would leave a routine
+/// run looking like a session its owner opened.
+#[tokio::test]
+async fn a_routine_run_opens_its_own_session_instead_of_claiming_a_warm_one() {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_warm_sessions(
+        Arc::new(WarmLifecycleStub {
+            claim: WarmClaim::Claimed,
+        }),
+        Arc::new(agent_session::domain::ports::NoOpToolCatalog),
+    );
+    let session = service
+        .open_managed_session(OpenManagedSession {
+            id: Some(AgentSessionId::new()),
+            owner: model_owner::Owner::User(sender()),
+            prompt: None,
+            repo_url: None,
+            repo_branch: None,
+            instructions: None,
+            model: None,
+            profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+                bot_id: bot_id::MACRO_NEW_BOT_ID,
+                profile: None,
+            }),
+            source: SessionSource::Routine,
+            visibility: SessionVisibility::Unlisted,
+        })
+        .await
+        .expect("open the routine run");
+
+    assert_eq!(session.source, SessionSource::Routine);
+    let persisted = repo.get(session.id).await.expect("persisted");
+    assert_eq!(persisted.source, SessionSource::Routine);
+    assert_eq!(persisted.visibility, SessionVisibility::Unlisted);
+    assert_eq!(containers.spawned(), 1, "a fresh runtime, not a warm one");
+    service
+        .execute(session.id, HarnessCommand::Delete)
+        .await
+        .expect("delete");
 }

@@ -3,25 +3,23 @@ import { downloadCalendarEventIcs } from '@app/features/calendar-view/download-e
 import { useHoldParentHoverCardOpen } from '@core/component/HoverCard';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CalendarPlusIcon from '@phosphor/calendar-plus.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import DownloadSimpleIcon from '@phosphor/download-simple.svg';
-import UserPlusIcon from '@phosphor/user-plus.svg';
-import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
+import CheckIcon from '@icon/system/regular/check.svg';
+import DownloadSimpleIcon from '@icon/system/regular/download-simple.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
+import { useCopySharedCalendarEventMutation } from '@queries/calendar/copy';
 import {
-  isAlreadyOnCalendar,
-  isCopyRefused,
-  useCopySharedCalendarEventMutation,
-} from '@queries/calendar/copy';
-import {
+  isJoinRequestDeclined,
   isSharerCannotInvite,
   useRequestToJoinCalendarEventMutation,
 } from '@queries/calendar/join-requests';
-import { queryReadyGate } from '@queries/gate';
 import type { CalendarJoinRequestStatus } from '@service-storage/generated/schemas/calendarJoinRequestStatus';
-import { Button, Dropdown } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import { Button } from '@ui';
+import { createSignal, Match, Show, Switch } from 'solid-js';
+import {
+  AddToCalendarButton,
+  toastAddToCalendarFailure,
+} from './AddToCalendarButton';
 
 /**
  * Actions for a meeting the viewer sees only because it was shared with one
@@ -37,8 +35,6 @@ export function SharedEventActions(props: {
   canRequestToJoin: boolean;
   /** The viewer's request to join, if they made one. */
   joinRequestStatus?: CalendarJoinRequestStatus;
-  /** Called once the copy is on the viewer's calendar. */
-  onAdded?: () => void;
 }) {
   const addSharedEvent = useCalendarAddSharedEventFlag();
   const [menuOpen, setMenuOpen] = createSignal(false);
@@ -46,37 +42,10 @@ export function SharedEventActions(props: {
   // while the viewer picks a calendar.
   useHoldParentHoverCardOpen(menuOpen);
 
-  const calendars = useVisibleCalendarsQuery();
-  // Only Google imports a copy under the meeting's own UID, which is what
-  // lets the mention resolve to it. Reading `data` while the list is pending
-  // would suspend the whole card; until it arrives there is nothing to pick.
-  const targetCalendars = () =>
-    (queryReadyGate(calendars) ? calendars.data : []).filter(
-      (calendar) =>
-        calendar.isWritable &&
-        calendar.provider === 'google' &&
-        !calendar.isSubscription
-    );
-
   const copy = useCopySharedCalendarEventMutation({
-    onSuccess: () => {
-      toast.success('Added to your calendar');
-      props.onAdded?.();
-    },
-    onError: (error) => {
-      if (isAlreadyOnCalendar(error)) {
-        toast.failure('This event is already on your calendar');
-      } else if (isCopyRefused(error)) {
-        toast.failure("Google Calendar won't add this event to that calendar", {
-          subtext: 'Download the .ics file to add it another way.',
-        });
-      } else {
-        toast.failure('Failed to add the event to your calendar');
-      }
-    },
+    onSuccess: () => toast.success('Added to your calendar'),
+    onError: toastAddToCalendarFailure,
   });
-  const addToCalendar = (calendarId: string | undefined) =>
-    copy.mutate({ eventId: props.eventId, calendarId });
 
   // Shown as sent from the moment the ask succeeds, ahead of the preview
   // refetch that carries the stored status: it holds only while the status is
@@ -104,9 +73,14 @@ export function SharedEventActions(props: {
       toast.failure(
         isSharerCannotInvite(error)
           ? "The person who shared this event can't add guests to it"
-          : 'Failed to ask to join the event'
+          : isJoinRequestDeclined(error)
+            ? 'The person who shared this event declined your request'
+            : 'Failed to ask to join the event'
       ),
   });
+  // A declined request stands: the card says so instead of offering to ask
+  // again, and the sharer is never asked twice.
+  const declined = () => props.joinRequestStatus === 'declined';
 
   return (
     <div
@@ -126,63 +100,33 @@ export function SharedEventActions(props: {
             Invited
           </span>
         </Match>
+        <Match when={declined()}>
+          <span class="flex h-5 items-center gap-1 px-1 text-xs text-ink-muted">
+            <XIcon class="size-3" />
+            Declined
+          </span>
+        </Match>
         <Match when={props.canRequestToJoin}>
           <Button
-            variant="outline"
+            variant="secondary"
             size="xs"
             disabled={requestToJoin.isPending}
             onClick={() => requestToJoin.mutate(props.eventId)}
           >
-            <UserPlusIcon />
+            <UserPlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Ask to join
           </Button>
         </Match>
       </Switch>
       <Show when={addSharedEvent() && !requestOutstanding()}>
-        <Show
-          when={targetCalendars().length > 1}
-          fallback={
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={copy.isPending || targetCalendars().length === 0}
-              onClick={() => addToCalendar(targetCalendars()[0]?.id)}
-            >
-              <CalendarPlusIcon />
-              Add to calendar
-            </Button>
+        <AddToCalendarButton
+          size="xs"
+          pending={copy.isPending}
+          onAdd={(calendarId) =>
+            copy.mutate({ eventId: props.eventId, calendarId })
           }
-        >
-          <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
-            <Dropdown.Trigger
-              variant="outline"
-              size="xs"
-              disabled={copy.isPending}
-            >
-              <CalendarPlusIcon />
-              Add to calendar
-              <CaretDownIcon />
-            </Dropdown.Trigger>
-            <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
-              <Dropdown.Group>
-                <For each={targetCalendars()}>
-                  {(calendar) => (
-                    <Dropdown.Item onSelect={() => addToCalendar(calendar.id)}>
-                      <span class="flex min-w-0 flex-col">
-                        <span class="truncate">{calendar.name}</span>
-                        <Show when={calendar.name !== calendar.emailAddress}>
-                          <span class="truncate text-xs text-ink-muted">
-                            {calendar.emailAddress}
-                          </span>
-                        </Show>
-                      </span>
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Group>
-            </Dropdown.Content>
-          </Dropdown>
-        </Show>
+          onMenuOpenChange={setMenuOpen}
+        />
       </Show>
       <Button
         variant="ghost"
@@ -197,14 +141,21 @@ export function SharedEventActions(props: {
           )
         }
       >
-        <DownloadSimpleIcon />
+        <DownloadSimpleIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         Download .ics
       </Button>
-      <Show when={!props.canRequestToJoin && !requestOutstanding()}>
-        <p class="w-full text-xs text-ink-muted">
-          The person who shared this event can't add guests to it.
-        </p>
-      </Show>
+      <Switch>
+        <Match when={declined()}>
+          <p class="w-full text-xs text-ink-muted">
+            The person who shared this event declined your request to join.
+          </p>
+        </Match>
+        <Match when={!props.canRequestToJoin && !requestOutstanding()}>
+          <p class="w-full text-xs text-ink-muted">
+            The person who shared this event can't add guests to it.
+          </p>
+        </Match>
+      </Switch>
     </div>
   );
 }

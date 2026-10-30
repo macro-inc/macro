@@ -44,7 +44,8 @@
                 "SELECT_STRING",
                 "ENTITY",
                 "LINK",
-                "TAG"
+                "TAG",
+                "DATE_RANGE"
               ]
             }
           }
@@ -111,7 +112,8 @@
                 "SELECT_STRING",
                 "ENTITY",
                 "LINK",
-                "TAG"
+                "TAG",
+                "DATE_RANGE"
               ]
             }
           }

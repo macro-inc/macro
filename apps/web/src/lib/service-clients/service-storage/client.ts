@@ -61,6 +61,8 @@ import {
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
+import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
+import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
 import type { CreateChannelLabelRequest } from './generated/schemas/createChannelLabelRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
@@ -1486,8 +1488,16 @@ export const storageServiceClient = {
   },
 
   /**
-   * Creates a markdown document and initializes its sync-service content on the backend.
+   * Creates a native Canvas with durable shared content ready before returning.
    */
+  async createCanvasDocument(request: CreateCanvasDocumentRequest) {
+    return dssFetch<CreateCanvasDocumentResponse>('/documents/create_canvas', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  /** Creates a markdown document and initializes its sync-service content on the backend. */
   async createMarkdownDocument(request: CreateMarkdownDocumentRequest) {
     const result = await dssFetch<CreateMarkdownHandler200>(
       `/documents/create_markdown`,

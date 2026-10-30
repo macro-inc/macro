@@ -7,17 +7,34 @@ import { type EmailSendIntent, isEmailSendIntent } from './send-intent';
 
 export type RestoredEmailSend = { draft: LocalDraft; intent: EmailSendIntent };
 
-/** Cancellation, copy restoration and authority retirement share one transaction. */
+/**
+ * Cancellation, copy restoration and authority retirement share one transaction.
+ * `landed` is this call's result from an attempt the page saw abort; when the
+ * send is gone and the copy still has that attempt's generation, the attempt
+ * committed and its result stands.
+ */
 export function restoreEmailSendTransaction(
   tx: IDBTransaction,
   session: DraftStorageSession,
   uuid: string,
-  finish: (result: RestoredEmailSend | Error | undefined) => void
+  finish: (result: RestoredEmailSend | Error | undefined) => void,
+  landed?: RestoredEmailSend
 ) {
   const sends = tx.objectStore('sends');
   const request = sends.get(uuid);
   request.onsuccess = () => {
     const intent = request.result as EmailSendIntent | undefined;
+    if (!intent && landed) {
+      const copy = tx.objectStore('drafts').get(landed.draft.key);
+      copy.onsuccess = () =>
+        finish(
+          (copy.result as LocalDraft | undefined)?.generation ===
+            landed.draft.generation
+            ? landed
+            : undefined
+        );
+      return;
+    }
     if (
       !isEmailSendIntent(intent) ||
       intent.accountId !== session.accountId ||

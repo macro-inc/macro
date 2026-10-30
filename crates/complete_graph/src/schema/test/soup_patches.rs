@@ -470,6 +470,8 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
             updated_at: now,
             viewed_at: None,
             extra: (),
+            source: models_soup::agent_session::AgentSessionSource::User,
+            visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
         }),
     ]);
     let calls = soup.raw_calls.clone();

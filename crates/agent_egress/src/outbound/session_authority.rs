@@ -122,6 +122,7 @@ where
         Ok(SessionGrant {
             session: session.id,
             owner,
+            agent: session.bot_id,
             repo,
             mcp_servers,
             prompter,

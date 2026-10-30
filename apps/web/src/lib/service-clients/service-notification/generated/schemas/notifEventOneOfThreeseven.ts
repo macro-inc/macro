@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CalendarEventReminderMetadata } from './calendarEventReminderMetadata';
+import type { ExternalChatMessageMetadata } from './externalChatMessageMetadata';
 import type { NotifEventOneOfThreesevenTag } from './notifEventOneOfThreesevenTag';
 
 /**
- * A calendar event alarm came due.
+ * A live message in a shared external chat.
  */
 export type NotifEventOneOfThreeseven = {
-  /** A calendar event alarm came due. */
-  content: CalendarEventReminderMetadata;
+  /** A live message in a shared external chat. */
+  content: ExternalChatMessageMetadata;
   tag: NotifEventOneOfThreesevenTag;
 };

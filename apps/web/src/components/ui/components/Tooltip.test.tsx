@@ -1,5 +1,11 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setTooltipsEnabled } from '../signals/signals';
 import { Tooltip } from './Tooltip';
@@ -76,5 +82,88 @@ describe('Tooltip touch behavior', () => {
     const button = screen.getByRole('button', { name: 'Back' });
     button.parentElement?.focus();
     expect(screen.getByRole('tooltip').textContent).toContain('Back to thread');
+  });
+
+  it('uses the control itself as a compound tooltip trigger', () => {
+    device.isTouch = () => false;
+    render(() => (
+      <Tooltip.Root open>
+        <Tooltip.Trigger>Details</Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content>Show details</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    ));
+    const button = screen.getByRole('button', { name: 'Details' });
+    expect(button.tagName).toBe('BUTTON');
+    expect(screen.getByRole('tooltip').textContent).toContain('Show details');
+  });
+
+  it('closes when a compound trigger unmounts', () => {
+    device.isTouch = () => false;
+    const [mounted, setMounted] = createSignal(true);
+    render(() => (
+      <Tooltip.Root defaultOpen>
+        <Show when={mounted()}>
+          <Tooltip.Trigger>Details</Tooltip.Trigger>
+        </Show>
+        <Tooltip.Portal>
+          <Tooltip.Content>Show details</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    ));
+    expect(screen.getByRole('tooltip').textContent).toContain('Show details');
+    setMounted(false);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('keeps the pointer-transparent override without losing caller styles', () => {
+    device.isTouch = () => false;
+    render(() => (
+      <Tooltip.Root open>
+        <Tooltip.Trigger>Details</Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content style={{ color: 'red', 'pointer-events': 'auto' }}>
+            Show details
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    ));
+    const tooltip = screen.getByRole('tooltip');
+    expect(tooltip.classList.contains('pointer-events-none!')).toBe(true);
+    expect(tooltip.style.color).toBe('red');
+  });
+
+  it('hides the popup when a mounted trigger loses its layout box', async () => {
+    device.isTouch = () => false;
+    vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
+      1024
+    );
+    vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(
+      768
+    );
+    const [hidden, setHidden] = createSignal(false);
+    render(() => (
+      <Tooltip.Root
+        open
+        getAnchorRect={
+          hidden()
+            ? () => ({ x: 0, y: 0, width: 0, height: 0 })
+            : () => ({ x: 64, y: 64, width: 40, height: 40 })
+        }
+      >
+        <Tooltip.Trigger style={{ display: hidden() ? 'none' : undefined }}>
+          Details
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content>Show details</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    ));
+    const trigger = screen.getByRole('button', { name: 'Details' });
+    await waitFor(() => expect(screen.getByRole('tooltip')).toBeTruthy());
+    setHidden(true);
+    await waitFor(() => expect(screen.queryByRole('tooltip')).toBeNull());
+    expect(trigger.isConnected).toBe(true);
   });
 });

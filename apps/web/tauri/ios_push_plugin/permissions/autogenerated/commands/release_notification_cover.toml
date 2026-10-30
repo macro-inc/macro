@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-release-notification-cover"
+description = "Enables the release_notification_cover command without any pre-configured scope."
+commands.allow = ["release_notification_cover"]
+
+[[permission]]
+identifier = "deny-release-notification-cover"
+description = "Denies the release_notification_cover command without any pre-configured scope."
+commands.deny = ["release_notification_cover"]

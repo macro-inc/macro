@@ -208,6 +208,13 @@ impl ChannelRepo for FakeMutationRepo {
         Ok("Project".to_string())
     }
 
+    async fn get_user_display_names(
+        &self,
+        _user_ids: &[MacroUserIdStr<'static>],
+    ) -> Result<std::collections::HashMap<MacroUserIdStr<'static>, String>, Self::Err> {
+        Ok(std::collections::HashMap::new())
+    }
+
     async fn user_has_team(&self, _user_id: String, _team_id: Uuid) -> Result<bool, Self::Err> {
         Ok(true)
     }

@@ -26,6 +26,7 @@ import type {
 } from '../../email-message/core/email-message';
 import {
   operationBlocksEditing,
+  operationBlocksInboxSwitch,
   operationBlocksSending,
   operationSending,
 } from '../../email-message/core/message-operation';
@@ -246,6 +247,17 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const currentDraftId = session.draftId;
   const [sentDraftId, setSentDraftId] = createSignal<string>();
   const currentThreadId = session.threadId;
+  // A reload reopens the draft this composer opened, which this device can
+  // read even while its save is queued. A draft the composer creates or moves
+  // to is recorded only once the server confirms it.
+  const confirmedDraftId = createMemo<string | undefined>((previous) => {
+    const identity = session.identity();
+    if (identity.kind === 'none') return undefined;
+    return session.serverConfirmed() ? identity.draftId : previous;
+  }, initialDraftId);
+  createEffect(
+    on(confirmedDraftId, (draftId) => props.host?.recordDraft?.(draftId))
+  );
   const sendLocked = () =>
     props.delivery.sendLocked?.(currentDraftId() ?? sentDraftId()) ?? false;
   observeDraftIdentity(
@@ -373,11 +385,15 @@ export function createEmailComposer(props: EmailComposerOptions) {
     operation: 'save' | 'delete'
   ) {
     props.notices.reportError(error);
+    const failureMessage =
+      operation === 'save' && props.drafts.saveLocalDraft
+        ? 'Draft could not be synced'
+        : `Failed to ${operation} draft`;
     if (!session.serverConfirmed()) {
       // A best-effort pre-send save may fail while delivery still succeeds.
       // Background saves and explicit draft actions report their own failure.
       if (schedule?.pending() || !submitting()) {
-        props.notices.feedback.failure(`Failed to ${operation} draft`);
+        props.notices.feedback.failure(failureMessage);
       }
       return;
     }
@@ -405,13 +421,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
         return;
       }
     }
-    props.notices.feedback.failure(`Failed to ${operation} draft`);
+    props.notices.feedback.failure(failureMessage);
   }
 
   function handleAlreadySent() {
     identityVersion += 1;
     autosave.cancel();
-    props.notices.feedback.alert('This email was already sent');
     resetState();
   }
 
@@ -483,6 +498,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const deliveryBlocked = () =>
     operationSource?.needsReload?.() ||
     operationBlocksSending(currentOperation());
+  const inboxSwitchBlocked = () =>
+    operationSource?.needsReload?.() ||
+    operationBlocksInboxSwitch(currentOperation());
   const operationBlocked = () =>
     operationSource?.needsReload?.() ||
     operationBlocksEditing(currentOperation());
@@ -1118,17 +1136,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
       const draftId = currentDraftId();
       if (draftId) {
         try {
-          await deleteDraftForDiscard(
-            props.drafts,
-            {
-              draftId,
-              draftGeneration: draftGeneration(),
-              threadId: currentThreadId(),
-              inboxId: activeInboxId(),
-            },
-            props.notices,
-            'This email was already sent'
-          );
+          await deleteDraftForDiscard(props.drafts, {
+            draftId,
+            draftGeneration: draftGeneration(),
+            threadId: currentThreadId(),
+            inboxId: activeInboxId(),
+          });
         } catch (error) {
           await reportPersistenceFailure(error, 'delete');
           setDiscarding(false);
@@ -1266,7 +1279,6 @@ export function createEmailComposer(props: EmailComposerOptions) {
       if (state.type === 'sent') {
         if (wasScheduled)
           props.notices.feedback.success('Scheduled email sent');
-        else props.notices.feedback.alert('This email was already sent');
         props.host?.showThread?.(state.threadId);
       } else {
         props.notices.feedback.alert('This draft is no longer available.');
@@ -1279,6 +1291,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     draftGeneration,
     onTransferred: () => setDraftGeneration(0),
     session,
+    persistence,
     drafts: props.drafts,
     attachments: form.attachments,
     save: () => autosave.save(),
@@ -1291,7 +1304,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
     if (
       sendLocked() ||
       restoring() ||
-      (!draftTransfer?.pending() && deliveryBlocked()) ||
+      (!draftTransfer?.pending() && inboxSwitchBlocked()) ||
       submitting() ||
       discarding() ||
       movingInbox() ||
@@ -1313,13 +1326,18 @@ export function createEmailComposer(props: EmailComposerOptions) {
         );
       }
       autosave.cancel();
-      if (sourceInboxId && sourceInboxId !== inboxId) {
-        await draftTransfer?.move(destination, sourceInboxId);
-      }
+      const moved =
+        sourceInboxId && sourceInboxId !== inboxId
+          ? await draftTransfer?.move(destination, sourceInboxId)
+          : undefined;
       form.setSelectedInbox(inboxId, senderEmail);
       editVersion += 1;
       setDraftDirty(true);
-      await autosave.save();
+      // The save captures the new sender before the host can unmount this
+      // composer to show the moved draft.
+      const saved = autosave.save();
+      if (moved) props.host?.showMovedDraft?.(moved);
+      await saved;
     } catch (error) {
       props.notices.reportError(error);
       props.notices.feedback.failure(

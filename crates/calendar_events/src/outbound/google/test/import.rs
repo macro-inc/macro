@@ -1,11 +1,8 @@
 use super::*;
-use crate::domain::ics::{CalendarEventExport, CalendarEventExportAccess};
+use crate::domain::ics::EventSnapshot;
 
-fn export(time: EventTime, recurrence_lines: Vec<String>) -> CalendarEventExport {
-    CalendarEventExport {
-        access: CalendarEventExportAccess::ChannelShared,
-        owner_id: "macro|organizer@example.com".to_string(),
-        event_type: EventType::Default,
+fn export(time: EventTime, recurrence_lines: Vec<String>) -> EventSnapshot {
+    EventSnapshot {
         ical_uid: "meeting@example.com".to_string(),
         sequence: 4,
         title: "Offsite".to_string(),
@@ -15,7 +12,6 @@ fn export(time: EventTime, recurrence_lines: Vec<String>) -> CalendarEventExport
         recurrence_lines,
         organizer_email: Some("organizer@example.com".to_string()),
         organizer_name: Some("Organizer".to_string()),
-        updated_at: Utc::now(),
     }
 }
 
@@ -305,4 +301,63 @@ async fn import_reports_a_refusal_apart_from_a_failure_worth_retrying() {
     };
     assert_eq!(error.kind(), CalendarProviderErrorKind::Transient);
     task.abort();
+}
+
+/// Google's copy of the meeting on the member's calendar.
+fn copy_on_calendar(attendees: serde_json::Value, marked: bool) -> GoogleEvent {
+    let mut event = serde_json::json!({
+        "id": "meeting-id",
+        "iCalUID": "meeting@example.com",
+        "status": "confirmed",
+        "organizer": { "email": "organizer@example.com" },
+        "attendees": attendees,
+    });
+    if marked {
+        event["extendedProperties"] = serde_json::json!({ "private": { "macroSnapshot": "true" } });
+    }
+    serde_json::from_value(event).unwrap()
+}
+
+#[test]
+fn an_invitation_reaching_a_snapshot_makes_it_the_owners_seat() {
+    let is_snapshot =
+        |event: &GoogleEvent| super::super::import::is_snapshot(event, "member@example.com");
+    let calendar = |status: &str| serde_json::json!({ "email": "member@example.com", "self": true, "responseStatus": status });
+
+    // What the import wrote, including the owner answering it in Google.
+    assert!(is_snapshot(&copy_on_calendar(
+        serde_json::json!([calendar("accepted")]),
+        true
+    )));
+    assert!(is_snapshot(&copy_on_calendar(
+        serde_json::json!([calendar("declined")]),
+        true
+    )));
+    // The import's own echo names the calendar without Google's `self` flag.
+    assert!(is_snapshot(&copy_on_calendar(
+        serde_json::json!([{ "email": "Member@example.com", "responseStatus": "accepted" }]),
+        true
+    )));
+
+    // A Google meeting lists its organizer beside the invited calendar.
+    assert!(!is_snapshot(&copy_on_calendar(
+        serde_json::json!([
+            { "email": "organizer@example.com", "organizer": true, "responseStatus": "accepted" },
+            calendar("needsAction"),
+        ]),
+        true
+    )));
+    // A meeting that lists only the invitee still asks them to answer.
+    assert!(!is_snapshot(&copy_on_calendar(
+        serde_json::json!([calendar("needsAction")]),
+        true
+    )));
+    assert!(!is_snapshot(&copy_on_calendar(
+        serde_json::json!([{ "email": "member@example.com", "self": true }]),
+        true
+    )));
+    assert!(!is_snapshot(&copy_on_calendar(
+        serde_json::json!([calendar("accepted")]),
+        false
+    )));
 }

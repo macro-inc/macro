@@ -52,7 +52,7 @@ export function createCanvasTextMeasurer() {
     setContent(geometry.content);
     const rect = element.getBoundingClientRect();
     return {
-      width: geometry.autoWidth ? Math.max(1, rect.width) : geometry.width,
+      width: Math.max(1, rect.width, element.scrollWidth),
       height: Math.max(geometry.fontSize * 1.35, rect.height),
     };
   };

@@ -5,6 +5,7 @@ import {
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
 import type { SafeFetchInit } from '@core/util/safeFetch';
+import type { Span } from '@macro-inc/observability';
 import type {
   CalendarEvent,
   CalendarEventProviderUrl,
@@ -29,6 +30,8 @@ import type {
   AddDraftAttachmentResponse,
   ApiMessageOperation,
   ApiPaginatedThreadCursor,
+  ArchiveThreadsRequest,
+  ArchiveThreadsResponse,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentDocumentIDResponse,
@@ -62,6 +65,9 @@ import type {
   UpsertScheduledResponse,
 } from './generated/schemas';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
+import { ForwardCalendarEventErrorCode } from './generated/schemas/forwardCalendarEventErrorCode';
+import type { ForwardCalendarEventRequest } from './generated/schemas/forwardCalendarEventRequest';
+import type { ForwardCalendarEventResponse } from './generated/schemas/forwardCalendarEventResponse';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
@@ -101,6 +107,24 @@ async function calendarMutationErrorHandler(response: Response) {
   const code =
     body?.code && body.code in CalendarMutationErrorCode
       ? (body.code as CalendarMutationErrorCode)
+      : undefined;
+  if (code) {
+    return { code, message: body?.message ?? '' };
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
+}
+
+async function forwardCalendarEventErrorHandler(response: Response) {
+  const body = (await response.json().catch(() => null)) as {
+    code?: string;
+    message?: string;
+  } | null;
+  const code =
+    body?.code && body.code in ForwardCalendarEventErrorCode
+      ? (body.code as ForwardCalendarEventErrorCode)
       : undefined;
   if (code) {
     return { code, message: body?.message ?? '' };
@@ -161,10 +185,9 @@ export const SIGNATURE_IMAGES_UNRESOLVED_CODE =
 
 export const emailClient = {
   settingsOperations: (linkId: string) =>
-    emailFetch<MailboxSettingsOperation[]>(
-      `${emailHost}/email/settings/operations`,
-      { headers: emailLinkHeaders(linkId) }
-    ),
+    emailFetch<MailboxSettingsOperation[]>('/email/settings/operations', {
+      headers: emailLinkHeaders(linkId),
+    }),
 
   async threadOperations(threadId: string) {
     return emailFetch<import('./generated/schemas').MailboxOperation[]>(
@@ -176,6 +199,32 @@ export const emailClient = {
     return emailFetch<Record<string, InvitationResolution>>(
       `/email/threads/${threadId}/calendar-invitations`
     );
+  },
+  async copyCalendarInvitation(
+    target: { threadId: string; messageId: string; invitationId: string },
+    args: CopyCalendarEventRequest
+  ) {
+    return fetchWithToken<CalendarEvent, CalendarMutationErrorCode>(
+      `${emailHost}/email/threads/${target.threadId}/messages/${target.messageId}/calendar-invitations/${encodeURIComponent(target.invitationId)}/copy`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args),
+        errorResponseHandler: calendarMutationErrorHandler,
+      }
+    );
+  },
+  async forwardCalendarEvent(
+    eventId: string,
+    args: ForwardCalendarEventRequest
+  ) {
+    return fetchWithToken<
+      ForwardCalendarEventResponse,
+      ForwardCalendarEventErrorCode
+    >(`${emailHost}/email/calendar-events/${eventId}/forward`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+      errorResponseHandler: forwardCalendarEventErrorHandler,
+    });
   },
   async init(args?: { linkId?: string; forceShare?: boolean }) {
     const params = new URLSearchParams();
@@ -249,6 +298,13 @@ export const emailClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+  /** The message's original source as `.eml` bytes. */
+  async getMessageEml(args: { message_id: string }) {
+    return fetchWithToken<Uint8Array<ArrayBuffer>>(
+      `${emailHost}/email/messages/${args.message_id}/eml`,
+      { method: 'GET' }
+    );
   },
   async getUserLabels() {
     return (
@@ -354,6 +410,13 @@ export const emailClient = {
       })
     ).map((result) => result);
   },
+  /** One request for up to 100 threads; the server reports threads it could not change. */
+  async flagArchivedBatch(args: ArchiveThreadsRequest) {
+    return await emailFetch<ArchiveThreadsResponse>('/email/threads/archived', {
+      method: 'PATCH',
+      body: JSON.stringify(args),
+    });
+  },
   async startSync() {
     return (
       await emailFetch<EmptyResponse>('/email/sync', {
@@ -450,7 +513,11 @@ export const emailClient = {
   // Patches the settings for one inbox. Scoped to `linkId` via the
   // X-Email-Link-Id header (the backend resolves the link from it); omit for
   // the primary inbox. Partial: fields omitted from `settings` are left as-is.
-  async patchSettings(args: PatchSettingsRequest, linkId?: string) {
+  async patchSettings(
+    args: PatchSettingsRequest,
+    linkId?: string,
+    parentSpan?: Span
+  ) {
     return fetchWithToken<
       PatchSettingsResponse,
       typeof SIGNATURE_IMAGES_UNRESOLVED_CODE
@@ -458,6 +525,7 @@ export const emailClient = {
       method: 'PATCH',
       body: JSON.stringify(args),
       headers: emailLinkHeaders(linkId),
+      trace: { parentSpan },
       // The 422 body carries how many signature images couldn't be loaded;
       // surface it as the error message so the caller can prompt a re-add.
       // Other statuses fall back to the default HTTP_ERROR shape.
@@ -909,13 +977,14 @@ export const emailClient = {
     );
   },
 
-  async importGmailSignature(linkId?: string) {
+  async importGmailSignature(linkId?: string, parentSpan?: Span) {
     return fetchWithToken<
       PatchSettingsResponse,
       'NO_SIGNATURE_FOUND' | typeof SIGNATURE_IMAGES_UNRESOLVED_CODE
     >(`${emailHost}/email/settings/import-signature`, {
       method: 'POST',
       headers: emailLinkHeaders(linkId),
+      trace: { parentSpan },
       errorResponseHandler: async (response) => {
         if (response.status === 404) {
           return { code: 'NO_SIGNATURE_FOUND' as const, message: '' };

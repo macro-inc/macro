@@ -1,3 +1,7 @@
+import {
+  moveAllDayRange,
+  moveTimedRange,
+} from '@app/components/date-time-range/time-range';
 import type { OutOfOfficeProperties } from '@service-calendar/generated/schemas/outOfOfficeProperties';
 import type { GuestPolicy } from '@service-storage/generated/schemas/guestPolicy';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
@@ -24,7 +28,6 @@ import {
   eventHasEnded,
   guestEmail,
   initialGuestOptions,
-  moveAllDayRange,
   PAST_EVENT_GUESTS_WARNING,
   type SelectedEventEditorGuest,
 } from './event-form-model';
@@ -421,13 +424,33 @@ export function createCalendarEventFormController(
     replaceState(value);
   };
 
-  const setStart = (start: string) =>
-    replaceState(
-      state().allDay ? moveAllDayRange(state(), start) : { ...state(), start }
-    );
+  // Until the end is picked in this edit it follows the start, keeping the
+  // event's length; once picked, it stays where the user put it.
+  let endChosen = false;
 
-  const setAllDay = (allDay: boolean) =>
+  const setStart = (start: string) => {
+    const current = state();
+    if (endChosen) {
+      replaceState({ ...current, start });
+      return;
+    }
+    replaceState(
+      current.allDay
+        ? moveAllDayRange(current, start)
+        : moveTimedRange(current, start)
+    );
+  };
+
+  const setEnd = (end: string) => {
+    if (end === state().end) return;
+    endChosen = true;
+    setField('end', end);
+  };
+
+  const setAllDay = (allDay: boolean) => {
+    endChosen = false;
     replaceState(convertTimesForAllDay(state(), allDay));
+  };
 
   const setEventKind = (kind: EventEditorEventKind) => {
     if (kind === eventKind()) return;
@@ -588,6 +611,7 @@ export function createCalendarEventFormController(
    */
   const resetDetails = () => {
     const initial = initialValue();
+    endChosen = false;
     batch(() => {
       setState({
         ...state(),
@@ -610,6 +634,7 @@ export function createCalendarEventFormController(
   const replaceFromExternal = (next: EventEditorInitialValues) => {
     const cloned = cloneValue(next);
     const guests = initialGuestOptions(next.guests, options.guestOptions());
+    endChosen = false;
     batch(() => {
       setInitialValue(cloned);
       setState(cloned);
@@ -636,6 +661,7 @@ export function createCalendarEventFormController(
     setReminderMinutes,
     setField,
     setStart,
+    setEnd,
     setAllDay,
     eventKind,
     isOutOfOffice,

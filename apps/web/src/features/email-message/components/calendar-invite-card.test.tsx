@@ -129,6 +129,60 @@ describe('native invitation card', () => {
     ).toBeNull();
     expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0);
   });
+  it('points at the invitation attachment only from outside it', () => {
+    const noMatch: InvitationResolution = { kind: 'no_match' };
+    render(() => (
+      <>
+        <CalendarInviteCard
+          invitation={invitationFixture}
+          actions={{ resolution: noMatch }}
+        />
+        <CalendarInviteCard
+          invitation={invitationFixture}
+          actions={{ resolution: noMatch }}
+          inCalendarFile
+        />
+      </>
+    ));
+    const [inline, inFile] = screen.getAllByText(/^Saved invitation\./);
+    expect(inline.textContent).toBe(
+      'Saved invitation. Open the original email or invitation attachment for more options.'
+    );
+    expect(inFile.textContent).toBe('Saved invitation.');
+  });
+
+  it('points a saved shared event at its attachment only from outside it', () => {
+    render(() => (
+      <>
+        <CalendarInviteCard invitation={invitationFixtures.shared} />
+        <CalendarInviteCard
+          invitation={invitationFixtures.shared}
+          inCalendarFile
+        />
+      </>
+    ));
+    const [inline, inFile] = screen.getAllByText(/^Shared event\./);
+    expect(inline.textContent).toBe(
+      'Shared event. Open the original email or event attachment to add it to a calendar.'
+    );
+    expect(inFile.textContent).toBe('Shared event.');
+  });
+
+  it('sends a shared event matching several accounts to the calendar to choose', () => {
+    render(() => (
+      <CalendarInviteCard
+        invitation={invitationFixtures.shared}
+        actions={{ resolution: { kind: 'ambiguous' } }}
+      />
+    ));
+    expect(
+      screen.getByText(
+        'This event matches multiple accounts. Open your calendar to choose.'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText('On your calendar.')).toBeNull();
+  });
+
   it('expands guest identities and descriptions explicitly', () => {
     render(() => <CalendarInviteCard invitation={invitationFixture} />);
     fireEvent.click(screen.getByRole('button', { name: '+3 more' }));

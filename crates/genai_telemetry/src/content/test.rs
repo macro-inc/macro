@@ -2,6 +2,17 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn tool_media_pixels_are_omitted_without_changing_the_public_result() {
+    let result = json!({"revision":"scene-1","modelMedia":[{"type":"image","mediaType":"image/png","data":"never-record-these-pixels"}]});
+    let (captured, omitted) = bounded_json_string(&result, &Limits::default());
+    assert!(omitted);
+    assert!(!captured.contains("never-record-these-pixels"));
+    assert!(captured.contains("image/png"));
+    assert!(captured.contains("encodedBytes"));
+    assert_eq!(result["modelMedia"][0]["data"], "never-record-these-pixels");
+}
+
+#[test]
 fn truncate_chars_borrows_when_within_budget() {
     assert!(matches!(truncate_chars("hello", 5), Cow::Borrowed("hello")));
     assert!(matches!(truncate_chars("", 0), Cow::Borrowed("")));

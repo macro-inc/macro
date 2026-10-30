@@ -11,8 +11,8 @@ use crate::domain::model::{
     AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
     ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LeaseView, LogAppended,
     ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim,
-    SessionManager, SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog,
-    StoredQueuedAction, ThreadSession, TurnPrompter,
+    SessionManager, SessionPreviewCandidate, SessionSource, SessionStatus, SessionVisibility,
+    StoredAgentSessionLog, StoredQueuedAction, ThreadSession, TurnPrompter,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -90,6 +90,8 @@ pub struct InMemoryAgentSessionRepo {
     /// Sessions an agent conversation sends its messages to, mirroring the
     /// current rows of `agent_conversation_sessions`.
     conversation_sessions: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
+    /// Sessions whose name was generated, mirroring `name_is_generated`.
+    generated_names: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -212,6 +214,10 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             status: SessionStatus::default(),
             created_at: now,
             modified_at: now,
+            source: params.purpose.source(),
+            visibility: params
+                .purpose
+                .visibility(params.bot_id, params.thread_id, false),
         };
         if let Some(hash) = params.egress_token_hash {
             self.egress_token_hashes
@@ -427,6 +433,25 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(())
     }
 
+    async fn set_origin(
+        &self,
+        id: AgentSessionId,
+        source: SessionSource,
+        visibility: SessionVisibility,
+    ) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        session.source = source;
+        session.visibility = visibility;
+        session.modified_at = chrono::Utc::now();
+        Ok(())
+    }
+
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
         let mut sessions = self
             .sessions
@@ -435,6 +460,10 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         let session = sessions.get_mut(&id).ok_or_else(|| {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
+        self.generated_names
+            .lock()
+            .expect("in-memory generated name store is not poisoned")
+            .remove(&id);
         if session.name == name {
             return Ok(());
         }
@@ -475,6 +504,52 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
         if session.name != DEFAULT_AGENT_SESSION_NAME || session.is_archived {
+            return Ok(false);
+        }
+        session.name = name.to_owned();
+        session.modified_at = chrono::Utc::now();
+        self.generated_names
+            .lock()
+            .expect("in-memory generated name store is not poisoned")
+            .insert(id);
+        Ok(true)
+    }
+
+    async fn generated_name(&self, id: AgentSessionId) -> Result<Option<String>> {
+        let sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        let generated = self
+            .generated_names
+            .lock()
+            .expect("in-memory generated name store is not poisoned")
+            .contains(&id);
+        Ok((generated && !session.is_archived).then(|| session.name.clone()))
+    }
+
+    async fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
+        name: &str,
+    ) -> Result<bool> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        let generated = self
+            .generated_names
+            .lock()
+            .expect("in-memory generated name store is not poisoned")
+            .contains(&id);
+        if !generated || session.name != current || session.is_archived {
             return Ok(false);
         }
         session.name = name.to_owned();
@@ -1032,6 +1107,8 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         status: SessionStatus::NoMessages,
         created_at: now,
         modified_at: now,
+        source: SessionSource::User,
+        visibility: SessionVisibility::Listed,
     }
 }
 

@@ -202,11 +202,10 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
       </ThreadList>
       <ScrollToBottomOverlay
         scrollState={scrollState}
-        onScrollToBottom={() => {
+        onScrollToBottom={(behavior) => {
           setHighlightedId(undefined);
-          navigation()?.scrollToLatest();
+          navigation()?.scrollToLatest(behavior);
         }}
-        class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
       />
       <ReplyToSelection container={transcriptEl()} onReply={quoteSelection} />
     </div>

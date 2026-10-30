@@ -11,10 +11,10 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import Paperclip from '@icon/system/regular/paperclip.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
-import DotsThree from '@phosphor/dots-three.svg';
-import Paperclip from '@phosphor/paperclip.svg';
-import Trash from '@phosphor/trash.svg';
 import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
@@ -212,6 +212,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     composeContext.presentation.isTouch() &&
     !state.hasBodyText() &&
     state.replyType() !== 'forward';
+  const quotedContent = () =>
+    state.replyType() === 'forward' ? 'forwarded message' : 'quoted text';
+  const quoteToggleLabel = () =>
+    `${form.replyAppended() ? 'Hide' : 'Show'} ${quotedContent()}`;
   const signatureHtml = () =>
     composeContext.presentation.signaturesEnabled()
       ? state.signatureHtml()
@@ -449,17 +453,18 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
 
   const AttachButton = () => (
     <Button
+      variant="ghost"
       ref={(el) =>
         fileSelector(el, () => ({
           multiple: true,
           onSelect: handleAddAttachments,
         }))
       }
-      size="icon-composer"
+      size="icon-md"
       tooltip="Attach"
       disabled={editingDisabled()}
     >
-      <Paperclip />
+      <Paperclip class="size-4 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 
@@ -672,7 +677,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
               placeholder={
                 isMobileCompose()
                   ? 'Use `@` to reference files'
-                  : 'Reply — @mention to share or cc people'
+                  : `${state.replyType() === 'forward' ? 'Forward' : 'Reply'} — @mention to share or cc people`
               }
               portalScope={isMobileCompose() ? 'local' : 'split'}
               refFn={(el) => props.markdownDomRef?.(el)}
@@ -718,16 +723,16 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="xs"
                 class="text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-                tooltip="Show quoted text"
-                onclick={(e: MouseEvent) => {
+                onClick={(e: MouseEvent) => {
                   e.stopPropagation();
                   setQuoteCollapsed(false);
                   setComposerExpanded(true);
                 }}
               >
-                <DotsThree />
+                <DotsThree class="size-3.5 shrink-0 pointer-events-none" />
+                Show {quotedContent()}
               </Button>
             </div>
           </Show>
@@ -743,21 +748,18 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
               data-corvu-no-drag=""
               onClick={(e) => e.stopPropagation()}
             >
-              <Tooltip
-                label={
-                  form.replyAppended() ? 'Hide quoted text' : 'Show quoted text'
-                }
-              >
+              <Tooltip label={quoteToggleLabel()}>
                 <KToggleButton
                   as={Button}
+                  aria-label={quoteToggleLabel()}
                   variant="ghost"
                   size="icon-sm"
-                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted [&_:where(svg)]:size-5"
+                  class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"
                   pressed={form.replyAppended()}
                   disabled={editingDisabled()}
                   onChange={toggleQuotedText}
                 >
-                  <DotsThree />
+                  <DotsThree class="size-5 shrink-0" />
                 </KToggleButton>
               </Tooltip>
             </div>
@@ -790,12 +792,13 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             >
               <div class="flex shrink-0 items-center gap-1">
                 <Button
+                  variant="ghost"
                   onClick={deleteDraftAndReset}
                   tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-                  size="icon-composer"
+                  size="icon-md"
                   disabled={editingDisabled()}
                 >
-                  <Trash />
+                  <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
                 <AttachButton />
                 <Show
@@ -823,8 +826,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                   pending={isSending()}
                   hidden={sendActionHidden()}
                   onClick={() => sendEmail()}
-                  tooltip={sendUnavailableReason() ?? scheduleActionLabel()}
-                  shortcut={sendUnavailableReason() ? undefined : 'cmd+enter'}
+                  tooltip={{
+                    content: sendUnavailableReason() ?? scheduleActionLabel(),
+                    shortcut: sendUnavailableReason() ? undefined : 'cmd+enter',
+                  }}
                   aria-label={scheduleActionLabel()}
                 />
               </div>

@@ -2,6 +2,8 @@ import { expect, it } from 'vitest';
 import {
   extendGanttRange,
   ganttCreationRange,
+  ganttDragAxis,
+  rescheduledGanttDays,
   snapGanttGuide,
 } from './gantt-interaction';
 
@@ -34,4 +36,40 @@ it('extends only approached calendar edges, including viewports wider than their
     start: -40,
     end: 160,
   });
+});
+
+it('reschedules a bar by moving it whole or dragging one inclusive edge, never past the other', () => {
+  expect(rescheduledGanttDays({ start: 10, end: 14 }, 'move', 3)).toEqual({
+    start: 13,
+    end: 17,
+  });
+  expect(rescheduledGanttDays({ start: 10, end: 14 }, 'move', -12)).toEqual({
+    start: -2,
+    end: 2,
+  });
+  expect(rescheduledGanttDays({ start: 10, end: 14 }, 'start', -2)).toEqual({
+    start: 8,
+    end: 14,
+  });
+  expect(rescheduledGanttDays({ start: 10, end: 14 }, 'start', 9)).toEqual({
+    start: 14,
+    end: 14,
+  });
+  expect(rescheduledGanttDays({ start: 10, end: 14 }, 'end', 2)).toEqual({
+    start: 10,
+    end: 16,
+  });
+  expect(rescheduledGanttDays({ start: 10, end: 14 }, 'end', -9)).toEqual({
+    start: 10,
+    end: 10,
+  });
+});
+
+it('tells a vertical drag from a horizontal one once the press has moved far enough', () => {
+  expect(ganttDragAxis(2, 2, 4)).toBeUndefined();
+  expect(ganttDragAxis(1, 6, 4)).toBe('vertical');
+  expect(ganttDragAxis(-3, -9, 4)).toBe('vertical');
+  expect(ganttDragAxis(6, 1, 4)).toBe('horizontal');
+  // A diagonal reschedules, as every drag did before.
+  expect(ganttDragAxis(5, 5, 4)).toBe('horizontal');
 });

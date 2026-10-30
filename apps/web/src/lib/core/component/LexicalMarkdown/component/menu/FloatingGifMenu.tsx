@@ -1,11 +1,17 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCanEdit } from '@core/signal/permissions';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, InputGroup, Surface } from '@ui';
-import { $getSelection, $setSelection, type BaseSelection } from 'lexical';
+import {
+  $getRoot,
+  $getSelection,
+  $setSelection,
+  type BaseSelection,
+} from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -38,10 +44,14 @@ false && clickOutside;
 
 const COLUMNS = 2;
 const RESULT_LIMIT = 30;
+// Search field, padding, and "Powered by" row around the grid.
+const PANEL_CHROME_HEIGHT = 76;
+const MAX_GRID_HEIGHT = 280;
 
 /**
  * GIF search, opened via TRY_INSERT_GIF_COMMAND (`/gif` or a composer's +).
- * The search field takes focus; arrows move through the grid, Enter inserts,
+ * Desktop focuses the search field; touch leaves the composer focused so the
+ * picker does not vanish. Arrows move through the grid, Enter inserts,
  * Escape closes. Portalled like the slash menu so the editor shell's click
  * and keydown handlers don't swallow the picker's events.
  */
@@ -62,6 +72,18 @@ export function FloatingGifMenu(
   const [searchTerm, setSearchTerm] = createSignal('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
+    number | undefined
+  >(undefined);
+
+  const gridMaxHeight = () => {
+    const available = menuAvailableHeight();
+    if (available === undefined) return MAX_GRID_HEIGHT;
+    return Math.min(
+      MAX_GRID_HEIGHT,
+      Math.max(0, available - PANEL_CHROME_HEIGHT)
+    );
+  };
   // The search field takes focus, so the editor's caret is kept to insert at.
   let insertAt: BaseSelection | null = null;
   let inputRef: HTMLInputElement | undefined;
@@ -104,7 +126,9 @@ export function FloatingGifMenu(
     setTimeout(() => {
       if (!canEdit() || !editor()?.isEditable()) return;
       setMenuOpen(true);
-      inputRef?.focus();
+      // Autofocusing search on touch moves focus out of the composer and
+      // lets iOS hide the caret — the picker then vanishes. Tap to search.
+      if (!isTouchDevice()) inputRef?.focus();
     }, 0);
   });
 
@@ -118,6 +142,7 @@ export function FloatingGifMenu(
     currentEditor.update(() => {
       if (!canEdit() || !currentEditor.isEditable()) return;
       if (selection) $setSelection(selection.clone());
+      else if (!$getSelection()) $getRoot().selectEnd();
       $insertGifNode(gif);
     });
     closeToEditor();
@@ -162,14 +187,21 @@ export function FloatingGifMenu(
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          data-holds-prompts
           class="w-80 cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(() => window.getSelection()),
             reactiveOnContainer: editor()?.getRootElement(),
+            onAvailableHeight: setMenuAvailableHeight,
+            fullHeight: MAX_GRID_HEIGHT + PANEL_CHROME_HEIGHT,
           }}
           use:clickOutside={resetMenu}
           on:touchstart={(event) => event.stopPropagation()}
-          // Keep focus in the search field while picking a GIF.
+          // Keep composer/search focus while picking a GIF. Cancel both
+          // pointerdown and mousedown; iOS still emits the latter.
+          on:pointerdown={(event) => {
+            if (event.target !== inputRef) event.preventDefault();
+          }}
           on:mousedown={(event) => {
             if (event.target !== inputRef) event.preventDefault();
           }}
@@ -189,7 +221,10 @@ export function FloatingGifMenu(
               </InputGroup.Addon>
             </InputGroup>
 
-            <div class="h-70 overflow-y-auto overscroll-contain scrollbar-hidden">
+            <div
+              class="overflow-y-auto overscroll-contain scrollbar-hidden"
+              style={{ height: `${gridMaxHeight()}px` }}
+            >
               <Switch>
                 <Match when={gifs.error}>
                   <div class="flex h-full flex-col items-center justify-center gap-1 text-sm text-ink-muted">

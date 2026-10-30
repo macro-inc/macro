@@ -90,12 +90,62 @@ test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
   await expectLanded(page, 'Entered Macro at /channel/launch');
 });
 
+test('an email link opens the dropped step and a new session keeps later progress', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow&step=plan', {
+    emailAccounts: [
+      {
+        address: 'ada@acme.com',
+        isPrimary: true,
+        ownerId: 'macro|ada@acme.com',
+      },
+    ],
+  });
+  await expect(heading(page, 'Free Claude & GPT for 30 days.')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Start 30 day trial' })
+  ).toBeVisible();
+  expect(await fakeEvents(page)).toContainEqual({
+    event: 'onboarding_v4_started',
+    data: { signup_method: 'google', entry_step: 'plan' },
+  });
+
+  await page.getByRole('button', { name: 'Back to previous step' }).click();
+  await expect(heading(page, 'Built for teams.')).toBeVisible();
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto('/?view=flow');
+  await expect(heading(page, 'Built for teams.')).toBeVisible();
+});
+
+test('a work-email link shows the inbox that is already connected', async ({
+  page,
+}) => {
+  await openFixture(page, '/?view=flow&step=work', {
+    emailAccounts: [
+      {
+        address: 'ada@acme.com',
+        isPrimary: true,
+        ownerId: 'macro|ada@acme.com',
+      },
+    ],
+  });
+  await expect(heading(page, /Connect your work/)).toBeVisible();
+  await expect(page.getByText('Work email connected')).toBeVisible();
+  await expect(page.getByText('ada@acme.com')).toBeVisible();
+});
+
+test('an unknown step link starts at welcome', async ({ page }) => {
+  await openFixture(page, '/?view=flow&step=not-a-step');
+  await expect(heading(page, 'Create your workspace')).toBeVisible();
+});
+
 test('Free, Pro, and Max appear below the unchanged trial offer', async ({
   page,
 }) => {
   await openFixture(page, '/?view=flow&next=/md/notes');
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -144,7 +194,7 @@ test('Max checkout returns with a licensed account and no trial', async ({
 }) => {
   await openFixture(page, '/?view=flow');
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -167,7 +217,7 @@ test('cancelling checkout returns to a retryable trial offer', async ({
 }) => {
   await openFixture(page, '/?view=flow', { checkoutOutcome: 'cancel' });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -189,7 +239,7 @@ test('an ineligible trial explains itself instead of charging', async ({
     'The 30-day trial is only available for your first Premium subscription';
   await openFixture(page, '/?view=flow', { failures: { checkout: message } });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -219,7 +269,7 @@ test('an invite’s free months replace the trial and keep its promotion', async
     },
   });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
     );
@@ -236,7 +286,7 @@ test('an invite’s free months replace the trial and keep its promotion', async
 test('an existing team member just confirms and moves on', async ({ page }) => {
   await openFixture(page, '/?view=flow', { teams: [{ name: 'Acme' }] });
   await page.evaluate(() => {
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'team' })
     );
@@ -357,7 +407,7 @@ for (const width of [1440, 390]) {
         'plan',
       ]) {
         await page.evaluate((step) => {
-          sessionStorage.setItem(
+          localStorage.setItem(
             'onboarding-flow-step',
             JSON.stringify({ user: 'macro|ada@acme.com', step })
           );
@@ -380,7 +430,7 @@ for (const width of [1440, 390]) {
       }
       // The explicit palette also survives a simulated Google redirect that drops query params.
       await page.evaluate(() =>
-        sessionStorage.setItem(
+        localStorage.setItem(
           'onboarding-flow-step',
           JSON.stringify({ user: 'macro|ada@acme.com', step: 'work' })
         )
@@ -468,7 +518,7 @@ test('tools keep Drive and Sheets, hide excluded Google apps and preserve native
     ],
   });
   await page.evaluate(() =>
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
     )
@@ -602,7 +652,7 @@ for (const githubLinkStatus of [
       ],
     });
     await page.evaluate(() =>
-      sessionStorage.setItem(
+      localStorage.setItem(
         'onboarding-flow-step',
         JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
       )
@@ -635,7 +685,7 @@ test('connection status failure leaves native GitHub available', async ({
 }) => {
   await openFixture(page, '/?view=flow', { connectionFailures: ['pipedream'] });
   await page.evaluate(() =>
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
     )
@@ -666,7 +716,7 @@ test('enables an existing native tool without reconnecting', async ({
     ],
   });
   await page.evaluate(() =>
-    sessionStorage.setItem(
+    localStorage.setItem(
       'onboarding-flow-step',
       JSON.stringify({ user: 'macro|ada@acme.com', step: 'tools' })
     )
@@ -689,7 +739,7 @@ for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await openFixture(page, '/?view=flow', { trialEligible: false });
     await page.evaluate(() => {
-      sessionStorage.setItem(
+      localStorage.setItem(
         'onboarding-flow-step',
         JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
       );
@@ -723,7 +773,7 @@ test.describe('subscription recovery', () => {
         failures: width === 390 ? { trialEligibility: 'offline' } : {},
       });
       await page.evaluate(() =>
-        sessionStorage.setItem(
+        localStorage.setItem(
           'onboarding-flow-step',
           JSON.stringify({ user: 'macro|ada@acme.com', step: 'plan' })
         )

@@ -217,3 +217,41 @@ async fn it_works_with_double_encoded_scheme() {
         assert_eq!(original_url.0.as_str(), "https://example.com/");
     });
 }
+
+#[test]
+fn local_frontend_origin_is_accepted_only_when_configured() {
+    let origin = Url::parse("https://peter-dev:29809").unwrap();
+    for path in ["/app/login", "/app/inbox-link-callback"] {
+        let url = origin.join(path).unwrap();
+        assert!(is_allowed_original_url_with_local_origin(
+            &url,
+            Some(&origin)
+        ));
+        assert!(!is_allowed_original_url_with_local_origin(&url, None));
+    }
+}
+
+#[test]
+fn local_frontend_origin_requires_exact_https_origin_without_credentials() {
+    let origin = Url::parse("https://peter-dev:29809").unwrap();
+    for candidate in [
+        "http://peter-dev:29809/app/login",
+        "https://peter-dev:29810/app/login",
+        "https://peter-dev/app/login",
+        "https://peter-dev.evil.example:29809/app/login",
+        "https://evil.example:29809/app/login",
+        "https://user:password@peter-dev:29809/app/login",
+        "https://user@peter-dev:29809/app/login",
+    ] {
+        let url = Url::parse(candidate).unwrap();
+        assert!(
+            !is_allowed_original_url_with_local_origin(&url, Some(&origin)),
+            "{url}"
+        );
+    }
+    let http_origin = Url::parse("http://peter-dev:29809").unwrap();
+    assert!(!is_allowed_original_url_with_local_origin(
+        &http_origin,
+        Some(&http_origin)
+    ));
+}

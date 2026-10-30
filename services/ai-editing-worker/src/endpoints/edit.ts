@@ -122,7 +122,7 @@ const EditBody = z
  *  chains (multiple, advancing on provider errors/rate limits). Roles the mode
  *  does not run are left unresolved, so their providers' keys are never
  *  required. The schema refinements guarantee the mode's roles are present. */
-function buildModels(
+export function buildModels(
   env: ReturnType<typeof getEnv>,
   models: EditModels,
   mode: EditMode,

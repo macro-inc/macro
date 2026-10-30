@@ -1,3 +1,10 @@
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Funnel from '@icon/system/regular/funnel-simple.svg';
+import Rows from '@icon/system/regular/rows.svg';
+import SortAscending from '@icon/system/regular/sort-ascending.svg';
+import SortDescending from '@icon/system/regular/sort-descending.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import XCircle from '@icon/system/regular/x-circle.svg';
 import {
   TABLE_COLUMN_TYPES,
   type TableColumnFilter,
@@ -7,13 +14,6 @@ import { TABLE_COLUMN_TYPE_LABELS } from '@macro-inc/spreadsheet/table-columns';
 import { filterSummary } from '@macro-inc/spreadsheet/table-filters';
 import ArrowLineLeft from '@phosphor/arrow-line-left.svg';
 import ArrowLineRight from '@phosphor/arrow-line-right.svg';
-import CaretDown from '@phosphor/caret-down.svg';
-import Funnel from '@phosphor/funnel-simple.svg';
-import Rows from '@phosphor/rows.svg';
-import SortAscending from '@phosphor/sort-ascending.svg';
-import SortDescending from '@phosphor/sort-descending.svg';
-import Trash from '@phosphor/trash.svg';
-import XCircle from '@phosphor/x-circle.svg';
 import FunnelFill from '@phosphor-fill/funnel-simple-fill.svg';
 import { Dropdown } from '@ui/components/Dropdown';
 import { createSignal, For, Show } from 'solid-js';
@@ -59,9 +59,10 @@ export function TableColumnMenu(props: {
         modal={false}
       >
         <Dropdown.Trigger
+          aria-label={`${props.column} column menu${props.filter ? ', filtered' : ''}`}
+          tooltip={`${props.column} column menu${props.filter ? ', filtered' : ''}`}
           variant="ghost"
           size="icon-xs"
-          label={`${props.column} column menu${props.filter ? ', filtered' : ''}`}
           title={
             props.filter
               ? `Filtered: ${filterSummary(props.filter)}`

@@ -727,3 +727,77 @@ async fn a_blocked_worker_does_not_block_discovery_or_renewal_or_queue_duplicate
     complete_handshake(&containers.container(blocked).unwrap()).await;
     blocked_open.await.unwrap();
 }
+
+#[tokio::test]
+async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
+    use agent_runtime_protocol::domain::notification::{
+        ImportOutcome, ImportSettlement, ImportWorkspace, ReviewSettlement,
+    };
+    let outbox = Arc::new(Outbox::default());
+    let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    turns.settled(id).await;
+    let review = Uuid::now_v7();
+    outbox
+        .enqueue(
+            PendingNotification::new(ProduceNotification {
+                session_id: id,
+                subject_id: review.to_string(),
+                event: NotificationEvent::ReviewSettled(ReviewSettlement::Import {
+                    import: ImportSettlement {
+                        source: ImportWorkspace::Notion,
+                        outcome: ImportOutcome::Completed,
+                        error: None,
+                        imported: 3,
+                        planned: 3,
+                        documents: 3,
+                        databases: 0,
+                        database_rows: 0,
+                        task_lists: 0,
+                        task_rows: 0,
+                        skipped: 1,
+                        not_written: 0,
+                        shared_with_team: 0,
+                        already_in_macro: 0,
+                        waiting_on_teammates: 0,
+                        root_folder_id: None,
+                        failures: Vec::new(),
+                        hand_items: Vec::new(),
+                    },
+                }),
+                dedupe_key: None,
+                wake: true,
+            })
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    service.recover_notifications().await.unwrap();
+    container.agent().wait_for_requests(4).await;
+
+    let prompt = prompts(&container.agent());
+    let ContentBlock::Text(context) = &prompt.last().unwrap()[0] else {
+        panic!("the events lead the prompt");
+    };
+    assert!(
+        context.text.contains(&format!(
+            "<m-notification kind=\"review.settled\" subject=\"{review}\""
+        )),
+        "{}",
+        context.text
+    );
+    assert!(
+        context
+            .text
+            .contains("&quot;outcome&quot;:&quot;completed&quot;"),
+        "{}",
+        context.text
+    );
+    let prompter = repo.turn_prompter(id).await.unwrap().unwrap();
+    assert_eq!(
+        prompter.kind,
+        agent_session::domain::model::PrompterKind::System
+    );
+}

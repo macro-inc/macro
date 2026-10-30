@@ -173,6 +173,44 @@ describe('recurrence submission', () => {
     ]);
   });
 
+  // October 1, 2026 is a Thursday.
+  it('reads a weekly rule without weekdays as the weekly preset and keeps its text', () => {
+    const controller = controllerFor(
+      { ...recurringValue, recurrenceLines: ['RRULE:FREQ=WEEKLY'] },
+      { isEdit: true }
+    );
+    expect(controller.recurrenceChoice()).toBe('weekly');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY',
+    ]);
+
+    // The rule follows the start, as the preset does.
+    controller.setStart('2026-10-02T18:00');
+    controller.setField('end', '2026-10-02T18:30');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY',
+    ]);
+  });
+
+  it('opens a weekly rule with an end but no weekdays on the start’s weekday', () => {
+    const controller = controllerFor(
+      { ...recurringValue, recurrenceLines: ['RRULE:FREQ=WEEKLY;COUNT=3'] },
+      { isEdit: true }
+    );
+    expect(controller.recurrenceChoice()).toBe('custom');
+    expect(controller.customConfig().byDay).toEqual(['TH']);
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY;COUNT=3',
+    ]);
+
+    // Moved to Friday, the series keeps the Thursday the editor shows.
+    controller.setStart('2026-10-02T18:00');
+    controller.setField('end', '2026-10-02T18:30');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=TH;COUNT=3',
+    ]);
+  });
+
   it('converts UNTIL when changing a timed event to all-day', () => {
     const controller = controllerFor(
       {
@@ -649,4 +687,73 @@ it('allows unrelated edits to an existing Teams meeting on a calendar without co
   expect(controller.conferenceError()).toBeUndefined();
   expect(controller.canSave()).toBe(true);
   expect(controller.submitValues()?.conference).toBeUndefined();
+});
+
+describe('moving the start', () => {
+  const timed = {
+    allDay: false,
+    start: '2030-01-01T10:00',
+    end: '2030-01-01T11:30',
+  };
+
+  it('carries the end along, keeping the event’s length', () => {
+    const controller = controllerFor(timed);
+    controller.setStart('2030-01-01T14:00');
+    expect(controller.state()).toMatchObject({
+      start: '2030-01-01T14:00',
+      end: '2030-01-01T15:30',
+    });
+    controller.setStart('2030-01-02T23:00');
+    expect(controller.state().end).toBe('2030-01-03T00:30');
+    expect(controller.dateRangeError()).toBeUndefined();
+  });
+
+  it('leaves an end the user picked in this edit where they put it', () => {
+    const controller = controllerFor(timed);
+    controller.setEnd('2030-01-01T17:00');
+    controller.setStart('2030-01-01T15:00');
+    expect(controller.state()).toMatchObject({
+      start: '2030-01-01T15:00',
+      end: '2030-01-01T17:00',
+    });
+  });
+
+  it('does the same for all-day dates', () => {
+    const allDay = { allDay: true, start: '2030-01-01', end: '2030-01-02' };
+    const following = controllerFor(allDay);
+    following.setStart('2030-01-05');
+    expect(following.state().end).toBe('2030-01-06');
+
+    const picked = controllerFor(allDay);
+    picked.setEnd('2030-01-04');
+    picked.setStart('2030-01-03');
+    expect(picked.state().end).toBe('2030-01-04');
+  });
+
+  it('follows the start again once the times are rewritten', () => {
+    const toggled = controllerFor(timed);
+    toggled.setEnd('2030-01-01T17:00');
+    toggled.setAllDay(true);
+    toggled.setStart('2030-01-03');
+    expect(toggled.state()).toMatchObject({
+      start: '2030-01-03',
+      end: '2030-01-03',
+    });
+
+    const reset = controllerFor(timed, { isEdit: true });
+    reset.setEnd('2030-01-01T17:00');
+    reset.resetDetails();
+    reset.setStart('2030-01-01T12:00');
+    expect(reset.state().end).toBe('2030-01-01T13:30');
+  });
+
+  it('keeps the end of a range that has no length to keep', () => {
+    const controller = controllerFor({
+      allDay: false,
+      start: '2030-01-01T12:00',
+      end: '2030-01-01T09:00',
+    });
+    controller.setStart('2030-01-01T08:00');
+    expect(controller.state().end).toBe('2030-01-01T09:00');
+  });
 });
