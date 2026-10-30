@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use models_email::email::service::label::Label;
-use models_email::service::contact::{Contact, ContactList};
+use models_email::service::contact::Contact;
 use uuid::Uuid;
 
 use super::super::models::{
