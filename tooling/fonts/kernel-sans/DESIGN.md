@@ -68,7 +68,9 @@ wins; note the exception in a comment.
    - At the inner vertex of two diagonals (v w y A V W Y, the figures):
      `geom.crotch_trap`, depth `p.trap`, which ends in a flat floor and
      blunts the vertex. Never a long slit or a needle cut, and no trap at
-     crotches wider than about 70 degrees (R's leg, K's leg, @).
+     crotches wider than about 70 degrees (R's leg, K's leg, @). Where one
+     edge is a bar that runs on past the vertex (the bars of 2 and 4), use
+     half depth, or the trap reads as a slit along the bar.
    `p.trap` is about 6 at Light, 12 at Regular and 41 at ExtraBold. Traps
    must open into the white cleanly and never leave slivers.
 4. **Square dots.** Dots of i, j, and punctuation are squares of side `p.dot`

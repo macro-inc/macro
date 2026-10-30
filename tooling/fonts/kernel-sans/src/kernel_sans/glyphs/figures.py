@@ -347,7 +347,8 @@ def _two(p):
     base = rect(0, 0, w + p.w(6, 0.1), hb)
     crotch_x = mo[0] - d[0] * (mo[1] - hb) / d[1]
     shape = up + spine + base
-    return shape - crotch_trap((crotch_x, hb), 0, d, p.trap)
+    # One-sided crotch (the base runs on past it): half depth, as in 4.
+    return shape - crotch_trap((crotch_x, hb), 0, d, p.trap * 0.5)
 
 
 def _waist(p, k):
@@ -390,7 +391,9 @@ def _three(p):
 def _four(p):
     s = p.fstem
     w = p.w(506, 0.75)
-    t = p.fstem * 0.9
+    # The diagonal thins above Regular (0.78 of the stem at ExtraBold), or
+    # the counter closes to a sliver.
+    t = p.fstem * (0.9 - 0.12 * max(0.0, p.grow) / 80)
     hb = _fh(p)
     yb = P.CAP * 0.235
     xs = w - p.w(84, 0.25) - s
@@ -411,8 +414,10 @@ def _four(p):
     # edge, opening into the counter below (DESIGN.md, like n).
     yc = oy0 + (xs - hw) * dy / dx
     shape = shape - stem_trap(xs, yc, p.trap, side="left")
-    # Crotch where the inner edge meets the bar.
-    shape = shape - crotch_trap((hw, oy0), 0, (dx, dy), p.trap)
+    # Crotch where the inner edge meets the bar. It is one-sided (the bar
+    # runs on past it), so at full depth it reads as a slit along the bar;
+    # half depth just blunts it.
+    shape = shape - crotch_trap((hw, oy0), 0, (dx, dy), p.trap * 0.5)
     return shape
 
 
