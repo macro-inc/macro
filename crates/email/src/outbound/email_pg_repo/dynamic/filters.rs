@@ -991,7 +991,15 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
     }
 }
 
-/// Use the same visibility rule for the candidate and its displayed preview.
+/// Use the same visibility rule for the candidate and its displayed preview:
+/// present, not trashed, and not a pending sequence step (a draft whose
+/// schedule has a source and is neither sent nor failed), which stays out of
+/// every mail list until it is sent or fails. The static preview views and
+/// `recompute_thread_metadata` restate the sequence predicate.
 pub(super) fn build_lateral_trash_exclusion(resolved: &ResolvedFilters) -> SqlFragment {
-    build_trash_check(resolved)
+    let mut f = build_trash_check(resolved);
+    f.push_raw(PENDING_SEQUENCE_STEP_EXCLUSION);
+    f
 }
+
+const PENDING_SEQUENCE_STEP_EXCLUSION: &str = " AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages sm_seq WHERE sm_seq.message_id = m.id AND sm_seq.source IS NOT NULL AND NOT sm_seq.sent AND sm_seq.delivery_status <> 'failed')";

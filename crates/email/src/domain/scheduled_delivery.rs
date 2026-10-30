@@ -48,9 +48,36 @@ pub enum PreparationError {
     /// A temporary failure before submission may be retried safely.
     #[error(transparent)]
     Retry(anyhow::Error),
+    /// Not a failure: a prerequisite is not met yet, such as the message this
+    /// one replies to still being scheduled. Preparation runs again after the
+    /// retry delay.
+    #[error(transparent)]
+    Deferred(anyhow::Error),
     /// The user must review the message, attachments, or account before retrying.
     #[error(transparent)]
     Failed(anyhow::Error),
+}
+
+/// A reply is never delivered before the message it answers, such as the
+/// previous step of a sequence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ReplyOrderError {
+    /// The parent is still scheduled; preparation is deferred until it is sent.
+    #[error("the message this email replies to has not been sent yet")]
+    ParentPending,
+    /// The parent is a draft that is not scheduled or whose delivery failed,
+    /// so it will not be sent unless the user acts; delivery fails.
+    #[error("the message this email replies to was not sent")]
+    ParentUnsent,
+}
+
+impl From<ReplyOrderError> for PreparationError {
+    fn from(error: ReplyOrderError) -> Self {
+        match error {
+            ReplyOrderError::ParentPending => Self::Deferred(error.into()),
+            ReplyOrderError::ParentUnsent => Self::Failed(error.into()),
+        }
+    }
 }
 
 /// A failed send response must retain whether delivery might have occurred.
@@ -203,6 +230,17 @@ where
             );
             repo.release(&claim).await?;
             return Err(error);
+        }
+        Err(PreparationError::Deferred(reason)) => {
+            tracing::info!(
+                event = "email_send.preparation",
+                outcome = "deferred",
+                reason = %reason,
+                retry_delay_secs = PREPARATION_RETRY_SECONDS,
+                duration_ms = started.elapsed().as_millis() as u64,
+                "email preparation deferred until a prerequisite is met"
+            );
+            return repo.release(&claim).await;
         }
         Err(PreparationError::Failed(error)) => {
             tracing::warn!(event = "email_send.preparation", outcome = "failed", error=?error,

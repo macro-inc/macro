@@ -6,7 +6,7 @@ use uuid::Uuid;
 /// Fetches a paginated list of thread previews for the "Important" view.
 /// Includes threads that:
 /// 1. Have messages the provider marks important that are in the inbox, or
-/// 2. Contain draft messages
+/// 2. Contain draft messages other than pending sequence steps
 /// Trashed and provider-missing messages never qualify.
 /// The threads are sorted by timestamp, with preview details taken from the latest qualifying message.
 #[tracing::instrument(skip(pool), err)]
@@ -58,7 +58,8 @@ pub(crate) async fn important_preview_cursor(
                   )
               )
               AND (
-                  m.is_draft
+                  -- A pending sequence step is not the user's draft (see build_lateral_trash_exclusion).
+                  (m.is_draft AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed'))
                   OR (
                       CASE WHEN m.mailbox_state IS NOT NULL THEN m.mailbox_state->>'attention' = 'primary'
                       ELSE m.id IN (

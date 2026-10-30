@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum_extra::extract::Cached;
 use email::domain::{
-    models::EmailErr,
+    models::{EmailErr, ScheduledSendSource},
     scheduled::{EmailSchedulingService, ScheduleChange},
 };
 use email::inbound::axum::api_types::DraftEditPrecondition;
@@ -26,9 +26,9 @@ impl IntoResponse for UpsertScheduledError {
         let status = match &self.0 {
             EmailErr::MessageNotFound(_) => StatusCode::NOT_FOUND,
             EmailErr::Unauthorized => StatusCode::FORBIDDEN,
-            EmailErr::MessageDeliveryConflict(_) | EmailErr::InvalidScheduleTime => {
-                StatusCode::BAD_REQUEST
-            }
+            EmailErr::MessageDeliveryConflict(_)
+            | EmailErr::InvalidScheduleTime
+            | EmailErr::ScheduleSourceUnsupported => StatusCode::BAD_REQUEST,
             _ => {
                 tracing::error!(error=?self.0, "schedule transition failed");
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -55,6 +55,10 @@ pub struct UpsertScheduledRequest {
     pub send_time: DateTime<Utc>,
     /// Per-message signature override; absent uses the inbox's send defaults.
     pub include_signature: Option<bool>,
+    /// What created this send. `sequence` keeps the pending step out of the
+    /// user's Drafts and Scheduled lists (Gmail inboxes only). Absent keeps the
+    /// draft's existing source; only unscheduling clears it.
+    pub source: Option<ScheduledSendSource>,
 }
 
 #[derive(Debug, serde::Serialize, ToSchema)]
@@ -95,7 +99,10 @@ pub async fn handler(
             authorization.authorization.user.macro_user_id.clone(),
             link.id,
             draft_id,
-            ScheduleChange::Set(request.send_time),
+            ScheduleChange::Set {
+                send_time: request.send_time,
+                source: request.source,
+            },
             request.include_signature,
             precondition.draft_generation,
         )

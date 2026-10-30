@@ -3,6 +3,7 @@ use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use email::domain::models::ScheduledSendSource;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;
 use models_email::service::message::Message;
@@ -47,6 +48,10 @@ pub struct GetScheduledQueryParams {
     /// The maximum number of scheduled messages to return.
     #[serde(default = "default_limit")]
     pub limit: u32,
+    /// List only the sends this source created, in every delivery state.
+    /// Without it, the user's own scheduled sends are listed: pending sequence
+    /// steps are hidden, like in Drafts, and failed ones are included.
+    pub source: Option<ScheduledSendSource>,
 }
 
 impl GetScheduledQueryParams {
@@ -102,6 +107,7 @@ pub async fn handler(
         link.id,
         params.offset,
         params.limit,
+        params.source.map(<&'static str>::from),
     )
     .await?;
 

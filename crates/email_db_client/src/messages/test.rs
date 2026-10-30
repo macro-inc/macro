@@ -80,7 +80,7 @@ async fn draft_exists_with_id_returns_false_for_nonexistent_message(
 )]
 async fn get_scheduled_db_messages_returns_unsent_only(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100).await?;
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, None).await?;
 
     // Should return 3 unsent scheduled messages
     assert_eq!(result.len(), 3);
@@ -116,7 +116,7 @@ async fn get_scheduled_db_messages_excludes_sent_messages(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100).await?;
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, None).await?;
 
     let returned_ids: Vec<Uuid> = result.iter().map(|m| m.id).collect();
 
@@ -138,7 +138,7 @@ async fn get_scheduled_db_messages_excludes_non_scheduled_messages(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100).await?;
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, None).await?;
 
     let returned_ids: Vec<Uuid> = result.iter().map(|m| m.id).collect();
 
@@ -168,7 +168,7 @@ async fn get_scheduled_db_messages_excludes_immediate_send_undo_rows(
     .execute(&pool)
     .await?;
 
-    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100).await?;
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, None).await?;
 
     assert!(
         result.iter().all(|message| message.id != immediate_send_id),
@@ -184,7 +184,7 @@ async fn get_scheduled_db_messages_excludes_immediate_send_undo_rows(
 )]
 async fn get_scheduled_db_messages_isolates_by_link_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100).await?;
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, None).await?;
 
     let returned_ids: Vec<Uuid> = result.iter().map(|m| m.id).collect();
 
@@ -206,7 +206,7 @@ async fn get_scheduled_db_messages_orders_by_created_at_desc(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100).await?;
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, None).await?;
 
     // Should be ordered by created_at DESC (newest first)
     assert_eq!(
@@ -233,7 +233,7 @@ async fn get_scheduled_db_messages_respects_limit(pool: Pool<Postgres>) -> anyho
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
 
     // Request only 2 messages
-    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 2).await?;
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 2, None).await?;
 
     assert_eq!(result.len(), 2);
 
@@ -258,7 +258,7 @@ async fn get_scheduled_db_messages_respects_offset(pool: Pool<Postgres>) -> anyh
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
 
     // Skip first 2 messages
-    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 2, 100).await?;
+    let result = get_scheduled_db_messages_by_link_id(&pool, link_id, 2, 100, None).await?;
 
     assert_eq!(result.len(), 1);
 
@@ -279,7 +279,7 @@ async fn get_scheduled_db_messages_pagination_works(pool: Pool<Postgres>) -> any
     let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
 
     // Page 1: limit 1, offset 0
-    let page1 = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 1).await?;
+    let page1 = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 1, None).await?;
     assert_eq!(page1.len(), 1);
     assert_eq!(
         page1[0].subject,
@@ -287,7 +287,7 @@ async fn get_scheduled_db_messages_pagination_works(pool: Pool<Postgres>) -> any
     );
 
     // Page 2: limit 1, offset 1
-    let page2 = get_scheduled_db_messages_by_link_id(&pool, link_id, 1, 1).await?;
+    let page2 = get_scheduled_db_messages_by_link_id(&pool, link_id, 1, 1, None).await?;
     assert_eq!(page2.len(), 1);
     assert_eq!(
         page2[0].subject,
@@ -295,7 +295,7 @@ async fn get_scheduled_db_messages_pagination_works(pool: Pool<Postgres>) -> any
     );
 
     // Page 3: limit 1, offset 2
-    let page3 = get_scheduled_db_messages_by_link_id(&pool, link_id, 2, 1).await?;
+    let page3 = get_scheduled_db_messages_by_link_id(&pool, link_id, 2, 1, None).await?;
     assert_eq!(page3.len(), 1);
     assert_eq!(
         page3[0].subject,
@@ -303,7 +303,7 @@ async fn get_scheduled_db_messages_pagination_works(pool: Pool<Postgres>) -> any
     );
 
     // Page 4: limit 1, offset 3 (no more results)
-    let page4 = get_scheduled_db_messages_by_link_id(&pool, link_id, 3, 1).await?;
+    let page4 = get_scheduled_db_messages_by_link_id(&pool, link_id, 3, 1, None).await?;
     assert!(page4.is_empty());
 
     Ok(())
@@ -317,9 +317,50 @@ async fn get_scheduled_db_messages_returns_empty_for_nonexistent_link(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let nonexistent_link_id = Uuid::parse_str("00000000-0000-0000-0000-999999999999")?;
-    let result = get_scheduled_db_messages_by_link_id(&pool, nonexistent_link_id, 0, 100).await?;
+    let result =
+        get_scheduled_db_messages_by_link_id(&pool, nonexistent_link_id, 0, 100, None).await?;
 
     assert!(result.is_empty());
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_scheduled_db_messages"))
+)]
+async fn get_scheduled_db_messages_filters_by_source(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
+    let pending_step = Uuid::parse_str("00000000-0000-0000-0000-0000000d0001")?;
+    let failed_step = Uuid::parse_str("00000000-0000-0000-0000-0000000d0002")?;
+    let ordinary = Uuid::parse_str("00000000-0000-0000-0000-0000000d0003")?;
+    sqlx::query!(
+        "UPDATE email_scheduled_messages SET source = 'sequence' WHERE message_id = ANY($1)",
+        &[pending_step, failed_step],
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE email_scheduled_messages SET delivery_status = 'failed', processing = true WHERE message_id = $1",
+        failed_step,
+    )
+    .execute(&pool)
+    .await?;
+
+    let default: Vec<Uuid> = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, None)
+        .await?
+        .iter()
+        .map(|m| m.id)
+        .collect();
+    assert_eq!(default, vec![ordinary, failed_step]);
+
+    let sequence_only: Vec<Uuid> =
+        get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, Some("sequence"))
+            .await?
+            .iter()
+            .map(|m| m.id)
+            .collect();
+    assert_eq!(sequence_only, vec![failed_step, pending_step]);
 
     Ok(())
 }

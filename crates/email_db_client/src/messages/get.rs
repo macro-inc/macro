@@ -310,33 +310,82 @@ pub async fn fetch_messages_with_labels(
     Ok(processed_messages)
 }
 
-// gets the headers we need for threading messages correctly
+/// Where the message a scheduled reply answers stands in its own delivery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReplyParentDelivery {
+    /// Received, or sent.
+    Delivered,
+    /// Its schedule is neither sent nor failed, so it will be sent first.
+    Scheduled,
+    /// A draft without a live schedule, or a send that failed: it will not be
+    /// sent unless the user acts.
+    NotSent,
+}
+
+/// The message a scheduled reply answers, as its delivery needs it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplyParent {
+    /// Whether the parent is sent, or will be sent before the reply.
+    pub delivery: ReplyParentDelivery,
+    /// Provider thread; set once the parent is sent or synced.
+    pub provider_thread_id: Option<String>,
+    /// Message-ID header of the provider copy, without angle brackets.
+    pub message_id_header: Option<String>,
+    /// Raw References header of the provider copy.
+    pub references_header: Option<String>,
+    /// Message-ID Macro minted for the parent's own scheduled delivery, kept
+    /// after it is sent; covers a sent parent the inbox sync hasn't reached.
+    pub delivery_message_id: Option<String>,
+}
+
+/// Load the message a scheduled reply answers from the same inbox. A parent in
+/// another inbox is `None`: its provider thread and headers belong to another
+/// account.
 #[tracing::instrument(skip(pool), err)]
-pub async fn get_message_threading_headers(
+pub async fn get_reply_parent(
     pool: &PgPool,
     message_id: Uuid,
     link_id: Uuid,
-) -> anyhow::Result<(Option<String>, Option<String>)> {
-    let row_option = sqlx::query!(
+) -> anyhow::Result<Option<ReplyParent>> {
+    let Some(row) = sqlx::query!(
         r#"
-        SELECT 
+        SELECT
+          CASE
+            WHEN s.message_id IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed' THEN 'scheduled'
+            WHEN m.is_draft OR (s.message_id IS NOT NULL AND NOT s.sent) THEN 'not_sent'
+            ELSE 'delivered'
+          END AS "delivery!",
+          m.provider_thread_id,
           -- Use trim() to remove the leading/trailing angle brackets
-          trim(jsonb_path_query_first(headers_jsonb, '$[*] ? (@.name like_regex "message-id" flag "i").value') #>> '{}', '<>') as "message_id",
+          trim(jsonb_path_query_first(m.headers_jsonb, '$[*] ? (@.name like_regex "message-id" flag "i").value') #>> '{}', '<>') AS message_id_header,
           -- The references header can have multiple IDs, so we just return it raw
-          jsonb_path_query_first(headers_jsonb, '$[*] ? (@.name like_regex "references" flag "i").value') #>> '{}' as "references"
-        FROM email_messages
-        WHERE id = $1 AND link_id = $2
+          jsonb_path_query_first(m.headers_jsonb, '$[*] ? (@.name like_regex "references" flag "i").value') #>> '{}' AS references_header,
+          s.delivery_message_id AS "delivery_message_id?"
+        FROM email_messages m
+        LEFT JOIN email_scheduled_messages s ON s.message_id = m.id AND s.link_id = m.link_id
+        WHERE m.id = $1 AND m.link_id = $2
         "#,
         message_id,
         link_id
     )
-        .fetch_optional(pool)
-        .await?;
-
-    match row_option {
-        Some(row) => Ok((row.message_id, row.references)),
-        None => Ok((None, None)),
-    }
+    .fetch_optional(pool)
+    .await?
+    else {
+        return Ok(None);
+    };
+    let delivery = match row.delivery.as_str() {
+        "scheduled" => ReplyParentDelivery::Scheduled,
+        "not_sent" => ReplyParentDelivery::NotSent,
+        "delivered" => ReplyParentDelivery::Delivered,
+        other => anyhow::bail!("unknown reply parent delivery state {other}"),
+    };
+    Ok(Some(ReplyParent {
+        delivery,
+        provider_thread_id: row.provider_thread_id,
+        message_id_header: row.message_id_header,
+        references_header: row.references_header,
+        delivery_message_id: row.delivery_message_id,
+    }))
 }
 
 /// Retrieves the ID of a message based on link_id and global_id, if exists

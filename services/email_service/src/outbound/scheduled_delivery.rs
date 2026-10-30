@@ -1,8 +1,7 @@
 //! PostgreSQL and provider adapters for scheduled email delivery.
 use crate::outbound::email_api::GmailApi;
 use crate::util::gmail::send::{
-    attachment_snapshot::prepare_delivery_attachments, cleanup_draft_attachments,
-    generate_email_threading_headers,
+    attachment_snapshot::prepare_delivery_attachments, cleanup_draft_attachments, reply_threading,
 };
 use anyhow::Context;
 use chrono::Utc;
@@ -11,7 +10,7 @@ use email::domain::events::{
 };
 use email::domain::scheduled_delivery::{
     ClaimedDelivery, DELIVERY_LEASE_SECONDS, DeliveryMode, DeliveryPause,
-    PREPARATION_RETRY_SECONDS, PreparationError, RECONCILIATION_DELAY_SECONDS,
+    PREPARATION_RETRY_SECONDS, PreparationError, RECONCILIATION_DELAY_SECONDS, ReplyOrderError,
     ScheduledDeliveryRepo, ScheduledMessageSender, SubmissionError,
     attachments::{ApprovedAttachments, AttachmentSnapshotMismatch},
 };
@@ -332,8 +331,11 @@ impl ScheduledDeliveryAdapter {
             content::load_delivery_content(&self.db, &claim.delivery)
                 .await
                 .context("failed to load scheduled message")?;
-        let (parent_message_id, references) =
-            generate_email_threading_headers(&self.db, message.replying_to_id, data.link_id).await;
+        // Checked before attachments load: a reply waits for its parent.
+        let threading = reply_threading(&self.db, message.replying_to_id, data.link_id).await?;
+        if message.provider_thread_id.is_none() {
+            message.provider_thread_id = threading.provider_thread_id;
+        }
         let approved = claim
             .delivery
             .approved_snapshot
@@ -376,8 +378,8 @@ impl ScheduledDeliveryAdapter {
         let request = SendRequest {
             message: message.clone(),
             from: sender_contact,
-            parent_message_id,
-            references,
+            parent_message_id: threading.parent_message_id,
+            references: threading.references,
             message_id: claim.delivery.message_id_header.clone(),
         };
         let provider = self
@@ -407,6 +409,9 @@ impl ScheduledDeliveryAdapter {
 }
 
 fn classify_preparation_error(error: anyhow::Error) -> PreparationError {
+    if let Some(order) = error.downcast_ref::<ReplyOrderError>() {
+        return (*order).into();
+    }
     if error.is::<AttachmentSnapshotMismatch>()
         || error.is::<PreparedSendContentUnavailable>()
         || error.downcast_ref::<email::domain::forwarded_attachments::ForwardedAttachmentError>().is_some_and(|error| matches!(error, email::domain::forwarded_attachments::ForwardedAttachmentError::DraftNotFound | email::domain::forwarded_attachments::ForwardedAttachmentError::AttachmentNotFound))

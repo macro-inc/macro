@@ -69,6 +69,7 @@ import { ForwardCalendarEventErrorCode } from './generated/schemas/forwardCalend
 import type { ForwardCalendarEventRequest } from './generated/schemas/forwardCalendarEventRequest';
 import type { ForwardCalendarEventResponse } from './generated/schemas/forwardCalendarEventResponse';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
+import type { ScheduledSendSource } from './generated/schemas/scheduledSendSource';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
 const calendarHost: string = SERVER_HOSTS['calendar-service'];
@@ -478,13 +479,19 @@ export const emailClient = {
   },
 
   async getScheduledMessages(
-    args: { offset: number; limit: number },
+    args: {
+      offset: number;
+      limit: number;
+      /** Only this source's sends, in every delivery state. */
+      source?: ScheduledSendSource;
+    },
     linkId?: string
   ) {
     const params = new URLSearchParams({
       offset: String(args.offset),
       limit: String(args.limit),
     });
+    if (args.source) params.set('source', args.source);
     return emailFetch<GetScheduledResponse>(
       `/email/drafts/scheduled?${params.toString()}`,
       {

@@ -5,7 +5,8 @@ use uuid::Uuid;
 
 /// Fetches a paginated list of thread previews for the "Drafts" view.
 /// This view includes all threads that contain at least one draft message, sorted by the
-/// timestamp of the most recent draft within each thread.
+/// timestamp of the most recent draft within each thread. Pending sequence steps
+/// are not the user's drafts and are left out until they are sent or fail.
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn drafts_preview_cursor(
     pool: &PgPool,
@@ -73,6 +74,8 @@ pub(crate) async fn drafts_preview_cursor(
                 -- Include Macro drafts and imported drafts supported by the provider adapter.
                 WHERE m.link_id = ANY($1) AND m.is_draft = TRUE AND (m.internal_date_ts IS NULL OR m.mailbox_state IS NOT NULL)
                   AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
+                  -- A pending sequence step is not the user's draft (see build_lateral_trash_exclusion).
+                  AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
                 GROUP BY m.thread_id
             ) ldpt
             JOIN email_threads t ON ldpt.thread_id = t.id
@@ -102,6 +105,7 @@ pub(crate) async fn drafts_preview_cursor(
               -- Include Macro drafts and imported drafts supported by the provider adapter.
               AND (m.internal_date_ts IS NULL OR m.mailbox_state IS NOT NULL)
               AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
+              AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
             ORDER BY m.updated_at DESC
             LIMIT 1
         ) AS lmp

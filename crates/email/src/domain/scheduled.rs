@@ -10,7 +10,7 @@ use super::{
     events::{
         EmailMacroEvent, MessageSendCancelledMetadata, MessageSendQueuedMetadata, SendCancelReason,
     },
-    models::EmailErr,
+    models::{EmailErr, ScheduledSendSource, UserProvider},
     ports::EmailRepo,
     service::EmailServiceImpl,
 };
@@ -19,7 +19,13 @@ use super::{
 #[derive(Debug, Clone, Copy)]
 pub enum ScheduleChange {
     /// Commit or update a future delivery time.
-    Set(DateTime<Utc>),
+    Set {
+        /// When to deliver; must be in the future.
+        send_time: DateTime<Utc>,
+        /// Marks the schedule as created by a sequence. `None` keeps the
+        /// source an existing schedule already has; only cancellation clears it.
+        source: Option<ScheduledSendSource>,
+    },
     /// Restore an unsent message before provider submission to an editable draft.
     Cancel,
 }
@@ -87,7 +93,14 @@ where
             .find(|link| link.id == link_id)
             .ok_or(EmailErr::Unauthorized)?;
         validate_schedule_change(change, Utc::now())?;
-        let signature = if matches!(change, ScheduleChange::Set(_)) {
+        if let ScheduleChange::Set {
+            source: Some(_), ..
+        } = change
+            && link.provider != UserProvider::Gmail
+        {
+            return Err(EmailErr::ScheduleSourceUnsupported);
+        }
+        let signature = if matches!(change, ScheduleChange::Set { .. }) {
             let settings = self.email_repo.fetch_email_settings(link_id).await
                 .inspect_err(|error| tracing::warn!(error=?error, "failed to fetch signature settings; skipping"))
                 .ok();
@@ -113,7 +126,7 @@ where
             return Ok(());
         };
         let event = match change {
-            ScheduleChange::Set(send_time) => {
+            ScheduleChange::Set { send_time, .. } => {
                 EmailMacroEvent::message_send_queued(MessageSendQueuedMetadata {
                     link_id,
                     owner: link.macro_id,
@@ -144,7 +157,7 @@ pub(crate) fn validate_schedule_change(
     change: ScheduleChange,
     now: DateTime<Utc>,
 ) -> Result<(), EmailErr> {
-    if let ScheduleChange::Set(send_time) = change
+    if let ScheduleChange::Set { send_time, .. } = change
         && send_time <= now
     {
         return Err(EmailErr::InvalidScheduleTime);

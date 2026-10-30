@@ -1232,7 +1232,10 @@ async fn test_client_handle_replay_cannot_replace_a_scheduled_or_sent_winner(
         link,
         winner_id,
         &actor,
-        ScheduleChange::Set(Utc::now() + chrono::Duration::hours(1)),
+        ScheduleChange::Set {
+            send_time: Utc::now() + chrono::Duration::hours(1),
+            source: None,
+        },
         None,
         0,
     )

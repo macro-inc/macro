@@ -172,6 +172,11 @@ pub async fn recompute_signal(
 }
 
 /// Shared thread projection for Gmail labels, Outlook folders, and local drafts.
+///
+/// A pending sequence step (a draft whose schedule has a source and is neither
+/// sent nor failed) is not part of the thread's mail state, so a thread holding
+/// only such steps stays out of Inbox and All Mail. Callers that change a
+/// schedule's source or failure state recompute this projection.
 pub async fn recompute_thread_metadata(
     tx: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -184,6 +189,8 @@ pub async fn recompute_thread_metadata(
                 EXISTS (SELECT 1 FROM email_message_recipients r WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id) AS sender_is_recipient
             FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id
             WHERE m.thread_id = $1 AND m.link_id = $2 AND f.is_present
+                AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id
+                    AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
         ), aggregate AS (
             SELECT COALESCE(bool_or((in_inbox AND NOT in_sent) OR local_draft),false) AS inbox_visible,
                 COALESCE(bool_or(in_inbox AND NOT in_trash AND NOT in_junk),false) AS has_inbox,
