@@ -111,7 +111,7 @@ def build_font(drawn, p, fmt="otf", features=None):
             names["psName"],
             {"FullName": names["fullName"], "FamilyName": P.FAMILY, "Weight": p.name},
             charstrings,
-            {"BlueValues": [-P.OS, 0, P.XH, P.XH + P.OS, P.CAP, P.CAP + P.COS], "StdHW": [round(p.hair)], "StdVW": [round(p.stem)]},
+            {"BlueValues": [-P.OS, 0, P.XH, P.XH + P.OS, P.CAP, P.CAP + P.COS], "StdHW": round(p.hair), "StdVW": round(p.stem)},
         )
 
     fb.setupHorizontalMetrics(metrics)

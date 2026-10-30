@@ -115,6 +115,7 @@ def main():
     ap.add_argument("--no-variable", action="store_true")
     ap.add_argument("--zoom", default="", help="comma-separated glyph names to render large")
     ap.add_argument("--cell", type=int, default=420, help="cell height in px for --zoom")
+    ap.add_argument("--specimen-embed", default="", help="also write a self-contained specimen to this path")
     args = ap.parse_args()
     only = [m for m in args.only.split(",") if m]
     if args.zoom:
@@ -137,6 +138,13 @@ def main():
 
         for path in build_variable(out_dir):
             print("variable ->", os.path.relpath(path, HERE))
+        if set(weights) == set(P.WEIGHTS):
+            from kernel_sans.specimen import build_specimen
+
+            page = build_specimen(out_dir, os.path.join(HERE, "specimen", "index.html"))
+            print("specimen ->", os.path.relpath(page, HERE))
+            if args.specimen_embed:
+                print("specimen (embedded font) ->", build_specimen(out_dir, args.specimen_embed, embed=True))
 
 
 if __name__ == "__main__":

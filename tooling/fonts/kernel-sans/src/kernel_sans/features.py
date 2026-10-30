@@ -32,12 +32,11 @@ STYLISTIC_SET_NAMES = {
 }
 
 
-def feature_code(names, p):
-    names = set(names)
+def feature_code(drawn, p):
+    """drawn: {glyph name: G} for the weight described by p."""
+    names = set(drawn)
     out = ["languagesystem DFLT dflt;", "languagesystem latn dflt;", ""]
-
-    # Kerning first so its lookups apply after substitutions are known.
-    out.append(kerning.feature_code(names, p))
+    out.append(kerning.feature_code(drawn, p))
 
     liga = []
     for n in sorted(names):
