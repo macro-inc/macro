@@ -680,8 +680,8 @@ def fraction(p):
 
 
 def _pct_ring(p):
-    rw, rh = p.w(236, 0.7), P.CAP * 0.47
-    ws, h = p.fstem * 0.84, _fh(p) * 0.8
+    rw, rh = p.w(236, 1.3), P.CAP * 0.47
+    ws, h = p.fstem * (0.84 - 0.12 * max(0.0, p.grow) / 70), _fh(p) * (0.8 - 0.1 * max(0.0, p.grow) / 70)
     os_ = P.COS * 0.7
     sh = ring(0, -os_, rw, rh + os_, ws, h, n=_n(p), n_in=_ni(p))
     return sh
@@ -930,13 +930,13 @@ def florin(p):
     s = p.fstem * 0.96
     h = _fh(p) * 0.95
     top, bot = P.CAP + P.COS, -170 - P.COS
-    hw = p.w(150, 0.45)  # half the hook box width
+    hw = p.w(150, 0.8)  # half the hook box width
     xs = 0.0
     # Upper hook: the stem turns right over the top and ends cut vertically.
-    ub = (xs, top - hw * 1.3, xs + hw * 2, top)
+    ub = (xs, top - p.w(196, 0.6), xs + hw * 2, top)
     ui = (xs + s, ub[1] + h, ub[2] - s, top - h)
     ucx, ucy = (ub[0] + ub[2]) / 2, (ub[1] + ub[3]) / 2
-    xt = ucx + hw * 0.5
+    xt = ucx + 0.62 * (ui[2] - ucx)
     upper = (squircle(*ub, n=n) - squircle(*ui, n=ni)) & above(ucy) & left_of(xt)
     upper = upper - chamfer(xt, _oy(ub, n, xt), p.ccut, "ne")
     # Lower hook: the same turned half a turn.
@@ -1003,41 +1003,42 @@ def _chevron(p, cx, cy, half_w, half_h, t=None):
 
 def _wave(p, cx, cy, half_w, amp, t=None):
     """Tilde: crest on the left, trough on the right, drawn as one outline
-    with squircle-like handles. The ends run vertically and are cut flat,
-    with the house chamfer on their outer corner."""
+    with squircle-like handles. The ends leave the crest and trough at a
+    steep angle and are cut horizontally, with the house chamfer on their
+    outer corner."""
     t = _mt(p) if t is None else t
-    wy = t * 0.86  # thickness at crest and trough
-    wx = t * 0.94  # at the vertical ends
+    wy = t * 0.84  # thickness at crest and trough
+    we = t * 0.94  # across the ends
     wm = t * 0.98  # across the middle
-    x0, x1, x3 = cx - half_w + wx / 2, cx - half_w / 2, cx + half_w - wx / 2
-    x2 = cx + half_w / 2
-    e0 = amp * 0.25  # the ends stop a little past the centre line
-    phi = math.atan2(2.1 * amp, half_w)
+    x0, x1 = cx - half_w, cx - half_w * 0.44
+    x3, x2 = cx + half_w, cx + half_w * 0.44
+    e0 = amp * 0.3  # the ends stop a little past the centre line
+    ae = math.radians(62)
+    de = (math.cos(ae), math.sin(ae))  # end direction, towards the crest
+    he = we / (2 * math.sin(ae))
+    phi = math.atan2(2.0 * amp, half_w * 0.88)
     dm = (math.cos(phi), -math.sin(phi))
     nm = (math.sin(phi), math.cos(phi))
-    k = 0.66
-    up, dn, rt, lf = (0.0, 1.0), (0.0, -1.0), (1.0, 0.0), (-1.0, 0.0)
-    o0 = (x0 - wx / 2, cy - e0)
+    k = 0.64
+    rt, lf = (1.0, 0.0), (-1.0, 0.0)
+    mde = (-de[0], -de[1])
+    o0 = (x0 - he, cy - e0)
     o1 = (x1, cy + amp + wy / 2)
     o2 = (cx + nm[0] * wm / 2, cy + nm[1] * wm / 2)
     o3 = (x2, cy - amp + wy / 2)
-    o4 = (x3 - wx / 2, cy + e0)
-    i4 = (x3 + wx / 2, cy + e0)
+    o4 = (x3 - he, cy + e0)
+    i4 = (x3 + he, cy + e0)
     i3 = (x2, cy - amp - wy / 2)
     i2 = (cx - nm[0] * wm / 2, cy - nm[1] * wm / 2)
     i1 = (x1, cy + amp - wy / 2)
-    i0 = (x0 + wx / 2, cy - e0)
+    i0 = (x0 + he, cy - e0)
     mdm = (-dm[0], -dm[1])
     segs = []
-    for a, ta, b, tb in (
-        (o0, up, o1, rt), (o1, rt, o2, dm), (o2, dm, o3, rt), (o3, rt, o4, up),
-    ):
+    for a, ta, b, tb in ((o0, de, o1, rt), (o1, rt, o2, dm), (o2, dm, o3, rt), (o3, rt, o4, de)):
         h1, h2 = _handles(a, ta, b, tb, k, k)
         segs.append((h1, h2, b))
     segs.append(i4)
-    for a, ta, b, tb in (
-        (i4, dn, i3, lf), (i3, lf, i2, mdm), (i2, mdm, i1, lf), (i1, lf, i0, dn),
-    ):
+    for a, ta, b, tb in ((i4, mde, i3, lf), (i3, lf, i2, mdm), (i2, mdm, i1, lf), (i1, lf, i0, mde)):
         h1, h2 = _handles(a, ta, b, tb, k, k)
         segs.append((h1, h2, b))
     sh = _path(o0, segs)
@@ -1145,7 +1146,7 @@ def notequal(p):
 
 
 def _tilde(p, cy, scale=1.0):
-    return _wave(p, _cx(p), cy, _arm(p) * 1.0 * scale, p.w(62, 0.4) * scale)
+    return _wave(p, _cx(p), cy, p.w(216, 0.9) * scale, p.w(58, 0.3) * scale)
 
 
 @glyph("asciitilde", 0x007E)
