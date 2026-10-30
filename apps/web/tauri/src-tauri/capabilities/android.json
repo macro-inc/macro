@@ -10,6 +10,7 @@
     "android-auth:allow-authenticate",
     "android-mobile:default",
     "android-push:default",
+    "call-kit:allow-configure-tracing",
     "call-kit:allow-end-active-call",
     "call-kit:allow-get-pending-answered-call",
     "call-kit:allow-watch-call-answered",

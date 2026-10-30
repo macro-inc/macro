@@ -32,5 +32,12 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
     } else {
         lines
     };
-    frame.render_widget(Paragraph::new(body).block(card("Daemon logs")), area);
+    let mut block = card("Daemon logs");
+    if let Some(path) = &app.update_log {
+        block = block.title_bottom(Line::styled(
+            format!(" Update history: {} ", path.display()),
+            Style::new().fg(DIM),
+        ));
+    }
+    frame.render_widget(Paragraph::new(body).block(block), area);
 }

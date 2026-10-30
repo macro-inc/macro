@@ -342,7 +342,11 @@ is feature-gated and lists teammates with 24px avatars; its header has the same
 14px checkbox before the title, which shows or hides the grid overlay and is saved
 with the calendar visibility preferences. The teammate rows have no checkboxes and
 stay listed while the overlay is hidden. Clicking a teammate's row navigates to that
-date, opens read-only event details, and marks the row active. The left-aligned
+date, opens read-only event details, and marks the row active. With the overlay shown,
+the details wait for the event's chip and open on it, scrolled into view, the way a
+search result or notification opens; if the chip has not rendered after two seconds
+they open beside the row instead. With the overlay hidden they open beside the row.
+A card opened beside a row stays there when the event's chip mounts later. The left-aligned
 `Settings` control with a gear icon fills the sidebar footer; booking management
 lives in the `Booking links` dropdown rather than a separate footer shortcut.
 An account checkbox toggles its calendars together in one update. The checkbox
@@ -483,7 +487,15 @@ Events require connecting a Google account (`Connect calendar`). The
 section listing each connected account with a per-account `Enable` (grant calendar),
 `Reconnect` (expired Google authorization), or `Turn off` action, plus
 `Connect another account` to connect a new Google account
-(email + calendar).
+(email + calendar; the item and the `Connect email` dialog both say the email
+and calendar connect together). A Google consent that leaves the email
+permissions unchecked connects nothing: the callback returns to the calendar
+with a persistent `Email access required` prompt whose `Try again` reopens
+`Connect email` asking for the same permissions. The auth service also tries
+to revoke the partial grant at Google, unless an inbox for that address still
+works on it; when the revocation succeeds, Google lists every permission again
+on the retry instead of folding the earlier calendar grant into an "already
+has some access" notice.
 
 `Turn off` keeps its confirmation open with `Turning off…` until removal finishes;
 re-enabling is not offered while the old calendar is still being deleted. Reconnecting
@@ -636,17 +648,37 @@ In each of those cases (inviting off, a hidden guest list, an Outlook guest copy
 a refusal), the `enable-calendar-invitation-forward` flag (on in dev, with no PostHog flag
 yet, so off in production) puts `Forward invitation` (a paper-plane icon) where `Add guests`
 would be, whether or not guest invites are on, and the explanation goes on: `You can forward the invitation instead. The people
-you send it to can add the event to their calendar but won't be on the guest list.` It opens
+you send it to get the event by email but won't be on the guest list.` It opens
 the same add-only editor (current guests under `Invited`, the picker adds people listed as
-`Forward to`), says `They can add the event to their calendar but won't appear in the guest
-list.`, and `Forward` (or Cmd/Ctrl+Enter) sends; there is no Optional box or occurrence
+`Forward to`), says `They'll get the event by email but won't appear in the guest list.`,
+and `Forward` (or Cmd/Ctrl+Enter) sends; there is no Optional box or occurrence
 choice, since the forward always carries the whole series. It posts
-`POST /email/calendar-events/{event_id}/forward` with the recipients and a body made of
-`Forward by email`'s summary plus `This invitation was forwarded to you. Add the event to
-your calendar from the attached file. You won't be on the organizer's guest list.`; email-service sends it from the inbox
-holding the copy, with the event's `.ics` (`METHOD:PUBLISH`, no guests or join link)
-attached, so recipients can add the event to their calendar and nothing reaches the
-organizer or the guest list. The toast reads `Invitation forwarded to <name>` (or `to N
+`POST /email/calendar-events/{event_id}/forward` with the recipients and `Forward by
+email`'s summary as the body; email-service sends it from the inbox holding the copy, and
+the server decides what it is from the stored copy, ending the body with the matching note:
+- Google's private copy (`privateCopy` in the stored Google payload) of an invitation whose
+  organizer is outside Google, such as Exchange (Google stores every such invitation that
+  way and reports it as `guestsCanInviteOthers: false`): a real invitation, as Google's own
+  Add guests sends there. The message's calendar body is `METHOD:REQUEST` with the original
+  organizer and the recipients (only them) as attendees, an `invite.ics` copy is attached,
+  and the email goes to the recipients and the organizer, as Google addresses its own.
+  Recipients get Yes / Maybe / No in Gmail and Outlook and their answers go to the
+  organizer; the forwarder's own copy and answer are untouched. The note reads `This
+  invitation was forwarded to you. Your answer goes to the organizer.`
+- Anything else, notably a Google organizer who turned inviting off, and whenever the
+  evidence is missing (an Outlook copy, a snapshot, a private copy whose UID ends in
+  `@google.com`, which is an imported Google meeting, an organizer Macro cannot name, or a
+  source synced before Macro kept Google's whole payload): the event's `.ics`
+  (`METHOD:PUBLISH`, no guests) attached, so recipients can add the event to their calendar
+  and nothing reaches the organizer or the guest list. The note reads `This invitation was
+  forwarded to you. Add the event to your calendar from the attached file. You won't be on
+  the organizer's guest list.`
+
+Both carry the join link, unlike `Download .ics` and channel shares: a Macro call's
+`Join Macro call` line and location stay, and the copy's Meet, Teams or Zoom link is added as
+a `Join with Google Meet: <url>` (or `Join the Microsoft Teams meeting`, `Join the meeting`)
+line unless the description already shows it, plus `CONFERENCE` (and, for Meet,
+`X-GOOGLE-CONFERENCE`). The toast reads `Invitation forwarded to <name>` (or `to N
 people`) once the send is accepted; a failure reads `Could not forward the invitation`, with
 `Retry` unless the server refused the recipients (400 `invalid_recipients`, whose reason
 shows instead). The editor offers the same `Forward invitation` beside its read-only guests
@@ -754,8 +786,11 @@ overlay the grid as read-only chips titled `<name>: <event title>`. The sidebar'
 `Team out of office` section (shown only when the user belongs to a team with other members)
 is a collapsible list of the next 90 days of teammate absences. The checkbox in its header
 shows or hides the overlay (the list itself always shows); clicking a row navigates the grid
-to that date. Coverage depends on each teammate having connected their own calendar and using
-Google's out-of-office event type.
+to that date. The list shows ten rows and a `+N more` button that expands it to every row,
+scrolling inside a bounded height, with `Show less` to collapse it again. The choice survives
+the poll and count changes; when ten or fewer rows remain, the button hides. Reopening the
+narrow-pane overlay sidebar starts collapsed, as its section toggles do. Coverage depends on
+each teammate having connected their own calendar and using Google's out-of-office event type.
 
 The grid's pages and the list read the overlay from shared fixed 91-day windows,
 each fetched once and refreshed by one 30-second poll while the tab is focused, so
@@ -1394,8 +1429,8 @@ Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
 description links use the host's normal link-opening behavior.
 
-A published event file (`METHOD:PUBLISH`, what `Forward by email` and `Forward invitation`
-attach) is a shared
+A published event file (`METHOD:PUBLISH`, what `Forward by email` and, for a Google
+organizer, `Forward invitation` attach) is a shared
 event, not an invitation: the card reads `Shared event organized by <organizer>` and never
 shows Yes / Maybe / No, a last response, or a waiting-for-sync line. When the viewer already
 holds the meeting it says `On your calendar.` with `Open in calendar` and `View your day`;
@@ -1405,7 +1440,8 @@ When the calendar check confirms the viewer does not hold it, the card says
 `Not on your calendar.` and, behind the `enable-calendar-add-shared-event` flag, offers
 `Add to calendar`, which imports the same snapshot as the channel-share card
 (the viewer's only writable Google calendar, or one picked from a menu; the real organizer
-kept, the viewer as the only guest, nobody notified) through email service's
+kept, the viewer as the only guest, nobody notified), except that it keeps the join link the
+file carries, through email service's
 `POST /email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy`.
 The server reads the event from the saved email, never from the request. The card then
 resolves to the snapshot. A single occurrence, a cancelled event, a time that cannot be read,
@@ -1435,8 +1471,13 @@ action is unavailable.
 Calendar split that is already open; otherwise a click replaces the email with Calendar and a
 shift-click opens Calendar in a new split beside it, from the inline card and the `.ics` dialog.
 `View your day` opens a compact agenda without changing the active split; Close returns
-focus to its trigger. Busy overlapping events are labeled, while cancelled, declined,
-and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
+focus to its trigger. The event appears once, as the viewer's own copy in its time slot,
+highlighted and marked `This invitation` (also on a shared event's card after `Add to
+calendar`). A `This invitation` line with the email's own time stands above the list
+instead while no such row is there: an unreadable time, the calendar unavailable, offline or
+syncing, the copy past the first 20 events, or an email whose time differs from the copy
+(a proposal, or an update the calendar has not synced yet; the copy stays highlighted). Busy overlapping events are labeled, while
+cancelled, declined, and free events do not count as conflicts. Calendar 12/24-hour preferences apply to
 already-open invitation cards as well as the calendar view.
 
 For a writable Outlook event you organize, the editor's `Replace event…` action

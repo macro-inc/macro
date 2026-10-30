@@ -108,11 +108,16 @@ import { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
 const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'favorites',
+  'team_channels',
   'channels',
   'direct_messages',
 ];
 const LABEL_KEY_PREFIX = 'label:';
-const BROWSE_QUERY_SCOPES = ['channels', 'direct_messages'] as const;
+const BROWSE_QUERY_SCOPES = [
+  'team_channels',
+  'channels',
+  'direct_messages',
+] as const;
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
 const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
   ...CHANNEL_TAB_IDS,
@@ -316,6 +321,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const channels = createMemo(() =>
     deduplicateChannels([
+      props.sources.team_channels.items(),
       props.sources.channels.items(),
       props.sources.direct_messages.items(),
       props.sources.recents.items(),
@@ -362,8 +368,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       .map((favorite) => favorite.entityId)
   );
 
-  // A labelled or favorited channel has a row before the paginated Channels
-  // source reaches it, so fetch the ones the sources have not loaded: a label
+  // A labelled or favorited channel has a row before the paginated Team
+  // channels source reaches it, so fetch the ones the sources have not loaded: a label
   // needs them to list its channels, a favorite row to act on its channel.
   const referencedChannelIds = createMemo(() => [
     ...new Set([
@@ -413,7 +419,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     buildChannelSectionRows({
       labels: labels(),
       channels: deduplicateChannels([
-        props.sources.channels.items(),
+        props.sources.team_channels.items(),
         labelledChannels(),
       ]),
       channelsById: channelsById(),
@@ -446,6 +452,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       state.expandedGroups,
       {
         favorites: favorites(),
+        team_channels: props.sources.team_channels.items(),
         channels: props.sources.channels.items(),
         direct_messages: props.sources.direct_messages.items(),
         recents: props.sources.recents.items(),
@@ -537,7 +544,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
       if (row.kind === 'conversation' || row.kind === 'label') {
         const virtualizer =
-          virtualizers()[row.kind === 'label' ? 'channels' : row.scope];
+          virtualizers()[row.kind === 'label' ? 'team_channels' : row.scope];
         if (virtualizer) {
           virtualizer.scrollToIndex(row.localIndex, options);
           return;
@@ -569,10 +576,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
-    // The Channels section renders label headings between channels, so its
-    // indexes come from the rendered rows rather than the source.
+    // The Team channels section renders label headings between channels, so
+    // its indexes come from the rendered rows rather than the source.
     const rendered =
-      scope === 'channels'
+      scope === 'team_channels'
         ? channelSectionRows().map((row) =>
             row.kind === 'conversation' ? row.channel.id : undefined
           )
@@ -723,7 +730,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
           const source = props.sources[row.scope];
           const renderedCount =
-            row.scope === 'channels'
+            row.scope === 'team_channels'
               ? channelSectionRows().length
               : source.items().length;
           if (row.localIndex < renderedCount - 1) return true;
@@ -944,7 +951,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
             name,
             channelIds,
           });
-          setGroupOpen('channels', true);
+          setGroupOpen('team_channels', true);
           setLabelOpen(created.id, true);
         },
       },
@@ -975,7 +982,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
             rule,
             channelIds: [],
           });
-          setGroupOpen('channels', true);
+          setGroupOpen('team_channels', true);
           setLabelOpen(created.id, true);
           toast.success(`Created “${name}”`);
         },
@@ -1032,8 +1039,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       : label.channelCount === 0
         ? 'It has no channels in it.'
         : label.channelCount === 1
-          ? 'Its 1 channel goes back to the main Channels list.'
-          : `Its ${label.channelCount} channels go back to the main Channels list.`;
+          ? 'Its 1 channel goes back to the Team channels list.'
+          : `Its ${label.channelCount} channels go back to the Team channels list.`;
     const confirmed = await confirmDialog(
       {
         title: `Delete “${label.name}”?`,

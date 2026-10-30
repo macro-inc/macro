@@ -22,7 +22,6 @@ import { type Accessor, createMemo } from 'solid-js';
 import {
   type CreateProjectCommandItem,
   newProjectCommand,
-  type ProjectCommandItem,
 } from './project-items';
 import { useEntitySearch } from './queries/entity-search';
 import { getCommandLastUsedAt } from './recency';
@@ -73,7 +72,6 @@ type CommandMenuItem =
   | CommandItem
   | SearchItem
   | AskAiItem
-  | ProjectCommandItem
   | CreateProjectCommandItem;
 
 export type PaginationControls = {
@@ -387,6 +385,7 @@ export function useCommandItems(
     excludeEmails: true,
     contactDiscovery: options?.contactDiscovery,
   });
+  const projectsFlag = useFeatureFlag(enableProjects);
   const categoryItems = (): CommandMenuItem[] => {
     if (
       commandScopeCommands().length > 0 ||
@@ -405,7 +404,7 @@ export function useCommandItems(
     const items = entities.items();
     return [
       ...items,
-      ...(entities.projectsEnabled() && categoryFilter() === 'projects'
+      ...(projectsFlag().enabled && categoryFilter() === 'projects'
         ? [newProjectCommand]
         : []),
     ];

@@ -2,6 +2,7 @@ import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 import { TASK_DEFAULT_GROUP_BY } from '../constants';
+import { isProjectTab } from '../core/task-navigation';
 import type { TasksViewState, TaskTab } from '../types';
 import {
   TASK_PRIORITY_OPTIONS,
@@ -297,7 +298,7 @@ export function captureTaskSavedView(input: {
   sort?: TasksViewState['sort'];
   context: TaskFacetContext;
 }): Result<TaskSavedViewConfig, string> {
-  if (input.tab === 'projects')
+  if (isProjectTab(input.tab))
     return err('Open a task list to save its filters.');
   if (
     Object.keys(input.facets).some((id) => !SAVED_TASK_FACET_IDS.includes(id))

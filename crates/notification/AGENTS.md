@@ -68,6 +68,12 @@ through the same service.
 
 ## Gotchas
 
+- `user_notification` carries copies of its notification's `event_item_type`,
+  `event_item_id` and `notification_event_type`. Entity reads find a viewer's
+  rows through `idx_user_notification_viewer_entity` on those copies, so a row
+  inserted without them never matches an entity read or mark-seen, and a
+  migration that rewrites those `notification` columns must update
+  `user_notification` too.
 - Feature flags gate most adapters (`axum`, `ai_tool`, `clear_ios_push`,
   `schema`, and the default `kafka` for the Kafka publishers and consumer); building without the feature a caller needs silently drops the
   module instead of failing loudly — check `Cargo.toml` before assuming an
@@ -83,6 +89,8 @@ through the same service.
   stale/unknown measurements from zero; they are not client-delivery ACKs.
 - Notification payloads must not be logged on tracing spans (see the
   `fix(notification): stop recording notification payloads` history).
+- Android call pushes carry W3C trace context inside their existing JSON offer;
+  keep propagation in the outbound SNS adapter, with no baggage or payload logging.
 - iOS egress binds `recipientId` to each receiving account; channel pushes carry
   an optional typed `navigation` destination, with `threadId: null` for a root
   message. Preserve older payloads that omit these fields.

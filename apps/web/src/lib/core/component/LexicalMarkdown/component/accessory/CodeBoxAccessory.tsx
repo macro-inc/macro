@@ -18,7 +18,6 @@ import FileRs from '@icon/system/regular/file-rs.svg';
 import FileSql from '@icon/system/regular/file-sql.svg';
 import FileTs from '@icon/system/regular/file-ts.svg';
 import TrashCan from '@icon/system/regular/trash-simple.svg';
-import { Switch } from '@kobalte/core/switch';
 import { $isCodeNode, CodeNode } from '@lexical/code';
 import {
   $isCustomCodeNode,
@@ -26,7 +25,7 @@ import {
   normalizedLanguage,
   type SupportedLanguage,
 } from '@macro-inc/lexical-core';
-import { Button, CopyButton, cn, Dropdown } from '@ui';
+import { Button, CopyButton, cn, Dropdown, ToggleSwitch } from '@ui';
 import {
   $getNodeByKey,
   type EditorThemeClasses,
@@ -247,18 +246,16 @@ export function CodeBoxAccessory(props: {
             <Show when={showPreviewToggle()}>
               <div class="flex items-center gap-2 mr-2">
                 <div class="text-xs text-ink-extra-muted/50">Preview</div>
-                <Switch
+                <ToggleSwitch
+                  size="sm"
+                  label="Preview"
+                  labelClass="sr-only"
                   checked={isPreviewMode()}
                   onChange={(enabled) => {
                     setIsPreviewMode(enabled);
                     setPreviewModeOnNode(enabled);
                   }}
-                >
-                  <Switch.Input class="sr-only" />
-                  <Switch.Control class="inline-flex h-4 w-8 hover:ring hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                    <Switch.Thumb class="block size-3 rounded-full bg-surface transition-transform data-checked:translate-x-4" />
-                  </Switch.Control>
-                </Switch>
+                />
               </div>
             </Show>
             <Show when={props.editor.isEditable()}>
@@ -287,7 +284,7 @@ export function CodeBoxAccessory(props: {
                 return copyCode();
               }}
             >
-              <Copy />
+              <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </CopyButton>
           </div>
         </div>
@@ -434,12 +431,13 @@ export const StaticCodeBoxAccessory = (props: {
           <Show when={showPreviewToggle()}>
             <div class="flex items-center gap-2">
               <div class={cn('text-xs', textColor())}>Preview</div>
-              <Switch checked={isPreviewMode()} onChange={setIsPreviewMode}>
-                <Switch.Input class="sr-only" />
-                <Switch.Control class="inline-flex h-4 w-8 hover:ring hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-checked:bg-accent">
-                  <Switch.Thumb class="block size-3 rounded-full transition-transform data-checked:translate-x-4 bg-surface" />
-                </Switch.Control>
-              </Switch>
+              <ToggleSwitch
+                size="sm"
+                label="Preview"
+                labelClass="sr-only"
+                checked={isPreviewMode()}
+                onChange={setIsPreviewMode}
+              />
             </div>
           </Show>
           <CopyButton
@@ -453,7 +451,7 @@ export const StaticCodeBoxAccessory = (props: {
               return copyCode();
             }}
           >
-            <Copy />
+            <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </CopyButton>
         </div>
       </div>

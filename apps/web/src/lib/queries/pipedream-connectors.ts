@@ -67,9 +67,12 @@ export function usePipedreamConnectionsQuery(options?: {
   refetchInterval?: number;
   /** See the same option on `useMcpServersQuery`. */
   neverSuspend?: boolean;
+  /** See the same option on `useMcpServersQuery`. */
+  enabled?: () => boolean;
 }) {
   return useQuery(() => ({
     ...pipedreamConnectionsQueryOptions(),
+    enabled: options?.enabled?.() ?? true,
     refetchOnMount: 'always' as const,
     refetchOnWindowFocus: 'always' as const,
     refetchInterval: options?.refetchInterval,
@@ -105,6 +108,15 @@ export function usePipedreamOverlaysQuery() {
 
 function sameEndpoint(a: string, b: string) {
   return a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+}
+
+/** The catalog app a native MCP server stands in for, when it is overlaid. */
+export function overlaidAppSlug(
+  overlays: readonly PipedreamOverlayResponse[],
+  serverUrl: string
+): string | undefined {
+  return overlays.find((overlay) => sameEndpoint(serverUrl, overlay.server_url))
+    ?.app_slug;
 }
 
 /**

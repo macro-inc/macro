@@ -1,5 +1,6 @@
 pub mod ai_stream_registry;
 pub mod chat_renamer;
+pub mod database_query;
 pub mod get_chat;
 pub mod id_mapping;
 pub mod integration_analytics;

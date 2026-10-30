@@ -295,7 +295,7 @@ export type PayloadScalar = null | boolean | number | string;
 export type RoutineModelId = string;
 
 /**
- * A shared routine's snapshot, readable by any signed-in user with its ID.
+ * A shared routine's snapshot, readable by signed-in users with sharing enabled.
  */
 export type RoutineTemplate = {
     /**

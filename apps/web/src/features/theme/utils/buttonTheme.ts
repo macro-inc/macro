@@ -33,7 +33,7 @@ export function buttonAccentVars(
   const useDarkInk = luminance > DARK_INK_LUMINANCE_THRESHOLD;
 
   return {
-    '--button-primary-ink': useDarkInk ? BLACK : WHITE,
-    '--button-primary-state-mix': useDarkInk ? WHITE : BLACK,
+    '--button-accent-ink': useDarkInk ? BLACK : WHITE,
+    '--button-accent-state-mix': useDarkInk ? WHITE : BLACK,
   };
 }

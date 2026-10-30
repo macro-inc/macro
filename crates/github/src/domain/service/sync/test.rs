@@ -91,6 +91,7 @@ sNRx7TF4iOEBkdJgBUoY4X/rZ+51FQOrdZGqeWo+8TjBhMQN7b4=
 #[derive(Debug, Clone)]
 struct TaskStatusCall {
     entity_id: String,
+    credited_user: Option<MacroUserIdStr<'static>>,
     status: String,
 }
 
@@ -259,10 +260,12 @@ impl DocumentService for StubDocumentService {
     async fn update_task_status(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<MacroUserIdStr<'static>>,
         status: &str,
     ) -> Result<(), DocumentError> {
         self.task_status_calls.lock().unwrap().push(TaskStatusCall {
             entity_id: receipt.entity().entity_id.clone(),
+            credited_user,
             status: status.to_string(),
         });
         Ok(())
@@ -1308,6 +1311,12 @@ fn make_sync_service_with_repo_and_notification_ingress(
 }
 
 fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocumentService>) {
+    make_sync_service_with_repo_and_doc_service(StubSyncRepo::new())
+}
+
+fn make_sync_service_with_repo_and_doc_service(
+    repo: StubSyncRepo,
+) -> (TestGithubSyncService, Arc<StubDocumentService>) {
     let doc_service = Arc::new(StubDocumentService::new());
     let foreign_entity_service = StubForeignEntityService::new();
 
@@ -1324,7 +1333,7 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
         doc_service.clone(),
         pull_request_service(&foreign_entity_service),
         StubNotificationIngress::new(),
-        StubSyncRepo::new(),
+        repo,
         StubSyncClient::new(),
         StubRealtime::default(),
     );
@@ -2311,6 +2320,78 @@ async fn pr_merged_sets_task_status_completed() {
     assert_eq!(status_calls.len(), 1);
     assert_eq!(status_calls[0].entity_id, KNOWN_TASK_UUID);
     assert_eq!(status_calls[0].status, "Completed");
+}
+
+#[tokio::test]
+async fn pr_merged_credits_the_linked_macro_user_who_merged() {
+    let (service, doc_service) = make_sync_service_with_repo_and_doc_service(
+        StubSyncRepo::new().with_github_link("333", "macro|merger@example.com"),
+    );
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 },
+            "sender": { "login": "monalisa", "id": 333 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].status, "Completed");
+    assert_eq!(
+        status_calls[0]
+            .credited_user
+            .as_ref()
+            .map(ToString::to_string),
+        Some("macro|merger@example.com".to_string())
+    );
+}
+
+#[tokio::test]
+async fn pr_merged_by_an_unlinked_github_account_is_not_credited() {
+    let (service, doc_service) = make_sync_service_with_repo_and_doc_service(
+        StubSyncRepo::new().with_github_link("333", "macro|merger@example.com"),
+    );
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "number": 42,
+                "title": "fixes MACRO-2BuyvtY3aeEvHx4uG8iD51",
+                "body": null,
+                "head": { "ref": "feature/some-branch" },
+                "merged": true
+            },
+            "repository": {
+                "name": "my-repo",
+                "owner": { "login": "my-org" }
+            },
+            "installation": { "id": 12345 },
+            "sender": { "login": "someone-else", "id": 444 }
+        }),
+    );
+
+    service.process_webhook_event(&event).await.unwrap();
+
+    let status_calls = doc_service.task_status_calls();
+    assert_eq!(status_calls.len(), 1);
+    assert_eq!(status_calls[0].status, "Completed");
+    assert!(status_calls[0].credited_user.is_none());
 }
 
 #[tokio::test]

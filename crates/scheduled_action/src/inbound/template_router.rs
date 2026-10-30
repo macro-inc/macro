@@ -49,8 +49,8 @@ impl<T, Svc, Auth> FromRef<RoutineTemplateRouterState<T, Svc, Auth>>
     }
 }
 
-/// Like routine creation, a team bot reaches the domain so its non-user owner
-/// gets the explicit `OwnerNotUserError` instead of a generic 403.
+/// Let the domain apply the rollout to the creation principal; a team bot
+/// without an acting user has no enabled user rollout.
 impl<T, Svc, Auth> FromRef<RoutineTemplateRouterState<T, Svc, Auth>> for NonUserOwners {
     fn from_ref(_state: &RoutineTemplateRouterState<T, Svc, Auth>) -> Self {
         NonUserOwners::Enabled
@@ -163,14 +163,19 @@ where
 )]
 pub async fn get_template<T, Svc, Auth>(
     State(state): State<RoutineTemplateRouterState<T, Svc, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<RoutineTemplate>, ScheduledActionApiError>
 where
     T: RoutineTemplateService,
     Auth: MacroAuthorizationService,
 {
-    Ok(Json(state.service.get_template(id).await?))
+    Ok(Json(
+        state
+            .service
+            .get_template(&user.authorization.user.macro_user_id, id)
+            .await?,
+    ))
 }
 
 #[utoipa::path(

@@ -1,8 +1,9 @@
 //! Series content of one event the requester can see, for iCalendar export
-//! and for copying onto their own calendar.
+//! and for copying onto their own calendar, and what forwarding their own
+//! copy needs besides.
 
 use super::*;
-use crate::domain::ics::{CalendarEventExport, CalendarEventExportAccess};
+use crate::domain::ics::{CalendarEventExport, CalendarEventExportAccess, ForwardedCopy, JoinLink};
 
 struct ExportRow {
     is_channel_shared: bool,
@@ -170,4 +171,59 @@ pub(super) async fn event_export(
         })
     })
     .transpose()
+}
+
+/// What the requester's own `event_id` copy shows about its invitation's
+/// origin, read from every calendar's source of it, and its conference link.
+pub(super) async fn forwarded_copy(
+    pool: &PgPool,
+    requester_id: &str,
+    event_id: Uuid,
+) -> Result<Option<ForwardedCopy>, Report> {
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            event.conference_url,
+            event.conference_provider,
+            -- Google's own flag, kept in the payload it sent. Every source
+            -- must be a Google private copy: an Outlook copy, or a source
+            -- stored before Macro kept Google's whole payload, is no evidence.
+            -- A source without the key counts as false, since bool_and skips
+            -- NULLs.
+            COALESCE(
+                bool_and(
+                    COALESCE(
+                        source.source_kind = 'google'
+                            AND source.raw_payload->>'privateCopy' = 'true',
+                        false
+                    )
+                ),
+                false
+            ) AS "google_private_copy!",
+            event.is_snapshot
+                OR COALESCE(
+                    bool_or(source.normalized_payload->'event'->>'isSnapshot' = 'true'),
+                    false
+                ) AS "is_snapshot!"
+        FROM calendar_events event
+        LEFT JOIN calendar_event_sources source ON source.event_id = event.id
+        WHERE event.id = $1
+          AND event.owner_id = $2
+          AND event.status <> 'cancelled'
+        GROUP BY event.id
+        "#,
+        event_id,
+        requester_id,
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(report)?;
+    Ok(row.map(|row| ForwardedCopy {
+        google_private_copy: row.google_private_copy,
+        is_snapshot: row.is_snapshot,
+        join_link: row.conference_url.map(|url| JoinLink {
+            url,
+            provider: row.conference_provider.as_deref().map(conference_provider),
+        }),
+    }))
 }

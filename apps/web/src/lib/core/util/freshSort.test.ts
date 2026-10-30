@@ -387,6 +387,91 @@ describe('freshSort with all exact matches', () => {
   });
 });
 
+describe('name match ranking', () => {
+  it('ranks exact names, then prefixes, then other matches, ignoring case and outer spaces', () => {
+    const viewedAt = new Date();
+    const items: MockItem[] = [
+      { id: 'contains', name: 'Team launch plan', type: 'item', viewedAt },
+      { id: 'prefix', name: 'Launch plan review', type: 'item', viewedAt },
+      { id: 'exact', name: 'Launch Plan', type: 'item', viewedAt },
+    ];
+    const search = createFreshSearch<MockItem>({
+      config: { rankNameMatchesFirst: true },
+      getName: (item) => item.name,
+      getTimestamp: (item) => ({ viewedAt: item.viewedAt }),
+    });
+
+    expect(
+      search(items, '  launch PLAN ').map((result) => result.item.id)
+    ).toEqual(['exact', 'prefix', 'contains']);
+    const browseScores = search(items, '').map(
+      (result) => result.combinedScore
+    );
+    expect(new Set(browseScores).size).toBe(1);
+  });
+
+  it('keeps an exact name ahead of a boosted channel that only starts with it', () => {
+    const items: MockItem[] = [
+      {
+        id: 'channel',
+        name: 'Planning',
+        type: 'channel',
+        viewedAt: new Date(),
+      },
+      {
+        id: 'exact',
+        name: 'Plan',
+        type: 'item',
+        viewedAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000),
+      },
+    ];
+    const search = createFreshSearch<MockItem>({
+      config: {
+        rankNameMatchesFirst: true,
+        useViewedAt: true,
+        channelBoost: 3,
+      },
+      getName: (item) => item.name,
+      isChannelItem: (item) => item.type === 'channel',
+      getTimestamp: (item) => ({ viewedAt: item.viewedAt }),
+    });
+
+    expect(search(items, 'plan').map((result) => result.item.id)).toEqual([
+      'exact',
+      'channel',
+    ]);
+  });
+
+  it('measures match position on the label when search text puts keywords first', () => {
+    const now = Date.now();
+    const items: MockItem[] = [
+      {
+        id: 'plan',
+        name: 'Create plan',
+        type: 'item',
+        viewedAt: new Date(now - 24 * 60 * 60 * 1000),
+      },
+      { id: 'command', name: 'Create', type: 'item', viewedAt: new Date(now) },
+    ];
+    const search = createFreshSearch<MockItem>({
+      config: {
+        rankNameMatchesFirst: true,
+        startBonusDecay: 0.2,
+        useViewedAt: true,
+      },
+      getName: (item) =>
+        item.id === 'command' ? `new make add ${item.name}` : item.name,
+      getDisplayName: (item) => item.name,
+      getTimestamp: (item) => ({ viewedAt: item.viewedAt }),
+    });
+
+    expect(search(items, 'cre').map((result) => result.item.id)).toEqual([
+      'command',
+      'plan',
+    ]);
+  });
+});
+
 describe('boostFn functionality', () => {
   interface MockItemWithEmail extends MockItem {
     email?: string;

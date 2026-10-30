@@ -1288,6 +1288,7 @@ pub async fn run() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         message_realtime,
+        channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
@@ -2200,6 +2201,9 @@ pub async fn run() -> anyhow::Result<()> {
             Arc::new(readonly_email_service),
             entity_access_service.as_ref().clone(),
         ),
+        email_focus_reader: Arc::new(email::domain::focus::FocusQueries::new(
+            email::outbound::FocusPgRepository(readonly_db.clone()),
+        )),
         graphql_crm_context: graphql_crm::CrmGraphqlContext::new(pipeline_service.clone()),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),

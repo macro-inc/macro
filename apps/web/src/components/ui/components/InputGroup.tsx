@@ -315,7 +315,7 @@ function InputGroupClearButton(props: InputGroupClearButtonProps) {
         onPointerDown={(event) => event.preventDefault()}
         onClick={() => group.clear()}
       >
-        <XIcon />
+        <XIcon class="size-3.5 shrink-0" />
       </InputGroupButton>
     </Show>
   );

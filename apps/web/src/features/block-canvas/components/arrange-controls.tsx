@@ -52,7 +52,10 @@ export function CanvasAlignmentControls(props: {
                       disabled={props.count < 2}
                       onClick={() => props.onAlign(alignment)}
                     >
-                      <Dynamic component={icon} />
+                      <Dynamic
+                        component={icon}
+                        class="size-3.5 touch:size-6 shrink-0 pointer-events-none"
+                      />
                     </ButtonGroup.Button>
                   </>
                 )}

@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::models::{Link, ResolvedSendingInbox, UserProvider};
+use calendar_events::domain::ics::CalendarEventForwardKind;
 use calendar_events::domain::ics::{CalendarEventForward, CalendarEventIcs};
 use rootcause::Report;
 use std::sync::Mutex;
@@ -40,6 +41,8 @@ struct Fake {
     /// Inboxes the requester can send from.
     inboxes: Vec<&'static str>,
     resolved_addresses: Mutex<Vec<Option<String>>>,
+    /// The invitees each calendar read was asked to name.
+    invitees: Mutex<Vec<Vec<IcsParticipant>>>,
     sent: Mutex<Vec<(Uuid, CreateDraftInput, Vec<SourcedAttachment>)>>,
 }
 
@@ -48,8 +51,10 @@ impl CalendarEventForwardSource for Fake {
         &self,
         requester_id: &str,
         _event_id: Uuid,
+        invitees: &[IcsParticipant],
     ) -> Result<Option<CalendarEventForward>, Report> {
         assert_eq!(requester_id, "macro|guest@example.com");
+        self.invitees.lock().unwrap().push(invitees.to_vec());
         Ok(self.forward.clone())
     }
 }
@@ -97,7 +102,7 @@ impl EmailFileSendService for Fake {
             link_id: link.id,
             subject: input.subject.clone(),
             to: input.to.clone(),
-            cc: Vec::new(),
+            cc: input.cc.clone(),
             bcc: Vec::new(),
             body_text: input.body_text.clone(),
             body_html: None,
@@ -118,9 +123,32 @@ fn guest_copy(title: &str) -> Fake {
                 document: EVENT_ICS.to_owned(),
             },
             inbox: "guest@example.com".to_owned(),
+            kind: CalendarEventForwardKind::EventFile,
         }),
         inboxes: vec!["work@example.com", "guest@example.com"],
         ..Fake::default()
+    }
+}
+
+const INVITATION_ICS: &str = "BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nEND:VCALENDAR\r\n";
+
+/// A guest's copy of an invitation from an organizer outside Google.
+fn outside_invitation() -> Fake {
+    Fake {
+        forward: Some(CalendarEventForward {
+            ics: CalendarEventIcs {
+                title: "Board review".to_owned(),
+                document: INVITATION_ICS.to_owned(),
+            },
+            inbox: "guest@example.com".to_owned(),
+            kind: CalendarEventForwardKind::Invitation {
+                organizer: IcsParticipant {
+                    email: "organizer@exchange.example".to_owned(),
+                    name: Some("The Organizer".to_owned()),
+                },
+            },
+        }),
+        ..guest_copy("Board review")
     }
 }
 
@@ -157,16 +185,19 @@ async fn sends_the_event_file_from_the_inbox_holding_the_copy() {
     assert_eq!(input.to[0].email, "friend@example.org");
     assert!(input.cc.is_empty() && input.bcc.is_empty());
     assert_eq!(input.replying_to_id, None);
-    assert_eq!(
-        input.body_text.as_deref(),
-        Some("Office tour\nWhen: Friday")
+    let body = input.body_text.as_deref().unwrap();
+    assert!(body.starts_with("Office tour\nWhen: Friday\n\n"), "{body}");
+    assert!(
+        body.ends_with("You won't be on the organizer's guest list."),
+        "{body}"
     );
     let html = URL_SAFE_NO_PAD
         .decode(input.body_html.as_deref().unwrap())
         .unwrap();
-    assert_eq!(
-        String::from_utf8(html).unwrap(),
-        "<div>Office tour<br>When: Friday</div>"
+    let html = String::from_utf8(html).unwrap();
+    assert!(
+        html.starts_with("<div>Office tour<br>When: Friday<br><br>This invitation"),
+        "{html}"
     );
     assert_eq!(
         input.actor.as_ref().map(ToString::to_string).as_deref(),
@@ -176,6 +207,89 @@ async fn sends_the_event_file_from_the_inbox_holding_the_copy() {
     assert_eq!(files[0].file_name, "Office tour.ics");
     assert_eq!(files[0].content_type, "text/calendar");
     assert_eq!(files[0].bytes, EVENT_ICS.as_bytes());
+    assert!(!files[0].is_inline);
+}
+
+#[tokio::test]
+async fn an_outside_organizers_invitation_goes_out_answerable_to_the_recipients_and_organizer() {
+    let fake = outside_invitation();
+    forward(
+        &fake,
+        EventForwardRequest {
+            to: vec![ContactInfo {
+                name: Some("A Friend".to_owned()),
+                ..contact(" friend@example.org ")
+            }],
+            body_text: Some("Board review\nWhen: Friday".to_owned()),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        *fake.invitees.lock().unwrap(),
+        [vec![IcsParticipant {
+            email: "friend@example.org".to_owned(),
+            name: Some("A Friend".to_owned()),
+        }]],
+        "the calendar names exactly the validated recipients"
+    );
+    let sent = fake.sent.lock().unwrap();
+    let (_, input, files) = &sent[0];
+    let to: Vec<_> = input
+        .to
+        .iter()
+        .map(|to| (to.email.as_str(), to.name.as_deref()))
+        .collect();
+    assert_eq!(
+        to,
+        [
+            ("friend@example.org", Some("A Friend")),
+            ("organizer@exchange.example", Some("The Organizer")),
+        ],
+        "the organizer is addressed beside the recipients, as Google does"
+    );
+    assert!(input.cc.is_empty() && input.bcc.is_empty());
+    let body = input.body_text.as_deref().unwrap();
+    assert!(body.starts_with("Board review\nWhen: Friday\n\n"), "{body}");
+    assert!(
+        body.ends_with("Your answer goes to the organizer."),
+        "{body}"
+    );
+    assert!(
+        !body.contains("attached file") && !body.contains("copied"),
+        "{body}"
+    );
+    assert_eq!(files.len(), 2);
+    assert_eq!(files[0].content_type, "text/calendar; method=REQUEST");
+    assert!(
+        files[0].is_inline,
+        "the invitation is the message's calendar body"
+    );
+    assert_eq!(files[0].bytes, INVITATION_ICS.as_bytes());
+    assert_eq!(files[1].file_name, "invite.ics");
+    assert_eq!(files[1].content_type, "application/ics");
+    assert!(!files[1].is_inline);
+    assert_eq!(files[1].bytes, INVITATION_ICS.as_bytes());
+}
+
+#[tokio::test]
+async fn an_organizer_among_the_recipients_is_not_addressed_twice() {
+    let fake = outside_invitation();
+    forward(
+        &fake,
+        EventForwardRequest {
+            to: vec![contact("Organizer@Exchange.example")],
+            body_text: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let sent = fake.sent.lock().unwrap();
+    let to: Vec<_> = sent[0].1.to.iter().map(|to| to.email.as_str()).collect();
+    assert_eq!(to, ["Organizer@Exchange.example"]);
+    assert!(sent[0].1.cc.is_empty());
 }
 
 #[tokio::test]
@@ -221,9 +335,10 @@ async fn markup_in_the_body_is_escaped_and_the_title_cannot_name_a_path() {
     let html = URL_SAFE_NO_PAD
         .decode(input.body_html.as_deref().unwrap())
         .unwrap();
-    assert_eq!(
-        String::from_utf8(html).unwrap(),
-        "<div>&lt;b&gt;&amp;&lt;/b&gt;</div>"
+    let html = String::from_utf8(html).unwrap();
+    assert!(
+        html.starts_with("<div>&lt;b&gt;&amp;&lt;/b&gt;<br><br>"),
+        "{html}"
     );
     assert_eq!(files[0].file_name, "Q3-Q4 <review>.ics");
 }

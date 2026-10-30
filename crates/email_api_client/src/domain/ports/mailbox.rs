@@ -82,6 +82,13 @@ pub trait MailboxContentReader: Send + Sync + 'static {
         message_id: &ProviderId,
         attachment_id: &ProviderId,
     ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
+
+    /// Fetch a message's original RFC 822 bytes.
+    fn mime(
+        &self,
+        token: &AccessToken,
+        message_id: &ProviderId,
+    ) -> impl Future<Output = Result<Vec<u8>, EmailApiError>> + Send;
 }
 
 /// Per-folder providers enumerate bounded pages for initial and incremental sync.

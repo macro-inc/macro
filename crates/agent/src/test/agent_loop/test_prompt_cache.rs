@@ -220,6 +220,7 @@ async fn run_session(
     });
     let before = transport.bodies().len();
     let mut session = util::test_loop()
+        .with_streamed_tool_calls()
         .with_model(model)
         .test_routed_session(
             &router(transport),
@@ -401,6 +402,7 @@ async fn a_replayed_turn_repeats_its_live_requests() {
         eager: AsyncToolCollection::<()>::new().add_tool::<LoadToolsStandIn, ()>(),
     });
     let mut session = util::test_loop()
+        .with_streamed_tool_calls()
         .with_model("anthropic/claude-opus-4-8")
         .test_routed_session(
             &router(&transport),

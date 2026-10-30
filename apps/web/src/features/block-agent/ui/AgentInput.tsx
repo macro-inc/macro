@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { toast } from '@core/component/Toast/Toast';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
@@ -19,6 +20,10 @@ import {
   DictationPanel,
 } from '@app/features/dictation/components/dictation-controls';
 import { createComposerDictation } from '@app/features/dictation/composer-dictation';
+import {
+  ComposerAddDrawer,
+  ComposerAddMenu,
+} from '@channel/Input/ComposerAddMenu';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -43,6 +48,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { agentAttachmentItems } from './attachment-menu';
 
 /**
  * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
@@ -56,6 +62,7 @@ export type QuoteInsert = (text: string) => void;
 export interface AgentInputProps {
   /** Image capability of the selected model; unknown runtimes omit it. */
   supportsImages?: boolean | null;
+  modelName?: string;
   placeholder?: string;
   /** Context to seed in the composer without sending it. */
   initialInput?: string;
@@ -125,6 +132,13 @@ export interface AgentInputProps {
 }
 
 export function AgentInput(props: AgentInputProps) {
+  const [attachDrawerOpen, setAttachDrawerOpen] = createSignal(false);
+  const imageUnsupportedReason = () =>
+    props.supportsImages === false
+      ? t('common.imagesUnsupported', {
+          model: props.modelName ?? t('common.selectedModel'),
+        })
+      : undefined;
   const [owned, setOwned] = createSignal(props.initialInput ?? '');
   const controlled = () => props.onDraftChange !== undefined;
   const markdown = () => (controlled() ? (props.draft ?? '') : owned());
@@ -340,11 +354,6 @@ export function AgentInput(props: AgentInputProps) {
         classList={{ 'opacity-50': props.readOnly }}
       >
         {/* Desktop: the model pill sits above the box, as it always has. */}
-        <Show when={props.supportsImages === false}>
-          <p role="status" class="px-3 py-1 text-xs text-ink-muted">
-            {IMAGE_INPUT_WARNING}
-          </p>
-        </Show>
         <Show when={!isTouchDevice() && props.modelControl}>
           <div class="flex items-center px-0.5">{props.modelControl}</div>
         </Show>
@@ -430,6 +439,32 @@ export function AgentInput(props: AgentInputProps) {
                     <Input.AttachFilesAction
                       accept={null}
                       disabled={props.disabled || props.readOnly}
+                      trigger={(openFiles, openImages) => {
+                        const groups = () => [
+                          {
+                            items: agentAttachmentItems(
+                              openFiles,
+                              openImages,
+                              imageUnsupportedReason()
+                            ),
+                          },
+                        ];
+                        return (
+                          <>
+                            <ComposerAddMenu
+                              groups={groups()}
+                              disabled={props.disabled || props.readOnly}
+                              onOpenDrawer={() => setAttachDrawerOpen(true)}
+                            />
+                            <ComposerAddDrawer
+                              groups={groups()}
+                              open={attachDrawerOpen()}
+                              onOpenChange={setAttachDrawerOpen}
+                              getEditor={() => editor.lexical.getRootElement()}
+                            />
+                          </>
+                        );
+                      }}
                     />
                   </Show>
                   <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">

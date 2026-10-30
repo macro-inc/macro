@@ -3,6 +3,7 @@
 // Adopted from monitors created by hand in the Datadog UI. Do not edit a
 // monitor here and in the UI at the same time — this file wins on deploy.
 import { adopted } from '../adopted';
+import { notify } from '../notify';
 
 // https://us5.datadoghq.com/monitors/1062630
 adopted('rds-high-cpu', {
@@ -10,12 +11,9 @@ adopted('rds-high-cpu', {
   type: 'query alert',
   query:
     'avg(last_1h):sum:aws.rds.cpuutilization{name:*-prod} by {name}.weighted() >= 95',
-  message: `@hutch@macro.com 
-@evan@macro.com 
-@teo@macro.com
-@webhook-macro-alert-hook
+  message: `RDS DB {{name.name}} is experiencing high CPU utilization.
 
-RDS DB {{name.name}} is experiencing high CPU utilization.`,
+${notify({ pages: true })}`,
   monitorThresholds: {
     critical: '95',
     warning: '80',
@@ -25,7 +23,6 @@ RDS DB {{name.name}} is experiencing high CPU utilization.`,
   includeTags: true,
   newGroupDelay: 0,
   evaluationDelay: 900,
-  renotifyInterval: 0,
   requireFullWindow: false,
 });
 
@@ -34,7 +31,9 @@ adopted('macrodb-low-burst-balance', {
   name: '[PROD] MacroDB Low Burst Balance',
   type: 'query alert',
   query: 'avg(last_1h):avg:aws.rds.burst_balance{name:macro-db-prod} <= 10',
-  message: '@slack-monitoring',
+  message: `macro-db-prod burst balance is at {{value}}%.
+
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '10',
     warning: '25',
@@ -54,7 +53,7 @@ adopted('rds-proxy-connections', {
     'avg(last_1h):avg:aws.rds.proxy.database_connections{proxyname:macrodb-proxy-prod} > 500',
   message: `We have excessive concurrent connections in the rds proxy. This can lead to slow database calls and potential outage if other services can not secure a connection
 
-@slack-holy-shit-alarms`,
+${notify({ pages: true })}`,
   monitorThresholds: {
     critical: '500',
   },
@@ -80,8 +79,6 @@ Storage utilization: {{value}}%
 Critical threshold: {{threshold}}%
 
 RDS storage utilization has reached a critical level. Investigate storage growth or increase the allocated storage.
-
-@webhook-macro-alert-hook
 {{/is_alert}}
 
 {{#is_warning}}
@@ -93,8 +90,6 @@ Storage utilization: {{value}}%
 Warning threshold: {{warn_threshold}}%
 
 RDS storage utilization is approaching the critical threshold.
-
-@webhook-macro-alert-hook
 {{/is_warning}}
 
 {{#is_recovery}}
@@ -105,11 +100,9 @@ Engine: {{engine.name}}
 Storage utilization: {{value}}%
 
 RDS storage utilization has returned to an acceptable level.
-
-@webhook-macro-alert-hook
 {{/is_recovery}}
 
-@hutch@macro.com @evan@macro.com`,
+${notify({ pages: true })}`,
   tags: ['integration:amazon_rds'],
   monitorThresholds: {
     critical: '90',
@@ -120,7 +113,6 @@ RDS storage utilization has returned to an acceptable level.
   includeTags: true,
   newGroupDelay: 60,
   evaluationDelay: 900,
-  renotifyInterval: 0,
   requireFullWindow: false,
 });
 
@@ -132,7 +124,7 @@ adopted('rds-connection-anomaly', {
     "avg(last_1d):anomalies(avg:aws.rds.database_connections{name:*-prod} by {dbinstanceidentifier}, 'basic', 2, direction='above', interval=300, alert_window='last_1h', count_default_zero='true') >= 0.99",
   message: `The number of connections for RDS database {{dbinstanceidentifier.name}} is outside of the typical range.
 
-@slack-monitoring`,
+${notify({ pages: false })}`,
   tags: ['integration:amazon_rds'],
   monitorThresholds: {
     critical: '0.99',
@@ -147,7 +139,6 @@ adopted('rds-connection-anomaly', {
   includeTags: true,
   newGroupDelay: 60,
   evaluationDelay: 900,
-  renotifyInterval: 0,
   requireFullWindow: false,
 });
 
@@ -157,8 +148,11 @@ adopted('rds-low-freeable-memory', {
   type: 'query alert',
   query:
     'avg(last_1h):avg:aws.rds.freeable_memory{environment:prod OR database_instance:macro-db-prod.ctkwyjgndnfr.us-east-1.rds.amazonaws.com} by {database_instance} < 2000000000',
-  message: `@hutch@macro.com 
-@evan@macro.com`,
+  // macrodb.ts and Grafana watch the same metric over a shorter window; this
+  // one only notifies.
+  message: `{{database_instance.name}} freeable memory is {{value}} bytes.
+
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '2000000000',
     warning: '3000000000',
@@ -176,10 +170,9 @@ adopted('rds-high-iops', {
   type: 'query alert',
   query:
     'avg(last_1h):avg:aws.rds.write_iops{environment:prod OR database_instance:macro-db-prod.ctkwyjgndnfr.us-east-1.rds.amazonaws.com} by {database_instance}.as_rate() + avg:aws.rds.read_iops{environment:prod OR database_instance:macro-db-prod.ctkwyjgndnfr.us-east-1.rds.amazonaws.com} by {database_instance}.as_rate() > 10000',
-  message: `@hutch@macro.com 
-@evan@macro.com
+  message: `{{database_instance.name}} read plus write IOPS are at {{value}}.
 
-@webhook-alarm_webhook_test`,
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '10000',
     warning: '9000',

@@ -89,7 +89,7 @@ function $getActiveCommandSearchNode(): InlineSearchNode | null {
 /**
  * Registers the `/` trigger for the agent commands menu. Typing `/` at a
  * valid trigger position (start of line or after whitespace) opens a
- * combined skills, pull requests, and harness commands menu. Skills remain
+ * combined skills, MCPs, pull requests, and harness commands menu. Skills remain
  * available before the agent advertises any commands. Selecting a command
  * inserts `/name` as plain text at the cursor.
  *

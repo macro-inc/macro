@@ -38,7 +38,7 @@ unit tests. Standalone pure-logic crates need no database setup.
 | `just build` | Build with the workspace's default Cargo selection, using the SQLx cache. |
 | `just rust-check` | Type-check the Rust workspace using the SQLx cache. |
 | `cargo fmt` | Format Rust code. |
-| `just check` | Fast, change-scoped format/lint/code-rule gate; not a type check or test runner. |
+| `just check` | Fast, change-scoped format/lint/code-rule/PII gate; not a type check or test runner. |
 | `just check full` | Add TypeScript checking and Rust clippy to the gate. |
 | `just clippy` | Run workspace Rust lints using the SQLx cache. |
 

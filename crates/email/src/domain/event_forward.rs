@@ -1,19 +1,33 @@
 //! Forward one of the viewer's calendar events by email, as a guest whose
-//! organizer does not let them add guests forwards the invitation instead:
-//! the event's iCalendar file, the one the .ics export renders, sent from
-//! the inbox that holds their copy.
+//! organizer does not let them add guests forwards the invitation instead,
+//! sent from the inbox that holds their copy. Both kinds carry the copy's
+//! join link, since a forward deliberately invites the people it goes to.
 //!
-//! The file is `METHOD:PUBLISH` and names no attendees, so a recipient can
-//! add the event to their own calendar but has nothing to answer: nothing
-//! reaches the organizer and the guest list stays as the organizer keeps
-//! it. A Macro recipient sees it as a shared event with Add to calendar
-//! ([`super::invitation_import`]).
+//! The calendar decides the kind from the copy
+//! ([`CalendarEventForwardKind`]):
+//!
+//! - An organizer outside Google: Google keeps such an invitation as a
+//!   private copy and offers its own Add guests there as a forward, so this
+//!   sends what that does: a real invitation (`METHOD:REQUEST`) naming the
+//!   recipients as attendees, as the message's calendar body, addressed to
+//!   them and to the organizer, as Google addresses its own. Recipients
+//!   answer it to the organizer with Yes, Maybe or No; the forwarder's own
+//!   copy and answer are untouched.
+//! - Anything else, notably a Google organizer who turned inviting off: the
+//!   shared-event file (`METHOD:PUBLISH`) naming no attendees, so a
+//!   recipient can add the event to their own calendar but has nothing to
+//!   answer, nothing reaches the organizer, and the guest list stays as the
+//!   organizer keeps it. A Macro recipient sees it as a shared event with
+//!   Add to calendar ([`super::invitation_import`]).
 
 #[cfg(test)]
 mod test;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use calendar_events::domain::ports::CalendarEventForwardSource;
+use calendar_events::domain::{
+    ics::{CalendarEventForwardKind, IcsParticipant},
+    ports::CalendarEventForwardSource,
+};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use uuid::Uuid;
 
@@ -31,12 +45,30 @@ pub const MAX_FORWARD_RECIPIENTS: usize = 50;
 /// The type the event file is attached with, as Forward by email attaches it.
 const ICS_CONTENT_TYPE: &str = "text/calendar";
 
-/// What a forward sends besides the event file.
+/// The type of an invitation's calendar body, which makes it answerable.
+const INVITATION_BODY_CONTENT_TYPE: &str = "text/calendar; method=REQUEST";
+
+/// The type and name of the copy of the invitation attached for clients
+/// that read only attachments, as Google's own invitations attach it.
+const INVITATION_FILE_CONTENT_TYPE: &str = "application/ics";
+const INVITATION_FILE_NAME: &str = "invite.ics";
+
+/// Ends a forwarded event file's body: what the recipient can do with it.
+const EVENT_FILE_NOTE: &str = "This invitation was forwarded to you. Add the event to your \
+                               calendar from the attached file. You won't be on the \
+                               organizer's guest list.";
+
+/// Ends a forwarded invitation's body: who hears the recipient's answer.
+const INVITATION_NOTE: &str =
+    "This invitation was forwarded to you. Your answer goes to the organizer.";
+
+/// What a forward sends besides the event.
 #[derive(Debug, Clone)]
 pub struct EventForwardRequest {
     /// The people it goes to.
     pub to: Vec<ContactInfo>,
-    /// The plain-text body; a short note names the event when absent.
+    /// The plain-text summary of the event the body opens with; the title
+    /// when absent. A note saying what the recipient can do follows it.
     pub body_text: Option<String>,
 }
 
@@ -72,13 +104,14 @@ impl EventForwardError {
     }
 }
 
-/// Send `event_id`'s iCalendar file to the requested people from the inbox
-/// holding the actor's copy of it. The send is queued like any other, so it
-/// leaves after the usual undo delay.
+/// Send `event_id` to the requested people from the inbox holding the
+/// actor's copy of it, as an invitation or the shared-event file, whichever
+/// the copy allows. The send is queued like any other, so it leaves after
+/// the usual undo delay.
 #[tracing::instrument(
     name = "email.forward_calendar_event",
     skip(calendar, email, sender, actor, request),
-    fields(%event_id, recipient_count = request.to.len(), link_id, outcome),
+    fields(%event_id, recipient_count = request.to.len(), link_id, kind, outcome),
     err
 )]
 pub async fn forward_event<C, E, F>(
@@ -122,11 +155,19 @@ where
     F: EmailFileSendService,
 {
     let to = recipients(request.to)?;
+    let invitees: Vec<IcsParticipant> = to
+        .iter()
+        .map(|contact| IcsParticipant {
+            email: contact.email.clone(),
+            name: contact.name.clone().filter(|name| !name.trim().is_empty()),
+        })
+        .collect();
     let forward = calendar
-        .event_forward(&actor.to_string(), event_id)
+        .event_forward(&actor.to_string(), event_id, &invitees)
         .await
         .map_err(EventForwardError::Internal)?
         .ok_or(EventForwardError::NotFound)?;
+    tracing::Span::current().record("kind", forward.kind.as_str());
     let inbox = email
         .resolve_sending_inbox(
             actor.clone(),
@@ -147,10 +188,42 @@ where
         "" => "Untitled event",
         title => title,
     };
-    let body_text = request
+    let document = forward.ics.document.into_bytes();
+    let (note, to, files) = match forward.kind {
+        CalendarEventForwardKind::EventFile => (
+            EVENT_FILE_NOTE,
+            to,
+            vec![SourcedAttachment {
+                file_name: format!("{}.ics", file_stem(title)),
+                content_type: ICS_CONTENT_TYPE.to_owned(),
+                bytes: document,
+                is_inline: false,
+            }],
+        ),
+        CalendarEventForwardKind::Invitation { organizer } => (
+            INVITATION_NOTE,
+            with_organizer(to, organizer),
+            vec![
+                SourcedAttachment {
+                    file_name: INVITATION_FILE_NAME.to_owned(),
+                    content_type: INVITATION_BODY_CONTENT_TYPE.to_owned(),
+                    bytes: document.clone(),
+                    is_inline: true,
+                },
+                SourcedAttachment {
+                    file_name: INVITATION_FILE_NAME.to_owned(),
+                    content_type: INVITATION_FILE_CONTENT_TYPE.to_owned(),
+                    bytes: document,
+                    is_inline: false,
+                },
+            ],
+        ),
+    };
+    let summary = request
         .body_text
         .filter(|body| !body.trim().is_empty())
-        .unwrap_or_else(|| default_body(title));
+        .unwrap_or_else(|| title.to_owned());
+    let body_text = format!("{}\n\n{note}", summary.trim_end());
     let input = CreateDraftInput {
         frozen_signature_html: None,
         draft_generation: 0,
@@ -174,15 +247,27 @@ where
         draft_client_binding: None,
         thread_client_binding: None,
     };
-    let file = SourcedAttachment {
-        file_name: format!("{}.ics", file_stem(title)),
-        content_type: ICS_CONTENT_TYPE.to_owned(),
-        bytes: forward.ics.document.into_bytes(),
-    };
     sender
-        .send_message_with_files(&inbox.link, &inbox.accessible_inboxes, input, vec![file])
+        .send_message_with_files(&inbox.link, &inbox.accessible_inboxes, input, files)
         .await
         .map_err(EventForwardError::Email)
+}
+
+/// The recipients followed by the organizer, who gets the answers, as
+/// Google addresses its own forward; an organizer already among the
+/// recipients is not added twice.
+fn with_organizer(mut to: Vec<ContactInfo>, organizer: IcsParticipant) -> Vec<ContactInfo> {
+    if !to
+        .iter()
+        .any(|contact| contact.email.eq_ignore_ascii_case(&organizer.email))
+    {
+        to.push(ContactInfo {
+            email: organizer.email,
+            name: organizer.name,
+            photo_url: None,
+        });
+    }
+    to
 }
 
 /// The requested recipients as valid, distinct addresses, in the order given.
@@ -209,13 +294,6 @@ fn recipients(requested: Vec<ContactInfo>) -> Result<Vec<ContactInfo>, EventForw
         ));
     }
     Ok(to)
-}
-
-fn default_body(title: &str) -> String {
-    format!(
-        "{title}\n\nThis invitation was forwarded to you. Add the event to your calendar \
-         from the attached file. You won't be on the organizer's guest list."
-    )
 }
 
 /// The plain body as HTML: escaped, one line per line.

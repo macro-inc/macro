@@ -47,25 +47,6 @@ function hasProperties<T extends SoupApiItem>(
   return true;
 }
 
-function hasProjectId<T extends SoupApiItem>(
-  item: T
-): item is T & {
-  data: T['data'] & {
-    projectId?: string;
-  };
-} {
-  if (
-    item.tag === 'channel' ||
-    item.tag === 'call' ||
-    item.tag === 'crmCompany' ||
-    item.tag === 'foreignEntity' ||
-    item.tag === 'project'
-  )
-    return false;
-
-  return true;
-}
-
 export function serializeGroupByField(
   field: GroupByField
 ): ApiGroupedSoupField {
@@ -233,18 +214,25 @@ export function makeGroupComparator(
         return diff !== 0 ? diff : defaultOrder(a, b);
       };
     }
-    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES) {
-      return (a, b) => {
-        const aNotSet = a.key === NOT_SET_GROUP_KEY;
-        const bNotSet = b.key === NOT_SET_GROUP_KEY;
-        if (aNotSet && bNotSet) return 0;
-        if (aNotSet) return 1;
-        if (bNotSet) return -1;
-        return a.label.localeCompare(b.label);
-      };
+    if (
+      groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+      groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+    ) {
+      return notSetLastByLabel;
     }
   }
+  if (groupBy?.type === 'project') return notSetLastByLabel;
   return defaultOrder;
+}
+
+/** People and projects sort by name; the unassigned group closes the list. */
+function notSetLastByLabel(a: GroupMeta, b: GroupMeta): number {
+  const aNotSet = a.key === NOT_SET_GROUP_KEY;
+  const bNotSet = b.key === NOT_SET_GROUP_KEY;
+  if (aNotSet && bNotSet) return 0;
+  if (aNotSet) return 1;
+  if (bNotSet) return -1;
+  return a.label.localeCompare(b.label);
 }
 
 /**
@@ -255,18 +243,17 @@ export function makeGroupComparator(
 export function computeGroupKeysForItem(
   item: SoupApiItem,
   groupBy: GroupByField | undefined
-) {
+): string[] | undefined {
   if (!groupBy) return;
 
   return match(groupBy)
     .with({ type: 'entity_type' }, () => [item.tag])
-    .with({ type: 'project' }, () => {
-      if (!hasProjectId(item)) return;
-
-      const projectId = item.data.projectId;
-
-      return [projectId ?? NOT_SET_GROUP_KEY];
-    })
+    .with({ type: 'project' }, () =>
+      computeGroupKeysForItem(item, {
+        type: 'property',
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      })
+    )
     .with({ type: 'property' }, (propertyGroupBy) => {
       if (!hasProperties(item)) return;
 

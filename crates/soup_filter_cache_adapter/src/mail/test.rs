@@ -11,7 +11,9 @@ use soup_filter_projection::{
 
 mod drafts;
 mod optimistic;
+mod reconciliation;
 mod reminders;
+mod retention;
 mod through;
 
 const VIEWER: &str = "macro|mail@example.com";

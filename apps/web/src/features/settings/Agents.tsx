@@ -346,7 +346,7 @@ export function Agents(props: {
                   </p>
                 </div>
                 <Button
-                  variant="neutral"
+                  variant="primary"
                   size="sm"
                   onClick={() => setCreating(true)}
                 >
@@ -1427,6 +1427,7 @@ function AgentEditorPage(props: {
                             name="agent-permission-policy"
                             value="bypass"
                             title="Always bypass"
+                            suggested
                             description="Approve tool calls without asking."
                             checked={autoAcceptPermissions()}
                             onChange={() => setAutoAcceptChoice(true)}
