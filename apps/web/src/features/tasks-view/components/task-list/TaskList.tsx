@@ -219,7 +219,8 @@ export function TaskList(props: TaskListProps) {
   );
 
   const visibleRows = source.items;
-  const columnCount = () => taskGridColumnCount(showTaskProject(), false);
+  const columnCount = () =>
+    taskGridColumnCount(showTaskProject(), false, false);
   const [assigningProjectTasks, setAssigningProjectTasks] =
     createSignal<string[]>();
   const tasksById = createMemo(() => {

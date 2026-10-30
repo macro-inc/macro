@@ -13,6 +13,8 @@ export default {
   filesFromDevice: 'Documents and other files',
   selectedModel: 'This model',
   imagesUnsupported: "{{model}} doesn't support images",
+  changeStatus: 'Change status',
+  changePriority: 'Change priority',
   cancel: 'Cancel',
   close: 'Close',
   delete: 'Delete',

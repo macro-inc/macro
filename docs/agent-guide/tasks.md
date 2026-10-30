@@ -94,9 +94,11 @@ to read the full value.
 The project pill beneath a task title shows the project icon and name without
 a `Project:` prefix.
 Task rows and group headers keep a gutter from the surrounding list container.
-Click or tap the leading status icon to change status without opening the task.
-The status picker replaces the desktop Status column and the trailing mobile
-status pill; Priority, Assignees, and Project stay in their existing positions.
+Click or tap the leading status or priority icon to edit without opening the task.
+Both icons sit before the title on desktop and narrow rows. Their pickers replace
+the separate Status/Priority columns and duplicate trailing mobile pills; Assignees
+and Project stay on the right. Empty priority shows a circled minus, Urgent shows a
+filled exclamation badge, and Completed uses a filled check-circle.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,

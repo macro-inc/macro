@@ -18,7 +18,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 - Keep list rows and group headers inset from the surrounding container on desktop and touch; group disclosures keep a 44px touch target.
-- Edit status through the leading `TaskStatusControl` icon on desktop and mobile; keep the separate Status column and trailing mobile status pill removed.
+- Edit status and priority through leading `TaskPropertyControl` icons before the title on desktop and mobile; keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers; keep the glyphs aligned with the property feature.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
@@ -55,7 +55,7 @@ Run from `apps/web`:
 - `bun run test src/features/tasks-view`
 - `bun run type-check`
 - Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
-- Leading status editor browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts task-status-control.browser.e2e.ts`.
+- Leading status and priority editor browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts task-status-control.browser.e2e.ts`.
 
 ## Related
 

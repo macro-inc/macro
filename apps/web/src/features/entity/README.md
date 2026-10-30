@@ -10,9 +10,10 @@ existing inline metadata area. Names and icons use the shared property preview
 cache; the row does not search for related entities. Narrow rows compact these
 pills to icons, with full names available in tooltips and the overflow menu.
 
-Task list status editing uses `extractors-property/task-status-control.tsx` in
-the leading icon slot. It shares the property editor and mutation path across
-wide task rows and narrow entity rows, including optimistic status and rollback.
-Narrow rows omit the duplicate trailing Status property.
+Task list status and priority editing use `extractors-property/task-property-control.tsx`
+in the leading icon slots before the title. The controls share the property editor
+and mutation path across wide task rows and narrow entity rows, including optimistic
+values and rollback. Narrow rows omit duplicate trailing Status and Priority properties;
+wide task rows omit the separate Status and Priority columns.
 Narrow rows show the people icon beside the count for multiple assignees when
 avatars are collapsed.

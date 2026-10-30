@@ -87,6 +87,8 @@ interface EntityKeyPropertiesProps {
   includeProject?: boolean;
   /** The task's leading icon already owns status editing. */
   hideStatus?: boolean;
+  /** The task's leading priority icon already owns priority editing. */
+  hidePriority?: boolean;
 }
 
 /**
@@ -110,8 +112,10 @@ export function EntityKeyProperties(props: EntityKeyPropertiesProps) {
     });
     const key = getSortedKeyProperties(properties).filter(
       (property) =>
-        !props.hideStatus ||
-        property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS
+        (!props.hideStatus ||
+          property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS) &&
+        (!props.hidePriority ||
+          property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY)
     );
     return props.includeProject && entityType() === EntityType.TASK
       ? withTaskProject(key, properties)

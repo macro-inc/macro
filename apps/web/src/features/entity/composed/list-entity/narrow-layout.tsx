@@ -1,7 +1,7 @@
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { Entity } from '../../entity';
-import { TaskStatusControl } from '../../extractors-property/task-status-control';
+import { TaskPropertyControl } from '../../extractors-property/task-property-control';
 import {
   isChannelEntity,
   isChannelMessageEntity,
@@ -72,7 +72,12 @@ export function NarrowLayout(props: LayoutProps) {
             </div>
           }
         >
-          {(task) => <TaskStatusControl entity={task()} />}
+          {(task) => (
+            <div class="flex shrink-0 items-center">
+              <TaskPropertyControl entity={task()} property="status" />
+              <TaskPropertyControl entity={task()} property="priority" />
+            </div>
+          )}
         </Show>
         {props.titleLeading}
         <Show
@@ -144,6 +149,7 @@ export function NarrowLayout(props: LayoutProps) {
                     showCaret={false}
                     includeProject={props.showProject}
                     hideStatus
+                    hidePriority
                   />
                 }
               >

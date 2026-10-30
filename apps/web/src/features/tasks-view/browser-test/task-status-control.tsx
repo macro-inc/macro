@@ -36,6 +36,14 @@ const statusProperty = {
     value: [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED],
   },
 };
+const priorityProperty = {
+  id: '00000000-0000-0000-0000-000000000202',
+  definition: {
+    ...statusDefinition,
+    id: SYSTEM_PROPERTY_IDS.PRIORITY,
+    display_name: 'Priority',
+  },
+};
 const tasks: TaskEntityWithProperties[] = [
   {
     id: '00000000-0000-0000-0000-000000000101',
@@ -66,6 +74,11 @@ queryClient.setQueryData(
     .queryKey,
   soupPropertyToProperty(statusProperty).options
 );
+queryClient.setQueryData(
+  propertiesKeys.options({ propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY })
+    .queryKey,
+  soupPropertyToProperty(priorityProperty).options
+);
 
 const pending: Array<(succeeds: boolean) => void> = [];
 const [requests, setRequests] = createSignal(0);
@@ -89,7 +102,13 @@ window.fetch = async (input, init) => {
   if (url.includes('/properties/entities/'))
     return Response.json({ properties: [] });
   if (url.includes('/properties/definitions/'))
-    return Response.json(soupPropertyToProperty(statusProperty).options);
+    return Response.json(
+      soupPropertyToProperty(
+        url.includes(SYSTEM_PROPERTY_IDS.PRIORITY)
+          ? priorityProperty
+          : statusProperty
+      ).options
+    );
   if (url.startsWith(location.origin)) return originalFetch(input, init);
   return Response.json({}, { status: 404 });
 };

@@ -64,6 +64,7 @@ export function TaskListHeader() {
         indicator: true,
         project: showTaskProject(),
         status: false,
+        priority: false,
       })}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
@@ -74,7 +75,6 @@ export function TaskListHeader() {
       >
         Task
       </span>
-      <SortableHeader label="Priority" area="priority" />
       <SortableHeader label="Assignees" area="assignees" />
       <Show when={showTaskProject()}>
         <SortableHeader label="Project" area="initiative" />

@@ -1,25 +1,35 @@
+import { t } from '@app/lib/i18n';
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { Property } from '@property';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
+import { hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import type { TaskEntityWithProperties } from '../types/entity';
 import { soupPropertyToProperty } from './property-helpers';
 
-/** The task's leading icon is also its status editor on desktop and touch. */
-export function TaskStatusControl(props: { entity: TaskEntityWithProperties }) {
+/** Compact status and priority editors before the task title. */
+export function TaskPropertyControl(props: {
+  entity: TaskEntityWithProperties;
+  property: 'status' | 'priority';
+}) {
+  const definitionId = () =>
+    props.property === 'status'
+      ? SYSTEM_PROPERTY_IDS.STATUS
+      : SYSTEM_PROPERTY_IDS.PRIORITY;
   const property = createMemo(() =>
     soupPropertyToProperty(
       props.entity.properties?.find(
         (property) =>
-          property.definition.id === SYSTEM_PROPERTY_IDS.STATUS &&
+          property.definition.id === definitionId() &&
           property.definition.data_type === 'SELECT_STRING'
       ) ?? {
-        id: `pending:${SYSTEM_PROPERTY_IDS.STATUS}`,
+        id: `pending:${definitionId()}`,
         definition: {
-          id: SYSTEM_PROPERTY_IDS.STATUS,
-          display_name: 'Status',
+          id: definitionId(),
+          display_name: props.property === 'status' ? 'Status' : 'Priority',
           data_type: 'SELECT_STRING',
           is_metadata: false,
           is_multi_select: false,
@@ -63,15 +73,36 @@ export function TaskStatusControl(props: { entity: TaskEntityWithProperties }) {
           <>
             <Property.Tooltip property={shown()}>
               <Property.EditTrigger
-                aria-label="Change status"
+                aria-label={
+                  props.property === 'status'
+                    ? t('common.changeStatus')
+                    : t('common.changePriority')
+                }
                 data-blocks-navigation
                 class="flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-hover touch:size-9"
               >
-                <TaskStatusIcon
-                  statusId={statusId()}
-                  completed={props.entity.subType.is_completed}
-                  size="xs"
-                />
+                <Show
+                  when={props.property === 'status'}
+                  fallback={
+                    <Show
+                      when={hasValue(shown())}
+                      fallback={
+                        <PropertyEmptyIcon
+                          propertyDefinitionId={definitionId()}
+                          class="size-4 text-ink-extra-muted"
+                        />
+                      }
+                    >
+                      <Property.Icon property={shown()} class="size-4" />
+                    </Show>
+                  }
+                >
+                  <TaskStatusIcon
+                    statusId={statusId()}
+                    completed={props.entity.subType.is_completed}
+                    size="xs"
+                  />
+                </Show>
               </Property.EditTrigger>
             </Property.Tooltip>
             <Property.PopoverEditor />

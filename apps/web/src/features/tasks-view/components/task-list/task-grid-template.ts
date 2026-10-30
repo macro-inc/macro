@@ -61,12 +61,16 @@ export function taskGridTemplate(options: {
   project: boolean;
   /** Projects keep their status column; task rows edit status in the icon. */
   status?: boolean;
+  /** Task rows edit priority beside status before the title. */
+  priority?: boolean;
 }) {
   const columns = [
     ...(options.indicator ? [{ id: 'indicator', width: '1rem' }] : []),
     { id: 'content', width: 'minmax(0, 100%)' },
     ...TASK_GRID_COLUMNS.filter(
-      (column) => options.status !== false || column.id !== 'status'
+      (column) =>
+        (options.status !== false || column.id !== 'status') &&
+        (options.priority !== false || column.id !== 'priority')
     ),
     ...(options.project ? [TASK_PROJECT_COLUMN] : []),
     { id: 'createdBy', width: CREATED_BY_COLUMN_WIDTH },
@@ -79,5 +83,8 @@ export function taskGridTemplate(options: {
 }
 
 /** Column span for full-width rows such as group headers. */
-export const taskGridColumnCount = (project: boolean, status = true) =>
-  (project ? 7 : 6) + Number(status);
+export const taskGridColumnCount = (
+  project: boolean,
+  status = true,
+  priority = true
+) => (project ? 6 : 5) + Number(status) + Number(priority);

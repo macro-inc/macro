@@ -1,6 +1,7 @@
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { Entity } from '../../entity';
+import { TaskPropertyControl } from '../../extractors-property/task-property-control';
 import {
   isChannelEntity,
   isChannelMessageEntity,
@@ -68,6 +69,11 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
             {props.icon}
           </Show>
         </div>
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(task) => (
+            <TaskPropertyControl entity={task()} property="priority" />
+          )}
+        </Show>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (
@@ -133,6 +139,7 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
                   entity={props.entity}
                   maxUserStackUsers={0}
                   showCaret={false}
+                  hidePriority
                 />
               </Match>
               <Match

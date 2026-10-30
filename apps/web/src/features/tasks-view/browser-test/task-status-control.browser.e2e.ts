@@ -91,7 +91,7 @@ for (const device of [
         row.getByRole('img', { name: 'Task: Completed' })
       ).toBeVisible();
       await expect(row.locator('[data-property-id]')).toHaveCount(
-        device.narrow ? 1 : 3
+        device.narrow ? 2 : 3
       );
       await expect(
         row.locator(
@@ -102,6 +102,62 @@ for (const device of [
       await expect(
         page.getByRole('menu').getByText('In progress', { exact: true })
       ).toBeVisible();
+      await expect(page.getByLabel('Navigation count')).toHaveText('0');
+    });
+
+    test('leading priority editor creates a value, rolls back, and clears without navigation', async ({
+      page,
+    }) => {
+      await page.routeWebSocket('**', (socket) => socket.close());
+      await page.goto(
+        `/src/features/tasks-view/browser-test/task-status-control.html${device.narrow ? '?narrow=1' : ''}`
+      );
+      const row = page.getByLabel('Task without status');
+      const priority = row.getByRole('button', { name: 'Change priority' });
+      await expect(priority).toHaveCount(1);
+      await expect(
+        priority.locator('[data-macro-icon="minus-circle"]')
+      ).toBeVisible();
+      await priority.click();
+      await page.getByRole('menu').getByText('Urgent', { exact: true }).click();
+      await expect(
+        priority.locator('[data-macro-icon="priority-urgent-fill"]')
+      ).toBeVisible();
+      await expect(page.getByLabel('Navigation count')).toHaveText('0');
+      await expect(page.getByLabel('Save requests')).toHaveText(
+        '1 pending, 0 settled'
+      );
+      await page.getByRole('button', { name: 'Fail save' }).click();
+      await expect(
+        priority.locator('[data-macro-icon="minus-circle"]')
+      ).toBeVisible();
+      await priority.click();
+      await page.getByRole('menu').getByText('Urgent', { exact: true }).click();
+      await expect(page.getByLabel('Save requests')).toHaveText(
+        '2 pending, 1 settled'
+      );
+      await page.getByRole('button', { name: 'Complete save' }).click();
+      await expect(
+        priority.locator('[data-macro-icon="priority-urgent-fill"]')
+      ).toBeVisible();
+      await expect(page.getByLabel('Save requests')).toHaveText(
+        '2 pending, 2 settled'
+      );
+      await priority.click();
+      await page
+        .getByRole('menu')
+        .getByText('No priority', { exact: true })
+        .click();
+      await expect(
+        priority.locator('[data-macro-icon="minus-circle"]')
+      ).toBeVisible();
+      await expect(page.getByLabel('Save requests')).toHaveText(
+        '3 pending, 2 settled'
+      );
+      await page.getByRole('button', { name: 'Complete save' }).click();
+      await expect(page.getByLabel('Save requests')).toHaveText(
+        '3 pending, 3 settled'
+      );
       await expect(page.getByLabel('Navigation count')).toHaveText('0');
     });
   });
