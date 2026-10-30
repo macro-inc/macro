@@ -56,8 +56,7 @@ describe('compact alert posts', () => {
       GoAlertURL: 'https://oncall.macro-internal.com/alerts/130',
     });
     expect(renderPost(post)).toEqual({
-      content: `---
-🔔 · **macro-db-prod long-running transaction — macro-db-prod**
+      content: `🔔 · **macro-db-prod long-running transaction — macro-db-prod**
 🔴 critical: 2631.578 (threshold 1800.0)
 The oldest open transaction on macro-db-prod is 2631.578 seconds old. Long transactions hold locks and stop vacuum.
 [Acknowledge](https://oncall.macro-internal.com/alerts/130) · [Graph](https://us5.datadoghq.com/dashboard/42x-f55-h6z/macrodb-alerts) · [Runbook](https://github.com/macro-inc/macro/blob/main/docs/runbooks/macrodb.md#locks)`,
@@ -73,8 +72,7 @@ The oldest open transaction on macro-db-prod is 2631.578 seconds old. Long trans
       GoAlertURL: 'https://oncall.macro-internal.com/alerts/127',
     });
     expect(renderPost(post)).toEqual({
-      content: `---
-🚨 **PAGE** · **macro-db-prod database load above vCPU count — macro-db-prod-read-replica** ${HERE_TAG}
+      content: `🚨 **PAGE** · **macro-db-prod database load above vCPU count — macro-db-prod-read-replica** ${HERE_TAG}
 🟠 warning
 macro-db-prod-read-replica has 3.98x as many active sessions as vCPUs. Normal is under 1.3.
 [Acknowledge](https://oncall.macro-internal.com/alerts/127) · [Graph](https://grafana.macro-internal.com/d/prod-alerts?viewPanel=4) · [Runbook](https://github.com/macro-inc/macro/blob/main/docs/runbooks/macrodb.md#load)`,
@@ -90,8 +88,7 @@ macro-db-prod-read-replica has 3.98x as many active sessions as vCPUs. Normal is
       GoAlertURL: 'https://oncall.macro-internal.com/alerts/127',
     });
     expect(renderPost(post, true)).toEqual({
-      content: `---
-✅ Resolved · 🚨 **PAGE** · **macro-db-prod database load above vCPU count — macro-db-prod-read-replica**
+      content: `✅ Resolved · 🚨 **PAGE** · **macro-db-prod database load above vCPU count — macro-db-prod-read-replica**
 🟠 warning
 macro-db-prod-read-replica has 3.98x as many active sessions as vCPUs. Normal is under 1.3.
 [Acknowledge](https://oncall.macro-internal.com/alerts/127) · [Graph](https://grafana.macro-internal.com/d/prod-alerts?viewPanel=4) · [Runbook](https://github.com/macro-inc/macro/blob/main/docs/runbooks/macrodb.md#load)`,
@@ -111,8 +108,7 @@ macro-db-prod-read-replica has 3.98x as many active sessions as vCPUs. Normal is
         GoAlertURL: 'https://oncall.macro-internal.com/alerts/48',
       })
     ).toEqual({
-      content: `---
-Closed by Datadog · DynamoDB reads high — events · [Open](https://oncall.macro-internal.com/alerts/48)`,
+      content: `Closed by Datadog · DynamoDB reads high — events · [Open](https://oncall.macro-internal.com/alerts/48)`,
       mentions: [],
     });
   });

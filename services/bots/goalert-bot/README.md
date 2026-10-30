@@ -33,7 +33,6 @@ GoAlert webhook ──POST──> /goalert/{WEBHOOK_SECRET}
 A new alert post:
 
 ```
----
 🚨 **PAGE** · **<title> — <scope>** @here
 🔴 critical: 2631 (threshold 1800)
 <one-sentence description, AWS hostnames shortened>

@@ -127,7 +127,7 @@ describe('goalert-bot webhook', () => {
       {
         kind: 'post',
         body: {
-          content: `---\n🚨 **PAGE** · **macro-db-prod CPU high** ${HERE_TAG}\n🔴 critical\nCPU at 92%.\n[Acknowledge](https://oncall.macro-internal.com/alerts/127)`,
+          content: `🚨 **PAGE** · **macro-db-prod CPU high** ${HERE_TAG}\n🔴 critical\nCPU at 92%.\n[Acknowledge](https://oncall.macro-internal.com/alerts/127)`,
           mentions: [{ entity_type: 'group', entity_id: 'here' }],
         },
       },
@@ -199,7 +199,7 @@ describe('goalert-bot webhook', () => {
         messageId: 'message-9',
         body: {
           content:
-            '---\n✅ Resolved · 🚨 **PAGE** · **macro-db-prod CPU high**\n🔴 critical\nCPU at 92%.\n[Acknowledge](https://oncall.macro-internal.com/alerts/127)',
+            '✅ Resolved · 🚨 **PAGE** · **macro-db-prod CPU high**\n🔴 critical\nCPU at 92%.\n[Acknowledge](https://oncall.macro-internal.com/alerts/127)',
           mentions: [],
         },
       },
@@ -218,7 +218,7 @@ describe('goalert-bot webhook', () => {
         kind: 'post',
         body: {
           content:
-            '---\nClosed by Datadog · macro-db-prod CPU high · [Open](https://oncall.macro-internal.com/alerts/48)',
+            'Closed by Datadog · macro-db-prod CPU high · [Open](https://oncall.macro-internal.com/alerts/48)',
           mentions: [],
         },
       },
@@ -241,7 +241,7 @@ describe('goalert-bot webhook', () => {
         kind: 'post',
         body: {
           content:
-            '---\n🔔 · 5 alerts on Notify · [Acknowledge](https://oncall.macro-internal.com/services/notify/alerts)',
+            '🔔 · 5 alerts on Notify · [Acknowledge](https://oncall.macro-internal.com/services/notify/alerts)',
           mentions: [],
         },
       },

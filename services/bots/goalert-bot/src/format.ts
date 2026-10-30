@@ -180,12 +180,12 @@ export function renderPost(post: CompactPost, resolved = false): RichMessage {
   const rest = post.lines.join('\n');
   if (resolved) {
     // The mention is dropped so the edit does not notify everyone again.
-    return toBody(`---\n✅ Resolved · ${post.headline}\n${rest}`);
+    return toBody(`✅ Resolved · ${post.headline}\n${rest}`);
   }
   if (post.page) {
-    return msg`---\n${post.headline} ${here}\n${rest}`;
+    return msg`${post.headline} ${here}\n${rest}`;
   }
-  return toBody(`---\n${post.headline}\n${rest}`);
+  return toBody(`${post.headline}\n${rest}`);
 }
 
 /** What an `AlertStatus` log entry did to the alert. */
@@ -226,7 +226,7 @@ export function statusPost(payload: AlertStatusPayload): RichMessage {
     alertTitle(payload.Summary),
     markdownLinks([['Open', payload.GoAlertURL]]),
   ].filter(Boolean);
-  return toBody(`---\n${parts.join(' · ')}`);
+  return toBody(`${parts.join(' · ')}`);
 }
 
 export function alertBundlePost(payload: {
@@ -236,7 +236,7 @@ export function alertBundlePost(payload: {
 }): RichMessage {
   const page = isPage(payload.ServiceName);
   const line = `${page ? '🚨 **PAGE**' : '🔔'} · ${payload.Count} alerts on ${payload.ServiceName} · ${markdownLinks([['Acknowledge', payload.GoAlertURL]])}`;
-  return page ? msg`---\n${line} ${here}` : toBody(`---\n${line}`);
+  return page ? msg`${line} ${here}` : toBody(`${line}`);
 }
 
 export function alertStatusBundlePost(payload: {
@@ -245,7 +245,7 @@ export function alertStatusBundlePost(payload: {
   GoAlertURL: string;
 }): RichMessage {
   return toBody(
-    `---\n${payload.LogEntry} (${payload.Count} alerts) · ${markdownLinks([['Open', payload.GoAlertURL]])}`
+    `${payload.LogEntry} (${payload.Count} alerts) · ${markdownLinks([['Open', payload.GoAlertURL]])}`
   );
 }
 
