@@ -90,11 +90,4 @@ export type ThreadProps = {
   monorail?: boolean;
   /** Flat chat surfaces do not draw thread connector rails. */
   hideRail?: boolean;
-  /**
-   * Replies live in the channel's thread panel: the row shows only a reply
-   * summary that opens it, and replying opens the panel's composer.
-   */
-  onOpenThread?: (options?: { reply?: boolean }) => void;
-  /** This thread is the one open in the thread panel. */
-  openInPanel?: boolean;
 } & ThreadState;

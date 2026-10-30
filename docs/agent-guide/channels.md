@@ -264,22 +264,6 @@ and reload to verify that the system entry persists in chronological order.
 Also reload a short channel containing mostly system updates. Every entry should
 remain visible when the entire timeline fits without scrolling.
 
-## Thread side panel
-
-On desktop, a switch in its own pill right of a channel's tabs chooses the
-thread layout. Its label names the current mode: **Collapse** (on) collapses
-threads into a panel on the right, **Expand** (off) expands them inline. The
-tooltip names the action and its shortcut, `Cmd/Ctrl+Shift+E`, which also
-works from the composer. The choice persists across channels and sessions.
-In collapsed mode a root shows only an `N replies` summary; clicking it,
-`Reply`, or the reply and expand hotkeys opens the panel with every reply and
-a composer that stays open, and the root stays highlighted. Message images and
-videos shrink to small thumbnails that still open the viewer. A pane narrower
-than 44rem gives the panel its full width. A notification jump to a reply
-closes the panel and expands that thread inline so it can land on the reply.
-Touch devices never offer the switch and keep threads inline. Check opening,
-replying, switching threads, closing, the shortcut, and toggling back.
-
 ## Agent session entities
 
 The Agents list includes owned and shared sessions. Rows show the shared agent
