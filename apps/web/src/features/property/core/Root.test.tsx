@@ -106,3 +106,19 @@ it('drops a failed pick without clearing a newer one', async () => {
   await expect(saves[1].promise).rejects.toThrow('rejected');
   expect(shown()).toBe('low');
 });
+
+it('keeps a saving pick through ID assignment but not on another property', () => {
+  const { setSource, shown } = setup();
+
+  fireEvent.click(screen.getByText('Pick high'));
+  setSource({ ...priority, propertyId: 'assigned-after-save' });
+  expect(shown()).toBe('high');
+
+  setSource({
+    ...priority,
+    propertyId: 'status-assignment',
+    propertyDefinitionId: 'status-definition',
+    value: ['todo'],
+  });
+  expect(shown()).toBe('todo');
+});

@@ -34,8 +34,14 @@ interface PropertyRootProps
 /**
  * A pick the source has not shown yet. `base` is unset while the save runs;
  * after it succeeds, the pick stays until the source emits a newer property.
+ * The definition ID survives a new property's ID assignment mid-save, but not
+ * a Root that is reused for another property.
  */
-type PendingValue = { value: PropertyApiValues; base?: Property };
+type PendingValue = {
+  value: PropertyApiValues;
+  propertyDefinitionId: string;
+  base?: Property;
+};
 
 export function Root(props: PropertyRootProps) {
   const [local, rest] = splitProps(props, [
@@ -60,6 +66,7 @@ export function Root(props: PropertyRootProps) {
   const property = createMemo(() => {
     const current = pending();
     return current &&
+      current.propertyDefinitionId === local.property.propertyDefinitionId &&
       (current.base === undefined || current.base === local.property)
       ? withApiValues(local.property, current.value)
       : local.property;
@@ -68,11 +75,14 @@ export function Root(props: PropertyRootProps) {
   const save: PropertySaveFn = async (saved, value) => {
     const onSave = local.onSave;
     if (!onSave) return;
-    const entry: PendingValue = { value };
+    const entry: PendingValue = {
+      value,
+      propertyDefinitionId: saved.propertyDefinitionId,
+    };
     setPending(entry);
     try {
       await onSave(saved, value);
-      if (pending() === entry) setPending({ value, base: local.property });
+      if (pending() === entry) setPending({ ...entry, base: local.property });
     } catch (error) {
       if (pending() === entry) setPending(undefined);
       throw error;
