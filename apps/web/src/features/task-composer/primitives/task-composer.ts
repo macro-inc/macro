@@ -28,6 +28,7 @@ import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
@@ -357,12 +358,16 @@ export function createTaskComposer(
           onClick: () =>
             host.openTask(task, { newSplit: false, referredFrom: null }),
         },
-        {
-          label: 'Open (New Split)',
-          icon: SplitIcon,
-          onClick: () =>
-            host.openTask(task, { newSplit: true, referredFrom: null }),
-        },
+        ...(!isTouchDevice()
+          ? [
+              {
+                label: 'Open (New Split)',
+                icon: SplitIcon,
+                onClick: () =>
+                  host.openTask(task, { newSplit: true, referredFrom: null }),
+              },
+            ]
+          : []),
       ],
     });
   };
