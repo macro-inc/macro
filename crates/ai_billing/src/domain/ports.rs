@@ -195,6 +195,12 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Extra free allowance the user has earned, in cost cents, before the cap.
+    fn free_allowance_bonus_cents(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<i64>> + Send;
+
     /// Current prepaid balance, customer cents.
     fn credit_balance_cents(
         &self,

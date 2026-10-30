@@ -334,6 +334,11 @@ export type CreatePortalSessionRequest = {
  */
 export type CreateTeamRequest = {
     /**
+     * Whether colleagues who sign up with the owner's work email domain join
+     * the team automatically. Ignored for generic email providers.
+     */
+    allow_domain_join?: boolean;
+    /**
      * The name of the team
      */
     name: string;
@@ -1548,6 +1553,16 @@ export type ScheduledSeatPlan = {
  * plan in use.
  */
 export type SeatPlan = 'premium' | 'max';
+
+/**
+ * Response for the domain notice endpoint.
+ */
+export type SendDomainNoticeResponse = {
+    /**
+     * How many colleagues were emailed by this call.
+     */
+    sent: number;
+};
 
 /**
  * The body which is used to describe the recipient email
@@ -3693,6 +3708,27 @@ export type PatchTeamCrmSettingsResponses = {
 };
 
 export type PatchTeamCrmSettingsResponse2 = PatchTeamCrmSettingsResponses[keyof PatchTeamCrmSettingsResponses];
+
+export type SendTeamDomainNoticeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/domain-notice';
+};
+
+export type SendTeamDomainNoticeErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SendTeamDomainNoticeError = SendTeamDomainNoticeErrors[keyof SendTeamDomainNoticeErrors];
+
+export type SendTeamDomainNoticeResponses = {
+    200: SendDomainNoticeResponse;
+};
+
+export type SendTeamDomainNoticeResponse = SendTeamDomainNoticeResponses[keyof SendTeamDomainNoticeResponses];
 
 export type InviteToTeamData = {
     body: InviteToTeamRequest;

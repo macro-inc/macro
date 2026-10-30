@@ -17,7 +17,7 @@ axum = [
 ]
 default = ["axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
-outbound = ["dep:async-stripe", "dep:sqlx", "ports"]
+outbound = ["dep:sqlx", "ports"]
 ports = []
 
 [dependencies]
@@ -52,11 +52,7 @@ tower = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 
 
-async-stripe = { workspace = true, default-features = false, features = [
-  "billing",
-  "checkout",
-  "runtime-tokio-hyper",
-], optional = true } # Outbound dependencies
+# Outbound dependencies
 sqlx = { workspace = true, optional = true }
 url = { workspace = true }
 urlencoding = { workspace = true }

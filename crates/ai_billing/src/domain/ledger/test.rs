@@ -287,6 +287,7 @@ fn snapshot_for(
         chargeable,
         ledger,
         balance,
+        0,
         AiPricing::testing(),
     )
 }
@@ -524,6 +525,7 @@ fn unlimited_is_never_blocked() {
         AiPricing::testing().extra_customer_cents(97_999),
         PeriodLedger::default(),
         0,
+        0,
         AiPricing::testing(),
     );
     assert_eq!(decide(&s), AllowanceDecision::Allow);
@@ -553,6 +555,7 @@ fn credit_scope_follows_team_ownership_even_with_only_one_seat() {
             0,
             PeriodLedger::default(),
             2_500,
+            0,
             AiPricing::testing(),
         );
         assert_eq!(snapshot.seats, 1);
@@ -583,6 +586,7 @@ fn team_member_is_not_the_payer() {
         0,
         0,
         PeriodLedger::default(),
+        0,
         0,
         AiPricing::testing(),
     );

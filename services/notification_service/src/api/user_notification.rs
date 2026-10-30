@@ -33,6 +33,7 @@ use crate::api::context::AuthorizationService;
 pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     HashSet::from([
         EmailDigestNotification::TYPE_NAME,
+        model_notifications::ColleagueJoinedMacro::TYPE_NAME,
         NewEmailMetadata::TYPE_NAME,
         AiResponseMetadata::TYPE_NAME,
         ChannelMessageSendMetadata::TYPE_NAME,

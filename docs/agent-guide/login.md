@@ -238,6 +238,26 @@ On the create-team form, type a workspace name and edit a teammate address,
 then allow onboarding/contacts queries to refresh. The same inputs must retain
 their values and focus as suggestions arrive or a background request fails.
 Pending queries must show local loading states without suspending the flow.
+When the server suggests a work domain, the create form has no Skip button and
+shows an **Allow @domain emails to join** switch, on by default. Creating the
+team with it on sets the team's auto-join domain and, after the invites, emails
+up to 25 of the creator's same-domain contacts who are not on Macro, invited,
+or already sent a notice (`POST /team/domain-notice`). Creating the team does not leave the step: it
+switches to the **You're on <team>** confirmation, the same panel members who
+were already on a team (auto-joined or invite-accepted) see. That panel has
+**Copy invite link** beside **Continue**; it copies the team's
+`/app/team-invite?link=` URL, creating the link when the team has none. Members
+who may invite (admins and owners, or anyone when non-admin invites are on) can
+create the first link; when they can't, the button shows an error toast.
+
+Personal-domain accounts (no suggested work domain) never see the create-team
+form. The step shows an **Invite friends.** referral screen instead ("Get $10 of
+AI credit for each person who signs up."), with friend email rows, **Copy
+referral link** (`/app/signup?referral_code=`), **Send N invites** (one referral
+invite per address, then the plan step; no team is created), and **Skip for
+now**. Send stays disabled until an address is valid; if none of the invites
+can be sent, the addresses stay on screen. On phones, the paired buttons stack
+full width.
 
 Members with an active or trialing license, including a license from their team,
 finish directly from the team step without visiting the plan page. The Continue

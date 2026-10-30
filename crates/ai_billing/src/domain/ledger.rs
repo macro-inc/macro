@@ -153,7 +153,8 @@ pub fn plan_reload(state: ReloadState, thresholds: &AutoReloadThresholds) -> Opt
 /// Assemble the API-facing snapshot from the resolved inputs. `used_cost_cents`
 /// is this seat's usage at cost; `shared_chargeable_customer_cents` is the
 /// payer's cumulative usage beyond all seat allowances, already marked up at
-/// `pricing`.
+/// `pricing`. `free_bonus_cost_cents` is a free seat's earned extra allowance,
+/// already capped; it is ignored for paid seats.
 #[expect(
     clippy::too_many_arguments,
     reason = "snapshot assembly keeps its resolved billing inputs explicit"
@@ -167,9 +168,16 @@ pub fn build_snapshot(
     shared_chargeable_customer_cents: i64,
     ledger: PeriodLedger,
     credit_balance_cents: i64,
+    free_bonus_cost_cents: i64,
     pricing: AiPricing,
 ) -> UsageSnapshot {
-    let included_cents = entitlement.included_ai_cents(pricing);
+    // Only a free seat's allowance grows; paid users earn prepaid credit instead.
+    let included_cents = entitlement.included_ai_cents(pricing)
+        + if entitlement.tier.is_paid() {
+            0
+        } else {
+            free_bonus_cost_cents
+        };
     let shared_covered = ledger.credits_consumed_cents + ledger.overage_charged_cents;
     let uncovered_cents = (shared_chargeable_customer_cents - shared_covered).max(0);
     let seat_remaining = (included_cents - used_cost_cents).max(0);

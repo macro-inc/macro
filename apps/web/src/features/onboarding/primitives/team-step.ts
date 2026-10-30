@@ -69,7 +69,12 @@ export function createTeamStep(
 }
 
 /** The create form's prefill, once contacts and the domain suggestion settle. */
-export type TeamFormSeed = { domain: string | undefined; prefilled: string[] };
+export type TeamFormSeed = {
+  domain: string | undefined;
+  /** The record loaded without a work domain: show referrals, not a team form. */
+  personal: boolean;
+  prefilled: string[];
+};
 
 export function teamFormSeed(input: {
   record: Loadable<OnboardingRecord>;
@@ -84,11 +89,27 @@ export function teamFormSeed(input: {
       : undefined;
   return {
     domain,
+    personal: input.record.t === 'ready' && !domain,
     prefilled: prefillableTeammates({
       contacts: input.contacts.t === 'ready' ? input.contacts.value : [],
       domain,
       ownEmail: input.ownEmail,
     }),
+  };
+}
+
+/** Invite rows a user edits; at least one row always remains. */
+function createInviteSlots(initial: string[]) {
+  const [slots, setSlots] = createSignal<string[]>(initial);
+  return {
+    slots,
+    setSlot: (index: number, value: string) =>
+      setSlots((current) =>
+        current.map((slot, i) => (i === index ? value : slot))
+      ),
+    removeSlot: (index: number) =>
+      setSlots((current) => removeInviteSlot(current, index)),
+    addSlot: () => setSlots((current) => [...current, '']),
   };
 }
 
@@ -100,17 +121,20 @@ export function teamFormSeed(input: {
 export function createTeamForm(
   context: Pick<OnboardingContext, 'createTeam' | 'track'>,
   seed: TeamFormSeed,
-  options: { ownEmail: string | undefined; onCreated: () => void }
+  options: { ownEmail: string | undefined }
 ) {
   const [name, setName] = createSignal(
     seed.domain ? deriveTeamName(seed.domain) : ''
   );
-  const [slots, setSlots] = createSignal<string[]>(
+  const rows = createInviteSlots(
     seed.prefilled.length > 0 ? [...seed.prefilled, ''] : ['', '']
   );
   const [pending, setPending] = createSignal(false);
+  // Only a work domain can be joined by domain; on by default.
+  const [allowDomainJoin, setAllowDomainJoin] = createSignal(true);
+  const domainJoin = () => seed.domain !== undefined && allowDomainJoin();
 
-  const invites = () => validInviteEmails(slots(), options.ownEmail);
+  const invites = () => validInviteEmails(rows.slots(), options.ownEmail);
   const canCreate = () => name().trim().length > 0 && !pending();
 
   const create = async () => {
@@ -118,7 +142,11 @@ export function createTeamForm(
     const sent = invites();
     setPending(true);
     try {
-      await context.createTeam({ name: name().trim(), invites: sent });
+      await context.createTeam({
+        name: name().trim(),
+        invites: sent,
+        allowDomainJoin: domainJoin(),
+      });
     } catch {
       // The capability reports its own failure; keep the form intact.
       return;
@@ -133,25 +161,92 @@ export function createTeamForm(
       invites_removed: seed.prefilled.filter((address) => !kept.has(address))
         .length,
       used_domain_suggestion: seed.domain !== undefined,
+      allow_domain_join: domainJoin(),
     });
-    options.onCreated();
   };
 
   return {
     name,
     setName,
-    slots,
-    setSlot: (index: number, value: string) =>
-      setSlots((current) =>
-        current.map((slot, i) => (i === index ? value : slot))
-      ),
-    removeSlot: (index: number) =>
-      setSlots((current) => removeInviteSlot(current, index)),
-    addSlot: () => setSlots((current) => [...current, '']),
+    ...rows,
     invites,
     pending,
     canCreate,
-    suggested: seed.prefilled.length > 0,
+    /** The work domain colleagues can join by, when there is one. */
+    domain: seed.domain,
+    allowDomainJoin,
+    setAllowDomainJoin,
     create,
   };
+}
+
+/**
+ * Referral invites for a personal address: no team is created; each person
+ * who signs up earns the inviter AI credit.
+ */
+export function createReferralForm(
+  context: Pick<
+    OnboardingContext,
+    'sendReferralInvites' | 'copyReferralLink' | 'track'
+  >,
+  options: { ownEmail: string | undefined; onSent: () => void }
+) {
+  const rows = createInviteSlots(['', '']);
+  const [sending, setSending] = createSignal(false);
+  const [copying, setCopying] = createSignal(false);
+  const invites = () => validInviteEmails(rows.slots(), options.ownEmail);
+
+  const send = async () => {
+    const sent = invites();
+    if (sending() || sent.length === 0) return;
+    setSending(true);
+    try {
+      await context.sendReferralInvites(sent);
+    } catch {
+      // The capability reports its own failure; keep the addresses.
+      return;
+    } finally {
+      setSending(false);
+    }
+    context.track('onboarding_v4_team', {
+      action: 'referrals_sent',
+      invites_sent: sent.length,
+    });
+    options.onSent();
+  };
+
+  const copyLink = async () => {
+    if (copying()) return;
+    setCopying(true);
+    try {
+      await context.copyReferralLink();
+      context.track('onboarding_v4_team', { action: 'referral_link_copied' });
+    } catch {
+      // The capability reports its own failure.
+    } finally {
+      setCopying(false);
+    }
+  };
+
+  return { ...rows, invites, sending, send, copying, copyLink };
+}
+
+/** Copies the team's invite link from the on-team confirmation. */
+export function createTeamInviteLinkCopy(
+  context: Pick<OnboardingContext, 'copyTeamInviteLink' | 'track'>
+) {
+  const [copying, setCopying] = createSignal(false);
+  const copy = async () => {
+    if (copying()) return;
+    setCopying(true);
+    try {
+      await context.copyTeamInviteLink();
+      context.track('onboarding_v4_team', { action: 'invite_link_copied' });
+    } catch {
+      // The capability reports its own failure.
+    } finally {
+      setCopying(false);
+    }
+  };
+  return { copying, copy };
 }

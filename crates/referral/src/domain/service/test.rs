@@ -8,7 +8,8 @@ use rootcause::Report;
 
 use crate::domain::{
     models::ReferralError,
-    ports::{MockDiscountClient, MockReferralRepo, ReferralService},
+    models::TrackedReferral,
+    ports::{MockReferralRepo, MockReferralRewarder, ReferralService},
     service::ReferralServiceImpl,
 };
 
@@ -52,17 +53,101 @@ fn mock_repo() -> MockReferralRepo {
     repo
 }
 
-fn mock_discount_client() -> MockDiscountClient {
-    MockDiscountClient::new()
+fn build_service()
+-> ReferralServiceImpl<MockReferralRepo, MockReferralRewarder, MockNotificationIngress> {
+    with_parts(mock_repo(), MockReferralRewarder::new())
 }
 
-fn build_service()
--> ReferralServiceImpl<MockReferralRepo, MockDiscountClient, MockNotificationIngress> {
+fn with_parts(
+    repo: MockReferralRepo,
+    rewarder: MockReferralRewarder,
+) -> ReferralServiceImpl<MockReferralRepo, MockReferralRewarder, MockNotificationIngress> {
     ReferralServiceImpl {
-        repo: mock_repo(),
-        discount_client: mock_discount_client(),
+        repo,
+        rewarder,
         notification_ingress: MockNotificationIngress(MockNotificationIngressInner),
     }
+}
+
+fn referred() -> macro_user_id::user_id::MacroUserId<macro_user_id::lowercased::Lowercase<'static>>
+{
+    macro_user_id::user_id::MacroUserId::parse_from_str("macro|new@example.com")
+        .unwrap()
+        .lowercase()
+}
+
+#[tokio::test]
+async fn a_first_referral_rewards_the_referrer_and_completes() {
+    let tracking_id = uuid::Uuid::from_u128(7);
+    let mut repo = MockReferralRepo::new();
+    repo.expect_track_referral()
+        .times(1)
+        .returning(move |_, _| {
+            Box::pin(async move {
+                Ok(Some(TrackedReferral {
+                    tracking_id,
+                    referrer: MacroUserIdStr::try_from_email("referrer@example.com").unwrap(),
+                }))
+            })
+        });
+    repo.expect_complete_referral()
+        .times(1)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let mut rewarder = MockReferralRewarder::new();
+    rewarder
+        .expect_reward_referrer()
+        .withf(move |referrer, referred, key| {
+            referrer.as_ref() == "macro|referrer@example.com"
+                && referred.as_ref() == "macro|new@example.com"
+                && key == &format!("referral:{tracking_id}")
+        })
+        .times(1)
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
+    let service = with_parts(repo, rewarder);
+
+    service
+        .track_referral(&referred(), &invite_email::ReferralCode("CODE".into()))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn an_already_referred_user_rewards_nobody() {
+    let mut repo = MockReferralRepo::new();
+    repo.expect_track_referral()
+        .returning(|_, _| Box::pin(async { Ok(None) }));
+    let mut rewarder = MockReferralRewarder::new();
+    rewarder.expect_reward_referrer().never();
+    let service = with_parts(repo, rewarder);
+
+    service
+        .track_referral(&referred(), &invite_email::ReferralCode("CODE".into()))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_failed_reward_leaves_the_referral_incomplete() {
+    let mut repo = MockReferralRepo::new();
+    repo.expect_track_referral().returning(|_, _| {
+        Box::pin(async {
+            Ok(Some(TrackedReferral {
+                tracking_id: uuid::Uuid::from_u128(8),
+                referrer: MacroUserIdStr::try_from_email("referrer@example.com").unwrap(),
+            }))
+        })
+    });
+    repo.expect_complete_referral().never();
+    let mut rewarder = MockReferralRewarder::new();
+    rewarder
+        .expect_reward_referrer()
+        .returning(|_, _, _| Box::pin(async { Err(anyhow::anyhow!("billing down")) }));
+    let service = with_parts(repo, rewarder);
+
+    service
+        .track_referral(&referred(), &invite_email::ReferralCode("CODE".into()))
+        .await
+        .unwrap();
 }
 
 fn test_user() -> MacroUserIdStr<'static> {

@@ -4,6 +4,7 @@
 pub mod admission;
 pub mod credit_grant;
 pub mod financial;
+pub mod invite_reward;
 pub mod ledger;
 pub mod models;
 pub mod period;
@@ -19,6 +20,10 @@ pub use admission::{
     DisabledAiAdmissionService,
 };
 pub use credit_grant::{CreditGrant, CreditGrantRepo, CreditGrantService, GrantTarget};
+pub use invite_reward::{
+    FreeAllowanceBonusRepo, InviteReward, InviteRewardService, RewardOutcome,
+    capped_free_bonus_cents,
+};
 pub use ledger::{
     ReloadState, SettlementPlan, SettlementPolicy, SettlementState, plan_reload, plan_settlement,
 };

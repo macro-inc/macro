@@ -4,6 +4,7 @@
 #[cfg(test)]
 mod test;
 
+use super::invite_reward::capped_free_bonus_cents;
 use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
     AiUsageBilling, AllowanceDecision, AllowanceStore, AutoReloadMonthlyBudget,
@@ -411,6 +412,12 @@ where
                 let usage = self.usage.usage_cost_cents_by_user(&users, *period).await?;
                 (usage_for(user, &usage), 0, PeriodLedger::default(), 0)
             };
+        // Invites and referrals raise a free user's monthly allowance.
+        let free_bonus_cost_cents = if entitlement.tier.is_paid() || entitlement.unlimited {
+            0
+        } else {
+            capped_free_bonus_cents(self.repo.free_allowance_bonus_cents(user).await?)
+        };
         Ok(build_snapshot(
             user,
             entitlement,
@@ -420,6 +427,7 @@ where
             chargeable_customer_cents,
             ledger,
             credit_balance_cents,
+            free_bonus_cost_cents,
             self.pricing,
         ))
     }

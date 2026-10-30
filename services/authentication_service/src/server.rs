@@ -74,10 +74,7 @@ use teams::{
 use gtm_invite::{
     domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
 };
-use referral::{
-    domain::service::ReferralServiceImpl,
-    outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
-};
+use referral::{domain::service::ReferralServiceImpl, outbound::pg_referral_repo::PgReferralRepo};
 use user_language::{
     domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
@@ -510,12 +507,21 @@ pub async fn run() -> anyhow::Result<()> {
         db.clone(),
     )));
 
+    // Invites that turn into teammates and referrals that sign up earn the
+    // inviter AI credit (or more free allowance).
+    let invite_rewards = crate::outbound::invite_rewards::BillingInviteRewards::new(
+        ai_billing::domain::InviteRewardService::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+            ai_billing::outbound::PgCreditGrantRepo::new(db.clone()),
+        ),
+    );
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
-        discount_client: StripeDiscountClient::new(
-            stripe_client.clone(),
-            10000, /*100$ credit, in cents*/
-        ),
+        rewarder: invite_rewards.clone(),
         notification_ingress: notification_ingress_service.clone(),
     };
     let gtm_invite_service = GtmInviteServiceImpl {
@@ -643,8 +649,26 @@ pub async fn run() -> anyhow::Result<()> {
     .with_contacts_enqueuer(contacts_enqueuer)
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
-    .with_owned_entity_cleanup(team_owned_entity_cleanup);
+    .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_invite_rewarder(Arc::new(invite_rewards));
     let teams_service = Arc::new(teams_service_impl);
+    let domain_notice_service =
+        Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
+            teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
+                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            ),
+            teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
+                teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
+                    db.clone(),
+                ),
+                SqsNotificationIngress {
+                    queue: SqsQueue::new(
+                        aws_sdk_sqs::Client::new(&aws_config),
+                        notification_queue.to_string(),
+                    ),
+                },
+            ),
+        ));
     // Reminds people of team invites they have not answered. Replicas claim
     // disjoint invites, so every replica sweeps.
     let invite_reminders_stop = CancellationToken::new();
@@ -747,6 +771,7 @@ pub async fn run() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
+            domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),

@@ -61,7 +61,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
 
     /// Creates a new team with the provided normalized slug. `subscription_id` is `None` for
     /// free teams. Membership is not capped by team size. `owner_plan` is the plan the owner's
-    /// own seat is already billed at.
+    /// own seat is already billed at. `auto_join_domain` is stored as the team's auto-join domain.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
@@ -69,6 +69,7 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         team_slug: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
         owner_plan: SeatPlan,
+        auto_join_domain: Option<&str>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Moves any user-owned GitHub App installation rows to the given team.
@@ -350,11 +351,19 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<TeamInviteLinkToken>, TeamError>> + Send;
 
     /// Sets the team's invite link to `token`, replacing any existing link.
+    /// `created_by` is rewarded when someone joins through it.
     fn set_team_invite_link(
         &self,
         team_id: &uuid::Uuid,
         token: &TeamInviteLinkToken,
+        created_by: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Who created the invite link with `token`, if it exists and is known.
+    fn get_team_invite_link_creator(
+        &self,
+        token: &TeamInviteLinkToken,
+    ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>, TeamError>> + Send;
 
     /// Removes the team's invite link. A no-op when the team has none.
     fn delete_team_invite_link(
@@ -381,12 +390,15 @@ pub trait TeamMembersService: Clone + Send + Sync + 'static {
 /// The TeamService defines a set of actions to perform on the teams
 pub trait TeamService: Clone + Send + Sync + 'static {
     /// Creates a new team. `subscription_id` is `None` for free teams.
-    /// Membership is not capped by team size.
+    /// Membership is not capped by team size. With `allow_domain_join`, a team
+    /// whose owner has a work email starts with the owner's domain as its
+    /// auto-join domain.
     fn create_team(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
         subscription_id: Option<&stripe::SubscriptionId>,
+        allow_domain_join: bool,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send;
 
     /// Returns the user's active or trialing Stripe subscription id, if any.

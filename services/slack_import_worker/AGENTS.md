@@ -4,8 +4,7 @@
 
 Onboards new Channels (chat) customers from Slack: a composition root for
 importing Slack archive exports. Writes conversations, messages, and
-references into Macro as channels, and sends one best-effort colleague-join
-email.
+references into Macro as channels. It sends no emails or notifications.
 
 ## Start here
 
@@ -16,8 +15,7 @@ email.
 - `src/composition/channel_sink.rs`: writes imported conversations as channels.
 - `src/composition/reference_reconciliation.rs` + `src/composition/references.rs`:
   resolving cross-message references (replies, mentions) after import.
-- `src/composition/authorizer.rs`, `src/composition/join_announcer.rs`: access
-  checks and the join-email side effect.
+- `src/composition/authorizer.rs`: access checks.
 - `tests/archive_import.rs` + `tests/archive_import/`: end-to-end import tests,
   including kill/recovery behavior (`process_recovery.rs`, `kill_boundaries.sql`).
 

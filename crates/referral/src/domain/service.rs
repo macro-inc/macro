@@ -6,6 +6,7 @@ mod test;
 use std::{collections::HashSet, ops::Deref};
 
 use macro_user_id::{
+    cowlike::CowLike,
     email::{EmailStr, ReadEmailParts},
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
@@ -16,26 +17,26 @@ use rootcause::compat::boxed_error::IntoBoxedError;
 
 use crate::domain::{
     models::{InviteToMacro, ReferralCode, ReferralError},
-    ports::{DiscountClient, ReferralRepo, ReferralService},
+    ports::{ReferralRepo, ReferralRewarder, ReferralService},
 };
 
 /// The concrete referral service implementation.
-pub struct ReferralServiceImpl<R, Dc, N> {
+pub struct ReferralServiceImpl<R, Rw, N> {
     ///  referral repo
     pub repo: R,
-    /// discount client
-    pub discount_client: Dc,
+    /// rewards the referrer when someone signs up
+    pub rewarder: Rw,
     /// the notification sender
     pub notification_ingress: N,
 }
 
 impl<
     R: ReferralRepo,
-    Dc: DiscountClient,
+    Rw: ReferralRewarder,
     // the constructor for this is Arc<NI> so we use a different bound here
     N: Deref<Target = NI> + Send + Sync + 'static,
     NI: NotificationIngress,
-> ReferralService for ReferralServiceImpl<R, Dc, N>
+> ReferralService for ReferralServiceImpl<R, Rw, N>
 {
     #[tracing::instrument(skip(self), err)]
     async fn get_referral_code_for_user<'a>(
@@ -54,47 +55,40 @@ impl<
         referred_user_id: &MacroUserId<Lowercase<'a>>,
         referral_code: &ReferralCode,
     ) -> Result<(), ReferralError> {
-        self.repo
+        let Some(tracked) = self
+            .repo
             .track_referral(referred_user_id, referral_code)
             .await
-            .map_err(|e| ReferralError::Internal(e.into()))
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn get_referred_by(
-        &self,
-        referred_user_id: &uuid::Uuid,
-    ) -> Result<Option<ReferralCode>, ReferralError> {
-        self.repo
-            .get_referred_by(referred_user_id)
+            .map_err(|e| ReferralError::Internal(e.into()))?
+        else {
+            return Ok(());
+        };
+        let referred = MacroUserIdStr::parse_from_str(referred_user_id.as_ref())
+            .map_err(|e| ReferralError::Internal(e.into()))?
+            .into_owned();
+        if referred == tracked.referrer {
+            return Ok(());
+        }
+        // The signup already happened; a failed reward is logged, not undone.
+        if let Err(error) = self
+            .rewarder
+            .reward_referrer(
+                tracked.referrer.clone(),
+                referred,
+                format!("referral:{}", tracked.tracking_id),
+            )
             .await
-            .map_err(|e| ReferralError::Internal(e.into()))
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn process_referral<'a>(
-        &self,
-        referred_user_id: &MacroUserId<Lowercase<'a>>,
-        referral_code: &ReferralCode,
-    ) -> Result<(), ReferralError> {
-        // NOTE: This will error if the referral code is invalid and we cannot find a
-        // user from the referral code
-        let customer_id = self
+        {
+            tracing::error!(error = ?error, referrer = %tracked.referrer, "failed to reward the referrer");
+            return Ok(());
+        }
+        if let Err(error) = self
             .repo
-            .get_referrers_customer_id(referral_code)
-            .await
-            .map_err(|e| ReferralError::Internal(e.into()))?;
-
-        self.repo
             .complete_referral(referred_user_id, referral_code)
             .await
-            .map_err(|e| ReferralError::Internal(e.into()))?;
-
-        self.discount_client
-            .apply_discount(&customer_id)
-            .await
-            .map_err(|e| ReferralError::Internal(e.into()))?;
-
+        {
+            tracing::warn!(error = ?error.into(), "failed to mark the referral complete");
+        }
         Ok(())
     }
 

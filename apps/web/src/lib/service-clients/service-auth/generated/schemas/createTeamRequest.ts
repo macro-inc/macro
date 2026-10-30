@@ -9,6 +9,9 @@
  * The request body to create a new team
  */
 export interface CreateTeamRequest {
+  /** Whether colleagues who sign up with the owner's work email domain join
+the team automatically. Ignored for generic email providers. */
+  allow_domain_join?: boolean;
   /** The name of the team */
   name: string;
 }

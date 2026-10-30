@@ -294,6 +294,20 @@ impl BillingRepo for PgBillingRepo {
         Ok(())
     }
 
+    async fn free_allowance_bonus_cents(&self, user: &MacroUserIdStr<'_>) -> Result<i64> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(SUM(cost_cents), 0)::bigint AS "bonus!"
+            FROM ai_free_allowance_bonus
+            WHERE user_id = $1
+            "#,
+            user.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(storage)
+    }
+
     async fn credit_balance_cents(&self, payer: &MacroUserIdStr<'_>) -> Result<i64> {
         let balance = sqlx::query_scalar!(
             r#"
