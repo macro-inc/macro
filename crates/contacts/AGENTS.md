@@ -8,7 +8,9 @@ and kept in sync via the connection gateway.
 
 ## Start here
 
-- `src/domain/service.rs`: the contacts use cases (`domain::service`).
+- `src/domain/service.rs`: the contacts use cases (`domain::service`), including bounded ID pages through `ContactsPageService`; the deployed full-list API is unchanged.
+- `src/domain/models/page.rs`: page sizes (default 100, maximum 500), exclusive contact-ID positions, and page completeness. A short or empty page can still have a continuation after malformed legacy IDs.
+- `src/outbound/repository/page.rs`: indexed paging of both graph directions and self, with at most one page plus a lookahead row returned from Postgres.
 - `src/domain/ports.rs`: the traits `inbound`/`outbound` implement.
 - `src/inbound/http.rs`: HTTP handlers, router, DTOs, swagger.
 - `src/inbound/worker.rs`: SQS worker that ingests contact-affecting events.

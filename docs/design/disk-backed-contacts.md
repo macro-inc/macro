@@ -1,8 +1,10 @@
 # Disk-backed contacts
 
-**Status:** approved implementation direction; contact migration not started.
-**Next step:** phase 1, a bounded backend contact-read contract, followed by one
-end-to-end cached contact-search slice.
+**Status:** phase 1 in progress. The domain/repository now provide bounded
+contact-ID pages; the frontend still uses the full directory.
+**Next step:** enrich bounded pages with names, define viewer-scoped contact
+identity, and expose the read/search/lookup contract through GraphQL before
+connecting the first cached search consumer.
 
 ## Goal and scope
 
@@ -63,8 +65,11 @@ and search projection, not a new database or bespoke contact-storage subsystem.
 
 ## Phase 1 — bounded backend contract
 
-- [ ] Extend the existing `contacts` domain service and repository with stable,
-  keyset-paginated reads; do not load everyone before slicing a page.
+- [x] Extend the existing `contacts` domain service and repository with stable,
+  keyset-paginated contact-ID reads; do not load everyone before slicing a page.
+  `ContactsPageService` uses a validated 1–500 row bound (default 100), includes
+  self in the sorted page, and advances through malformed legacy IDs. The reverse
+  `(user2, user1)` index complements the existing forward unique index.
 - [ ] Expose the reads under the authenticated GraphQL viewer, composing domain
   behavior through `complete_graph` rather than embedding database queries in resolvers.
 - [ ] Return identity, email, and resolved names together, avoiding a second
@@ -76,8 +81,8 @@ and search projection, not a new database or bespoke contact-storage subsystem.
   do not merge viewer-specific names into a global public-profile record.
 - [ ] Provide bounded search and batch ID/email resolution under the same authorized
   contract. Cached user-profile data alone must not imply contact membership.
-- [ ] Set explicit limits for read pages, search results, and lookup batches.
-  Generate GraphQL/wire types from their source of truth.
+- [ ] Set explicit limits for search results and lookup batches; the ID-read page
+  limit is already 500. Generate GraphQL/wire types from their source of truth.
 
 Read [contacts ownership](../../crates/contacts/AGENTS.md),
 [schema conventions](../../crates/complete_graph/AGENTS.md), and the

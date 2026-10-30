@@ -77,6 +77,8 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
+- `contacts_connections` has a `(user2, user1)` index for reverse keyset paging; the existing unique `(user1, user2)` index covers forward paging. Bounded directory reads belong to `crates/contacts`, not this client.
+
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - `call_participants.client` defaults to `person` for older call writers;

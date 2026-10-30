@@ -1,4 +1,5 @@
 use crate::domain::models::messages::{ContactConnection, ContactConnections, ContactsNodes};
+use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;
@@ -17,6 +18,32 @@ pub trait ContactsRepository: Send + Sync + 'static {
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+}
+
+/// Bounded directory reads, separate from the deployed full-list API.
+pub trait ContactsPageRepository: Send + Sync + 'static {
+    /// Return only the viewer's graph neighbors and self, in stable contact-ID
+    /// order, after the cursor. Apply the bound in storage, not after loading all
+    /// contacts. Preserve continuation progress when skipping invalid legacy IDs.
+    fn contact_id_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
+}
+
+/// Bounded contact reads for authenticated inbound adapters.
+pub trait ContactsPageService: Send + Sync + 'static {
+    /// Read the authenticated viewer's contacts, including self, without an
+    /// in-memory full-directory intermediate. The adapter supplies the viewer
+    /// from authentication, never from a request body or cursor.
+    fn contact_id_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
 }
 
 /// Port trait for notifying users about contact changes.
