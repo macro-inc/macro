@@ -50,7 +50,8 @@ response delegate or repair destinations in previously delivered alerts.
 In a signed macOS release, an alert from a person shows their avatar in place of
 the app icon, their name as the title, and the channel or document name beneath
 for group conversations; direct messages show only the sender. Alerts from one
-conversation stack together in Notification Center and play the default sound.
+conversation stack together in Notification Center and play the default sound,
+unless Macro plays its own notification sound for that alert (see below).
 Verify a channel message, a direct message, a document comment, and a reminder
 (no sender: app icon and the combined title). Local and ad-hoc builds lack the
 communication entitlement and show the app icon with the sender and subtitle.
@@ -174,3 +175,35 @@ default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
 Desktop and mobile share this scale, with accessibility text scaling preserved.
 
 Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.
+
+## Notification sounds
+
+**Settings → Notifications → Sounds** turns on an in-app sound for incoming
+notifications. It is off by default and saved per person on each device
+(user-scoped localStorage), so a laptop and a phone choose separately. With
+sounds on, it shows a volume slider and one row per type (Messages, Mentions,
+Thread replies, Email, Meetings & reminders, Tasks, AI & agents, Everything
+else), each with its own on/off switch, sound picker, and play button. Picking
+a sound previews it. Email, AI & agents, and Everything else start off.
+
+Sounds are synthesized with Web Audio (`features/notification-sounds`); there
+are no audio files. Event types map to rows in `core/categories.ts`; a new
+backend event type stays quiet until it is mapped there. Incoming calls keep
+their own ring and never use these sounds. Only unseen notifications play,
+notifications within 1.5 s of a sound share it, and only the Macro tab the
+person last focused or touched plays, so several tabs ding once. Closing that
+tab hands sound back to the others until one is focused. Browsers keep
+audio suspended until the page has had a gesture; a notification before that
+stays silent rather than playing late.
+
+When Macro plays a sound for a notification, its browser or macOS alert is
+sent silent so the person hears one sound. macOS builds older than the
+`silent` argument on `send_macos_notification` ignore it and still play the
+system sound.
+
+The backend-free desktop/phone regression drives the real settings section,
+persistence, previews, and delivery through a stand-in notification feed:
+`bunx playwright test --config src/features/notification-sounds/browser-test/playwright.config.ts`
+(from `apps/web`). To check real delivery, turn sounds on, click anywhere in
+Macro, and trigger a mention from another session; then turn Mentions off and
+check that the next mention is quiet.

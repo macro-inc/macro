@@ -406,8 +406,10 @@ The shared board primitives remain independent of Tasks queries and mutations.
 
 Project grouping in the task list matches the Project column: tasks group by
 their initiative Project property, with unassigned tasks under **No Project**.
-Legacy folder membership does not affect these groups. Project headers resolve
-through the same authorized identity query as the Project column. Verify two
+Legacy folder membership does not affect these groups. Projects sort by name with
+**No Project** last. Headers show the name the server labels the group with; a
+group still labeled by its key resolves the name through the same authorized
+identity query as the Project column. Verify two
 projects and an unassigned task on desktop and mobile; changing or clearing a
 task’s Project must move it to the matching group without reloading.
 
@@ -771,6 +773,11 @@ editor inserts a project mention. A link to a project discussion stays a link.
 Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
+Opening a project without access shows `You don't have access to this project`
+with the same Request access row and access level as documents. The owner
+reviews it under Share's `Permission requests`, and once granted the open
+project loads in place. Losing access while the project is open switches to
+that view. A deleted project shows `Project unavailable` with Try again.
 
 Project information panels start closed and float over the content at every
 width, both in the Tasks project view and standalone initiative blocks. Opening

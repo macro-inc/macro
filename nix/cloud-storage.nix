@@ -1201,6 +1201,14 @@
               # the Nix lambda derivations. The default cc builder rejects
               # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
               AWS_LC_SYS_CMAKE_BUILDER = "1";
+              # Android builds compile with the NDK's clang, which the cc
+              # builder accepts. The CMake builder needs CMake to locate the
+              # NDK itself, which fails in the tauri-android shell ("Neither
+              # the NDK or a standalone toolchain was found").
+              AWS_LC_SYS_CMAKE_BUILDER_aarch64_linux_android = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_armv7_linux_androideabi = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_i686_linux_android = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_x86_64_linux_android = "0";
               # cargo-zigbuild compiles C with zig cc, which ignores the Nix
               # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
               # buildInputs provides to host builds (see the note on `libraries`;

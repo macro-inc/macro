@@ -512,12 +512,12 @@ server; see [MCP servers](../../../docs/development/mcp-servers.md#goalert).
 - A nightly timer dumps the database to `s3://<logs bucket>/goalert/`, one object
   per weekday. The dump goes to a file first, so a failed dump never replaces a
   good backup.
-- `macro-alerts-relay` on `127.0.0.1:8090` turns GoAlert webhooks (`/goalert`)
-  into Macro channel posts and adds the channel's bot token. GoAlert webhooks
-  cannot set headers, and the token stays in one service. A new alert posts as
-  `🚨 PAGE [<service>]` (paging services) or `🔔 [Notify]`, its summary, the first
-  1500 characters of its details and an `Acknowledge:` link; status changes post
-  one line with the GoAlert link.
+- `macro-alerts-relay` on `127.0.0.1:8090` turns GoAlert webhooks into Macro
+  channel posts and adds the channel's bot token; GoAlert webhooks cannot set
+  headers. Each post starts with `---`, then the page or notify marker and the
+  title without Datadog's bracketed tags, the state, a one-sentence description,
+  and `Acknowledge · Graph · Runbook` links. Status changes are one line.
+  `goalert/test_macro_alerts_relay.py` pins the format.
 - nginx serves `oncall.macro-internal.com` from a runtime server block. Only
   `/health`, `/api/v2/generic/incoming` and `/api/v2/heartbeat/` are reachable
   without a session (GoAlert checks the integration key); other inbound

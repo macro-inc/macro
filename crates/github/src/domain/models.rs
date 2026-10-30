@@ -9,6 +9,7 @@ mod installation_state;
 mod link;
 mod repository;
 mod sync;
+mod webhook_delivery;
 
 #[cfg(feature = "sync")]
 pub use app_jwt::AppJwt;
@@ -43,6 +44,9 @@ pub use sync::{
     GithubUserInstallationsPage, GithubWebhookEventType, MacroTaskId, ResolvedTeamTaskReference,
     TeamTaskReference, ValidatedGithubWebhookEvent, extract_github_mentions,
     pull_request_task_reference, strip_markdown_code,
+};
+pub use webhook_delivery::{
+    GithubWebhookReceived, GithubWebhookRepository, GithubWebhookSender, MAX_WEBHOOK_PAYLOAD_BYTES,
 };
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]

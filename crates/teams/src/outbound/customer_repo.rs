@@ -767,7 +767,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
     async fn get_subscription_id_for_customer(
         &self,
         customer_id: &stripe::CustomerId,
-    ) -> Result<stripe::SubscriptionId, CustomerError> {
+    ) -> Result<Option<stripe::SubscriptionId>, CustomerError> {
         // Stripe's `active` filter excludes `trialing`, so list every
         // uncanceled subscription and choose here. A trial grants Pro like
         // an active subscription, and a team created during the trial must
@@ -780,7 +780,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .await
             .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
 
-        paying_subscription(subscriptions.data).ok_or(CustomerError::SubscriptionNotActive)
+        Ok(paying_subscription(subscriptions.data))
     }
 }
 

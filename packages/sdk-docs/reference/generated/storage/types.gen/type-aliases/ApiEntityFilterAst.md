@@ -1,6 +1,6 @@
 # Type Alias: ApiEntityFilterAst
 
-> **ApiEntityFilterAst** = \{ `asf?`: `unknown`; `calf?`: `unknown`; `callf?`: `unknown`; `ccf?`: `unknown`; `cf?`: `unknown`; `chanf?`: `unknown`; `crma?`: `null` \| [`CrmAssociation`](CrmAssociation.md); `crmf?`: `unknown`; `cthf?`: `unknown`; `df?`: `unknown`; `eca?`: `string`[]; `ecd?`: `string`[]; `ef?`: `unknown`; `favorites_only?`: `boolean` \| `null`; `fef?`: `unknown`; `ghprf?`: `unknown`; `pf?`: `unknown`; `propf?`: `unknown`; \}
+> **ApiEntityFilterAst** = \{ `asf?`: `unknown`; `calf?`: `unknown`; `callf?`: `unknown`; `ccf?`: `unknown`; `cf?`: `unknown`; `chanf?`: `unknown`; `crma?`: `null` \| [`CrmAssociation`](CrmAssociation.md); `crmf?`: `unknown`; `cthf?`: `unknown`; `df?`: `unknown`; `eca?`: `string`[]; `ecd?`: `string`[]; `ef?`: `unknown`; `favorites_only?`: `boolean` \| `null`; `fef?`: `unknown`; `ghprf?`: `unknown`; `if?`: `unknown`; `pf?`: `unknown`; `propf?`: `unknown`; \}
 
 Wire-format entity filter AST accepted by soup AST endpoints.
 
@@ -24,5 +24,6 @@ Wire-format entity filter AST accepted by soup AST endpoints.
 | <a id="property-favorites_only"></a> `favorites_only?` | `boolean` \| `null` | Restrict to the authenticated viewer's favorites before pagination when true. |
 | <a id="property-fef"></a> `fef?` | `unknown` | the filters that should be applied to foreign entity records |
 | <a id="property-ghprf"></a> `ghprf?` | `unknown` | the filters that should be applied to GitHub pull request records, on top of `fef` |
+| <a id="property-if"></a> `if?` | `unknown` | Filters applied to initiatives (wire key `if`). Opt-in like agent sessions: an omitted filter returns no initiatives, and any literal, a notification state included, opts them in. |
 | <a id="property-pf"></a> `pf?` | `unknown` | the filters that should be applied to the project entity |
 | <a id="property-propf"></a> `propf?` | `unknown` | the filters that should be applied based on entity properties |

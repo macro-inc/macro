@@ -83,6 +83,32 @@ describe('ComposeLayout root composition', () => {
     ).toContain('sender@example.com');
   });
 
+  it('keeps the sender row while inboxes load, then shows the default inbox', () => {
+    const context = createComposeContext();
+    const inboxes = context.accounts.inboxes();
+    const [loaded, setLoaded] = createSignal(false);
+    context.accounts = {
+      ...context.accounts,
+      inboxes: () => (loaded() ? inboxes : []),
+      loading: () => !loaded(),
+      primaryId: () => (loaded() ? 'inbox' : undefined),
+    };
+    const root = mountEmailComposer(context);
+    composeStatus.sender = root.state.context;
+    try {
+      render(() => <ComposeLayout />);
+      const row = screen.getByRole('group', { name: 'Sending inbox' });
+      expect(row.getAttribute('aria-busy')).toBe('true');
+      setLoaded(true);
+      expect(screen.getByRole('group', { name: 'Sending inbox' })).toBe(row);
+      expect(row.getAttribute('aria-busy')).toBeNull();
+      expect(row.textContent).toContain('me@example.com');
+    } finally {
+      cleanup();
+      root.dispose();
+    }
+  });
+
   it('shows the missing-sender error and lets the user select the only remaining inbox', async () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     const context = createComposeContext();

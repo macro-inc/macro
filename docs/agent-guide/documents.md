@@ -100,8 +100,12 @@ lets a reviewer choose an access level and **Grant access**, or **Deny**. Team
 owners/admins and the human responsible for a bot-owned item review on its behalf.
 Only the first review of a request succeeds. Grants notify the requester; denials
 do not. Approved users appear in People with access, with controls to change or
-remove their direct grant. Opening a permission-request notification navigates
-to its item and opens Share.
+remove their direct grant. A pending request also puts the item, projects
+included, on the reviewer's Home feed until it is resolved. A project row has
+no Home preview: clicking it opens the project in place, Shift-click opens it
+in a new split, and when the project is already open in another split that
+split is focused. Opening a permission-request notification navigates to its
+item and opens Share.
 
 Both **Edit with AI** and selected-text AI edits open the shared usage-limit dialog
 when the backend refuses a request with a usage-limit code. Free users can choose
@@ -876,7 +880,7 @@ must be saved before persistent comments are available.
 ## Ask Macro about a spreadsheet
 
 **Ask Macro** sits immediately left of **Share**. Select the relevant cells, then
-click it to open a new agent session in a split beside the workbook. The composer starts
+click it to open the agent composer in a split beside the workbook. The composer starts
 with the workbook mention followed by one space; nothing sends automatically.
 The mention captures the active sheet ID/name and normalized selected range at
 click time. Changing the selection later does not change that draft attachment.
@@ -1470,8 +1474,8 @@ and as colored dots on the thumbnails of slides they are on. A viewer who opens
 a deck nobody has shared yet, or anyone when the sync service is unreachable,
 gets the stored file read-only.
 
-**Ask Macro**, in the header beside **Share**, opens a new agent session in a
-split with the deck mentioned in the composer (nothing sends automatically).
+**Ask Macro**, in the header beside **Share**, opens the agent composer in a
+split with the deck mentioned (nothing sends automatically).
 Macro AI reads decks with `ReadPresentation` (slides, layouts, theme colors,
 sections, transitions, header and footer, and every shape with its id, kind,
 placeholder role, position in points, text, table cells with merges and style,
@@ -2985,9 +2989,8 @@ updates live and shows each collaborator's caret with their name
   `addComment` ones) are.
 - The stored upload is not rewritten yet. Search, the PDF export and AI
   `ReadContent` still see the original file.
-- **Ask Macro**, in the header beside **Share**, opens a new agent session in
-  a split with the document mentioned in the composer (nothing sends
-  automatically).
+- **Ask Macro**, in the header beside **Share**, opens the agent composer in
+  a split with the document mentioned (nothing sends automatically).
 - AI `ReadWordDocument` and `EditWordDocument` read and edit the live copy, so
   open editors patch agent edits in as they land. `ReadWordDocument` lists
   every paragraph, table cell and content control with its id. `EditWordDocument`

@@ -43,12 +43,14 @@ export function TaskGroupHeader(props: {
       ? props.row.groupId
       : ''
   );
-  const project = usePropertyEntityDisplay(
-    () => (props.groupBy === 'project' ? props.row.groupId : ''),
-    () =>
-      props.groupBy === 'project' && props.row.groupId
-        ? 'INITIATIVE'
-        : undefined
+  // The grouped page names a project group the viewer can read; a group still
+  // labeled by its key resolves the name here.
+  const unnamedProjectId = () =>
+    props.groupBy === 'project' && props.row.label === props.row.groupId
+      ? props.row.groupId
+      : '';
+  const project = usePropertyEntityDisplay(unnamedProjectId, () =>
+    unnamedProjectId() ? 'INITIATIVE' : undefined
   );
   const label = createMemo(() => {
     if (!props.row.groupId) return props.row.label || 'Not set';
@@ -57,7 +59,9 @@ export function TaskGroupHeader(props: {
       return getPropertyOptionLabel(props.row.groupId) ?? props.row.label;
     }
 
-    if (props.groupBy === 'project') return project.name();
+    if (props.groupBy === 'project') {
+      return unnamedProjectId() ? project.name() : props.row.label;
+    }
 
     if (props.groupBy === 'assignee') {
       if (isBotPrincipalId(props.row.groupId)) return agent.name();
