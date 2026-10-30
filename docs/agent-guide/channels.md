@@ -40,6 +40,13 @@ format toolbar applies it to the same paragraphs in either selection direction.
 Verify a selection from the last paragraph back to the start of the first:
 the first paragraph must receive the format too. A range ending at the start of
 the following paragraph leaves that following paragraph unchanged.
+Typing `> ` creates a quote. Pasting text with paragraph breaks into that quote
+keeps all pasted paragraphs quoted, including HTML and text copied from another
+Macro editor. Inline formatting survives. Verify an empty quote and a selection
+within a quote, then type after the paste and save the message; every pasted
+paragraph must still have the quote styling.
+Selections across adjacent quoted paragraphs preserve quoting too. A selection
+that includes unquoted paragraphs keeps the normal paste behavior.
 The backend-free quote check is documented in the Markdown browser-test README
 linked above.
 
@@ -471,6 +478,23 @@ reply without attaching anything, and confirm it describes the image.
 Macro Coding Agent (`@coder`) is unavailable in mention suggestions, including
 when it appears among existing participants or bots. Check with the agents
 rollout both enabled and disabled.
+
+Agent-authored messages trigger other agents exactly like a person's: an explicit
+mention starts or continues the mentioned agent's session, and an unmentioned reply
+in a thread can reach another live agent there by quote-reply or inference. The
+originating user's permissions, connected runtime, and usage allowance apply through
+the bot message's server-recorded attribution. Autonomous webhook posts without that
+attribution trigger nothing, and a bot never triggers its own session. Finalized bot
+answers are evaluated like new posts, mentioned or not; streaming updates and
+ordinary edits are not. Agents handing the thread back and forth stop after 128
+agent turns (64 round trips) with no person writing in between; the next agent
+message is logged and triggers nothing, before any classifier runs. The invoked session's
+prompt reads "Started by <agent> for <person>" (or "Asked by" on a follow-up).
+To verify, ask session-backed `@Macro` to post a mention of `@cursor`, then have
+Cursor post a mention of session-backed Macro in the same thread. Check that the
+first mention opens Cursor and the return mention continues Macro's existing
+session. Repeat with revoked channel access and confirm no new work starts.
+
 When the backend is configured with AI usage enforcement, a rejected classic
 `@Macro` request gets a thread reply explaining the allowance failure (for example,
 `ai_allowance_exhausted`) or temporary validation failure (`ai_billing_unavailable`),
@@ -661,6 +685,9 @@ that buffer. Check that pagination retains the visible message, and that latest
 stays pinned when messages arrive, images load, or the composer resizes. Verify
 message/reply navigation, restoration, and the custom scrollbar after pagination.
 Very long flings or slow responses can still exhaust the available scroll range.
+In the iOS app, fling repeatedly through a long channel, starting each fling before
+the previous one's momentum ends, then let it settle. The messages must not jump when
+scrolling comes to rest, nor when it bounces or is held against the top of loaded history.
 
 Inline document mentions should show their stored title before entering the viewport
 and while preview requests are pending. With a slow preview response, check that a

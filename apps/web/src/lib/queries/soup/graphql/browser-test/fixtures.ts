@@ -46,6 +46,7 @@ function thread(n: number): MailItemFieldsFragment {
     linkId: id(1000),
     ownerId: VIEWER,
     inboxVisible: true,
+    hasReceivedMail: true,
     isRead: false,
     isSignal: false,
     isImportant: false,

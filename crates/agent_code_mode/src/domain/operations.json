@@ -196,6 +196,7 @@
   "cognition.generateDatabaseQuery": "Generate Database Query",
   "cognition.decisions": "Classify content",
   "cognition.healthHandler": "Health",
+  "cognition.generateImage": "Generate Image",
   "cognition.notionReportHandler": "Notion Report",
   "cognition.cancelNotionHandler": "Cancel Notion",
   "cognition.runImportHandler": "Run Import",

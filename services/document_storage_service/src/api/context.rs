@@ -45,7 +45,9 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
-use documents_hex::domain::ports::{TaskPropertiesPort, task_property_edit_receipt};
+use documents_hex::domain::ports::{
+    TaskPropertiesPort, credited_task_edit_receipt, task_property_edit_receipt,
+};
 use documents_hex::domain::purge::DocumentPurger;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
@@ -59,7 +61,13 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::{
+    domain::{
+        models::{EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
+        service::EntityAccessServiceImpl,
+    },
+    outbound::PgAccessRepository,
+};
 use favorites::{
     domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
     inbound::axum_router::FavoritesRouterState,
@@ -117,6 +125,7 @@ use macro_authorization::{
 };
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
@@ -149,7 +158,7 @@ use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 use system_properties::{
     PgSystemPropertiesRepository, StatusOption, SystemPropertiesService as _,
-    SystemPropertiesServiceImpl,
+    SystemPropertiesServiceImpl, SystemPropertyKey,
 };
 use tokio_util::task::TaskTracker;
 use webhook::{
@@ -323,14 +332,57 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .map_err(Into::into)
     }
 
-    async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            task_id = %access.entity().entity_id,
+            status,
+            unchanged = tracing::field::Empty,
+            credited = tracing::field::Empty
+        ),
+        err
+    )]
+    async fn update_task_status(
+        &self,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        status: &str,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
         let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
-
-        self.system_properties
-            .update_task_status(task_id, status_option)
+        let current = self
+            .properties
+            .get_system_property_value(
+                &access.clone().try_into_requirement::<ViewAccessLevel>()?,
+                SystemPropertyKey::Status,
+            )
             .await?;
-
-        Ok(())
+        // PR edits and comments re-send In Review; an unchanged status publishes nothing.
+        if current == Some(PropertyValue::SelectOption(vec![status_option.uuid()])) {
+            tracing::Span::current().record("unchanged", true);
+            return Ok(());
+        }
+        let access =
+            credited_task_edit_receipt(self.entity_access_service.as_ref(), access, credited_user)
+                .await;
+        tracing::Span::current().record(
+            "credited",
+            matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
+        );
+        self.properties
+            .set_entity_property(
+                &access,
+                SystemPropertyKey::STATUS_UUID,
+                Some(
+                    models_properties::api::requests::SetPropertyValue::SelectOption {
+                        option_id: status_option.uuid(),
+                    },
+                ),
+            )
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
     }
 
     async fn set_entity_property(

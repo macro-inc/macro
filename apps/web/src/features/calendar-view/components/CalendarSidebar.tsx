@@ -27,17 +27,9 @@ import { Key } from '@solid-primitives/keyed';
 import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { format } from 'date-fns';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  on,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
+import { useCalendarFocus } from '../calendar-focus-target';
 import { CALENDAR_TOUR } from '../tour';
 import {
   CalendarCreateBookingLinkItem,
@@ -51,9 +43,7 @@ import { ConnectCalendarsPromotion } from './ConnectCalendarsPromotion';
 function CalendarMiniCalendar() {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
-  const shell = useViewShell();
   const initialDate = new Date();
-  const [focusedDay, setFocusedDay] = createSignal(initialDate);
 
   const currentDate = createMemo(
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
@@ -64,32 +54,15 @@ function CalendarMiniCalendar() {
     return { end: dateInfo.end, start: dateInfo.start };
   });
 
-  const navigateToDate = (date: Date) => {
-    setFocusedDay(date);
-    calendarPager.gotoDate(date);
-    if (shell.aside.isOverlay()) shell.aside.collapse();
-  };
-  const navigateMonth = (month: Date) => {
-    const focused = focusedDay();
-    const sameMonth =
-      focused.getFullYear() === month.getFullYear() &&
-      focused.getMonth() === month.getMonth();
-    navigateToDate(sameMonth ? focused : month);
-  };
-  createEffect(on(currentDate, setFocusedDay));
-
+  // Month browsing and keyboard focus stay local to the mini calendar.
   return (
     <MiniCalendar
       required
       fixedWeeks
       startOfWeek={calendarView.displaySettings.weekStartsOn}
       value={currentDate()}
-      month={currentDate()}
-      focusedDay={focusedDay()}
       highlightedRange={highlightedRange()}
-      onMonthChange={navigateMonth}
-      onFocusedDayChange={setFocusedDay}
-      onValueChange={(date) => date && navigateToDate(date)}
+      onValueChange={(date) => date && calendarPager.gotoDate(date)}
     />
   );
 }
@@ -165,8 +138,30 @@ export function TeamOooUpcomingList() {
   const upcoming = useUpcomingTeamOoo();
   const windows = upcoming.windows;
   const calendarView = useCalendarView();
+  const calendarFocus = useCalendarFocus();
   const isActive = (window: TeamOooWindow) =>
     calendarView.selectedEvent()?.id === window.event.id;
+  const openWindow = (window: TeamOooWindow, row: HTMLElement) => {
+    const openOnRow = () =>
+      calendarView.selectEvent(window.event, row, 'agenda');
+    calendarPager.gotoDate(window.start);
+    // With the overlay on, the absence also renders on the grid: open it on
+    // its chip once the page shows it, as a navigation request does, so the
+    // card never opens on the row and then jumps to the chip.
+    if (calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID)) {
+      calendarFocus.focusOccurrence(
+        {
+          eventId: window.eventId,
+          occurrenceKey: window.occurrenceKey,
+          date: window.start,
+        },
+        openOnRow
+      );
+    } else {
+      openOnRow();
+    }
+    if (shell.aside.isOverlay()) shell.aside.collapse();
+  };
   // The choice outlives count changes: a list that shrinks to the cap and grows
   // again comes back the way the person left it.
   const [expanded, setExpanded] = createSignal(false);
@@ -220,15 +215,7 @@ export function TeamOooUpcomingList() {
                     isActive(window()) ? 'bg-active' : 'hover:bg-hover'
                   )}
                   aria-current={isActive(window()) ? 'true' : undefined}
-                  onClick={(event) => {
-                    calendarPager.gotoDate(window().start);
-                    calendarView.selectEvent(
-                      window().event,
-                      event.currentTarget,
-                      'agenda'
-                    );
-                    if (shell.aside.isOverlay()) shell.aside.collapse();
-                  }}
+                  onClick={(event) => openWindow(window(), event.currentTarget)}
                 >
                   <UserIcon
                     id={window().ownerId}
