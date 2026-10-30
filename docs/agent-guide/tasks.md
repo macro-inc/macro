@@ -683,14 +683,15 @@ filters, groups, and scroll position. Project URLs retain identity and section:
 `/app/component/initiative-view~<project-id>~overview` (or `tasks`).
 A Public project link opens signed out, read-only, at both that URL and
 `/app/tasks/projects/<project-id>/overview`: the project page alone, with no
-Tasks list beside it. Its Tasks section lists only the tasks the visitor may
-open themselves (each task keeps its own sharing; the project's link does not
-open them), and a task opens in the same pane with the project breadcrumb.
-The description reads as it stands, comments show **Sign in to view
-comments.**, and a Public link shared at Edit still gives the visitor View. A
-signed-in user who is not a member opens the same project at the level its
-link grants. A private project, and the Tasks list itself, show **Sign in to
-view this page**.
+Tasks list beside it. A project contains its tasks: anyone who can view the
+project, by membership, share, or link, can view every task in it, read-only
+unless the task grants them more. Its Tasks section lists all of the
+project's tasks, and a task opens in the same pane with the project
+breadcrumb. The description reads as it stands, comments show **Sign in to
+view comments.**, and a Public link shared at Edit still gives the visitor
+View. A signed-in user who is not a member opens the same project at the level
+its link grants, and its Tasks tab lists every task in it. A private project,
+and the Tasks list itself, show **Sign in to view this page**.
 Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.

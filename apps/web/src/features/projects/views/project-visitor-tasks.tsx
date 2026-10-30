@@ -10,8 +10,8 @@ import { useProjectsContext } from '../context/projects-context';
 import type { ProjectSection } from '../core/project';
 
 /**
- * A project's tasks as a caller with no account reads them: the ones they may
- * view, read-only, each opening in the same pane.
+ * A project's tasks as a caller with no account reads them: every task in
+ * the project, read-only, each opening in the same pane.
  */
 export function ProjectVisitorTasks(props: {
   projectId: string;
@@ -46,7 +46,7 @@ export function ProjectVisitorTasks(props: {
         <EmptyStatePanel
           centered
           title="No tasks"
-          description="Tasks you can see in this project appear here."
+          description="This project's tasks appear here."
         />
       </Match>
       <Match when={source.tasks()}>
