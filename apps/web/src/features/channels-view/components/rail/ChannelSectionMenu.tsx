@@ -1,8 +1,8 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import CheckIcon from '@icon/system/regular/check.svg';
-import SortIcon from '@icon/system/regular/sort-ascending.svg';
-import { Dropdown } from '@ui';
+import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
+import { Dropdown, ToggleSwitch } from '@ui';
 import { For } from 'solid-js';
 import type { ChannelSectionKey } from '../../types';
 import { useChannelsRail } from './ChannelsRailContext';
@@ -22,7 +22,7 @@ export function ChannelSectionDropdown(props: {
         variant="ghost"
         size="icon-sm"
       >
-        <SortIcon class="size-3.5" />
+        <SlidersIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-40">
         <ChannelSectionMenuItems section={props.section} />
@@ -69,12 +69,20 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
       </Dropdown.Group>
       <Dropdown.Group>
         <Dropdown.CheckboxItem
+          indicator={false}
+          closeOnSelect={false}
           checked={preferences().unreadOnly ?? false}
           onChange={(unreadOnly) =>
             rail.setSectionPreferences(props.section, { unreadOnly })
           }
         >
-          <span>{t('channelSections.unreadOnly')}</span>
+          <span class="flex-1">{t('channelSections.unreadOnly')}</span>
+          <span inert aria-hidden="true" class="pointer-events-none">
+            <ToggleSwitch
+              checked={preferences().unreadOnly ?? false}
+              readOnly
+            />
+          </span>
         </Dropdown.CheckboxItem>
       </Dropdown.Group>
     </>
