@@ -2004,15 +2004,6 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut connection = db
-        .acquire()
-        .instrument(tracing::info_span!(
-            "soup.pool.acquire",
-            pool_size = db.size(),
-            pool_idle = db.num_idle()
-        ))
-        .await?;
-    let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     // Document id arrays follow the eight fixed binds.
     let mut document_ids = DocumentIdArrays::starting_at(9);
     let mut builder = build_query(
