@@ -594,6 +594,10 @@ pub struct CreateChannelRequest {
     /// Participants to add, excluding the owner.
     #[cfg_attr(feature = "inbound", schema(value_type = HashSet<String>))]
     pub participants: HashSet<MacroUserIdStr<'static>>,
+    /// Whether this is a new user's support channel. Only signup sets it;
+    /// clients cannot.
+    #[serde(skip)]
+    pub is_support: bool,
 }
 
 /// Persisted channel data returned by channel creation.
@@ -1161,6 +1165,8 @@ pub struct ChannelListItem {
     pub team_id: Option<Uuid>,
     /// Whether team members automatically join the channel.
     pub auto_join_team: bool,
+    /// Whether this is a new user's support channel.
+    pub is_support: bool,
     /// Creation timestamp.
     pub created_at: DateTime<Utc>,
     /// Update timestamp.

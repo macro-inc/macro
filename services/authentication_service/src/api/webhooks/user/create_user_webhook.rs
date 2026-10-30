@@ -558,6 +558,7 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                         team_id: None,
                         auto_join_team: false,
                         participants,
+                        is_support: true,
                     },
                 )
                 .await

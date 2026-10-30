@@ -863,14 +863,21 @@ On desktop, the Chat rail has `All` and `Recent` tabs in a flat, shared track
 aligned with New. Choices use equal widths, a transparent outlined track with
 1px padding, and fully rounded pill shapes. The 32px selected state matches
 New's fill and border without an extra shadow. All contains an optional
-`Favorites` section and the
-independently paginated `Team channels`, `Channels`, and `DMs` sections, in
-that order. `Team channels` lists team channels; `Channels` lists every other
-non-DM channel (public and private). Each section collapses on its own and
-keeps its own sort; open sections split the column evenly, and the bottom-most
-open one takes any remaining height. Favorites appears when
+`Favorites` section, the
+independently paginated `Team channels`, `Channels`, and `DMs` sections, and an
+optional `Support` section, in that order. `Team channels` lists team channels;
+`Channels` lists every other non-DM channel (public and private). Each section
+collapses on its own and keeps its own sort; open sections split the column
+evenly, and the bottom-most open one takes any remaining height. Favorites appears when
 the user has channel favorites and only lists channels. Channel favorites open
-in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
+in the shared channel detail. Support appears only for people in other users'
+support channels (the Macro team members signup adds to each new user's
+`Macro Support x <name>` channel) and lists those channels instead of
+Channels. The channel list marks them with `is_support`, which only signup
+sets; a new user keeps their own support channel in Channels. Support has the
+same sort control as the other sections but no `+` action. With support
+channels taken out, Channels keeps loading pages on its own until it has
+enough rows to scroll. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click refreshes the notification
 selection and opens at latest. Split opens mark top-level notifications seen,
 including mentions and reactions, only after the split is opened or reused.
@@ -1090,7 +1097,7 @@ Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances
 into the appended rows. If the section has no next page, navigation proceeds
 to the next section. `[` and `]` jump between the visible Favorites,
-Channels, and DMs section headers.
+Team channels, Channels, DMs, and Support section headers.
 
 On touch layouts, Channels shows only the Recent conversation feed, with channel
 and DM message previews. Rows use Home's touch row: the unread dot in the left
@@ -1417,7 +1424,8 @@ without declining.
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
-useful as a guaranteed-existing channel in tests.
+useful as a guaranteed-existing channel in tests. It is a support channel
+(`is_support`), so the Macro team members in it see it under Support.
 
 Locally sent channel messages and thread replies enter with a brief upward slide
 and fade, without bubble scaling. Opening history or remounting a row does not

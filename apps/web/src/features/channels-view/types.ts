@@ -3,13 +3,19 @@ export type ChannelsTab = 'browse' | 'recents' | 'threads';
 /** The All tab's conversation lists, each its own paginated query. */
 export type ChannelsGroup = 'team_channels' | 'channels' | 'direct_messages';
 
+/**
+ * Conversation sections of the All tab. Support lists the new users' support
+ * channels a Macro team member is in, apart from their own channels.
+ */
+export type ChannelsRailGroup = ChannelsGroup | 'support';
+
 export type ChannelListSort = 'viewed_at' | 'updated_at' | 'created_at';
 
 /** Lists with their own sort preference: the All tab groups and the Threads rail. */
-export type ChannelsSortGroup = ChannelsGroup | 'threads';
+export type ChannelsSortGroup = ChannelsRailGroup | 'threads';
 
 /** Collapsible sections of the All tab. */
-export type ChannelsRailSection = 'favorites' | ChannelsGroup;
+export type ChannelsRailSection = 'favorites' | ChannelsRailGroup;
 
 export type ChannelsQueryScope = ChannelsGroup | 'recents';
 

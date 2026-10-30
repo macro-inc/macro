@@ -20874,6 +20874,7 @@
           "id",
           "channel_type",
           "auto_join_team",
+          "is_support",
           "created_at",
           "updated_at",
           "owner_id",
@@ -20923,6 +20924,10 @@
           "is_participant": {
             "type": "boolean",
             "description": "Whether the requesting user is an active participant of the channel."
+          },
+          "is_support": {
+            "type": "boolean",
+            "description": "Whether this is a new user's support channel."
           },
           "latest_message": {
             "oneOf": [

@@ -519,6 +519,7 @@ static CHANNEL_LIST_SELECT: &str = r#"
         pc.org_id as "org_id",
         pc.team_id as "team_id",
         pc.auto_join_team as "auto_join_team",
+        pc.is_support as "is_support",
         pc.created_at as "created_at",
         pc.updated_at as "updated_at",
         pc.owner_id as "owner_id",
@@ -1178,6 +1179,7 @@ struct ChannelListRow {
     org_id: Option<i64>,
     team_id: Option<Uuid>,
     auto_join_team: bool,
+    is_support: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     owner_id: String,
@@ -1195,6 +1197,7 @@ impl ChannelListRow {
             org_id: self.org_id,
             team_id: self.team_id,
             auto_join_team: self.auto_join_team,
+            is_support: self.is_support,
             created_at: self.created_at,
             updated_at: self.updated_at,
             owner_id: MacroUserIdStr::parse_from_str(&self.owner_id)
@@ -1514,6 +1517,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     org_id: row.try_get("org_id")?,
                     team_id: row.try_get("team_id")?,
                     auto_join_team: row.try_get("auto_join_team")?,
+                    is_support: row.try_get("is_support")?,
                     created_at: row.try_get("created_at")?,
                     updated_at: row.try_get("updated_at")?,
                     owner_id: row.try_get("owner_id")?,
@@ -2443,15 +2447,16 @@ impl ChannelRepo for PgChannelsRepo {
             team_id,
             auto_join_team,
             participants,
+            is_support,
         } = req;
         let channel_id = macro_uuid::generate_uuid_v7();
         let mut transaction = self.pool.begin().await?;
         sqlx::query!(
             r#"
             INSERT INTO comms_channels (
-                id, name, owner_id, org_id, team_id, channel_type, auto_join_team
+                id, name, owner_id, org_id, team_id, channel_type, auto_join_team, is_support
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
             channel_id,
             name.as_deref(),
@@ -2460,6 +2465,7 @@ impl ChannelRepo for PgChannelsRepo {
             team_id,
             channel_type as ChannelType,
             auto_join_team,
+            is_support,
         )
         .execute(&mut *transaction)
         .await

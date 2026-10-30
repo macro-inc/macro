@@ -215,6 +215,7 @@ vi.mock('./queries', () => ({
       direct_messages: { items: () => mocks.rows() },
       recents: { items: () => mocks.rows() },
       search: { items: () => [] },
+      support: { items: () => [] },
     };
   },
 }));

@@ -1411,6 +1411,7 @@ where
                     team_id: Some(*team.id()),
                     auto_join_team: true,
                     participants: HashSet::from([owner_id]),
+                    is_support: false,
                 },
             )
             .await

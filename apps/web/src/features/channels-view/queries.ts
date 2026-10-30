@@ -4,6 +4,7 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -20,6 +21,7 @@ import {
 import { type Accessor, createEffect, createMemo } from 'solid-js';
 import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
+import { supportChannelIds } from './core/support-channels';
 import type {
   ChannelListSort,
   ChannelsQueryScope,
@@ -35,6 +37,13 @@ const THREAD_CHANNELS_PAGE_SIZE = 100;
  * scrolling the rail loads the rest.
  */
 const THREAD_CHANNELS_AUTO_PAGES = 5;
+/**
+ * Channels rows to show before the section stops paging on its own once
+ * support channels are taken out. They are a team member's newest channels,
+ * so a page can lose most of its rows and leave a list too short to scroll.
+ */
+const CHANNELS_MIN_ROWS_WITHOUT_SUPPORT = 30;
+const CHANNELS_AUTO_PAGES_WITHOUT_SUPPORT = 10;
 
 const CHANNELS_QUERY_PARAMS = {
   limit: 100,
@@ -51,7 +60,7 @@ export type ChannelsDataSource = ListDataSource<ChannelEntity>;
 /** Scopes backed by a channel list query. */
 type ChannelsListScope = ChannelsQueryScope | 'search';
 
-export type ChannelsSourceScope = ChannelsListScope | 'threads';
+export type ChannelsSourceScope = ChannelsListScope | 'threads' | 'support';
 
 export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
 
@@ -320,7 +329,9 @@ function useThreadChannelsDataSource(
 function useChannelsDataSource(
   scope: ChannelsListScope,
   enabled: Accessor<boolean>,
-  sortMethod: Accessor<ChannelListSort | undefined>
+  sortMethod: Accessor<ChannelListSort | undefined>,
+  /** Channels another section lists instead, such as Support. */
+  excludedIds: Accessor<ReadonlySet<string>> = () => new Set()
 ): ChannelsDataSource {
   const query = useSoupAstItemsQuery(
     () => channelsQueryArgs(scope, sortMethod()),
@@ -333,10 +344,11 @@ function useChannelsDataSource(
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;
 
+    const excluded = excludedIds();
     const channels = filterChannelsForScope(
       scope,
       (query.data?.entities ?? []).filter(isChannelEntity)
-    );
+    ).filter((channel) => !excluded.has(channel.id));
 
     if (scope === 'recents') return channels;
 
@@ -345,6 +357,23 @@ function useChannelsDataSource(
       sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method
     );
   }, []);
+  // Page on, like the Threads rail, while excluded channels leave too few
+  // rows to scroll; scrolling the section loads the rest.
+  createEffect(() => {
+    if (
+      excludedIds().size === 0 ||
+      !query.isEnabled ||
+      query.isLoading ||
+      query.isFetching ||
+      query.error ||
+      !query.hasNextPage ||
+      items().length >= CHANNELS_MIN_ROWS_WITHOUT_SUPPORT ||
+      (query.data?.entities.length ?? 0) >=
+        CHANNELS_QUERY_PARAMS.limit * CHANNELS_AUTO_PAGES_WITHOUT_SUPPORT
+    )
+      return;
+    fireAndForget(query.fetchNextPage(), 'channels-view');
+  });
 
   return {
     items,
@@ -367,10 +396,64 @@ function useChannelsDataSource(
   };
 }
 
+/**
+ * The support channels the viewer helps in (see `supportChannelIds`), from
+ * the complete channel list. Keeps its identity while the ids are unchanged,
+ * so queries keyed by them do not refetch when the list reorders.
+ */
+export function useSupportChannelIds(): Accessor<readonly string[]> {
+  const list = useChannelsContext();
+  const userId = useUserId();
+  return createMemo(() => supportChannelIds(list.channels(), userId()), [], {
+    equals: (previous, next) =>
+      previous.length === next.length &&
+      previous.every((id, index) => id === next[index]),
+  });
+}
+
+/** The Support section: support channels the viewer helps in, by id. */
+function useSupportChannelsDataSource(
+  channelIds: Accessor<readonly string[]>,
+  enabled: Accessor<boolean>,
+  sortMethod: Accessor<ChannelListSort>
+): ChannelsDataSource {
+  const requestedIds = () => (enabled() ? channelIds() : []);
+  // Pages through every requested id on its own, so the section has no
+  // scroll-driven paging.
+  const query = useChannelsByIdsQuery(requestedIds);
+  const items = createMemo<ChannelEntity[]>((previous) => {
+    if (requestedIds().length === 0) return [];
+    if (!query.isEnabled || query.isLoading) return previous;
+    const requested = new Set(requestedIds());
+    return sortChannels(
+      (query.data?.entities ?? [])
+        .filter(isChannelEntity)
+        .filter((channel) => requested.has(channel.id)),
+      sortMethod()
+    );
+  }, []);
+
+  return {
+    items,
+    isLoading: () => query.isEnabled && query.isLoading && items().length === 0,
+    isFetching: () => query.isEnabled && query.isFetching,
+    error: () => (query.isEnabled ? (query.error ?? undefined) : undefined),
+    hasMore: () => false,
+    isLoadingMore: () => query.isEnabled && query.isFetchingNextPage,
+    loadMore: async () => {},
+    refresh: async () => {
+      if (!query.isEnabled) return;
+      await query.refresh();
+    },
+  };
+}
+
 export function useChannelsSources(
   enabled: (scope: ChannelsSourceScope) => boolean,
   sortBy: (group: ChannelsSortGroup) => ChannelListSort
 ): ChannelsSources {
+  const supportIds = useSupportChannelIds();
+  const supportIdSet = createMemo(() => new Set(supportIds()));
   return {
     team_channels: useChannelsDataSource(
       'team_channels',
@@ -380,7 +463,8 @@ export function useChannelsSources(
     channels: useChannelsDataSource(
       'channels',
       () => enabled('channels'),
-      () => sortBy('channels')
+      () => sortBy('channels'),
+      supportIdSet
     ),
     direct_messages: useChannelsDataSource(
       'direct_messages',
@@ -400,6 +484,11 @@ export function useChannelsSources(
     threads: useThreadChannelsDataSource(
       () => enabled('threads'),
       () => sortBy('threads')
+    ),
+    support: useSupportChannelsDataSource(
+      supportIds,
+      () => enabled('support'),
+      () => sortBy('support')
     ),
   };
 }

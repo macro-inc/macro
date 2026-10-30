@@ -659,6 +659,7 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
                 team_id: Some(TEAM_A),
                 auto_join_team: true,
                 participants: HashSet::new(),
+                is_support: false,
             },
         )
         .await
@@ -673,6 +674,7 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
                 team_id: Some(TEAM_A),
                 auto_join_team: false,
                 participants: HashSet::new(),
+                is_support: false,
             },
         )
         .await
@@ -740,6 +742,50 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn channel_list_marks_support_channels(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+    let private_channel = |name: &str, is_support| CreateChannelRequest {
+        name: Some(name.to_string()),
+        channel_type: ChannelType::Private,
+        team_id: None,
+        auto_join_team: false,
+        participants: HashSet::from([macro_user_id(USER_E)]),
+        is_support,
+    };
+
+    let support = repo
+        .create_channel(
+            macro_user_id(USER_A),
+            None,
+            private_channel("support", true),
+        )
+        .await
+        .unwrap();
+    let regular = repo
+        .create_channel(
+            macro_user_id(USER_A),
+            None,
+            private_channel("regular", false),
+        )
+        .await
+        .unwrap();
+
+    // The support team member sees the flag on the channel they were added to.
+    let is_support_by_id: HashMap<_, _> = repo
+        .get_user_channels_with_participants(channels_params(USER_E, None))
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|channel| (channel.channel.id, channel.channel.is_support))
+        .collect();
+    assert_eq!(is_support_by_id.get(&support.id), Some(&true));
+    assert_eq!(is_support_by_id.get(&regular.id), Some(&false));
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn maybe_get_dm_finds_channel_regardless_of_argument_order(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let user_a = macro_user_id(USER_A);
@@ -755,6 +801,7 @@ async fn maybe_get_dm_finds_channel_regardless_of_argument_order(pool: Pool<Post
                 team_id: None,
                 auto_join_team: false,
                 participants: HashSet::from([user_b.clone()]),
+                is_support: false,
             },
         )
         .await
@@ -2822,6 +2869,7 @@ async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgr
                 team_id: None,
                 auto_join_team: false,
                 participants: HashSet::new(),
+                is_support: false,
             },
         )
         .await

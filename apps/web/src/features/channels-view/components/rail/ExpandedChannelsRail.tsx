@@ -45,7 +45,7 @@ import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
 import type {
   ChannelListSort,
-  ChannelsGroup,
+  ChannelsRailGroup,
   ChannelsSortGroup,
   ChannelsTab,
 } from '../../types';
@@ -87,6 +87,7 @@ import {
 } from './ChannelsRailSection';
 import {
   CHANNEL_LIST_GROUPS,
+  isChannelListGroupShown,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
@@ -116,11 +117,11 @@ type ChannelRailSearch = {
 };
 
 type GroupConfig = {
-  group: ChannelsGroup;
+  group: ChannelsRailGroup;
   label: string;
   emptyLabel: string;
-  createLabel: string;
-  onCreate: () => void;
+  /** Sections without a create action leave this out. */
+  create?: { label: string; onCreate: () => void };
 };
 
 const GROUPS: GroupConfig[] = [
@@ -128,22 +129,28 @@ const GROUPS: GroupConfig[] = [
     group: 'team_channels',
     label: 'Team channels',
     emptyLabel: 'No team channels',
-    createLabel: 'Create channel',
-    onCreate: openNewChannelModal,
+    create: { label: 'Create channel', onCreate: openNewChannelModal },
   },
   {
     group: 'channels',
     label: 'Channels',
     emptyLabel: 'No channels',
-    createLabel: 'Create channel',
-    onCreate: openNewChannelModal,
+    create: { label: 'Create channel', onCreate: openNewChannelModal },
   },
   {
     group: 'direct_messages',
     label: 'DMs',
     emptyLabel: 'No direct messages',
-    createLabel: 'Start direct message',
-    onCreate: () => runCreateAction('channel'),
+    create: {
+      label: 'Start direct message',
+      onCreate: () => runCreateAction('channel'),
+    },
+  },
+  // Signup creates support channels, so the section has no create action.
+  {
+    group: 'support',
+    label: 'Support',
+    emptyLabel: 'No support channels',
   },
 ];
 
@@ -778,10 +785,14 @@ function ExpandedGroupSection(props: {
           <Show
             when={props.config.group === 'team_channels'}
             fallback={
-              <CreateRailAction
-                label={props.config.createLabel}
-                onClick={props.config.onCreate}
-              />
+              <Show when={props.config.create}>
+                {(create) => (
+                  <CreateRailAction
+                    label={create().label}
+                    onClick={create().onCreate}
+                  />
+                )}
+              </Show>
             }
           >
             <ChannelsCreateMenu />
@@ -892,9 +903,11 @@ function ExpandedBrowse() {
     );
   // Open sections share the column evenly; the collapsed headers and the gaps
   // come off the top first.
+  const groups = () =>
+    GROUPS.filter(({ group }) => isChannelListGroupShown(rail, group));
   const sectionMaxHeight = () => {
-    const total = GROUPS.length;
-    const open = GROUPS.filter(({ group }) => rail.isGroupOpen(group)).length;
+    const total = groups().length;
+    const open = groups().filter(({ group }) => rail.isGroupOpen(group)).length;
     if (open === 0) return '100%';
     return `calc((100% - ${total - open} * ${COLLAPSED_SECTION_HEIGHT}px - ${total - 1} * var(--sidebar-section-gap)) / ${open})`;
   };
@@ -911,7 +924,7 @@ function ExpandedBrowse() {
               Their caps resolve against this column, not the whole sidebar,
               so favorites is never squeezed out. */}
           <div class="flex min-h-0 flex-1 flex-col gap-(--sidebar-section-gap)">
-            <For each={GROUPS}>
+            <For each={groups()}>
               {(config) => (
                 <ExpandedGroupSection
                   config={config}

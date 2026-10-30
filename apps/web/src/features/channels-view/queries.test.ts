@@ -43,6 +43,12 @@ vi.mock('@entity', () => ({
     entity.type === 'channel_thread',
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
+const channelList = vi.hoisted(() => ({
+  channels: [] as { id: string; is_support?: boolean; owner_id: string }[],
+}));
+vi.mock('@core/context/channels', () => ({
+  useChannelsContext: () => ({ channels: () => channelList.channels }),
+}));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { resolveReferencedChannels, useChannelsSources } from './queries';
@@ -102,20 +108,25 @@ describe('channel list query selection', () => {
     });
     try {
       // Five channel lists, the Threads rail's threads and their channels,
-      // then the selected conversation.
-      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(8);
+      // the Support section's channels, then the selected conversation.
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(9);
       for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 5)) {
         expect(options?.().graphqlProjection).toBe('channel-list');
         expect(options?.().staleTime).toBe(30_000);
       }
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(5, 7)) {
+      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(5, 8)) {
         expect(options?.().staleTime).toBe(30_000);
       }
-      // The Threads rail's channels, fetched by id, are rail rows too.
-      const [, channelsByIdOptions] = useSoupAstItemsQuery.mock.calls[6];
-      expect(channelsByIdOptions?.().graphqlProjection).toBe('channel-list');
+      // The Threads rail's and Support's channels, fetched by id, are rail
+      // rows too.
+      for (const [
+        ,
+        channelsByIdOptions,
+      ] of useSoupAstItemsQuery.mock.calls.slice(6, 8)) {
+        expect(channelsByIdOptions?.().graphqlProjection).toBe('channel-list');
+      }
       const [selectionArgs, selectionOptions] =
-        useSoupAstItemsQuery.mock.calls[7];
+        useSoupAstItemsQuery.mock.calls[8];
       expect(selectionArgs().transport).toBe('rest');
       expect(selectionOptions?.().graphqlProjection).toBeUndefined();
       expect(selectionOptions?.().staleTime).toBe(0);
@@ -291,6 +302,79 @@ describe('Threads rail paging', () => {
       return dispose;
     });
     expect(fetchNextPage).toHaveBeenCalled();
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+});
+
+describe('Support section source', () => {
+  const channel = (id: string, updatedAt: string) => ({
+    type: 'channel',
+    id,
+    name: id,
+    channelType: 'private',
+    updatedAt,
+  });
+
+  const mountSources = () => {
+    const fetchNextPage = vi.fn(async () => {});
+    useSoupAstItemsQuery.mockImplementation((args, options) => {
+      const isByIdQuery = JSON.stringify(args().body).includes('support-b');
+      return {
+        isEnabled: options?.().enabled !== false,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        hasNextPage: !isByIdQuery,
+        fetchNextPage,
+        data: {
+          entities: isByIdQuery
+            ? [channel('support-b', '2026-10-02')]
+            : [
+                channel('support-b', '2026-10-02'),
+                channel('own-support', '2026-10-03'),
+                channel('eng', '2026-10-01'),
+              ],
+        },
+      } as never;
+    });
+    let sources!: ReturnType<typeof useChannelsSources>;
+    const dispose = createRoot((dispose) => {
+      sources = useChannelsSources(
+        (scope) => scope === 'channels' || scope === 'support',
+        () => 'updated_at'
+      );
+      return dispose;
+    });
+    return { sources, fetchNextPage, dispose };
+  };
+
+  it('moves other users’ support channels from Channels to Support', () => {
+    channelList.channels = [
+      { id: 'support-b', is_support: true, owner_id: 'macro|b@example.com' },
+      { id: 'own-support', is_support: true, owner_id: 'user-1' },
+      { id: 'eng', is_support: false, owner_id: 'macro|b@example.com' },
+    ];
+    const { sources, fetchNextPage, dispose } = mountSources();
+
+    expect(sources.channels.items().map((c) => c.id)).toEqual([
+      'own-support',
+      'eng',
+    ]);
+    expect(sources.support.items().map((c) => c.id)).toEqual(['support-b']);
+    // Two rows cannot fill the section, so Channels pages on by itself.
+    expect(fetchNextPage).toHaveBeenCalled();
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+    channelList.channels = [];
+  });
+
+  it('leaves Channels paging to scrolling without support channels', () => {
+    channelList.channels = [];
+    const { sources, fetchNextPage, dispose } = mountSources();
+
+    expect(sources.support.items()).toEqual([]);
+    expect(fetchNextPage).not.toHaveBeenCalled();
     dispose();
     useSoupAstItemsQuery.mockReset();
   });

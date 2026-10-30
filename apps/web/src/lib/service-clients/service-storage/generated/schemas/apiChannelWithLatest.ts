@@ -36,6 +36,8 @@ export interface ApiChannelWithLatest {
   interacted_at?: ApiChannelWithLatestInteractedAt;
   /** Whether the requesting user is an active participant of the channel. */
   is_participant: boolean;
+  /** Whether this is a new user's support channel. */
+  is_support: boolean;
   latest_message?: ApiChannelWithLatestLatestMessage;
   latest_non_thread_message?: ApiChannelWithLatestLatestNonThreadMessage;
   /** Channel name. */

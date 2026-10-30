@@ -6,9 +6,10 @@ import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsSourceScope } from '../../../queries';
-import type { ChannelsGroup, ChannelsQueryScope } from '../../../types';
+import type { ChannelsQueryScope, ChannelsRailGroup } from '../../../types';
 import {
   type ChannelRailRow,
+  type ChannelsRailContext,
   domIdForRow,
   rowKeyForChannel,
   rowKeyForFavorite,
@@ -91,7 +92,7 @@ export function useChannelRailFavoritesState() {
 }
 
 export function useChannelRailScopeState(
-  scope: Accessor<ChannelsQueryScope | 'threads'>
+  scope: Accessor<ChannelsQueryScope | 'threads' | 'support'>
 ) {
   const rail = useChannelsRail();
 
@@ -180,19 +181,29 @@ export function useChannelRailVirtualizer(
 }
 
 /** The All tab's list sections, top to bottom. */
-export const CHANNEL_LIST_GROUPS: readonly ChannelsGroup[] = [
+export const CHANNEL_LIST_GROUPS: readonly ChannelsRailGroup[] = [
   'team_channels',
   'channels',
   'direct_messages',
+  'support',
 ];
 
-export function useChannelRailSectionState(group: Accessor<ChannelsGroup>) {
+/** Only people in other users' support channels see Support. */
+export function isChannelListGroupShown(
+  rail: Pick<ChannelsRailContext, 'sources'>,
+  group: ChannelsRailGroup
+) {
+  return group !== 'support' || rail.sources.support.items().length > 0;
+}
+
+export function useChannelRailSectionState(group: Accessor<ChannelsRailGroup>) {
   const rail = useChannelsRail();
   const scope = useChannelRailScopeState(group);
   const state = createMemo(() => {
     const section = group();
-    const lastOpen = CHANNEL_LIST_GROUPS.findLast((candidate) =>
-      rail.isGroupOpen(candidate)
+    const lastOpen = CHANNEL_LIST_GROUPS.findLast(
+      (candidate) =>
+        rail.isGroupOpen(candidate) && isChannelListGroupShown(rail, candidate)
     );
     const rowId = rowKeyForSection(section);
     const targetChannelId = rail.channelActivity.targetChannelId(section);

@@ -835,6 +835,7 @@ async fn create_system_channel_event_uses_system_actor() {
             team_id: None,
             auto_join_team: false,
             participants: HashSet::from([macro_id("macro|teo@macro.com")]),
+            is_support: false,
         },
     )
     .await
@@ -870,6 +871,7 @@ async fn create_channel_on_behalf_attributes_created_to_the_bot() {
             team_id: None,
             auto_join_team: false,
             participants: HashSet::from([macro_id("macro|teo@macro.com")]),
+            is_support: false,
         },
     )
     .await
@@ -907,6 +909,7 @@ async fn signup_support_channel_via_user_create_channel_attributes_created_to_ow
             team_id: None,
             auto_join_team: false,
             participants: HashSet::from([macro_id("macro|teo@macro.com")]),
+            is_support: false,
         },
     )
     .await
@@ -937,6 +940,7 @@ async fn create_channel_event_carries_channel_name() {
             team_id: None,
             auto_join_team: false,
             participants: HashSet::from([macro_id("macro|recipient@test.com")]),
+            is_support: false,
         },
     )
     .await
@@ -1103,6 +1107,7 @@ async fn create_private_channel_allows_no_invited_participants() {
             team_id: None,
             auto_join_team: false,
             participants: HashSet::new(),
+            is_support: false,
         },
     )
     .await
@@ -1132,6 +1137,7 @@ async fn create_auto_join_team_channel_event_includes_current_team_members() {
             team_id: Some(Uuid::new_v4()),
             auto_join_team: true,
             participants: HashSet::from([macro_id("macro|sender@test.com")]),
+            is_support: false,
         },
     )
     .await
@@ -1160,6 +1166,19 @@ fn create_channel_request_defaults_auto_join_team_to_false() {
     assert!(!request.auto_join_team);
 }
 
+#[test]
+fn create_channel_request_ignores_client_support_flag() {
+    let request: CreateChannelRequest = serde_json::from_value(serde_json::json!({
+        "name": "Macro Support x someone",
+        "channel_type": "private",
+        "participants": [],
+        "is_support": true
+    }))
+    .unwrap();
+
+    assert!(!request.is_support);
+}
+
 #[tokio::test]
 async fn create_channel_rejects_auto_join_for_non_team_channel() {
     let channel_id = Uuid::new_v4();
@@ -1176,6 +1195,7 @@ async fn create_channel_rejects_auto_join_for_non_team_channel() {
                 team_id: None,
                 auto_join_team: true,
                 participants: HashSet::new(),
+                is_support: false,
             },
         )
         .await

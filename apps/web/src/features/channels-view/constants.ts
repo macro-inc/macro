@@ -9,6 +9,7 @@ export const CHANNELS_DEFAULT_SORT_BY = {
   team_channels: 'updated_at',
   channels: 'updated_at',
   direct_messages: 'updated_at',
+  support: 'updated_at',
   threads: 'updated_at',
 } satisfies Record<ChannelsSortGroup, ChannelListSort>;
 

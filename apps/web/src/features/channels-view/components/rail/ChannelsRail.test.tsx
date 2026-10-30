@@ -179,6 +179,7 @@ vi.mock('../../queries', () => ({
     ).values(),
   ],
   useChannelsByIdsQuery: () => ({ isEnabled: false }),
+  useSupportChannelIds: () => () => [],
   // What the real helper answers for the disabled lookup above.
   resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
@@ -240,6 +241,7 @@ const sources: ChannelsSources = {
   recents: source,
   search: source,
   threads: source,
+  support: { ...source, items: () => [] },
 };
 const mount = () =>
   render(() => (

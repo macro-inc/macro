@@ -127,6 +127,7 @@ where
                     team_id,
                     auto_join_team: false,
                     participants: HashSet::from_iter(participants),
+                    is_support: false,
                 },
             )
             .await

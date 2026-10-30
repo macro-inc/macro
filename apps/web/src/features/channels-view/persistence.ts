@@ -41,6 +41,7 @@ const channelsExpandedGroupsSchema = z.preprocess(
     team_channels: z.boolean().default(true),
     channels: z.boolean().default(true),
     direct_messages: z.boolean().default(true),
+    support: z.boolean().default(true),
   })
 );
 
@@ -52,6 +53,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
     team_channels: true,
     channels: true,
     direct_messages: true,
+    support: true,
   }),
   collapsedLabels: z.array(z.string()).default([]),
   threadsChannelId: z.string().optional(),
@@ -67,6 +69,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
     team_channels: true,
     channels: true,
     direct_messages: true,
+    support: true,
   },
   collapsedLabels: [],
   threadsChannelId: undefined,
@@ -90,6 +93,9 @@ const channelsPreferencesSchema = z.object({
       direct_messages: z
         .enum(['viewed_at', 'updated_at', 'created_at'])
         .default(CHANNELS_DEFAULT_SORT_BY.direct_messages),
+      support: z
+        .enum(['viewed_at', 'updated_at', 'created_at'])
+        .default(CHANNELS_DEFAULT_SORT_BY.support),
       threads: z
         .enum(['viewed_at', 'updated_at', 'created_at'])
         .default(CHANNELS_DEFAULT_SORT_BY.threads),

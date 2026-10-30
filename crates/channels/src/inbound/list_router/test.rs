@@ -223,6 +223,7 @@ fn list_channel(id: Uuid, updated_at_seconds: i64) -> ChannelWithLatest {
                 org_id: None,
                 team_id: None,
                 auto_join_team: false,
+                is_support: false,
                 created_at: timestamp,
                 updated_at: timestamp,
                 owner_id: MacroUserIdStr::try_from(BEARER_USER_ID.to_string()).unwrap(),
