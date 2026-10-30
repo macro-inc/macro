@@ -1,3 +1,4 @@
+import { ThrownResultError } from '@core/util/result';
 import { cleanup, render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -17,10 +18,12 @@ const mocks = vi.hoisted(() => ({
 let snapshot: {
   isSuccess: boolean;
   isPending: boolean;
-  isLoading: boolean;
+  isFetching: boolean;
+  isFetchedAfterMount: boolean;
   isError: boolean;
+  error: Error | null;
   data: RequestState;
-  refetch: () => Promise<void>;
+  refetch: () => Promise<{ data: RequestState }>;
 };
 let offset: Accessor<number>;
 vi.mock('@queries/access-requests/requests', () => ({
@@ -70,10 +73,12 @@ function mount(initial: Partial<RequestState> = {}) {
   snapshot = {
     isSuccess: true,
     isPending: false,
-    isLoading: false,
+    isFetching: false,
+    isFetchedAfterMount: true,
     isError: false,
+    error: null,
     data,
-    refetch: async () => {},
+    refetch: async () => ({ data }),
   };
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -172,4 +177,50 @@ it('does not show the previous document grant rows while the new document is pen
   expect(source.state()).toBeUndefined();
   expect(source.grants()).toEqual([]);
   pending.resolve([]);
+});
+
+it('drops a grants failure from before the viewer lost access', async () => {
+  const failed = Promise.withResolvers<void>();
+  mocks.grants.mockImplementation(() => {
+    failed.resolve();
+    return errAsync([{ code: 'FORBIDDEN', message: 'no access' }]);
+  });
+  const { source, update } = mount({ accessLevel: 'comment' });
+  await failed.promise;
+  await vi.waitFor(() =>
+    expect(source.error()).toBe('Could not load access requests.')
+  );
+  update('accessLevel', null);
+  expect(source.error()).toBeUndefined();
+  await source.refresh();
+  expect(mocks.grants).toHaveBeenCalledOnce();
+  expect(source.error()).toBeUndefined();
+});
+
+it('keeps loading while a new mount refetches a cached state', () => {
+  const { source } = mount({ accessLevel: 'view' });
+  Object.assign(snapshot, { isFetching: true, isFetchedAfterMount: false });
+  expect(source.loading()).toBe(true);
+  Object.assign(snapshot, { isFetching: false, isFetchedAfterMount: true });
+  expect(source.loading()).toBe(false);
+  Object.assign(snapshot, { isFetching: true });
+  expect(source.loading()).toBe(false);
+});
+
+it('tells a deleted entity from a failed state read', () => {
+  const { source } = mount({ accessLevel: null });
+  expect(source.notFound()).toBe(false);
+  Object.assign(snapshot, {
+    isSuccess: false,
+    isError: true,
+    error: new ThrownResultError([
+      { code: 'NETWORK_ERROR', message: 'offline' },
+    ]),
+  });
+  expect(source.notFound()).toBe(false);
+  Object.assign(snapshot, {
+    error: new ThrownResultError([{ code: 'NOT_FOUND', message: 'gone' }]),
+  });
+  expect(source.notFound()).toBe(true);
+  expect(source.state()?.accessLevel).toBeNull();
 });

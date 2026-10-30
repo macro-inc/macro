@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { accessRequestKeys } from '@queries/access-requests/keys';
 import {
   accessRequestsClient,
@@ -11,7 +11,12 @@ import { useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { SharingSource } from '../context/contracts';
-import type { AccessLevel, AccessRequest, ShareEntity } from '../core/types';
+import type {
+  AccessLevel,
+  AccessRequest,
+  RequestState,
+  ShareEntity,
+} from '../core/types';
 
 type Action =
   | { kind: 'submit'; level: AccessLevel; revision?: number }
@@ -20,6 +25,11 @@ type Action =
   | { kind: 'grant'; userId: string; level: AccessLevel | null };
 
 type Change = Action & { target: ShareEntity };
+
+// Direct grants are readable only with access or review authority.
+function canReadGrants(state: RequestState | undefined) {
+  return !!state && (state.accessLevel != null || state.canReview);
+}
 
 function directAccessOptions(
   target: ShareEntity | undefined,
@@ -45,15 +55,11 @@ export function createSharingSource(
 ): SharingSource {
   const [offset, setOffset] = createSignal(0);
   const state = useAccessRequestState(entity, enabled, offset);
-  const grants = useQuery(() => {
-    const current = !state.isPending ? state.data : undefined;
-    return directAccessOptions(
-      entity(),
-      enabled() &&
-        !!current &&
-        (current.accessLevel != null || current.canReview)
-    );
-  });
+  const grantsReadable = () =>
+    canReadGrants(!state.isPending ? state.data : undefined);
+  const grants = useQuery(() =>
+    directAccessOptions(entity(), enabled() && grantsReadable())
+  );
   const mutation = useMutation(() => ({
     mutationFn: async (change: Change) => {
       const target = change.target;
@@ -106,23 +112,23 @@ export function createSharingSource(
   return {
     state: () => (state.isPending ? undefined : state.data),
     grants: () => (grants.isPending ? [] : (grants.data ?? [])),
-    loading: () => state.isLoading,
+    // A cached state can predate an access change, so each mount waits for
+    // its own refetch.
+    loading: () => state.isFetching && !state.isFetchedAfterMount,
+    notFound: () =>
+      state.isError && thrownResultErrorHasCode(state.error, 'NOT_FOUND'),
     busy: () => mutation.isPending,
+    // A grants error from before losing access no longer applies.
     error: () =>
       mutation.isError
         ? 'Could not update access. Refresh and try again.'
-        : state.isError || grants.isError
+        : state.isError || (grantsReadable() && grants.isError)
           ? 'Could not load access requests.'
           : undefined,
     async refresh() {
       mutation.reset();
-      await state.refetch();
-      if (
-        !state.isPending &&
-        state.data &&
-        (state.data.accessLevel != null || state.data.canReview)
-      )
-        await grants.refetch();
+      const { data } = await state.refetch();
+      if (canReadGrants(data)) await grants.refetch();
     },
     submit: (level, revision) => mutate({ kind: 'submit', level, revision }),
     cancel: (revision) => mutate({ kind: 'cancel', revision }),

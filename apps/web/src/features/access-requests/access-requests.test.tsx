@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import type { JSX, ParentProps } from 'solid-js';
+import { createSignal, type JSX, type ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { DocumentAccessDenied } from './access-requests';
 import type { SharingSource } from './context/contracts';
@@ -10,6 +10,9 @@ import { RequestAccessView } from './views/RequestAccessView';
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@core/component/AccessErrorViews/Unauthorized', () => ({
   default: (props: ParentProps) => <div>{props.children}</div>,
+}));
+vi.mock('@core/component/AccessErrorViews/NotFound', () => ({
+  default: () => <div>Not found</div>,
 }));
 vi.mock('@entity/owner/owner-display', () => ({
   OwnerLabel: (props: { ownerId: string }) => <span>{props.ownerId}</span>,
@@ -140,4 +143,52 @@ it('preserves a reviewer’s selected grant level through a background request r
   ).toBe('comment');
   fireEvent.click(view.getByRole('button', { name: 'Grant access' }));
   expect(review.resolve).toHaveBeenCalledWith(request, 'comment');
+});
+
+it('decides the denied document screen from its own request state, not a cached one', () => {
+  const [loading, setLoading] = createSignal(true);
+  const fake = fakeSharingSource({
+    accessLevel: 'view',
+    mine: {
+      id: 'request',
+      requesterId: 'requester',
+      requestedLevel: 'edit',
+      status: 'pending',
+      revision: 1,
+      createdAt: '2026-10-15T00:00:00Z',
+      updatedAt: '2026-10-15T00:00:00Z',
+    },
+  });
+  source = { ...fake.source, loading };
+  const onAccessGranted = vi.fn();
+  const view = render(() => (
+    <DocumentAccessDenied
+      documentId="01a140ad-06d5-7791-8b68-bc128654bbba"
+      onAccessGranted={onAccessGranted}
+    />
+  ));
+  expect(view.getByText('Loading access requests…')).toBeTruthy();
+  expect(view.queryByText('Access requested')).toBeNull();
+  expect(onAccessGranted).not.toHaveBeenCalled();
+  fake.setState((current) => ({ ...current, accessLevel: null, mine: null }));
+  setLoading(false);
+  expect(view.getByRole('button', { name: 'Request access' })).toBeTruthy();
+  expect(onAccessGranted).not.toHaveBeenCalled();
+  fake.setState((current) => ({ ...current, accessLevel: 'view' }));
+  expect(onAccessGranted).toHaveBeenCalledOnce();
+});
+
+it('shows a deleted document as not found instead of offering a request', () => {
+  const [notFound, setNotFound] = createSignal(false);
+  source = { ...fakeSharingSource({ accessLevel: null }).source, notFound };
+  const view = render(() => (
+    <DocumentAccessDenied
+      documentId="01a140ad-06d5-7791-8b68-bc128654bbba"
+      onAccessGranted={vi.fn()}
+    />
+  ));
+  expect(view.getByRole('button', { name: 'Request access' })).toBeTruthy();
+  setNotFound(true);
+  expect(view.getByText('Not found')).toBeTruthy();
+  expect(view.queryByRole('button', { name: 'Request access' })).toBeNull();
 });
