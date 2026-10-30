@@ -49,17 +49,20 @@ async fn a_caller_with_no_account_hydrates_without_viewer_state_or_pull_requests
                 [EntityType::Initiative.with_entity_string(initiative_id.to_string())]
             );
             Box::pin(async move {
-                Ok(vec![SoupItem::Initiative(SoupInitiative {
-                    id: initiative_id,
-                    name: "Launch".to_owned(),
-                    owner_id: Owner::User(
-                        MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap(),
-                    ),
-                    created_at: Utc::now(),
-                    updated_at: Utc::now(),
-                    viewed_at: None,
-                    extra: (),
-                })])
+                Ok(vec![SoupProjectionHydration {
+                    document_server_facts: None,
+                    item: SoupItem::Initiative(SoupInitiative {
+                        id: initiative_id,
+                        name: "Launch".to_owned(),
+                        owner_id: Owner::User(
+                            MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap(),
+                        ),
+                        created_at: Utc::now(),
+                        updated_at: Utc::now(),
+                        viewed_at: None,
+                        extra: (),
+                    }),
+                }])
             })
         });
     let pull_requests = RecordingPullRequestListing::new(Vec::new());

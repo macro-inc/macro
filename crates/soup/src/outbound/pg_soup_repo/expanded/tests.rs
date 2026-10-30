@@ -2,7 +2,10 @@ use crate::{
     domain::models::SoupDocumentServerFacts,
     outbound::pg_soup_repo::{
         expanded::{
-            by_ids::{expanded_soup_by_ids, expanded_soup_by_ids_with_projection},
+            by_ids::{
+                expanded_soup_by_ids, expanded_soup_by_ids_with_projection,
+                expanded_viewable_by_ids,
+            },
             dynamic::{
                 ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup,
                 expanded_dynamic_cursor_soup_with_projection,
@@ -7066,4 +7069,35 @@ async fn crm_document_literals_match_attachments_and_associations(
     assert!(!not_acme.contains(DOC_A));
     assert!(not_acme.contains(DOC_B) && not_acme.contains(DOC_D));
     Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    )
+)]
+async fn viewable_reads_hydrate_documents_and_chats_the_listing_never_reaches(
+    pool: Pool<Postgres>,
+) {
+    let stranger = MacroUserIdStr::parse_from_str("macro|stranger@test.com").unwrap();
+    let entities = [
+        EntityType::Document.with_entity_str("11111111-0000-0000-0000-000000000000"),
+        EntityType::Chat.with_entity_str("22222222-0000-0000-0000-000000000000"),
+    ];
+    assert!(
+        expanded_soup_by_ids(&pool, stranger.copied(), &entities)
+            .await
+            .unwrap()
+            .is_empty(),
+        "the listing's by-ID read keeps its access predicate"
+    );
+
+    for viewer in [Some(stranger), None] {
+        let items = expanded_viewable_by_ids(&pool, viewer, &entities)
+            .await
+            .unwrap();
+        assert_eq!(items.len(), 2, "a receipt already authorized the read");
+    }
 }

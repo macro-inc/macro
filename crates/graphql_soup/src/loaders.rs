@@ -424,6 +424,16 @@ where
             }
         };
         let (receipts, team) = futures::future::try_join(receipts, team).await?;
+        self.hydrate_receipted(receipts, team).await
+    }
+
+    /// Hydrate entities the viewer already holds view receipts for, in one
+    /// Soup read with no further access check.
+    async fn hydrate_receipted(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        team: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupItemLoaderError> {
         if receipts.is_empty() {
             return Ok(Vec::new());
         }
@@ -571,11 +581,20 @@ where
     loader.load_one::<OwnedSoupItemLoaderKey>(key).await
 }
 
+/// Type-erased receipt hydration through the same loader's Soup service.
+type HydrateReceipted = dyn Fn(
+        Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> BoxFuture<'static, Result<Vec<SoupProjectionHydration>, SoupItemLoaderError>>
+    + Send
+    + Sync;
+
 /// Type-erased Soup DataLoader stored in GraphQL request or connection data.
 #[derive(Clone)]
 pub struct SoupItemDataLoader {
     /// Function backed by the concrete async-graphql DataLoader.
     load_one: Arc<LoadOne>,
+    /// Hydrates entities an earlier read already authorized.
+    hydrate_receipted: Arc<HydrateReceipted>,
 }
 
 impl SoupItemDataLoader {
@@ -589,10 +608,15 @@ impl SoupItemDataLoader {
         // A WebSocket may receive repeated updates for the same entity. Only
         // coalesce concurrent loads; never retain an item across updates.
         loader.enable_all_cache(false);
+        let hydrating = Arc::clone(&loader);
         Self {
             load_one: Arc::new(move |key| {
                 let loader = Arc::clone(&loader);
                 Box::pin(load_one_owned(loader, key))
+            }),
+            hydrate_receipted: Arc::new(move |receipts| {
+                let loader = Arc::clone(&hydrating);
+                Box::pin(async move { loader.loader().hydrate_receipted(receipts, None).await })
             }),
         }
     }
@@ -604,6 +628,16 @@ impl SoupItemDataLoader {
     ) -> Result<Option<SoupProjectionHydration>, SoupItemLoaderError> {
         let (viewer, entity) = key;
         (self.load_one)(OwnedSoupItemLoaderKey { viewer, entity }).await
+    }
+
+    /// Hydrate entities an earlier read already authorized, such as the tasks
+    /// a project read found visible, in one Soup read with no further access
+    /// check. Items Soup does not hydrate this way are absent.
+    pub async fn hydrate_receipted(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupItemLoaderError> {
+        (self.hydrate_receipted)(receipts).await
     }
 }
 

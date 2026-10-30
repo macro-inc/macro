@@ -6,6 +6,7 @@ use async_graphql::{
     Context,
     dataloader::{DataLoader, Loader},
 };
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use futures::{StreamExt, stream};
 use initiative::domain::{
     models::InitiativeDetail,
@@ -87,6 +88,20 @@ pub async fn load_initiative_detail(
 ) -> async_graphql::Result<Arc<InitiativeDetail>> {
     let loader = ctx.data::<DataLoader<InitiativeLoader>>()?;
     Ok(load_initiative(loader, id).await?.detail.clone())
+}
+
+/// Load the view receipts of the tasks this viewer may see, from the same
+/// read as detail, so hydrating them checks no access again.
+pub async fn load_initiative_task_receipts(
+    ctx: &Context<'_>,
+    id: Uuid,
+) -> async_graphql::Result<Vec<EntityAccessReceipt<ViewAccessLevel>>> {
+    let loader = ctx.data::<DataLoader<InitiativeLoader>>()?;
+    Ok(load_initiative(loader, id)
+        .await?
+        .read
+        .task_receipts()
+        .to_vec())
 }
 
 /// Load task progress only when a count field is requested, from the same visible tasks as detail.
