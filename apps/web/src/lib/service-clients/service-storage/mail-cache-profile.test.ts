@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   native: false,
@@ -20,6 +20,8 @@ describe('Mail capsule capability', () => {
     mocks.platform = 'ios';
     mocks.invoke.mockReset();
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it('uses the current browser engine without native IPC', async () => {
     const { mailCacheProfile } = await import('./mail-cache-profile');
@@ -53,5 +55,24 @@ describe('Mail capsule capability', () => {
     mocks.invoke.mockRejectedValue(new Error('unknown command'));
     const { mailCacheProfile } = await import('./mail-cache-profile');
     expect(await mailCacheProfile()).toBe('soup-mail-v2');
+  });
+
+  it('unblocks concurrent callers and keeps the legacy profile after a timeout', async () => {
+    vi.useFakeTimers();
+    mocks.native = true;
+    const pending = Promise.withResolvers<{ nativeBuild: number }>();
+    mocks.invoke.mockReturnValue(pending.promise);
+    const { mailCacheProfile } = await import('./mail-cache-profile');
+    const first = mailCacheProfile();
+    const second = mailCacheProfile();
+
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(await first).toBe('soup-mail-v2');
+    expect(await second).toBe('soup-mail-v2');
+
+    pending.resolve({ nativeBuild: 193 });
+    await pending.promise;
+    expect(await mailCacheProfile()).toBe('soup-mail-v2');
+    expect(mocks.invoke).toHaveBeenCalledOnce();
   });
 });

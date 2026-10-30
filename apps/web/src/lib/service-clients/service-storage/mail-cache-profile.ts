@@ -13,10 +13,17 @@ export function mailCacheProfile(): Promise<string> {
 }
 
 async function installedNativeProfile(): Promise<string> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
-    const { nativeBuild } = await invoke<{ nativeBuild: number }>(
-      'get_bundle_debug_info'
-    );
+    const { nativeBuild } = await Promise.race([
+      invoke<{ nativeBuild: number }>('get_bundle_debug_info'),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('Native Mail capability discovery timed out')),
+          1500
+        );
+      }),
+    ]);
     const platform = getNativeMobilePlatform();
     const minimum =
       platform === 'ios' ? 193 : platform === 'android' ? 20 : null;
@@ -28,5 +35,7 @@ async function installedNativeProfile(): Promise<string> {
   } catch {
     // Older engines may not expose build information. Never infer support from JS.
     return LEGACY_PROFILE;
+  } finally {
+    clearTimeout(timeout);
   }
 }

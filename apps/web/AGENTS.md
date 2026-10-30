@@ -849,3 +849,4 @@ favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
 and bot personas share one renderer; keep surface sizing in the caller.
 
 - Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
+- Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport.
