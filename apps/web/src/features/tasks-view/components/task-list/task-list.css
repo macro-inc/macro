@@ -11,6 +11,12 @@
   --task-col-created-by: 2rem;
 }
 
+@container u-list (min-width: 1221px) {
+  .task-grid-icon-creator {
+    --task-col-timestamp: 4rem;
+  }
+}
+
 /* Medium containers: hide Created By column */
 @container u-list (max-width: 1220px) {
   .task-grid-row {

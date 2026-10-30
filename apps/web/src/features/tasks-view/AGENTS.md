@@ -22,10 +22,10 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Set task-list horizontal padding from its container width: 8px below 640px, 12px from 640px, and 4px on phones.
 - Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
 - Render status and Urgent icons at 18px in task rows, list/board headers, cards, and property menus; use 16px group-header carets and preserve the existing hit targets.
-- Use the matching `task-status-*` theme token for each status icon and group-header tint; keep global warning, success, and accent colors independent.
+- Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit status and priority through leading `TaskPropertyControl` icons on desktop and mobile; place priority directly beside the title after the status gap, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Place Project before Assignees in desktop task headers and rows, preserving the mobile property order and other hosts of the shared grid.
-- Keep Created by icon-only in its 32px desktop column, retaining accessible owner names and the existing narrow-container visibility.
+- Keep Created by icon-only and right-aligned in its 32px desktop column beside the compact 64px Updated column; hide its visual header while retaining accessible labels and existing narrow-container visibility.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers; keep the glyphs aligned with the property feature.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.

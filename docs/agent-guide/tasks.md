@@ -92,8 +92,9 @@ and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
 Desktop task-list columns place Project before Assignees; mobile property order is unchanged.
-Created by uses a compact icon-only column and header; owner names remain available
-on hover and to assistive technology. Its narrow-container visibility is unchanged.
+Created by uses a compact icon-only column, with avatars aligned toward the 64px
+Updated column and no visible header. Owner names and the column label stay
+accessible; names remain available on hover. Its narrow-container visibility is unchanged.
 The project pill beneath a task title shows the project icon and name without
 a `Project:` prefix.
 Wide desktop task rows and group headers share their leading icon alignment.
@@ -118,7 +119,8 @@ Not started stays hollow, with a subtle recessed bevel formed by inner shadow an
 highlight arcs; its status color and icon dimensions stay unchanged.
 The property edit menus use 18px status and Urgent icons on desktop and mobile.
 Each status has its own `task-status-*` theme color, shared by task icons and
-group-header tints. In the theme editor's **Task statuses** section, change a status
+group-header tints. Completed defaults to accent; explicit Completed theme overrides
+remain available. In the theme editor's **Task statuses** section, change a status
 color and verify its icons and group-header tints update together in List and Gantt,
 while Board column icons match and global warning/success colors stay unchanged.
 In Progress defaults to amber blended with the theme's foreground: 20% foreground
