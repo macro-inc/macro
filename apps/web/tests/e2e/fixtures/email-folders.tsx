@@ -1,14 +1,16 @@
 import '@fontsource-variable/inter';
 import { QueryClientProvider } from '@tanstack/solid-query';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
 import { PillTabs } from '../../../src/components/app/mobile/PillTabs';
+import { createSelectionState } from '../../../src/components/list/create-selection-state';
 import { ViewSidebar } from '../../../src/components/view-shell/ViewSidebar';
 import { EmailRowActions } from '../../../src/features/email-view/components/EmailRowActions';
 import {
   EMAIL_TABS,
   type EmailTab,
 } from '../../../src/features/email-view/constants';
+import { createEmailFolderRestore } from '../../../src/features/email-view/primitives/folder-restore';
 import {
   ListEntity,
   ListLayoutProvider,
@@ -27,6 +29,14 @@ import '../../../src/index.css';
 function FolderQueryFixture() {
   const [container, setContainer] = createSignal<HTMLElement>();
   const [tab, setTab] = createSignal<EmailTab>('spam');
+  const selection = createSelectionState<string>({
+    items: () => [],
+    getKey: (id) => id,
+  });
+  function changeTab(next: EmailTab) {
+    selection.clear();
+    setTab(next);
+  }
   const mutation = useRestoreEmailFolderMutation();
   const pending = () => mutation.isPending;
   const [error, setError] = createSignal('');
@@ -47,17 +57,19 @@ function FolderQueryFixture() {
     })
   );
   const rows = () => query.data?.entities.filter(isEmailEntity) ?? [];
-  async function restore(threadId: string) {
-    const folder = tab();
-    if (folder !== 'spam' && folder !== 'trash') return;
-    setError('');
-    const result = await mutation.mutateAsync({
-      folder,
-      threadIds: [threadId],
-    });
-    if (result.failedIds.length)
-      setError('Could not restore email. Try again.');
-  }
+  const restore = createEmailFolderRestore({
+    tab,
+    isPending: pending,
+    selection: selection.keys,
+    clearSelection: selection.clear,
+    restore: async (input) => {
+      setError('');
+      return mutation.mutateAsync(input);
+    },
+    onRestored: () => {},
+    onFailed: () => setError('Could not restore email. Try again.'),
+  });
+
   return (
     <div class="flex h-screen bg-page text-ink">
       <Show when={!touch}>
@@ -69,7 +81,7 @@ function FolderQueryFixture() {
                 {(item) => (
                   <ViewSidebar.Item
                     active={tab() === item.id}
-                    onClick={() => setTab(item.id)}
+                    onClick={() => changeTab(item.id)}
                   >
                     {item.label}
                   </ViewSidebar.Item>
@@ -88,7 +100,7 @@ function FolderQueryFixture() {
               label: item.label,
             }))}
             value={tab()}
-            onChange={setTab}
+            onChange={changeTab}
           />
         </Show>
         <h2 class="my-5 text-sm font-medium">
@@ -97,40 +109,47 @@ function FolderQueryFixture() {
         <Show when={error()}>
           <p role="alert">{error()}</p>
         </Show>
-        <ul ref={setContainer} aria-label="Folder emails">
-          <ListLayoutProvider ref={container} narrowLayout="inbox">
-            <For each={rows()}>
-              {(entity) => {
-                const controls = () => (
-                  <EmailRowActions
-                    archived
-                    canArchive={false}
-                    canUnarchive={false}
-                    pending={pending()}
-                    onArchive={() => {}}
-                    onFocus={() => {}}
-                    onCommands={() => {}}
-                    restore={{
-                      label: label(),
-                      run: () => restore(entity.id),
-                    }}
-                  />
-                );
-                return (
-                  <li>
-                    <ListEntity
-                      entity={entity}
-                      hideCheckbox
-                      deferInteractions
-                      actions={controls()}
-                      touchActions={controls()}
+        <Suspense fallback={<p role="status">Loading folder…</p>}>
+          <ul ref={setContainer} aria-label="Folder emails">
+            <ListLayoutProvider ref={container} narrowLayout="inbox">
+              <For each={rows()}>
+                {(entity) => {
+                  const controls = () => (
+                    <EmailRowActions
+                      archived
+                      canArchive={false}
+                      canUnarchive={false}
+                      pending={pending()}
+                      onArchive={() => {}}
+                      onFocus={() => {}}
+                      onCommands={() => {}}
+                      restore={{
+                        label: label(),
+                        run: () => restore([entity.id]),
+                      }}
                     />
-                  </li>
-                );
-              }}
-            </For>
-          </ListLayoutProvider>
-        </ul>
+                  );
+                  return (
+                    <li>
+                      <ListEntity
+                        entity={entity}
+                        checked={selection.isSelected(entity.id)}
+                        onChecked={(checked) =>
+                          checked
+                            ? selection.select(entity.id)
+                            : selection.deselect(entity.id)
+                        }
+                        deferInteractions
+                        actions={controls()}
+                        touchActions={controls()}
+                      />
+                    </li>
+                  );
+                }}
+              </For>
+            </ListLayoutProvider>
+          </ul>
+        </Suspense>
       </main>
     </div>
   );

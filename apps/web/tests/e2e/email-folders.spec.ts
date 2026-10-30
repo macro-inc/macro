@@ -108,3 +108,38 @@ test('failed restore remains available for retry', async ({
   await expect(restore).toBeEnabled();
   await expect(page.getByRole('listitem')).toHaveCount(2);
 });
+
+test('pending restore preserves a selection made in another folder', async ({
+  page,
+  isMobile,
+}) => {
+  await mockFolderApi(page);
+  const started = Promise.withResolvers<void>();
+  const released = Promise.withResolvers<void>();
+  await page.route('**/email/threads/*/state', async (route) => {
+    started.resolve();
+    await released.promise;
+    await route.fallback();
+  });
+  await page.goto('/tests/e2e/fixtures/email-folders.html');
+  const rows = page
+    .getByRole('list', { name: 'Folder emails' })
+    .getByRole('listitem');
+  await expect(rows).toHaveCount(2);
+  if (!isMobile) await rows.first().hover();
+  await page
+    .getByRole('button', { name: 'Not spam', exact: true })
+    .first()
+    .click();
+  await started.promise;
+  await page.getByRole('button', { name: 'Trash', exact: true }).click();
+  await expect(rows).toHaveCount(2);
+  const selection = rows.last().getByRole('checkbox');
+  await selection.click();
+  await expect(selection).toBeChecked();
+  released.resolve();
+  await expect(
+    page.getByRole('button', { name: 'Restore', exact: true }).last()
+  ).toBeEnabled();
+  await expect(selection).toBeChecked();
+});
