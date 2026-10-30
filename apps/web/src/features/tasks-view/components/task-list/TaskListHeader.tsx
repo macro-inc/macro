@@ -1,12 +1,13 @@
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
-import { cn } from '@ui';
-import { Show } from 'solid-js';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import { cn, Tooltip } from '@ui';
+import { type JSX, Show } from 'solid-js';
 import { useTasksView } from '../../tasks-view-context';
 import type { TaskSortId } from '../../types';
 import { taskGridTemplate } from './task-grid-template';
 
 function SortableHeader(props: {
-  label: string;
+  label: JSX.Element;
   area: string;
   sortId?: TaskSortId;
   align?: 'start' | 'end';
@@ -59,7 +60,7 @@ export function TaskListHeader() {
   return (
     <div
       role="row"
-      class="task-grid-row grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
+      class="task-grid-row task-grid-icon-creator grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
       style={taskGridTemplate({
         indicator: true,
         project: showTaskProject(),
@@ -81,7 +82,14 @@ export function TaskListHeader() {
       </Show>
       <SortableHeader label="Assignees" area="assignees" />
       <SortableHeader
-        label="Created By"
+        label={
+          <Tooltip label="Created by">
+            <span class="inline-flex">
+              <UserPlusIcon class="size-4" />
+              <span class="sr-only">Created by</span>
+            </span>
+          </Tooltip>
+        }
         area="createdBy"
         class="@max-[1220px]/u-list:hidden"
       />

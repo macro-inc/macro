@@ -24,3 +24,6 @@ and row selection. Other trailing property icons use 20px phone glyphs.
 Other entity rows keep their existing indicator layout.
 Narrow rows show the people icon beside the count for multiple assignees when
 avatars are collapsed.
+
+`OwnerLabel.iconOnly` retains owner names as accessible text and hover titles for
+users, bots, teams, and unknown owners; ordinary owner labels remain unchanged.

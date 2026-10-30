@@ -117,7 +117,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
     >
       <Entity.Layout
         class={cn(
-          'task-grid-row w-full min-h-[inherit] items-center text-sm px-2',
+          'task-grid-row task-grid-icon-creator w-full min-h-[inherit] items-center text-sm px-2',
           'gap-2 grid grid-rows-[1fr]'
         )}
         style={taskGridTemplate({
@@ -235,7 +235,11 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           placement="createdBy"
           class="hidden @min-[1221px]/u-list:flex items-center min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
         >
-          <OwnerLabel ownerId={props.entity.ownerId} viewerLabel="Me" />
+          <OwnerLabel
+            ownerId={props.entity.ownerId}
+            viewerLabel="Me"
+            iconOnly
+          />
         </Entity.Slot>
 
         <Entity.Slot

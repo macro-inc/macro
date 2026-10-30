@@ -7,6 +7,10 @@
   --task-col-initiative: 8rem;
 }
 
+.task-grid-icon-creator {
+  --task-col-created-by: 2rem;
+}
+
 /* Medium containers: hide Created By column */
 @container u-list (max-width: 1220px) {
   .task-grid-row {
