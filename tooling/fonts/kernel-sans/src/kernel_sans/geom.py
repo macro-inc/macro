@@ -41,9 +41,13 @@ class Shape:
     # Transforms ---------------------------------------------------------
 
     def transform(self, xx, xy, yx, yy, dx, dy):
-        """Affine transform: x' = xx*x + yx*y + dx, y' = xy*x + yy*y + dy."""
+        """Affine transform: x' = xx*x + yx*y + dx, y' = xy*x + yy*y + dy.
+        A mirror (negative determinant) reverses the contours back, so every
+        shape keeps pathops' counter-clockwise direction."""
         p = pathops.Path()
         self.path.draw(_TransformPen(p.getPen(), (xx, xy, yx, yy, dx, dy)))
+        if xx * yy - xy * yx < 0:
+            p.reverse()
         return Shape(p)
 
     def move(self, dx=0.0, dy=0.0):

@@ -135,10 +135,16 @@ def build_font(drawn, p, fmt="otf", features=None):
 
     fb.setupHorizontalMetrics(metrics)
     fb.setupHorizontalHeader(ascent=P.HHEA_ASC, descent=P.HHEA_DESC)
-    fb.setupNameTable(_names(p))
+    # Windows records only: Mac records would be copied unchanged into the
+    # variable font, which renames only the Windows ones.
+    fb.setupNameTable(_names(p), mac=False)
     style = P.WEIGHTS.get(p.wght, "")
-    fs_selection = 0x40 if style == "Regular" else (0x20 if style == "Bold" else 0)
+    # Every weight but Bold is the Regular of its own family (nameID 2).
+    fs_selection = 0x20 if style == "Bold" else 0x40
     fs_selection |= 0x80  # USE_TYPO_METRICS
+    # Strikeout follows the hyphen; sub- and superscript sizes are the usual
+    # 65/60% of the em.
+    hy = drawn["hyphen"].shape.bounds() if "hyphen" in drawn else None
     fb.setupOS2(
         version=4,
         usWeightClass=p.wght,
@@ -153,9 +159,19 @@ def build_font(drawn, p, fmt="otf", features=None):
         sCapHeight=P.CAP,
         achVendID="MCRO",
         fsSelection=fs_selection,
-        ulUnicodeRange1=0b11,  # Basic Latin, Latin-1 Supplement
         ulCodePageRange1=0b1,  # Latin 1
+        yStrikeoutSize=round(hy[3] - hy[1]) if hy else round(p.hair),
+        yStrikeoutPosition=round(hy[3]) if hy else P.AXIS,
+        ySubscriptXSize=650,
+        ySubscriptYSize=600,
+        ySubscriptYOffset=75,
+        ySuperscriptXSize=650,
+        ySuperscriptYSize=600,
+        ySuperscriptYOffset=350,
     )
+    # Unicode ranges from the cmap (passing any ulUnicodeRange field to
+    # setupOS2 turns its own calculation off).
+    fb.font["OS/2"].recalcUnicodeRanges(fb.font)
     fb.setupPost(
         isFixedPitch=0, underlinePosition=-110, underlineThickness=round(p.hair * 0.8)
     )
