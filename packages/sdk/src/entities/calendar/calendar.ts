@@ -43,17 +43,25 @@ export class Calendar extends MacroEntity<VisibleCalendar> {
     );
   }
 
-  /** Provider display name. */
+  /** Provider display name. Often says whose calendar it is: Google names a
+   * person's primary calendar after them or their address. */
   readonly name = this.field('name');
 
-  /** Connected inbox address that syncs this calendar. */
+  /** Connected inbox address that syncs this calendar. It stays the user's
+   * own address on a calendar someone else shared with them. */
   readonly emailAddress = this.field('emailAddress');
 
-  /** Whether this is its account's primary calendar. */
+  /** Whether this is its account's primary calendar. The user's other
+   * calendars are not primary either, so false does not mean it isn't theirs. */
   readonly isPrimary = this.field('isPrimary');
 
-  /** Whether the grant can create and modify events on this calendar. */
+  /** Whether the grant can create and modify events on this calendar. People
+   * can hold that on someone else's calendar, so it does not mean it is theirs. */
   readonly isWritable = this.field('isWritable');
+
+  /** Whether this calendar counts toward the caller's busy time: their
+   * setting, by default only the primary calendars of inboxes they own. */
+  readonly contributesToAvailability = this.field('contributesToAvailability');
 
   /** Whether this is a subscribed system calendar (holidays, birthdays). */
   readonly isSubscription = this.field('isSubscription');

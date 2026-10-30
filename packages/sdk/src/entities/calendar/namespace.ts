@@ -9,6 +9,7 @@ import type {
   GuestPolicy,
   OutOfOfficeProperties,
   TeamCalendarSharing,
+  VisibleCalendar,
 } from '../../../generated/calendar/types.gen';
 import type {
   CalendarEvent as CalendarEventRecord,
@@ -64,13 +65,28 @@ export interface CreateEventOptions {
 }
 
 /** What the user is on one copy of an event, through the inbox holding it:
- * its organizer (or the owner of an event without guests), or a guest. */
+ * its organizer (or the owner of an event without guests), or a guest. Being
+ * able to write someone else's calendar makes them neither; `viewerCan` says
+ * what they may do there. */
 export type CalendarEventRole = 'organizer' | 'guest';
 
 /**
- * The calendar surface: the caller's visible calendars, event creation, and
- * handles to individual events and calendars. Backed by calendar_service (the
- * SDK reaches it on the gateway's `/calendar` route).
+ * The calendar surface: every calendar the caller can see (not all of them
+ * theirs), event creation, and handles to individual events and calendars.
+ * Backed by calendar_service (the SDK reaches it on the gateway's `/calendar`
+ * route).
+ *
+ * The user can see calendars that are not theirs, such as a colleague's or a
+ * team's. `inbox` is the account syncing a calendar, so it stays the user's
+ * own address on all of them, and neither it, `isPrimary`, `isWritable` nor
+ * `role` says whose calendar it is. Their schedule is the calendars with
+ * `contributesToAvailability`, plus meetings they attend: only those are
+ * "your calendar", and only those are conflicts when finding free time, as in
+ * team availability. Anything else is what that calendar shows, not where the
+ * user is or what they are doing. Call it by `calendarName`, say whose it is
+ * when the name shows that, and otherwise say you cannot tell rather than
+ * guess. When it overlaps a time you suggest, mention it so the user can
+ * decide, since their own other calendars read the same way.
  *
  * A meeting on more than one of the user's inboxes is one event per inbox;
  * {@link CalendarNamespace.occurrences} lists each copy with its `inbox` and
@@ -135,12 +151,28 @@ export class CalendarNamespace {
     ).sharing;
   }
 
-  /** Calendar occurrences in a viewport, automatically paginated. Each names
-   * the address of the connected inbox holding that copy of the event
-   * (`inbox`) and whether the user organizes it or is a guest there (`role`,
-   * absent when neither). A meeting on several of the user's inboxes appears
-   * once per inbox, each with its own event; describe them by inbox and role,
-   * never by id.
+  /** Occurrences on every calendar the user can see, not only theirs: only
+   * `contributesToAvailability` rows are their schedule; call the rest by
+   * `calendarName`. Automatically paginated within the viewport. Each names
+   * its calendar (`calendarName`), the address of the connected inbox holding
+   * that copy of the event (`inbox`) and whether the user organizes it or is
+   * a guest there (`role`, absent when neither, or when nothing shows the
+   * calendar is theirs).
+   *
+   * `inbox` is the account syncing the calendar, so a colleague's calendar
+   * reports the user's own address; it never says whose calendar it is, and
+   * neither does `role`, since writing someone's calendar lets the user act
+   * as its organizer. Say "your calendar", and count a conflict or busy time,
+   * only for `contributesToAvailability` rows and meetings the user attends
+   * (`role`), the way team availability does. Any other row is what that
+   * calendar shows, not where the user is or what they are doing: "the
+   * Offsites calendar has...", or "alex@example.com's calendar has..." when
+   * the name shows whose it is. If it does not, say you cannot tell rather
+   * than guess. When one overlaps a time you suggest, mention it so the user
+   * can decide, since their own other calendars read the same way.
+   *
+   * A meeting on several of the user's inboxes appears once per inbox, each
+   * with its own event; describe them by inbox and role, never by id.
    *
    * Before changing or deleting such a meeting, ask the user which inbox's
    * copy to change, unless they named it, only one copy can make the change,
@@ -151,24 +183,29 @@ export class CalendarNamespace {
    * event and gives the question to ask. An occurrence whose calendar is no
    * longer listed has no `inbox`; take it from that refusal. */
   occurrences(options: Omit<ListOccurrencesData['query'], 'cursor'>) {
-    let inboxes: Promise<Map<string, string>> | undefined;
+    let calendars: Promise<Map<string, VisibleCalendar>> | undefined;
     return paginate(async (cursor) => {
       const page = unwrap(
         await this.client.storage.listOccurrences({
           query: { ...options, cursor },
         }),
       );
-      inboxes ??= calendarInboxes(this.client);
-      const inboxByCalendar = await inboxes;
+      calendars ??= visibleCalendars(this.client);
+      const calendarById = await calendars;
       return {
-        items: page.items.map((item) => ({
-          event: CalendarEvent.fromRecord(this.client, item.event),
-          occurrence: item.occurrence,
-          inbox: item.event.calendarId
-            ? inboxByCalendar.get(item.event.calendarId)
-            : undefined,
-          role: eventRole(item.event),
-        })),
+        items: page.items.map((item) => {
+          const calendar = item.event.calendarId
+            ? calendarById.get(item.event.calendarId)
+            : undefined;
+          return {
+            event: CalendarEvent.fromRecord(this.client, item.event),
+            occurrence: item.occurrence,
+            calendarName: calendar?.name,
+            contributesToAvailability: calendar?.contributesToAvailability,
+            inbox: calendar?.emailAddress,
+            role: eventRole(item.event, calendar),
+          };
+        }),
         nextCursor: page.nextCursor,
       };
     });
@@ -214,7 +251,7 @@ export class CalendarNamespace {
 
   constructor(private readonly client: MacroClient) {}
 
-  /** The caller's visible calendars, primaries and writable first. */
+  /** The calendars the caller can see, some possibly not theirs, primaries and writable first. */
   calendars(): Promise<Calendar[]> {
     return Calendar.list(this.client);
   }
@@ -265,22 +302,34 @@ function toCreateBody(options: CreateEventOptions): CreateCalendarEventRequest {
   };
 }
 
-/** The inbox address of each calendar the caller can see, by calendar id. */
-async function calendarInboxes(
+/** The calendars the caller can see, by calendar id. */
+async function visibleCalendars(
   client: MacroClient,
-): Promise<Map<string, string>> {
+): Promise<Map<string, VisibleCalendar>> {
   const { calendars } = unwrap(await client.calendar.listCalendars());
-  return new Map(
-    calendars.map((calendar) => [calendar.id, calendar.emailAddress]),
-  );
+  return new Map(calendars.map((calendar) => [calendar.id, calendar]));
 }
 
-/** The user's role on a copy, read the way ListCalendarEvents reads it:
- * `organize` marks the organizer, and only the copy's own inbox row is
- * `isSelf`. */
-function eventRole(record: CalendarEventRecord): CalendarEventRole | undefined {
+/** The user's role on a copy, read the way ListCalendarEvents reads it: only
+ * the copy's own inbox row is `isSelf`. `organize` says they may act as
+ * organizer, which writing someone else's calendar grants too, so it counts
+ * only on a calendar of their own schedule with no other organizer listed. */
+function eventRole(
+  record: CalendarEventRecord,
+  calendar: VisibleCalendar | undefined,
+): CalendarEventRole | undefined {
   const own = record.attendees.find((attendee) => attendee.isSelf);
-  if (record.viewerCan.organize || own?.isOrganizer) {
+  if (own?.isOrganizer) {
+    return 'organizer';
+  }
+  const otherOrganizer = record.attendees.some(
+    (attendee) => attendee.isOrganizer,
+  );
+  if (
+    record.viewerCan.organize &&
+    calendar?.contributesToAvailability &&
+    !otherOrganizer
+  ) {
     return 'organizer';
   }
   return own ? 'guest' : undefined;
