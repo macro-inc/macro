@@ -334,7 +334,6 @@ fn runner_with(
             tick_every,
             groups_refresh_interval,
             backfill_timeout: Duration::from_secs(60),
-            backfill_retry: Duration::from_secs(300),
         },
     ));
     (runner, whatsapp, call_receiver)

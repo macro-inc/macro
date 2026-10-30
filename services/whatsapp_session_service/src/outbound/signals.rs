@@ -16,19 +16,20 @@ use tokio_util::sync::CancellationToken;
 
 use external_chat::signals::trace_context;
 use whatsapp_linked::signals::{
-    ACCOUNT_CHANGED, ACCOUNT_RELEASED, GROUPS_REQUESTED, LOOKUP_REQUESTED, PAIRING_REQUESTED,
-    SEND_REQUESTED,
+    ACCOUNT_CHANGED, ACCOUNT_RELEASED, GROUPS_REQUESTED, HISTORY_REQUESTED, LOOKUP_REQUESTED,
+    PAIRING_REQUESTED, SEND_REQUESTED,
 };
 
 use crate::domain::ports::Traced;
 use crate::domain::supervisor::Signal;
 
-const CHANNELS: [&str; 6] = [
+const CHANNELS: [&str; 7] = [
     ACCOUNT_RELEASED,
     PAIRING_REQUESTED,
     SEND_REQUESTED,
     GROUPS_REQUESTED,
     LOOKUP_REQUESTED,
+    HISTORY_REQUESTED,
     ACCOUNT_CHANGED,
 ];
 
@@ -115,6 +116,7 @@ pub fn parse(channel: &str, payload: &str) -> Option<(Signal, Option<String>)> {
         SEND_REQUESTED => Some(Signal::SendRequested(id)),
         GROUPS_REQUESTED => Some(Signal::GroupsRequested(id)),
         LOOKUP_REQUESTED => Some(Signal::LookupRequested(id)),
+        HISTORY_REQUESTED => Some(Signal::HistoryRequested(id)),
         ACCOUNT_CHANGED => Some(Signal::AccountChanged(id)),
         _ => None,
     }?;

@@ -258,7 +258,7 @@ impl SessionService {
         &self,
         scope: SessionScope,
         chats: &[ChatUpdate],
-    ) -> ExternalChatResult<bool> {
+    ) -> ExternalChatResult<()> {
         let valid: Vec<ChatUpdate> = chats
             .iter()
             .filter(|chat| match chat.kind {
@@ -278,7 +278,7 @@ impl SessionService {
             );
         }
         if valid.is_empty() {
-            return Ok(false);
+            return Ok(());
         }
         self.repository.update_chats(scope, &valid).await
     }

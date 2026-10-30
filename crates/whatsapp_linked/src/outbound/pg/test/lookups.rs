@@ -321,14 +321,16 @@ async fn a_contact_added_before_anyone_wrote_has_nothing_to_import(pool: PgPool)
         session.backfill_work(alice).await.unwrap().is_empty(),
         "nobody wrote yet, so there is nothing to wait for"
     );
-    let state = sqlx::query_scalar!(
-        "SELECT backfill_state FROM external_chat WHERE id = $1",
-        added.id
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
-    assert_eq!(state.as_deref(), Some("done"));
+    let state = || async {
+        sqlx::query_scalar!(
+            "SELECT backfill_state FROM external_chat WHERE id = $1",
+            added.id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    assert_eq!(state().await.as_deref(), Some("done"));
 
     let anchored = |minutes: i64| ChatUpdate {
         anchor: Some(MessageAnchor {
@@ -339,11 +341,12 @@ async fn a_contact_added_before_anyone_wrote_has_nothing_to_import(pool: PgPool)
         }),
         ..contact(&dana_jid, "Dana Smith")
     };
-    assert!(
-        !session.update_chats(alice, &[anchored(5)]).await.unwrap(),
+    session.update_chats(alice, &[anchored(5)]).await.unwrap();
+    assert_eq!(
+        state().await.as_deref(),
+        Some("done"),
         "a message after adding arrives live; nothing to import"
     );
-    assert!(session.backfill_work(alice).await.unwrap().is_empty());
     sqlx::query!(
         "UPDATE whatsapp_chat SET anchor = NULL WHERE chat_jid = $1",
         dana_jid
@@ -351,18 +354,10 @@ async fn a_contact_added_before_anyone_wrote_has_nothing_to_import(pool: PgPool)
     .execute(&pool)
     .await
     .unwrap();
-    assert!(
-        session.update_chats(alice, &[anchored(-60)]).await.unwrap(),
-        "a message from before adding means the phone has earlier history"
-    );
+    session.update_chats(alice, &[anchored(-60)]).await.unwrap();
     assert_eq!(
-        session
-            .backfill_work(alice)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|work| (work.chat_id, work.state))
-            .collect::<Vec<_>>(),
-        [(added.id, BackfillState::Pending)]
+        state().await.as_deref(),
+        Some("waiting_for_phone"),
+        "a message from before adding means the phone has earlier history, for the owner to import"
     );
 }

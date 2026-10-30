@@ -27,12 +27,12 @@ fn merge(into: &mut ChatUpdate, update: &ChatUpdate) {
 
 /// Upsert chat-list rows in a few statements for the whole batch; signal the
 /// owner's list once if any row changed. A message for an added chat that was
-/// waiting for one makes it `pending`; returns whether that happened.
+/// waiting for one makes it ready to import (`waiting_for_phone`).
 pub(super) async fn update_chats_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
     chats: &[ChatUpdate],
-) -> ExternalChatResult<bool> {
+) -> ExternalChatResult<()> {
     let mut merged: std::collections::BTreeMap<String, ChatUpdate> = Default::default();
     for chat in chats {
         let mut chat = chat.clone();
@@ -130,11 +130,13 @@ pub(super) async fn update_chats_in(
         .values()
         .filter_map(|chat| Some((chat.jid.clone(), chat.anchor.as_ref()?.at)))
         .unzip();
-    // A chat waiting for its first message is ready. So is a direct chat added
-    // with nothing to import once a message older than its adoption shows the
-    // phone has earlier history after all; newer messages arrive live.
+    // A chat waiting for its first message can be imported now. So can a
+    // direct chat added with nothing to import once a message older than its
+    // adoption shows the phone has earlier history after all; newer messages
+    // arrive live. Either waits for the owner to import (the phone is only
+    // asked then).
     let ready = sqlx::query_scalar!(
-        r#"UPDATE external_chat g SET backfill_state = 'pending'
+        r#"UPDATE external_chat g SET backfill_state = 'waiting_for_phone'
         FROM UNNEST($2::text[], $3::timestamptz[]) AS i(jid, at)
         WHERE g.user_id = $1 AND g.provider = 'whatsapp' AND g.remote_id = i.jid AND g.state = 'active'
           AND (g.backfill_state = 'waiting_for_message'
@@ -148,7 +150,6 @@ pub(super) async fn update_chats_in(
     .fetch_all(&mut **tx)
     .await
     .map_err(failure)?;
-    let anchored = !ready.is_empty();
     // The owner's added direct chats follow the person's name.
     let named: Vec<(String, String)> = merged
         .values()
@@ -180,7 +181,46 @@ pub(super) async fn update_chats_in(
         )
         .await?;
     }
-    Ok(anchored)
+    Ok(())
+}
+
+/// The owner's Import: chats waiting for the phone start importing, and the
+/// account's replica is asked to request their pages. A chat waiting for its
+/// first message starts too, in case a stored message anchors it; without
+/// one the replica puts it back.
+pub(super) async fn import_history(pool: &PgPool, account: &Account) -> ExternalChatResult<u32> {
+    let mut tx = pool.begin().await.map_err(failure)?;
+    let current = sqlx::query!(
+        "SELECT state, generation FROM whatsapp_linked_account WHERE id = $1 FOR SHARE",
+        account.id
+    )
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(failure)?
+    .ok_or(ExternalChatError::Disconnected)?;
+    if super::account_state(&current.state)? != AccountState::Connected
+        || current.generation != account.authorization_generation
+    {
+        return Err(ExternalChatError::Disconnected.into());
+    }
+    let started = sqlx::query_scalar!(
+        r#"UPDATE external_chat SET backfill_state = 'pending', backfill_requested_at = NULL
+        WHERE user_id = $1 AND provider = 'whatsapp' AND state = 'active'
+          AND backfill_state IN ('waiting_for_phone', 'waiting_for_message')
+        RETURNING id"#,
+        account.user_id
+    )
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(failure)?;
+    for chat_id in &started {
+        notify_change(&mut tx, Change::Chat { chat_id: *chat_id }).await?;
+    }
+    if !started.is_empty() {
+        notify(&mut tx, signals::HISTORY_REQUESTED, account.id).await?;
+    }
+    tx.commit().await.map_err(failure)?;
+    Ok(u32::try_from(started.len()).unwrap_or(u32::MAX))
 }
 
 pub(super) async fn account_chats(
@@ -247,7 +287,7 @@ pub(super) async fn backfill_work_in(
             ORDER BY m.source_at DESC, m.id DESC LIMIT 1
         ) stored ON true
         WHERE g.user_id = $2 AND g.state = 'active'
-          AND g.backfill_state IN ('waiting_for_message', 'pending', 'running', 'waiting_for_phone')
+          AND g.backfill_state IN ('pending', 'running')
         ORDER BY g.adopted_at, g.id LIMIT 20"#,
         account.id,
         account.user_id,

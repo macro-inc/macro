@@ -32,6 +32,8 @@ pub enum Signal {
     GroupsRequested(Uuid),
     /// `whatsapp_lookup_requested`.
     LookupRequested(Uuid),
+    /// `whatsapp_history_requested`.
+    HistoryRequested(Uuid),
     /// `whatsapp_account_changed`.
     AccountChanged(Uuid),
     /// The listener reconnected, so notifications may have been missed.
@@ -186,6 +188,10 @@ where
             }
             Signal::LookupRequested(account) => {
                 self.forward(account, AccountSignal::Lookup, span);
+                Ok(())
+            }
+            Signal::HistoryRequested(account) => {
+                self.forward(account, AccountSignal::History, span);
                 Ok(())
             }
             Signal::AccountChanged(account) if self.accounts.contains_key(&account) => {

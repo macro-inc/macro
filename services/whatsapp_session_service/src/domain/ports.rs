@@ -83,6 +83,9 @@ pub enum AccountSignal {
     Groups,
     /// `whatsapp_lookup_requested`: answer pending phone-number lookups.
     Lookup,
+    /// `whatsapp_history_requested`: the owner started importing earlier
+    /// messages.
+    History,
     /// `whatsapp_account_changed`: consent or adopted groups changed.
     Changed,
     /// Notifications may have been missed; re-read everything.

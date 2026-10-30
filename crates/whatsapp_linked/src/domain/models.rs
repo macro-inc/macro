@@ -410,6 +410,16 @@ pub struct Lookup {
     pub chat_jid: Option<String>,
 }
 
+/// Result of the owner's Import.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = WhatsAppHistoryImport))]
+pub struct HistoryImport {
+    /// Chats that started importing earlier messages from the phone.
+    pub started: u32,
+}
+
 /// Lookups one account may start per [`LOOKUP_WINDOW_MINUTES`]. WhatsApp
 /// bans accounts that query many numbers.
 pub const LOOKUP_LIMIT: i64 = 20;

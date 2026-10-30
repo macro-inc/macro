@@ -86,6 +86,12 @@ pub trait AccountRepository: Send + Sync {
     /// The account's lookup; one pending past [`LOOKUP_EXPIRY_SECONDS`] reads
     /// as `failed`. `NotFound` for another account's.
     async fn lookup(&self, account: Uuid, lookup: Uuid) -> ExternalChatResult<Lookup>;
+    /// Start importing earlier messages of the owner's chats that wait for
+    /// the phone or a message (`waiting_for_phone`/`waiting_for_message` →
+    /// `pending`), for the connected account
+    /// at its current generation (`Disconnected` otherwise). Returns how many
+    /// started; signals `whatsapp_history_requested` when any did.
+    async fn import_history(&self, account: &Account) -> ExternalChatResult<u32>;
 }
 
 /// An external chat bound to a remote chat, as one viewer can see it.
@@ -347,13 +353,13 @@ pub trait SessionRepository: Send + Sync {
     async fn observed_groups(&self, scope: SessionScope) -> ExternalChatResult<Vec<String>>;
 
     /// Upsert chat-list rows. Signals the owner's list when something changed.
-    /// Returns whether an added chat waiting for its first message got one
-    /// (it is `pending` now).
+    /// An added chat waiting for its first message that got one now waits for
+    /// the owner to import (`waiting_for_phone`).
     async fn update_chats(
         &self,
         scope: SessionScope,
         chats: &[ChatUpdate],
-    ) -> ExternalChatResult<bool>;
+    ) -> ExternalChatResult<()>;
 
     /// The account owner's groups still importing earlier messages.
     async fn backfill_work(&self, scope: SessionScope) -> ExternalChatResult<Vec<BackfillWork>>;
