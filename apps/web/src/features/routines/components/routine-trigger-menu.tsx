@@ -1,5 +1,6 @@
 import { isModality } from '@core/mobile/inputModality';
 import { isMobile } from '@core/mobile/isMobile';
+import GithubIcon from '@icon/mcp-github.svg';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -26,7 +27,6 @@ import {
   isGlobalEvent,
   newScheduleTrigger,
   type RoutineEventGroup,
-  type RoutineEventName,
   type RoutineTriggerDraft,
   routineEvents,
 } from '../core/routine-triggers';
@@ -37,8 +37,6 @@ type TriggerChoice = {
   key: string;
   label: string;
   description: string;
-  /** The event it starts on; absent for schedules. */
-  event?: RoutineEventName;
   make: () => RoutineTriggerDraft;
 };
 
@@ -52,15 +50,16 @@ function eventChoices(group: RoutineEventGroup): TriggerChoice[] {
   return routineEvents
     .filter((event) => event.group === group)
     .map((event) => ({
-      key: event.value,
+      // GitHub's choices share one event and differ by their preset.
+      key: `${event.value}:${event.label}`,
       label: event.label,
       description: event.description,
-      event: event.value,
       make: () => ({
         id: crypto.randomUUID(),
         kind: 'event',
         events: [event.value],
         ids: isGlobalEvent([event.value]) ? undefined : [],
+        ...structuredClone(event.preset),
       }),
     }));
 }
@@ -90,6 +89,7 @@ const TRIGGER_TYPES: TriggerType[] = [
   { label: 'Channels', icon: HashIcon, choices: eventChoices('Channels') },
   { label: 'Documents', icon: FileIcon, choices: eventChoices('Documents') },
   { label: 'Calls', icon: PhoneIcon, choices: eventChoices('Calls') },
+  { label: 'GitHub', icon: GithubIcon, choices: eventChoices('GitHub') },
 ];
 
 /**
@@ -106,11 +106,10 @@ function keepTapInMenu(event: TouchEvent) {
 /** An event the trigger can start on: its name and what makes it fire. */
 function ChoiceItem(props: {
   choice: TriggerChoice;
-  current?: RoutineEventName;
+  current?: string;
   onSelect: (trigger: RoutineTriggerDraft) => void;
 }) {
-  const current = () =>
-    !!props.choice.event && props.choice.event === props.current;
+  const current = () => props.choice.label === props.current;
   return (
     <Dropdown.Item
       class="items-start touch:min-h-11"
@@ -141,8 +140,13 @@ export function TriggerMenu(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (trigger: RoutineTriggerDraft) => void;
-  /** The event a saved trigger starts on, checked in its submenu. */
-  current?: RoutineEventName;
+  /** A saved trigger's event label, checked in its submenu. */
+  current?: string;
+  /** Wraps an event group's choices, e.g. to ask for an account they need. */
+  renderGroup?: (
+    group: RoutineEventGroup,
+    options: () => JSX.Element
+  ) => JSX.Element;
   /** For a saved trigger: offered at the bottom of the menu. */
   onRemove?: () => void;
   triggerLabel: string;
@@ -179,6 +183,12 @@ export function TriggerMenu(props: {
   };
   const choose = (value: RoutineTriggerDraft) => {
     props.onSelect(value);
+  };
+  const group = (type: TriggerType, options: () => JSX.Element) => {
+    const label = type.label;
+    return label === 'Schedule' || !props.renderGroup
+      ? options()
+      : props.renderGroup(label, options);
   };
   const query = () => search().trim().toLowerCase();
   const recurring = createMemo(() => {
@@ -298,15 +308,17 @@ export function TriggerMenu(props: {
                             <Dropdown.GroupLabel>
                               {type.label}
                             </Dropdown.GroupLabel>
-                            <For each={type.choices}>
-                              {(choice) => (
-                                <ChoiceItem
-                                  choice={choice}
-                                  current={props.current}
-                                  onSelect={choose}
-                                />
-                              )}
-                            </For>
+                            {group(type, () => (
+                              <For each={type.choices}>
+                                {(choice) => (
+                                  <ChoiceItem
+                                    choice={choice}
+                                    current={props.current}
+                                    onSelect={choose}
+                                  />
+                                )}
+                              </For>
+                            ))}
                           </Dropdown.Group>
                         </Dropdown.SubContent>
                       </Dropdown.Sub>
@@ -348,15 +360,17 @@ export function TriggerMenu(props: {
                         </span>
                       </Dropdown.Item>
                       <Show when={drilled()}>
-                        <For each={type.choices}>
-                          {(choice) => (
-                            <ChoiceItem
-                              choice={choice}
-                              current={props.current}
-                              onSelect={choose}
-                            />
-                          )}
-                        </For>
+                        {group(type, () => (
+                          <For each={type.choices}>
+                            {(choice) => (
+                              <ChoiceItem
+                                choice={choice}
+                                current={props.current}
+                                onSelect={choose}
+                              />
+                            )}
+                          </For>
+                        ))}
                       </Show>
                     </>
                   )}
@@ -386,29 +400,41 @@ export function TriggerMenu(props: {
                 </Dropdown.Item>
               )}
             </Show>
-            <For each={results()}>
-              {(result) => (
-                <Dropdown.Item
-                  class="touch:min-h-11"
-                  onTouchEnd={keepTapInMenu}
-                  onSelect={() => choose(result.choice.make())}
-                >
-                  <Show
-                    when={result.choice.key === 'once'}
-                    fallback={
-                      <result.type.icon class="size-4 shrink-0 text-ink-muted" />
-                    }
-                  >
-                    <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
-                  </Show>
-                  <span class="min-w-0 flex-1 truncate">
-                    {result.choice.label}
-                  </span>
-                  <span class="shrink-0 text-xs text-ink-extra-muted">
-                    {result.type.label}
-                  </span>
-                </Dropdown.Item>
+            <For
+              each={TRIGGER_TYPES.filter((type) =>
+                results().some((result) => result.type === type)
               )}
+            >
+              {(type) =>
+                group(type, () => (
+                  <For
+                    each={results().filter((result) => result.type === type)}
+                  >
+                    {(result) => (
+                      <Dropdown.Item
+                        class="touch:min-h-11"
+                        onTouchEnd={keepTapInMenu}
+                        onSelect={() => choose(result.choice.make())}
+                      >
+                        <Show
+                          when={result.choice.key === 'once'}
+                          fallback={
+                            <result.type.icon class="size-4 shrink-0 text-ink-muted" />
+                          }
+                        >
+                          <CalendarIcon class="size-4 shrink-0 text-ink-muted" />
+                        </Show>
+                        <span class="min-w-0 flex-1 truncate">
+                          {result.choice.label}
+                        </span>
+                        <span class="shrink-0 text-xs text-ink-extra-muted">
+                          {result.type.label}
+                        </span>
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                ))
+              }
             </For>
             <Show when={!recurring() && !results().length}>
               <p class="px-2 py-2 text-sm text-ink-muted">

@@ -51,6 +51,7 @@ export * from './executionResultCondition';
 export * from './executionResultConfigurationRevision';
 export * from './executionResultError';
 export * from './executionResultResource';
+export * from './executionResultStepsItem';
 export * from './githubSelector';
 export * from './inProgressExecution';
 export * from './inProgressExecutionChatId';

@@ -249,7 +249,7 @@ pub(crate) fn email_run(action: &ScheduledAction) -> AuthorizedEventRun {
         access: EventAccessCapability::EmailThread(
             EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
                 MacroUserIdStr::parse_from_str(OWNER).unwrap(),
-                &event.entity_id().to_string(),
+                &event.entity_id().unwrap().to_string(),
                 EntityType::EmailThread,
             ),
         ),
@@ -365,7 +365,7 @@ async fn one_classifier_call_picks_a_branch_and_tools_read_the_trigger_and_earli
     assert_eq!(decisions[0].0["email"]["subject"], "Invoice #42");
     assert_eq!(decisions[0].1.len(), 2);
 
-    let thread = run.pending.event.entity_id().to_string();
+    let thread = run.pending.event.entity_id().unwrap().to_string();
     let calls = fixture.tools.calls.lock().unwrap();
     let tools: Vec<_> = calls.iter().map(|call| call.tool.as_str()).collect();
     assert_eq!(
@@ -730,6 +730,8 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
                 ContextTrigger::Events {
                     events: vec!["document.created".into()],
                     entity_ids: Vec::new(),
+                    github: None,
+                    payload_match: Vec::new(),
                     condition: None,
                 },
                 ContextTrigger::Events {
@@ -737,11 +739,15 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
                     entity_ids: vec![
                         Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-000000007a5c").unwrap()
                     ],
+                    github: None,
+                    payload_match: Vec::new(),
                     condition: Some("Is the task ready for review?".into()),
                 },
                 ContextTrigger::Events {
                     events: vec!["task.property_changed".into()],
                     entity_ids: Vec::new(),
+                    github: None,
+                    payload_match: Vec::new(),
                     condition: Some("Did someone ask for a second reviewer?".into()),
                 },
             ],
@@ -805,6 +811,8 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it_and_hands_it_the_rout
             triggers: vec![ContextTrigger::Events {
                 events: vec!["email.message_received".into()],
                 entity_ids: Vec::new(),
+                github: None,
+                payload_match: Vec::new(),
                 condition: None,
             }],
             firing: RoutineFiring::Manual { requested_at },

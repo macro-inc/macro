@@ -1461,6 +1461,17 @@ fn conditions_are_trimmed_bounded_and_round_trip() {
     );
 }
 
+fn program_configuration(
+    trigger: serde_json::Value,
+    steps: serde_json::Value,
+) -> ActionConfiguration {
+    ActionConfiguration {
+        trigger: serde_json::from_value(trigger).unwrap(),
+        task: json!({ "steps": steps }),
+        ..configuration(true)
+    }
+}
+
 /// Whether the owner has linked GitHub.
 struct Linked(bool);
 impl github::domain::ports::GithubInstallationClaims for Linked {
@@ -1490,6 +1501,114 @@ fn github_configuration(enabled: bool) -> ActionConfiguration {
         enabled,
         ..configuration(true)
     }
+}
+
+#[tokio::test]
+async fn programs_that_read_their_trigger_need_activity_triggers_and_decisions_need_a_classifier() {
+    let cron = json!({"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"});
+    let email = json!({"type": "events", "filters": [{"events": ["email.message_received"]}]});
+    let mixed = json!({"type": "multiple", "triggers": [cron.clone(), email.clone()]});
+    let archive = json!([{ "type": "tool", "tool": "UpdateThreadLabels", "arguments": {
+        "thread_id": "{{trigger.entity_id}}", "label_id": "inbox", "add": false
+    } }]);
+    let triage = json!([{ "type": "if", "condition": "Is this a newsletter?", "then": archive }]);
+    let digest = json!([{ "type": "tool", "tool": "SendChannelMessage", "arguments": {
+        "channel_id": "c", "content": "Daily reminder"
+    } }]);
+
+    let without = service(true);
+    for trigger in [cron.clone(), mixed] {
+        assert_policy(
+            without
+                .create_action(
+                    &user_principal(),
+                    CreateScheduledAction::Canonical(program_configuration(
+                        trigger,
+                        archive.clone(),
+                    )),
+                )
+                .await,
+            ActionPolicyError::ProgramNeedsEvent,
+        );
+    }
+    assert_policy(
+        without
+            .create_action(
+                &user_principal(),
+                CreateScheduledAction::Canonical(program_configuration(
+                    email.clone(),
+                    triage.clone(),
+                )),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+    // Steps that don't read a trigger run on any schedule.
+    without
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(cron.clone(), digest)),
+        )
+        .await
+        .unwrap();
+    let archived = without
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(email.clone(), archive)),
+        )
+        .await
+        .unwrap();
+    // Updates are held to the same rule.
+    assert_policy(
+        without
+            .update_action(
+                edit_receipt(archived.id.unwrap()),
+                update(program_configuration(
+                    cron,
+                    json!([{ "type": "if", "condition": "Urgent?" }]),
+                )),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+
+    let with = TestService::new(
+        without.repo.clone(),
+        without.executor.clone(),
+        without.dispatcher_tx.clone(),
+        grants(&without.repo),
+    )
+    .with_event_management_enabled(true)
+    .with_conditions_enabled(true);
+    let created = with
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(email, triage.clone())),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.task, json!({ "steps": triage }));
+}
+
+#[tokio::test]
+async fn structurally_invalid_programs_are_rejected_with_the_broken_rule() {
+    let svc = service(true);
+    let error = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(
+                json!({"type": "events", "filters": [{"events": ["email.message_received"]}]}),
+                json!([{ "type": "choose", "options": [{ "label": "Only one" }] }]),
+            )),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error
+            .downcast_ref::<TargetValidationError>()
+            .map(ToString::to_string),
+        Some("a choice needs between 2 and 8 options".to_owned())
+    );
 }
 
 #[tokio::test]

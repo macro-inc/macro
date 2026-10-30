@@ -1139,7 +1139,7 @@ an error, and **Run now** is disabled for such routines (hover explains why).
 
 **Add trigger** opens a menu with **Search triggers** and one row per kind:
 **Schedule** (**On a schedule**, **Once**), **Email**, **Tasks**, **Channels**,
-**Documents** and **Calls**. Each row opens a submenu of its events, each with a
+**Documents**, **Calls** and **GitHub**. Each row opens a submenu of its events, each with a
 one-line description of what makes it fire. Typing flattens the list: a typed
 schedule such as **every weekday at 9am** becomes the top row with its time
 zone, and matching events show their group at the right. Arrow keys, Enter and
@@ -1173,37 +1173,40 @@ The event menu groups Macro activity triggers by surface:
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, choose specific accessible
-channels/documents/tasks or any accessible item in the same panel. Creation
-triggers cover newly created accessible items; email covers the owner's inbox;
-**Call started** shows **Calls you start** and **Call ended** shows **Calls you
-join** — neither has an item picker. Calls the owner did not start never trigger
-**Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
-also includes status and priority; overlapping selectors start only one run for
-the same event. Bot-authored or delegated Macro changes do not retrigger
-routines. Saved legacy selectors remain
-editable but are no longer offered in the new-trigger menu.
+channels/documents/tasks or any accessible item. Creation triggers cover newly
+created accessible items; email covers the owner's inbox; **Call started**
+watches **Calls you start** and **Call ended** **Calls you join**, neither with
+an item picker. Calls the owner did not start never trigger **Call started**;
+calls they did not join never trigger **Call ended**. Mentions match only @
+mentions of the routine owner. **Any property changed** also includes status and
+priority; overlapping selectors start only one run for the same event.
+Bot-authored or delegated Macro changes do not retrigger routines. Saved legacy
+selectors remain editable but are no longer offered in the new-trigger menu.
 
-A GitHub trigger panel edits the preset's **GitHub events** and **Actions**
-(comma-separated names GitHub sends, such as `workflow_run` and `completed`;
-empty means any), checks **Repositories** from the owner's reachable list
-(none checked means all), and **Also run for bots and apps** (off by default, so
-an agent acting through Macro's app can't retrigger itself). Deliveries only
-reach owners whose currently linked GitHub account installed the delivering
-installation, or whose team did. While GitHub is disconnected the panel shows
-**Connect GitHub** instead, and an enabled GitHub routine can't be saved. The
-panel also has **Only when the payload…** rows: a dotted field (`*` checks every list
-item, e.g. `pull_request.labels.*.name`), a comparison (**is**, **is one of**,
-**is not one of**, **matches** glob, **is set**, **is not set**) and a value.
-Every row must pass before the run is queued. The chip shows the repository
-after the trigger's label.
+A GitHub trigger reads **in All repositories** (or the repository, or **N
+repositories**) on the routine's page; that token opens its panel. The panel
+edits the preset's **GitHub events** and **Actions** (comma-separated names
+GitHub sends, such as `workflow_run` and `completed`; empty means any), checks
+**Repositories** from the owner's reachable list (none checked means all), and
+**Also run for bots and apps** (off by default, so an agent acting through
+Macro's app can't retrigger itself). Deliveries only reach owners whose
+currently linked GitHub account installed the delivering installation, or whose
+team did. While GitHub is disconnected the panel shows **Connect GitHub**
+instead, and an enabled GitHub routine can't be saved. The panel also has
+**Only when the payload…** rows: a dotted field (`*` checks every list item, e.g.
+`pull_request.labels.*.name`), a comparison (**is**, **is one of**, **is not one
+of**, **matches** glob, **is set**, **is not set**) and a value. Every row must
+pass before the run is queued. Steps that act on the triggering item can't run
+on GitHub triggers, which have no Macro item.
 
-When `enable-routine-conditions` is on, every activity trigger panel has an
-**Only run if** box for an optional yes/no question about each event, such as
-**Is this email an invoice or a receipt?** Before a run starts, the event's
-content (the email, channel message, document, task, or call, read as the routine
-owner) is checked against it, and events answered no are skipped. The chip
-shows the question after **· if**. Saving a condition fails with "trigger
-conditions are not enabled" while the scheduled-action service has no
+When `enable-routine-conditions` is on, every activity trigger can take one
+**Only if** check, a yes/no question about each event, such as **Is this email
+an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
+yes** in the trigger panel). Before a run starts, the event's content (the email,
+channel message, document, task, call, or GitHub delivery, read as the routine
+owner) is checked against it, and events answered no are skipped. Saving a
+condition fails with "trigger conditions are not enabled" while the
+scheduled-action service has no
 `TYPESAFE_API_KEY`.
 
 A routine can combine up to sixteen trigger groups: each schedule is a group,

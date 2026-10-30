@@ -1,5 +1,6 @@
 import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
+import GithubIcon from '@icon/mcp-github.svg';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
@@ -41,6 +42,7 @@ function TriggerIcon(props: { kind?: TriggerKind }) {
       .with('document', () => FileTextIcon)
       .with('channel', () => HashIcon)
       .with('call', () => PhoneIcon)
+      .with('github', () => GithubIcon)
       .with('schedule', undefined, () => ClockIcon)
       .exhaustive();
   return (

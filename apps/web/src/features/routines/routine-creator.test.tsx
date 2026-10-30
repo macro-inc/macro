@@ -662,11 +662,8 @@ describe('routine composer execution selection', () => {
     host.create.mockImplementation(async (body) => created(body));
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Workflow failed' })
-    );
-    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    chooseTrigger('GitHub', 'Workflow failed');
+    const panel = await screen.findByRole('dialog', { name: 'Add trigger' });
     fireEvent.click(
       within(panel).getByRole('checkbox', { name: 'macro-inc/macro' })
     );
@@ -715,17 +712,23 @@ describe('routine composer execution selection', () => {
     host.githubLinked = false;
     await mount();
     inputPrompt();
-    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
-    const panel = await screen.findByRole('dialog', { name: 'Add trigger' });
-    expect(
-      within(panel).queryByRole('button', { name: 'Workflow failed' })
-    ).toBeNull();
-    expect(
-      within(panel).queryByRole('button', { name: 'Webhook received' })
-    ).toBeNull();
-    fireEvent.click(
-      within(panel).getByRole('button', { name: 'Connect GitHub' })
+    press(screen.getByRole('button', { name: 'Add trigger' }), 'Enter');
+    press(
+      screen.getByRole('menuitem', { name: 'GitHub', hidden: true }),
+      'ArrowRight'
     );
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: 'Connect GitHub',
+        hidden: true,
+      })
+    );
+    expect(
+      screen.queryByRole('menuitem', {
+        name: /^Workflow failed/,
+        hidden: true,
+      })
+    ).toBeNull();
     expect(host.connectGithub).toHaveBeenCalledOnce();
   });
 

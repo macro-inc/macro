@@ -14,6 +14,10 @@ each run.
   and the ports its adapters implement.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
+- `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`):
+  one classifier call for its decisions, tool steps through the harness, and
+  at most one agent step through `target_runner.rs`. An old single-agent task
+  runs as one agent step.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,

@@ -677,7 +677,8 @@ export type TriggerKind =
   | 'task'
   | 'document'
   | 'channel'
-  | 'call';
+  | 'call'
+  | 'github';
 
 export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
   if (trigger.kind === 'schedule') return 'schedule';
@@ -688,6 +689,7 @@ export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
     .with('DOCUMENT', () => 'document')
     .with('CALL_RECORD', () => 'call')
     .with('CHANNEL', () => 'channel')
+    .with('GITHUB', () => 'github')
     .exhaustive();
 }
 

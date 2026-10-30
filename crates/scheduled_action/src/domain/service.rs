@@ -205,6 +205,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
+        self.check_program(&input.trigger, &input.task)?;
         if input.enabled {
             self.check_github(&input.trigger, owner_user).await?;
         }
@@ -285,6 +286,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
+            self.check_program(&input.trigger, &input.task)?;
             if input.enabled {
                 self.check_github(&input.trigger, action.owner_user()?)
                     .await?;

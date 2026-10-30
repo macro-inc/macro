@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableRoutineConditions } from '@core/constant/featureFlags';
-import { Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { RoutineEventCondition } from './components/routine-event-condition';
 import { RoutineGithubConnect } from './components/routine-github-connect';
 import { RoutineGithubSettings } from './components/routine-github-settings';
@@ -60,6 +60,7 @@ export function RoutineTriggers(props: {
     <TriggerList
       triggers={props.triggers}
       onChange={props.onChange}
+      layout={props.layout}
       renderEventGroup={(group, options) => (
         <Show
           when={group !== 'GitHub' || github().linked !== false}
@@ -118,17 +119,11 @@ export function RoutineTriggers(props: {
       renderEventScope={(trigger, onChange) => (
         <Show when={entityKind(trigger())}>
           {(kind) => (
-            <Show
-              when={
-                !isGlobalEvent(trigger().events) || trigger().ids !== undefined
-              }
-            >
-              <RoutineEventScope
-                kind={kind()}
-                ids={trigger().ids}
-                onChange={onChange}
-              />
-            </Show>
+            <RoutineEventScope
+              kind={kind()}
+              ids={trigger().ids}
+              onChange={onChange}
+            />
           )}
         </Show>
       )}
