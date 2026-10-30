@@ -295,18 +295,37 @@ impl SessionCodeMode for CodeModeService {
         let cancel = cancel.child_token();
         let _cancel_on_drop = cancel.clone().drop_guard();
         let service = self.clone();
+        let span = tracing::info_span!(
+            "code_mode.execution",
+            agent_session_id = %session.id,
+            execution_id = %execution,
+            source_bytes = request.source.len(),
+            status = tracing::field::Empty,
+            activity = tracing::field::Empty,
+            result_bytes = tracing::field::Empty,
+        );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
         tokio::spawn(
             async move {
                 let _permit = permit;
                 let result = service.run(identity, execution, request, cancel).await;
-                if let Err(error) = &result {
-                    tracing::error!(?error, "could not finish code execution journal");
+                match &result {
+                    Ok(receipt) => {
+                        let span = tracing::Span::current();
+                        span.record("status", tracing::field::debug(receipt.status));
+                        span.record("activity", receipt.activity.len());
+                        if let Some(value) = &receipt.result {
+                            span.record("result_bytes", value.to_string().len());
+                        }
+                    }
+                    Err(error) => {
+                        tracing::error!(?error, "could not finish code execution journal");
+                    }
                 }
                 result
             }
-            .in_current_span(),
+            .instrument(span.or_current()),
         )
         .await
         .map_err(CodeModeError::Task)?

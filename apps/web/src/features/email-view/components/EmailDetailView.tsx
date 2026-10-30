@@ -254,7 +254,7 @@ export function EmailDetailView(props: {
               aria-label="Back"
               onClick={closeThread}
             >
-              <ArrowLeftIcon class="size-4" />
+              <ArrowLeftIcon class="size-4 touch:size-6" />
             </Button>
           </Show>
           <div ref={setHeaderMenuMount} class="flex items-center" />

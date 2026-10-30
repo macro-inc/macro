@@ -14,8 +14,10 @@ us-east-1. `README.md` is the full operations guide.
 
 ## Recipes
 
-- Change a Grafana prod alert rule: edit `prodRules` in `nixos/alerting.nix`, and
-  its Datadog copy in `infra/stacks/monitoring/monitors/` by hand.
+- Change a Grafana prod alert rule: edit its entry in `nixos/prod-alerts.nix`
+  (rules and the `Prod alerts` dashboard panel both read it), and its Datadog
+  copy in `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next
+  free `panelId`; never renumber one, since sent notifications link to it.
 - Add a runtime setting: `settings.ts` → `render.ts` (bump the schema version) →
   `nixos/read-user-data.py` (keys, pattern, version) → the consuming `.nix` file.
 - Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in
@@ -43,6 +45,8 @@ From `infra/`: `bun run check`, then Biome on changed `.ts`.
 - GoAlert's application config lives in its database; `goalert/apply-config.py`
   overwrites it on every start from `goalert.nix`. `set-config` accepts invalid
   values silently, so check the journal for `validate config`.
+- Grafana keeps a provisioned contact point removed from `alerting.nix`; list
+  its uid in `deleteContactPoints` to delete it.
 - Grafana provisioning expands `$VAR` in contact point settings, but not in rule
   queries or annotations, so `$B` and `$values` work there and secrets must come
   in through the Grafana unit's environment.

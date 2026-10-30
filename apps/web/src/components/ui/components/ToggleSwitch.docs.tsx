@@ -150,7 +150,7 @@ export default defineDoc({
       id: 'form-state',
       title: 'Read-only and invalid',
       description:
-        'Native form props and Kobalte state remain available. Track and thumb motion respect prefers-reduced-motion.',
+        'Native form props and Kobalte state remain available. The thumb stays white across themes and states, and motion respects prefers-reduced-motion.',
       render: FormStateDemo,
     },
     {

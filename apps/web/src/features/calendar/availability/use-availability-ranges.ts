@@ -2,12 +2,14 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { calendarKeys } from '@queries/calendar/keys';
 import {
+  type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
   fetchCalendarOccurrences,
   useCalendarOccurrencesQuery,
 } from '@queries/calendar/occurrences';
 import { queryClient } from '@queries/client';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
+import { queryOptions } from '@tanstack/solid-query';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import {
   AVAILABILITY_RANGE_OPTIONS,
@@ -18,6 +20,17 @@ import {
   computeAvailability,
   resolveAvailabilityWindow,
 } from './availability';
+
+function currentOccurrencesQueryOptions(
+  userId: string | undefined,
+  range: CalendarOccurrenceQueryRange
+) {
+  return queryOptions({
+    queryKey: calendarKeys.occurrences(userId ?? '', range).queryKey,
+    queryFn: ({ signal }) => fetchCalendarOccurrences(range, signal),
+    staleTime: 0,
+  });
+}
 
 /** Evaluates every copy range against the same occurrence snapshot and settings. */
 export function useAvailabilityRanges(settings: () => AvailabilitySettings) {
@@ -69,11 +82,9 @@ export function useAvailabilityRanges(settings: () => AvailabilitySettings) {
     );
     // A copy must use current occurrences, even when the initial query's
     // 60-second cache window has not expired yet.
-    const data = await queryClient.fetchQuery({
-      queryKey: calendarKeys.occurrences(userId() ?? '', range).queryKey,
-      queryFn: ({ signal }) => fetchCalendarOccurrences(range, signal),
-      staleTime: 0,
-    });
+    const data = await queryClient.fetchQuery(
+      currentOccurrencesQueryOptions(userId(), range)
+    );
     if (data.syncStatus === CalendarSyncStatus.syncing) return;
 
     const currentTime = new Date();

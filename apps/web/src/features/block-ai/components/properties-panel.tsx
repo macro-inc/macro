@@ -184,7 +184,7 @@ function IconButton(props: {
       disabled={props.disabled}
       onClick={() => props.onClick()}
     >
-      <props.icon />
+      <props.icon class="size-3.5" />
     </Button>
   );
 }

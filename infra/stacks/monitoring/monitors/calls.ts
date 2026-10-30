@@ -15,6 +15,7 @@
 // rejects them as disabled or missing endpoints, and `@error` carries the
 // `PushEndpointUnavailable` context text, so they are excluded.
 import * as datadog from '@pulumi/datadog';
+import { goalertWebhooks } from '../goalert';
 import { notify, RENOTIFY_MINUTES } from '../notify';
 
 export const nativeCallPushFailing = new datadog.Monitor(
@@ -42,5 +43,6 @@ ${notify({ pages: false })}`,
     notifyAudit: false,
     enableLogsSample: true,
     groupbySimpleMonitor: false,
-  }
+  },
+  { dependsOn: goalertWebhooks }
 );

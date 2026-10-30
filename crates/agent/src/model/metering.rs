@@ -118,6 +118,14 @@ impl ProviderSupport {
                 .entry("maxOutputTokens")
                 .or_insert(Value::from(self.output_token_ceiling));
         }
+        // Agent turns leave the Responses limit unset so the model may use its
+        // maximum; a metered call still needs the verified ceiling on the wire.
+        if self.protocol == WireProtocol::Responses {
+            body.as_object_mut()
+                .ok_or(MeteringError::Unsupported)?
+                .entry("max_output_tokens")
+                .or_insert(Value::from(self.output_token_ceiling));
+        }
         let pointer = match self.protocol {
             WireProtocol::Anthropic => "/max_tokens",
             WireProtocol::Responses => "/max_output_tokens",

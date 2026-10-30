@@ -72,6 +72,7 @@ const mocks = vi.hoisted(() => ({
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
   crmEnabled: (): boolean => true,
+  projectsEnabled: (): boolean => true,
   graphqlEnabled: (): boolean => true,
   cacheEnabled: true,
   queries: {} as Partial<
@@ -91,6 +92,7 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableDatabases: {},
   enableForms: {},
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  enableProjects: { key: 'enable-projects' },
   isFeatureEnabled: () => mocks.crmEnabled(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -98,7 +100,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
     enabled:
       flag.key === 'enable-graphql-soup'
         ? mocks.graphqlEnabled()
-        : mocks.crmEnabled(),
+        : flag.key === 'enable-projects'
+          ? mocks.projectsEnabled()
+          : mocks.crmEnabled(),
   }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({
@@ -257,6 +261,7 @@ beforeEach(() => {
   mocks.initiatives = [];
   mocks.databases = [];
   mocks.crmEnabled = () => true;
+  mocks.projectsEnabled = () => true;
   mocks.graphqlEnabled = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
@@ -305,6 +310,23 @@ const companyHit: SearchDocumentWire = {
   searchText: 'acme | acme.example',
   timestampMs: Date.parse(cachedCompany.updatedAt),
   sourceHash: 'company-hash',
+};
+const cachedInitiative = {
+  __typename: 'GraphqlSoupInitiative',
+  displayName: 'Launch plan',
+  metadata: {
+    ownerId: 'owner',
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-02T00:00:00.000Z',
+  },
+};
+const initiativeHit: SearchDocumentWire = {
+  profile: 'quick-access-v1',
+  recordKey: 'GraphqlSoupInitiative:initiative-1',
+  bucket: 'initiative',
+  searchText: 'launch plan',
+  timestampMs: Date.parse(cachedInitiative.metadata.updatedAt),
+  sourceHash: 'initiative-hash',
 };
 const restCompany: CrmCompanyEntity = {
   id: 'company-1',
@@ -1084,6 +1106,102 @@ describe('Quick Access source integration', () => {
     }
   );
 
+  it('finds a cached project absent from the REST feed', async () => {
+    mocks.readRecordsByKeys.mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
+      records: [
+        {
+          recordKey: 'GraphqlSoupInitiative:initiative-1',
+          record: cachedInitiative,
+        },
+      ],
+    });
+    mocks.search.mockResolvedValue({
+      documents: [initiativeHit],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    await vi.waitFor(() => expect(list.items()).toHaveLength(1));
+    expect(mocks.search).toHaveBeenCalledWith(
+      expect.objectContaining({ buckets: ['initiative'], query: 'launch' })
+    );
+    expect(list.items()[0]).toMatchObject({
+      id: 'initiative-1',
+      kind: 'entity',
+      bucket: 'initiative',
+      searchText: 'Launch plan',
+      data: { type: 'initiative', name: 'Launch plan', ownerId: 'owner' },
+    });
+  });
+
+  it('merges project cache hits with the REST feed without duplicates', async () => {
+    mocks.initiatives = [
+      {
+        id: 'initiative-1',
+        type: 'initiative',
+        name: 'Launch plan',
+        ownerId: 'owner',
+        updatedAt: '2025-01-02T00:00:00.000Z',
+      },
+    ];
+    mocks.search.mockResolvedValue({
+      documents: [initiativeHit],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items().map((item) => item.id)).toEqual(['initiative-1']);
+  });
+
+  it('shows a renamed project by its cached name while the REST feed is stale', async () => {
+    mocks.initiatives = [
+      {
+        id: 'initiative-1',
+        type: 'initiative',
+        name: 'Old name',
+        ownerId: 'owner',
+        updatedAt: '2025-01-01T00:00:00.000Z',
+      },
+    ];
+    mocks.readRecordsByKeys.mockResolvedValue({
+      revision: INITIAL_CACHE_REVISION,
+      records: [
+        {
+          recordKey: 'GraphqlSoupInitiative:initiative-1',
+          record: cachedInitiative,
+        },
+      ],
+    });
+    mocks.search.mockResolvedValue({
+      documents: [initiativeHit],
+      nextCursor: null,
+    });
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    await vi.waitFor(() =>
+      expect(list.items()[0]).toMatchObject({
+        id: 'initiative-1',
+        searchText: 'Launch plan',
+        data: { name: 'Launch plan' },
+      })
+    );
+    expect(list.items()).toHaveLength(1);
+  });
+
+  it('does not search cached projects when Projects is disabled', () => {
+    mocks.projectsEnabled = () => false;
+    const list = setup((source) =>
+      source.useList({ buckets: ['initiative'], searchTerm: () => 'launch' })
+    );
+    expect(list.items()).toEqual([]);
+    expect(mocks.search).not.toHaveBeenCalled();
+  });
+
   it('merges CRM cache hits with the REST feed without duplicates', async () => {
     mocks.companies = [restCompany];
     mocks.search.mockResolvedValue({
@@ -1304,7 +1422,7 @@ describe('Quick Access source integration', () => {
     ).toEqual(['folder', 'note', 'task']);
   });
 
-  it('lists task projects with document search hits without searching the cache for them', async () => {
+  it('lists task projects from the REST feed with document hits while searching cached projects too', async () => {
     mocks.initiatives = [
       {
         type: 'initiative',
@@ -1343,7 +1461,7 @@ describe('Quick Access source integration', () => {
     ).toMatchObject({ bucket: 'initiative', data: { type: 'initiative' } });
     expect(mocks.search).toHaveBeenCalledWith(
       expect.objectContaining({
-        buckets: expect.not.arrayContaining(['initiative']),
+        buckets: expect.arrayContaining(['initiative']),
       })
     );
   });

@@ -62,7 +62,7 @@ adopted('dss-errors-dev', {
   query: `logs("service:cloud-storage-service env:dev status:error ${DSS_EXPIRED_JWT_EXCLUSION}").index("*").rollup("count").last("5m") > 200`,
   message: `Dev cloud-storage-service logged {{value}} errors in 5 minutes.
 
-${notify({ pages: false })}`,
+${notify({ pages: false, environment: 'dev' })}`,
   monitorThresholds: {
     critical: '200',
     warning: '100',
@@ -76,17 +76,18 @@ ${notify({ pages: false })}`,
 });
 
 // https://us5.datadoghq.com/monitors/1062128
-// No warning threshold: prod error lines exceed 50 per 5 minutes in roughly
-// one window in eight, so a warning would notify Slack all day.
+// The steady baseline is 300-450 error lines per 5 minutes since the
+// expired-JWT exclusion, so 800 is roughly double a normal window. No warning
+// threshold: one would notify all day.
 adopted('dss-errors-prod', {
   name: '[PROD] Increased number of errors for DSS',
   type: 'log alert',
-  query: `logs("service:cloud-storage-service env:prod status:error ${DSS_EXPIRED_JWT_EXCLUSION}").index("*").rollup("count").last("5m") > 150`,
+  query: `logs("service:cloud-storage-service env:prod status:error ${DSS_EXPIRED_JWT_EXCLUSION}").index("*").rollup("count").last("5m") > 800`,
   message: `Prod cloud-storage-service logged {{value}} errors in 5 minutes, not counting expired-JWT rejections.
 
 ${notify({ pages: false })}`,
   monitorThresholds: {
-    critical: '150',
+    critical: '800',
   },
   onMissingData: 'default',
   notifyAudit: true,
@@ -207,7 +208,7 @@ adopted('channel-invite-spam-dev', {
     'logs("service:notification-service-dev message:\\"processing message\\" @notification_event_type:channel_invite").index("*").rollup("count").by("@sender_id").last("1h") > 10',
   message: `A user is generating a high number of channel invites. This could mean they are spamming users with invite emails.
 
-${notify({ pages: false })}`,
+${notify({ pages: false, environment: 'dev' })}`,
   monitorThresholds: {
     critical: '10',
     warning: '5',

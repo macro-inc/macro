@@ -867,6 +867,22 @@ use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
 
+Mail list pages carry same-query server membership in the existing `baseline`
+field. The Mail adapter reconciles only baseline rows outside the indexed window,
+retaining unknown rows and rejecting confirmed nonmembers. Known read, archive,
+and signal flags can disprove an incomplete row's membership through the compiled
+predicate; missing facts never prove a new match. Optimistic and committed flags
+are read from the same engine revision as the page.
+
+Fallbacks preserve the server's query-dependent preview fields while selecting
+live flags independently of canonical preview hydration. Lists with retained rows,
+or older native hosts without `retainedKeys`, remain eligible for mutation-driven
+server revalidation. Indexed cursors do not move to retained rows; continuation
+publishes an ordered through-read of the union instead of appending across them.
+New server membership triggers evaluation even when the local list is already
+longer. A baseline beyond the 5,000-row cap discards the local projection and uses
+the live server list; indexed rows do not count against that baseline cap.
+
 Grouped Soup uses `graphql/create-grouped-soup-live-query.ts` to own the initial
 request and every loaded per-bin continuation. With maintained cache queries and
 a supported filter plus created/updated sort, their combined server membership
@@ -954,9 +970,30 @@ Background hydration retains its existing opt-in notification contract. Soup's
 local collection source opts in; ordinary foreground queries refresh on their
 normal affected-operation notifications.
 
+## Authoritative Mail membership repair
+
+The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages
+inside `properties::augment_authoritative`, under the same engine lock and
+transaction as their normalized write. It compares up to 500 local matches
+against returned IDs, bounded by the last canonical view timestamp and ID when
+`nextCursor` exists. Exhausted/empty first pages cover the whole matching slice.
+Missing matches become durable incomplete projections, not deleted records or
+invented archive/signal facts. Mail retention excludes explicitly invalidated
+(`Dirty`) baseline rows in the same projection scope unless an optimistic shadow
+takes precedence; an older open view cannot restore the revoked evidence.
+This differs from missing metadata, which still retains same-query membership.
+Full canonical snapshots restore their proof;
+partial patches cannot. Backfills, cursor pages, incomplete responses,
+unsupported predicates, identity switches, and pending optimistic rows do not
+supply this negative evidence. The existing authoritative-write telemetry covers
+this preparation/write path; no new worker command or database migration is needed.
+See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-filtering).
+
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 3. Email rows index the thread
+The disposable Quick Access projection is version 4; version 4 added task
+projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
+name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an
 earlier sender remains searchable after another participant replies. Snippets and
 message bodies are excluded. The frontend materializes only matched thread keys

@@ -212,6 +212,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
     composeContext.presentation.isTouch() &&
     !state.hasBodyText() &&
     state.replyType() !== 'forward';
+  const quotedContent = () =>
+    state.replyType() === 'forward' ? 'forwarded message' : 'quoted text';
+  const quoteToggleLabel = () =>
+    `${form.replyAppended() ? 'Hide' : 'Show'} ${quotedContent()}`;
   const signatureHtml = () =>
     composeContext.presentation.signaturesEnabled()
       ? state.signatureHtml()
@@ -673,7 +677,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
               placeholder={
                 isMobileCompose()
                   ? 'Use `@` to reference files'
-                  : 'Reply — @mention to share or cc people'
+                  : `${state.replyType() === 'forward' ? 'Forward' : 'Reply'} — @mention to share or cc people`
               }
               portalScope={isMobileCompose() ? 'local' : 'split'}
               refFn={(el) => props.markdownDomRef?.(el)}
@@ -719,16 +723,16 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
             <div class="shrink-0 flex items-center pt-1" data-corvu-no-drag="">
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="xs"
                 class="text-ink-extra-muted hover:text-ink-muted hover:bg-active"
-                tooltip="Show quoted text"
-                onclick={(e: MouseEvent) => {
+                onClick={(e: MouseEvent) => {
                   e.stopPropagation();
                   setQuoteCollapsed(false);
                   setComposerExpanded(true);
                 }}
               >
                 <DotsThree class="size-3.5 shrink-0 pointer-events-none" />
+                Show {quotedContent()}
               </Button>
             </div>
           </Show>
@@ -744,13 +748,10 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
               data-corvu-no-drag=""
               onClick={(e) => e.stopPropagation()}
             >
-              <Tooltip
-                label={
-                  form.replyAppended() ? 'Hide quoted text' : 'Show quoted text'
-                }
-              >
+              <Tooltip label={quoteToggleLabel()}>
                 <KToggleButton
                   as={Button}
+                  aria-label={quoteToggleLabel()}
                   variant="ghost"
                   size="icon-sm"
                   class="size-5 rounded bg-transparent p-0 text-ink-extra-muted hover:text-ink-muted"

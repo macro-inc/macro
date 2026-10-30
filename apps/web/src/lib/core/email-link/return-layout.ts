@@ -1,6 +1,13 @@
+import type { ConsentScopes } from '@service-auth/client';
 import type { InboxAddition } from './link-outcome';
 
 const RETURN_LAYOUT_KEY = 'macro:inbox-link:return-layout';
+
+const CONSENT_SCOPES: ReadonlyArray<ConsentScopes> = [
+  'gmail',
+  'gmail_and_calendar',
+  'calendar',
+];
 
 /** What the callback needs once the inbox consent round trip comes back. */
 export type InboxLinkReturn = {
@@ -10,6 +17,12 @@ export type InboxLinkReturn = {
    * survives with it.
    */
   url: string;
+  /**
+   * The permissions the flow asked consent for, so a refused consent can be
+   * retried with the same request (a calendar entry point asks for the
+   * mailbox and calendar together).
+   */
+  scopes?: ConsentScopes;
   /** Set only for a plain add; see {@link InboxAddition}. */
   addition?: InboxAddition;
 };
@@ -70,7 +83,8 @@ export function readInboxLinkReturn(
   if (!stored || stored.linkId !== linkId || typeof stored.url !== 'string') {
     return undefined;
   }
-  return { url: stored.url, addition: stored.addition };
+  const scopes = CONSENT_SCOPES.find((value) => value === stored.scopes);
+  return { url: stored.url, scopes, addition: stored.addition };
 }
 
 /** Read and clear the stash, as {@link readInboxLinkReturn} reads it. */

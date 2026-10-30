@@ -1014,6 +1014,15 @@ impl Adapter {
                     ended = Some(stop);
                     break;
                 }
+                // A waiting Macro prompt owns the next turn: the item joins
+                // it, and only the prompt's own turn end may answer it.
+                LogEvent::LateUpdate(update) => {
+                    moved = true;
+                    self.notify_update(&session.id, update);
+                    if !session.prompt_pending.load(Ordering::SeqCst) {
+                        self.turn_complete(&session.id, "end_turn");
+                    }
+                }
             }
         }
         Ok((moved, ended))

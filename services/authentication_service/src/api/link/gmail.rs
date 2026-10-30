@@ -27,7 +27,19 @@ mod test;
 
 const GOOGLE_AUTHORIZATION_URL: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GMAIL_IDENTITY_PROVIDER_NAME: &str = "google_gmail";
-const GMAIL_SCOPES: &str = "openid profile email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/contacts.readonly https://www.googleapis.com/auth/contacts.other.readonly https://www.googleapis.com/auth/gmail.settings.basic";
+/// The scope that makes a Google account a mailbox Macro can read and send
+/// from. A consent that leaves it out cannot provision an inbox, so the
+/// callback refuses it (`api::oauth2::google`).
+pub(crate) const GMAIL_MAILBOX_SCOPE: &str = "https://www.googleapis.com/auth/gmail.modify";
+const GMAIL_SCOPES: [&str; 7] = [
+    "openid",
+    "profile",
+    "email",
+    GMAIL_MAILBOX_SCOPE,
+    "https://www.googleapis.com/auth/contacts.readonly",
+    "https://www.googleapis.com/auth/contacts.other.readonly",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
+];
 /// The identity scopes every consent needs: the callback resolves the account
 /// that consented from the `sub` and `email` claims on Google's id_token, and
 /// Google only mints one when `openid` is requested.
@@ -221,14 +233,15 @@ pub async fn init_gmail_link_handler(
 /// consent, which is what it would have gotten before calendar existed.
 fn gmail_authorization_scopes(calendar_scope_enabled: bool, scopes: ConsentScopes) -> String {
     let calendar = google_calendar_scope_parameter();
+    let mailbox = GMAIL_SCOPES.join(" ");
     match scopes {
         ConsentScopes::Calendar if calendar_scope_enabled => {
             format!("{IDENTITY_SCOPES} {calendar}")
         }
         ConsentScopes::GmailAndCalendar if calendar_scope_enabled => {
-            format!("{GMAIL_SCOPES} {calendar}")
+            format!("{mailbox} {calendar}")
         }
-        _ => GMAIL_SCOPES.to_string(),
+        _ => mailbox,
     }
 }
 

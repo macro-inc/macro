@@ -1,7 +1,7 @@
 use crate::cognition::api::{
     attachments::get_chats_for_attachment,
     chats::{chat_history, chat_history_batch_messages},
-    citations, decisions, health,
+    citations, database_query, decisions, health,
     preview::get_batch_preview,
     stream::chat_message::{
         self, ChatMessageError, HttpSendChatMessageRequest, SendChatMessageResponse,
@@ -93,6 +93,7 @@ use utoipa::OpenApi;
             stream_stop::stop_chat_stream,
             structured_completion::structured_completion,
             decisions::decide,
+            database_query::generate_database_query,
             memory_api::get_memory_handler,
             import_api::get_state_handler,
             import_api::run_import_handler,

@@ -32,6 +32,7 @@ import {
   invalidateAllAfterLogin,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import type { ConsentScopes } from '@service-auth/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button } from '@ui';
 import {
@@ -140,13 +141,45 @@ const ADMIN_CONSENT_GRANTED_NOTICE = 'admin_consent_granted';
 
 /**
  * The `email_link_error` values the auth service redirects back with when a
- * consent screen ends without a grant. Anything else is a generic failure.
+ * consent screen ends without a usable grant. Anything else is a generic
+ * failure.
  */
 const ADMIN_CONSENT_REQUIRED_ERROR = 'admin_consent_required';
 const CONSENT_CANCELLED_ERROR = 'cancelled';
+/** Google's consent came back without the email permissions; nothing was connected. */
+const GMAIL_NOT_GRANTED_ERROR = 'gmail_not_granted';
 
 const stringParam = (value: string | string[] | undefined) =>
   typeof value === 'string' ? value : null;
+
+/**
+ * Google's consent left the email permissions unchecked, so nothing was
+ * connected and the partial grant was revoked. The prompt outlives the
+ * callback page and stays until the person dismisses it or tries again with
+ * the permissions the flow asked for.
+ */
+function promptForEmailAccess(scopes: ConsentScopes | undefined) {
+  const toastId = toast.custom(
+    {
+      title: 'Email access required',
+      content: () =>
+        "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",
+      actions: [
+        {
+          label: 'Try again',
+          onClick: () => {
+            toast.dismiss(toastId);
+            openAddInboxDialog({ scopes });
+          },
+        },
+      ],
+    },
+    {
+      persistent: true,
+      region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+    }
+  );
+}
 
 /**
  * Handles the OAuth callback after an already-authenticated user adds another
@@ -155,9 +188,11 @@ const stringParam = (value: string | string[] | undefined) =>
  * announced: init also succeeds when the account chooser returned an inbox the
  * user already had, which a plain add reports as already connected.
  *
- * A consent screen that ended without a grant arrives with `email_link_error`
- * instead: a cancel says nothing was connected, a tenant that needs admin
- * approval gets the dialog with the approval link, and anything else gets a toast.
+ * A consent screen that ended without a usable grant arrives with
+ * `email_link_error` instead: a cancel says nothing was connected, a tenant
+ * that needs admin approval gets the dialog with the approval link, a Google
+ * consent that left out the email permissions gets a prompt that stays until
+ * dismissed and retries the same request, and anything else gets a toast.
  * An administrator who approved the tenant arrives with `email_link_notice`.
  *
  * Web consent navigates the page; desktop returns from the system browser via
@@ -298,6 +333,14 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const handleConsentFailure = (error: string) => {
     if (error === CONSENT_CANCELLED_ERROR) {
       announceConsentCancelled();
+      navigateAfterLink();
+      return;
+    }
+    if (error === GMAIL_NOT_GRANTED_ERROR) {
+      trackOutcome('gmail_not_granted');
+      // The retry asks for what this flow asked for: a calendar entry point
+      // wants email and calendar together, not email alone.
+      promptForEmailAccess(stashed?.scopes);
       navigateAfterLink();
       return;
     }

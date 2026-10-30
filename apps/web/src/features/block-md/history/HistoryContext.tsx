@@ -1,7 +1,5 @@
-import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { ThrownResultError } from '@core/util/result';
-import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
 import {
   buildDiffState,
   buildWhoMap,
@@ -22,6 +20,7 @@ import {
   mapArray,
   useContext,
 } from 'solid-js';
+import { type PeerRecord, peerAuthorId, useAuthorName } from './author';
 import { sessionize } from './sessionize';
 import { buildTimestampIndex } from './timestampIndex';
 import { userColor, userLabel } from './utils';
@@ -124,13 +123,10 @@ export function HistoryProvider(props: {
     isOpen() || shouldLoad() ? props.documentId() : ''
   );
 
-  // AI peers are recognizable from the peer id alone (reserved block) and all
-  // collapse into the single Macro identity. Checked before the peer map,
-  // which may attribute them to whoever's token the AI worker connected with.
-  const resolvePeerUser = (peers: Map<string, string>, peer: string): string =>
-    isAiPeer(BigInt(peer))
-      ? MACRO_AGENT_BOT_ID
-      : (peers.get(peer) ?? 'unknown');
+  const resolvePeerUser = (
+    peers: Map<string, PeerRecord>,
+    peer: string
+  ): string => peerAuthorId(peer, peers.get(peer));
 
   // Non-suspending reads of the loaded doc and peer map. Reading the resource
   // (`historyDoc()`) or the query.data while they're still pending bubbles
@@ -140,7 +136,7 @@ export function HistoryProvider(props: {
     historyDoc.state === 'ready' || historyDoc.state === 'refreshing'
       ? historyDoc.latest
       : undefined;
-  const loadedPeers = (): Map<string, string> | undefined =>
+  const loadedPeers = (): Map<string, PeerRecord> | undefined =>
     peerMap.isSuccess ? peerMap.data : undefined;
 
   // Either fetch failing leaves the timeline permanently empty, so surface it
@@ -151,17 +147,21 @@ export function HistoryProvider(props: {
     return null;
   });
 
-  // One stable display-name accessor per unique userId, batched into one fetch.
+  // One stable display-name accessor per unique author, batched into one fetch.
   const uniqueUserIds = createMemo(() => {
     const peers = loadedPeers();
-    return peers ? [...new Set(peers.values())] : [];
+    if (!peers) return [];
+    return [
+      ...new Set(
+        [...peers].map(([peer, record]) => peerAuthorId(peer, record))
+      ),
+    ];
   });
   const userEntries = mapArray(uniqueUserIds, (userId) => {
-    const macroId = tryMacroId(userId);
-    const displayName = () =>
-      macroId
-        ? getDisplayName(macroId, { emailFallback: 'local-part' })
-        : userLabel(userId);
+    const displayName = useAuthorName(
+      () => userId,
+      (id) => getDisplayName(tryMacroId(id), { emailFallback: 'local-part' })
+    );
     return { userId, displayName, color: userColor(userId) };
   });
   const userById = (userId: string): HistoryUser =>

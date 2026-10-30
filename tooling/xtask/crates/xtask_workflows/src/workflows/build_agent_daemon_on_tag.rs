@@ -192,12 +192,10 @@ fn linux_job(target: &DaemonTarget) -> Job {
         // cache on failure, so it is never load-bearing.
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
-        .add_step(
-            Step::new("Build daemon")
-                .run(include_str!("scripts/build_agent_daemon_linux.sh"))
-                .shell("bash")
-                .add_env(("TARGET", target.triple)),
-        )
+        .add_step(build_step(
+            target,
+            include_str!("scripts/build_agent_daemon_linux.sh"),
+        ))
         .add_step(package_step(target))
         .add_step(upload_step(target))
         .add_step(steps::teardown_nix())
@@ -212,12 +210,10 @@ fn macos_job(target: &DaemonTarget) -> Job {
         .add_step(steps::checkout_ref(RESOLVED_REF))
         .add_step(steps::setup_rust_light())
         .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
-        .add_step(
-            Step::new("Build daemon")
-                .run(include_str!("scripts/build_agent_daemon_macos.sh"))
-                .shell("bash")
-                .add_env(("TARGET", target.triple)),
-        )
+        .add_step(build_step(
+            target,
+            include_str!("scripts/build_agent_daemon_macos.sh"),
+        ))
         .add_step(package_step(target))
         .add_step(upload_step(target))
 }
@@ -231,14 +227,22 @@ fn windows_job(target: &DaemonTarget) -> Job {
         .add_step(steps::checkout_ref(RESOLVED_REF))
         .add_step(steps::setup_rust_light())
         .add_step(steps::derive_artifact_metadata(RESOLVED_REF))
-        .add_step(
-            Step::new("Build daemon")
-                .run(include_str!("scripts/build_agent_daemon_windows.sh"))
-                .shell("bash")
-                .add_env(("TARGET", target.triple)),
-        )
+        .add_step(build_step(
+            target,
+            include_str!("scripts/build_agent_daemon_windows.sh"),
+        ))
         .add_step(package_step(target))
         .add_step(upload_step(target))
+}
+
+/// The release tag is compiled in: `macrod --version` prints it and the
+/// self-updater compares it with the latest release.
+fn build_step(target: &DaemonTarget, script: &str) -> Step<Run> {
+    Step::new("Build daemon")
+        .run(script)
+        .shell("bash")
+        .add_env(("TARGET", target.triple))
+        .add_env(("MACROD_RELEASE_TAG", "${{ steps.metadata.outputs.tag }}"))
 }
 
 fn package_step(target: &DaemonTarget) -> Step<Run> {
@@ -248,6 +252,7 @@ fn package_step(target: &DaemonTarget) -> Step<Run> {
         .add_env(("TARGET", target.triple))
         .add_env(("SLUG", target.slug))
         .add_env(("SAFE_TAG", "${{ steps.metadata.outputs.safe_tag }}"))
+        .add_env(("RELEASE_TAG", "${{ steps.metadata.outputs.tag }}"))
         .add_env(("SMOKE_RUN", if target.smoke_run { "1" } else { "0" }))
 }
 

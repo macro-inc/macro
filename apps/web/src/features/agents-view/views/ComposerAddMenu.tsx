@@ -223,6 +223,10 @@ export function AgentComposerAddMenu(props: {
                       setTarget(undefined);
                       settings.openSettings('Agent');
                     }}
+                    onOpenEmailSettings={() => {
+                      setTarget(undefined);
+                      settings.openSettings('Email');
+                    }}
                   />
                 }
               >

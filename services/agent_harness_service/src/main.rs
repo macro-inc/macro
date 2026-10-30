@@ -636,8 +636,8 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
-    // `ai-code-mode` decides, per user, whether agent sessions and the public
-    // MCP present the SDK in place of the tools it covers.
+    // `ai-code-mode` decides, per user, whether agent sessions hide
+    // SDK-covered tools and whether the public MCP lists only code mode.
     let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
         match (&code_runner, config.posthog_api_key.value()) {
             (Some(_), Some(key)) => {
@@ -1073,8 +1073,14 @@ async fn run() -> anyhow::Result<()> {
         channels::domain::message_delivery::ChannelMessageDelivery::new(
             PgChannelsRepo::new(pool.clone()),
             SpawnedChannelEventDispatcher::new(side_effects),
-            channels::domain::service::NoopChannelReferenceSharePermissions,
+            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+                pool.clone(),
+                entity_access.clone(),
+            ),
             message_realtime.clone(),
+            channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                pool.clone(),
+            ),
         ),
         messages::domain::delivery::DiscussionDelivery::new(
             messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())

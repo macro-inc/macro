@@ -19,6 +19,7 @@ in
     ./ci-dashboard.nix
     ./database-dashboard.nix
     ./database-queries-dashboard.nix
+    ./prod-alerts-dashboard.nix
     ./alerting.nix
     ./goalert.nix
   ];
@@ -67,7 +68,7 @@ in
       serviceConfig = {
         EnvironmentFile = [
           "/opt/observability/runtime.env"
-          # Interpolated into the GoAlert contact point by alerting provisioning.
+          # Interpolated into the GoAlert contact points by alerting provisioning.
           "/run/macro-observability/grafana-goalert.env"
         ];
         LoadCredential = map credential [

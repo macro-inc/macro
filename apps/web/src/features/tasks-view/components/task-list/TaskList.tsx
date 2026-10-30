@@ -32,19 +32,19 @@ import {
 } from '@entity';
 import { useListLayout } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { Button, cn } from '@ui';
+import { Button } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   type JSX,
   Match,
+  on,
   type Setter,
   Show,
   Switch,
@@ -61,6 +61,7 @@ import {
   useTasksView,
 } from '../../tasks-view-context';
 import { TaskGroupHeader } from './TaskGroupHeader';
+import { TaskListContinuationRow } from './TaskListContinuationRow';
 import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
 import { taskGridColumnCount } from './task-grid-template';
@@ -150,24 +151,6 @@ export function TaskList(props: TaskListProps) {
   }: ListActivation<TasksDataSourceItem, TasksListActivationMetadata>) {
     if (item.kind === 'group-header') {
       toggleGroup(item.groupId);
-
-      return;
-    }
-
-    if (item.kind === 'load-more' && item.groupId !== undefined) {
-      const focusIndex = list.items.indexOf(item.id);
-      fireAndForget(
-        source.loadMoreGroup(item.groupId).then(() => {
-          if (list.focus.requestedKey() !== item.id) return;
-
-          list.focus.restore(item.id, {
-            fallback: 'nearest',
-            nearestIndex: focusIndex,
-            retainUnavailable: false,
-          });
-        }),
-        'tasks-view'
-      );
 
       return;
     }
@@ -304,6 +287,17 @@ export function TaskList(props: TaskListProps) {
     scrollHandle: virtualizer,
     enabled: panel.isPanelActive,
     navigation: {
+      // Hold focus at a group's last loaded task until its next page arrives;
+      // a failed page lets focus continue into the next group.
+      onBeforeMove: ({ direction, current }) => {
+        if (direction !== 1 || !current) return true;
+        const next = list.items.at(current.index + 1);
+        return (
+          next?.kind !== 'load-more' ||
+          next.groupId === undefined ||
+          Boolean(source.groupError?.(next.groupId))
+        );
+      },
       onNavigate: (event) => {
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (source.isLoadingMore() || !source.hasMore()) {
@@ -396,6 +390,39 @@ export function TaskList(props: TaskListProps) {
       reason: 'restore',
     });
   });
+
+  // A group's next page can arrive after the reader scrolled past that group,
+  // inserting rows above the viewport. Keep the first visible row in place.
+  let scrollAnchor: { id: string; offset: number } | undefined;
+  function recordScrollAnchor() {
+    const handle = virtualizer();
+    if (!handle || handle.scrollOffset <= 0) {
+      scrollAnchor = undefined;
+      return;
+    }
+    const index = handle.findItemIndex(handle.scrollOffset);
+    const row = visibleRows()[index];
+    scrollAnchor = row && {
+      id: row.id,
+      offset: handle.scrollOffset - handle.getItemOffset(index),
+    };
+  }
+  createEffect(
+    on(
+      visibleRows,
+      (rows) => {
+        const handle = virtualizer();
+        const anchor = scrollAnchor;
+        if (!handle || !anchor) return;
+        const index = rows.findIndex((row) => row.id === anchor.id);
+        if (index < 0) return;
+        const offset = handle.getItemOffset(index) + anchor.offset;
+        if (Math.abs(offset - handle.scrollOffset) >= 1)
+          handle.scrollTo(offset);
+      },
+      { defer: true }
+    )
+  );
 
   function checkNearEnd() {
     const handle = virtualizer();
@@ -510,7 +537,10 @@ export function TaskList(props: TaskListProps) {
                   viewportRef={setViewport}
                   items={visibleRows()}
                   focusedIndex={list.focus.index()}
-                  onScroll={checkNearEnd}
+                  onScroll={() => {
+                    recordScrollAnchor();
+                    checkNearEnd();
+                  }}
                 >
                   {(row) => (
                     <Switch>
@@ -626,68 +656,29 @@ export function TaskList(props: TaskListProps) {
                           </div>
                         )}
                       </Match>
-                      <Match when={row.kind === 'load-more' ? row : undefined}>
-                        {(loadMore) => {
-                          const highlighted = () =>
-                            list.focus.key() === loadMore().id;
-                          const buttonClass = () =>
-                            cn({
-                              'bg-surface': !highlighted(),
-                              'border-transparent': highlighted(),
-                            });
-                          const activate = () => {
-                            if (loadMore().isLoading) return;
-                            list.activate.key(loadMore().id, {
-                              reason: 'pointer',
-                            });
-                          };
-
-                          return (
-                            <div id={loadMore().id} role="row">
-                              <div
-                                role="gridcell"
-                                aria-colspan={columnCount()}
-                                aria-busy={loadMore().isLoading}
-                                onMouseMove={() =>
-                                  list.focus.set(loadMore().id, {
-                                    reason: 'hover',
-                                  })
-                                }
-                                onClick={activate}
-                                class={cn(
-                                  'my-1 flex min-h-9 items-center justify-center rounded',
-                                  highlighted()
-                                    ? 'mx-1 w-[calc(100%-0.5rem)] bg-active/60'
-                                    : 'mx-auto'
-                                )}
-                              >
-                                <Show
-                                  when={!loadMore().isLoading}
-                                  fallback={
-                                    <Button
-                                      variant="secondary"
-                                      size="xs"
-                                      class={buttonClass()}
-                                      disabled
-                                    >
-                                      <SpinnerIcon class="size-3 animate-spin" />
-                                      Loading...
-                                    </Button>
-                                  }
-                                >
-                                  <Button
-                                    variant="secondary"
-                                    size="xs"
-                                    class={buttonClass()}
-                                  >
-                                    <CaretDownIcon class="size-2.5" />
-                                    Load More
-                                  </Button>
-                                </Show>
-                              </div>
-                            </div>
-                          );
-                        }}
+                      <Match
+                        when={
+                          row.kind === 'load-more' && row.groupId !== undefined
+                            ? { ...row, groupId: row.groupId }
+                            : undefined
+                        }
+                      >
+                        {(continuation) => (
+                          <TaskListContinuationRow
+                            id={continuation().id}
+                            columnCount={columnCount()}
+                            isLoading={continuation().isLoading ?? false}
+                            failed={Boolean(
+                              source.groupError?.(continuation().groupId)
+                            )}
+                            onLoad={() =>
+                              fireAndForget(
+                                source.loadMoreGroup(continuation().groupId),
+                                'tasks-view'
+                              )
+                            }
+                          />
+                        )}
                       </Match>
                     </Switch>
                   )}

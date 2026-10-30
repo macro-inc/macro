@@ -133,6 +133,7 @@ describe('desktop account linking', () => {
       );
       expect(consumeInboxLinkReturn('pending-link')).toEqual({
         url: '/home/~/settings/connections?view=all#selection',
+        scopes,
       });
       expect(window.location.href).toBe(originalLocation);
       expect(mocks.authenticate).not.toHaveBeenCalled();
@@ -169,6 +170,7 @@ describe('desktop account linking', () => {
       );
       expect(consumeInboxLinkReturn('outlook-link')).toEqual({
         url: '/home/~/settings/connections?view=all#selection',
+        scopes,
       });
       expect(window.location.href).toBe(originalLocation);
       expect(mocks.authenticate).not.toHaveBeenCalled();
@@ -187,6 +189,7 @@ describe('desktop account linking', () => {
     await useAddInboxFlow()({ provider: 'GMAIL' });
     expect(consumeInboxLinkReturn('pending-link')).toEqual({
       url: '/home/~/settings/connections?view=all#selection',
+      scopes: 'gmail',
       addition: {
         provider: 'GMAIL',
         connectedInboxes: [

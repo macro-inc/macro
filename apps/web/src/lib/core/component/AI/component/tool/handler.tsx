@@ -94,6 +94,7 @@ import {
   readDiscussionHandler,
   resolveCommentHandler,
 } from './Comments';
+import { connectMcpServerHandler } from './ConnectMcpServer';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createSkillHandler } from './CreateSkill';
@@ -268,6 +269,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ImportFromLinear: importFromLinearHandler,
   ImportFromJira: importFromJiraHandler,
   ImportNotionPage: importNotionPageHandler,
+  ConnectMcpServer: connectMcpServerHandler,
   GetCompany: getCompanyHandler,
   CreateCompany: createCompanyHandler,
   CreateContact: createContactHandler,
