@@ -333,7 +333,7 @@ export default defineDoc({
   name: 'Toast',
   category: 'Feedback',
   description:
-    'Status badges, title-aligned content and actions, and compact mobile notices. These local previews use the app renderer without triggering real operations or publishing into the app notification regions.',
+    'Standalone status icons, title-aligned content and actions, and compact mobile notices. These local previews use the app renderer without triggering real operations or publishing into the app notification regions.',
   import: "import { toast } from '@core/component/Toast/Toast';",
   demos: [
     { id: 'notifications', title: 'Statuses and close controls', render: StatusesDemo, fill: true },

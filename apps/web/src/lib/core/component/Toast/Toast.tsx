@@ -25,18 +25,15 @@ const TOAST_STYLES: Record<
 > = {
   [ToastType.SUCCESS]: {
     icon: CheckIcon,
-    iconClass:
-      'rounded-full bg-success-bg text-success dark-mode:bg-success dark-mode:text-surface',
+    iconClass: 'text-success',
   },
   [ToastType.FAILURE]: {
     icon: ExclamationIcon,
-    iconClass:
-      'rounded-full bg-failure-bg text-failure dark-mode:bg-failure dark-mode:text-surface',
+    iconClass: 'text-failure',
   },
   [ToastType.ALERT]: {
     icon: WarningIcon,
-    iconClass:
-      'rounded-full bg-warning-bg text-warning dark-mode:bg-warning dark-mode:text-surface',
+    iconClass: 'text-warning',
   },
   [ToastType.LOADING]: { icon: Spinner, iconClass: 'text-accent' },
 };
@@ -280,9 +277,9 @@ export function ToastContent(props: {
         if (!event.defaultPrevented) props.onUserDismiss?.();
       }}
     >
-      <div ref={surface} class="macro-toast-surface menu-surface">
+      <div ref={surface} class="macro-toast-surface">
         <div
-          class={cn('macro-toast-content min-w-0', showCloseButton() && 'pr-8')}
+          class={cn('macro-toast-content min-w-0', showCloseButton() && 'pr-10')}
         >
           <Show
             when={props.embed}
@@ -310,7 +307,7 @@ export function ToastContent(props: {
                       <Dynamic
                         component={Icon()}
                         class={cn(
-                          props.custom || loading() ? 'size-4' : 'size-3',
+                          props.custom || loading() ? 'size-4' : 'size-5',
                           loading() && 'motion-safe:animate-spin'
                         )}
                       />
@@ -362,8 +359,8 @@ export function ToastContent(props: {
               size={isMobile() ? 'icon-md' : 'icon-sm'}
               aria-label={t('common.close')}
               class={cn(
-                'absolute right-1 z-10',
-                singleRow() ? 'top-1/2 -translate-y-1/2' : 'top-1'
+                'absolute right-2 z-10',
+                singleRow() ? 'top-1/2 -translate-y-1/2' : 'top-2'
               )}
               onClick={() => props.onUserDismiss?.()}
             >

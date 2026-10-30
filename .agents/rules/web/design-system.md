@@ -88,7 +88,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   tabs, and header controls as placeholders), so change the skeleton in the
   same change as the header. Enforced for pulsing boxes by ast-grep
   `tsx-skeleton-shimmer`, CI error.
-- Toasts share the floating `menu-surface` material and semantic status icon colors. Keep descriptions, custom content, and stacked actions aligned with their title; never add surface colors in toast callers. Simple phone notices use content-width pills and rich notices use bounded cards.
+- Toasts retain their own `--color-toast` surface, border, and light/dark shadows from the main app, not `menu-surface`. Use standalone semantic status icons without badge backgrounds. Keep descriptions, custom content, and stacked actions aligned with their title; never add surface colors in toast callers. Inset close buttons by 8px from the right and, on multiline cards, the top; reserve room so text and actions do not collide. Simple phone notices use content-width pills and rich notices use bounded cards.
 - Keep toast close buttons visible by default. Use `showCloseButton: false` only to hide that control; it does not change expiry, Escape, swipe, or user-dismiss callbacks. Preserve desktop queueing, mobile replacement, and separate persistent regions when changing presentation. `ToastContent` is the shared renderer for isolated gallery regions, not an alternative application service.
 
 Check: `just check` passes the ast-grep rules; the changed bar shows one height,
