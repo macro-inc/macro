@@ -7,7 +7,17 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// An entity type with an existing Share surface.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    utoipa::ToSchema,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ShareEntityType {
     /// Files and document-backed tasks, snippets and skills.
@@ -55,7 +65,17 @@ pub struct ShareEntity {
     pub entity_id: Uuid,
 }
 /// Durable outcome; reading a notification never changes it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+    utoipa::ToSchema,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum RequestStatus {
     /// Awaiting a reviewer.
@@ -132,6 +152,14 @@ pub struct RequestAccess {
     pub requested_level: AccessLevel,
     /// Last observed revision; omitted only for the first request.
     pub revision: Option<i32>,
+}
+/// A submitted request and the people asked to review it.
+#[derive(Debug, Clone)]
+pub struct SubmittedRequest {
+    /// The pending request.
+    pub request: AccessRequest,
+    /// Recorded reviewers, empty when the requester cannot yet see the item.
+    pub reviewers: Vec<MacroUserIdStr<'static>>,
 }
 /// Owner's decision; omission of a granted level means deny.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
