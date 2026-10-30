@@ -39,7 +39,9 @@ trigger_context = { path = "../trigger_context" }
 harness_id = { path = "../harness_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 lexical_client = { path = "../lexical_client" }
+calendar_events = { path = "../calendar_events" }
 dashmap = { workspace = true }
 futures = { workspace = true }
 # The installation records that say which repositories a user can reach, so a

@@ -97,6 +97,10 @@ wakes; interrupted quiet batches return to the next real prompt.
   Background channel messages are not attached. `trigger_router` fills each
   context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
   lists them per message; ACP `resource_link`s are what vision models fetch.
+- Every composed prompt's `<m-agent-context>` states `<current_time>` in the
+  sender's (else owner's) primary calendar time zone, via the
+  `UserTimeZones` port, or UTC when unknown. Models have no other source
+  for the date, so never drop it from a composition path.
 
 ## Related
 

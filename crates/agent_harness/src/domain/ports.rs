@@ -173,9 +173,9 @@ pub trait MessagePromptContext: Send + Sync + 'static {
 
 /// Composes an agent prompt from raw markdown and trusted session context.
 pub trait AgentPromptComposer: Send + Sync + 'static {
-    /// Return the markdown that should be delivered to the agent runtime.
-    /// With no instructions, people, or trigger, the prompt is sanitized
-    /// without adding a private context node.
+    /// Return the markdown that should be delivered to the agent runtime:
+    /// the sanitized prompt behind a private context node that states the
+    /// current time and whatever instructions, people, and trigger it has.
     fn compose(
         &self,
         prompt_markdown: &str,
@@ -183,6 +183,17 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
         people: Option<&super::model::PromptPeople>,
         trigger: Option<&trigger_context::TriggerContext>,
     ) -> impl Future<Output = Result<String>> + Send;
+}
+
+/// The time zone a user keeps time in, so a prompt can state the current
+/// time the way its reader does.
+pub trait UserTimeZones: Send + Sync + 'static {
+    /// The user's IANA time zone; `None` when it is unknown. Best effort: a
+    /// failed lookup is `None`.
+    fn time_zone(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Option<String>> + Send;
 }
 
 /// Who a prompt names, made able to open the session it is for.

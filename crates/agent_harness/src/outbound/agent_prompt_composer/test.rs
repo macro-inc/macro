@@ -5,6 +5,28 @@ use std::sync::{Arc, Mutex};
 use trigger_context::{ContextPerson, ProjectRef, TaskAssignedContext, TaskSnapshot};
 use uuid::Uuid;
 
+/// Everyone keeps time in New York, the way their primary calendars say.
+struct NewYork;
+
+impl UserTimeZones for NewYork {
+    async fn time_zone(&self, _user: &MacroUserIdStr<'static>) -> Option<String> {
+        Some("America/New_York".to_owned())
+    }
+}
+
+/// Nobody's time zone is known.
+struct Unknown;
+
+impl UserTimeZones for Unknown {
+    async fn time_zone(&self, _user: &MacroUserIdStr<'static>) -> Option<String> {
+        None
+    }
+}
+
+fn afternoon_in_new_york() -> chrono::DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 9, 24, 20, 3, 36).unwrap()
+}
+
 /// The trigger crosses a service boundary, so the body the lexical service
 /// validates is asserted here rather than only in its own types.
 #[tokio::test]
@@ -24,10 +46,11 @@ async fn the_trigger_reaches_the_lexical_service_beside_the_people() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    let composer = LexicalAgentPromptComposer::new(LexicalClient::new(
-        "test".into(),
-        format!("http://{address}"),
-    ));
+    let composer = LexicalAgentPromptComposer::new(
+        LexicalClient::new("test".into(), format!("http://{address}")),
+        NewYork,
+    )
+    .with_clock(afternoon_in_new_york);
     let owner = MacroUserIdStr::try_from_email("julia@example.com").unwrap();
     let trigger = TriggerContext::TaskAssigned(TaskAssignedContext {
         task: TaskSnapshot {
@@ -73,6 +96,11 @@ async fn the_trigger_reaches_the_lexical_service_beside_the_people() {
             "instructions": "Be brief.",
             "owner": { "id": "macro|julia@example.com", "name": "julia@example.com" },
             "sender": { "id": "macro|julia@example.com", "name": "julia@example.com" },
+            "currentTime": {
+                "iso": "2026-09-24T16:03:36-04:00",
+                "local": "Thursday, September 24, 2026, 4:03 PM",
+                "timeZone": "America/New_York"
+            },
             "trigger": {
                 "kind": "task_assigned",
                 "task": {
@@ -115,10 +143,11 @@ async fn a_prompt_without_a_trigger_sends_none() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    let composer = LexicalAgentPromptComposer::new(LexicalClient::new(
-        "test".into(),
-        format!("http://{address}"),
-    ));
+    let composer = LexicalAgentPromptComposer::new(
+        LexicalClient::new("test".into(), format!("http://{address}")),
+        Unknown,
+    )
+    .with_clock(afternoon_in_new_york);
 
     let composed = composer
         .compose("Raw prompt", None, None, None)
@@ -128,7 +157,13 @@ async fn a_prompt_without_a_trigger_sends_none() {
     assert_eq!(composed, "Sanitized prompt");
     assert_eq!(
         received.lock().unwrap().take().unwrap(),
-        serde_json::json!({ "promptMarkdown": "Raw prompt" })
+        serde_json::json!({
+            "promptMarkdown": "Raw prompt",
+            "currentTime": {
+                "iso": "2026-09-24T20:03:36+00:00",
+                "local": "Thursday, September 24, 2026, 8:03 PM"
+            }
+        })
     );
     server.abort();
 }
