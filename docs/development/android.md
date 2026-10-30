@@ -59,6 +59,11 @@ Build commands embed the production frontend. Outputs are under
 Release builds automatically prepare the signing configuration below and produce
 signed artifacts. Debug builds do not fetch release signing credentials.
 
+The app's Gradle packaging excludes the duplicate
+`META-INF/versions/9/OSGI-INF/MANIFEST.MF` from JSpecify and OpenTelemetry. This
+OSGi metadata is unused on Android. Keep the exclusion exact: broad `META-INF`
+exclusions can remove service-provider registrations used by OpenTelemetry.
+
 ## Release signing
 
 The existing upload keystore and signing credentials are stored in Doppler
