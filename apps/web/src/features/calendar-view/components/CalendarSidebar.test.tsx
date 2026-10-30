@@ -48,12 +48,24 @@ vi.mock('@queries/calendar/team-ooo', () => ({
 }));
 
 const [selectedEvent, setSelectedEvent] = createSignal<CalendarEvent>();
-const selectEvent = vi.fn((event: CalendarEvent, _anchor: HTMLElement) =>
-  setSelectedEvent(event)
-);
+const [selectedEventAnchor, setSelectedEventAnchor] =
+  createSignal<HTMLElement>();
+const selectEvent = vi.fn((event: CalendarEvent, anchor: HTMLElement) => {
+  setSelectedEvent(event);
+  setSelectedEventAnchor(anchor);
+});
+const closeEventDetails = vi.fn(() => {
+  setSelectedEvent(undefined);
+  setSelectedEventAnchor(undefined);
+});
 
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
-  useCalendarView: () => ({ selectedEvent, selectEvent }),
+  useCalendarView: () => ({
+    selectedEvent,
+    selectedEventAnchor,
+    selectEvent,
+    closeEventDetails,
+  }),
 }));
 vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
   useCalendarPager: () => ({ gotoDate: vi.fn() }),
@@ -110,6 +122,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   setSelectedEvent(undefined);
+  setSelectedEventAnchor(undefined);
   vi.clearAllMocks();
 });
 
@@ -178,6 +191,35 @@ describe('TeamOooUpcomingList', () => {
     expect(selectEvent).toHaveBeenCalledTimes(1);
     expect(selectEvent.mock.calls[0][1]).toBe(row);
     expect(row.getAttribute('aria-current')).toBe('true');
+  });
+
+  it('closes the details when Show less removes their row', async () => {
+    const user = userEvent.setup();
+    requests.teamOoo.mockImplementation(async () => teamOooItems(15));
+    renderList();
+    await screen.findByRole('button', { name: /Jackson/ });
+    await user.click(screen.getByRole('button', { name: '+5 more' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Teammate 14/ }));
+
+    screen.getByRole('button', { name: 'Show less' }).focus();
+    await user.keyboard('{Enter}');
+
+    expect(rows()).toHaveLength(10);
+    expect(closeEventDetails).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the details open when Show less keeps their row', async () => {
+    const user = userEvent.setup();
+    requests.teamOoo.mockImplementation(async () => teamOooItems(15));
+    renderList();
+    await user.click(await screen.findByRole('button', { name: '+5 more' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Teammate 3/ }));
+
+    screen.getByRole('button', { name: 'Show less' }).focus();
+    await user.keyboard('{Enter}');
+
+    expect(rows()).toHaveLength(10);
+    expect(closeEventDetails).not.toHaveBeenCalled();
   });
 
   it('stays expanded when the poll refetches', async () => {

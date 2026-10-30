@@ -173,6 +173,19 @@ export function TeamOooUpcomingList() {
   const hiddenCount = () => windows().length - UPCOMING_SHOWN_MAX;
   const shownWindows = () =>
     expanded() ? windows() : windows().slice(0, UPCOMING_SHOWN_MAX);
+  let rowList: HTMLDivElement | undefined;
+  const toggleExpanded = (toggle: HTMLElement) => {
+    const anchor = calendarView.selectedEventAnchor();
+    const anchoredToRow = anchor !== undefined && rowList?.contains(anchor);
+    setExpanded((value) => !value);
+    // Show less can remove the row an open card is anchored to; a pointer
+    // press closes the card as an outside interaction, Enter does not.
+    if (anchoredToRow && !anchor.isConnected) calendarView.closeEventDetails();
+    // The section is last in the sidebar, so the longer list pushes this
+    // focused control below the fold. Its margin keeps the sidebar's bottom
+    // inset below it.
+    toggle.scrollIntoView({ block: 'nearest' });
+  };
 
   return (
     <div class="flex flex-col gap-0.5">
@@ -192,6 +205,7 @@ export function TeamOooUpcomingList() {
         </Match>
         <Match when={windows().length > 0}>
           <div
+            ref={rowList}
             class={cn(
               'flex flex-col gap-0.5',
               expanded() && hiddenCount() > 0 && 'max-h-120 overflow-y-auto'
@@ -247,14 +261,7 @@ export function TeamOooUpcomingList() {
               size="xs"
               class="self-start scroll-mb-(--sidebar-content-inset)"
               aria-expanded={expanded()}
-              onClick={(event) => {
-                const toggle = event.currentTarget;
-                setExpanded((value) => !value);
-                // The section is last in the sidebar, so the longer list
-                // pushes this focused control below the fold. Its margin
-                // keeps the sidebar's bottom inset below it.
-                toggle.scrollIntoView({ block: 'nearest' });
-              }}
+              onClick={(event) => toggleExpanded(event.currentTarget)}
             >
               {expanded() ? 'Show less' : `+${hiddenCount()} more`}
             </Button>
