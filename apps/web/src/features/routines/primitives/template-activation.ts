@@ -6,6 +6,12 @@ import type {
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import {
+  firstAgent,
+  stepsFromTask,
+  stepsToWire,
+  updateStep,
+} from '../core/routine-steps';
+import {
   type Activator,
   fillTemplatePrompt,
   fillTemplateTrigger,
@@ -22,10 +28,32 @@ export type TemplateReference = {
   state: ReferenceState;
 };
 
-/** The instructions a template's routine runs, from its task. */
+/**
+ * The instructions a template's routine runs, from its task: a routine with
+ * steps keeps them on its agent step.
+ */
 export function templatePrompt(template: RoutineTemplate): string {
+  const steps = stepsFromTask(template.task);
+  if (steps) return firstAgent(steps)?.instructions ?? '';
   const prompt = template.task.user_prompt;
   return typeof prompt === 'string' ? prompt : '';
+}
+
+/** The template's task with its instructions filled in for the activator. */
+function filledTask(task: RoutineTemplate['task'], prompt: string) {
+  const steps = stepsFromTask(task);
+  if (!steps) return { ...task, user_prompt: prompt };
+  const agent = firstAgent(steps);
+  if (!agent) return task;
+  return {
+    ...task,
+    steps: stepsToWire(
+      updateStep(steps, agent.id, (step) => ({
+        ...step,
+        instructions: prompt,
+      }))
+    ),
+  };
 }
 
 /**
@@ -83,7 +111,7 @@ export function createTemplateActivation(args: {
         activator,
       }),
       kind: 'Agent',
-      task: { ...template.task, user_prompt: prompt() },
+      task: filledTask(template.task, prompt()),
       enabled: true,
       run_visibility: DEFAULT_RUN_VISIBILITY,
     };

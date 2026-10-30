@@ -73,4 +73,43 @@ describe('createTemplateActivation', () => {
       dispose();
     });
   });
+
+  it('fills a routine with steps on its agent step and keeps its actions', () => {
+    createRoot((dispose) => {
+      const label = {
+        type: 'tool',
+        tool: 'UpdateThreadLabels',
+        arguments: {
+          thread_id: '{{trigger.entity_id}}',
+          label: 'Finance',
+          add: true,
+        },
+      };
+      const apps = [{ app_slug: 'linear', server_name: 'Linear' }];
+      const activation = createTemplateActivation({
+        template: () => ({
+          ...TEMPLATE,
+          task: {
+            steps: [
+              label,
+              { type: 'agent', model: 'model', instructions: `Read ${DOC}` },
+            ],
+            mcp_servers: apps,
+          },
+        }),
+        activator: () => ACTIVATOR,
+        access: () => new Map([['doc-1', false]]),
+      });
+      expect(activation.prompt()).toBe(`Read ${DOC}`);
+      activation.choose('doc-1', 'leave_out');
+      expect(activation.request()?.task).toEqual({
+        steps: [
+          label,
+          { type: 'agent', model: 'model', instructions: 'Read Acme account' },
+        ],
+        mcp_servers: apps,
+      });
+      dispose();
+    });
+  });
 });

@@ -361,6 +361,34 @@ export function flattenSteps(steps: StepDraft[]): StepDraft[] {
   ]);
 }
 
+/** The same steps, with `update` applied to the step whose id is `id`. */
+export function updateStep(
+  steps: StepDraft[],
+  id: string,
+  update: (step: StepDraft) => StepDraft
+): StepDraft[] {
+  return steps.map((step) => {
+    if (step.id === id) return update(step);
+    return match(step)
+      .returnType<StepDraft>()
+      .with({ kind: 'agent' }, { kind: 'tool' }, (step) => step)
+      .with({ kind: 'if' }, (step) => ({
+        ...step,
+        yes: updateStep(step.yes, id, update),
+        no: updateStep(step.no, id, update),
+      }))
+      .with({ kind: 'choose' }, (step) => ({
+        ...step,
+        options: step.options.map((option) => ({
+          ...option,
+          steps: updateStep(option.steps, id, update),
+        })),
+        otherwise: updateStep(step.otherwise, id, update),
+      }))
+      .exhaustive();
+  });
+}
+
 /** The first agent a run can reach, for list labels and "Copy prompt". */
 export function firstAgent(steps: StepDraft[]): AgentStepDraft | undefined {
   return flattenSteps(steps).find(

@@ -38,7 +38,9 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { StepsOutline } from './components/routine-steps-outline';
 import { TemplateCard } from './components/template-card';
+import { stepsFromTask } from './core/routine-steps';
 import { describeTrigger } from './core/routine-triggers';
 import {
   type Activator,
@@ -64,6 +66,22 @@ import { ShareTemplateDialog } from './views/share-template-dialog';
 
 function triggerLines(trigger: ActionTrigger): string[] {
   return (parseRoutineTriggers(trigger) ?? []).map(describeTrigger);
+}
+
+/**
+ * What a template's routine does: its steps for a routine with steps, else
+ * its instructions, read-only.
+ */
+function TemplateWork(props: { task: unknown; prompt: string }) {
+  const steps = () => stepsFromTask(props.task);
+  return (
+    <Show
+      when={steps()?.some((step) => step.kind !== 'agent') && steps()}
+      fallback={<ReadOnlyInstructions prompt={props.prompt} />}
+    >
+      {(program) => <StepsOutline steps={program()} />}
+    </Show>
+  );
 }
 
 function ReadOnlyInstructions(props: { prompt: string }) {
@@ -162,7 +180,12 @@ function ActivateTemplate(
         getDisplayName(tryMacroId(props.template.author)) || 'its author'
       }
       triggers={triggerLines(props.template.trigger)}
-      instructions={<ReadOnlyInstructions prompt={activation.prompt()} />}
+      instructions={
+        <TemplateWork
+          task={activation.request()?.task ?? props.template.task}
+          prompt={activation.prompt()}
+        />
+      }
       references={activation.references()}
       choices={activation.choices()}
       onChoose={activation.choose}
@@ -283,7 +306,10 @@ function EnabledRoutineTemplatePage(props: {
               triggers={triggerLines(current().trigger)}
               references={activation.references()}
               instructions={
-                <ReadOnlyInstructions prompt={templatePrompt(current())} />
+                <TemplateWork
+                  task={current().task}
+                  prompt={templatePrompt(current())}
+                />
               }
               onActivate={() => openActivation(current())}
               onBack={props.onBack}
