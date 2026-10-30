@@ -102,6 +102,7 @@ export function CallParticipantsMenu(props: { localName?: string }) {
   const author = useAuthor();
   const currentUserId = useUserId();
   const [open, setOpen] = createSignal(false);
+  const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
   const participants = createMemo(() =>
     Array.from(call.remoteParticipants().values()).filter(
       (participant) => !participant.isAgent
@@ -179,14 +180,11 @@ export function CallParticipantsMenu(props: { localName?: string }) {
         <MobileDrawer
           open={open()}
           onOpenChange={setOpen}
+          finalFocusEl={trigger()}
           restoreFocus
           noOutsidePointerEvents
         >
-          <Trigger
-            aria-haspopup="dialog"
-            aria-expanded={open()}
-            onClick={() => setOpen(!open())}
-          />
+          <MobileDrawer.Trigger as={Trigger} ref={setTrigger} />
           <MobileDrawer.Portal>
             <MobileDrawer.Overlay />
             <MobileDrawer.Content>

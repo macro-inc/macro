@@ -10,7 +10,6 @@ import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
 import { ActiveCallLink } from './ActiveCallLink';
 import { CallOverlay } from './CallOverlay';
-import { CallParticipantsMenu } from './CallParticipantsMenu';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { useCall } from './use-call';
 
@@ -151,12 +150,11 @@ export function ChannelCallTab(props: {
     >
       <Match when={call.isInThisChannel() && !call.joinError()}>
         <div class="size-full min-h-0">
-          <SplitHeaderRight>
-            <CallParticipantsMenu />
-            <Show when={isMobile()}>
+          <Show when={isMobile()}>
+            <SplitHeaderRight>
               <ActiveCallLink />
-            </Show>
-          </SplitHeaderRight>
+            </SplitHeaderRight>
+          </Show>
           <CallOverlay
             onLeave={handleLeave}
             footerLeading={

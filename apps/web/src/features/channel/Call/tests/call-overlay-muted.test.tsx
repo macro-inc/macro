@@ -13,10 +13,15 @@ import { CallParticipantsMenu } from '../CallParticipantsMenu';
 const mocks = vi.hoisted(() => ({
   callContext: undefined as unknown,
   displayNames: new Map<string, string>(),
+  mobile: false,
 }));
 
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanel: () => undefined,
+}));
+
+vi.mock('@core/mobile/isMobile', () => ({
+  isMobile: () => mocks.mobile,
 }));
 
 vi.mock('@core/component/UserIcon', () => ({
@@ -159,6 +164,7 @@ function setUpCallState(
 afterEach(() => vi.unstubAllGlobals());
 
 beforeEach(() => {
+  mocks.mobile = false;
   mocks.displayNames.clear();
   vi.stubGlobal(
     'ResizeObserver',
@@ -415,6 +421,35 @@ describe('CallOverlay muted microphone badges', () => {
 });
 
 describe('CallParticipantsMenu live roster', () => {
+  it('restores the phone drawer trigger after an unfocused touch opens it', async () => {
+    vi.useFakeTimers();
+    mocks.mobile = true;
+    setUpCallState();
+    const view = render(() => (
+      <>
+        <button>Previous focus</button>
+        <CallParticipantsMenu />
+      </>
+    ));
+    try {
+      screen.getByRole('button', { name: 'Previous focus' }).focus();
+      const trigger = screen.getByRole('button', { name: 'Participants (1)' });
+      fireEvent.click(trigger);
+      await vi.advanceTimersByTimeAsync(500);
+      expect(screen.getByRole('dialog').id).toBe(
+        trigger.getAttribute('aria-controls')
+      );
+      fireEvent.keyDown(document, { key: 'Escape' });
+      fireEvent.transitionEnd(screen.getByRole('dialog'));
+      await vi.advanceTimersByTimeAsync(500);
+      expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(document.activeElement).toBe(trigger);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
+  });
+
   it('tracks human arrivals and departures without counting recording agents', () => {
     const guest = createRemoteParticipant('guest-1', {}, 'Guest attendee');
     const agent = createRemoteParticipant('agent-1', {}, 'Recorder', true);
