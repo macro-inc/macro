@@ -1,8 +1,9 @@
 use super::super::{
-    DocumentIdArrays, ExpandedDynamicCursorArgs, ItemSource, build_query,
-    expanded_dynamic_cursor_soup_hydrated,
+    DocumentIdArrays, ExpandedDynamicCursorArgs, ItemSource, build_chat_filter,
+    build_document_filter, build_project_filter, build_query, chat_literal_constant,
+    document_literal_constant, expanded_dynamic_cursor_soup_hydrated, project_literal_constant,
 };
-use super::FeedArm;
+use super::{FeedArm, OrderedScans};
 use crate::domain::models::{
     SimpleSortQuery, SimpleSortRequest, SoupDocumentServerFacts, SoupProjectionHydration,
 };
@@ -15,7 +16,8 @@ use item_filters::{
     NotificationState,
     ast::{
         EntityFilterAst, LiteralTree,
-        chat::ChatLiteral,
+        chat::{ChatLiteral, ChatRole},
+        crm_association::CrmAssociation,
         date::DateLiteral,
         document::DocumentLiteral,
         project::ProjectLiteral,
@@ -548,7 +550,7 @@ fn shapes_reach_every_driver_and_phase() {
         .iter()
         .flat_map(|(_, filter)| {
             SORTS.map(|sort| {
-                let query = build_query(
+                let (query, _) = build_query(
                     filter,
                     false,
                     sort,
@@ -612,6 +614,89 @@ async fn source_items_pages_like_the_item_tables(pool: PgPool) -> anyhow::Result
         assert!(!everything.contains(&hidden), "{hidden} should not show");
     }
     Ok(())
+}
+
+/// Only in-order scans depend on the session's time zone and the user's sources, so only they
+/// make a page ask for them.
+#[test]
+fn only_ordered_scans_need_the_bound() {
+    let ordered = |document_filter: Expr<DocumentLiteral>| {
+        let filter = EntityFilterAst {
+            document_filter: tree(document_filter),
+            chat_filter: tree(Expr::val(ChatLiteral::Importance(false))),
+            project_filter: tree(Expr::val(ProjectLiteral::Importance(false))),
+            ..Default::default()
+        };
+        build_query(
+            &filter,
+            false,
+            SimpleSortMethod::UpdatedAt,
+            ItemSource::SourceItems,
+            USER,
+            &mut DocumentIdArrays::starting_at(9),
+        )
+        .1
+    };
+    let doc = |literal| Expr::val(literal);
+    assert_eq!(
+        ordered(doc(DocumentLiteral::SubType(DocumentSubType::Task))),
+        Some(OrderedScans::Sources)
+    );
+    assert_eq!(
+        ordered(doc(DocumentLiteral::Owner(
+            Owner::from_principal_str(USER).unwrap()
+        ))),
+        Some(OrderedScans::Owner)
+    );
+    assert_eq!(
+        ordered(doc(DocumentLiteral::Id(document(1)))),
+        None,
+        "lookup"
+    );
+    assert_eq!(
+        ordered(doc(DocumentLiteral::NameContains("plan".into()))),
+        None,
+        "item tables"
+    );
+}
+
+/// Each literal a `*_literal_constant` function fixes renders as that constant, so an arm it
+/// finds empty is one Postgres folds away on the item tables.
+#[test]
+fn literal_constants_match_their_sql() {
+    let renders = |sql: String, value: bool| {
+        let constants: &[&str] = if value {
+            &[" AND TRUE"]
+        } else {
+            &[" AND 1=0", " AND FALSE"]
+        };
+        constants.contains(&sql.as_str())
+    };
+    for literal in [
+        ChatLiteral::Role(ChatRole::User),
+        ChatLiteral::Importance(true),
+        ChatLiteral::Importance(false),
+    ] {
+        let value = chat_literal_constant(&literal).unwrap();
+        let sql = build_chat_filter(Some(&Expr::val(literal.clone())));
+        assert!(renders(sql, value), "{literal:?}");
+    }
+    for literal in [
+        ProjectLiteral::Importance(true),
+        ProjectLiteral::Importance(false),
+    ] {
+        let value = project_literal_constant(&literal).unwrap();
+        let sql = build_project_filter(Some(&Expr::val(literal.clone())));
+        assert!(renders(sql, value), "{literal:?}");
+    }
+    for literal in [
+        DocumentLiteral::IncludeCbmAtmNc(false),
+        DocumentLiteral::CrmAssociated(CrmAssociation::Activity),
+    ] {
+        let value = document_literal_constant(&literal).unwrap();
+        let sql = build_document_filter(Some(&Expr::val(literal.clone())), None);
+        assert!(renders(sql, value), "{literal:?}");
+    }
 }
 
 /// Projected scans order the stored timestamps, which sort like the item tables' `timestamptz`
@@ -930,6 +1015,26 @@ fn selective_filters_read_the_item_tables() {
         )
         .is_none(),
         "every chat is important"
+    );
+    assert!(
+        FeedArm::chat(
+            Some(&Expr::is_not(Expr::val(ChatLiteral::Role(ChatRole::User)))),
+            None,
+            false
+        )
+        .is_none(),
+        "role filters match every chat"
+    );
+    assert!(
+        FeedArm::document(
+            Some(&Expr::is_not(doc(DocumentLiteral::IncludeCbmAtmNc(false)))),
+            None,
+            false,
+            USER,
+            &mut DocumentIdArrays::starting_at(9),
+        )
+        .is_none(),
+        "a disabled CBM filter matches every document"
     );
     assert!(
         FeedArm::project(

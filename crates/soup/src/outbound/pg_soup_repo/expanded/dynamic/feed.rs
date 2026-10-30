@@ -26,8 +26,9 @@ use sqlx::{Postgres, QueryBuilder};
 
 use super::{
     DOCUMENT_TASK_PROPERTY_JOINS, DocumentIdArrays, USER_HOLDS_GRANT_SOURCE, build_chat_filter,
-    build_document_filter, build_project_filter, build_properties_filter,
-    document_filter_needs_task_property_joins, push_not_inward, push_union_separator,
+    build_document_filter, build_project_filter, build_properties_filter, chat_literal_constant,
+    document_filter_needs_task_property_joins, document_literal_constant, project_literal_constant,
+    push_not_inward, push_union_separator,
 };
 
 /// The sort key main gives never-viewed items under `ViewedAt`.
@@ -219,7 +220,9 @@ impl FeedArm {
             }
             _ => false,
         };
-        if !served_by_scan(driver, &conjuncts, served, properties) {
+        if !served_by_scan(driver, &conjuncts, served, properties)
+            || matches_nothing(filter_ast, document_literal_constant)
+        {
             return None;
         }
         // `Importance` and `IncludeCbmAtmNc` filters read these aliases.
@@ -266,12 +269,8 @@ impl FeedArm {
         let served = |conjunct: &Expr<ChatLiteral>| {
             matches!(conjunct, Expr::Literal(ChatLiteral::UpdatedAt(_)))
         };
-        let constant = |lit: &ChatLiteral| match lit {
-            ChatLiteral::Importance(important) => Some(*important),
-            _ => None,
-        };
         (served_by_scan(driver, &conjuncts, served, properties)
-            && !matches_nothing(filter_ast, constant))
+            && !matches_nothing(filter_ast, chat_literal_constant))
         .then(|| {
             FeedArm::single_kind(
                 FeedEntity::Chat,
@@ -308,12 +307,8 @@ impl FeedArm {
         let served = |conjunct: &Expr<ProjectLiteral>| {
             matches!(conjunct, Expr::Literal(ProjectLiteral::UpdatedAt(_)))
         };
-        let constant = |lit: &ProjectLiteral| match lit {
-            ProjectLiteral::Importance(important) => Some(*important),
-            _ => None,
-        };
         (served_by_scan(driver, &conjuncts, served, properties)
-            && !matches_nothing(filter_ast, constant))
+            && !matches_nothing(filter_ast, project_literal_constant))
         .then(|| {
             FeedArm::single_kind(
                 FeedEntity::Project,
@@ -677,9 +672,9 @@ fn selective<T>(expr: &Expr<T>) -> bool {
     }
 }
 
-/// Whether `filter_ast` keeps no row once the literals `constant` fixes take their values. Those
-/// literals render as SQL constants, which Postgres folds, so the item-table arm for such a
-/// filter reads nothing; a source scan would still read every source to test each row.
+/// Whether `filter_ast` keeps no row once the literals `constant` fixes take the values they render
+/// as. Postgres folds those constants, so the item-table arm for such a filter reads nothing; a
+/// source scan would still read every source to test each row.
 fn matches_nothing<T: Clone>(
     filter_ast: Option<&Expr<T>>,
     constant: impl Fn(&T) -> Option<bool>,
@@ -749,6 +744,17 @@ impl<T: Clone> Conjuncts<T> {
     }
 }
 
+/// The in-order scans a feed reads. They order stored timestamps before each scan's limit, which
+/// matches the page's `timestamptz` order only in UTC; source scans also read up to a page from
+/// every source the user holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OrderedScans {
+    /// Only the owner driver's scan of the viewer's documents.
+    Owner,
+    /// Scans of the user's sources, perhaps with the owner driver's.
+    Sources,
+}
+
 /// The `TopItems` members for documents, chats and projects.
 pub(super) struct Feed {
     arms: Vec<FeedArm>,
@@ -781,6 +787,18 @@ impl Feed {
             sort: FeedSort::of(sort)?,
             exclude_frecency,
         })
+    }
+
+    /// `None` when every arm sorts its few matches whole.
+    pub(super) fn ordered_scans(&self) -> Option<OrderedScans> {
+        let reads = |driver| self.arms.iter().any(|arm| arm.driver == driver);
+        if reads(Driver::Sources) {
+            Some(OrderedScans::Sources)
+        } else if reads(Driver::Owner) {
+            Some(OrderedScans::Owner)
+        } else {
+            None
+        }
     }
 
     /// Under `ViewedAt`, the arms whose viewed items go in `ViewedItems`.

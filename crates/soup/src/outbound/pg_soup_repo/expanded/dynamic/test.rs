@@ -226,6 +226,7 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             "macro|viewer@example.com",
             &mut DocumentIdArrays::starting_at(9),
         )
+        .0
         .sql()
         .contains("FROM initiative")
     );
@@ -241,11 +242,12 @@ fn initiatives_are_opt_in_and_share_the_existing_sql_pagination() {
             "macro|viewer@example.com",
             &mut DocumentIdArrays::starting_at(9),
         )
+        .0
         .sql()
         .contains("FROM initiative")
     );
     filter.initiative_filter = Some(Arc::new(Expr::val(InitiativeLiteral::Include)));
-    let query = build_query(
+    let (query, _) = build_query(
         &filter,
         false,
         SimpleSortMethod::UpdatedAt,

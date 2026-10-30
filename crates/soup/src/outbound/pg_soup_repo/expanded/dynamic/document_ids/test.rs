@@ -194,6 +194,7 @@ fn arrays_follow_fixed_binds(item_source: ItemSource) {
             "macro|viewer@example.com",
             &mut flat_ids,
         )
+        .0
         .sql()
         .to_owned();
         let grouping = GroupingConfig {

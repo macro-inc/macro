@@ -83,11 +83,18 @@ For a read regression, set `SOUP_SOURCE_ITEMS_ENABLED=false` and restart.
 Drift can only come from disabling the triggers or writing `source_items` by
 hand; the backfill repairs it and the audit confirms it.
 
+Disabling reads leaves the history index's write cost in place. If view upserts
+regress, disable projected reads, then drop `idx_user_history_user_type_updated`
+with `DROP INDEX CONCURRENTLY` outside a transaction. Its migration is recorded
+as applied, so restoring the index takes a new migration; do that before
+enabling view-time projected reads again.
+
 Verify `source_items_read`, `idx_document_owner_updated_live` and
 `idx_user_history_user_type_updated` have `pg_index.indisready` and
-`pg_index.indisvalid` true before enabling reads. An interrupted concurrent build can leave an invalid
-index that `IF NOT EXISTS` skips: drop only that index with
-`DROP INDEX CONCURRENTLY`, outside a transaction, then rerun the statement.
+`pg_index.indisvalid` true before enabling reads. An interrupted concurrent
+build can leave an invalid index that `IF NOT EXISTS` skips: drop only that
+index with `DROP INDEX CONCURRENTLY`, outside a transaction, then rerun the
+statement.
 
 The migrations are forward-only and never move or delete authoritative rows.
 
@@ -105,12 +112,22 @@ driver for the viewer's own documents, id and project lookups, notifications)
 or cannot be selective (a negated literal, or a disjunction with such a side).
 Otherwise, for example a filter on another user's documents, a property value,
 a creation date or a name, that arm reads its item table in the same query, as
-it would with the projection disabled. A user with many sources reads up to a
-page from each, so when sources × page size exceeds 5,000 rows the whole query
-reads the item tables, which read each visible item once. Projected scans order
-the stored `timestamp(3)` values, which sort like the item tables' `timestamptz`
-casts only in UTC; sqlx opens every session in UTC, and a page whose session was
-moved to another time zone reads the item tables.
+it would with the projection disabled. So does an arm whose filter folds to
+false once literals rendered as SQL constants (chat role and importance,
+project importance, a disabled CBM filter, an unresolved CRM association) take
+their values: Postgres drops such an item-table arm without reading it.
+
+Owner and source scans order the stored `timestamp(3)` values before their
+limits, which sort like the item tables' `timestamptz` casts only in UTC. A
+page with such a scan first asks the session for its time zone and the user's
+source count, in one query on the same connection; pages with only lookups,
+notifications or item-table arms skip it. The whole page reads the item tables
+when the session is not UTC (sqlx opens every session in UTC) or, for source
+scans, when the user holds more than 400 sources or sources × page size exceeds
+5,000. Source scans read up to a page from every source plus an index descent
+per source and kind, where the item tables read each visible item once. These
+thresholds are routing heuristics fit to the benchmark (users of up to 354
+sources), not bounds on the rows a page reads.
 
 Soup's query tests run every case on both paths and require identical pages,
 and assert the projection is exact after every fixture. `crates/source_items`

@@ -12,7 +12,7 @@ mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
 pub(in crate::outbound::pg_soup_repo) use document_ids::DocumentIdArrays;
-use feed::{Feed, FeedArm};
+use feed::{Feed, FeedArm, OrderedScans};
 use initiative::initiative_top_clause;
 pub(in crate::outbound::pg_soup_repo) use initiative::{
     build_initiative_filter, initiative_access_clause, initiative_opted_in,
@@ -919,6 +919,30 @@ pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     }
 }
 
+/// The value `document_literal_sql` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn document_literal_constant(
+    literal: &DocumentLiteral,
+) -> Option<bool> {
+    match literal {
+        DocumentLiteral::IncludeCbmAtmNc(false) => Some(true),
+        DocumentLiteral::CrmAssociated(_) => Some(false),
+        DocumentLiteral::FileType(_)
+        | DocumentLiteral::Id(_)
+        | DocumentLiteral::ProjectId(_)
+        | DocumentLiteral::Owner(_)
+        | DocumentLiteral::Importance(_)
+        | DocumentLiteral::NotificationState(_)
+        | DocumentLiteral::IncludeCbmAtmNc(true)
+        | DocumentLiteral::SubType(_)
+        | DocumentLiteral::IsEmailAttachment(_)
+        | DocumentLiteral::CreatedAt(_)
+        | DocumentLiteral::UpdatedAt(_)
+        | DocumentLiteral::Property(_)
+        | DocumentLiteral::EmailAttachmentParticipant(_)
+        | DocumentLiteral::NameContains(_) => None,
+    }
+}
+
 fn document_literal_sql(literal: DocumentLiteral) -> String {
     match literal {
         DocumentLiteral::FileType(f) => {
@@ -1090,6 +1114,22 @@ fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> Stri
     }
 }
 
+/// The value `build_chat_filter` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn chat_literal_constant(
+    literal: &ChatLiteral,
+) -> Option<bool> {
+    match literal {
+        ChatLiteral::Role(_) => Some(true),
+        ChatLiteral::Importance(important) => Some(*important),
+        ChatLiteral::ProjectId(_)
+        | ChatLiteral::ChatId(_)
+        | ChatLiteral::Owner(_)
+        | ChatLiteral::NotificationState(_)
+        | ChatLiteral::CreatedAt(_)
+        | ChatLiteral::UpdatedAt(_) => None,
+    }
+}
+
 pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
     ast: Option<&Expr<ChatLiteral>>,
 ) -> String {
@@ -1130,6 +1170,21 @@ pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
         String::new()
     } else {
         format!(" AND {}", formatting)
+    }
+}
+
+/// The value `build_project_filter` renders `literal` as when it renders a constant.
+pub(in crate::outbound::pg_soup_repo) fn project_literal_constant(
+    literal: &ProjectLiteral,
+) -> Option<bool> {
+    match literal {
+        ProjectLiteral::Importance(important) => Some(*important),
+        ProjectLiteral::ProjectId(_)
+        | ProjectLiteral::ProjectIdSelf(_)
+        | ProjectLiteral::Owner(_)
+        | ProjectLiteral::NotificationState(_)
+        | ProjectLiteral::CreatedAt(_)
+        | ProjectLiteral::UpdatedAt(_) => None,
     }
 }
 
@@ -1458,12 +1513,16 @@ fn project_top_where_clause() -> String {
     )
 }
 
-/// The most `source_items` rows the per-source scans of one page may read. Each of the user's
-/// sources contributes up to a page, so a user with many sources reads more rows that way than the
-/// item tables, which read each visible item once; past this the query reads the item tables.
+/// Source scans read up to a page from every source the user holds, where the item tables read
+/// each visible item once. Past this many sources × page size the query reads the item tables. A
+/// routing threshold fit to the production-scale benchmark, not a bound on rows read.
 const SOURCE_SCAN_ROWS: i64 = 5_000;
 
-/// What decides whether a page may read `source_items`.
+/// Each source also costs an index descent per kind before it yields a row. The benchmark's users
+/// held up to 354 sources; past this many the query reads the item tables.
+const SOURCE_SCAN_SOURCES: i64 = 400;
+
+/// What decides whether a page may read `source_items` in order.
 struct ScanBound {
     /// How many sources `user_source_ids` lists for the user.
     sources: i64,
@@ -1474,8 +1533,14 @@ struct ScanBound {
 }
 
 impl ScanBound {
-    fn allows(&self, limit: i64) -> bool {
-        self.utc && self.sources * limit <= SOURCE_SCAN_ROWS
+    fn allows(&self, scans: OrderedScans, limit: i64) -> bool {
+        self.utc
+            && match scans {
+                OrderedScans::Owner => true,
+                OrderedScans::Sources => {
+                    self.sources <= SOURCE_SCAN_SOURCES && self.sources * limit <= SOURCE_SCAN_ROWS
+                }
+            }
     }
 }
 
@@ -1521,7 +1586,7 @@ fn build_query<'a>(
     item_source: ItemSource,
     viewer: &str,
     document_ids: &mut DocumentIdArrays,
-) -> QueryBuilder<'a, Postgres> {
+) -> (QueryBuilder<'a, Postgres>, Option<OrderedScans>) {
     let include_initiatives = initiative_opted_in(filter_ast.initiative_filter.as_deref())
         && properties_filter_can_apply_to(
             filter_ast.properties_filter.as_deref(),
@@ -1841,7 +1906,7 @@ fn build_query<'a>(
     }
     builder.push(DETAIL_SUFFIX);
 
-    builder
+    (builder, feed.as_ref().and_then(Feed::ordered_scans))
 }
 
 #[derive(Debug, FromRow)]
@@ -2153,27 +2218,28 @@ async fn expanded_dynamic_cursor_soup_hydrated(
             pool_idle = db.num_idle()
         ))
         .await?;
-    let item_source = if item_source == ItemSource::SourceItems
-        && Feed::serves(*cursor.sort_method())
-        && !scan_bound(&mut connection, user_id.as_ref())
-            .await?
-            .allows(query_limit)
-    {
-        ItemSource::ItemTables
-    } else {
-        item_source
-    };
 
     // Document id arrays follow the eight fixed binds.
     let mut document_ids = DocumentIdArrays::starting_at(9);
-    let mut builder = build_query(
-        cursor.filter(),
-        exclude_frecency,
-        *cursor.sort_method(),
-        item_source,
-        user_id.as_ref(),
-        &mut document_ids,
-    );
+    let build = |item_source, document_ids: &mut DocumentIdArrays| {
+        build_query(
+            cursor.filter(),
+            exclude_frecency,
+            *cursor.sort_method(),
+            item_source,
+            user_id.as_ref(),
+            document_ids,
+        )
+    };
+    let (mut builder, ordered_scans) = build(item_source, &mut document_ids);
+    if let Some(scans) = ordered_scans
+        && !scan_bound(&mut connection, user_id.as_ref())
+            .await?
+            .allows(scans, query_limit)
+    {
+        document_ids = DocumentIdArrays::starting_at(9);
+        (builder, _) = build(ItemSource::ItemTables, &mut document_ids);
+    }
     let mut query = builder
         .build()
         .bind(user_id.as_ref())
