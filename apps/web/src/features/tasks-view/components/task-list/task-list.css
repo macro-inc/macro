@@ -31,4 +31,9 @@
     --task-col-timestamp: 5rem;
     --task-col-initiative: 6rem;
   }
+
+  .task-grid-row.task-grid-icon-creator {
+    --task-col-assignees: 2.5rem;
+    --task-col-initiative: 2rem;
+  }
 }
