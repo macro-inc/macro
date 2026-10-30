@@ -1,5 +1,5 @@
-//! `cargo x deps [--check]` regenerates (or, with `--check`, verifies) the two
-//! generated dependency artifacts:
+//! `cargo x deps [--check]` checks the Macro Connect crate boundary and
+//! regenerates (or, with `--check`, verifies) two generated dependency artifacts:
 //!
 //! - `workspace-hack/Cargo.toml` (via the hakari engine): pins every
 //!   third-party dep to its union feature set so a solo `cargo build -p X`
@@ -13,6 +13,7 @@
 //! runs and CI cannot disagree about generator versions. `just hakari` wraps
 //! the regenerate mode; CI runs `--check` and fails on drift.
 
+mod boundary;
 mod closures;
 mod hakari_ops;
 
@@ -31,6 +32,7 @@ fn main() -> Result<()> {
 
 fn run_deps(check: bool) -> Result<()> {
     let graph = build_graph(check)?;
+    boundary::check(&graph)?;
 
     let mut drift: Vec<String> = Vec::new();
     let hakari_changed = hakari_ops::run(&graph, check, &mut drift)?;

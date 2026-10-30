@@ -1,0 +1,24 @@
+id: ts-connect-self-contained
+language: typescript
+severity: error
+message: Macro Connect code does not import Macro packages or the Macro web app; copy what you need into connect/.
+note: |-
+  Macro Connect (connect/) is a separate product built as if it lived in its
+  own repository. It imports @macro-connect/* packages, its own files, and
+  third-party libraries only. See connect/AGENTS.md#boundary.
+files:
+  - connect/**
+rule:
+  kind: string
+  all:
+    - any:
+        - regex: ^['"]@macro-inc/
+        - regex: ^['"]@(app|core|ui|design|theme|icon|queries|entity|property|filesystem|notifications|channel|animate|graphql-cache|phosphor|phosphor-fill|ai-ops|components|block-[a-z]+|service-[a-z-]+)(/|['"])
+        - regex: ^['"](\.\./)+(apps|packages|crates|services)/
+    - any:
+        - inside:
+            kind: import_statement
+            field: source
+        - inside:
+            kind: export_statement
+            field: source

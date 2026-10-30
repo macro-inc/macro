@@ -1,6 +1,7 @@
 //! `cargo workspace dependency check` — polices duplicate third-party deps in
-//! human-written crates, and rejects drift in the generated workspace-hack +
-//! dep-closure map. Generated into `cargo_workspace_dependency_check.yml`
+//! human-written crates, checks the Macro Connect Cargo boundary, and rejects
+//! drift in the generated workspace-hack + dep-closure map. Generated into
+//! `cargo_workspace_dependency_check.yml`
 //! (replaces the hand-written `cargo-workspace-dependency-check.yml`).
 //!
 //! Both jobs build Rust, so they run on the rust-ci profile with the Nix/Cargo
@@ -26,6 +27,8 @@ pub fn cargo_workspace_dependency_check() -> Workflow {
                 .add_type(PullRequestType::Reopened)
                 .add_type(PullRequestType::ReadyForReview)
                 .add_path(xtask_paths::repo_glob!("Cargo.toml"))
+                .add_path(xtask_paths::repo_glob!("**/Cargo.toml"))
+                .add_path(xtask_paths::repo_glob!("connect/**"))
                 .add_path(xtask_paths::repo_glob!("crates/**/Cargo.toml"))
                 .add_path(xtask_paths::repo_glob!("services/**/Cargo.toml"))
                 .add_path(xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"))
@@ -114,7 +117,7 @@ fn run_checker() -> Step<Run> {
 }
 
 fn deps_check() -> Step<Run> {
-    Step::new("generated dependency artifacts are up to date").run(indoc::indoc! {r#"
+    Step::new("check Connect boundary and dependency artifacts").run(indoc::indoc! {r#"
         cargo run -p xtask --locked -- deps --check
     "#})
 }

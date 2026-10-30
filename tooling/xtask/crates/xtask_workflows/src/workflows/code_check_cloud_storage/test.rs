@@ -1,6 +1,22 @@
 use super::*;
 
 #[test]
+fn connect_changes_trigger_rust_and_convention_checks() {
+    let rust_filters = serde_json::to_string(&paths_filter().value.with).unwrap();
+    assert!(rust_filters.contains("'connect/**'"), "{rust_filters}");
+
+    let conventions = crate::workflows::code_check_conventions::code_check_conventions()
+        .to_string()
+        .expect("conventions workflow yaml");
+    assert!(conventions.contains("'connect/**'"), "{conventions}");
+
+    let cargo_deny = crate::workflows::cargo_deny::cargo_deny()
+        .to_string()
+        .expect("cargo deny workflow yaml");
+    assert!(cargo_deny.contains("connect/**/Cargo.toml"), "{cargo_deny}");
+}
+
+#[test]
 fn inventory_only_changes_run_live_config_validation() {
     let with = serde_json::to_value(&paths_filter().value.with).unwrap();
     let filters = with["filters"].as_str().unwrap().to_owned();
