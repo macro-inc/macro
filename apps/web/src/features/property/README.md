@@ -25,8 +25,9 @@ Other empty properties retain the dashed circle. Populated project properties
 use the regular cube icon through `Property.Icon`. Keep these state indicators
 static and readable in compact rows. When composing a project icon separately,
 pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
-Status and Urgent option icons default to 18px in property pills and both desktop
-and mobile editors; compact displays can override the size explicitly.
+Status and Urgent option icons default to 18px in desktop and mobile editors.
+Title property pills and side-panel Status/Priority values use 16px icons;
+other compact displays can override the size explicitly.
 
 ## Side-panel collections
 

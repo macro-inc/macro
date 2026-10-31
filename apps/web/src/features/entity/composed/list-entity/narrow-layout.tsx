@@ -169,7 +169,7 @@ export function NarrowLayout(props: LayoutProps) {
                 fallback={
                   <Entity.Properties
                     entity={props.entity}
-                    maxUserStackUsers={0}
+                    maxUserStackUsers={1}
                     showCaret={false}
                     includeProject={props.showProject}
                     hideStatus

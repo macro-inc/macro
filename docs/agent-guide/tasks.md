@@ -91,10 +91,13 @@ The Project column shows the linked project's name when one project is assigned,
 and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
-Desktop task-list columns place Project before Assignees; mobile property order is unchanged.
-The 80px Updated column keeps its label and sort arrow visible without truncation,
-and its timestamps stay on one line. Created by is the final column, with a 16px
-avatar and a 16px gap after Updated. Its header shows a matching-size user-plus
+Task rows place Project before Assignees on desktop and phones. Narrow rows keep
+one assignee avatar plus the remaining count instead of a generic people icon.
+At list-container widths up to 840px, Project, Assignees, and Updated headers
+become icons with hover/focus tooltips and accessible names. Project occupies 32px,
+Assignees 40px, and Updated 64px; wider lists retain an 80px Updated column with
+its full label and sort arrow. Timestamps stay on one line, and Updated remains
+sortable. Created by is the final column, with a 16px avatar and a 16px gap after Updated. Its header shows a matching-size user-plus
 icon with a “Created by” tooltip on hover or focus. Owner names and the column label
 stay accessible; names remain available on hover. Its narrow-container visibility
 is unchanged.
@@ -120,8 +123,8 @@ Click or tap the leading status or priority icon to edit without opening the tas
 Status and Urgent icons are 18px on desktop and phones; other priority icons are
 16px on desktop and 20px on phones. Phone tap targets sit edge-to-edge.
 Priority sits directly beside the title. Their pickers replace
-the separate Status/Priority columns and duplicate trailing mobile pills; Assignees
-and Project stay on the right, with 20px phone icons. Empty assignees use a filled
+the separate Status/Priority columns and duplicate trailing mobile pills; Project
+and Assignees stay on the right, with 20px phone icons. Empty assignees use a filled
 person in a dashed circular frame. Empty priority shows the same wide ascending
 bars as Low/Medium/High, with every bar at 30% opacity. Urgent shows a rounded
 square with a transparent exclamation cutout. Completed and Canceled use filled
@@ -149,6 +152,8 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+Status and Priority values use 16px icons both beneath the title and in the
+Properties side panel, without changing their menus or tap targets.
 In the task's Properties side panel, hover or focus a row for **Pin below title**
 or **Unpin from title**. Pinning adds the property to the title row; unpinning keeps
 its saved value and the side-panel row. The title pill's hover card also offers

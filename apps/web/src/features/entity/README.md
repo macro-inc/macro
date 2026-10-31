@@ -22,8 +22,8 @@ Phone task rows reserve an 8px unread-dot rail without a checkbox column and pla
 status and priority controls edge-to-edge while preserving their 36px touch targets
 and row selection. Other trailing property icons use 20px phone glyphs.
 Other entity rows keep their existing indicator layout.
-Narrow rows show the people icon beside the count for multiple assignees when
-avatars are collapsed.
+Narrow task rows keep Project before Assignees and show one assignee avatar plus
+the remaining count; do not replace the first assignee with a generic people icon.
 
 `OwnerLabel.iconOnly` retains owner names as accessible text and hover titles for
 users, bots, teams, and unknown owners; ordinary owner labels remain unchanged.

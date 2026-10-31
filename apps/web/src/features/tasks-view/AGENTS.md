@@ -24,9 +24,9 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Render status and Urgent icons at 18px in task rows, list/board headers, cards, and property menus; use 16px group-header carets and preserve the existing hit targets.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit status and priority through leading `TaskPropertyControl` icons on desktop and mobile; place priority directly beside the title after the status gap, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
-- Place Project before Assignees in desktop task headers and rows, preserving the mobile property order and other hosts of the shared grid.
-- At container widths up to 840px, keep icon-only Project and Assignees columns at 32px and 40px respectively; retain space for the assignee overflow count and leave wide and phone layouts unchanged.
-- Keep Updated at 80px with an untruncated header and single-line timestamps; keep Created by last as a 16px avatar with a 16px gap after Updated and preserve its narrow-container visibility.
+- Place Project before Assignees in wide and narrow task rows, including phones; keep one assignee avatar plus the remaining count in narrow rows.
+- At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, and Updated headers; keep Project at 32px, Assignees at 40px, and Updated at 64px, retaining one assignee avatar and its overflow count.
+- Above 840px, keep Updated at 80px with an untruncated header; retain single-line timestamps at every width, and keep Created by last with its existing avatar spacing and narrow-container visibility.
 - Show a 16px user-plus icon in the Created by header, right-aligned with creator avatars, with an accessible name and a keyboard-focusable “Created by” tooltip.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, and a corner-dashed project cube; use the regular cube for set projects.

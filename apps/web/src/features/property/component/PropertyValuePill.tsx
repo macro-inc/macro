@@ -1,5 +1,6 @@
 import { type ComponentProps, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { SYSTEM_PROPERTY_IDS } from '../constants';
 import { Property } from '../property';
 import { getEntityValues, hasValue } from '../utils';
 import { ProjectLinkPill } from './ProjectLinkPill';
@@ -54,7 +55,17 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
             <span class="inline-flex min-w-0 items-center gap-1">
               <Switch
                 fallback={
-                  <Property.Icon property={property()} class="shrink-0" />
+                  <Property.Icon
+                    property={property()}
+                    class={
+                      property().propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.STATUS ||
+                      property().propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.PRIORITY
+                        ? 'size-4 shrink-0'
+                        : 'shrink-0'
+                    }
+                  />
                 }
               >
                 <Match when={isMultiUserEntity()}>
