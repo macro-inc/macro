@@ -23,6 +23,7 @@ use entity_access::domain::models::{
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use models_properties::{
     DataType, EntityType, PropertyOwner,
     api::{
@@ -1342,6 +1343,62 @@ async fn entity_property_event_attributes_team_bot_but_not_system_access() {
         );
         assert!(published.envelope["metadata"]["on_behalf_of"].is_null());
     }
+}
+
+#[tokio::test]
+async fn entity_property_event_records_the_outside_source_of_an_internal_write() {
+    let access = EditReceipt::dangerously_assert_internal_user("doc1", AccessEntityType::Document);
+    let property_definition_id = Uuid::from_u128(0xE70A);
+    let assignment = entity_property_for_event(
+        Uuid::from_u128(0xE70B),
+        "doc1",
+        EntityType::Document,
+        property_definition_id,
+        event_timestamp(),
+    );
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, false))) })
+    });
+    repo.expect_upsert_entity_property()
+        .return_once(move |_, _, _, _| {
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property: assignment,
+                    value: None,
+                    previous_value: None,
+                })
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    service
+        .set_entity_property_with_source(
+            &access,
+            property_definition_id,
+            None,
+            Some(PropertyChangeSource::GithubPullRequest {
+                url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+                account: GithubAccount {
+                    id: "444".to_string(),
+                    login: "someone-else".to_string(),
+                },
+            }),
+        )
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(
+        published.envelope["metadata"]["source"],
+        serde_json::json!({
+            "type": "github_pull_request",
+            "url": "https://github.com/my-org/my-repo/pull/42",
+            "account": { "id": "444", "login": "someone-else" },
+        })
+    );
+    assert!(published.envelope["metadata"]["actor_user_id"].is_null());
 }
 
 #[tokio::test]

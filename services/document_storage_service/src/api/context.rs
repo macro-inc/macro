@@ -125,6 +125,7 @@ use macro_authorization::{
 };
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
@@ -346,6 +347,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
         status: &str,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
@@ -371,7 +373,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
         );
         self.properties
-            .set_entity_property(
+            .set_entity_property_with_source(
                 &access,
                 SystemPropertyKey::STATUS_UUID,
                 Some(
@@ -379,6 +381,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                         option_id: status_option.uuid(),
                     },
                 ),
+                source.cloned(),
             )
             .await
             .map(|_| ())

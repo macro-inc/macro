@@ -17,6 +17,7 @@ use models_permissions::share_permission::{
 };
 use models_properties::EntityReference;
 use models_properties::api::SetPropertyValue;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -2191,10 +2192,11 @@ impl<
     }
 
     #[tracing::instrument(
-        skip(self, entity_access_receipt, credited_user),
+        skip(self, entity_access_receipt, credited_user, source),
         fields(
             task_id = %entity_access_receipt.entity().entity_id,
-            credit_requested = credited_user.is_some()
+            credit_requested = credited_user.is_some(),
+            has_source = source.is_some()
         ),
         err
     )]
@@ -2202,10 +2204,16 @@ impl<
         &self,
         entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
         credited_user: Option<MacroUserIdStr<'static>>,
+        source: Option<PropertyChangeSource>,
         status: &str,
     ) -> Result<(), DocumentError> {
         self.task_properties_service
-            .update_task_status(&entity_access_receipt, credited_user.as_ref(), status)
+            .update_task_status(
+                &entity_access_receipt,
+                credited_user.as_ref(),
+                source.as_ref(),
+                status,
+            )
             .await
             .map_err(DocumentError::Internal)?;
 
