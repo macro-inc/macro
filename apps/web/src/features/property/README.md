@@ -35,8 +35,9 @@ cards use a cube header with the assigned value below it; empty Project hover
 cards retain the one-line empty message.
 
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
-Measure actual title, tag, and control widths; collapse trailing tag chips only
-when their combined content overflows, then truncate the title as a last resort.
+Show at most three individual chips by default and keep the rest in overflow.
+Measure actual title, tag, and control widths; collapse more trailing chips when
+their combined content overflows, then truncate the title as a last resort.
 Hidden tags keep the existing overflow picker and hover actions. Keep the visible
 chip count stable while a picker or its nested editor is active so resizing
 cannot discard the editing session. Hosts without a controller retain their

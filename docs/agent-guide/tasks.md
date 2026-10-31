@@ -97,9 +97,9 @@ and assigned Project hover cards put their heading above the value; empty
 Project keeps its simple one-line message.
 Folder pills keep their link color and become circular when icon-only. When the
 title area runs out of room, the folder path collapses to a clickable icon with
-a full-path hover card first, then tags collapse
-one at a time into the existing overflow chip. Short titles keep their labels and
-tags visible; long titles truncate only after the folder and tags collapse.
+a full-path hover card first. Show at most three individual tag chips and keep the
+rest in the existing overflow chip. As space shrinks, move more chips into
+overflow one at a time before truncating the title.
 Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 An open picker or nested tag editor stays mounted while resizing. The share
 indicator remains immediately beside the title whenever it is shown.

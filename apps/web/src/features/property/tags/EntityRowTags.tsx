@@ -314,12 +314,9 @@ export function EntityRowTags(props: {
   const [pickerActive, setPickerActive] = createSignal(false);
   const [visibleLimit, setVisibleLimit] = createSignal(Infinity);
   const id = createUniqueId();
-  const limit = createMemo(() => {
-    const count = appliedTags().length;
-    if (props.maxVisible !== undefined)
-      return Math.min(count, props.maxVisible);
-    return props.collapse ? count : Math.min(count, DEFAULT_MAX_VISIBLE);
-  });
+  const limit = createMemo(() =>
+    Math.min(appliedTags().length, props.maxVisible ?? DEFAULT_MAX_VISIBLE)
+  );
   const maxVisible = () =>
     props.collapse ? Math.min(limit(), visibleLimit()) : limit();
 

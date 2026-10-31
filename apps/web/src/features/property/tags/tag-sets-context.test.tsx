@@ -106,7 +106,7 @@ describe('TagSetsContext', () => {
     );
   });
 
-  it('keeps an active tag picker mounted while the row collapses', async () => {
+  it('caps visible tags while preserving collapse and active picker state', async () => {
     const registrations = new Map<string, CollapsibleRegistration>();
     const collapse = {
       register(registration: CollapsibleRegistration) {
@@ -171,7 +171,9 @@ describe('TagSetsContext', () => {
       </QueryClientProvider>
     ));
 
-    expect(view.getByRole('button', { name: 'Fourth' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Third' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Fourth' })).toBeNull();
+    expect(view.getByRole('button', { name: '+1 tag' })).toBeTruthy();
     const first = view.getByRole('button', { name: 'First' });
     await fireEvent.click(first);
     expect(registrations.size).toBe(0);
@@ -192,9 +194,10 @@ describe('TagSetsContext', () => {
     for (const registration of registrations.values()) {
       registration.setCollapsed(false);
     }
-    expect(overflow.isConnected).toBe(false);
+    expect(view.getByRole('button', { name: '+1 tag' })).toBe(overflow);
     expect(view.getByRole('button', { name: 'First' })).toBeTruthy();
     expect(view.getByRole('button', { name: 'Second' })).toBeTruthy();
-    expect(view.getByRole('button', { name: 'Fourth' })).toBeTruthy();
+    expect(view.getByRole('button', { name: 'Third' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: 'Fourth' })).toBeNull();
   });
 });
