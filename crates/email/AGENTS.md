@@ -98,6 +98,11 @@ tools — hexagonal, heavily feature-gated.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.
+- Read receipts (`domain/read_receipts.rs`) own pixel policy for every send
+  path: strip existing Macro pixels, track only HTML bodies, never block
+  delivery on a tracking failure, and count opens only for sent messages.
+  Tokens are stored per message, so a retried send or Outlook draft revision
+  rebuilds the same URL; keep it that way or the draft fingerprints drift.
 - Outlook organization commands only run in their link's current
   `sync_generation`. Anything that bumps it must rebind unfinished commands as
   `pending`, since claims skip `confirming` ones while those still block later

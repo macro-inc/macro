@@ -390,6 +390,7 @@ pub async fn run() -> anyhow::Result<()> {
             )
             .with_connections_enabled(config.outlook_connections_enabled),
         ),
+        read_receipts: crate::composition::read_receipts(db.clone(), env)?,
         invitation_snapshots: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
         // calendar_service's sync kill switch rejects RSVP writes itself.
         invitation_resolver: Arc::new(CalendarInvitationResolver::new(PgCalendarRepository::new(

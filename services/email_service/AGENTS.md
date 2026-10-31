@@ -158,6 +158,11 @@ the gateway `/email` prefix.
   visibility while processing. Don't raise its receive batch: messages queued
   behind a long mailbox purge would be redelivered and purged twice.
   `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
+- `GET /opens/{token}` is public and must return the same uncacheable GIF for
+  every token. Gmail sends add the pixel only to the provider copy in
+  `outbound/scheduled_delivery.rs`; Outlook adds it through the materializer
+  wrapper in the `pubsub_workers` binary. Pixels use `EmailServiceUrl`, so the
+  local Docker stack embeds an in-network host recipients cannot load.
 
 ## Related
 

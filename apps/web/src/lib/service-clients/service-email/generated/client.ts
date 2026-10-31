@@ -66,6 +66,7 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
   TransferRecoveryResponse,
@@ -4110,6 +4111,61 @@ export const updateThreadProject = async (
   } as updateThreadProjectResponse;
 };
 
+export type getThreadReadReceiptsResponse200 = {
+  data: ThreadReadReceipts;
+  status: 200;
+};
+
+export type getThreadReadReceiptsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getThreadReadReceiptsResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getThreadReadReceiptsResponseSuccess =
+  getThreadReadReceiptsResponse200 & {
+    headers: Headers;
+  };
+export type getThreadReadReceiptsResponseError = (
+  | getThreadReadReceiptsResponse401
+  | getThreadReadReceiptsResponse403
+) & {
+  headers: Headers;
+};
+
+export type getThreadReadReceiptsResponse =
+  | getThreadReadReceiptsResponseSuccess
+  | getThreadReadReceiptsResponseError;
+
+export const getGetThreadReadReceiptsUrl = (threadId: string) => {
+  return `/email/threads/${threadId}/read-receipts`;
+};
+
+export const getThreadReadReceipts = async (
+  threadId: string,
+  options?: RequestInit
+): Promise<getThreadReadReceiptsResponse> => {
+  const res = await fetch(getGetThreadReadReceiptsUrl(threadId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getThreadReadReceiptsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getThreadReadReceiptsResponse;
+};
+
 /**
  * @summary Health check
  */
@@ -4144,4 +4200,44 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
+};
+
+/**
+ * @summary Every request gets the same uncacheable pixel so the response reveals nothing
+about the token, and each open reaches the server.
+ */
+export type getReadReceiptPixelResponseDefault = {
+  data: unknown;
+  status: number;
+};
+export type getReadReceiptPixelResponseError =
+  getReadReceiptPixelResponseDefault & {
+    headers: Headers;
+  };
+
+export type getReadReceiptPixelResponse = getReadReceiptPixelResponseError;
+
+export const getGetReadReceiptPixelUrl = (token: string) => {
+  return `/opens/${token}`;
+};
+
+export const getReadReceiptPixel = async (
+  token: string,
+  options?: RequestInit
+): Promise<getReadReceiptPixelResponse> => {
+  const res = await fetch(getGetReadReceiptPixelUrl(token), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getReadReceiptPixelResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getReadReceiptPixelResponse;
 };

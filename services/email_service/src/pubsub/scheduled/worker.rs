@@ -8,6 +8,10 @@ use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;
 
 /// method that ingests sqs messages and calls the process function for each
+#[expect(
+    clippy::too_many_arguments,
+    reason = "mirrors the ScheduledContext fields"
+)]
 pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
@@ -18,6 +22,7 @@ pub async fn run_worker(
     s3_client: s3_client::S3,
     attachment_bucket: String,
     macro_event_broker: PubSubEventBroker,
+    read_receipts: crate::composition::ReadReceipts,
 ) {
     run_worker_with_cancellation(
         ScheduledContext {
@@ -28,6 +33,7 @@ pub async fn run_worker(
             s3_client,
             attachment_bucket,
             macro_event_broker,
+            read_receipts,
         },
         CancellationToken::new(),
     )

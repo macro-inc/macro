@@ -14,6 +14,15 @@ export function formatFullDate(date: DateValue): string {
     .replace(',', '');
 }
 
+export function formatShortDateTime(date: DateValue): string {
+  return new Date(date).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 export function formatShortDate(date: DateValue): string {
   const d = new Date(date);
   if (d.getFullYear() !== new Date().getFullYear()) {

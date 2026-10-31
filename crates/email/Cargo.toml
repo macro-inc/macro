@@ -93,6 +93,7 @@ non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
 models_email = { path = "../models_email", optional = true }
+rand = { workspace = true }
 recursion = { workspace = true }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }

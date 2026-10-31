@@ -7227,6 +7227,7 @@ dependencies = [
  "models_email",
  "models_pagination",
  "non_empty",
+ "rand 0.9.4",
  "recursion",
  "redis",
  "reqwest 0.13.4",
