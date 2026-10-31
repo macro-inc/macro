@@ -29,6 +29,7 @@ patterns in older code.
 | `infra/` | Deployment definitions and local infrastructure. |
 | `tooling/` | Development tools, scripts, and imported `just` recipes. |
 | `docs/` | Development guides, architecture, designs, runbooks, and the browser agent guide; see [the index](docs/README.md). |
+| `connect/` | Macro Connect, a separate product built as if in its own repo; Macro uses only its public client and SDK. Start at [its guide](connect/AGENTS.md). |
 
 ## Where agent guidance lives
 

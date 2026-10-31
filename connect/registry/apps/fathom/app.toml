@@ -1,0 +1,10 @@
+id = "fathom"
+name = "Fathom"
+description = "Search meeting recordings, summaries, and action items."
+access = ["mcp"]
+mcp_url = "https://api.fathom.ai/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["fathom"]
+status = "pending"
+probed = 2026-10-30

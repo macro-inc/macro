@@ -4199,6 +4199,33 @@
       "crates/work_feed",
       "crates/workspace-hack"
     ],
+    "connect_api": [
+      "connect/crates/connect_client",
+      "connect/crates/connect_platform",
+      "connect/crates/connect_registry",
+      "connect/services/connect_api",
+      "crates/workspace-hack"
+    ],
+    "connect_client": [
+      "connect/crates/connect_client",
+      "connect/crates/connect_platform",
+      "crates/workspace-hack"
+    ],
+    "connect_integration": [
+      "connect/crates/connect_client",
+      "connect/crates/connect_platform",
+      "connect/crates/connect_registry",
+      "connect/tests/connect_integration",
+      "crates/workspace-hack"
+    ],
+    "connect_platform": [
+      "connect/crates/connect_platform",
+      "crates/workspace-hack"
+    ],
+    "connect_registry": [
+      "connect/crates/connect_registry",
+      "crates/workspace-hack"
+    ],
     "connection": [
       "crates/agent",
       "crates/ai_toolset",

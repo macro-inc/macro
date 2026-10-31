@@ -1,0 +1,10 @@
+id = "netlify"
+name = "Netlify"
+description = "Manage sites, deploys, and environment settings."
+access = ["mcp"]
+mcp_url = "https://netlify-mcp.netlify.app/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["netlify"]
+status = "pending"
+probed = 2026-10-30

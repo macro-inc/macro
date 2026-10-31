@@ -1,0 +1,10 @@
+id = "grafana"
+name = "Grafana"
+description = "Search dashboards and query Grafana Cloud data sources."
+access = ["mcp"]
+mcp_url = "https://mcp.grafana.com/mcp"
+client_registration = "cimd"
+scopes = []
+pipedream_app_slugs = ["grafana"]
+status = "pending"
+probed = 2026-10-30

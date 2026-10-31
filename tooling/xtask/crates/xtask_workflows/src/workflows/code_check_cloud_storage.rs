@@ -272,6 +272,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - '.sqlx/**'
                   - 'crates/**'
                   - 'services/**'
+                  - 'connect/**'
                   - 'tooling/xtask/**'
                   - 'static_assets/**'
                   - 'nix/**'

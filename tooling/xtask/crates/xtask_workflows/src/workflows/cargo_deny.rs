@@ -21,6 +21,7 @@ pub fn cargo_deny() -> Workflow {
                 .add_path(xtask_paths::repo_glob!("Cargo.toml"))
                 .add_path(xtask_paths::repo_glob!("crates/**/Cargo.toml"))
                 .add_path(xtask_paths::repo_glob!("services/**/Cargo.toml"))
+                .add_path(xtask_paths::repo_glob!("connect/**/Cargo.toml"))
                 .add_path(xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"))
                 .add_path(xtask_paths::repo_glob!("Cargo.lock"))
                 .add_path(xtask_paths::repo_glob!("deny.toml"))

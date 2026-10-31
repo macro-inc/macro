@@ -1,0 +1,10 @@
+id = "trello"
+name = "Trello"
+description = "Read and update boards, lists, and cards."
+access = ["mcp"]
+mcp_url = "https://mcp.trello.com/v1"
+client_registration = "cimd"
+scopes = []
+pipedream_app_slugs = ["trello"]
+status = "pending"
+probed = 2026-10-30

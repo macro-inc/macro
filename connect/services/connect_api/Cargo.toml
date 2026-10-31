@@ -1,0 +1,46 @@
+[package]
+name = "connect_api"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+aes-gcm = { workspace = true }
+async-trait = { workspace = true }
+aws-sdk-kms = { workspace = true }
+axum = { workspace = true }
+async-stream = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true }
+connect_client = { path = "../../crates/connect_client" }
+connect_platform = { path = "../../crates/connect_platform" }
+connect_registry = { path = "../../crates/connect_registry" }
+futures = { workspace = true }
+opentelemetry-http = { workspace = true }
+rand = { workspace = true }
+reqwest = { workspace = true }
+rmcp = { workspace = true, features = ["auth", "client", "transport-streamable-http-client-reqwest"] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+subtle = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "net", "signal", "sync", "time"] }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+opentelemetry = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+tower = { workspace = true }
+wiremock = { workspace = true }

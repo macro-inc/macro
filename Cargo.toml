@@ -4,6 +4,11 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "connect/crates/connect_registry",
+  "connect/crates/connect_platform",
+  "connect/crates/connect_client",
+  "connect/tests/connect_integration",
+  "connect/services/connect_api",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",

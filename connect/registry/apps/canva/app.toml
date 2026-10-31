@@ -1,0 +1,10 @@
+id = "canva"
+name = "Canva"
+description = "Search, create, and export designs."
+access = ["mcp"]
+mcp_url = "https://mcp.canva.com/mcp"
+client_registration = "cimd"
+scopes = []
+pipedream_app_slugs = ["canva"]
+status = "pending"
+probed = 2026-10-30

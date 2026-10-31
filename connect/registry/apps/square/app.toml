@@ -1,0 +1,10 @@
+id = "square"
+name = "Square"
+description = "Look up payments, orders, customers, and catalog items."
+access = ["mcp"]
+mcp_url = "https://mcp.squareup.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["square"]
+status = "pending"
+probed = 2026-10-30

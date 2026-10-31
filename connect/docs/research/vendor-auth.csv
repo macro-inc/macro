@@ -1,0 +1,90 @@
+app,pipedream_connections,mcp_url,mcp_auth,verified,api_auth,custom_oauth_app,friction,notes
+notion,683,https://mcp.notion.com/mcp,cimd+dcr,probed,"oauth2, api_key",no,,"Notion MCP (Beta)"
+google_drive,520,https://drivemcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"drive/drive.readonly RESTRICTED: verification + annual CASA (~$500-4.5k/yr, weeks-months); 100-user cap until verified","Developer Preview enrollment required"
+github,345,https://api.githubcopilot.com/mcp/,preregistered_only,probed,"oauth2 (OAuth/GitHub App), PAT",yes,"Low: no review; ours already exists",
+google_sheets,317,https://sheetsmcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"SENSITIVE; RESTRICTED if drive/drive.readonly requested","Developer Preview; 6 tools"
+gmail,315,https://gmailmcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"All needed scopes RESTRICTED: verification + annual CASA; 100-user cap","Developer Preview; no send tool; per-tool PRM quirk"
+google_calendar,276,https://calendarmcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"SENSITIVE: verification, no CASA","Developer Preview"
+linear,229,https://mcp.linear.app/mcp,cimd+dcr,probed,"oauth2, api_key",no,,
+slack_v2,186,https://mcp.slack.com/mcp,preregistered_only,probed,oauth2 (user/bot token),yes,"Marketplace publication for broad distribution; workspace admin approval may apply","Our pre-registered Slack app already covers this"
+google_docs,97,https://docsmcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"SENSITIVE; RESTRICTED if drive/drive.readonly requested","Developer Preview; 2 tools"
+linkedin,72,none,n/a,probed,oauth2,yes,"Self-serve OIDC + w_member_social (post only); reading posts closed; org pages need Community Management API vetting; 60-day tokens, no refresh unless partner","No official MCP"
+anthropic,60,none,n/a,docs,api_key,n/a (api key),,
+openai,57,none,n/a,docs,api_key,n/a (api key),,
+spotify,52,none,n/a,probed,oauth2,yes,"Dev Mode capped ~5 users (Feb 2026); Extended Quota needs registered business + ~250k MAU (forum/press)","Effectively blocked"
+google_forms,42,none,n/a,probed,oauth2,yes,"SENSITIVE (unverified): verification, no CASA",
+hubspot,42,https://mcp.hubspot.com,preregistered_only,probed,"oauth2 (or private app token)",yes,"Self-serve app on HubSpot developer platform; install limits for unlisted apps may apply","No DCR/CIMD; native stack already has users here so an app likely exists"
+figma,38,https://mcp.figma.com/mcp,preregistered_only,probed+docs,"oauth2, PAT","yes (and still blocked)","DCR allowlisted by client_name (403 for unknown); custom OAuth apps can't get mcp:connect; catalog entry by request only","Fallback: REST API with our own OAuth app"
+microsoft_teams,37,https://agent365.svc.cloud.microsoft/agents/servers/mcp_TeamsServer,preregistered_only,probed,oauth2 (Entra/Graph),yes,"Multitenant Entra app + publisher verification (free, days); Teams read scopes need tenant admin consent","Agent 365 MCP needs Agent 365 + Copilot licences; realistically Graph"
+google_analytics,35,https://analyticsdata.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"SENSITIVE (unverified): verification","Also undocumented Admin server"
+asana,29,https://mcp.asana.com/v2/mcp,preregistered_only,probed,"oauth2 (or PAT)",yes,"Self-serve MCP app in Asana developer console","No DCR/CIMD; native stack already has users here so an app likely exists"
+youtube_data_api,27,none,n/a,probed,"oauth2 (or api_key for public)",yes,"SENSITIVE (unverified); quota raise needs YouTube compliance audit",
+airtable_oauth,23,https://mcp.airtable.com/mcp,cimd+dcr,probed,"oauth2 (or PAT)",no,,
+trello,23,https://mcp.trello.com/v1,cimd+dcr,probed,"api_key + user token; Atlassian OAuth",no,,"Auth on auth.atlassian.com"
+zoom,23,https://mcp.zoom.us/mcp/zoom/streamable,preregistered_only,probed,oauth2,yes,"Zoom Marketplace app; public multi-account app needs Marketplace review (weeks)","Docs: no DCR/CIMD"
+granola,21,https://mcp.granola.ai/mcp,cimd+dcr,probed,"api_key (Bearer grn_…)","no (MCP); api key for REST","REST keys Business/Enterprise only","Granola sync uses REST: no OAuth there; MCP may not cover bulk sync"
+todoist,21,https://ai.todoist.net/mcp,cimd+dcr,probed,"oauth2 (or API token)",no,,
+google_tasks,20,https://tasksmcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"SENSITIVE (unverified)","Undocumented; tools/list empty"
+calendly_v2,18,https://mcp.calendly.com,dcr,probed,"oauth2 (or PAT)",no,,
+pinterest,18,none,n/a,probed,oauth2,yes,"Trial access sandboxed; Standard needs review with demo video (days to 30+)",
+clickup,15,https://mcp.clickup.com/mcp,dcr,probed,"oauth2 (or personal token)",no,,
+jira,15,https://mcp.atlassian.com/v1/mcp/authv2,cimd+dcr,probed,"oauth2 (3LO) or api_token",no,"Org admin may need to allow our domain in Rovo MCP settings","One server covers Jira + Confluence"
+quickbooks,15,none (public),n/a,probed,oauth2,yes,"Intuit production keys need app assessment; App Partner Program meters some reads","Intuit hosted MCP restricted to Claude/ChatGPT connectors"
+xero_accounting_api,15,https://mcp.xero.com/mcp,preregistered_only,probed,oauth2,yes,"No DCR/CIMD; app tiers: Starter free/5 conns, Core AUD$35/mo/50, Plus AUD$245/mo/1000; needs App Certification",
+discord,13,https://mcp.discord.com/mcp,preregistered_only,probed,"oauth2 / bot_token",yes,"Undocumented personal.* scopes likely allowlisted","Unannounced MCP; treat as unavailable"
+microsoft_onedrive,13,https://agent365.svc.cloud.microsoft/agents/servers/mcp_ODSPRemoteServer,preregistered_only,probed,oauth2 (Entra/Graph),yes,same Entra app,"Licensed Agent 365 only; personal MSA not covered"
+microsoft_outlook,13,https://agent365.svc.cloud.microsoft/agents/servers/mcp_MailTools,preregistered_only,probed,oauth2 (Entra/Graph),yes,same Entra app,"Licensed Agent 365 only; otherwise Graph"
+netlify,11,https://netlify-mcp.netlify.app/mcp,dcr,probed,"PAT, oauth2",no,,
+posthog,11,https://mcp.posthog.com/mcp,cimd+dcr,probed,"oauth2, api_key",no,,
+stripe,11,https://mcp.stripe.com,dcr,probed,"api_key, oauth2 (Connect)",no,,"Admins can disable MCP per account"
+dropbox,10,https://mcp.dropbox.com/mcp,dcr,probed,oauth2,no,,
+google_search_console,10,https://searchconsole.googleapis.com/mcp,preregistered_only,probed,oauth2,yes,"SENSITIVE (unverified)","Undocumented but live"
+apollo_io_oauth,9,https://mcp.apollo.io/mcp,cimd+dcr,probed,"api_key; oauth2 for partners",no,,
+cloudflare_api_key,9,https://mcp.cloudflare.com/mcp,cimd+dcr,probed,"api_token, oauth2",no,,
+attio,8,https://mcp.attio.com/mcp,dcr,probed,"oauth2 (or API key)",no,,
+microsoft_outlook_calendar,8,https://agent365.svc.cloud.microsoft/agents/servers/mcp_CalendarTools,preregistered_only,probed,oauth2 (Entra/Graph),yes,same Entra app,"Licensed Agent 365 only; otherwise Graph"
+supabase,8,https://mcp.supabase.com/mcp,dcr,probed,"PAT, oauth2",no,,"DCR registers confidential clients only"
+exa,7,https://mcp.exa.ai/mcp,cimd+dcr,probed,api_key,no,,"Keyless tier also works"
+google_slides,7,https://slidesmcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"SENSITIVE; RESTRICTED if drive.readonly requested","Developer Preview"
+google_gemini,6,none,n/a,probed,api_key,n/a (api key),,
+openphone,6,https://mcp.quo.com/mcp,dcr,probed,api_key,no,,"Now Quo"
+zoho_mail,6,per-user Zoho MCP console URL,api_key,docs,oauth2,"no for MCP; yes for direct API","Zoho API console self-serve; multi data-center","No fixed URL; each user builds a key-bearing server URL"
+mailchimp,5,https://ai-inc.mailchimp.com/claude/mcp/v2,dcr,probed,oauth2,no,,"Per-client path, undocumented; may not be supported for us"
+raindrop,5,https://api.raindrop.io/rest/v2/ai/mcp,dcr,probed,"oauth2",no,,"PRM resource != MCP URL; strict resource check may reject"
+slack,5,https://mcp.slack.com/mcp,preregistered_only,probed,oauth2,yes,same as slack_v2,"Old slug; migrate to same app"
+vercel_token_auth,5,https://mcp.vercel.com,cimd+dcr,probed+docs,"api_token, oauth2","yes (client allowlist)","Vercel approves MCP clients via form; timeline unknown","Fallback: pasted access token (current behaviour)"
+webflow,5,https://mcp.webflow.com/mcp,dcr,probed,oauth2,no,,
+youtube_analytics_api,5,none,n/a,probed,oauth2,yes,"SENSITIVE (unverified)",
+zoho_crm,5,per-user Zoho MCP console URL,api_key,docs,oauth2,"no for MCP; yes for direct API",same as zoho_mail,same as zoho_mail
+zoom_admin,5,https://mcp.zoom.us/mcp/admin/streamable,preregistered_only,probed,oauth2,yes,same as zoom; admin scopes,
+coda,4,https://coda.io/apis/mcp,dcr,probed,"api_key",no,,"Rebranded Superhuman Docs MCP"
+confluence,4,https://mcp.atlassian.com/v1/mcp/authv2,cimd+dcr,probed,"oauth2 (3LO) or api_token",no,same as jira,
+cursor,4,none,n/a,docs,api_key,n/a (api key),,
+google_classroom,4,https://classroommcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"SENSITIVE (unverified); edu admins often restrict","tools/list empty"
+google_cloud,4,https://<service>.googleapis.com/mcp,preregistered_only,probed,oauth2,yes,"SENSITIVE (unverified)","One server per GCP product"
+google_meet,4,https://meetmcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"SENSITIVE (unverified)","Undocumented; tools/list empty"
+roblox,4,none,n/a,probed,oauth2 (Open Cloud),yes,"Private apps capped at 10 users; public needs review + ID-verified registrant",
+shopify_developer_app,4,https://mcp.shopify.com/mcp,cimd,probed,oauth2,no,,"Same server as shopify"
+box,3,https://mcp.box.com,preregistered_only,probed,oauth2,yes,"Each customer's Box admin must enable the integration; predefined listing needs Box partnership",
+canva,3,https://mcp.canva.com/mcp,cimd+dcr,probed,oauth2,no,,
+datadog,3,https://mcp.datadoghq.com/api/unstable/mcp-server/mcp,dcr,probed,"api_key + app_key, oauth2",no,"Org needs MCP Preview access + MCP Read permission","Per-site URL (US1/US3/US5/EU1/AP1/AP2)"
+fathom,3,https://api.fathom.ai/mcp,dcr,probed,"api_key; oauth2",no,,
+google_chat,3,https://chatmcp.googleapis.com/mcp/v1,preregistered_only,probed,oauth2,yes,"RESTRICTED: verification + annual CASA; needs Chat app config","Developer Preview"
+highlevel_oauth,3,https://services.leadconnectorhq.com/mcp/,dcr,probed,"oauth2 (or private token)",no,,"Official status not confirmed in docs"
+pipedrive,3,https://mcp.pipedrive.ai/mcp,dcr,probed,"oauth2 (or API token)",no,,"Host is .ai not .com"
+sentry,3,https://mcp.sentry.dev/mcp,cimd+dcr,probed,"auth_token, oauth2",no,,"sentry.io SaaS only"
+shopify,3,https://mcp.shopify.com/mcp,cimd,probed,oauth2,no,,"CIMD only"
+telegram_bot_api,3,none,n/a,docs,bot_token,n/a (api key),,
+zoho_books,3,per-user Zoho MCP console URL,api_key,docs,oauth2,"no for MCP; yes for direct API",same as zoho_mail,same as zoho_mail
+firecrawl,2,https://mcp.firecrawl.dev/mcp,api_key,probed,api_key,n/a (api key),,"Key in URL path"
+intercom,2,https://mcp.intercom.com/mcp,dcr,probed,oauth2,no,,
+klaviyo,2,https://mcp.klaviyo.com/mcp,cimd+dcr,probed,"oauth2 / api_key",no,,
+square,2,https://mcp.squareup.com/mcp,dcr,probed,oauth2,no,,
+zendesk,2,https://mcp.zendesk.com/mcp,cimd,probed,oauth2,no,,"CIMD only; not documented as GA"
+apify,1,https://mcp.apify.com,cimd+dcr,probed,"api_token, oauth2",no,,"PRM only at root path"
+microsoft_excel,1,none,n/a,docs,oauth2 (Entra/Graph),yes,same Entra app,
+monday,1,https://mcp.monday.com/mcp,cimd+dcr,probed,"oauth2 (or API token)",no,,
+paypal,1,https://mcp.paypal.com/mcp,dcr,probed,oauth2,no,,
+slack_bot,1,https://mcp.slack.com/mcp,preregistered_only,probed,bot_token,yes,same as slack_v2,"MCP is user-token only; bot use needs Web API"
+typeform,1,https://api.typeform.com/mcp,cimd+dcr,probed,"oauth2 (or PAT)",no,,
+grafana,0,https://mcp.grafana.com/mcp,cimd+dcr,probed,"service account token",no,,"Grafana Cloud only"

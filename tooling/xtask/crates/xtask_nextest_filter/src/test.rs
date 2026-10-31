@@ -50,6 +50,17 @@ fn crate_change_maps_to_rdeps_of_that_crate() {
     );
 }
 
+#[test]
+fn connect_change_maps_to_workspace_package() {
+    let graph = build_graph(false).expect("cargo metadata");
+    let selection = select_in_repo(&graph, &["connect/crates/connect_registry/src/lib.rs"]);
+    assert_ne!(selection, PackageSelection::All);
+    assert!(
+        selected_packages(&selection).contains("connect_registry"),
+        "changed Connect crate must be selected: {selection:?}"
+    );
+}
+
 /// Top-level files that belong to no package — a JSON at the repo root, a
 /// README, a deleted misc file — must not select the full suite.
 #[test]

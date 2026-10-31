@@ -1,0 +1,10 @@
+id = "coda"
+name = "Coda"
+description = "Read and edit docs, pages, and tables."
+access = ["mcp"]
+mcp_url = "https://coda.io/apis/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["coda"]
+status = "pending"
+probed = 2026-10-30
