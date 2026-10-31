@@ -10,7 +10,9 @@ type HoverCardProps = ParentProps<{
   contentClass?: string;
   placement?: Placement;
   content: JSX.Element;
-  as?: 'div' | 'span';
+  as?: 'div' | 'span' | 'button';
+  triggerAriaLabel?: string;
+  triggerOnClick?: JSX.EventHandler<HTMLElement, MouseEvent>;
   /**
    * When true, force the hover card closed and prevent it from opening on
    * hover. Use to defer to another surface anchored on the same trigger — e.g.
@@ -26,6 +28,8 @@ type HoverCardProps = ParentProps<{
  * Styled rich hover content that can contain controls and nested hover cards.
  * Use `Tooltip` instead when the content is only a short text hint; its
  * string-only `label` API and coordination group are intentionally separate.
+ * Use `as="button"` with `triggerAriaLabel` and `triggerOnClick` for one
+ * keyboard focus target; touch devices keep the button without the preview.
  *
  * @example
  * <HoverCard content={<PreviewActions />}>
@@ -34,7 +38,22 @@ type HoverCardProps = ParentProps<{
  */
 export function HoverCard(props: HoverCardProps) {
   return (
-    <Show when={!isTouchDevice()} fallback={props.children}>
+    <Show
+      when={!isTouchDevice()}
+      fallback={
+        <Show when={props.as === 'button'} fallback={props.children}>
+          <button
+            type="button"
+            aria-label={props.triggerAriaLabel}
+            class={cn('inline-flex items-center', props.triggerClass)}
+            onClick={props.triggerOnClick}
+            disabled={props.disabled}
+          >
+            {props.children}
+          </button>
+        </Show>
+      }
+    >
       <CoreHoverCard
         trigger={props.children}
         content={
@@ -59,6 +78,8 @@ export function HoverCard(props: HoverCardProps) {
         contentClass="max-w-[calc(100vw-32px)]"
         triggerClass={cn('inline-flex items-center', props.triggerClass)}
         triggerAs={props.as ?? 'div'}
+        triggerAriaLabel={props.triggerAriaLabel}
+        triggerOnClick={props.triggerOnClick}
         disabled={props.disabled}
         chokeGroup={props.chokeGroup}
       />
