@@ -365,13 +365,17 @@ test.describe('a persistent prompt', () => {
       Promise.all(card.getAnimations().map((motion) => motion.finished))
     );
     const resting = await prompt(page).boundingBox();
+    // 12px over the dock inset, plus the 20px gap the stack keeps above notices.
+    expect(
+      page.viewportSize()!.height - (resting!.y + resting!.height)
+    ).toBeCloseTo(32, 1);
 
     await tap(page, page.getByRole('button', { name: 'Show notice' }));
     await expect(notice(page)).toBeVisible();
     await expect(async () => {
       const raised = await prompt(page).boundingBox();
       const shown = await notice(page).boundingBox();
-      expect(raised!.y + raised!.height).toBeLessThanOrEqual(shown!.y);
+      expect(shown!.y - (raised!.y + raised!.height)).toBeCloseTo(20, 1);
     }).toPass();
 
     await page.getByRole('button', { name: 'Dismiss notice' }).click();
