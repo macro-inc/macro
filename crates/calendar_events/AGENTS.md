@@ -225,8 +225,11 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   event there is one list and one nudge, and another inbox's copy has its own
   list. The signal names that inbox, so it goes only to the list's readers;
   the requester is never one, since a reader's own view of the event is
-  `OwnCopy`, which refuses the ask. `document_storage_service` hosts the ask,
-  so it has its own `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
+  `OwnCopy`, which refuses the ask. The web also refetches the list when the
+  sharer's notification lands, but that is not the signal: it reaches no
+  delegate, a muted category never sends it, and the notifier only queues.
+  `document_storage_service` hosts the ask, so it has its own
+  `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with
