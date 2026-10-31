@@ -308,6 +308,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         } else {
             None
         };
+        // Checked like any update, but with nothing to replace: a new revision
+        // would only supersede event runs queued under the current one.
+        if !configuration_changed && action.enabled == input.enabled {
+            return Ok(action);
+        }
         action.configuration_revision = action.configuration_revision.next()?;
         action.name = input.name;
         action.trigger = input.trigger;

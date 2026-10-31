@@ -1707,3 +1707,36 @@ async fn a_description_is_trimmed_kept_when_omitted_cleared_when_empty_and_bound
         ActionPolicyError::DescriptionTooLong,
     );
 }
+
+#[tokio::test]
+async fn an_update_that_changes_nothing_keeps_the_revision() {
+    let svc = service(false);
+    let created = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(configuration(false)),
+        )
+        .await
+        .unwrap();
+    let id = created.id.unwrap();
+    let same = svc
+        .update_action(edit_receipt(id), update(configuration(false)))
+        .await
+        .unwrap();
+    // A new revision would supersede event runs queued under the old one.
+    assert_eq!(same.configuration_revision, created.configuration_revision);
+    let renamed = svc
+        .update_action(
+            edit_receipt(id),
+            update(ActionConfiguration {
+                name: "renamed".into(),
+                ..configuration(false)
+            }),
+        )
+        .await
+        .unwrap();
+    assert_ne!(
+        renamed.configuration_revision,
+        created.configuration_revision
+    );
+}
