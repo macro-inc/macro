@@ -415,50 +415,75 @@ async fn ingress_insert(
     .map(|result| result.rows_affected() == 1)
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_queued_join_request_notification_is_not_stored_after_its_event_went(pool: PgPool) {
+/// An event a sharer could be asked to join.
+async fn shared_event(pool: &PgPool) -> Uuid {
     let sharer_id = "macro|join-queued@example.com";
-    let sharer_link = insert_link(&pool, sharer_id).await;
+    let sharer_link = insert_link(pool, sharer_id).await;
     let repo = PgCalendarRepository::new(pool.clone());
     let provider = provider_ids(&repo, sharer_link).await;
-    let event_id = repo
-        .upsert_event_fixture(timed_upsert(
-            sharer_id,
-            sharer_link,
-            provider,
-            "join-queued@example.com",
-            "Offsite",
-            1,
-        ))
+    repo.upsert_event_fixture(timed_upsert(
+        sharer_id,
+        sharer_link,
+        provider,
+        "join-queued@example.com",
+        "Offsite",
+        1,
+    ))
+    .await
+    .unwrap()
+}
+
+async fn backend_pid(transaction: &mut Transaction<'_, Postgres>) -> i32 {
+    sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut **transaction)
         .await
-        .unwrap();
+        .unwrap()
+}
+
+/// Only Postgres can tell that a statement is waiting on `blocker`'s row lock.
+async fn wait_for_blocked_transaction(pool: &PgPool, blocker: i32) {
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let waiting = sqlx::query_scalar!(
+                r#"SELECT EXISTS (
+                    SELECT 1 FROM pg_stat_activity
+                    WHERE datname = current_database()
+                    AND $1 = ANY(pg_blocking_pids(pid))
+                ) AS "waiting!""#,
+                blocker,
+            )
+            .fetch_one(pool)
+            .await
+            .unwrap();
+            if waiting {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("the statement should wait on the row lock");
+}
+
+async fn stored_notifications(pool: &PgPool) -> i64 {
+    sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM notification"#)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_queued_join_request_notification_is_not_stored_after_its_event_went(pool: PgPool) {
+    let event_id = shared_event(&pool).await;
     assert!(ingress_insert(&pool, event_id).await.unwrap());
 
-    // A cancellation in flight holds the row, so the insert waits for its outcome.
-    let mut cancelling = pool.begin().await.unwrap();
     sqlx::query!(
         "UPDATE calendar_events SET status = 'cancelled' WHERE id = $1",
         event_id,
     )
-    .execute(&mut *cancelling)
+    .execute(&pool)
     .await
     .unwrap();
-    let mut arriving = pool.begin().await.unwrap();
-    sqlx::query!("SET LOCAL lock_timeout = '100ms'")
-        .execute(&mut *arriving)
-        .await
-        .unwrap();
-    let waited = ingress_insert(&mut *arriving, event_id).await.unwrap_err();
-    assert_eq!(
-        waited
-            .as_database_error()
-            .and_then(|error| error.code())
-            .as_deref(),
-        Some("55P03")
-    );
-    arriving.rollback().await.unwrap();
-    cancelling.commit().await.unwrap();
-
     assert!(!ingress_insert(&pool, event_id).await.unwrap());
 
     sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
@@ -466,11 +491,72 @@ async fn a_queued_join_request_notification_is_not_stored_after_its_event_went(p
         .await
         .unwrap();
     assert!(!ingress_insert(&pool, event_id).await.unwrap());
-    assert_eq!(
-        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM notification"#)
-            .fetch_one(&pool)
-            .await
-            .unwrap(),
-        0
-    );
+    assert_eq!(stored_notifications(&pool).await, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_queued_insert_waits_for_a_cancellation_then_stores_nothing(pool: PgPool) {
+    let event_id = shared_event(&pool).await;
+    let mut cancelling = pool.begin().await.unwrap();
+    let blocker = backend_pid(&mut cancelling).await;
+    sqlx::query!(
+        "UPDATE calendar_events SET status = 'cancelled' WHERE id = $1",
+        event_id,
+    )
+    .execute(&mut *cancelling)
+    .await
+    .unwrap();
+
+    let arriving = tokio::spawn({
+        let pool = pool.clone();
+        async move { ingress_insert(&pool, event_id).await }
+    });
+    wait_for_blocked_transaction(&pool, blocker).await;
+    cancelling.commit().await.unwrap();
+
+    assert!(!arriving.await.unwrap().unwrap());
+    assert_eq!(stored_notifications(&pool).await, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_queued_insert_waits_for_a_delete_then_stores_nothing(pool: PgPool) {
+    let event_id = shared_event(&pool).await;
+    let mut deleting = pool.begin().await.unwrap();
+    let blocker = backend_pid(&mut deleting).await;
+    sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
+        .execute(&mut *deleting)
+        .await
+        .unwrap();
+
+    let arriving = tokio::spawn({
+        let pool = pool.clone();
+        async move { ingress_insert(&pool, event_id).await }
+    });
+    wait_for_blocked_transaction(&pool, blocker).await;
+    deleting.commit().await.unwrap();
+
+    assert!(!arriving.await.unwrap().unwrap());
+    assert_eq!(stored_notifications(&pool).await, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_delete_waits_for_a_queued_insert_then_retires_it(pool: PgPool) {
+    let event_id = shared_event(&pool).await;
+    let mut arriving = pool.begin().await.unwrap();
+    let blocker = backend_pid(&mut arriving).await;
+    assert!(ingress_insert(&mut *arriving, event_id).await.unwrap());
+
+    let deleting = tokio::spawn({
+        let pool = pool.clone();
+        async move {
+            sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
+                .execute(&pool)
+                .await
+        }
+    });
+    wait_for_blocked_transaction(&pool, blocker).await;
+    arriving.commit().await.unwrap();
+
+    deleting.await.unwrap().unwrap();
+    assert_eq!(stored_notifications(&pool).await, 0);
 }
