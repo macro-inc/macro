@@ -33,6 +33,7 @@ import {
 import { type Accessor, onCleanup } from 'solid-js';
 import { queryClient } from '../client';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
+import type { PredicateQueryStatus } from './graphql/create-predicate-query';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
 import { soupPageTimestamp } from './page-timestamp';
@@ -351,6 +352,7 @@ export type SoupAstItemsQuery = {
   readonly groupedPaging?: import('./graphql/create-grouped-soup-live-query').GroupedSoupPaging;
   readonly data: SoupAstItemsData | undefined;
   readonly error: Error | null;
+  readonly fetchError?: Error | null;
   /** Includes paused initial requests, whose data resource is not readable yet. */
   readonly isPending: boolean;
   readonly isLoading: boolean;
@@ -365,6 +367,7 @@ export type SoupAstItemsQuery = {
   readonly isEnabled: boolean;
   readonly hasNextPage: boolean;
   readonly transport: SoupAstItemsQueryTransport;
+  readonly cacheStatus?: PredicateQueryStatus;
   fetchNextPage(): Promise<void>;
   refetch(): Promise<void>;
   /** Discards continuation pages while retaining the initial page. */
@@ -480,6 +483,11 @@ export function useSoupAstItemsQuery(
         ? (activeGraphqlQuery().error() ?? null)
         : (restQuery.error ?? null);
     },
+    get fetchError() {
+      if (!usesGraphql()) return restQuery.error ?? null;
+      const query = activeGraphqlQuery();
+      return query.fetchError?.() ?? query.error() ?? null;
+    },
     get isPending() {
       if (!usesGraphql()) return restQuery.isPending;
       const query = activeGraphqlQuery();
@@ -525,6 +533,11 @@ export function useSoupAstItemsQuery(
     },
     get transport() {
       return usesGraphql() ? 'graphql' : 'rest';
+    },
+    get cacheStatus() {
+      return usesGraphql()
+        ? (activeGraphqlQuery().cacheStatus?.() ?? 'unsupported')
+        : 'unsupported';
     },
     async fetchNextPage() {
       if (usesGraphql()) {

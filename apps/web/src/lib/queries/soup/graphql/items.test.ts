@@ -10,6 +10,10 @@ import { type DocumentNode, print } from 'graphql';
 import { createComputed, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
+import {
+  type LiveQueryUpdate,
+  parseCacheRevision,
+} from '../../../graphql-cache/protocol';
 
 const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
 const getGraphqlSoupCacheHostMock = vi.hoisted(() => vi.fn());
@@ -207,6 +211,73 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  it('exposes cold-cache predicate readiness before any network response', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const key = 'GraphqlSoupChannel:cached';
+    const evaluation = deferred<LiveQueryUpdate>();
+    entityFilterMock.mockImplementation((args) =>
+      args.liveQuery?.release
+        ? Promise.resolve({ kind: 'unsupported' })
+        : evaluation.promise
+    );
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => REVISION_0,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    const ready = deferred<void>();
+    const { query, dispose } = createRoot((dispose) => {
+      const query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({
+          enabled: true,
+          projection: 'channel-list',
+          networkPaused: true,
+        })
+      );
+      createComputed(() => {
+        if (query.cacheStatus?.() === 'ready') ready.resolve();
+      });
+      return { query, dispose };
+    });
+    try {
+      expect(query.cacheStatus?.()).toBe('loading');
+      expect(entityFilterMock).toHaveBeenCalledWith(
+        expect.objectContaining({ baseline: [], liveQuery: expect.any(Object) })
+      );
+      fake.executions[0].next(undefined, { source: 'normalized-cache-hit' });
+      evaluation.resolve({
+        kind: 'live-query',
+        revision: parseCacheRevision(REVISION_0),
+        reset: true,
+        keys: [key],
+        upserts: [
+          {
+            recordKey: key,
+            record: {
+              __typename: 'GraphqlSoupChannel',
+              id: 'cached',
+              createdAt: '2026-01-01T00:00:00Z',
+              updatedAt: '2026-01-01T00:00:00Z',
+            },
+          },
+        ],
+        patches: [],
+        removed: [],
+        retainedKeys: [],
+        optimistic: false,
+      });
+      await ready.promise;
+      expect(query.data()?.entities.map(({ id }) => id)).toEqual(['cached']);
+      expect(query.cacheStatus?.()).toBe('ready');
+      expect(query.isFetching()).toBe(false);
+    } finally {
+      dispose();
+    }
+  });
   it.each([
     { name: 'current host', supported: true, includesInvite: true },
     { name: 'older host omits row', supported: false, includesInvite: false },
@@ -1286,6 +1357,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           f.fake.executions[0].fail(f.error);
           expect(f.query.data()?.entities).toHaveLength(empty ? 0 : 1);
           expect(f.query.error()).toBeUndefined();
+          expect(f.query.fetchError?.()).toBe(f.error);
         } finally {
           f.dispose();
         }

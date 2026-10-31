@@ -16,6 +16,7 @@ import {
 } from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
 import type { GroupedSoupPaging } from './create-grouped-soup-live-query';
+import type { PredicateQueryStatus } from './create-predicate-query';
 import {
   createSoupLiveQuery,
   type SoupLiveQueryOptions,
@@ -39,11 +40,15 @@ export type GraphqlSoupAstItemsQuery = {
   groupedPaging?: GroupedSoupPaging;
   /** Cache writes keep this list current. Grouped lists leave it out. */
   cacheMaintained?: Accessor<boolean>;
+  /** Readiness of the local predicate, not proof of complete server membership. */
+  cacheStatus?: Accessor<PredicateQueryStatus>;
   localRevision?: Accessor<CacheRevision | undefined>;
   localOptimistic?: Accessor<boolean>;
   data: Accessor<SoupAstItemsData | undefined>;
   /** Latest GraphQL transport or application error. */
   error: Accessor<CombinedError | undefined>;
+  /** Includes background failures hidden by the cached-data display policy. */
+  fetchError?: Accessor<CombinedError | undefined>;
   /** False when the filter AST has no GraphQL translation. */
   isSupported: Accessor<boolean>;
   isEnabled: Accessor<boolean>;

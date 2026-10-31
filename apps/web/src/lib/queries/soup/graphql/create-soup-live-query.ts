@@ -1001,6 +1001,11 @@ export function createSoupLiveQuery(
 
   return {
     cacheMaintained,
+    /** Local predicate readiness is separate from network loading and membership completeness. */
+    cacheStatus: () =>
+      !getGraphqlSoupCacheHost()?.liveQueries || !localSource()
+        ? ('unsupported' as const)
+        : live.status(),
     queryScope: () => JSON.stringify([firstPageInput(), cacheGeneration]),
     localRevision: () => displayLocalProjection()?.mail?.revision,
     localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,
@@ -1011,6 +1016,7 @@ export function createSoupLiveQuery(
     fetchedRecords: () => query.data?.records() ?? [],
     cachedMail,
     error,
+    fetchError: () => query.error ?? undefined,
     isSupported,
     isEnabled: () => query.isEnabled,
     isLoading: () => {
