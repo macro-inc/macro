@@ -5,6 +5,7 @@ mod test;
 
 mod handle_comment;
 mod handle_installation;
+mod handle_issue;
 mod handle_pr;
 mod notify_pr;
 mod notify_pr_activity;
@@ -235,6 +236,18 @@ impl<
     fn github_key(event: &ValidatedGithubWebhookEvent) -> Option<GithubKey> {
         match (event.repo_owner(), event.repo_name(), event.pull_number()) {
             (Some(o), Some(r), Some(p)) => Some(GithubKey::new(o, r, p)),
+            _ => None,
+        }
+    }
+
+    /// Build an issue-scoped [`GithubKey`] (`owner/repo/issues/number`) from
+    /// an `issues` webhook event, if owner/repo/issue number are present.
+    ///
+    /// Issues share GitHub's numbering space with pull requests, so they must
+    /// not reuse the `pull` key format.
+    fn github_issue_key(event: &ValidatedGithubWebhookEvent) -> Option<GithubKey> {
+        match (event.repo_owner(), event.repo_name(), event.issue_number()) {
+            (Some(o), Some(r), Some(n)) => Some(GithubKey::new_issue(o, r, n)),
             _ => None,
         }
     }
@@ -1030,6 +1043,16 @@ impl<
                 }
 
                 Ok(())
+            }
+            GithubWebhookEventType::Issues => {
+                // `issues` events also fire for pull requests (shared numbering
+                // space); those stay owned by the pull request pipeline.
+                if webhook_event.is_pull_request_backed_issue() {
+                    tracing::debug!("skipping issues event backed by a pull request");
+                    return Ok(());
+                }
+
+                self.handle_issue_event(webhook_event).await
             }
             GithubWebhookEventType::Installation => match action {
                 Some("created") => self.handle_installation_created(webhook_event).await,

@@ -695,3 +695,211 @@ fn an_oversized_payload_travels_without_it() {
 
     assert_eq!(delivery.payload, None);
 }
+
+// ---------------------------------------------------------------------------
+// `issues` webhook events (standalone GitHub issues, issue #8347)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn event_type_from_issues_header() {
+    assert_eq!(
+        GithubWebhookEventType::from_event_header("issues"),
+        GithubWebhookEventType::Issues
+    );
+}
+
+#[test]
+fn extract_text_issues_title_and_body() {
+    let payload = serde_json::json!({
+        "action": "opened",
+        "issue": {
+            "number": 42,
+            "title": "Track MACRO-abc123 in the backlog",
+            "body": "This issue closes MACRO-def456",
+            "state": "open",
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("issues".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert_eq!(texts.len(), 2);
+    assert_eq!(texts[0], "Track MACRO-abc123 in the backlog");
+    assert_eq!(texts[1], "This issue closes MACRO-def456");
+}
+
+#[test]
+fn extract_text_issues_null_body() {
+    let payload = serde_json::json!({
+        "action": "opened",
+        "issue": {
+            "number": 7,
+            "title": "some title",
+            "body": null,
+            "state": "open",
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("issues".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    assert_eq!(texts, vec!["some title".to_string()]);
+}
+
+#[test]
+fn extract_text_issues_strips_code() {
+    let payload = serde_json::json!({
+        "action": "opened",
+        "issue": {
+            "number": 7,
+            "title": "fix panel padding",
+            "body": "Swap `pt-4` for `py-6` on the container.",
+            "state": "open",
+        }
+    });
+    let event = ValidatedGithubWebhookEvent::new("issues".to_string(), payload);
+    let texts = event.extract_searchable_text();
+    let refs = TeamTaskReference::extract_from_text(&texts.join(" "));
+    assert!(refs.is_empty());
+}
+
+#[test]
+fn issues_status_opened_and_reopened() {
+    for action in ["opened", "reopened"] {
+        let event = ValidatedGithubWebhookEvent::new(
+            "issues".to_string(),
+            serde_json::json!({
+                "action": action,
+                "issue": { "number": 1, "state": "open" },
+            }),
+        );
+        assert_eq!(event.task_status_for_event(), Some("Not Started"));
+    }
+}
+
+#[test]
+fn issues_status_closed_as_completed() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issues".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "issue": { "number": 1, "state": "closed", "state_reason": "completed" },
+        }),
+    );
+    assert_eq!(event.task_status_for_event(), Some("Completed"));
+    assert!(event.issue_closed_as_completed());
+}
+
+#[test]
+fn issues_status_closed_without_reason_defaults_to_completed() {
+    // Older payloads carry no `state_reason`; preserve closed → Completed.
+    let event = ValidatedGithubWebhookEvent::new(
+        "issues".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "issue": { "number": 1, "state": "closed" },
+        }),
+    );
+    assert_eq!(event.task_status_for_event(), Some("Completed"));
+    assert!(event.issue_closed_as_completed());
+}
+
+#[test]
+fn issues_status_closed_not_planned_or_duplicate() {
+    for reason in ["not_planned", "duplicate"] {
+        let event = ValidatedGithubWebhookEvent::new(
+            "issues".to_string(),
+            serde_json::json!({
+                "action": "closed",
+                "issue": { "number": 1, "state": "closed", "state_reason": reason },
+            }),
+        );
+        assert_eq!(event.task_status_for_event(), Some("Not Started"));
+        assert!(!event.issue_closed_as_completed());
+    }
+}
+
+#[test]
+fn issues_status_ignores_non_lifecycle_actions() {
+    for action in ["edited", "labeled", "unlabeled", "assigned", "unassigned"] {
+        let event = ValidatedGithubWebhookEvent::new(
+            "issues".to_string(),
+            serde_json::json!({
+                "action": action,
+                "issue": { "number": 1, "state": "open" },
+            }),
+        );
+        assert_eq!(event.task_status_for_event(), None);
+    }
+}
+
+#[test]
+fn issues_number_and_state_helpers() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issues".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "issue": { "number": 99, "state": "open", "state_reason": serde_json::Value::Null },
+        }),
+    );
+    assert_eq!(event.issue_number(), Some(99));
+    // `pull_number` already falls back to `issue.number`.
+    assert_eq!(event.pull_number(), Some(99));
+    assert_eq!(event.issue_state(), Some("open"));
+    assert!(event.is_issue());
+    assert!(!event.is_pull_request_backed_issue());
+    assert!(!event.is_associated_with_pull_request());
+}
+
+#[test]
+fn issues_repository_id_uses_numeric_id() {
+    // Span fields must use the numeric `repository.id`, never the owner
+    // login (which can be a username).
+    let event = ValidatedGithubWebhookEvent::new(
+        "issues".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "issue": { "number": 5, "state": "open" },
+            "repository": {
+                "id": 123456,
+                "name": "macro",
+                "owner": { "login": "some-user" },
+            },
+        }),
+    );
+    assert_eq!(event.repository_id(), Some(123456));
+    assert_eq!(event.repo_owner(), Some("some-user"));
+
+    let without_repo = ValidatedGithubWebhookEvent::new(
+        "issues".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "issue": { "number": 5, "state": "open" },
+        }),
+    );
+    assert_eq!(without_repo.repository_id(), None);
+}
+
+#[test]
+fn issues_event_backed_by_pr_stays_with_pr_pipeline() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issues".to_string(),
+        serde_json::json!({
+            "action": "labeled",
+            "issue": {
+                "number": 7,
+                "state": "open",
+                "pull_request": { "url": "https://api.github.com/repos/o/r/pulls/7" },
+            },
+        }),
+    );
+    assert!(!event.is_issue());
+    assert!(event.is_pull_request_backed_issue());
+    assert!(event.is_associated_with_pull_request());
+}
+
+#[test]
+fn pr_context_empty_for_issues_event() {
+    let payload = serde_json::json!({
+        "action": "opened",
+        "issue": { "number": 1, "title": "t", "body": "b", "state": "open" },
+    });
+    let event = ValidatedGithubWebhookEvent::new("issues".to_string(), payload);
+    assert!(event.extract_pr_context_text().is_empty());
+}

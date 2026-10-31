@@ -8,6 +8,15 @@ fn test_github_key() {
     assert_eq!(key.to_string(), "rust-lang/rust/pull/12345");
 }
 
+#[test]
+fn test_github_issue_key_uses_issues_segment() {
+    // Issues share GitHub's numbering space with PRs; the key must not
+    // collide with a pull request of the same number.
+    let key = GithubKey::new_issue("rust-lang", "rust", 12345);
+    assert_eq!(key.as_ref(), "rust-lang/rust/issues/12345");
+    assert_eq!(key.to_string(), "rust-lang/rust/issues/12345");
+}
+
 fn pull_request_reference() -> GithubPullRequestRef {
     GithubPullRequestRef {
         github_key: "macro/app/pull/7".to_string(),

@@ -208,6 +208,16 @@ impl ValidatedGithubWebhookEvent {
                     texts.push(strip_markdown_code(s));
                 }
             }
+            GithubWebhookEventType::Issues => {
+                if let Some(issue) = self.payload.get("issue") {
+                    if let Some(s) = issue.get("title").and_then(|v| v.as_str()) {
+                        texts.push(strip_markdown_code(s));
+                    }
+                    if let Some(s) = issue.get("body").and_then(|v| v.as_str()) {
+                        texts.push(strip_markdown_code(s));
+                    }
+                }
+            }
             GithubWebhookEventType::PullRequestReview => {
                 if let Some(s) = self
                     .payload
@@ -245,6 +255,10 @@ impl ValidatedGithubWebhookEvent {
     /// `closed` + merged → `"Completed"`, `closed` without merge →
     /// `"Not Started"` (the TODO status).
     ///
+    /// For `issues` events: `opened`/`reopened` → `"Not Started"`,
+    /// `closed` → `"Completed"` when the issue was closed as completed,
+    /// otherwise `"Not Started"` (closed as not planned or duplicate).
+    ///
     /// For comment/review events that newly associate a task with an open PR,
     /// returns `"In Review"`.
     ///
@@ -272,6 +286,12 @@ impl ValidatedGithubWebhookEvent {
 
                 if is_open { Some("In Review") } else { None }
             }
+            GithubWebhookEventType::Issues => match self.action() {
+                Some("opened" | "reopened") => Some("Not Started"),
+                Some("closed") if self.issue_closed_as_completed() => Some("Completed"),
+                Some("closed") => Some("Not Started"),
+                _ => None,
+            },
             GithubWebhookEventType::CheckRun
             | GithubWebhookEventType::Installation
             | GithubWebhookEventType::Unknown(_) => None,
@@ -303,6 +323,7 @@ impl ValidatedGithubWebhookEvent {
     pub fn is_associated_with_pull_request(&self) -> bool {
         match self.parsed_event_type() {
             GithubWebhookEventType::PullRequest => self.payload.get("pull_request").is_some(),
+            GithubWebhookEventType::Issues => self.is_pull_request_backed_issue(),
             GithubWebhookEventType::IssueComment => self
                 .payload
                 .get("issue")
@@ -314,6 +335,61 @@ impl ValidatedGithubWebhookEvent {
             }
             GithubWebhookEventType::CheckRun => self.pull_number().is_some(),
             GithubWebhookEventType::Installation | GithubWebhookEventType::Unknown(_) => false,
+        }
+    }
+
+    /// Extract the issue number from an `issues` webhook payload.
+    pub fn issue_number(&self) -> Option<u64> {
+        self.payload
+            .get("issue")
+            .and_then(|issue| issue.get("number"))
+            .and_then(|v| v.as_u64())
+    }
+
+    /// Whether this is an `issues` event for a standalone issue (not a PR).
+    ///
+    /// GitHub also emits `issues` events for pull requests (they share the
+    /// issues numbering space); those carry an `issue.pull_request` object
+    /// and remain owned by the pull request pipeline.
+    pub fn is_issue(&self) -> bool {
+        matches!(self.parsed_event_type(), GithubWebhookEventType::Issues)
+            && !self.is_pull_request_backed_issue()
+    }
+
+    /// Whether this `issues` event payload is actually backed by a pull request.
+    pub fn is_pull_request_backed_issue(&self) -> bool {
+        self.payload
+            .get("issue")
+            .and_then(|issue| issue.get("pull_request"))
+            .is_some()
+    }
+
+    /// The issue's `state` (`"open"` / `"closed"`), if present.
+    pub fn issue_state(&self) -> Option<&str> {
+        self.payload
+            .get("issue")
+            .and_then(|issue| issue.get("state"))
+            .and_then(|v| v.as_str())
+    }
+
+    /// The issue's `state_reason` (`"completed"`, `"not_planned"`, `"duplicate"`,
+    /// `"reopened"`), if present. `None` on older payloads and while open.
+    pub fn issue_state_reason(&self) -> Option<&str> {
+        self.payload
+            .get("issue")
+            .and_then(|issue| issue.get("state_reason"))
+            .and_then(|v| v.as_str())
+    }
+
+    /// Whether a `closed` issue was closed as completed.
+    ///
+    /// Missing `state_reason` (older payloads) is treated as completed to
+    /// preserve the historical `closed` → `Completed` mapping.
+    pub fn issue_closed_as_completed(&self) -> bool {
+        match self.issue_state_reason() {
+            None => true,
+            Some("completed") => true,
+            Some(_) => false,
         }
     }
 
@@ -332,6 +408,18 @@ impl ValidatedGithubWebhookEvent {
             .get("repository")
             .and_then(|r| r.get("name"))
             .and_then(|v| v.as_str())
+    }
+
+    /// Extract the numeric repository ID from the webhook payload.
+    ///
+    /// Uses the numeric `repository.id` rather than owner/repo names because
+    /// it is stable and safe to record on spans (owner logins can be
+    /// usernames).
+    pub fn repository_id(&self) -> Option<u64> {
+        self.payload
+            .get("repository")
+            .and_then(|r| r.get("id"))
+            .and_then(|v| v.as_u64())
     }
 
     /// Extract the GitHub App installation ID from the webhook payload.
@@ -381,6 +469,7 @@ impl ValidatedGithubWebhookEvent {
         let pr = match self.parsed_event_type() {
             // For PR events, the event itself is the context — nothing to compare against.
             GithubWebhookEventType::PullRequest
+            | GithubWebhookEventType::Issues
             | GithubWebhookEventType::CheckRun
             | GithubWebhookEventType::Installation
             | GithubWebhookEventType::Unknown(_) => {
@@ -526,6 +615,8 @@ fn strip_inline_code_spans(text: &str) -> String {
 pub enum GithubWebhookEventType {
     /// `pull_request` events
     PullRequest,
+    /// `issues` events (standalone issues, not pull requests)
+    Issues,
     /// `issue_comment` events (includes comments on PRs)
     IssueComment,
     /// `pull_request_review` events
@@ -545,6 +636,7 @@ impl GithubWebhookEventType {
     pub fn from_event_header(s: &str) -> Self {
         match s {
             "pull_request" => Self::PullRequest,
+            "issues" => Self::Issues,
             "issue_comment" => Self::IssueComment,
             "pull_request_review" => Self::PullRequestReview,
             "pull_request_review_comment" => Self::PullRequestReviewComment,
