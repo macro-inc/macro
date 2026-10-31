@@ -1,15 +1,14 @@
 import { useBeforeLeave } from '@app/lib/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useUserId } from '@core/context/user';
-import { queryClient } from '@queries/client';
 import type {
   MarketingCapabilities,
   MarketingRepository,
 } from './context/contracts';
 import { createContactQueries } from './queries/contacts';
 import { createDatabaseMarketingRepository } from './queries/database-repository';
+import { seedMarketingSnapshot } from './queries/enrollments-query';
 import { createGmailSequenceDelivery } from './queries/gmail-delivery';
-import { marketingKeys } from './queries/keys';
 import { MarketingWorkspaceView } from './views/marketing-workspace';
 
 /**
@@ -24,10 +23,7 @@ function createQueryRepository(
     ...repository,
     async load() {
       const snapshot = await repository.load();
-      queryClient.setQueryData(
-        marketingKeys.snapshot(userId()).queryKey,
-        snapshot
-      );
+      seedMarketingSnapshot(userId(), snapshot);
       return snapshot;
     },
   };

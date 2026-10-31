@@ -16,7 +16,16 @@ import {
   EmptyStatePanel,
   Tabs,
 } from '@ui';
-import { createSignal, type JSX, Match, onMount, Show, Switch } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  type JSX,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
+import { ActionNotice } from '../components/action-notice';
 import { CampaignList, type CampaignRow } from '../components/campaign-list';
 import {
   ContactList,
@@ -47,6 +56,7 @@ import {
   isReplaceable,
   isUnsubscribed,
   type MarketingContact,
+  matchesSearch,
   newId,
   normalizeEmail,
 } from '../core/model';
@@ -145,20 +155,33 @@ export function MarketingWorkspaceView(props: {
     snapshot().enrollments.filter(
       (entry) => normalizeEmail(entry.contact.email) === normalizeEmail(email)
     );
+  /** Enrollment counts per campaign and per address, and unsubscribed addresses: once per snapshot. */
+  const counts = createMemo(() => {
+    const byCampaign = new Map<string, number>();
+    const byEmail = new Map<string, number>();
+    for (const entry of snapshot().enrollments) {
+      const email = normalizeEmail(entry.contact.email);
+      byCampaign.set(
+        entry.campaignId,
+        (byCampaign.get(entry.campaignId) ?? 0) + 1
+      );
+      byEmail.set(email, (byEmail.get(email) ?? 0) + 1);
+    }
+    const unsubscribed = new Set(
+      snapshot().unsubscribed.map((entry) => normalizeEmail(entry.email))
+    );
+    return { byCampaign, byEmail, unsubscribed };
+  });
   const campaignRows = (): CampaignRow[] =>
     snapshot()
       .campaigns.filter(
         (campaign) =>
-          `${campaign.name} ${campaign.description}`
-            .toLowerCase()
-            .includes(search().toLowerCase()) &&
+          matchesSearch(search(), campaign.name, campaign.description) &&
           (statusFilter() === 'all' || statusFilter() === campaign.status)
       )
       .map((campaign) => ({
         campaign,
-        enrolled: snapshot().enrollments.filter(
-          (entry) => entry.campaignId === campaign.id
-        ).length,
+        enrolled: counts().byCampaign.get(campaign.id) ?? 0,
         attention: workspace.campaignAttention(campaign.id),
       }));
   const attentionTotal = () =>
@@ -169,15 +192,11 @@ export function MarketingWorkspaceView(props: {
   const contactRows = (): ContactRow[] =>
     workspace
       .contacts()
-      .filter((item) =>
-        `${item.name} ${item.email}`
-          .toLowerCase()
-          .includes(search().toLowerCase())
-      )
+      .filter((item) => matchesSearch(search(), item.name, item.email))
       .map((item) => ({
         contact: item,
-        sequences: enrollmentsOf(item.email).length,
-        unsubscribed: isUnsubscribed(snapshot(), item.email),
+        sequences: counts().byEmail.get(normalizeEmail(item.email)) ?? 0,
+        unsubscribed: counts().unsubscribed.has(normalizeEmail(item.email)),
       }));
   const untrackedCount = () =>
     Object.values(workspace.untracked()).reduce(
@@ -188,7 +207,7 @@ export function MarketingWorkspaceView(props: {
   /** Leave the open campaign, saving unsaved edits first. */
   async function leaveCampaign() {
     const current = edit();
-    if (current && changed() && current.draft.status !== 'active') {
+    if (current && current.draft.status !== 'active') {
       const ok = await act(
         'campaign.save',
         () => workspace.save(current.draft, false, current.base),
@@ -325,14 +344,11 @@ export function MarketingWorkspaceView(props: {
     );
   }
   function cancelUntracked() {
-    const bySender = Object.entries(workspace.untracked());
+    const bySender = workspace.untracked();
     fireAndForget(
       act(
         'untracked.cancel',
-        async () => {
-          for (const [senderId, draftIds] of bySender)
-            await workspace.engine.cancelUntracked(senderId, draftIds);
-        },
+        () => workspace.engine.cancelUntracked(bySender),
         () => t('emailMarketing.noticeUntrackedCanceled'),
         { emails: untrackedCount() }
       ),
@@ -374,34 +390,23 @@ export function MarketingWorkspaceView(props: {
       </Show>
       <Show when={untrackedCount()}>
         {(count) => (
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-failure/5 px-4 py-2 text-xs text-ink">
-            {t('emailMarketing.untrackedNotice', { count: count() })}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={workspace.busy()}
-              onClick={cancelUntracked}
-            >
-              {t('emailMarketing.cancelUntracked')}
-            </Button>
-          </div>
+          <ActionNotice
+            message={t('emailMarketing.untrackedNotice', { count: count() })}
+            action={t('emailMarketing.cancelUntracked')}
+            // Canceling writes no records, so a read-only database doesn't block it.
+            disabled={workspace.busy()}
+            onAction={cancelUntracked}
+          />
         )}
       </Show>
       <Show when={workspace.orphans().length}>
         {(count) => (
-          <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-failure/5 px-4 py-2 text-xs text-ink">
-            {t('emailMarketing.orphansNotice', { count: count() })}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={workspace.busy() || !snapshot().writable}
-              onClick={stopOrphans}
-            >
-              {t('emailMarketing.stopOrphans')}
-            </Button>
-          </div>
+          <ActionNotice
+            message={t('emailMarketing.orphansNotice', { count: count() })}
+            action={t('emailMarketing.stopOrphans')}
+            disabled={workspace.locked()}
+            onAction={stopOrphans}
+          />
         )}
       </Show>
     </div>
@@ -555,7 +560,7 @@ export function MarketingWorkspaceView(props: {
               <>
                 <ViewCreateButton
                   aria-label={t('emailMarketing.newCampaign')}
-                  disabled={!snapshot().writable || workspace.busy()}
+                  disabled={workspace.locked()}
                   onClick={openCreate}
                 />
                 {searchControl(t('emailMarketing.searchCampaigns'))}
@@ -565,7 +570,7 @@ export function MarketingWorkspaceView(props: {
               <CampaignList
                 rows={campaignRows()}
                 filtered={!!search() || statusFilter() !== 'all'}
-                canCreate={snapshot().writable && !workspace.busy()}
+                canCreate={!workspace.locked()}
                 onCreate={openCreate}
                 onOpen={openCampaign}
               />
@@ -615,7 +620,6 @@ export function MarketingWorkspaceView(props: {
       {/* Mounted per opening, so every new campaign starts blank. */}
       <Show when={creating()}>
         <NewCampaignDialog
-          open
           busy={workspace.busy()}
           error={workspace.error()}
           onOpenChange={setCreating}
@@ -679,8 +683,8 @@ export function MarketingWorkspaceView(props: {
                 name: campaign().name,
               })}
               body={t('emailMarketing.deleteBody')}
-              deleteLabel={t('emailMarketing.delete')}
-              cancelLabel={t('emailMarketing.cancel')}
+              deleteLabel={t('common.delete')}
+              cancelLabel={t('common.cancel')}
               onDelete={() => fireAndForget(remove(), SURFACE)}
             />
           </>
@@ -692,7 +696,7 @@ export function MarketingWorkspaceView(props: {
         unsubscribed={
           !!contact() && isUnsubscribed(snapshot(), contact()!.email)
         }
-        disabled={workspace.busy() || !snapshot().writable}
+        disabled={workspace.locked()}
         attention={workspace.enrollmentAttention}
         sentSteps={workspace.sentSteps}
         isFinished={workspace.isFinished}
@@ -718,7 +722,7 @@ export function MarketingWorkspaceView(props: {
         }
         body={t('emailMarketing.unsubscribeBody')}
         confirmLabel={t('emailMarketing.markUnsubscribed')}
-        cancelLabel={t('emailMarketing.cancel')}
+        cancelLabel={t('common.cancel')}
         onConfirm={() => fireAndForget(unsubscribe(), SURFACE)}
       />
     </ViewShell.Root>

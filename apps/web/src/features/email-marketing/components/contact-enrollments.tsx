@@ -1,9 +1,9 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { Button } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, Match, Show, Switch } from 'solid-js';
 import type { AttentionReason, Enrollment, QueuedStep } from '../core/model';
-import { AttentionBadge, StatusBadge } from './status-badge';
+import { EnrollmentBadge } from './status-badge';
 
 export function ContactEnrollments(props: {
   entries: Enrollment[];
@@ -50,58 +50,49 @@ export function ContactEnrollments(props: {
           {props.error}
         </p>
       </Show>
-      <Show
-        when={!props.error && !props.loading}
-        fallback={
-          <Show when={props.loading}>
-            <ListSkeleton.Root label={t('emailMarketing.loadingEnrollments')}>
-              <ListSkeleton.Row>
-                <ListSkeleton.Bar class="h-3 w-1/2" />
-              </ListSkeleton.Row>
-            </ListSkeleton.Root>
+      <Switch>
+        <Match when={props.loading}>
+          <ListSkeleton.Root label={t('emailMarketing.loadingEnrollments')}>
+            <ListSkeleton.Row>
+              <ListSkeleton.Bar class="h-3 w-1/2" />
+            </ListSkeleton.Row>
+          </ListSkeleton.Root>
+        </Match>
+        <Match when={!props.error}>
+          <Show
+            when={props.entries.length}
+            fallback={
+              <p class="text-xs text-ink-muted">
+                {t('emailMarketing.notEnrolled')}
+              </p>
+            }
+          >
+            <ul class="flex flex-col gap-2">
+              <For each={props.entries}>
+                {(entry) => (
+                  <li class="flex items-center justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="ph-no-capture truncate text-sm">
+                        {entry.campaignName}
+                      </p>
+                      <p class="text-xs text-ink-muted">
+                        {t('emailMarketing.scheduledEmails', {
+                          count: scheduled(entry),
+                        })}
+                      </p>
+                    </div>
+                    <EnrollmentBadge
+                      status={entry.status}
+                      finished={props.isFinished?.(entry)}
+                      attention={props.attention?.(entry)}
+                    />
+                  </li>
+                )}
+              </For>
+            </ul>
           </Show>
-        }
-      >
-        <Show
-          when={props.entries.length}
-          fallback={
-            <p class="text-xs text-ink-muted">
-              {t('emailMarketing.notEnrolled')}
-            </p>
-          }
-        >
-          <ul class="flex flex-col gap-2">
-            <For each={props.entries}>
-              {(entry) => (
-                <li class="flex items-center justify-between gap-3">
-                  <div class="min-w-0">
-                    <p class="ph-no-capture truncate text-sm">
-                      {entry.campaignName}
-                    </p>
-                    <p class="text-xs text-ink-muted">
-                      {t('emailMarketing.scheduledEmails', {
-                        count: scheduled(entry),
-                      })}
-                    </p>
-                  </div>
-                  <Show
-                    when={props.attention?.(entry)}
-                    fallback={
-                      <StatusBadge
-                        status={
-                          props.isFinished?.(entry) ? 'completed' : entry.status
-                        }
-                      />
-                    }
-                  >
-                    {(reason) => <AttentionBadge reason={reason()} />}
-                  </Show>
-                </li>
-              )}
-            </For>
-          </ul>
-        </Show>
-      </Show>
+        </Match>
+      </Switch>
     </section>
   );
 }

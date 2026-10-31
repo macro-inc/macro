@@ -45,6 +45,7 @@ files:
   - apps/web/src/features/block-spreadsheet/components/**
   - apps/web/src/features/property/tags/components/**
   - apps/web/src/features/activity/components/**
+  - apps/web/src/features/email-marketing/components/**
   - apps/web/src/features/drive-view/components/**
   - apps/web/src/features/email-message/components/**
   - apps/web/src/features/email-thread/components/**

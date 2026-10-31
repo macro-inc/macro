@@ -1,6 +1,6 @@
+import type { InspectedStep, Inspection } from '../core/attention';
 import type {
   Campaign,
-  DeliveryIssue,
   Enrollment,
   MarketingContact,
   MarketingSnapshot,
@@ -30,20 +30,6 @@ export type DraftRef = {
   draftId: string;
   generation?: number;
   threadId?: string;
-};
-
-/** A step to read back from the scheduler. */
-export type InspectedStep = DraftRef & {
-  sendAt: string;
-  /** The record says the scheduler has it: queued, or already handed to Gmail. */
-  queued: boolean;
-};
-
-export type Inspection = {
-  issues: Record<string, DeliveryIssue>;
-  untracked: string[];
-  /** Steps that left the scheduler after their send time: sent. */
-  sent: string[];
 };
 
 export type DraftContent = {

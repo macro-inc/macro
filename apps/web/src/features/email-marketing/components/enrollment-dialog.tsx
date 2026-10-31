@@ -1,11 +1,13 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ActionDialogShell, Button, Checkbox, Dialog, Input } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { addMinutes, format, startOfMinute } from 'date-fns';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   type Campaign,
   MAX_ENROLLMENT_BATCH,
   type MarketingContact,
+  matchesSearch,
   mergeContacts,
   normalizeEmail,
 } from '../core/model';
@@ -15,11 +17,10 @@ const SURFACE = 'email-marketing.enroll';
 
 /** Half an hour from now, as a `datetime-local` value in local time. */
 function defaultStart() {
-  const date = new Date(Date.now() + 30 * 60_000);
-  date.setSeconds(0, 0);
-  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-    .toISOString()
-    .slice(0, 16);
+  return format(
+    addMinutes(startOfMinute(new Date()), 30),
+    "yyyy-MM-dd'T'HH:mm"
+  );
 }
 
 export function EnrollmentDialog(props: {
@@ -43,26 +44,28 @@ export function EnrollmentDialog(props: {
   const [searchError, setSearchError] = createSignal<unknown>();
   const [searching, setSearching] = createSignal(false);
   // CRM results fill in what local contacts lack, never replace them.
-  const all = () =>
-    mergeContacts([...selected(), ...remote(), ...props.contacts]);
-  const filtered = () =>
+  const all = createMemo(() =>
+    mergeContacts([...selected(), ...remote(), ...props.contacts])
+  );
+  const filtered = createMemo(() =>
     all().filter((contact) =>
-      `${contact.name} ${contact.email}`
-        .toLowerCase()
-        .includes(search().toLowerCase())
-    );
+      matchesSearch(search(), contact.name, contact.email)
+    )
+  );
   // Normalized, so a CRM case variant still matches a local contact.
+  const selectedEmails = createMemo(
+    () => new Set(selected().map((contact) => normalizeEmail(contact.email)))
+  );
+  const enrolled = createMemo(() => new Set(props.enrolledEmails));
   const isSelected = (email: string) =>
-    selected().some(
-      (contact) => normalizeEmail(contact.email) === normalizeEmail(email)
-    );
+    selectedEmails().has(normalizeEmail(email));
   const blocked = (email: string) =>
-    props.enrolledEmails.includes(normalizeEmail(email)) ||
-    props.isUnsubscribed(email);
-  const chosen = () =>
+    enrolled().has(normalizeEmail(email)) || props.isUnsubscribed(email);
+  const chosen = createMemo(() =>
     all().filter(
       (contact) => isSelected(contact.email) && !blocked(contact.email)
-    );
+    )
+  );
   const searchCrm = async () => {
     setSearching(true);
     setSearchError(undefined);
@@ -78,7 +81,7 @@ export function EnrollmentDialog(props: {
     if (await props.onEnroll(chosen(), new Date(start()))) props.onClose();
   };
   const contactState = (contact: MarketingContact) =>
-    props.enrolledEmails.includes(normalizeEmail(contact.email))
+    enrolled().has(normalizeEmail(contact.email))
       ? t('emailMarketing.alreadyEnrolled')
       : props.isUnsubscribed(contact.email)
         ? t('emailMarketing.unsubscribed')
@@ -241,7 +244,7 @@ export function EnrollmentDialog(props: {
             disabled={props.busy}
             onClick={() => props.onClose()}
           >
-            {t('emailMarketing.cancel')}
+            {t('common.cancel')}
           </Button>
           <Button
             type="button"

@@ -8,8 +8,6 @@ export default {
   loading: 'Loading Email Marketing',
   loadFailed: 'Couldn’t load Email Marketing',
   refresh: 'Refresh',
-  close: 'Close',
-  cancel: 'Cancel',
 
   // Campaign list
   newCampaign: 'New campaign',
@@ -77,7 +75,6 @@ export default {
   campaignViews: 'Campaign views',
   sequence: 'Sequence',
   enrollments: 'Enrollments',
-  delete: 'Delete',
   saveDraft: 'Save draft',
   activate: 'Activate',
   pauseCampaign: 'Pause campaign',

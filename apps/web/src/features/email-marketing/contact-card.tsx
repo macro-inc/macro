@@ -1,24 +1,39 @@
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useUserId } from '@core/context/user';
+import { queryReadyGate } from '@queries/gate';
+import { useQuery } from '@tanstack/solid-query';
+import { createMemo } from 'solid-js';
+import { unwrap } from 'solid-js/store';
 import { ContactEnrollments } from './components/contact-enrollments';
 import { isUnsubscribed, normalizeEmail } from './core/model';
 import {
-  useContactAttention,
-  useMarketingEnrollments,
+  contactAttentionQueryOptions,
+  marketingEnrollmentsQueryOptions,
 } from './queries/enrollments-query';
 
 export function MarketingContactCard(props: { email: string }) {
-  const query = useMarketingEnrollments();
+  const userId = useUserId();
+  const query = useQuery(() => marketingEnrollmentsQueryOptions(userId()));
   const { openWithSplit } = useSplitLayout();
   // Gate on pending only, so cached rows stay through a failed refetch (FE-48).
-  const snapshot = () => (query.isPending ? undefined : query.data);
-  const entries = () =>
-    snapshot()?.enrollments.filter(
-      (entry) =>
-        normalizeEmail(entry.contact.email) === normalizeEmail(props.email)
-    ) ?? [];
-  const attention = useContactAttention(entries);
-  const delivery = () => (attention.isPending ? undefined : attention.data);
+  const snapshot = () => (queryReadyGate(query) ? query.data : undefined);
+  const entries = createMemo(
+    () =>
+      snapshot()?.enrollments.filter(
+        (entry) =>
+          normalizeEmail(entry.contact.email) === normalizeEmail(props.email)
+      ) ?? []
+  );
+  // Plain copies: the cached queryFn must not hold the snapshot query's store.
+  const attention = useQuery(() =>
+    contactAttentionQueryOptions(
+      userId(),
+      entries().map((entry) => structuredClone(unwrap(entry)))
+    )
+  );
+  const delivery = () =>
+    queryReadyGate(attention) ? attention.data : undefined;
   return (
     <ContactEnrollments
       entries={entries()}

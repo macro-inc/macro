@@ -1,10 +1,7 @@
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
-import type {
-  DraftRef,
-  InspectedStep,
-  SequenceDelivery,
-} from '../context/contracts';
+import type { DraftRef, SequenceDelivery } from '../context/contracts';
+import type { InspectedStep } from '../core/attention';
 import { MarketingError } from '../core/errors';
 import type { DeliveryIssue } from '../core/model';
 
@@ -13,6 +10,13 @@ type ResultErrors = { code: string; message: string }[];
 function describe(errors: ResultErrors) {
   return errors.map((error) => error.message).join('; ');
 }
+
+/** Nothing left to act on: the schedule or the message no longer exists. */
+function allNotFound(errors: ResultErrors) {
+  return errors.every((error) => error.code === 'NOT_FOUND');
+}
+
+type CancelOutcome = 'canceled' | 'delivery_started' | { retry: number };
 
 /** Marks scheduled sends as sequence steps, which Mail's lists leave out. */
 const SEQUENCE_SOURCE = 'sequence';
@@ -74,9 +78,7 @@ async function readDraftState(draft: DraftRef): Promise<DraftState> {
   }
   const message = await emailClient.getMessage({ message_id: draft.draftId });
   if (message.isErr())
-    return message.error.every((error) => error.code === 'NOT_FOUND')
-      ? { kind: 'gone' }
-      : { kind: 'unknown' };
+    return allNotFound(message.error) ? { kind: 'gone' } : { kind: 'unknown' };
   const moved =
     message.value.thread_db_id !== draft.threadId
       ? await readFromThread(message.value.thread_db_id, draft.draftId)
@@ -88,25 +90,19 @@ async function cancelOnce(
   senderId: string,
   draft: DraftRef,
   generation: number
-): Promise<'canceled' | 'delivery_started' | { retry: number }> {
+): Promise<CancelOutcome> {
   const unscheduled = await emailClient.unscheduleMessage(
     { draftID: draft.draftId, draftGeneration: generation },
     senderId
   );
   // No schedule and no message both mean nothing is left to send.
-  const removed =
-    unscheduled.isOk() ||
-    unscheduled.error.every((error) => error.code === 'NOT_FOUND');
+  const removed = unscheduled.isOk() || allNotFound(unscheduled.error);
   if (removed) {
     const deleted = await emailClient.deleteDraft(
       { id: draft.draftId, draftGeneration: generation },
       senderId
     );
-    if (
-      deleted.isOk() ||
-      deleted.error.every((error) => error.code === 'NOT_FOUND')
-    )
-      return 'canceled';
+    if (deleted.isOk() || allNotFound(deleted.error)) return 'canceled';
     // 409: already sent, mid-send, or edited elsewhere. Decide from state.
     return resolveConflict(draft, generation, describe(deleted.error));
   }
@@ -120,7 +116,7 @@ async function resolveConflict(
   draft: DraftRef,
   generation: number,
   reason: string
-): Promise<'canceled' | 'delivery_started' | { retry: number }> {
+): Promise<CancelOutcome> {
   const state = await readDraftState(draft);
   if (state.kind === 'gone') return 'canceled';
   if (state.kind === 'found') {
@@ -224,14 +220,16 @@ export function createGmailSequenceDelivery(): SequenceDelivery {
         if (due <= now) sent.push(step.draftId);
         else issues[step.draftId] = 'missing';
       }
-      for (const [index, step] of stalled.entries()) {
-        issues[step.draftId] = 'stalled';
-        if (index >= MAX_STATUS_READS) continue;
-        const state = await readDraftState(step);
+      for (const step of stalled) issues[step.draftId] = 'stalled';
+      const states = await Promise.all(
+        stalled.slice(0, MAX_STATUS_READS).map(readDraftState)
+      );
+      for (const [index, state] of states.entries()) {
         if (state.kind !== 'found') continue;
-        if (state.status === 'failed') issues[step.draftId] = 'failed';
+        const { draftId } = stalled[index];
+        if (state.status === 'failed') issues[draftId] = 'failed';
         else if (state.status === 'unconfirmed')
-          issues[step.draftId] = 'unconfirmed';
+          issues[draftId] = 'unconfirmed';
       }
       const known = new Set(steps.map((step) => step.draftId));
       return {

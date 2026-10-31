@@ -1,7 +1,8 @@
-import { ThrownResultError, throwOnErr } from '@core/util/result';
+import { macroIdToEmail, tryMacroId } from '@core/user/macroId';
+import { ThrownResultError } from '@core/util/result';
 import { queryClient } from '@queries/client';
-import { emailKeys } from '@queries/email/keys';
-import { contactsClient } from '@service-contacts/client';
+import { contactsQueryOptions } from '@queries/contacts/contacts';
+import { emailLinksQueryOptions } from '@queries/email/link';
 import { emailClient } from '@service-email/client';
 import { fetchCrmContacts } from '@service-storage/crm-contacts';
 import type { MarketingCapabilities } from '../context/contracts';
@@ -11,14 +12,8 @@ type CrmContact = Awaited<
   ReturnType<typeof fetchCrmContacts>
 >['contacts'][number];
 
-/** Shares Mail's cached inbox list instead of fetching it per call. */
-function emailLinksFetchOptions() {
-  return {
-    queryKey: emailKeys.links.queryKey,
-    queryFn: () => throwOnErr(() => emailClient.getLinks()),
-    staleTime: 60_000,
-  };
-}
+/** Inboxes connected in another tab show up within a minute. */
+const SENDERS_STALE_TIME = 60_000;
 
 /** CRM contacts are optional; GraphQL already excludes hidden ones. */
 const CRM_CONTACT_LIMIT = 500;
@@ -41,7 +36,11 @@ export function createContactQueries(
 > {
   return {
     async loadSenders() {
-      const { links } = await queryClient.fetchQuery(emailLinksFetchOptions());
+      // Shares Mail's cached inbox list instead of fetching it per call.
+      const { links } = await queryClient.fetchQuery({
+        ...emailLinksQueryOptions(),
+        staleTime: SENDERS_STALE_TIME,
+      });
       return links
         .filter(
           (link) => link.provider === 'GMAIL' && link.macro_id === userId()
@@ -55,7 +54,7 @@ export function createContactQueries(
     async loadContacts() {
       // The GraphQL source spans every CRM team the viewer can see.
       const [personal, gmail, crm] = await Promise.all([
-        throwOnErr(() => contactsClient.getContacts()),
+        queryClient.fetchQuery(contactsQueryOptions()),
         emailClient.listContacts(),
         fetchCrmContacts({ limit: CRM_CONTACT_LIMIT }),
       ]);
@@ -68,10 +67,10 @@ export function createContactQueries(
       )
         throw new ThrownResultError(gmail.error);
       return mergeContacts([
-        ...personal.contacts.map((id) => ({
-          email: id.replace(/^macro\|/, ''),
-          name: '',
-        })),
+        ...personal.contacts.flatMap((id) => {
+          const macroId = tryMacroId(id);
+          return macroId ? [{ email: macroIdToEmail(macroId), name: '' }] : [];
+        }),
         ...(gmail.isOk()
           ? Object.values(gmail.value.contacts)
               .flat()

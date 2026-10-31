@@ -50,14 +50,21 @@ function fetchEmailLinks() {
   return throwOnErr(() => emailClient.getLinks());
 }
 
+/** The signed-in user's inboxes, for `useQuery` or `queryClient.fetchQuery`. */
+export function emailLinksQueryOptions() {
+  return {
+    queryKey: emailKeys.links.queryKey,
+    queryFn: fetchEmailLinks,
+    staleTime: LINK_STALE_TIME,
+    refetchOnWindowFocus: 'always' as const,
+  };
+}
+
 export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
   const authenticated = useIsAuthenticated();
   return useQuery(() => ({
-    queryKey: emailKeys.links.queryKey,
-    queryFn: fetchEmailLinks,
+    ...emailLinksQueryOptions(),
     enabled: authenticated() === true && enabled(),
-    staleTime: LINK_STALE_TIME,
-    refetchOnWindowFocus: 'always',
   }));
 }
 

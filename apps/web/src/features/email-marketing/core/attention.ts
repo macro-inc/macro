@@ -1,21 +1,32 @@
-import type {
-  AttentionReason,
-  DeliveryIssue,
-  Enrollment,
-  Sender,
-  SenderStatus,
+import {
+  type AttentionReason,
+  type DeliveryIssue,
+  type Enrollment,
+  isOnScheduler,
+  LIVE_STATUSES,
+  type QueuedStep,
+  type Sender,
+  type SenderStatus,
 } from './model';
 
 /** A record still preparing after this long was abandoned mid-scheduling. */
 const INTERRUPTED_AFTER_MS = 15 * 60_000;
 
-export type InspectionTarget = {
+/** A step to read back from the scheduler. */
+export type InspectedStep = {
   draftId: string;
   generation?: number;
   threadId?: string;
   sendAt: string;
-  /** Queued or already handed to Gmail, not still being scheduled. */
+  /** The record says the scheduler has it: queued, or already handed to Gmail. */
   queued: boolean;
+};
+
+export type Inspection = {
+  issues: Record<string, DeliveryIssue>;
+  untracked: string[];
+  /** Steps that left the scheduler after their send time: sent. */
+  sent: string[];
 };
 
 /** `undefined` until the user's inboxes have loaded. */
@@ -37,18 +48,12 @@ export function inspectionTargets(
   enrollments: Enrollment[],
   senderStatus: (senderId: string) => SenderStatus | undefined
 ) {
-  const bySender = new Map<string, InspectionTarget[]>();
+  const bySender = new Map<string, InspectedStep[]>();
   for (const entry of enrollments) {
     const status = senderStatus(entry.senderId);
     if (status !== 'ready' && status !== 'reauth') continue;
     for (const step of entry.steps) {
-      if (
-        (step.status !== 'queued' &&
-          step.status !== 'scheduling' &&
-          step.status !== 'delivery_started') ||
-        !step.draftId
-      )
-        continue;
+      if (!step.draftId || !isOnScheduler(step)) continue;
       const targets = bySender.get(entry.senderId) ?? [];
       targets.push({
         draftId: step.draftId,
@@ -72,11 +77,10 @@ export function attentionFor(
   senderStatus: (senderId: string) => SenderStatus | undefined,
   issues: Record<string, DeliveryIssue>
 ): AttentionReason | undefined {
-  const live =
-    entry.status === 'preparing' ||
-    entry.status === 'scheduled' ||
-    entry.status === 'needs_attention';
-  if (live && senderStatus(entry.senderId) === 'disconnected')
+  if (
+    LIVE_STATUSES.includes(entry.status) &&
+    senderStatus(entry.senderId) === 'disconnected'
+  )
     return 'disconnected';
   if (
     entry.status === 'preparing' &&
@@ -107,15 +111,8 @@ export function needsAttention(
  * draft id, sent steps, and untracked sequence emails by inbox.
  */
 export async function collectIssues(
-  inspect: (
-    senderId: string,
-    steps: InspectionTarget[]
-  ) => Promise<{
-    issues: Record<string, DeliveryIssue>;
-    untracked: string[];
-    sent: string[];
-  }>,
-  bySender: Map<string, InspectionTarget[]>
+  inspect: (senderId: string, steps: InspectedStep[]) => Promise<Inspection>,
+  bySender: Map<string, InspectedStep[]>
 ) {
   const senders = [...bySender];
   const results = await Promise.allSettled(
@@ -140,16 +137,16 @@ export async function collectIssues(
   };
 }
 
-/**
- * Steps of an enrollment known to be sent: handed to Gmail, or seen leaving
- * the scheduler after their time.
- */
+/** Handed to Gmail, or seen leaving the scheduler after its time. */
+export function isStepSent(step: QueuedStep, sent: ReadonlySet<string>) {
+  return (
+    step.status === 'delivery_started' ||
+    (step.status === 'queued' && !!step.draftId && sent.has(step.draftId))
+  );
+}
+
 export function sentSteps(entry: Enrollment, sent: ReadonlySet<string>) {
-  return entry.steps.filter(
-    (step) =>
-      step.status === 'delivery_started' ||
-      (step.status === 'queued' && !!step.draftId && sent.has(step.draftId))
-  ).length;
+  return entry.steps.filter((step) => isStepSent(step, sent)).length;
 }
 
 /** A scheduled enrollment with nothing left to send. */
@@ -157,10 +154,7 @@ export function isFinished(entry: Enrollment, sent: ReadonlySet<string>) {
   return (
     entry.status === 'scheduled' &&
     entry.steps.every(
-      (step) =>
-        step.status === 'delivery_started' ||
-        step.status === 'canceled' ||
-        (step.status === 'queued' && !!step.draftId && sent.has(step.draftId))
+      (step) => step.status === 'canceled' || isStepSent(step, sent)
     )
   );
 }

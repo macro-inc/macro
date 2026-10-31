@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { isMobile } from '@core/mobile/isMobile';
 import X from '@icon/system/regular/x.svg';
 import { ActionDialogShell, Button, Dialog, Input } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
@@ -33,23 +32,20 @@ function DialogHeader(props: {
           </ActionDialogShell.Description>
         </Show>
       </div>
-      {/* Phone drawers dismiss by drag, backdrop, or Escape; no X. */}
-      <Show when={!isMobile()}>
-        <Dialog.CloseButton
-          as={Button}
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('emailMarketing.close')}
-        >
-          <X aria-hidden="true" class="size-4" />
-        </Dialog.CloseButton>
-      </Show>
+      {/* Renders nothing in a phone drawer, which dismisses by drag, backdrop, or Escape. */}
+      <Dialog.CloseButton
+        as={Button}
+        variant="ghost"
+        size="icon-sm"
+        aria-label={t('common.close')}
+      >
+        <X aria-hidden="true" class="size-4" />
+      </Dialog.CloseButton>
     </div>
   );
 }
 
 export function NewCampaignDialog(props: {
-  open: boolean;
   busy: boolean;
   error: unknown;
   onOpenChange: (open: boolean) => void;
@@ -60,7 +56,7 @@ export function NewCampaignDialog(props: {
   const [template, setTemplate] = createSignal<Template>('welcome');
   return (
     <Dialog
-      open={props.open}
+      open
       position="center"
       class="w-[min(480px,calc(100vw-16px))]"
       onOpenChange={(open) => {
@@ -126,7 +122,7 @@ export function NewCampaignDialog(props: {
               disabled={props.busy}
               onClick={() => props.onOpenChange(false)}
             >
-              {t('emailMarketing.cancel')}
+              {t('common.cancel')}
             </Button>
             <Button
               type="submit"

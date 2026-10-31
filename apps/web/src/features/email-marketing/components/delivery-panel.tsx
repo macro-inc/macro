@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { For, Show } from 'solid-js';
 import type { Sender } from '../core/model';
+import { Dot } from './status-badge';
 
 /** The Gmail inboxes sequences can send from, and how sending works. */
 export function DeliveryPanel(props: {
@@ -25,14 +26,7 @@ export function DeliveryPanel(props: {
                   {sender.email}
                 </span>
                 <span class="flex shrink-0 items-center gap-1.5 text-xs text-ink-muted">
-                  <span
-                    class="size-1.5 rounded-full"
-                    classList={{
-                      'bg-success': sender.ready,
-                      'bg-warning': !sender.ready,
-                    }}
-                    aria-hidden="true"
-                  />
+                  <Dot class={sender.ready ? 'bg-success' : 'bg-warning'} />
                   {sender.ready
                     ? t('emailMarketing.inboxConnected')
                     : t('emailMarketing.inboxReconnect')}

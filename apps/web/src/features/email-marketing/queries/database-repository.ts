@@ -4,6 +4,7 @@ import type {
   DatabaseOp,
 } from '@core/database-sql/generated/types';
 import { throwOnErr } from '@core/util/result';
+import { utf8Encode } from '@core/util/string';
 import { databasesClient } from '@service-storage/databases';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { PropertyValue } from '@service-storage/generated/schemas/propertyValue';
@@ -14,6 +15,7 @@ import { MarketingError } from '../core/errors';
 import {
   type Campaign,
   campaignSchema,
+  EMPTY_SNAPSHOT,
   type Enrollment,
   enrollmentSchema,
   type MarketingSnapshot,
@@ -191,13 +193,7 @@ export function createDatabaseMarketingRepository(): MarketingRepository {
       tables = [];
       missingTables = [...TABLE_NAMES];
       rowIds = new Map();
-      return {
-        campaigns: [],
-        enrollments: [],
-        unsubscribed: [],
-        unreadable: 0,
-        writable: true,
-      };
+      return structuredClone(EMPTY_SNAPSHOT);
     }
     const id = databaseId;
     const detail = await throwOnErr(() => databasesClient.get({ id }));
@@ -295,9 +291,7 @@ export function createDatabaseMarketingRepository(): MarketingRepository {
       ),
       ops,
     };
-    if (
-      new TextEncoder().encode(JSON.stringify(request)).length > MAX_WRITE_BYTES
-    )
+    if (utf8Encode(JSON.stringify(request)).length > MAX_WRITE_BYTES)
       throw new MarketingError('sequenceTooLarge');
     const result = await databasesClient.applyOps({ id, request });
     if (result.isErr()) {

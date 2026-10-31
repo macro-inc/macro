@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { Badge, cn, Tooltip } from '@ui';
+import { Show } from 'solid-js';
 import type { AttentionReason, Campaign, Enrollment } from '../core/model';
 
 /** `completed`: a scheduled enrollment with nothing left to send. */
@@ -28,7 +29,7 @@ const STATUS_DOTS: Record<Status, string> = {
   completed: 'bg-ink-muted',
 };
 
-function Dot(props: { class: string }) {
+export function Dot(props: { class: string }) {
   return (
     <span
       class={cn('size-1.5 shrink-0 rounded-full', props.class)}
@@ -76,5 +77,23 @@ export function AttentionBadge(props: { reason: AttentionReason }) {
         {t(ATTENTION_LABELS[props.reason])}
       </Badge>
     </Tooltip>
+  );
+}
+
+/** An enrollment's delivery problem when there is one, else its status. */
+export function EnrollmentBadge(props: {
+  status: Enrollment['status'];
+  finished?: boolean;
+  attention?: AttentionReason;
+}) {
+  return (
+    <Show
+      when={props.attention}
+      fallback={
+        <StatusBadge status={props.finished ? 'completed' : props.status} />
+      }
+    >
+      {(reason) => <AttentionBadge reason={reason()} />}
+    </Show>
   );
 }

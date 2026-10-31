@@ -43,7 +43,7 @@ export function CampaignDetail(props: {
 }) {
   const ws = () => props.workspace;
   const active = () => props.campaign.status === 'active';
-  const locked = () => ws().busy() || !ws().snapshot().writable;
+  const locked = () => ws().locked();
   const campaignId = createMemo(() => props.campaign.id);
   const entries = createMemo(() =>
     ws()
@@ -103,8 +103,8 @@ export function CampaignDetail(props: {
               type="button"
               variant="ghost"
               size="icon-md"
-              aria-label={t('emailMarketing.delete')}
-              tooltip={t('emailMarketing.delete')}
+              aria-label={t('common.delete')}
+              tooltip={t('common.delete')}
               disabled={locked()}
               onClick={() => props.onDelete()}
             >

@@ -676,7 +676,7 @@ describe('server scheduled sequences', () => {
       code('unreadableRecords')
     );
     await expect(
-      test.engine.cancelUntracked('gmail', ['stray'])
+      test.engine.cancelUntracked({ gmail: ['stray'] })
     ).rejects.toThrow(code('unreadableRecords'));
     expect(test.delivery.cancel).not.toHaveBeenCalled();
     expect(test.snapshot().enrollments[0]).toEqual(enrollment);
@@ -690,7 +690,7 @@ describe('server scheduled sequences', () => {
     });
     vi.mocked(test.delivery.cancel).mockResolvedValue('delivery_started');
     await expect(
-      test.engine.cancelUntracked('gmail', ['draft-1', 'stray'])
+      test.engine.cancelUntracked({ gmail: ['draft-1', 'stray'] })
     ).rejects.toThrow(code('cancelFailed'));
     expect(
       vi.mocked(test.delivery.cancel).mock.calls.map(([, d]) => d.draftId)
@@ -930,7 +930,7 @@ describe('concurrent changes', () => {
   it('cancels only scheduled emails that no record knows about', async () => {
     const test = setup();
     await test.enroll(campaign, contact, start);
-    await test.engine.cancelUntracked('gmail', ['draft-1', 'orphan']);
+    await test.engine.cancelUntracked({ gmail: ['draft-1', 'orphan'] });
     expect(
       vi
         .mocked(test.delivery.cancel)

@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { clamp } from '@core/util/math';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -21,9 +22,7 @@ const PERSONALIZATION = ['{{firstName}}', '{{name}}', '{{email}}'];
 
 /** Whole days from 0 to 365; an emptied field reads as 0. */
 function clampDelay(value: number) {
-  return Number.isFinite(value)
-    ? Math.min(365, Math.max(0, Math.trunc(value)))
-    : 0;
+  return Number.isFinite(value) ? clamp(Math.trunc(value), 0, 365) : 0;
 }
 
 export function SequenceEditor(props: {

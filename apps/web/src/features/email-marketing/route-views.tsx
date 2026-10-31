@@ -6,11 +6,13 @@ import {
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { enableEmailMarketing } from '@core/constant/featureFlags';
-import { lazy, Show } from 'solid-js';
+import { lazyNamed } from '@core/util/lazyNamed';
+import { Show } from 'solid-js';
 
-const EmailMarketing = lazy(async () => ({
-  default: (await import('./email-marketing')).EmailMarketing,
-}));
+const EmailMarketing = lazyNamed(
+  () => import('./email-marketing'),
+  'EmailMarketing'
+);
 
 function TrackedEmailMarketing() {
   usePageViewTracking('email-marketing');

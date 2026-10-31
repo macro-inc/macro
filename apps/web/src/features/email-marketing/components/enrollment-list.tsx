@@ -1,16 +1,21 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { Button, EmptyStatePanel } from '@ui';
 import { isValid } from 'date-fns';
-import { createUniqueId, For, Show } from 'solid-js';
-import type {
-  AttentionReason,
-  DeliveryIssue,
-  Enrollment,
-  MarketingContact,
-  QueuedStep,
+import { createMemo, createUniqueId, For, Show } from 'solid-js';
+import {
+  type AttentionReason,
+  type DeliveryIssue,
+  type Enrollment,
+  LIVE_STATUSES,
+  type MarketingContact,
+  type QueuedStep,
 } from '../core/model';
 import { enrollmentErrorMessage } from './error-message';
-import { AttentionBadge, attentionDetail, StatusBadge } from './status-badge';
+import {
+  AttentionBadge,
+  attentionDetail,
+  EnrollmentBadge,
+} from './status-badge';
 
 const STEP_STATUS = {
   pending: 'emailMarketing.stepPending',
@@ -19,13 +24,6 @@ const STEP_STATUS = {
   canceled: 'emailMarketing.stepCanceled',
   delivery_started: 'emailMarketing.stepSent',
 } as const satisfies Record<QueuedStep['status'], string>;
-
-/** Pausing also rescues a failed or interrupted enrollment: resume finishes it. */
-const PAUSABLE: Enrollment['status'][] = [
-  'scheduled',
-  'preparing',
-  'needs_attention',
-];
 
 function stepState(step: QueuedStep, sent: boolean) {
   if (sent) return t(STEP_STATUS.delivery_started);
@@ -51,11 +49,13 @@ export function EnrollmentList(props: {
   onOpenContact: (contact: MarketingContact) => void;
   onOpenThread: (threadId: string) => void;
 }) {
-  const time = () =>
-    new Intl.DateTimeFormat(formatLocale(), {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
+  const time = createMemo(
+    () =>
+      new Intl.DateTimeFormat(formatLocale(), {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+  );
   /** A record edited in the database can hold any text as a send time. */
   const stepTiming = (step: QueuedStep) => {
     const sendAt = new Date(step.sendAt);
@@ -116,18 +116,11 @@ export function EnrollmentList(props: {
                     </p>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
-                    <Show
-                      when={props.attention(entry)}
-                      fallback={
-                        <StatusBadge
-                          status={
-                            props.isFinished(entry) ? 'completed' : entry.status
-                          }
-                        />
-                      }
-                    >
-                      {(reason) => <AttentionBadge reason={reason()} />}
-                    </Show>
+                    <EnrollmentBadge
+                      status={entry.status}
+                      finished={props.isFinished(entry)}
+                      attention={props.attention(entry)}
+                    />
                     <Show when={props.isUnsubscribed(entry.contact.email)}>
                       <span class="text-xs text-ink-muted">
                         {t('emailMarketing.unsubscribed')}
@@ -135,7 +128,8 @@ export function EnrollmentList(props: {
                     </Show>
                     <Show
                       when={
-                        PAUSABLE.includes(entry.status) &&
+                        // Pausing also rescues a failed or interrupted enrollment.
+                        LIVE_STATUSES.includes(entry.status) &&
                         !props.isFinished(entry)
                       }
                     >
@@ -201,11 +195,7 @@ export function EnrollmentList(props: {
                         </Show>
                         <span class="text-ink-subtle">{stepTiming(step)}</span>
                         <Show
-                          when={
-                            step.threadId &&
-                            step.status !== 'canceled' &&
-                            step.threadId
-                          }
+                          when={step.status !== 'canceled' && step.threadId}
                         >
                           {(threadId) => (
                             <Button

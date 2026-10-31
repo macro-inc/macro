@@ -1,6 +1,5 @@
-import { useUserId } from '@core/context/user';
-import { keepPreviousData, useQuery } from '@tanstack/solid-query';
-import { unwrap } from 'solid-js/store';
+import { queryClient } from '@queries/client';
+import { keepPreviousData } from '@tanstack/solid-query';
 import {
   attentionFor,
   collectIssues,
@@ -9,13 +8,20 @@ import {
   senderStatusOf,
   sentSteps,
 } from '../core/attention';
-import type { AttentionReason, Enrollment } from '../core/model';
+import type {
+  AttentionReason,
+  Enrollment,
+  MarketingSnapshot,
+} from '../core/model';
 import { createContactQueries } from './contacts';
 import { createDatabaseMarketingRepository } from './database-repository';
 import { createGmailSequenceDelivery } from './gmail-delivery';
 import { marketingKeys } from './keys';
 
-/** Module-scope factory so the cached queryFn never retains a view's scope. */
+/**
+ * The signed-in account's records, shared by every CRM card. Module-scope, so
+ * the cached queryFn never retains a view's scope.
+ */
 export function marketingEnrollmentsQueryOptions(userId: string | undefined) {
   return {
     queryKey: marketingKeys.snapshot(userId).queryKey,
@@ -24,14 +30,16 @@ export function marketingEnrollmentsQueryOptions(userId: string | undefined) {
   };
 }
 
-/** Shared enrollment snapshot for CRM, scoped to the signed-in account. */
-export function useMarketingEnrollments() {
-  const userId = useUserId();
-  return useQuery(() => marketingEnrollmentsQueryOptions(userId()));
+/** Put a snapshot the workspace just loaded where the CRM cards read it. */
+export function seedMarketingSnapshot(
+  userId: string | undefined,
+  snapshot: MarketingSnapshot
+) {
+  queryClient.setQueryData(marketingKeys.snapshot(userId).queryKey, snapshot);
 }
 
 /** What the scheduler says about a contact's enrollments, by enrollment id. */
-export type ContactDelivery = {
+type ContactDelivery = {
   /** Problems the stored status does not show. */
   reasons: Record<string, AttentionReason>;
   /** Steps already sent. */
@@ -60,6 +68,7 @@ async function readAttention(
   return result;
 }
 
+/** Delivery problems and progress for one contact's enrollments. */
 export function contactAttentionQueryOptions(
   userId: string | undefined,
   entries: Enrollment[]
@@ -75,16 +84,4 @@ export function contactAttentionQueryOptions(
     // Keep the last answer while a changed enrollment refetches it.
     placeholderData: keepPreviousData,
   };
-}
-
-/** Delivery problems and progress for one contact's enrollments. */
-export function useContactAttention(entries: () => Enrollment[]) {
-  const userId = useUserId();
-  // Plain copies: the cached queryFn must not hold the snapshot query's store.
-  return useQuery(() =>
-    contactAttentionQueryOptions(
-      userId(),
-      entries().map((entry) => structuredClone(unwrap(entry)))
-    )
-  );
 }

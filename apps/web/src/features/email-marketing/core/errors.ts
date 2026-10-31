@@ -43,7 +43,7 @@ export type MarketingErrorCode =
   | 'refreshFailed'
   | 'contactsFailed';
 
-export type MarketingErrorParams = Record<string, string | number>;
+type MarketingErrorParams = Record<string, string | number>;
 
 /** One contact's failure inside a batch action. */
 export type ContactFailure = { email: string; error: unknown };
@@ -64,6 +64,16 @@ export class MarketingError extends Error {
     this.params = params;
     this.failures = failures;
   }
+}
+
+/** Fail with every contact an action failed for, if any. */
+export function throwContactFailures(failures: ContactFailure[]) {
+  if (failures.length)
+    throw new MarketingError(
+      'contactsFailed',
+      { count: failures.length },
+      failures
+    );
 }
 
 /** Codes an enrollment record may store as its `error`. */

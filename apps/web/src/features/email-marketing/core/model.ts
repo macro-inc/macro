@@ -1,9 +1,15 @@
+import { getFirstName } from '@app/features/email-message/core/name';
 import { addDays, differenceInCalendarDays } from 'date-fns';
+import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import { z } from 'zod';
-import { ENROLLMENT_ERRORS, MarketingError } from './errors';
+import {
+  ENROLLMENT_ERRORS,
+  type EnrollmentErrorCode,
+  MarketingError,
+} from './errors';
 
-export const stepSchema = z.object({
+const stepSchema = z.object({
   id: z.string(),
   delayDays: z.number().int().min(0).max(365),
   subject: z.string().max(300),
@@ -29,7 +35,7 @@ export const contactSchema = z.object({
   companyId: z.string().optional(),
 });
 /** A frozen step: personalization can lengthen it past the template limits. */
-export const queuedStepSchema = stepSchema.extend({
+const queuedStepSchema = stepSchema.extend({
   subject: z.string().max(1_000),
   body: z.string().max(120_000),
   sendAt: z.string(),
@@ -133,6 +139,11 @@ export function truncate(text: string, max: number) {
   return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }
 
+/** A list search: the query appears in any of the fields, ignoring case. */
+export function matchesSearch(query: string, ...fields: string[]) {
+  return fields.join(' ').toLowerCase().includes(query.toLowerCase());
+}
+
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -162,8 +173,39 @@ export function isReplaceable(entry: Enrollment) {
 
 export function isEnrollmentErrorCode(
   error: string | undefined
-): error is (typeof ENROLLMENT_ERRORS)[number] {
+): error is EnrollmentErrorCode {
   return ENROLLMENT_ERRORS.some((code) => code === error);
+}
+
+/** Enrollments that are sending or may still send: what a pause acts on. */
+export const LIVE_STATUSES: readonly Enrollment['status'][] = [
+  'preparing',
+  'scheduled',
+  'needs_attention',
+];
+
+/** A step the scheduler holds, or has already handed to Gmail. */
+export function isOnScheduler(step: QueuedStep) {
+  return (
+    !!step.draftId &&
+    (step.status === 'queued' ||
+      step.status === 'scheduling' ||
+      step.status === 'delivery_started')
+  );
+}
+
+export function isCampaignActive(snapshot: MarketingSnapshot, id: string) {
+  return snapshot.campaigns.find((item) => item.id === id)?.status === 'active';
+}
+
+/** Why an inbox can't send right now; `undefined` while inboxes load means unknown. */
+export function senderError(status: SenderStatus | undefined) {
+  return match(status)
+    .with('ready', () => undefined)
+    .with('disconnected', () => new MarketingError('inboxDisconnected'))
+    .with('reauth', () => new MarketingError('inboxReauth'))
+    .with(undefined, () => new MarketingError('inboxesLoading'))
+    .exhaustive();
 }
 
 const TOKEN = /\{\{\s*(\w+)\s*\}\}/g;
@@ -192,7 +234,7 @@ function unknownTokens(text: string) {
 
 export function personalize(text: string, contact: MarketingContact) {
   const variables: Record<string, string> = {
-    firstName: contact.name.trim().split(/[\s,]+/)[0] || 'there',
+    firstName: getFirstName(contact.name) || 'there',
     name: contact.name.trim() || 'there',
     email: contact.email,
   };

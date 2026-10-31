@@ -1,18 +1,19 @@
 import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import type { MarketingCapabilities } from '../context/contracts';
 import {
   attentionFor,
   collectIssues,
   inspectionTargets,
   isFinished,
+  isStepSent,
   needsAttention,
   senderStatusOf,
   sentSteps,
 } from '../core/attention';
-import { MarketingError } from '../core/errors';
+import { MarketingError, throwContactFailures } from '../core/errors';
 import {
   type Campaign,
   type DeliveryIssue,
@@ -22,6 +23,7 @@ import {
   type MarketingSnapshot,
   type QueuedStep,
   type Sender,
+  senderError,
   validateCampaign,
 } from '../core/model';
 import { createSequenceEngine } from './sequence-engine';
@@ -52,10 +54,7 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
     senderStatusOf(senders(), senderId);
   const stepIssue = (step: QueuedStep): DeliveryIssue | undefined =>
     step.draftId ? issues()[step.draftId] : undefined;
-  /** Handed to Gmail, or seen leaving the scheduler after its time. */
-  const stepSent = (step: QueuedStep) =>
-    step.status === 'delivery_started' ||
-    (step.status === 'queued' && !!step.draftId && sent().has(step.draftId));
+  const stepSent = (step: QueuedStep) => isStepSent(step, sent());
   const enrollmentAttention = (entry: Enrollment) =>
     attentionFor(entry, senderStatus, issues());
   /**
@@ -73,13 +72,16 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
         );
   /** Untracked sends, hidden while an unreadable record may track them. */
   const untrackedSends = () => (snapshot().unreadable ? {} : untracked());
-  /** Enrollments in a campaign that need the user. */
+  /** Enrollments that need the user, counted per campaign in one pass. */
+  const attentionByCampaign = createMemo(() => {
+    const counts = new Map<string, number>();
+    for (const entry of snapshot().enrollments)
+      if (needsAttention(entry, senderStatus, issues()))
+        counts.set(entry.campaignId, (counts.get(entry.campaignId) ?? 0) + 1);
+    return counts;
+  });
   const campaignAttention = (campaignId: string) =>
-    snapshot().enrollments.filter(
-      (entry) =>
-        entry.campaignId === campaignId &&
-        needsAttention(entry, senderStatus, issues())
-    ).length;
+    attentionByCampaign().get(campaignId) ?? 0;
 
   const engine = createSequenceEngine(
     capabilities.repository,
@@ -123,20 +125,27 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
     );
   }
 
-  /** Reload records and inboxes; an inbox read failure keeps the last list. */
+  /** An inbox read failure keeps the last list and is reported where it matters. */
+  function applySenders(inboxes: PromiseSettledResult<Sender[]>) {
+    if (inboxes.status === 'fulfilled') {
+      setSenders(inboxes.value);
+      setSendersError(undefined);
+    } else setSendersError(inboxes.reason);
+  }
+  function applySnapshot(data: MarketingSnapshot) {
+    setSnapshot(data);
+    setLoaded(true);
+    inspectDelivery(data);
+  }
+  /** Reload records and inboxes. */
   async function refresh() {
     const [data, inboxes] = await Promise.allSettled([
       capabilities.repository.load(),
       capabilities.loadSenders(),
     ]);
-    if (inboxes.status === 'fulfilled') {
-      setSenders(inboxes.value);
-      setSendersError(undefined);
-    } else setSendersError(inboxes.reason);
+    applySenders(inboxes);
     if (data.status === 'rejected') throw data.reason;
-    setSnapshot(data.value);
-    setLoaded(true);
-    inspectDelivery(data.value);
+    applySnapshot(data.value);
   }
   /** Load everything; a retry keeps what is on screen while it runs. */
   async function initialize() {
@@ -147,16 +156,9 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
       capabilities.loadContacts(),
       capabilities.loadSenders(),
     ]);
-    if (inboxes.status === 'fulfilled') {
-      setSenders(inboxes.value);
-      setSendersError(undefined);
-    } else setSendersError(inboxes.reason);
+    applySenders(inboxes);
     if (people.status === 'fulfilled') setContacts(people.value);
-    if (data.status === 'fulfilled') {
-      setSnapshot(data.value);
-      setLoaded(true);
-      inspectDelivery(data.value);
-    }
+    if (data.status === 'fulfilled') applySnapshot(data.value);
     const failed = [data, inboxes, people].find(
       (result) => result.status === 'rejected'
     );
@@ -222,12 +224,10 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
       validateCampaign(campaign);
       const status = senderStatus(campaign.senderId);
       // Inboxes that never loaded say nothing about this one's connection.
-      if (status === undefined)
-        throw sendersError() ?? new MarketingError('inboxesLoading');
-      if (status !== 'ready')
-        throw new MarketingError(
-          status === 'disconnected' ? 'inboxDisconnected' : 'inboxReauth'
-        );
+      const problem =
+        (status === undefined ? sendersError() : undefined) ??
+        senderError(status);
+      if (problem) throw problem;
     }
     // The all-table version check makes this load and the write one step.
     const stored = (await capabilities.repository.load()).campaigns.find(
@@ -247,12 +247,7 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
     startAt: Date
   ) {
     const { failures } = await engine.enrollMany(campaign, selected, startAt);
-    if (failures.length)
-      throw new MarketingError(
-        'contactsFailed',
-        { count: failures.length },
-        failures
-      );
+    throwContactFailures(failures);
   }
   return {
     snapshot,
@@ -261,6 +256,8 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
     /** Records have loaded at least once. */
     loaded,
     busy,
+    /** Writes wait: an action is running, or the records are read-only. */
+    locked: () => busy() || !snapshot().writable,
     error,
     dismissError: () => setError(undefined),
     contacts,

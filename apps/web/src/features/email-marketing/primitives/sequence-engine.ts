@@ -1,16 +1,22 @@
 import { deepEqual } from '@core/util/compareUtils';
-import { match } from 'ts-pattern';
 import type {
   MarketingRepository,
   SequenceDelivery,
 } from '../context/contracts';
-import { type ContactFailure, MarketingError } from '../core/errors';
+import {
+  type ContactFailure,
+  MarketingError,
+  throwContactFailures,
+} from '../core/errors';
 import {
   type Campaign,
   contactSchema,
   type Enrollment,
+  isCampaignActive,
+  isOnScheduler,
   isReplaceable,
   isUnsubscribed,
+  LIVE_STATUSES,
   type MarketingContact,
   type MarketingSnapshot,
   MIN_START_DELAY_MS,
@@ -21,6 +27,7 @@ import {
   replyParent,
   rescheduleSteps,
   type SenderStatus,
+  senderError,
   standaloneSubject,
   validateCampaign,
 } from '../core/model';
@@ -36,10 +43,11 @@ export type EngineOptions = {
 };
 
 /** Statuses a stop may move from, per requested target. */
-const STOPPABLE: Record<'paused' | 'stopped', Enrollment['status'][]> = {
-  paused: ['preparing', 'scheduled', 'needs_attention'],
-  stopped: ['preparing', 'scheduled', 'needs_attention', 'paused'],
-};
+const STOPPABLE: Record<'paused' | 'stopped', readonly Enrollment['status'][]> =
+  {
+    paused: LIVE_STATUSES,
+    stopped: [...LIVE_STATUSES, 'paused'],
+  };
 
 /**
  * Writes that lose to unrelated changes elsewhere (another tab enrolling,
@@ -56,6 +64,14 @@ const BATCH_STOPPERS = [
 
 function isConflict(error: unknown) {
   return error instanceof MarketingError && error.code === 'changedElsewhere';
+}
+
+/** Records that fail to parse may be the ones an action would act on. */
+function assertReadable(current: MarketingSnapshot) {
+  if (current.unreadable)
+    throw new MarketingError('unreadableRecords', {
+      count: current.unreadable,
+    });
 }
 
 type Guard = (current: MarketingSnapshot) => boolean;
@@ -97,18 +113,8 @@ export function createSequenceEngine(
   }
 
   function requireReadySender(senderId: string) {
-    match(senderStatus(senderId))
-      .with('ready', () => {})
-      .with('disconnected', () => {
-        throw new MarketingError('inboxDisconnected');
-      })
-      .with('reauth', () => {
-        throw new MarketingError('inboxReauth');
-      })
-      .with(undefined, () => {
-        throw new MarketingError('inboxesLoading');
-      })
-      .exhaustive();
+    const error = senderError(senderStatus(senderId));
+    if (error) throw error;
   }
 
   /**
@@ -157,8 +163,7 @@ export function createSequenceEngine(
   function enrollable(campaign: Campaign, enrollment: Enrollment): Guard {
     const email = normalizeEmail(enrollment.contact.email);
     return (current) =>
-      current.campaigns.find((item) => item.id === campaign.id)?.status ===
-        'active' &&
+      isCampaignActive(current, campaign.id) &&
       !isUnsubscribed(current, email) &&
       !current.enrollments.some(
         (entry) =>
@@ -305,10 +310,7 @@ export function createSequenceEngine(
 
   /** The campaign is still the active version the caller saw, and every record reads. */
   function assertEnrollable(campaign: Campaign, current: MarketingSnapshot) {
-    if (current.unreadable)
-      throw new MarketingError('unreadableRecords', {
-        count: current.unreadable,
-      });
+    assertReadable(current);
     const saved = current.campaigns.find((item) => item.id === campaign.id);
     if (!saved || saved.status !== 'active')
       throw new MarketingError('campaignInactive');
@@ -461,10 +463,19 @@ export function createSequenceEngine(
     }
   }
 
-  /** Stop every matching enrollment, collecting failures by contact. */
-  async function stopWhere(matches: Match, status: 'paused' | 'stopped') {
-    const first = await load();
-    const targets = first.enrollments.filter((entry) => matches(entry, first));
+  /**
+   * Stop every matching enrollment, then fail naming each contact that
+   * couldn't be stopped. `first` is a load the caller just made.
+   */
+  async function stopWhere(
+    matches: Match,
+    status: 'paused' | 'stopped',
+    first?: MarketingSnapshot
+  ) {
+    const current = first ?? (await load());
+    const targets = current.enrollments.filter((entry) =>
+      matches(entry, current)
+    );
     const scheduled = scheduledDrafts();
     const failures: ContactFailure[] = [];
     for (const target of targets) {
@@ -474,24 +485,17 @@ export function createSequenceEngine(
         failures.push({ email: target.contact.email, error });
       }
     }
-    return failures;
+    throwContactFailures(failures);
   }
 
-  function throwFailures(failures: ContactFailure[]) {
-    if (failures.length)
-      throw new MarketingError(
-        'contactsFailed',
-        { count: failures.length },
-        failures
-      );
-  }
-
-  /** Pause the newest stored copy of a campaign, retrying around other writes. */
-  async function pauseRecord(campaignId: string) {
+  /**
+   * Pause the newest stored copy of a campaign, retrying around other writes.
+   * `first` is a load the caller just made.
+   */
+  async function pauseRecord(campaignId: string, first?: MarketingSnapshot) {
     for (let attempt = 1; ; attempt++) {
-      const stored = (await load()).campaigns.find(
-        (item) => item.id === campaignId
-      );
+      const current = attempt === 1 && first ? first : await load();
+      const stored = current.campaigns.find((item) => item.id === campaignId);
       if (!stored) throw new MarketingError('campaignChanged');
       if (stored.status === 'paused') return;
       try {
@@ -512,13 +516,11 @@ export function createSequenceEngine(
     /** Stop new enrollments first, then cancel every live enrollment's drafts. */
     async pauseCampaign(campaign: Campaign) {
       await pauseRecord(campaign.id);
-      throwFailures(
-        await stopWhere(
-          (entry) =>
-            entry.campaignId === campaign.id &&
-            STOPPABLE.paused.includes(entry.status),
-          'paused'
-        )
+      await stopWhere(
+        (entry) =>
+          entry.campaignId === campaign.id &&
+          STOPPABLE.paused.includes(entry.status),
+        'paused'
       );
     },
     async stop(entry: Enrollment, status: 'paused' | 'stopped') {
@@ -532,10 +534,7 @@ export function createSequenceEngine(
       const saved = current.enrollments.find((item) => item.id === entry.id);
       if (!saved || saved.status !== 'paused')
         throw new MarketingError('notPaused');
-      if (
-        current.campaigns.find((item) => item.id === saved.campaignId)
-          ?.status !== 'active'
-      )
+      if (!isCampaignActive(current, saved.campaignId))
         throw new MarketingError('activateFirst');
       if (isUnsubscribed(current, saved.contact.email))
         throw new MarketingError('unsubscribed', {
@@ -582,8 +581,8 @@ export function createSequenceEngine(
         enrollment,
         saved,
         (fresh) =>
-          fresh.campaigns.find((item) => item.id === saved.campaignId)
-            ?.status === 'active' && !isUnsubscribed(fresh, saved.contact.email)
+          isCampaignActive(fresh, saved.campaignId) &&
+          !isUnsubscribed(fresh, saved.contact.email)
       );
       await writer.write();
       return enqueue(enrollment, writer);
@@ -595,18 +594,13 @@ export function createSequenceEngine(
     async deleteCampaign(campaign: Campaign) {
       const current = await load();
       // An unreadable record may belong to this campaign and still be sending.
-      if (current.unreadable)
-        throw new MarketingError('unreadableRecords', {
-          count: current.unreadable,
-        });
+      assertReadable(current);
       if (!current.campaigns.some((item) => item.id === campaign.id)) return;
-      await pauseRecord(campaign.id);
-      throwFailures(
-        await stopWhere(
-          (entry) =>
-            entry.campaignId === campaign.id && entry.status !== 'stopped',
-          'stopped'
-        )
+      await pauseRecord(campaign.id, current);
+      await stopWhere(
+        (entry) =>
+          entry.campaignId === campaign.id && entry.status !== 'stopped',
+        'stopped'
       );
       const entries = (await load()).enrollments.filter(
         (entry) => entry.campaignId === campaign.id
@@ -633,65 +627,53 @@ export function createSequenceEngine(
           if (!isConflict(error) || attempt >= MAX_WRITE_ATTEMPTS) throw error;
         }
       }
-      throwFailures(
-        await stopWhere(
-          (enrollment) =>
-            normalizeEmail(enrollment.contact.email) === address &&
-            enrollment.status !== 'stopped',
-          'stopped'
-        )
+      await stopWhere(
+        (enrollment) =>
+          normalizeEmail(enrollment.contact.email) === address &&
+          enrollment.status !== 'stopped',
+        'stopped'
       );
     },
     /** Stop enrollments whose campaign record is gone, so nothing sends unseen. */
     async stopOrphans() {
       // An unreadable campaign record is not a deleted one.
       const current = await load();
-      if (current.unreadable)
-        throw new MarketingError('unreadableRecords', {
-          count: current.unreadable,
-        });
-      throwFailures(
-        await stopWhere(
-          (entry, current) =>
-            entry.status !== 'stopped' &&
-            !current.campaigns.some((item) => item.id === entry.campaignId),
-          'stopped'
-        )
+      assertReadable(current);
+      await stopWhere(
+        (entry, fresh) =>
+          entry.status !== 'stopped' &&
+          !fresh.campaigns.some((item) => item.id === entry.campaignId),
+        'stopped',
+        current
       );
     },
-    /** Cancel scheduled sequence emails that no enrollment record knows about. */
-    async cancelUntracked(senderId: string, draftIds: string[]) {
-      requireReadySender(senderId);
+    /** Cancel scheduled sequence emails, by inbox, that no record knows about. */
+    async cancelUntracked(bySender: Record<string, string[]>) {
+      const senders = Object.entries(bySender);
+      for (const [senderId] of senders) requireReadySender(senderId);
       // Recheck against a fresh load: a step recorded since is not untracked,
       // and an unreadable record may be the one that tracks it.
       const current = await load();
-      if (current.unreadable)
-        throw new MarketingError('unreadableRecords', {
-          count: current.unreadable,
-        });
+      assertReadable(current);
       const known = new Set(
         current.enrollments.flatMap((entry) =>
           entry.steps.flatMap((step) =>
-            step.draftId &&
-            (step.status === 'queued' ||
-              step.status === 'scheduling' ||
-              step.status === 'delivery_started')
-              ? step.draftId
-              : []
+            step.draftId && isOnScheduler(step) ? step.draftId : []
           )
         )
       );
       const errors: unknown[] = [];
-      for (const draftId of draftIds) {
-        if (known.has(draftId)) continue;
-        try {
-          // An email Gmail is already sending can't be recalled.
-          if ((await delivery.cancel(senderId, { draftId })) !== 'canceled')
-            errors.push(new MarketingError('cancelFailed'));
-        } catch (error) {
-          errors.push(error);
+      for (const [senderId, draftIds] of senders)
+        for (const draftId of draftIds) {
+          if (known.has(draftId)) continue;
+          try {
+            // An email Gmail is already sending can't be recalled.
+            if ((await delivery.cancel(senderId, { draftId })) !== 'canceled')
+              errors.push(new MarketingError('cancelFailed'));
+          } catch (error) {
+            errors.push(error);
+          }
         }
-      }
       // No contact to name: these emails have no record.
       if (errors.length)
         throw new MarketingError(

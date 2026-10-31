@@ -13,7 +13,9 @@ created on the first write. Shared databases are never adopted: delivery acts
 on the signed-in user's inbox. Each row has a `Name` label and a JSON
 `Sequence data` cell; a campaign's `Name` edited in the database view renames
 it. Rows that no longer parse are counted and block enrolling until fixed.
-Every write sends all table versions. A write that loses to an unrelated
+Rows are read from the primary with the table version they reflect, so a
+write made moments earlier is never missing. Every write sends all table
+versions. A write that loses to an unrelated
 change retries only while its own record is untouched and what it depends on
 still holds (campaign active, address subscribed). Edits to an open campaign
 save only over the stored copy they started from, and save on every exit:
@@ -27,17 +29,22 @@ Enrolling freezes each personalized step, then creates and schedules one Gmail
 draft per step in order, so the server sends them with the tab closed. A
 batch that runs long starts later contacts later instead of failing.
 Scheduled steps are marked as sequence sends, which keeps them out of Mail's
-Drafts and Scheduled lists. A follow-up marked "reply in the same thread"
-replies to the previous scheduled or sent step (`Re:` plus the thread's first
-subject); with no earlier step left it starts a new thread. Pause, stop,
-delete, and unsubscribe cancel unsent drafts at their stored generation; sent
-email is never recalled.
+lists, thread view, and search until they send. A follow-up marked "reply in
+the same thread" replies to the previous scheduled or sent step of its own
+thread (`Re:` plus the thread's first subject); with none left it starts a new
+thread. Pause, stop, delete, and unsubscribe cancel unsent drafts at their
+stored generation, last step first, and stop at the first failure so no reply
+loses its parent; steps the scheduler already sent are marked sent without a
+request, and sent email is never recalled. Resume skips steps whose time has
+passed, unless the contact received nothing yet: then the sequence starts
+over.
 
 Opening the workspace or a CRM contact reads the scheduler back, so failed,
 missing, stalled, or interrupted sends and disconnected inboxes show as
 needing attention. The workspace also lists every inbox's scheduled sequence
 emails, so ones whose records were lost (a trashed database, a deleted table)
-can still be canceled, and stops enrollments whose campaign row is gone.
+can still be canceled, and stops enrollments whose campaign row is gone; both
+wait while any record is unreadable.
 Unsubscribing an address stops it in every campaign and blocks enrolling it
 again. Replies are not processed automatically.
 
