@@ -85,6 +85,13 @@ pub(crate) fn outlook_mailbox_state(
 }
 
 /// What setting a system label did, for the tool's summary.
+/// The one way a call names its label.
+#[derive(Clone, Copy)]
+enum LabelSelector<'a> {
+    Id(Uuid),
+    Name(&'a str),
+}
+
 fn outlook_done(label: &str, add: bool) -> &'static str {
     match (label.trim().to_ascii_uppercase().as_str(), add) {
         ("INBOX", false) => "Archived",
@@ -137,6 +144,19 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!("Update thread labels");
 
+        // Checked before the thread is resolved, so no provider acts on a
+        // call that names its label both ways or not at all.
+        let selector = match (self.label_id, self.label.as_deref()) {
+            (Some(id), None) => LabelSelector::Id(id),
+            (None, Some(name)) => LabelSelector::Name(name),
+            _ => {
+                return Err(ToolCallError {
+                    description: "Pass exactly one of `label` or `label_id`.".to_string(),
+                    internal_error: anyhow::anyhow!("label_id and label are exclusive"),
+                });
+            }
+        };
+
         // Resolve the inbox from the thread itself rather than defaulting to the
         // caller's primary inbox, so label operations work on threads that live
         // in a delegated or secondary inbox.
@@ -159,7 +179,7 @@ where
         // Outlook has no system labels: archive, read, flag, trash and junk
         // are mailbox states there, so set the state instead.
         if link.provider == UserProvider::Outlook
-            && let Some(name) = self.label.as_deref()
+            && let LabelSelector::Name(name) = selector
             && let Some(state) = outlook_mailbox_state(name, self.add)
         {
             let action = state?;
@@ -182,9 +202,9 @@ where
             });
         }
 
-        let label_id = match (self.label_id, self.label.as_deref()) {
-            (Some(id), None) => id,
-            (None, Some(name)) => {
+        let label_id = match selector {
+            LabelSelector::Id(id) => id,
+            LabelSelector::Name(name) => {
                 let labels = service_context
                     .service
                     .list_labels(&link)
@@ -202,12 +222,6 @@ where
                         ),
                         internal_error: anyhow::anyhow!("unknown label name"),
                     })?
-            }
-            _ => {
-                return Err(ToolCallError {
-                    description: "Pass exactly one of `label` or `label_id`.".to_string(),
-                    internal_error: anyhow::anyhow!("label_id and label are exclusive"),
-                });
             }
         };
 
