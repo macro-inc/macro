@@ -24,7 +24,7 @@ let snapshot: {
   isError: boolean;
   error: Error | null;
   data: RequestState;
-  refetch: () => Promise<{ data: RequestState }>;
+  refetch: () => Promise<{ data: RequestState; error?: Error | null }>;
 };
 let offset: Accessor<number>;
 vi.mock('@queries/access-requests/requests', () => ({
@@ -207,6 +207,28 @@ it('refreshes grants from the refetched state, not the cached one', async () => 
   });
   await source.refresh();
   expect(mocks.grants).toHaveBeenCalledOnce();
+});
+
+it('hides grant rows once the viewer can no longer read them', async () => {
+  const grants = [{ userId: 'macro|reader@macro.com', accessLevel: 'view' }];
+  mocks.grants.mockImplementation(() => okAsync(grants));
+  const { source, update } = mount({ accessLevel: 'view' });
+  await source.refresh();
+  expect(source.grants()).toEqual(grants);
+  update('accessLevel', null);
+  expect(source.grants()).toEqual([]);
+});
+
+it('does not refresh grants for an entity the refresh found deleted', async () => {
+  const { source } = mount({ accessLevel: 'view' });
+  await source.refresh();
+  mocks.grants.mockClear();
+  snapshot.refetch = async () => ({
+    data: snapshot.data,
+    error: new ThrownResultError([{ code: 'NOT_FOUND', message: 'gone' }]),
+  });
+  await source.refresh();
+  expect(mocks.grants).not.toHaveBeenCalled();
 });
 
 it('keeps loading while a new mount refetches a cached state', () => {

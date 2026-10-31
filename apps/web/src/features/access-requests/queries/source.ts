@@ -111,7 +111,8 @@ export function createSharingSource(
   };
   return {
     state: () => (state.isPending ? undefined : state.data),
-    grants: () => (grants.isPending ? [] : (grants.data ?? [])),
+    grants: () =>
+      grantsReadable() && !grants.isPending ? (grants.data ?? []) : [],
     // A cached state can predate an access change, so each mount waits for
     // its own refetch.
     loading: () =>
@@ -128,8 +129,9 @@ export function createSharingSource(
           : undefined,
     async refresh() {
       mutation.reset();
-      const { data } = await state.refetch();
-      if (canReadGrants(data)) await grants.refetch();
+      const { data, error } = await state.refetch();
+      if (canReadGrants(data) && !thrownResultErrorHasCode(error, 'NOT_FOUND'))
+        await grants.refetch();
     },
     submit: (level, revision) => mutate({ kind: 'submit', level, revision }),
     cancel: (revision) => mutate({ kind: 'cancel', revision }),
