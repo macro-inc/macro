@@ -7,7 +7,26 @@
   --task-col-initiative: 8rem;
 }
 
-/* Medium containers: hide Created By column */
+/* Include spacing inside visible tracks so hidden columns leave no grid gaps. */
+.task-grid-row.task-grid-icon-creator {
+  --task-col-assignees: 9.5rem;
+  --task-col-created-by: 2rem;
+  --task-col-timestamp: calc(max(3.5rem, var(--task-updated-header-width, 4rem)) + 0.5rem);
+  --task-col-initiative: 8.5rem;
+  column-gap: 0;
+  transition: grid-template-columns 160ms ease;
+}
+
+.task-grid-icon-creator .task-updated-cell {
+  min-width: 0;
+  overflow: hidden;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms;
+}
+
+/* Other grid hosts hide Created By in medium containers. */
 @container u-list (max-width: 1220px) {
   .task-grid-row {
     --task-col-created-by: 0rem;
@@ -23,5 +42,40 @@
     --task-col-created-by: 0rem;
     --task-col-timestamp: 5rem;
     --task-col-initiative: 6rem;
+  }
+
+  .task-grid-row.task-grid-icon-creator {
+    --task-col-assignees: 3rem;
+    --task-col-initiative: 2.5rem;
+  }
+}
+
+/* Collapse metadata before the remaining columns crowd the task title. */
+@container u-list (max-width: 600px) {
+  .task-grid-row.task-grid-icon-creator {
+    --task-col-timestamp: 0rem;
+    --task-col-created-by: 0rem;
+  }
+
+  .task-grid-icon-creator .task-creator-cell {
+    display: none;
+  }
+
+  .task-grid-icon-creator .task-shared-badge {
+    display: inline-flex;
+  }
+
+  .task-grid-icon-creator .task-updated-cell {
+    margin-inline-start: 0;
+    opacity: 0;
+    transform: translateX(4px);
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-grid-row.task-grid-icon-creator,
+  .task-grid-icon-creator .task-updated-cell {
+    transition: none;
   }
 }

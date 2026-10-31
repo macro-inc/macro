@@ -90,9 +90,11 @@ export type HoverCardComponentProps = {
    * Element type Kobalte should render the trigger as. Defaults to `span`.
    * Use `div` for block-level children or `nav` for navigation triggers.
    */
-  triggerAs?: 'span' | 'div' | 'nav';
+  triggerAs?: 'span' | 'div' | 'nav' | 'button';
   /** Accessible label applied to the trigger element. */
   triggerAriaLabel?: string;
+  /** Click action for a button trigger that also opens a hover preview. */
+  triggerOnClick?: JSX.EventHandler<HTMLElement, MouseEvent>;
   /** Class applied to the underlying trigger element. */
   triggerClass?: string;
   /** Receives the underlying Kobalte trigger element. */
@@ -384,6 +386,10 @@ export function HoverCard(props: HoverCardComponentProps) {
         }}
         as={props.triggerAs ?? 'span'}
         aria-label={props.triggerAriaLabel}
+        {...(props.triggerAs === 'button'
+          ? { type: 'button', role: 'button' }
+          : {})}
+        onClick={props.triggerOnClick}
         class={props.triggerClass}
         disabled={isDisabled()}
         tabIndex={props.triggerTabIndex}

@@ -1,7 +1,8 @@
 import { useMaybeBlockId } from '@core/block';
-import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { Property } from '@property';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import type { Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { cn, Layer } from '@ui';
@@ -40,7 +41,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
             <Layer depth={2}>
               {/* Stop clicks from bubbling to the row (which opens the entity). */}
               <div
-                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-surface/50 text-left @max-[840px]/u-list:hidden"
+                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full hover:bg-button-tertiary-hover hover:text-ink text-left @max-[840px]/u-list:hidden"
                 onClick={(e) => e.stopPropagation()}
                 role="presentation"
               >
@@ -94,7 +95,14 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
               when={!isEmpty()}
               fallback={
                 <>
-                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />
+                  <PropertyEmptyIcon
+                    propertyDefinitionId={props.property().propertyDefinitionId}
+                    class={cn(
+                      'text-ink-extra-muted',
+                      props.property().propertyDefinitionId !==
+                        SYSTEM_PROPERTY_IDS.PRIORITY && 'opacity-50'
+                    )}
+                  />
                   <span class="truncate flex-1 opacity-50 @max-[840px]/u-list:hidden">
                     {props.property().displayName}
                   </span>

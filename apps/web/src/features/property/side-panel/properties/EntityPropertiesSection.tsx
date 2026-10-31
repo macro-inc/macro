@@ -695,7 +695,22 @@ function SinglePill(props: {
       <Show
         when={!empty()}
         fallback={
-          <SidePanel.EmptyPill label={props.getEmptyLabel?.(props.property)} />
+          <Show
+            when={
+              props.property.propertyDefinitionId ===
+              SYSTEM_PROPERTY_IDS.PROJECT
+            }
+            fallback={
+              <SidePanel.EmptyPill
+                label={props.getEmptyLabel?.(props.property)}
+              />
+            }
+          >
+            <PropertyNS.Empty
+              propertyDefinitionId={props.property.propertyDefinitionId}
+              label={props.getEmptyLabel?.(props.property)}
+            />
+          </Show>
         }
       >
         <Show
@@ -704,7 +719,14 @@ function SinglePill(props: {
             <>
               <PropertyNS.Icon
                 property={props.property}
-                class="size-3 shrink-0"
+                class={
+                  props.property.propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.STATUS ||
+                  props.property.propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.PRIORITY
+                    ? 'size-4 shrink-0'
+                    : 'size-3 shrink-0'
+                }
               />
               <PropertyNS.Text property={props.property} class="min-w-0" />
             </>
@@ -781,7 +803,14 @@ function MultiValue(props: { property: Property; children: JSX.Element }) {
                   <Badge variant="ghost" size="sm" class="max-w-35">
                     <PropertyValueIcon
                       optionId={chip.key}
-                      class="size-3 shrink-0"
+                      class={
+                        props.property.propertyDefinitionId ===
+                          SYSTEM_PROPERTY_IDS.STATUS ||
+                        props.property.propertyDefinitionId ===
+                          SYSTEM_PROPERTY_IDS.PRIORITY
+                          ? 'size-4 shrink-0'
+                          : 'size-3 shrink-0'
+                      }
                     />
                     <span class="truncate">{chip.label}</span>
                   </Badge>

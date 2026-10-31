@@ -22,7 +22,6 @@ import {
   type BaseListEntityProps,
   hasSearchContentHits,
   useCharacterCount,
-  useListLayout,
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
@@ -142,8 +141,6 @@ export function TaskListEntity(props: TaskListEntityProps) {
     splitId: useSplitPanel()?.handle?.id,
   });
 
-  const isWide = useListLayout()?.isWide ?? (() => true);
-
   return (
     <Entity.Root
       id={props.rowId}
@@ -160,7 +157,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
       }}
       ref={mergeRefs(props.ref, draggable)}
       class={cn(
-        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 rounded-xl',
+        'soup-list-entity @container/entity w-[calc(100%-0.5rem)] mr-1 relative group/narrow flex flex-col py-0.5 mobile:py-0 rounded-xl',
         {
           'min-h-10 mx-1': !isMobile(),
           'bg-list-selected': props.checked,
@@ -175,7 +172,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
       onMouseMove={props.onMouseMove}
     >
       <Switch>
-        <Match when={isWide()}>
+        <Match when={!isMobile()}>
           <MaybeEntityRow
             entityId={props.entity.id}
             config={props.entityRowConfig}

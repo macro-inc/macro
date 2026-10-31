@@ -37,7 +37,7 @@ export function MultiSelectCheckbox(props: MultiSelectCheckboxProps) {
             'opacity-0 group-hover/button:opacity-100 group-focus-visible/button:opacity-100'
         )}
       >
-        <InlineCheckbox checked={!!props.checked} size="md" />
+        <InlineCheckbox checked={!!props.checked} size="md" animate={false} />
       </span>
     </button>
   );

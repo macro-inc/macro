@@ -111,7 +111,7 @@ function Fixture() {
           {cleared() ? 'Restore Project One' : 'Clear Task One project'}
         </button>
       </div>
-      <div role="grid" aria-label="Tasks grouped by Project">
+      <div class="soup-list" role="grid" aria-label="Tasks grouped by Project">
         <For each={groups()}>
           {([key, items]) => (
             <section aria-label={PROJECTS.get(key) ?? 'No Project'}>

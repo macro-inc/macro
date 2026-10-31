@@ -15,7 +15,11 @@ import {
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import type { EntityRowConfig } from '../../extractors-notification';
-import type { EntityData, ProjectEntity } from '../../types/entity';
+import type {
+  EntityData,
+  EntityWithProperties,
+  ProjectEntity,
+} from '../../types/entity';
 import type { WithNotification } from '../../types/notification';
 import type { ContentHitData, SearchLocation } from '../../types/search';
 import { isSearchEntity } from '../../types/search';
@@ -77,7 +81,7 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
 const WIDE_BREAKPOINT = 512; // @lg container query = 32rem
 
 export interface LayoutProps {
-  entity: WithNotification<EntityData>;
+  entity: WithNotification<EntityWithProperties<EntityData>>;
   /** Persistent schedule metadata, including on touch and notification rows. */
   scheduleStatus?: JSX.Element;
   actions?: JSX.Element;

@@ -41,10 +41,10 @@ import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
 import Clock from '@icon/system/regular/clock.svg';
 import Copy from '@icon/system/regular/copy.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Link from '@icon/system/regular/link.svg';
 import Rename from '@icon/system/regular/pencil-line.svg';
-import Stack from '@icon/system/regular/stack.svg';
 import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
 import Trash from '@icon/system/regular/trash-simple.svg';
@@ -664,7 +664,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
         ? [
             {
               label: t('entityActions.addToProject'),
-              icon: Stack,
+              icon: ProjectIcon,
               group: 'file' as const,
               action: () => {
                 setOpen(false);
