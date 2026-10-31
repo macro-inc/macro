@@ -41,6 +41,8 @@ Hidden tags keep the existing overflow picker and hover actions. Keep the visibl
 chip count stable while a picker or its nested editor is active so resizing
 cannot discard the editing session. Hosts without a controller retain their
 explicit or default chip limit.
+Tag chips, overflow chips, and inline tag pills retain their compact desktop
+height on touch instead of adopting the shared button touch minimum.
 
 ## Side-panel collections
 

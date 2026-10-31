@@ -264,7 +264,7 @@ function TagOverflow(props: {
           triggerClass={badgeTriggerClasses({
             variant: 'outline',
             size: 'xs',
-            class: 'max-w-[14ch] gap-1.5',
+            class: 'max-w-[14ch] gap-1.5 touch:min-h-0',
           })}
           triggerLabel="Edit tags"
           onOpenChange={setPickerOpen}
@@ -476,7 +476,7 @@ function inlineTagsTriggerClass(props: InlineTagsPillProps, count: number) {
     class: cn(
       // Capped so a long tag label truncates instead of squeezing
       // whatever shares the row with the pill (e.g. a task title).
-      'min-w-0 max-w-35 gap-1.5 text-left',
+      'min-w-0 max-w-35 gap-1.5 text-left touch:min-h-0',
       count === 0 && !props.showAddButton && 'text-ink-extra-muted',
       props.class
     ),
