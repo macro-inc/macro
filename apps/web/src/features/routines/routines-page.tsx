@@ -5,7 +5,10 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
-import { enableRoutineConditions } from '@core/constant/featureFlags';
+import {
+  enableRoutineConditions,
+  enableRoutineStarterTemplates,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
 import { getErrorMessage } from './core/routine-draft';
@@ -48,6 +51,7 @@ function RoutinesContent() {
     toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
   );
   const decisions = useFeatureFlag(enableRoutineConditions);
+  const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
   const hasPaidAccess = useHasPaidAccess();
   /** New routine: describe it, pick a template, or start fresh. */
   function create() {
@@ -78,7 +82,11 @@ function RoutinesContent() {
           registerSearchFocus={(focus) => (focusSearch = focus)}
           onCreate={() => create()}
           onOpen={(id) => open(id)}
-          templates={featuredTemplates(decisions().enabled)}
+          templates={
+            starterTemplates().enabled
+              ? featuredTemplates(decisions().enabled)
+              : []
+          }
           onTemplate={startFrom}
         />
       }

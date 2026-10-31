@@ -1036,7 +1036,9 @@ Routines**): tapping a routine closes the settings sheet and opens it, and
 
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
-search, which matches name, When and Then. Above the rows, **Templates** shows
+search, which matches name, Trigger and Steps. When
+`enable-routine-starter-templates` is on (on in development; PostHog decides in
+deployed environments), **Templates** above the rows shows
 four template cards (icon, name, one line and its trigger → first step, such as
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
@@ -1073,7 +1075,8 @@ routine** in the same popover host as task and project creation. It never edits
 a routine itself: a **Describe your routine** box with **Draft it** (AI fills in
 the name, triggers and steps from a sentence such as "When an invoice arrives,
 label it Finance and make a task to pay it", using the workspace's label, tag,
-channel, folder, people and agent names), **Templates** (Macro's cards: **Sort
+channel, folder, people and agent names), **Templates** (with
+`enable-routine-starter-templates` on; Macro's cards: **Sort
 my inbox**, **Triage new tasks**, **Morning brief**, **Chase stuck tasks**, and
 **Share updates** only where AI decisions are enabled; each shows its icon,
 what it does and its trigger → first step), and **Start fresh** beside the

@@ -1,4 +1,4 @@
-import { For, type JSX } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import type { RoutineTemplate } from '../core/routine-templates';
 import { RoutineTemplateCard } from './routine-template-strip';
 
@@ -15,20 +15,22 @@ export function RoutineStart(props: {
   return (
     <div class="grid min-w-0 gap-5 pb-4">
       {props.describe}
-      <section aria-label="Templates" class="grid min-w-0 gap-2.5">
-        <h2 class="text-sm font-semibold text-ink">Templates</h2>
-        <div class="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-2.5">
-          <For each={props.templates}>
-            {(template) => (
-              <RoutineTemplateCard
-                on="dialog"
-                template={template}
-                onUse={() => props.onTemplate(template)}
-              />
-            )}
-          </For>
-        </div>
-      </section>
+      <Show when={props.templates.length}>
+        <section aria-label="Templates" class="grid min-w-0 gap-2.5">
+          <h2 class="text-sm font-semibold text-ink">Templates</h2>
+          <div class="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-2.5">
+            <For each={props.templates}>
+              {(template) => (
+                <RoutineTemplateCard
+                  on="dialog"
+                  template={template}
+                  onUse={() => props.onTemplate(template)}
+                />
+              )}
+            </For>
+          </div>
+        </section>
+      </Show>
     </div>
   );
 }

@@ -19,6 +19,8 @@ export function RoutineCreatorView(props: {
   defaultModel: string;
   /** Decisions are answered by the classifier behind trigger conditions. */
   decisionsEnabled: boolean;
+  /** Macro's built-in templates are offered (`enable-routine-starter-templates`). */
+  templatesEnabled: boolean;
   /** Drafts the routine from a description; absent where that is unavailable. */
   renderComposer?: (
     apply: (draft: ScheduleDraft, description: string) => void,
@@ -71,7 +73,11 @@ export function RoutineCreatorView(props: {
       <div class="min-h-0 flex-1 overflow-y-auto px-2 pt-2">
         <RoutineStart
           describe={props.renderComposer?.(drafted, blank, undefined)}
-          templates={availableTemplates(props.decisionsEnabled)}
+          templates={
+            props.templatesEnabled
+              ? availableTemplates(props.decisionsEnabled)
+              : []
+          }
           onTemplate={startFrom}
         />
       </div>

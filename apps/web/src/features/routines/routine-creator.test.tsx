@@ -24,6 +24,7 @@ const host = vi.hoisted(() => ({
   create: vi.fn<(body: CreateScheduledAction) => Promise<ScheduledAction>>(),
   openWithSplit: vi.fn(),
   created: vi.fn(),
+  flags: new Set<string>(),
   cancelled: vi.fn(),
   started: vi.fn(),
   success: vi.fn(),
@@ -34,7 +35,7 @@ const host = vi.hoisted(() => ({
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'enable-routine-conditions',
+    enabled: host.flags.has(flag.key),
   }),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
@@ -196,6 +197,10 @@ let styles: HTMLStyleElement;
 beforeEach(() => {
   vi.clearAllMocks();
   host.githubLinked = true;
+  host.flags = new Set([
+    'enable-routine-conditions',
+    'enable-routine-starter-templates',
+  ]);
   localStorage.clear();
   setCatalogState('success');
   styles = document.createElement('style');
@@ -898,6 +903,18 @@ describe('new routine', () => {
         name: 'Routine description',
       }).value
     ).toBe('Weekdays at 9, sum up my day');
+  });
+
+  it('offers no templates while Macro’s templates are flagged off', async () => {
+    host.flags.delete('enable-routine-starter-templates');
+    openNewRoutine();
+    await screen.findByRole('button', { name: 'Start fresh' });
+    expect(screen.queryByRole('region', { name: 'Templates' })).toBeNull();
+    expect(
+      screen.queryByRole('button', {
+        name: 'Start a routine from Morning brief',
+      })
+    ).toBeNull();
   });
 
   it('starts fresh on a blank page', async () => {
