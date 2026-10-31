@@ -45,14 +45,11 @@ passwordless/password flows against the FusionAuth HTTP API.
 - Map request failures with `.map_err(FusionAuthClientError::transport)` and
   statuses the endpoint does not document with
   `FusionAuthClientError::unexpected_response` (or `unexpected` after reading
-  the body). They turn outages into `Upstream` (502/503 via
-  `crates/upstream_error`) and FusionAuth's `[invalid]userId` into
-  `UserDoesNotExist`; a hand-written `Generic` becomes a 500.
+  the body). They turn outages, throttling, timeouts, and undecodable bodies
+  into `Upstream` (502/503 via `crates/upstream_error`); a hand-written
+  `Generic` becomes a 500.
 - Calls to Google or Microsoft name the provider:
   `FusionAuthClientError::provider_transport("Google", e)`.
-
-## Gotchas
-
 - Link lookup and unlink map HTTP 400 `userId` / `[invalid]userId` errors to
   `UserDoesNotExist`; other validation, authentication, and server failures
   must remain errors. Never log identity-provider link tokens.

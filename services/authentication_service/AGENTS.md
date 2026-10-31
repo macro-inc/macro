@@ -83,11 +83,11 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
-- Answer third-party failures as 502/503, not 500. A `GithubError` without a
-  route-specific answer goes through `github_error_response`
-  (`src/api/link/github.rs`); a `FusionAuthClientError` with `upstream()`
-  returns that error's `into_response()`. Document 502/503 with
-  `UpstreamErrorResponse` in the route's `utoipa::path`.
+- Answer third-party failures as 502/503, not 500: match
+  `GithubError::Upstream(error)` before a route's 500 catch-all, and answer a
+  `FusionAuthClientError` whose `upstream()` is set with that error's
+  `into_response()`. Document 502/503 with `UpstreamErrorResponse` in the
+  route's `utoipa::path`.
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
