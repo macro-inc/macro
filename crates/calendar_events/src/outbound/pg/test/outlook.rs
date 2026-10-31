@@ -1,3 +1,4 @@
+use super::join_requests::{JOIN_REQUEST_NOTIFICATION, insert_notification, recipient_holds};
 use super::*;
 use crate::domain::models::{
     AutomaticDeclinePolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
@@ -1396,4 +1397,63 @@ async fn the_organizer_repair_stores_outlook_organizers_as_holding_their_meeting
         before + 1,
         "a rerun finds nothing left to fix"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_outlook_cancellation_or_removal_retires_join_request_notifications(pool: PgPool) {
+    let (repo, _, owner) = mailbox(&pool).await;
+    let member = "macro|outlook-member@example.com";
+    insert_user(&pool, member).await;
+    let lease = calendar(&repo).await;
+    repo.checkpoint_outlook_calendar(
+        &lease,
+        OutlookCalendarProgress::Page(OutlookCalendarPage {
+            members: vec![("provider-removed".into(), "provider-removed".into())],
+            removed: vec![],
+            next: None,
+            delta: Some("baseline".into()),
+        }),
+    )
+    .await
+    .unwrap();
+    let event = claim(&repo).await.unwrap();
+    let cancelled_id = store(&repo, &event, "cancelled").await;
+    let removed_id = store(&repo, &event, "removed").await;
+    let (request, _) = repo
+        .open_join_request(cancelled_id, member, "member@work.example.com")
+        .await
+        .unwrap();
+    let on_cancelled =
+        insert_notification(&pool, JOIN_REQUEST_NOTIFICATION, cancelled_id, &owner).await;
+    let on_removed =
+        insert_notification(&pool, JOIN_REQUEST_NOTIFICATION, removed_id, &owner).await;
+
+    // Outlook can keep a cancelled meeting: the row stays, with its request.
+    let mut cancelled = upsert(&event, "cancelled");
+    cancelled.event.status = EventStatus::Cancelled;
+    cancelled.event.sequence = 1;
+    cancelled.event.updated_at += Duration::minutes(1);
+    repo.upsert_event(CalendarEventWrite::OutlookSync {
+        lease: Box::new(event.clone()),
+        upsert: cancelled,
+    })
+    .await
+    .unwrap();
+    assert!(!recipient_holds(&pool, on_cancelled).await);
+    assert_eq!(
+        repo.get_join_request(request.id).await.unwrap(),
+        Some(request)
+    );
+    assert!(recipient_holds(&pool, on_removed).await);
+
+    repo.checkpoint_outlook_calendar(
+        &event,
+        OutlookCalendarProgress::Event {
+            id: "provider-removed".into(),
+            exists: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!recipient_holds(&pool, on_removed).await);
 }

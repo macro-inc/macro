@@ -885,7 +885,9 @@ Outlook sends the invitation and the mention then opens the viewer's own copy. D
 the requester nothing, but their card then reads `Declined` and `The person who shared this event
 declined your request to join.` with no `Ask to join`, and offers `Add to calendar` again. A
 declined request stands: the server refuses another ask with 409 `request_declined`, so the
-sharer is asked only once. A classic `@Macro` reply that
+sharer is asked only once. The notification goes when the event does (deleted in Macro, deleted
+or cancelled in Google or Outlook, its calendar or inbox removed); deleting one occurrence of a
+series leaves it, since the sharer can still add the guest. A classic `@Macro` reply that
 mentions an event does not share
 it by posting the chip. It asks whether to share with the channel, and a yes in that thread
 writes the same channel grant. Private and confidential events are never shared this way.
