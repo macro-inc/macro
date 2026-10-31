@@ -4762,6 +4762,9 @@ describe('normalizedCacheExchange', () => {
         .spyOn(AbortSignal, 'timeout')
         .mockReturnValue(timeoutSignal);
       const operationFetch = vi.fn().mockResolvedValue(new Response());
+      // Webviews below Safari 17.4 have no AbortSignal.any.
+      const { any } = AbortSignal;
+      Reflect.deleteProperty(AbortSignal, 'any');
       try {
         const mutation = makeMutationOp(1, optimistic);
         const mutationWithFetch = makeOperation(mutation.kind, mutation, {
@@ -4788,6 +4791,7 @@ describe('normalizedCacheExchange', () => {
         expect(signal.reason).toBe('cancelled');
         await fetched;
       } finally {
+        Object.assign(AbortSignal, { any });
         timeout.mockRestore();
       }
     });
