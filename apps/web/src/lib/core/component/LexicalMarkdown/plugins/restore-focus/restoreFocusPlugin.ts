@@ -3,7 +3,7 @@
  * programmatically focused by element.focus() api.
  */
 import { mergeRegister } from '@lexical/utils';
-import type { LexicalEditor } from 'lexical';
+import { $getRoot, $getSelection, type LexicalEditor } from 'lexical';
 import { registerRootEventListener } from '../shared';
 
 /** Where programmatic focus puts the caret when the editor has no selection. */
@@ -37,6 +37,17 @@ export function restoreFocusPlugin(
         if (e.target !== editor.getRootElement()) return;
         if (clickFlag) return;
         e.preventDefault();
+        // Native focus has already put the DOM caret at the start, and an
+        // editor without a selection would adopt it; apply the default instead.
+        const hadSelection = editor
+          .getEditorState()
+          .read(() => $getSelection() !== null);
+        if (!hadSelection) {
+          editor.update(() => {
+            if (defaultSelection === 'rootEnd') $getRoot().selectEnd();
+            else $getRoot().selectStart();
+          });
+        }
         editor.focus(undefined, { defaultSelection });
       })
     );

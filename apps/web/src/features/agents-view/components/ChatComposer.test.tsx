@@ -1,6 +1,7 @@
 import { createSessionComposerDraft } from '@app/features/block-agent/primitives/session-composer-draft';
 import type { InputAttachmentData } from '@channel/Input/types';
 import { preloadAgentFold } from '@core/agent-fold/client';
+import type { RestoreFocusDefault } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
@@ -57,6 +58,8 @@ const editor = vi.hoisted(() => ({
   readMarkdown: (): string => '',
   /** Applies MarkdownShell's initial value when the editor connects. */
   connect: undefined as ((markdown: string) => void) | undefined,
+  /** The fallback the composer configures with withRestoreFocus. */
+  restoreFocus: undefined as RestoreFocusDefault | undefined,
 }));
 
 vi.mock(
@@ -73,7 +76,10 @@ vi.mock(
         withLinks: () => builder,
         withHistory: () => builder,
         withCode: () => builder,
-        withRestoreFocus: () => builder,
+        withRestoreFocus: (fallback?: RestoreFocusDefault) => {
+          editor.restoreFocus = fallback;
+          return builder;
+        },
         withSkills: () => builder,
         withAgentCommands: () => builder,
         withFilePaste: (options: {
@@ -208,10 +214,12 @@ function connectRoot() {
   return root;
 }
 
-/** Focus the root as triggerFocusInput does; the composer's restoreFocusPlugin then focuses the editor. */
+/** Focus the root as triggerFocusInput does; restoreFocusPlugin then focuses the editor, falling back to the composer's configured default. */
 function focusEditor(root: HTMLElement) {
   root.focus();
-  editor.lexical?.focus(undefined, { defaultSelection: 'rootEnd' });
+  editor.lexical?.focus(undefined, {
+    defaultSelection: editor.restoreFocus ?? 'rootStart',
+  });
 }
 
 /** Characters before the DOM caret in `root`, or undefined when it is elsewhere. */
