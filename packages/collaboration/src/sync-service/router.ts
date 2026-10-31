@@ -186,34 +186,34 @@ class VirtualSyncSocket {
    * Give another caller its own socket on this route. A sync source learns
    * the document only from `RemoteInitialSync`, which the Durable Object sends
    * once per downstream connection, so a caller joining an open route
-   * re-subscribes it; the callers already on it see a reconnect.
+   * re-subscribes it; the callers already on it see a close, then a
+   * reconnect.
    */
   public addOwner(
     initialToken: string | undefined,
     refreshToken: () => Promise<string>
   ): SyncSocket {
     const owner = new OwnedSyncSocket(this, refreshToken);
+    const current = [...this.owners];
+    // Registered first, so the route outlives any current owner that closes
+    // during the close below.
+    this.owners.add(owner);
     // A route still subscribing (or waiting to) delivers its initial sync to
     // every owner, including this one.
-    const joiningOpenRoute = this.owners.size > 0 && this.state === 'open';
-    if (joiningOpenRoute) {
-      // Re-subscribing replaces the server's route, dropping its in-flight
-      // acks and replies. Close the current owners first, as an upstream drop
-      // would, so their pending waits end now instead of timing out.
-      this.dispatch(
-        WebsocketEvent.Close,
-        new CloseEvent(WebsocketEvent.Close, {
-          code: 4000,
-          reason: 'resubscribing for another caller',
-          wasClean: false,
-        })
-      );
-    }
-    this.owners.add(owner);
-    if (joiningOpenRoute) {
-      this.initialToken = initialToken;
-      this.resubscribe();
-    }
+    if (current.length === 0 || this.state !== 'open') return owner;
+
+    // Re-subscribing replaces the server's route, dropping its in-flight acks
+    // and replies. Start the new subscription first, so anything sent from
+    // here on waits for it, then close the current owners as an upstream drop
+    // would, so their pending waits end now instead of timing out.
+    this.initialToken = initialToken;
+    this.resubscribe();
+    const close = new CloseEvent(WebsocketEvent.Close, {
+      code: 4000,
+      reason: 'resubscribing for another caller',
+      wasClean: false,
+    });
+    for (const other of current) other.dispatch(WebsocketEvent.Close, close);
     return owner;
   }
 
