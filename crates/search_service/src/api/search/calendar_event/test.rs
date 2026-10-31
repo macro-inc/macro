@@ -51,13 +51,12 @@ fn returned_description(description: &str, holds_meeting: bool) -> Option<String
     let mut info = timed_series(id);
     info.description = Some(description.to_string());
     info.holds_meeting = holds_meeting;
-    let results =
-        construct_search_result(
-            vec![hit(id)],
-            HashMap::from([(id, info)]),
-            HashMap::new(),
-            HashMap::new(),
-        );
+    let results = construct_search_result(
+        vec![hit(id)],
+        HashMap::from([(id, info)]),
+        HashMap::new(),
+        HashMap::new(),
+    );
     results
         .into_iter()
         .next()
@@ -215,13 +214,12 @@ fn resolved_occurrence_rides_on_the_row() {
     info.occurrence_starts_at = Some(Utc.with_ymd_and_hms(2026, 8, 25, 10, 0, 0).unwrap());
     info.occurrence_ends_at = Some(Utc.with_ymd_and_hms(2026, 8, 25, 10, 15, 0).unwrap());
 
-    let results =
-        construct_search_result(
-            vec![hit(id)],
-            HashMap::from([(id, info)]),
-            HashMap::new(),
-            HashMap::new(),
-        );
+    let results = construct_search_result(
+        vec![hit(id)],
+        HashMap::from([(id, info)]),
+        HashMap::new(),
+        HashMap::new(),
+    );
 
     assert_eq!(results.len(), 1);
     let metadata = results[0].metadata.as_ref().expect("metadata");
@@ -282,13 +280,12 @@ fn all_day_series_reads_the_date_pair() {
     info.start_date = Some(NaiveDate::from_ymd_opt(2026, 8, 25).unwrap());
     info.end_date = Some(NaiveDate::from_ymd_opt(2026, 8, 26).unwrap());
 
-    let results =
-        construct_search_result(
-            vec![hit(id)],
-            HashMap::from([(id, info)]),
-            HashMap::new(),
-            HashMap::new(),
-        );
+    let results = construct_search_result(
+        vec![hit(id)],
+        HashMap::from([(id, info)]),
+        HashMap::new(),
+        HashMap::new(),
+    );
 
     let metadata = results[0].metadata.as_ref().expect("metadata");
     match &metadata.time {
@@ -308,7 +305,12 @@ fn hit_the_caller_cannot_see_is_dropped() {
     // The visibility query is the authority: an id absent from its result set
     // is one the caller lost access to since it was indexed.
     let id = Uuid::new_v4();
-    let results = construct_search_result(vec![hit(id)], HashMap::new(), HashMap::new(), HashMap::new());
+    let results = construct_search_result(
+        vec![hit(id)],
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+    );
     assert!(
         results.is_empty(),
         "a hit with no visible row must not reach the response"
@@ -322,13 +324,12 @@ fn unreadable_span_is_dropped_rather_than_dated_wrong() {
     info.starts_at = None;
     info.ends_at = None;
     // Neither leg of the time-shape constraint is satisfied.
-    let results =
-        construct_search_result(
-            vec![hit(id)],
-            HashMap::from([(id, info)]),
-            HashMap::new(),
-            HashMap::new(),
-        );
+    let results = construct_search_result(
+        vec![hit(id)],
+        HashMap::from([(id, info)]),
+        HashMap::new(),
+        HashMap::new(),
+    );
     assert!(results.is_empty());
 }
 
@@ -375,13 +376,12 @@ fn organizer_absent_when_source_names_neither() {
     let mut info = timed_series(id);
     info.organizer_email = None;
     info.organizer_name = None;
-    let results =
-        construct_search_result(
-            vec![hit(id)],
-            HashMap::from([(id, info)]),
-            HashMap::new(),
-            HashMap::new(),
-        );
+    let results = construct_search_result(
+        vec![hit(id)],
+        HashMap::from([(id, info)]),
+        HashMap::new(),
+        HashMap::new(),
+    );
     assert!(
         results[0]
             .metadata

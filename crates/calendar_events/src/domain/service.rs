@@ -15,20 +15,19 @@ use super::{
         CalendarEventExportAccess, CalendarEventForward, CalendarEventForwardKind,
         CalendarEventIcs, IcsParticipant, IcsPurpose, render_event_ics,
     },
+    labels::{CalendarLabels, EventLabels},
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
         CalendarEventUpsert, CalendarGrantIntent, CalendarOccurrenceCursor,
         GoogleBackfillRunReport, GoogleCalendarSyncSnapshot, GoogleScopeSet, OccurrenceRange,
     },
-    labels::{CalendarLabels, EventLabels},
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventForwardSource,
         CalendarEventLabelReader, CalendarEventWrite, CalendarEventWriteOutcome,
-        CalendarOccurrenceService,
-        CalendarProviderError, CalendarProviderErrorKind, CalendarReauthNotifier,
-        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, RetiredCalendarEvent,
+        CalendarOccurrenceService, CalendarProviderError, CalendarProviderErrorKind,
+        CalendarReauthNotifier, CalendarRepository, GoogleCalendarProvider,
+        GoogleCalendarSyncRepository, GoogleEventSyncContext, RetiredCalendarEvent,
     },
 };
 

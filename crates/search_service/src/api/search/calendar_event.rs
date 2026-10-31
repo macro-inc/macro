@@ -49,8 +49,6 @@ pub(in crate::api::search) async fn enrich_calendar_events(
         events.values().filter(|event| !event.holds_meeting).count(),
     );
 
-    // Fetch event properties (e.g. tags) so rows can render and re-check
-    // them, mirroring the projects enrichment.
     // Labels only describe a row, so a failure leaves them out rather than
     // failing the search.
     let visible_ids: Vec<Uuid> = events.keys().copied().collect();
@@ -61,6 +59,8 @@ pub(in crate::api::search) async fn enrich_calendar_events(
         .inspect_err(|e| tracing::error!(error=?e, "failed to label calendar event hits"))
         .unwrap_or_default();
 
+    // Fetch event properties (e.g. tags) so rows can render and re-check
+    // them, mirroring the projects enrichment.
     let entity_refs: Vec<EntityReference> = event_ids
         .iter()
         .map(|id| EntityReference::new(id.to_string(), EntityType::CalendarEvent))

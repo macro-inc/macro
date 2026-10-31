@@ -76,7 +76,11 @@ fn copy(calendar_id: Uuid, organizer: &str, attendees: Vec<CalendarAttendee>) ->
 
 #[test]
 fn a_colleagues_calendar_says_so_and_gives_no_role() {
-    let solo = EventLabels::of(copy(COLLEAGUES, COLLEAGUE, Vec::new()), Some(&viewer()), &calendars());
+    let solo = EventLabels::of(
+        copy(COLLEAGUES, COLLEAGUE, Vec::new()),
+        Some(&viewer()),
+        &calendars(),
+    );
     assert_eq!(
         solo,
         EventLabels {
@@ -117,13 +121,21 @@ fn a_read_only_calendar_naming_the_user_gives_no_role() {
 
 #[test]
 fn a_real_organizer_and_guest_keep_their_roles() {
-    let organized = copy(OWN, INBOX, vec![attendee(INBOX, true), attendee(COLLEAGUE, false)]);
+    let organized = copy(
+        OWN,
+        INBOX,
+        vec![attendee(INBOX, true), attendee(COLLEAGUE, false)],
+    );
     assert_eq!(
         EventLabels::of(organized, Some(&viewer()), &calendars()).role,
         Some(EventRole::Organizer)
     );
 
-    let invited = copy(OWN, COLLEAGUE, vec![attendee(COLLEAGUE, true), attendee(INBOX, false)]);
+    let invited = copy(
+        OWN,
+        COLLEAGUE,
+        vec![attendee(COLLEAGUE, true), attendee(INBOX, false)],
+    );
     assert_eq!(
         EventLabels::of(invited, Some(&viewer()), &calendars()).role,
         Some(EventRole::Guest)
@@ -190,7 +202,11 @@ fn a_cancelled_copy_gives_no_organizer_capability() {
 
 #[test]
 fn a_requester_with_no_inbox_of_their_own_gets_no_role() {
-    let labels = EventLabels::of(copy(OWN, INBOX, vec![attendee(INBOX, true)]), None, &calendars());
+    let labels = EventLabels::of(
+        copy(OWN, INBOX, vec![attendee(INBOX, true)]),
+        None,
+        &calendars(),
+    );
     assert_eq!(labels.calendar_name.as_deref(), Some(INBOX));
     assert_eq!(labels.role, None);
 }
