@@ -2,9 +2,12 @@ import type { ReloadReason } from '@app/observability/generated/native-diagnosti
 import { reloadApp } from '@app/observability/reload';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { invoke } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { deviceLooksOffline } from './connectivity';
+import { fireAndForget } from './fireAndForget';
 import { isEditableInput } from './isEditableInput';
+import { isTauri } from './platform';
 
 /** What the reload decision needs from the page; replaced in tests. */
 export interface ReloadPage {
@@ -79,15 +82,31 @@ export function hasAutomaticReloadHolds(): boolean {
 }
 
 /**
+ * The native updater applies a finished bundle when the app returns to the
+ * foreground, without asking this page, so a hold has to reach it too.
+ */
+async function syncNativeReloadHold() {
+  if (!isTauri()) return;
+  try {
+    await invoke('set_bundle_reload_hold', { held: holds.size > 0 });
+  } catch {
+    // Older binaries can load this OTA bundle but do not have the command.
+  }
+}
+
+/**
  * Keeps this tab from reloading by itself into a newer build while work a
- * reload would cut off is running, such as a call or an upload. Returns the
- * release. The user can still reload from the prompt.
+ * reload would cut off is running, such as a call, an upload, or a native
+ * sign-in sheet. Returns the release. The user can still reload from the
+ * prompt.
  */
 export function holdAutomaticReload(): () => void {
   const hold = Symbol('automatic reload hold');
   holds.add(hold);
+  fireAndForget(syncNativeReloadHold(), 'bundle-update');
   return () => {
     holds.delete(hold);
+    fireAndForget(syncNativeReloadHold(), 'bundle-update');
   };
 }
 

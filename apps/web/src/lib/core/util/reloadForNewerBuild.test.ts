@@ -1,11 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const native = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  isTauri: vi.fn(),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { custom: vi.fn() },
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: native.invoke }));
+vi.mock('./platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./platform')>()),
+  isTauri: native.isTauri,
+}));
+
+import { Telemetry } from '@macro-inc/observability';
 
 import {
+  hasAutomaticReloadHolds,
   holdAutomaticReload,
   pendingWebUpdate,
   promptReloadForFailedLoad,
@@ -49,6 +62,54 @@ function fakePage(state: {
     },
   };
 }
+
+describe('holdAutomaticReload', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    resetReloadForNewerBuildForTests();
+  });
+
+  it('tells the native updater until the last hold is released', async () => {
+    native.isTauri.mockReturnValue(true);
+    native.invoke.mockResolvedValue(undefined);
+
+    const first = holdAutomaticReload();
+    const second = holdAutomaticReload();
+    first();
+    second();
+
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(4));
+    expect(native.invoke.mock.calls).toEqual([
+      ['set_bundle_reload_hold', { held: true }],
+      ['set_bundle_reload_hold', { held: true }],
+      ['set_bundle_reload_hold', { held: true }],
+      ['set_bundle_reload_hold', { held: false }],
+    ]);
+  });
+
+  it('keeps working on binaries that do not have the command', async () => {
+    native.isTauri.mockReturnValue(true);
+    native.invoke.mockRejectedValue(new Error('Command not found'));
+    const reported = vi.spyOn(Telemetry, 'error');
+
+    const release = holdAutomaticReload();
+    expect(hasAutomaticReloadHolds()).toBe(true);
+    release();
+
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(hasAutomaticReloadHolds()).toBe(false);
+    expect(reported).not.toHaveBeenCalled();
+  });
+
+  it('stays off the native bridge on the web', () => {
+    native.isTauri.mockReturnValue(false);
+
+    holdAutomaticReload()();
+
+    expect(native.invoke).not.toHaveBeenCalled();
+  });
+});
 
 describe('reloadForNewerBuild', () => {
   beforeEach(() => {

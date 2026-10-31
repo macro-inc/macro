@@ -5,6 +5,7 @@ import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
+import { hasAutomaticReloadHolds } from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
 import { PlatformNotificationProvider } from '@notifications';
 import { queryPersistence } from '@queries/client';
@@ -152,7 +153,9 @@ function TauriProvider(props: { children: JSX.Element }) {
       // iOS gives us a short JS execution window after the app is backgrounded.
       // Use it to ask Rust to apply a completed bundle before suspension;
       // native Ready/Resumed handlers cover cases where this window is missed.
-      if (document.hidden) {
+      // Leaving the app does not mean nothing is running: switching to Gmail
+      // for a sign-in code hides the page while its auth sheet is still open.
+      if (document.hidden && !hasAutomaticReloadHolds()) {
         performBundleUpdate();
       }
     };
