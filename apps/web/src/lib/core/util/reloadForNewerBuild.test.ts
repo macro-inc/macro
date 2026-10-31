@@ -179,7 +179,7 @@ describe('recoverFromFailedLoad', () => {
     const { page, prompts } = fakePage({ hidden: false, offline: false });
 
     recoverFromFailedLoad(page, once, 'build-a');
-    expect(page.reload).toHaveBeenCalledOnce();
+    expect(page.reload).toHaveBeenCalledExactlyOnceWith('failed_load_recovery');
     expect(prompts).toHaveLength(0);
 
     // The reload landed on the same build again, for example from a stale

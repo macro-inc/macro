@@ -183,7 +183,7 @@ export function recoverFromFailedLoad(
     !page.isEditingText() &&
     reloadOnce.claim(build)
   ) {
-    page.reload();
+    page.reload('failed_load_recovery');
     return;
   }
   promptReloadForFailedLoad(page);
