@@ -309,6 +309,26 @@ function appCommands(): Set<string> {
   );
 }
 
+/**
+ * The commands a plugin's `build.rs` passes to `tauri_plugin::Builder::new`,
+ * inline or through a `const` array.
+ */
+function buildScriptCommands(build: string): Set<string> {
+  const argument =
+    /tauri_plugin::Builder::new\(\s*(&\[[\s\S]*?\]|[A-Z_]+)\s*\)/.exec(
+      build
+    )?.[1];
+  const list = argument?.startsWith('&[')
+    ? argument
+    : argument &&
+      new RegExp(`const ${argument}: &\\[&str\\] = (&\\[[\\s\\S]*?\\]);`).exec(
+        build
+      )?.[1];
+  return new Set(
+    [...(list ?? '').matchAll(/"([A-Za-z0-9_]+)"/g)].map((m) => m[1] ?? '')
+  );
+}
+
 /** Commands of the in-repo plugins, by plugin name, from their `build.rs`. */
 function repoPluginCommands(): Map<string, Set<string>> {
   const plugins = new Map<string, Set<string>>();
@@ -324,10 +344,7 @@ function repoPluginCommands(): Map<string, Set<string>> {
     }
     const name = /Builder::new\("([a-z0-9-]+)"\)/.exec(lib)?.[1];
     if (!name) continue;
-    plugins.set(
-      name,
-      new Set([...build.matchAll(/"([A-Za-z0-9_]+)"/g)].map((m) => m[1] ?? ''))
-    );
+    plugins.set(name, buildScriptCommands(build));
   }
   return plugins;
 }
@@ -365,7 +382,8 @@ describe('native commands', () => {
         return repoPlugin.has(pluginCommand) ? [] : [`${command} (${file})`];
       }
       // A published plugin: the app must at least install it.
-      return lib.includes(`tauri_plugin_${name.replaceAll('-', '_')}::`)
+      const crate = `tauri_plugin_${name.replaceAll('-', '_')}`;
+      return new RegExp(`\\b${crate}::(init|Builder)\\b`).test(lib)
         ? []
         : [`${command} (${file})`];
     });
