@@ -176,10 +176,20 @@ export function CampaignDetail(props: {
           </Button>
         </div>
       </Show>
+      {/* Leaving saves edits; discarding is the way out when they can't be. */}
       <Show when={props.changed && !props.conflict && !active()}>
-        <p class="mx-4 mb-2 text-xs text-ink-muted">
+        <div class="mx-4 mb-2 flex flex-wrap items-center gap-2 text-xs text-ink-muted">
           {t('emailMarketing.unsavedChanges')}
-        </p>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            disabled={ws().busy()}
+            onClick={() => props.onDiscard()}
+          >
+            {t('emailMarketing.discardChanges')}
+          </Button>
+        </div>
       </Show>
       <div class="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-8 lg:px-8">
         <Show
@@ -191,7 +201,9 @@ export function CampaignDetail(props: {
               disabled={locked()}
               isUnsubscribed={(email) => isUnsubscribed(ws().snapshot(), email)}
               attention={ws().enrollmentAttention}
+              isFinished={ws().isFinished}
               stepIssue={ws().stepIssue}
+              stepSent={ws().stepSent}
               onPause={(entry) => props.onStop(entry, 'paused')}
               onResume={props.onResume}
               onStop={(entry) => props.onStop(entry, 'stopped')}

@@ -7,8 +7,10 @@ import {
   attentionFor,
   collectIssues,
   inspectionTargets,
+  isFinished,
   needsAttention,
   senderStatusOf,
+  sentSteps,
 } from '../core/attention';
 import { MarketingError } from '../core/errors';
 import {
@@ -37,17 +39,40 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
   const [error, setError] = createSignal<unknown>();
   const [contacts, setContacts] = createSignal<MarketingContact[]>([]);
   const [senders, setSenders] = createSignal<Sender[]>();
+  /** Why the inbox list failed to load, until a later load succeeds. */
+  const [sendersError, setSendersError] = createSignal<unknown>();
   const [issues, setIssues] = createSignal<Record<string, DeliveryIssue>>({});
   /** Scheduled sequence emails no record tracks, by inbox. */
   const [untracked, setUntracked] = createSignal<Record<string, string[]>>({});
+  /** Queued steps the scheduler has since sent. */
+  const [sent, setSent] = createSignal<ReadonlySet<string>>(new Set());
   let inspection = 0;
 
   const senderStatus = (senderId: string) =>
     senderStatusOf(senders(), senderId);
   const stepIssue = (step: QueuedStep): DeliveryIssue | undefined =>
     step.draftId ? issues()[step.draftId] : undefined;
+  /** Handed to Gmail, or seen leaving the scheduler after its time. */
+  const stepSent = (step: QueuedStep) =>
+    step.status === 'delivery_started' ||
+    (step.status === 'queued' && !!step.draftId && sent().has(step.draftId));
   const enrollmentAttention = (entry: Enrollment) =>
     attentionFor(entry, senderStatus, issues());
+  /**
+   * Live enrollments whose campaign record is gone (deleted in the database).
+   * None while records are unreadable: an unreadable campaign isn't deleted.
+   */
+  const orphans = () =>
+    snapshot().unreadable
+      ? []
+      : snapshot().enrollments.filter(
+          (entry) =>
+            entry.status !== 'stopped' &&
+            !isFinished(entry, sent()) &&
+            !snapshot().campaigns.some((item) => item.id === entry.campaignId)
+        );
+  /** Untracked sends, hidden while an unreadable record may track them. */
+  const untrackedSends = () => (snapshot().unreadable ? {} : untracked());
   /** Enrollments in a campaign that need the user. */
   const campaignAttention = (campaignId: string) =>
     snapshot().enrollments.filter(
@@ -74,6 +99,7 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
     if (!bySender.size) {
       setIssues({});
       setUntracked({});
+      setSent(new Set<string>());
       return;
     }
     fireAndForget(
@@ -90,17 +116,27 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
         if (run !== inspection) return;
         setIssues(result.found);
         setUntracked(result.untracked);
+        setSent(result.sent);
         if (result.failed) throw result.failed.reason;
       }),
       'email-marketing.inspect'
     );
   }
 
+  /** Reload records and inboxes; an inbox read failure keeps the last list. */
   async function refresh() {
-    const data = await capabilities.repository.load();
-    setSnapshot(data);
+    const [data, inboxes] = await Promise.allSettled([
+      capabilities.repository.load(),
+      capabilities.loadSenders(),
+    ]);
+    if (inboxes.status === 'fulfilled') {
+      setSenders(inboxes.value);
+      setSendersError(undefined);
+    } else setSendersError(inboxes.reason);
+    if (data.status === 'rejected') throw data.reason;
+    setSnapshot(data.value);
     setLoaded(true);
-    inspectDelivery(data);
+    inspectDelivery(data.value);
   }
   /** Load everything; a retry keeps what is on screen while it runs. */
   async function initialize() {
@@ -111,7 +147,10 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
       capabilities.loadContacts(),
       capabilities.loadSenders(),
     ]);
-    if (inboxes.status === 'fulfilled') setSenders(inboxes.value);
+    if (inboxes.status === 'fulfilled') {
+      setSenders(inboxes.value);
+      setSendersError(undefined);
+    } else setSendersError(inboxes.reason);
     if (people.status === 'fulfilled') setContacts(people.value);
     if (data.status === 'fulfilled') {
       setSnapshot(data.value);
@@ -126,7 +165,9 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
   }
   /**
    * Run one user action at a time in its own span, then reload so every view
-   * matches storage. Spans carry ids and counts, never addresses or content.
+   * matches storage. A failed reload after a successful action still reports
+   * success, so the action is not repeated. Spans carry ids and counts, never
+   * addresses or content.
    */
   async function run(
     name: string,
@@ -159,8 +200,9 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
       try {
         await refresh();
       } catch (cause) {
-        succeeded = false;
-        setError(cause);
+        Telemetry.error(cause, { surface: 'email-marketing.refresh' });
+        if (succeeded) setError(new MarketingError('refreshFailed'));
+        else setError((current: unknown) => current ?? cause);
       }
       setBusy(false);
     }
@@ -175,9 +217,13 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
     activate: boolean,
     base: Campaign | undefined
   ) {
+    if (!campaign.name.trim()) throw new MarketingError('nameRequired');
     if (activate) {
       validateCampaign(campaign);
       const status = senderStatus(campaign.senderId);
+      // Inboxes that never loaded say nothing about this one's connection.
+      if (status === undefined)
+        throw sendersError() ?? new MarketingError('inboxesLoading');
       if (status !== 'ready')
         throw new MarketingError(
           status === 'disconnected' ? 'inboxDisconnected' : 'inboxReauth'
@@ -219,9 +265,15 @@ export function createMarketingWorkspace(capabilities: MarketingCapabilities) {
     dismissError: () => setError(undefined),
     contacts,
     senders: () => senders() ?? [],
+    /** The inbox list's load failure, if the last load failed. */
+    sendersError,
     senderStatus,
-    untracked,
+    untracked: untrackedSends,
+    orphans,
+    sentSteps: (entry: Enrollment) => sentSteps(entry, sent()),
+    isFinished: (entry: Enrollment) => isFinished(entry, sent()),
     stepIssue,
+    stepSent,
     enrollmentAttention,
     campaignAttention,
     initialize,

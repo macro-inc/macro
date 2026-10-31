@@ -2,7 +2,8 @@ import { t } from '@app/lib/i18n';
 import { Badge, cn, Tooltip } from '@ui';
 import type { AttentionReason, Campaign, Enrollment } from '../core/model';
 
-type Status = Campaign['status'] | Enrollment['status'];
+/** `completed`: a scheduled enrollment with nothing left to send. */
+type Status = Campaign['status'] | Enrollment['status'] | 'completed';
 
 const STATUS_LABELS = {
   draft: 'emailMarketing.statusDraft',
@@ -12,6 +13,7 @@ const STATUS_LABELS = {
   scheduled: 'emailMarketing.statusScheduled',
   stopped: 'emailMarketing.statusStopped',
   needs_attention: 'emailMarketing.statusNeedsAttention',
+  completed: 'emailMarketing.statusCompleted',
 } as const satisfies Record<Status, string>;
 
 /** Only the dot carries the color: tinted label text is illegible in light mode. */
@@ -23,6 +25,7 @@ const STATUS_DOTS: Record<Status, string> = {
   scheduled: 'bg-success',
   stopped: 'bg-ink-muted',
   needs_attention: 'bg-failure',
+  completed: 'bg-ink-muted',
 };
 
 function Dot(props: { class: string }) {

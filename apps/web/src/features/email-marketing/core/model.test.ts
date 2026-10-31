@@ -6,6 +6,7 @@ import {
   personalize,
   planSteps,
   replyParent,
+  truncate,
   validateCampaign,
 } from './model';
 
@@ -168,5 +169,14 @@ describe('sequence planning', () => {
     steps[1] = { ...steps[1], status: 'canceled', draftId: 'gone' };
     expect(replyParent(steps, 0)).toBeUndefined();
     expect(replyParent(steps, 2)).toBe('sent');
+  });
+});
+
+describe('record text', () => {
+  it('shortens a name without splitting an emoji', () => {
+    const name = `${'a'.repeat(119)}😀`;
+    expect(truncate(name, 120)).toBe('a'.repeat(119));
+    expect(truncate('Welcome', 120)).toBe('Welcome');
+    expect(truncate(`${'a'.repeat(118)}😀`, 120)).toBe(`${'a'.repeat(118)}😀`);
   });
 });

@@ -3,7 +3,11 @@ import { For, Show } from 'solid-js';
 import type { Sender } from '../core/model';
 
 /** The Gmail inboxes sequences can send from, and how sending works. */
-export function DeliveryPanel(props: { senders: Sender[] }) {
+export function DeliveryPanel(props: {
+  senders: Sender[];
+  /** The inbox list failed to load, so an empty list says nothing. */
+  loadFailed: boolean;
+}) {
   return (
     <div class="mx-auto w-full max-w-3xl space-y-4 px-4 pb-6">
       <section class="rounded-xl border border-edge-muted p-5">
@@ -17,7 +21,9 @@ export function DeliveryPanel(props: { senders: Sender[] }) {
           <For each={props.senders}>
             {(sender) => (
               <li class="flex items-center justify-between gap-3 rounded-lg bg-panel/50 px-4 py-3">
-                <span class="min-w-0 truncate text-sm">{sender.email}</span>
+                <span class="ph-no-capture min-w-0 truncate text-sm">
+                  {sender.email}
+                </span>
                 <span class="flex shrink-0 items-center gap-1.5 text-xs text-ink-muted">
                   <span
                     class="size-1.5 rounded-full"
@@ -37,7 +43,9 @@ export function DeliveryPanel(props: { senders: Sender[] }) {
         </ul>
         <Show when={!props.senders.length}>
           <p class="mt-4 rounded-lg bg-panel p-4 text-sm text-ink-muted">
-            {t('emailMarketing.noInboxes')}
+            {props.loadFailed
+              ? t('emailMarketing.inboxesLoadFailed')
+              : t('emailMarketing.noInboxes')}
           </p>
         </Show>
       </section>

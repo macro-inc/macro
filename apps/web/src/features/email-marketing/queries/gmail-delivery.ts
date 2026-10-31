@@ -1,6 +1,10 @@
 import { throwOnErr } from '@core/util/result';
 import { emailClient } from '@service-email/client';
-import type { DraftRef, SequenceDelivery } from '../context/contracts';
+import type {
+  DraftRef,
+  InspectedStep,
+  SequenceDelivery,
+} from '../context/contracts';
 import { MarketingError } from '../core/errors';
 import type { DeliveryIssue } from '../core/model';
 
@@ -127,6 +131,28 @@ async function resolveConflict(
   throw new MarketingError('cancelFailed', { reason });
 }
 
+/** The inbox's unsent sequence emails, and whether the list is whole. */
+async function listScheduled(senderId: string) {
+  const ids = new Set<string>();
+  for (let page = 0; page < MAX_SCHEDULED_PAGES; page++) {
+    const result = await throwOnErr(() =>
+      emailClient.getScheduledMessages(
+        {
+          offset: page * SCHEDULED_PAGE_SIZE,
+          limit: SCHEDULED_PAGE_SIZE,
+          source: SEQUENCE_SOURCE,
+        },
+        senderId
+      )
+    );
+    for (const message of result.messages) ids.add(message.db_id);
+    if (result.messages.length < SCHEDULED_PAGE_SIZE)
+      return { ids, complete: true };
+  }
+  // Past the page cap an unseen step may simply be on a later page.
+  return { ids, complete: false };
+}
+
 export function createGmailSequenceDelivery(): SequenceDelivery {
   return {
     async createDraft(senderId, content) {
@@ -175,38 +201,28 @@ export function createGmailSequenceDelivery(): SequenceDelivery {
       if (typeof second === 'string') return second;
       throw new MarketingError('cancelKeepsChanging');
     },
+    async scheduled(senderId) {
+      const { ids, complete } = await listScheduled(senderId);
+      return complete ? ids : undefined;
+    },
     async inspect(senderId, steps) {
       // Only this inbox's sequence sends, pending or failed, never sent ones.
-      const scheduled = new Set<string>();
-      let complete = false;
-      for (let page = 0; page < MAX_SCHEDULED_PAGES; page++) {
-        const result = await throwOnErr(() =>
-          emailClient.getScheduledMessages(
-            {
-              offset: page * SCHEDULED_PAGE_SIZE,
-              limit: SCHEDULED_PAGE_SIZE,
-              source: SEQUENCE_SOURCE,
-            },
-            senderId
-          )
-        );
-        for (const message of result.messages) scheduled.add(message.db_id);
-        if (result.messages.length < SCHEDULED_PAGE_SIZE) {
-          complete = true;
-          break;
-        }
-      }
+      const { ids: scheduled, complete } = await listScheduled(senderId);
       const now = Date.now();
       const issues: Record<string, DeliveryIssue> = {};
-      const stalled: (DraftRef & { sendAt: string })[] = [];
+      const sent: string[] = [];
+      const stalled: InspectedStep[] = [];
       for (const step of steps) {
         const due = new Date(step.sendAt).getTime();
-        const queued = scheduled.has(step.draftId);
-        if (queued && due < now - STALLED_AFTER_MS) stalled.push(step);
-        // Removed from the scheduler before its time: deleted or sent elsewhere.
-        // Past the page cap an unseen step may simply be on a later page.
-        else if (!queued && complete && due > now)
-          issues[step.draftId] = 'missing';
+        if (scheduled.has(step.draftId)) {
+          if (due < now - STALLED_AFTER_MS) stalled.push(step);
+          continue;
+        }
+        // A step still being scheduled may not be listed yet.
+        if (!step.queued || !complete) continue;
+        // Off the scheduler after its time: sent. Before it: deleted or sent elsewhere.
+        if (due <= now) sent.push(step.draftId);
+        else issues[step.draftId] = 'missing';
       }
       for (const [index, step] of stalled.entries()) {
         issues[step.draftId] = 'stalled';
@@ -217,10 +233,11 @@ export function createGmailSequenceDelivery(): SequenceDelivery {
         else if (state.status === 'unconfirmed')
           issues[step.draftId] = 'unconfirmed';
       }
-      const live = new Set(steps.map((step) => step.draftId));
+      const known = new Set(steps.map((step) => step.draftId));
       return {
         issues,
-        untracked: [...scheduled].filter((draftId) => !live.has(draftId)),
+        sent,
+        untracked: [...scheduled].filter((draftId) => !known.has(draftId)),
       };
     },
   };

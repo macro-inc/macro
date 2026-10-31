@@ -46,6 +46,7 @@ const KEYS = {
   needEditAccess: 'emailMarketing.errorNeedEditAccess',
   storageUnavailable: 'emailMarketing.errorStorageUnavailable',
   changedElsewhere: 'emailMarketing.errorChangedElsewhere',
+  refreshFailed: 'emailMarketing.errorRefreshFailed',
 } as const satisfies Record<SingleCode, string>;
 
 function single(error: MarketingError) {

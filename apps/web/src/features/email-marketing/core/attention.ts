@@ -14,6 +14,8 @@ export type InspectionTarget = {
   generation?: number;
   threadId?: string;
   sendAt: string;
+  /** Queued or already handed to Gmail, not still being scheduled. */
+  queued: boolean;
 };
 
 /** `undefined` until the user's inboxes have loaded. */
@@ -27,7 +29,10 @@ export function senderStatusOf(
   return sender.ready ? 'ready' : 'reauth';
 }
 
-/** Steps handed to the scheduler, grouped by an inbox the user still has. */
+/**
+ * Steps handed to the scheduler, including ones already sent, grouped by an
+ * inbox the user still has.
+ */
 export function inspectionTargets(
   enrollments: Enrollment[],
   senderStatus: (senderId: string) => SenderStatus | undefined
@@ -38,7 +43,9 @@ export function inspectionTargets(
     if (status !== 'ready' && status !== 'reauth') continue;
     for (const step of entry.steps) {
       if (
-        (step.status !== 'queued' && step.status !== 'scheduling') ||
+        (step.status !== 'queued' &&
+          step.status !== 'scheduling' &&
+          step.status !== 'delivery_started') ||
         !step.draftId
       )
         continue;
@@ -48,6 +55,7 @@ export function inspectionTargets(
         generation: step.draftGeneration,
         threadId: step.threadId,
         sendAt: step.sendAt,
+        queued: step.status !== 'scheduling',
       });
       bySender.set(entry.senderId, targets);
     }
@@ -96,13 +104,17 @@ export function needsAttention(
 
 /**
  * Read scheduler state for queued steps, one inbox at a time: problems by
- * draft id, and untracked sequence emails by inbox.
+ * draft id, sent steps, and untracked sequence emails by inbox.
  */
 export async function collectIssues(
   inspect: (
     senderId: string,
     steps: InspectionTarget[]
-  ) => Promise<{ issues: Record<string, DeliveryIssue>; untracked: string[] }>,
+  ) => Promise<{
+    issues: Record<string, DeliveryIssue>;
+    untracked: string[];
+    sent: string[];
+  }>,
   bySender: Map<string, InspectionTarget[]>
 ) {
   const senders = [...bySender];
@@ -111,9 +123,11 @@ export async function collectIssues(
   );
   const found: Record<string, DeliveryIssue> = {};
   const untracked: Record<string, string[]> = {};
+  const sent = new Set<string>();
   for (const [index, result] of results.entries()) {
     if (result.status !== 'fulfilled') continue;
     Object.assign(found, result.value.issues);
+    for (const draftId of result.value.sent) sent.add(draftId);
     if (result.value.untracked.length)
       untracked[senders[index][0]] = result.value.untracked;
   }
@@ -121,6 +135,32 @@ export async function collectIssues(
   return {
     found,
     untracked,
+    sent,
     failed: failed?.status === 'rejected' ? failed : undefined,
   };
+}
+
+/**
+ * Steps of an enrollment known to be sent: handed to Gmail, or seen leaving
+ * the scheduler after their time.
+ */
+export function sentSteps(entry: Enrollment, sent: ReadonlySet<string>) {
+  return entry.steps.filter(
+    (step) =>
+      step.status === 'delivery_started' ||
+      (step.status === 'queued' && !!step.draftId && sent.has(step.draftId))
+  ).length;
+}
+
+/** A scheduled enrollment with nothing left to send. */
+export function isFinished(entry: Enrollment, sent: ReadonlySet<string>) {
+  return (
+    entry.status === 'scheduled' &&
+    entry.steps.every(
+      (step) =>
+        step.status === 'delivery_started' ||
+        step.status === 'canceled' ||
+        (step.status === 'queued' && !!step.draftId && sent.has(step.draftId))
+    )
+  );
 }

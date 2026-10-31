@@ -40,6 +40,7 @@ export type MarketingErrorCode =
   | 'needEditAccess'
   | 'storageUnavailable'
   | 'changedElsewhere'
+  | 'refreshFailed'
   | 'contactsFailed';
 
 export type MarketingErrorParams = Record<string, string | number>;

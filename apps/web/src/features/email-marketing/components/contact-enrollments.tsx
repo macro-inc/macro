@@ -2,7 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
-import type { AttentionReason, Enrollment } from '../core/model';
+import type { AttentionReason, Enrollment, QueuedStep } from '../core/model';
 import { AttentionBadge, StatusBadge } from './status-badge';
 
 export function ContactEnrollments(props: {
@@ -13,7 +13,18 @@ export function ContactEnrollments(props: {
   onOpen?: () => void;
   /** A problem to show instead of the stored status, when the host knows one. */
   attention?: (entry: Enrollment) => AttentionReason | undefined;
+  /** Steps known sent; without a scheduler read, the ones handed to Gmail. */
+  sentSteps?: (entry: Enrollment) => number | undefined;
+  /** A scheduled enrollment with nothing left to send. */
+  isFinished?: (entry: Enrollment) => boolean;
 }) {
+  const count = (entry: Enrollment, status: QueuedStep['status']) =>
+    entry.steps.filter((step) => step.status === status).length;
+  /** Steps handed to the scheduler and not sent yet. */
+  const scheduled = (entry: Enrollment) =>
+    count(entry, 'queued') +
+    count(entry, 'delivery_started') -
+    (props.sentSteps?.(entry) ?? count(entry, 'delivery_started'));
   return (
     <section
       class="rounded-xl border border-edge-muted bg-panel/30 p-4"
@@ -64,18 +75,24 @@ export function ContactEnrollments(props: {
               {(entry) => (
                 <li class="flex items-center justify-between gap-3">
                   <div class="min-w-0">
-                    <p class="truncate text-sm">{entry.campaignName}</p>
+                    <p class="ph-no-capture truncate text-sm">
+                      {entry.campaignName}
+                    </p>
                     <p class="text-xs text-ink-muted">
                       {t('emailMarketing.scheduledEmails', {
-                        count: entry.steps.filter(
-                          (step) => step.status === 'queued'
-                        ).length,
+                        count: scheduled(entry),
                       })}
                     </p>
                   </div>
                   <Show
                     when={props.attention?.(entry)}
-                    fallback={<StatusBadge status={entry.status} />}
+                    fallback={
+                      <StatusBadge
+                        status={
+                          props.isFinished?.(entry) ? 'completed' : entry.status
+                        }
+                      />
+                    }
                   >
                     {(reason) => <AttentionBadge reason={reason()} />}
                   </Show>

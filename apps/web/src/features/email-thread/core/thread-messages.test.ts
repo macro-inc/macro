@@ -92,6 +92,32 @@ describe('thread message selection', () => {
     });
     expect(selectThreadMessages(thread([standalone])).messages).toEqual([]);
   });
+  it('keeps a pending Email Marketing step out of the thread and out of the reply slot', () => {
+    const parent = message('parent');
+    const mine = message('mine', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      updated_at: '2026-09-01T10:00:00Z',
+    });
+    const step = message('step', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      updated_at: '2026-09-02T10:00:00Z',
+      scheduled_send_source: 'sequence',
+      scheduled_send_status: 'pending',
+    });
+    const selected = selectThreadMessages(thread([parent, mine, step]));
+    expect(selected.draftMap).toEqual({ parent: mine });
+    expect(selected.messages.map((item) => item.db_id)).toEqual([
+      'parent',
+      'mine',
+    ]);
+    // A failed step comes back as a draft the user can fix.
+    const failed = { ...step, scheduled_send_status: 'failed' as const };
+    expect(selectThreadMessages(thread([parent, failed])).draftMap.parent).toBe(
+      failed
+    );
+  });
   it('orders messages chronologically without mutating the source and separates reply drafts', () => {
     const newer = message('new', { internal_date_ts: '2026-09-02T10:00:00Z' });
     const older = message('old');

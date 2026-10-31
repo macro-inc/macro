@@ -15,6 +15,8 @@ export function OptionSelect<T extends string>(props: {
   placeholder?: string;
   disabled?: boolean;
   size?: 'sm' | 'md';
+  /** Labels are personal data (contacts, inboxes): keep them out of session replay. */
+  personal?: boolean;
   class?: string;
   onChange: (value: T) => void;
 }) {
@@ -41,7 +43,11 @@ export function OptionSelect<T extends string>(props: {
         aria-label={props.label}
         class={inputClasses({
           size: props.size ?? 'md',
-          class: cn('justify-between gap-2', props.class),
+          class: cn(
+            'justify-between gap-2',
+            props.personal && 'ph-no-capture',
+            props.class
+          ),
         })}
       >
         <Select.Value<SelectOption<T>> class="truncate">
@@ -49,7 +55,7 @@ export function OptionSelect<T extends string>(props: {
         </Select.Value>
         <Select.Icon />
       </Select.Trigger>
-      <Select.Content>
+      <Select.Content class={props.personal ? 'ph-no-capture' : undefined}>
         <Select.Listbox />
       </Select.Content>
     </Select>

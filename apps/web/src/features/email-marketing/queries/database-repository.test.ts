@@ -9,10 +9,11 @@ const client = vi.hoisted(() => ({
   create: vi.fn(),
   importTable: vi.fn(),
   applyOps: vi.fn(),
+  queryRows: vi.fn(),
+  /** A table's rows as text cells, by table id; served as one primary page. */
   read: vi.fn(),
 }));
 vi.mock('@service-storage/databases', () => ({ databasesClient: client }));
-vi.mock('./database-rows', () => ({ readMarketingTable: client.read }));
 
 const campaign: Campaign = {
   id: 'campaign',
@@ -61,6 +62,31 @@ const tables = [
   table('Unsubscribed contacts', 'unsubscribe-table', 3),
 ];
 const TABLE_NAMES = tables.map((entry) => entry.table.name);
+type TextRow = { rowId: string; name?: string; data?: string };
+const text = (value: string) => ({ type: 'String', value });
+/** One page of rows the way the rows route answers, at the table's version. */
+async function rowsPage({
+  tableId,
+}: {
+  tableId: string;
+  request: { after?: string };
+}) {
+  const rows: TextRow[] = await client.read(tableId);
+  return ok({
+    version: tables.find((entry) => entry.table.id === tableId)?.table.version,
+    rows: rows.map((row) => ({
+      rowId: row.rowId,
+      cells: {
+        ...(row.name === undefined
+          ? {}
+          : { [`${tableId}:Name`]: text(row.name) }),
+        ...(row.data === undefined
+          ? {}
+          : { [`${tableId}:Sequence data`]: text(row.data) }),
+      },
+    })),
+  });
+}
 function listed(
   id: string,
   createdAt: string,
@@ -92,6 +118,7 @@ beforeEach(() => {
     ok([listed('database', '2026-10-01T00:00:00Z', 'owner', TABLE_NAMES)])
   );
   client.get.mockImplementation(async () => detail());
+  client.queryRows.mockImplementation(rowsPage);
   client.read.mockImplementation(async (id: string) =>
     id === 'campaign-table'
       ? [
@@ -143,6 +170,84 @@ describe('Macro Databases sequence records', () => {
     expect(second.baseVersions['enrollment-table']).toBe(13);
     expect(second.ops[0].change.changes.rows).toEqual(['enrollment-row']);
   });
+  it('guards writes with the versions its rows were read at, so a just-written row is never missing', async () => {
+    // The schema read lags; the rows read is newer and holds the new row.
+    client.queryRows.mockImplementation(async (request) => {
+      const page = await rowsPage(request);
+      return request.tableId === 'enrollment-table'
+        ? page.map((value) => ({ ...value, version: 14 }))
+        : page;
+    });
+    const repository = createDatabaseMarketingRepository();
+    await repository.load();
+    await repository.saveCampaign(campaign);
+    expect(
+      client.applyOps.mock.calls[0][0].request.baseVersions['enrollment-table']
+    ).toBe(14);
+  });
+
+  it('reads a table again when a write lands during the read', async () => {
+    client.queryRows
+      .mockResolvedValueOnce(err([{ code: 'CONFLICT', message: '409' }]))
+      .mockImplementation(rowsPage);
+    const snapshot = await createDatabaseMarketingRepository().load();
+    expect(snapshot.campaigns).toEqual([campaign]);
+    expect(client.queryRows).toHaveBeenCalledTimes(4);
+  });
+
+  it('starts a paged read over when the table changes between pages', async () => {
+    const row = (id: string) => ({
+      rowId: id,
+      cells: {
+        'enrollment-table:Sequence data': text(
+          JSON.stringify({ ...enrollment, id })
+        ),
+      },
+    });
+    let reads = 0;
+    client.queryRows.mockImplementation(async (request) => {
+      if (request.tableId !== 'enrollment-table') return rowsPage(request);
+      reads++;
+      // The first pass sees page two at a newer version than page one.
+      const version = reads === 2 ? 13 : reads === 1 ? 12 : 13;
+      return request.request.after
+        ? ok({ version, rows: [row('second')] })
+        : ok({ version, rows: [row('first')], next: 'first' });
+    });
+    const repository = createDatabaseMarketingRepository();
+    const snapshot = await repository.load();
+    expect(snapshot.enrollments.map((entry) => entry.id)).toEqual([
+      'first',
+      'second',
+    ]);
+    expect(reads).toBe(4);
+    await repository.saveCampaign(campaign);
+    expect(
+      client.applyOps.mock.calls[0][0].request.baseVersions['enrollment-table']
+    ).toBe(13);
+  });
+
+  it('still finds its tables and columns after a case-only rename', async () => {
+    const renamed = structuredClone(tables);
+    renamed[0].table.name = 'EMAIL CAMPAIGNS';
+    for (const entry of renamed[0].columns)
+      entry.column.display_name = entry.column.display_name.toLowerCase();
+    client.list.mockResolvedValue(
+      ok([
+        listed('database', '2026-10-01T00:00:00Z', 'owner', [
+          'EMAIL CAMPAIGNS',
+          'sequence enrollments',
+        ]),
+      ])
+    );
+    client.get.mockImplementation(async () => detail(renamed));
+    const repository = createDatabaseMarketingRepository();
+    expect((await repository.load()).campaigns).toEqual([campaign]);
+    await repository.saveCampaign(campaign);
+    // The table counts as present: no import of a second copy.
+    expect(client.importTable).not.toHaveBeenCalled();
+  });
+
   it('counts unreadable rows instead of failing the load, and ignores empty ones', async () => {
     client.read.mockImplementation(async (id: string) =>
       id === 'enrollment-table'

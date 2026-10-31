@@ -16,7 +16,10 @@ it. Rows that no longer parse are counted and block enrolling until fixed.
 Every write sends all table versions. A write that loses to an unrelated
 change retries only while its own record is untouched and what it depends on
 still holds (campaign active, address subscribed). Edits to an open campaign
-save only over the stored copy they started from.
+save only over the stored copy they started from, and save on every exit:
+Back, another section, a new campaign, or leaving the view (the host's leave
+guard). An edit that can't save keeps the user there with **Discard my
+changes**.
 
 ## Sending
 
@@ -45,6 +48,8 @@ contact adapters; `primitives/` the sequence engine and workspace state;
 `components/` presentation; `views/` the workspace and campaign detail.
 User-facing text is in `lib/i18n/locales/en/email-marketing.ts`; errors carry
 codes that views translate.
+Contact names and addresses, personalized subjects and bodies, and inbox
+addresses render under `ph-no-capture`, out of session replay.
 
 ## Checks
 

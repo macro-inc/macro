@@ -218,6 +218,7 @@ export function optimisticDraftEntity(
     hasAttachments: existing?.hasAttachments ?? false,
     scheduledSendTime: args.sendTime ?? existing?.scheduledSendTime ?? null,
     scheduledSendStatus: existing?.scheduledSendStatus ?? null,
+    scheduledSendSource: existing?.scheduledSendSource ?? null,
     bodyText: args.bodyText ?? null,
     bodyHtmlSanitized: args.optimisticBodyHtml,
     bodyMacro: args.bodyMacro ?? null,

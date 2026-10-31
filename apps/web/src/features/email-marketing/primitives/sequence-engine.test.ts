@@ -106,7 +106,8 @@ function setup(
     })),
     schedule: vi.fn(async () => {}),
     cancel: vi.fn(async () => 'canceled' as const),
-    inspect: vi.fn(async () => ({ issues: {}, untracked: [] })),
+    scheduled: vi.fn(async (): Promise<Set<string> | undefined> => undefined),
+    inspect: vi.fn(async () => ({ issues: {}, untracked: [], sent: [] })),
   };
   const engine = createSequenceEngine(repository, delivery, {
     now: options.now ?? (() => clock),
@@ -216,23 +217,66 @@ describe('server scheduled sequences', () => {
       'Re: Hi Ada',
     ]);
   });
-  it('starts a new thread under the original subject when a reply has no earlier email to answer', async () => {
+  it("starts a new thread when the email that began a reply's thread was skipped", async () => {
+    // Welcome starts one thread; Case study starts another that Last call answers.
+    const branches: Campaign = {
+      ...campaign,
+      steps: [
+        campaign.steps[0],
+        { id: 'case', delayDays: 2, subject: 'Case study', body: 'Read it' },
+        {
+          id: 'last',
+          delayDays: 2,
+          subject: '',
+          body: 'Last call',
+          asReply: true,
+        },
+      ],
+    };
+    let now = clock;
+    const test = setup({ campaigns: [branches], now: () => now });
+    const queued = await test.enroll(branches, contact, start);
+    // Welcome went out before the pause; Case study is past due on resume.
+    now = new Date('2026-10-03T17:00:00Z');
+    vi.mocked(test.delivery.cancel).mockImplementation(async (_, draft) =>
+      draft.draftId === 'draft-1' ? 'delivery_started' : 'canceled'
+    );
+    await test.engine.stop(queued, 'paused');
+    now = new Date('2026-10-06T15:00:00Z');
+    vi.mocked(test.delivery.createDraft).mockClear();
+    const resumed = await test.engine.resume(test.snapshot().enrollments[0]);
+    expect(resumed.steps.map((step) => step.status)).toEqual([
+      'delivery_started',
+      'canceled',
+      'queued',
+    ]);
+    // Not a reply to Welcome: that is another thread, under another subject.
+    expect(vi.mocked(test.delivery.createDraft).mock.calls).toEqual([
+      [
+        'gmail',
+        expect.objectContaining({
+          subject: 'Case study',
+          replyingToId: undefined,
+        }),
+      ],
+    ]);
+  });
+
+  it('starts over when a paused contact never received anything', async () => {
     let now = clock;
     const test = setup({ campaigns: [threaded], now: () => now });
-    const queued = await test.enroll(threaded, contact, start);
-    await test.engine.stop(queued, 'paused');
-    // Step one is past due and skipped; step two must not reply to a canceled draft.
-    now = new Date('2026-10-04T15:00:00Z');
-    vi.mocked(test.delivery.createDraft).mockClear();
-    await test.engine.resume(test.snapshot().enrollments[0]);
-    const calls = vi.mocked(test.delivery.createDraft).mock.calls;
-    expect(calls[0][1]).toMatchObject({
-      subject: 'Hi Ada',
-      replyingToId: undefined,
-    });
-    expect(calls[1][1].replyingToId).toBe(
-      test.snapshot().enrollments[0].steps[1].draftId
-    );
+    vi.mocked(test.delivery.schedule).mockRejectedValueOnce(new Error('503'));
+    await expect(test.enroll(threaded, contact, start)).rejects.toThrow('503');
+    // Pausing a failed enrollment clears its error; its times then pass.
+    await test.engine.stop(test.snapshot().enrollments[0], 'paused');
+    now = new Date('2026-10-08T15:00:00Z');
+    const resumed = await test.engine.resume(test.snapshot().enrollments[0]);
+    expect(resumed.steps.map((step) => [step.status, step.sendAt])).toEqual([
+      ['queued', '2026-10-08T15:11:00.000Z'],
+      ['queued', '2026-10-10T15:11:00.000Z'],
+      ['queued', '2026-10-11T15:11:00.000Z'],
+    ]);
+    expect(resumed.steps[1].subject).toBe('Re: Hi Ada');
   });
   it('cancels every created draft after a partial or ambiguous scheduler failure', async () => {
     const test = setup();
@@ -450,13 +494,16 @@ describe('server scheduled sequences', () => {
     let now = clock;
     const test = setup({ now: () => now });
     const queued = await test.enroll(campaign, contact, start);
+    now = new Date('2026-10-03T17:00:00Z');
+    vi.mocked(test.delivery.cancel).mockImplementation(async (_, draft) =>
+      draft.draftId === 'draft-1' ? 'delivery_started' : 'canceled'
+    );
     await test.engine.stop(queued, 'paused');
-    // A day later, step two (Oct 5 16:00) is still on time and keeps its slot;
-    // step one is past due and is skipped, not sent late.
+    // A day later, step two (Oct 5 16:00) is still on time and keeps its slot.
     now = new Date('2026-10-04T15:00:00Z');
     const onTime = await test.engine.resume(test.snapshot().enrollments[0]);
     expect(onTime.steps.map((step) => [step.status, step.sendAt])).toEqual([
-      ['canceled', '2026-10-03T16:00:00.000Z'],
+      ['delivery_started', '2026-10-03T16:00:00.000Z'],
       ['queued', '2026-10-05T16:00:00.000Z'],
     ]);
   });
@@ -527,7 +574,9 @@ describe('server scheduled sequences', () => {
     );
     expect(test.delivery.createDraft).not.toHaveBeenCalled();
   });
-  it('stops a disconnected inbox enrollment without calling the scheduler', async () => {
+  it('cancels on the server even when the inbox is missing from the loaded list', async () => {
+    // The list may be stale (an inbox connected in another tab); a deleted
+    // inbox's drafts answer not found, which the delivery reports as canceled.
     let status: SenderStatus = 'ready';
     const test = setup({ senderStatus: () => status });
     const enrollment = await test.enroll(campaign, contact, start);
@@ -536,8 +585,116 @@ describe('server scheduled sequences', () => {
     const saved = test.snapshot().enrollments[0];
     expect(saved.status).toBe('stopped');
     expect(saved.steps.every((step) => step.status === 'canceled')).toBe(true);
-    expect(saved.error).toBe('inboxDisconnected');
+    expect(saved.error).toBeUndefined();
+    expect(
+      vi.mocked(test.delivery.cancel).mock.calls.map(([, d]) => d.draftId)
+    ).toEqual(['draft-2', 'draft-1']);
+  });
+
+  it('keeps an earlier step when canceling a later one fails, so no reply goes out unthreaded', async () => {
+    const test = setup({ campaigns: [threaded] });
+    const enrollment = await test.enroll(threaded, contact, start);
+    vi.mocked(test.delivery.cancel).mockImplementation(async (_, draft) => {
+      if (draft.draftId === 'draft-2') throw new Error('503');
+      return 'canceled';
+    });
+    await expect(test.engine.stop(enrollment, 'paused')).rejects.toThrow(
+      code('cancelFailed')
+    );
+    const saved = test.snapshot().enrollments[0];
+    expect(saved.steps.map((step) => step.status)).toEqual([
+      'queued',
+      'queued',
+      'canceled',
+    ]);
+    expect(saved).toMatchObject({
+      status: 'needs_attention',
+      error: 'cancelFailed',
+    });
+    expect(
+      vi.mocked(test.delivery.cancel).mock.calls.map(([, d]) => d.draftId)
+    ).toEqual(['draft-3', 'draft-2']);
+  });
+
+  it('marks steps the scheduler already sent without canceling them, and leaves a finished enrollment as it is', async () => {
+    let now = clock;
+    const test = setup({ now: () => now });
+    await test.enroll(campaign, contact, start);
+    now = new Date('2026-10-06T15:00:00Z');
+    vi.mocked(test.delivery.scheduled).mockResolvedValue(new Set());
+    await test.engine.pauseCampaign(campaign);
+    const saved = test.snapshot().enrollments[0];
+    expect(saved.status).toBe('scheduled');
+    expect(saved.steps.map((step) => step.status)).toEqual([
+      'delivery_started',
+      'delivery_started',
+    ]);
     expect(test.delivery.cancel).not.toHaveBeenCalled();
+    // One scheduler read for the whole action, and nothing left to write next time.
+    expect(test.delivery.scheduled).toHaveBeenCalledTimes(1);
+    const writes = test.saved.length;
+    await test.engine.pauseCampaign(campaign);
+    expect(test.saved).toHaveLength(writes);
+  });
+
+  it('cancels only the steps the scheduler still holds once some were sent', async () => {
+    let now = clock;
+    const test = setup({ now: () => now });
+    const enrollment = await test.enroll(campaign, contact, start);
+    now = new Date('2026-10-04T15:00:00Z');
+    vi.mocked(test.delivery.scheduled).mockResolvedValue(new Set(['draft-2']));
+    await test.engine.stop(enrollment, 'paused');
+    const saved = test.snapshot().enrollments[0];
+    expect(saved.status).toBe('paused');
+    expect(saved.steps.map((step) => step.status)).toEqual([
+      'delivery_started',
+      'canceled',
+    ]);
+    expect(
+      vi.mocked(test.delivery.cancel).mock.calls.map(([, d]) => d.draftId)
+    ).toEqual(['draft-2']);
+  });
+
+  it('asks the server step by step when the scheduler list cannot be read', async () => {
+    let now = clock;
+    const test = setup({ now: () => now });
+    const enrollment = await test.enroll(campaign, contact, start);
+    now = new Date('2026-10-04T15:00:00Z');
+    vi.mocked(test.delivery.scheduled).mockRejectedValue(new Error('503'));
+    await test.engine.stop(enrollment, 'paused');
+    expect(test.delivery.cancel).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses to stop orphans or cancel untracked emails while a record is unreadable', async () => {
+    const test = setup();
+    const enrollment = await test.enroll(campaign, contact, start);
+    test.edit((data) => {
+      data.campaigns = [];
+      data.unreadable = 1;
+    });
+    await expect(test.engine.stopOrphans()).rejects.toThrow(
+      code('unreadableRecords')
+    );
+    await expect(
+      test.engine.cancelUntracked('gmail', ['stray'])
+    ).rejects.toThrow(code('unreadableRecords'));
+    expect(test.delivery.cancel).not.toHaveBeenCalled();
+    expect(test.snapshot().enrollments[0]).toEqual(enrollment);
+  });
+
+  it('treats steps already handed to Gmail as tracked, and reports a stray email it cannot recall', async () => {
+    const test = setup();
+    await test.enroll(campaign, contact, start);
+    test.edit((data) => {
+      data.enrollments[0].steps[0].status = 'delivery_started';
+    });
+    vi.mocked(test.delivery.cancel).mockResolvedValue('delivery_started');
+    await expect(
+      test.engine.cancelUntracked('gmail', ['draft-1', 'stray'])
+    ).rejects.toThrow(code('cancelFailed'));
+    expect(
+      vi.mocked(test.delivery.cancel).mock.calls.map(([, d]) => d.draftId)
+    ).toEqual(['stray']);
   });
   it('does not cancel anything while inboxes are still loading', async () => {
     let status: SenderStatus | undefined = 'ready';

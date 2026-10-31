@@ -35,23 +35,27 @@ export function EnrollmentDialog(props: {
   onSearchCrm: (query: string) => Promise<MarketingContact[]>;
 }) {
   const [search, setSearch] = createSignal('');
-  // Normalized emails, so a CRM case variant still matches a local contact.
-  const [selected, setSelected] = createSignal<string[]>([]);
+  // Checked contacts stay listed when a new CRM search replaces the results.
+  const [selected, setSelected] = createSignal<MarketingContact[]>([]);
   const [start, setStart] = createSignal(defaultStart());
   const [consent, setConsent] = createSignal(false);
   const [remote, setRemote] = createSignal<MarketingContact[]>([]);
   const [searchError, setSearchError] = createSignal<unknown>();
   const [searching, setSearching] = createSignal(false);
   // CRM results fill in what local contacts lack, never replace them.
-  const all = () => mergeContacts([...remote(), ...props.contacts]);
+  const all = () =>
+    mergeContacts([...selected(), ...remote(), ...props.contacts]);
   const filtered = () =>
     all().filter((contact) =>
       `${contact.name} ${contact.email}`
         .toLowerCase()
         .includes(search().toLowerCase())
     );
+  // Normalized, so a CRM case variant still matches a local contact.
   const isSelected = (email: string) =>
-    selected().includes(normalizeEmail(email));
+    selected().some(
+      (contact) => normalizeEmail(contact.email) === normalizeEmail(email)
+    );
   const blocked = (email: string) =>
     props.enrolledEmails.includes(normalizeEmail(email)) ||
     props.isUnsubscribed(email);
@@ -156,20 +160,22 @@ export function EnrollmentDialog(props: {
                       props.busy ||
                       blocked(contact.email) ||
                       (!isSelected(contact.email) &&
-                        selected().length >= MAX_ENROLLMENT_BATCH)
+                        chosen().length >= MAX_ENROLLMENT_BATCH)
                     }
-                    onChange={(checked: boolean) => {
-                      const email = normalizeEmail(contact.email);
-                      setSelected((before) =>
-                        checked
-                          ? [...new Set([...before, email])]
-                          : before.filter((item) => item !== email)
-                      );
-                    }}
+                    onChange={(checked: boolean) =>
+                      setSelected((before) => [
+                        ...before.filter(
+                          (item) =>
+                            normalizeEmail(item.email) !==
+                            normalizeEmail(contact.email)
+                        ),
+                        ...(checked ? [contact] : []),
+                      ])
+                    }
                   >
                     <Checkbox.Control />
                     <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-3">
-                      <span class="min-w-0 flex-1">
+                      <span class="ph-no-capture min-w-0 flex-1">
                         <span class="block truncate text-sm font-medium">
                           {contact.name || contact.email}
                         </span>
@@ -212,7 +218,11 @@ export function EnrollmentDialog(props: {
           </Checkbox>
           <Show when={props.error}>
             {(cause) => (
-              <p class="whitespace-pre-line text-xs text-failure" role="alert">
+              // Per-contact failures name the address.
+              <p
+                class="ph-no-capture whitespace-pre-line text-xs text-failure"
+                role="alert"
+              >
                 {errorMessage(cause())}
               </p>
             )}

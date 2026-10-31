@@ -6,13 +6,10 @@ import { createSignal, type JSX, Show } from 'solid-js';
 import {
   type AttentionReason,
   type Campaign,
-  DEFAULT_OPT_OUT_LINE,
   type Enrollment,
-  isReplyStep,
   type MarketingContact,
-  personalize,
-  replySubject,
-  threadSubject,
+  newId,
+  planSteps,
 } from '../core/model';
 import { ContactEnrollments } from './contact-enrollments';
 import { errorMessage } from './error-message';
@@ -153,7 +150,7 @@ export function templateSteps(template: Template) {
     subject: string,
     body: string,
     asReply?: boolean
-  ) => ({ id: crypto.randomUUID(), delayDays, subject, body, asReply });
+  ) => ({ id: newId(), delayDays, subject, body, asReply });
   return template === 'welcome'
     ? [
         step(
@@ -188,18 +185,11 @@ export function PreviewDialog(props: {
     props.contacts.find((item) => item.email === email()) ??
     props.contacts[0] ??
     SAMPLE_CONTACT;
-  const step = () =>
+  /** The step exactly as enrolling would send it to this contact. */
+  const planned = () =>
     props.stepIndex === undefined
       ? undefined
-      : props.campaign.steps[props.stepIndex];
-  const subject = () => {
-    const index = props.stepIndex ?? 0;
-    const text = personalize(
-      threadSubject(props.campaign.steps, index),
-      contact()
-    );
-    return isReplyStep(props.campaign.steps, index) ? replySubject(text) : text;
-  };
+      : planSteps(props.campaign, contact(), new Date())[props.stepIndex];
   return (
     <Dialog
       open={props.stepIndex !== undefined}
@@ -234,21 +224,18 @@ export function PreviewDialog(props: {
                     },
                   ]
             }
+            personal
             onChange={setEmail}
           />
-          <div class="overflow-hidden rounded-xl border border-edge-muted">
+          <div class="ph-no-capture overflow-hidden rounded-xl border border-edge-muted">
             <div class="space-y-2 border-b border-edge-muted p-5">
               <p class="text-xs text-ink-muted">
                 {t('emailMarketing.previewTo', { email: contact().email })}
               </p>
-              <p class="text-sm font-semibold">{subject()}</p>
+              <p class="text-sm font-semibold">{planned()?.subject}</p>
             </div>
             <div class="whitespace-pre-wrap p-6 text-sm leading-7">
-              {personalize(step()?.body ?? '', contact())}
-              {'\n\n'}
-              <span class="text-ink-muted">
-                {(props.campaign.optOutLine ?? DEFAULT_OPT_OUT_LINE).trim()}
-              </span>
+              {planned()?.body}
             </div>
           </div>
         </ActionDialogShell.Body>
@@ -263,6 +250,8 @@ export function ContactDialog(props: {
   unsubscribed: boolean;
   disabled: boolean;
   attention: (entry: Enrollment) => AttentionReason | undefined;
+  sentSteps: (entry: Enrollment) => number;
+  isFinished: (entry: Enrollment) => boolean;
   onClose: () => void;
   onCloseAutoFocus?: (event: Event) => void;
   onOpenCrm: (contact: MarketingContact) => void;
@@ -280,14 +269,22 @@ export function ContactDialog(props: {
     >
       <ActionDialogShell>
         <DialogHeader
-          title={props.contact?.name || props.contact?.email}
-          description={props.contact?.email}
+          title={
+            <span class="ph-no-capture">
+              {props.contact?.name || props.contact?.email}
+            </span>
+          }
+          description={
+            <span class="ph-no-capture">{props.contact?.email}</span>
+          }
         />
         <ActionDialogShell.Body>
           <ContactEnrollments
             entries={props.entries}
             unsubscribed={props.unsubscribed}
             attention={props.attention}
+            sentSteps={props.sentSteps}
+            isFinished={props.isFinished}
           />
           <div class="flex flex-wrap gap-2">
             <Show when={props.contact?.crmContactId}>

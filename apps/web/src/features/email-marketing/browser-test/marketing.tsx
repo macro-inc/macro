@@ -8,6 +8,7 @@ import { visibleNavItems } from '@components/app/sidebar-next/nav-items';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { authKeys } from '@queries/auth/keys';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -18,6 +19,7 @@ import { ContactEnrollments } from '../components/contact-enrollments';
 import type { MarketingCapabilities } from '../context/contracts';
 import {
   type Campaign,
+  campaignSchema,
   type DeliveryIssue,
   EMPTY_SNAPSHOT,
   type MarketingSnapshot,
@@ -51,6 +53,15 @@ const contacts = [
     companyId: 'northstar',
   },
   { name: 'Sam Rivera', email: 'sam@example.com' },
+];
+/** Found only by searching CRM, as in a CRM larger than the contacts list. */
+const crmOnly = [
+  { name: 'Riley Park', email: 'riley@example.com', crmContactId: 'crm-riley' },
+  {
+    name: 'Taylor Brooks',
+    email: 'taylor@example.com',
+    crmContactId: 'crm-taylor',
+  },
 ];
 const campaign: Campaign = {
   id: 'example-welcome',
@@ -129,12 +140,14 @@ const capabilities: MarketingCapabilities = {
       return read();
     },
     async saveCampaign(value) {
+      // Validated as the database repository does.
+      const campaign = campaignSchema.parse(value);
       const data = read();
       write({
         ...data,
         campaigns: [
-          ...data.campaigns.filter((item) => item.id !== value.id),
-          structuredClone(value),
+          ...data.campaigns.filter((item) => item.id !== campaign.id),
+          campaign,
         ],
       });
     },
@@ -186,6 +199,13 @@ const capabilities: MarketingCapabilities = {
       writeOutbox(readOutbox().filter((draft) => draft.id !== draftId));
       return 'canceled';
     },
+    async scheduled() {
+      return new Set(
+        readOutbox()
+          .filter((draft) => draft.sendAt)
+          .map((draft) => draft.id)
+      );
+    },
     async inspect(_, steps) {
       const issues: Record<string, DeliveryIssue> = {};
       for (const step of steps)
@@ -193,6 +213,7 @@ const capabilities: MarketingCapabilities = {
       const live = new Set(steps.map((step) => step.draftId));
       return {
         issues,
+        sent: [],
         untracked: readOutbox()
           .filter((draft) => draft.sendAt && !live.has(draft.id))
           .map((draft) => draft.id),
@@ -203,7 +224,7 @@ const capabilities: MarketingCapabilities = {
     return contacts;
   },
   async searchCrmContacts(query) {
-    return contacts.filter(
+    return [...contacts, ...crmOnly].filter(
       (contact) =>
         contact.crmContactId &&
         `${contact.email} ${contact.name}`
@@ -226,6 +247,12 @@ const capabilities: MarketingCapabilities = {
     setPanel('outbox');
   },
 };
+let leave: (() => Promise<boolean>) | undefined;
+/** Leaving the workspace runs its leave guard first, as the split router does. */
+async function navigate(id: string) {
+  if (panel() === 'email-marketing' && !(await (leave?.() ?? true))) return;
+  setPanel(id);
+}
 function Back() {
   return (
     <Button
@@ -267,7 +294,7 @@ function Fixture() {
                 variant="ghost"
                 size="icon-md"
                 aria-label={item.label}
-                onClick={() => setPanel(item.id)}
+                onClick={() => fireAndForget(navigate(item.id), 'fixture')}
               >
                 <item.icon class="size-5" />
               </Button>
@@ -279,14 +306,19 @@ function Fixture() {
             size="icon-md"
             class="mt-auto"
             aria-label="Test scheduler outbox"
-            onClick={() => setPanel('outbox')}
+            onClick={() => fireAndForget(navigate('outbox'), 'fixture')}
           >
             ✉
           </Button>
         </aside>
         <div class="min-h-0 min-w-0 flex-1">
           <Show when={panel() === 'email-marketing'}>
-            <MarketingWorkspaceView capabilities={capabilities} />
+            <MarketingWorkspaceView
+              capabilities={capabilities}
+              registerLeave={(guard) => {
+                leave = guard;
+              }}
+            />
           </Show>
           <Show when={panel() === 'companies'}>
             <div class="mx-auto max-w-3xl space-y-6 p-10">

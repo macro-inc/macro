@@ -199,7 +199,29 @@ describe('Gmail sequence delivery', () => {
       'inbox'
     );
   });
-  it('reports stalled, failed, and removed steps from one scheduled list per inbox', async () => {
+  it("lists an inbox's unsent sequence drafts only when the whole list fits", async () => {
+    const page = (count: number, from = 0) =>
+      ok({
+        messages: Array.from({ length: count }, (_, index) => ({
+          db_id: `draft-${from + index}`,
+        })),
+      });
+    client.getScheduledMessages.mockResolvedValueOnce(page(2));
+    expect(await createGmailSequenceDelivery().scheduled('inbox')).toEqual(
+      new Set(['draft-0', 'draft-1'])
+    );
+    // Five full pages: a sixth may hold more, so the list is not whole.
+    client.getScheduledMessages.mockReset();
+    for (let index = 0; index < 5; index++)
+      client.getScheduledMessages.mockResolvedValueOnce(
+        page(1000, index * 1000)
+      );
+    expect(
+      await createGmailSequenceDelivery().scheduled('inbox')
+    ).toBeUndefined();
+  });
+
+  it('reports stalled, failed, removed, and sent steps from one scheduled list per inbox', async () => {
     const now = Date.now();
     client.getScheduledMessages.mockResolvedValue(
       ok({
@@ -223,20 +245,21 @@ describe('Gmail sequence delivery', () => {
     );
     const past = new Date(now - 60 * 60_000).toISOString();
     const future = new Date(now + 60 * 60_000).toISOString();
-    const { issues, untracked } = await createGmailSequenceDelivery().inspect(
-      'inbox',
-      [
-        { draftId: 'late', threadId: 'late', sendAt: past },
-        { draftId: 'failed', threadId: 'failed', sendAt: past },
-        { draftId: 'removed', sendAt: future },
-        { draftId: 'sent', sendAt: past },
-      ]
-    );
+    const { issues, untracked, sent } =
+      await createGmailSequenceDelivery().inspect('inbox', [
+        { draftId: 'late', threadId: 'late', sendAt: past, queued: true },
+        { draftId: 'failed', threadId: 'failed', sendAt: past, queued: true },
+        { draftId: 'removed', sendAt: future, queued: true },
+        { draftId: 'sent', sendAt: past, queued: true },
+        // Drafted but not yet scheduled: not listed yet, and not missing.
+        { draftId: 'drafting', sendAt: future, queued: false },
+      ]);
     expect(issues).toEqual({
       late: 'stalled',
       failed: 'failed',
       removed: 'missing',
     });
+    expect(sent).toEqual(['sent']);
     // Scheduled, but no step accounts for it: its record is gone.
     expect(untracked).toEqual(['orphan']);
     expect(client.getScheduledMessages).toHaveBeenCalledTimes(1);
