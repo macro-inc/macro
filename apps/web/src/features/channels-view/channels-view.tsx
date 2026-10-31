@@ -192,9 +192,9 @@ function ChannelsViewRoot() {
                     <ViewShell.Root
                       asidePreferenceKey="channels"
                       // The empty state only points at the rail, so keep it open.
-                      asideRequired={
-                        threadsTab() || selectedChannel() === undefined
-                      }
+                      asideRequired={selectedChannel() === undefined}
+                      // Keep tab changes from resetting a narrow navigation overlay.
+                      asidePinned={threadsTab()}
                       aside={{
                         width: state.asideWidth,
                         preserveDuringResize: false,

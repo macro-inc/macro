@@ -903,6 +903,21 @@ queries and new section preferences do not affect the flag-off layout. Existing
 labels remain governed by `enable-channel-tags`. Mobile retains its recent feed
 regardless of the redesign flag, including while it is loading.
 
+### Original sidebar (flag off)
+
+The desktop rail keeps **All** and **Recent** tabs in a shared pill track beside
+New. All contains optional Favorites and independently paginated Team channels,
+Channels, and DMs. Channels lists joined public and private channels. Each group
+collapses and sorts independently; open groups split the available height.
+
+`enable-channel-threads-preview` adds a **Threads** tab. It is on in development;
+`VITE_ENABLE_CHANNEL_THREADS_PREVIEW` overrides it locally. **All threads** clears
+the channel filter, while the Conversations section lists channels and DMs with
+threads the user participates in. Scrolling loads more. Selecting a conversation
+filters the thread view instead of opening that conversation. On desktop, Threads
+pins navigation open with no Hide navigation control. In narrow splits, changing
+between Threads, All, and Recent preserves an already-open navigation overlay.
+
 ### Sectioned sidebar (flag on)
 
 With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
