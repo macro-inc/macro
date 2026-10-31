@@ -1,4 +1,5 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
 import {
   makeAddTagAction,
   makeCopyEntityIdAction,
@@ -632,8 +633,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                   openBulkEditModal({
                     view: 'moveToProject',
                     entities: [entity],
-                    onFinish: () =>
-                      toast.success(t('entityActions.toastMovedToFolder')),
+                    onMoved: (folder) => toastMovedToFolder(1, folder.id),
                     onError: () =>
                       toast.failure(t('entityActions.toastMoveToFolderFailed')),
                   });

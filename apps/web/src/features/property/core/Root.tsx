@@ -13,6 +13,7 @@ import type { Property, PropertyApiValues } from '../types';
 import { withApiValues } from '../utils/transforms';
 import {
   type PropertyEditFn,
+  type PropertyPickFn,
   PropertyRootContext,
   type PropertyRootContextValue,
   type PropertySaveFn,
@@ -43,6 +44,16 @@ type PendingValue = {
   base?: Property;
 };
 
+/**
+ * The names the last pick's picker showed, by entity ID. They outlive the
+ * pending value: a chip's own read can answer after the source shows the pick,
+ * and chips use these names only while that read loads.
+ */
+type PickedNames = {
+  names: ReadonlyMap<string, string>;
+  propertyDefinitionId: string;
+};
+
 export function Root(props: PropertyRootProps) {
   const [local, rest] = splitProps(props, [
     'property',
@@ -71,8 +82,9 @@ export function Root(props: PropertyRootProps) {
       ? withApiValues(local.property, current.value)
       : local.property;
   });
+  const [picked, setPicked] = createSignal<PickedNames>();
 
-  const save: PropertySaveFn = async (saved, value) => {
+  const save: PropertyPickFn = async (saved, value, entityNames) => {
     const onSave = local.onSave;
     if (!onSave) return;
     const entry: PendingValue = {
@@ -80,11 +92,20 @@ export function Root(props: PropertyRootProps) {
       propertyDefinitionId: saved.propertyDefinitionId,
     };
     setPending(entry);
+    setPicked(
+      entityNames && {
+        names: entityNames,
+        propertyDefinitionId: saved.propertyDefinitionId,
+      }
+    );
     try {
       await onSave(saved, value);
       if (pending() === entry) setPending({ ...entry, base: local.property });
     } catch (error) {
-      if (pending() === entry) setPending(undefined);
+      if (pending() === entry) {
+        setPending(undefined);
+        setPicked(undefined);
+      }
       throw error;
     }
   };
@@ -135,6 +156,13 @@ export function Root(props: PropertyRootProps) {
 
   const value: PropertyRootContextValue = {
     property,
+    pickedEntityName: (entityId) => {
+      const current = picked();
+      return current?.propertyDefinitionId ===
+        local.property.propertyDefinitionId
+        ? current.names.get(entityId)
+        : undefined;
+    },
     canEdit: () => local.canEdit ?? false,
     get onSave() {
       return local.onSave && save;
