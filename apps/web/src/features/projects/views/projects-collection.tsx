@@ -701,6 +701,7 @@ export function ProjectsCollection(props: {
                       handle?.scrollTo(collection.scrollOffset());
                     }}
                     items={collection.items()}
+                    isSticky={(row) => row.kind === 'group-header'}
                     focusedIndex={list.focus.index()}
                     onScroll={checkNearEnd}
                   >

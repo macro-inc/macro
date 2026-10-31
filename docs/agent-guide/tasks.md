@@ -136,6 +136,10 @@ Narrow and mobile group headers use compact independent spacing and keep the car
 value icon, label, and count on one line; long labels truncate. Group-header carets
 are 16px, with 18px status and Urgent icons. Desktop list insets follow the list
 container: 8px below 640px and 12px from 640px; phone insets remain 4px.
+In grouped task and project lists, the current group header stays pinned at the top
+of the scrolling pane until the next group pushes it away. The pinned header still
+collapses or expands its group; keyboard navigation keeps rows below it visible.
+Mobile headers remain below the floating chrome.
 Phone task rows have 44px row height and an 8px unread-dot rail without a checkbox
 column. The rail stays reserved on read tasks so titles do not shift. Status and
 priority controls retain their 36px touch targets; selection highlighting and row

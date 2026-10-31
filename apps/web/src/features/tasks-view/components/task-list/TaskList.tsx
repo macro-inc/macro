@@ -176,7 +176,9 @@ export function TaskList(props: TaskListProps) {
       activeTab: state.tab,
     });
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
-  createScrollTopFade(viewport);
+  createScrollTopFade(() =>
+    state.groupBy === 'none' ? viewport() : undefined
+  );
   const [grid, setGrid] = createSignal<HTMLDivElement>();
   const [timestampHeaderWidth, setTimestampHeaderWidth] =
     createSignal<number>();
@@ -544,6 +546,7 @@ export function TaskList(props: TaskListProps) {
                     ref={registerVirtualizer}
                     viewportRef={setViewport}
                     items={visibleRows()}
+                    isSticky={(row) => row.kind === 'group-header'}
                     focusedIndex={list.focus.index()}
                     onScroll={() => {
                       recordScrollAnchor();
