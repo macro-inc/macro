@@ -158,11 +158,14 @@ impl SoupService for RecordingSoupService {
             .iter()
             .filter_map(|receipt| {
                 let id = Uuid::parse_str(&receipt.entity().entity_id).ok()?;
-                (receipt.entity().entity_type == EntityType::Initiative).then(|| {
-                    SoupProjectionHydration {
-                        item: initiative(id),
-                        document_server_facts: None,
-                    }
+                let item = match receipt.entity().entity_type {
+                    EntityType::Initiative => initiative(id),
+                    EntityType::Document => document(id),
+                    _ => return None,
+                };
+                Some(SoupProjectionHydration {
+                    item,
+                    document_server_facts: None,
                 })
             })
             .collect())
@@ -552,6 +555,46 @@ async fn context_loader_returns_none_for_a_missing_item() {
         .expect("missing item is not a loader failure");
 
     assert!(item.is_none());
+}
+
+#[tokio::test]
+async fn a_document_the_listing_leaves_out_hydrates_through_a_view_receipt() {
+    let viewer = user("macro|project-viewer@example.com");
+    let listed = Uuid::from_u128(31);
+    let through_project = EntityType::Document.with_entity_string(Uuid::from_u128(32).to_string());
+    let refused = EntityType::Document.with_entity_string(Uuid::from_u128(33).to_string());
+    let views = RecordingViews {
+        grants: Arc::new(HashMap::from([(
+            Some(viewer.clone()),
+            HashSet::from([through_project.clone()]),
+        )])),
+        ..RecordingViews::default()
+    };
+    let loader = SoupItemLoader::new(
+        RecordingSoupService::default().with_response(viewer.clone(), vec![document(listed)]),
+        RecordingThreadReader::default(),
+        Arc::new(views.clone()),
+    );
+    let listed = EntityType::Document.with_entity_string(listed.to_string());
+    let keys = vec![
+        (Some(viewer.clone()), listed.clone()),
+        (Some(viewer.clone()), through_project.clone()),
+        (Some(viewer.clone()), refused.clone()),
+    ];
+
+    let items = Loader::<SoupItemLoaderKey>::load(&loader, &keys)
+        .await
+        .expect("batch loads");
+
+    assert!(items.contains_key(&(Some(viewer.clone()), listed)));
+    assert!(items.contains_key(&(Some(viewer.clone()), through_project.clone())));
+    assert!(!items.contains_key(&(Some(viewer.clone()), refused.clone())));
+    let calls = views.calls.lock().expect("view calls lock").clone();
+    assert_eq!(
+        calls,
+        [(Some(viewer), vec![through_project, refused])],
+        "only the documents the listing missed are checked"
+    );
 }
 
 #[test]

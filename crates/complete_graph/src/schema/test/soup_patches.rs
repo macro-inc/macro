@@ -376,7 +376,7 @@ async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
     let loader = graphql_soup::soup_item_loader(
         soup.clone(),
         Arc::new(NoOpEmailService),
-        NoOpEntityAccessService,
+        CountingEntityAccessService::default(),
     );
     let schema = Schema::build(MutationEffectsQuery, EmptyMutation, EmptySubscription)
         .data(loader)

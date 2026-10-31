@@ -356,10 +356,28 @@ where
             }
         };
         let listed = async {
-            match &viewer {
-                Some(user) => self.load_soup_items(user.clone(), soup_entities).await,
-                None => Ok(Vec::new()),
-            }
+            let Some(user) = &viewer else {
+                return Ok(Vec::new());
+            };
+            let documents = soup_entities
+                .iter()
+                .filter(|entity| entity.entity_type == EntityType::Document)
+                .cloned()
+                .collect::<Vec<_>>();
+            let mut listed = self.load_soup_items(user.clone(), soup_entities).await?;
+            // The listing leaves out documents the viewer reaches only
+            // through entity access, such as a task through its project.
+            // Only those misses pay for a per-item check.
+            let found = listed
+                .iter()
+                .map(|hydration| hydration.item.entity())
+                .collect::<HashSet<_>>();
+            let missed = documents
+                .into_iter()
+                .filter(|document| !found.contains(document))
+                .collect::<Vec<_>>();
+            listed.extend(self.load_receipted_items(viewer.clone(), missed).await?);
+            Ok(listed)
         };
         let (threads, receipted, listed) = try_join3(
             threads,
