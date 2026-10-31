@@ -67,6 +67,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, Tooltip } from '@ui';
 import {
+  $createTextNode,
   $getNodeByKey,
   COMMAND_PRIORITY_NORMAL,
   type EditorThemeClasses,
@@ -259,7 +260,7 @@ function InlinePreview(props: {
                   data-document-name={props.documentName}
                   class="opacity-50"
                 >
-                  <Show when={props.documentName} fallback={'Loading...'}>
+                  <Show when={props.documentName} fallback="Loading...">
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
                   <MentionAccessories
@@ -305,7 +306,7 @@ function InlinePreview(props: {
                   data-block-name={props.blockName}
                   data-document-name={props.documentName}
                 >
-                  <Show when={props.documentName} fallback={'Unknown'}>
+                  <Show when={props.documentName} fallback="Unknown">
                     {(name) => name().replaceAll('\n', ' ').trim()}
                   </Show>
                   <MentionAccessories
@@ -735,7 +736,8 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
             <Button
               variant="ghost"
               size="icon-xs"
-              label="Expand database"
+              aria-label="Expand database"
+              tooltip="Expand database"
               on:mousedown={(event) => event.preventDefault()}
               on:click={expand}
             >
@@ -1114,6 +1116,14 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
     });
   };
 
+  const convertToText = (link: string) => {
+    editor?.update(() => {
+      const node = $getNodeByKey(props.key);
+      if (!$isDocumentMentionNode(node)) return;
+      node.replace($createTextNode(link));
+    });
+  };
+
   const convertToCard = () => {
     if (!editor) return;
     editor.update(() => {
@@ -1144,6 +1154,9 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
   const previewContentProps: DocumentPreviewContentProps = {
     get delete() {
       return editor?.isEditable() ? deleteMention : undefined;
+    },
+    get convertToText() {
+      return editor?.isEditable() ? convertToText : undefined;
     },
     get collapseInfo() {
       return {

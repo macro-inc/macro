@@ -87,41 +87,49 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 
     /// Read the same bounded message timeline for either parent.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn timeline(
         &self,
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessagePage, MessageError> {
-        let (parent, query) = self.timeline_selection(&access, query).await?;
-        self.repo.timeline(&parent, query).await
+        async {
+            let (parent, query) = self.timeline_selection(&access, query).await?;
+            self.repo.timeline(&parent, query).await
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Read a parent's messages and its timeline activity as one ordered page.
     /// Parents without a timeline activity source return their messages only.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn timeline_entries(
         &self,
         access: EntityAccessReceipt<MessageView>,
         query: MessageTimelineQuery,
     ) -> Result<MessageTimelinePage, MessageError> {
-        let (parent, query) = self.timeline_selection(&access, query).await?;
-        let Some(source) = timeline_activity(&parent) else {
-            return self.repo.timeline(&parent, query).await.map(Into::into);
-        };
-        // These filters select a subset of roots, and activity has no matching
-        // filter, so the merged window would be wrong. Including deleted threads
-        // only adds tombstones on the same keyset, so it combines with activity.
-        if !query.ids.is_empty()
-            || query.anchored.is_some()
-            || query.activity_after.is_some()
-            || query.activity_before.is_some()
-        {
-            return Err(MessageError::Invalid(
-                "activity timelines cannot be combined with message filters",
-            ));
+        async {
+            let (parent, query) = self.timeline_selection(&access, query).await?;
+            let Some(source) = timeline_activity(&parent) else {
+                return self.repo.timeline(&parent, query).await.map(Into::into);
+            };
+            // These filters select a subset of roots, and activity has no matching
+            // filter, so the merged window would be wrong. Including deleted threads
+            // only adds tombstones on the same keyset, so it combines with activity.
+            if !query.ids.is_empty()
+                || query.anchored.is_some()
+                || query.activity_after.is_some()
+                || query.activity_before.is_some()
+            {
+                return Err(MessageError::Invalid(
+                    "activity timelines cannot be combined with message filters",
+                ));
+            }
+            self.activity_timeline(&parent, source, query).await
         }
-        self.activity_timeline(&parent, source, query).await
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Validate a selection and resolve the parent it reads.
@@ -157,34 +165,42 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     }
 
     /// Read a message and its canonical root for navigation.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn get(
         &self,
         access: EntityAccessReceipt<MessageView>,
         id: Uuid,
     ) -> Result<Message, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
-        self.active_message(&parent, id, true).await
+        async {
+            let parent = parent_from_receipt(&access)?;
+            self.ensure_parent(&parent).await?;
+            self.active_message(&parent, id, true).await
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Open a specific discussion, including roots outside the current timeline page.
-    #[tracing::instrument(err, skip(self, access))]
+    #[tracing::instrument(skip(self, access))]
     pub async fn get_thread(
         &self,
         access: EntityAccessReceipt<MessageView>,
         root_id: Uuid,
     ) -> Result<MessageThread, MessageError> {
-        let parent = parent_from_receipt(&access)?;
-        self.ensure_parent(&parent).await?;
-        let state = self.active_thread(&parent, root_id).await?;
-        let root = self.active_message(&parent, root_id, true).await?;
-        let replies = self.repo.replies(&parent, root_id).await?;
-        Ok(MessageThread {
-            state,
-            root,
-            replies,
-        })
+        async {
+            let parent = parent_from_receipt(&access)?;
+            self.ensure_parent(&parent).await?;
+            let state = self.active_thread(&parent, root_id).await?;
+            let root = self.active_message(&parent, root_id, true).await?;
+            let replies = self.repo.replies(&parent, root_id).await?;
+            Ok(MessageThread {
+                state,
+                root,
+                replies,
+            })
+        }
+        .await
+        .inspect_err(log_read_error)
     }
 
     /// Load authorized history preceding a live prompt in this conversation.
@@ -352,7 +368,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         {
             return Err(MessageError::Invalid(error));
         }
-        self.validate_references(&access, &input.mentions, &input.attachments)
+        input.mentions = self
+            .validate_references(&access, input.mentions, &input.attachments)
             .await?;
         let canonical_root_id = match parent {
             MessageParent::Call(call_id) => {
@@ -382,11 +399,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 guest_name: None,
                 triggered_by: access
                     .acting_user_id()
-                    .filter(|_| {
-                        actor.as_bot().is_some()
-                            && input.attribution == MessageAttribution::ActingUser
-                    })
+                    .filter(|_| actor.as_bot().is_some() && input.attribution.has_acting_user())
                     .map(ToString::to_string),
+                triggered_via: match &input.attribution {
+                    MessageAttribution::ActingUserVia { client } if actor.as_bot().is_some() => {
+                        Some(client.clone())
+                    }
+                    MessageAttribution::ActingUserVia { .. }
+                    | MessageAttribution::ActingUser
+                    | MessageAttribution::Unprompted => None,
+                },
                 input,
             })
             .await?;
@@ -467,12 +489,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 "a message needs content or an attachment",
             ));
         }
-        self.validate_references(
-            &access,
-            &input.mentions,
-            input.attachments.as_deref().unwrap_or_default(),
-        )
-        .await?;
+        input.mentions = self
+            .validate_references(
+                &access,
+                input.mentions,
+                input.attachments.as_deref().unwrap_or_default(),
+            )
+            .await?;
         // Reconciliation may repeat a bot's final reply after a process died
         // between patching it and recording success. Identical content must
         // not produce another edit event or completion notification.
@@ -738,12 +761,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(resolved)
     }
 
+    /// Rejects malformed references and attachments the sender cannot view, and
+    /// returns the mentions to record. A mention of something the sender cannot
+    /// view stays in the content but is not recorded, so it shares, notifies,
+    /// and triggers nothing.
     async fn validate_references(
         &self,
         access: &EntityAccessReceipt<MessageWrite>,
-        mentions: &[SimpleMention],
+        mentions: Vec<SimpleMention>,
         attachments: &[NewAttachment],
-    ) -> Result<(), MessageError> {
+    ) -> Result<Vec<SimpleMention>, MessageError> {
         if attachments.len() > 10 || mentions.len() > 100 {
             return Err(MessageError::Invalid("too many message references"));
         }
@@ -754,7 +781,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
         }
         let mut checked = std::collections::HashSet::new();
-        for (kind, id, mention) in mentions
+        let mut hidden = std::collections::HashSet::new();
+        for (raw_kind, id, mention) in mentions
             .iter()
             .map(|m| (m.entity_type.as_str(), m.entity_id.as_str(), true))
             .chain(
@@ -763,13 +791,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     .map(|a| (a.entity_type.as_str(), a.entity_id.as_str(), false)),
             )
         {
-            if !checked.insert((kind, id, mention)) {
+            if !checked.insert((raw_kind, id, mention)) {
                 continue;
             }
             // Editors also emit display-only chips (dates, contacts, colors) as
             // mentions. They name nothing that can be authorized, so they are
             // stored as written, exactly as the channel writer did before.
-            let Some(kind) = MessageReferenceKind::parse(kind) else {
+            let Some(kind) = MessageReferenceKind::parse(raw_kind) else {
                 continue;
             };
             let entity_type = match kind {
@@ -827,10 +855,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 .can_view(access.auth(), entity_type, id)
                 .await?
             {
-                return Err(MessageError::Forbidden);
+                if !mention {
+                    return Err(MessageError::Forbidden);
+                }
+                hidden.insert((raw_kind.to_owned(), id.to_owned()));
             }
         }
-        Ok(())
+        Ok(mentions
+            .into_iter()
+            .filter(|m| !hidden.contains(&(m.entity_type.clone(), m.entity_id.clone())))
+            .collect())
     }
 
     async fn ensure_parent(&self, parent: &MessageParent) -> Result<(), MessageError> {
@@ -906,6 +940,21 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
 /// channel messages the same way. Edit and comment access do not.
 fn can_moderate(permission: &EntityPermission) -> bool {
     permission.satisfies::<OwnerAccessLevel>() || permission.satisfies::<AdminParticipantRole>()
+}
+
+/// Logs a failed read in the current span.
+///
+/// Unlike `#[instrument(err)]`, whose level is fixed, this keeps refusals at
+/// INFO: clients and agents read messages, threads, and parents that were
+/// deleted under them. Repository failures stay at ERROR.
+fn log_read_error(error: &MessageError) {
+    match error {
+        MessageError::Repository(_) => tracing::error!(error = %error),
+        MessageError::NotFound
+        | MessageError::Forbidden
+        | MessageError::Invalid(_)
+        | MessageError::Conflict => tracing::info!(error = %error),
+    }
 }
 
 fn parent_from_receipt<P: RequiredPermission>(

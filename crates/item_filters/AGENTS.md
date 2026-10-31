@@ -56,8 +56,9 @@ logically-combinable query form.
   The CRM service resolves activity scope; clients do not enumerate record IDs.
 
 - Several entity types (initiatives, agent sessions) are opt-in: `include:
-  false` by default, and asking for specific ids/owners also implicitly opts
-  in — don't assume an empty `include` flag means "show everything".
+  false` by default, and asking for specific ids/owners (or, for initiatives,
+  notification states) also implicitly opts in — don't assume an empty
+  `include` flag means "show everything".
 - `#![deny(missing_docs)]`: every new public field needs a doc comment.
 - Represent DATE presence as `DateRange` with both bounds open and absence as its negation; `start` is inclusive and `end` exclusive.
 - Export filter intervals as `PropertyDateFilterRange` in schemas to distinguish half-open optional bounds from stored, inclusive `models_properties::DateRange` values.

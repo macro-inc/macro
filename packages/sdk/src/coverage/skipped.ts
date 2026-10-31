@@ -136,6 +136,7 @@ export const authExcluded = [
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
+  'setGithubPullRequestState',
   'ssoLogin',
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
@@ -195,6 +196,8 @@ export const cognitionExcluded = [
   // Sidebar setup and import cards remember dismissals per user (web app only).
   'dismissedPromptsHandler',
   'dismissPromptHandler',
+  // Proposes SQL for the web app's in-browser engine to execute.
+  'generateDatabaseQuery',
   'setPricingHandler',
   'startMcpAuth',
   'updateMcpServer',
@@ -239,7 +242,11 @@ export const emailExcluded = [
   'resyncLink',
 ] as const satisfies readonly (keyof EmailSdk)[];
 
-export const emailBacklog = [] as const satisfies readonly (keyof EmailSdk)[];
+export const emailBacklog = [
+  // Belongs on CalendarEvent beside inviteGuests; the first release keeps
+  // forwarding to the app's own surfaces, since the SDK also reaches agents.
+  'forwardCalendarEvent',
+] as const satisfies readonly (keyof EmailSdk)[];
 
 export const notificationExcluded = [
   'bulkGetTypedNotificationsByEventItemIds',
@@ -330,7 +337,6 @@ export const storageExcluded = [
   'getAttachmentReferences',
   'getBatchCallRecordPreview',
   'getBatchChannelPreview',
-  'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
   'getBotOwnerProfiles',

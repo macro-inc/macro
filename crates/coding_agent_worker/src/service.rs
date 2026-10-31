@@ -223,7 +223,7 @@ async fn start(options: &ServiceOptions) -> rootcause::Result<Daemon> {
     // Pairing persisted into the file; serve what is actually on disk.
     let config = Config::load(&path)?;
     let harness_id = credentials.harness_id.to_string();
-    let daemon = Daemon::start(config, credentials, &path).await?;
+    let daemon = Daemon::start(config, credentials, &path, None).await?;
     emit(&Event::Running { harness_id });
     Ok(daemon)
 }

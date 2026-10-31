@@ -99,7 +99,11 @@ export function MeetingCallHeading(props: {
                 if (event.key === 'Escape' && !saving()) setEditing(false);
               }}
             />
-            <Button type="submit" disabled={saving() || !draft().trim()}>
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={saving() || !draft().trim()}
+            >
               {saving() ? 'Saving…' : 'Save'}
             </Button>
             <Button

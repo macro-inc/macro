@@ -78,6 +78,25 @@ fragment MailPreviewFields on GraphqlMailPreviewMessage {
 	senderPhotoUrl
 }
 
+# Independent selections keep known flags live even on a partial thread.
+fragment MailReadStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	isRead
+}
+
+fragment MailInboxStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	inboxVisible
+}
+
+fragment MailSignalStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	isSignal
+}
+
 # Local-only selection: materialize canonical preview references instead of the
 # query-dependent preview fields last written by a different tab/filter.
 fragment MailItemFields on GraphqlSoupEntity {
@@ -169,6 +188,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		providerId
 		ownerId
 		inboxVisible
+		hasReceivedMail
 		linkId
 		latestInboundMessageTs
 		latestOutboundMessageTs
@@ -433,8 +453,10 @@ fragment SoupNotificationStateFields on GraphqlNotification {
 	__typename
 	id
 	eventType
-	# The canonical type also covers entities outside Soup (WhatsApp groups).
-	entityType: targetEntityType
+	# The Soup cache reads `entityType` by its schema name; never alias it.
+	entityType
+	# The canonical type also covers entities outside Soup (external chats).
+	targetEntityType
 	entityId
 	sent
 	state

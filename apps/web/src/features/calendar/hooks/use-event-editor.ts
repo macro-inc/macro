@@ -40,8 +40,10 @@ import {
 } from '../utils/calendar-label';
 import {
   addedGuestEmails,
+  canForwardInvitation,
   type EventGuestEditing,
   eventGuestEditing,
+  FORWARD_INVITATION_INSTEAD,
   GUEST_EDITS_RESTRICTED,
   guestEditsRestricted,
   guestInvitesRestrictedReason,
@@ -106,9 +108,17 @@ function hasTimeChanged(
     .otherwise(() => true);
 }
 
+/** A new event's id and the time it was created with. */
+export type CreatedCalendarEvent = {
+  eventId: string;
+  time: EventEditorSubmitValues['time'];
+};
+
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
+  /** Called with a new event once it exists, before `onSaved`. */
+  onCreated?: (created: CreatedCalendarEvent) => void;
   macroCallsEnabled: Accessor<boolean>;
   /**
    * Whether the guest-invites rollout is on: a guest the organizer lets
@@ -116,6 +126,8 @@ interface UseEventEditorProps {
    * when omitted.
    */
   guestInvitesEnabled?: Accessor<boolean>;
+  /** Whether a guest who cannot add guests may forward the invitation. */
+  invitationForwardEnabled?: Accessor<boolean>;
   /**
    * The edited event as the calendar now holds it. The lock on its details
    * follows this copy, so a guest whose organizer stops letting guests
@@ -202,7 +214,12 @@ export function useEventEditor(props: UseEventEditorProps) {
   });
   const guestsReadOnlyReason = () => {
     const event = props.event();
-    return event && guestInvitesRestrictedReason(event);
+    const reason = event && guestInvitesRestrictedReason(event);
+    if (!reason) return undefined;
+    return (props.invitationForwardEnabled?.() ?? false) &&
+      canForwardInvitation(event)
+      ? `${reason} ${FORWARD_INVITATION_INSTEAD}`
+      : reason;
   };
   // A refusal means the stored guest policy was newer than the event shown,
   // so the details lock without waiting for the refetch.
@@ -330,7 +347,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       if (!event) {
         // The server mints the call and writes its link into the event, so
         // the one invitation attendees receive already carries it.
-        await create.mutateAsync({
+        const created = await create.mutateAsync({
           title: values.title,
           time: values.time,
           calendarId: values.calendarId,
@@ -348,6 +365,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
         });
+        props.onCreated?.({ eventId: created.id, time: values.time });
         props.onSaved();
         return;
       }

@@ -228,8 +228,10 @@ pub async fn run() -> anyhow::Result<()> {
 
     tracing::trace!("initialized config");
 
+    // Per task. Normally each task runs about one query at a time; a larger
+    // max only lets a slow database pile up more sessions.
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (50, 150),
+        Environment::Production => (10, 50),
         Environment::Develop => (25, 100),
         Environment::Local => (15, 50),
     };
@@ -652,7 +654,10 @@ pub async fn run() -> anyhow::Result<()> {
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
         ConnectionGatewayGithubRealtime::new(conn_gateway_client.clone()),
-    );
+    )
+    .with_webhook_publisher(github::broker::BrokerGithubWebhookPublisher(
+        macro_event_broker.clone(),
+    ));
 
     let github_pull_request_index_state = PullRequestIndexRouterState {
         service: Arc::new(PullRequestIndexService::new(
@@ -1283,6 +1288,7 @@ pub async fn run() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         message_realtime,
+        channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
@@ -2195,6 +2201,9 @@ pub async fn run() -> anyhow::Result<()> {
             Arc::new(readonly_email_service),
             entity_access_service.as_ref().clone(),
         ),
+        email_focus_reader: Arc::new(email::domain::focus::FocusQueries::new(
+            email::outbound::FocusPgRepository(readonly_db.clone()),
+        )),
         graphql_crm_context: graphql_crm::CrmGraphqlContext::new(pipeline_service.clone()),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),

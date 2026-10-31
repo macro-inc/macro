@@ -4,7 +4,15 @@ use std::sync::Arc;
 
 use ai_billing::{AiAdmissionService, AiFeature, DisabledAiAdmissionService};
 use async_trait::async_trait;
-use messages::domain::{api::MessageReader, events::MessagePostedMetadata};
+use channel_sender::ChannelSender;
+use entity_access::domain::models::EntityAccessReceipt;
+use messages::domain::{
+    agent_hops::{MAX_AGENT_HOPS, agent_hops},
+    api::MessageReader,
+    events::MessagePostedMetadata,
+    models::Message,
+    service::MessageWrite,
+};
 use uuid::Uuid;
 
 use super::models::{BotInvocation, BotTrigger, TranscriptMessage};
@@ -21,8 +29,9 @@ use super::sender_label;
 /// * the thread already contains a Macro AI message,
 /// * the classifier judges that the message expects an agent response.
 ///
-/// Bot-authored messages never trigger anything; classifier failures resolve
-/// to no trigger.
+/// Attributed bot messages trigger like a person's, within the agent hop
+/// limit and never their own bot; unattributed bot messages trigger nothing.
+/// Classifier failures resolve to no trigger.
 pub struct MentionOrInferredDetector<I> {
     messages: Arc<dyn MessageReader>,
     access: Arc<dyn ConversationAccess>,
@@ -63,12 +72,11 @@ where
         parent_id: Uuid,
     ) -> anyhow::Result<Vec<TranscriptMessage>> {
         let user = candidate
-            .sender
-            .as_user()
-            .ok_or_else(|| anyhow::anyhow!("only users invoke agents"))?;
+            .invoking_user()
+            .ok_or_else(|| anyhow::anyhow!("nobody invoked this message"))?;
         let access = self
             .access
-            .user_write(user, &candidate.parent)
+            .user_write(&user, &candidate.parent)
             .await
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
         let view = access.try_into_requirement()?;
@@ -86,17 +94,57 @@ where
         let mut transcript = Vec::new();
         for message in std::iter::once(thread.root).chain(thread.replies) {
             if message.deleted_at.is_none() && !message.content.trim().is_empty() {
-                transcript.push(transcript_message(
-                    message.sender_id.as_ref(),
-                    &message.content,
-                ));
+                transcript.push(transcript_message(&message));
             }
         }
         Ok(transcript)
     }
 
+    /// Whether a bot's mention stays within [`MAX_AGENT_HOPS`] of the last
+    /// person in its thread. An unreadable thread counts as over the limit.
+    async fn within_hop_limit(
+        &self,
+        candidate: &MessagePostedMetadata,
+        access: EntityAccessReceipt<MessageWrite>,
+    ) -> bool {
+        let thread: anyhow::Result<_> = async {
+            let view = access.try_into_requirement()?;
+            Ok(self.messages.get_thread(view, candidate.root_id).await?)
+        }
+        .await;
+        let thread = match thread {
+            Ok(thread) => thread,
+            Err(error) => {
+                tracing::warn!(error = ?error, "thread read failed; not counting agent hops");
+                return false;
+            }
+        };
+        let senders: Vec<&ChannelSender<'static>> = std::iter::once(&thread.root)
+            .chain(&thread.replies)
+            .take_while(|message| message.id != candidate.message_id)
+            .map(|message| &message.sender_id)
+            .chain(std::iter::once(&candidate.sender))
+            .collect();
+        let hops = agent_hops(senders.into_iter());
+        if hops > MAX_AGENT_HOPS {
+            tracing::info!(
+                message_id = %candidate.message_id,
+                hops,
+                "bot mention exceeds the agent hop limit; not invoking"
+            );
+            return false;
+        }
+        true
+    }
+
+    /// Macro AI never infers a reply to its own message.
     async fn infer(&self, candidate: &MessagePostedMetadata) -> Option<BotInvocation> {
-        let requesting_user = candidate.sender.as_user()?;
+        if candidate.sender.as_bot().map(|sender| sender.bot_id()) == Some(bot_id::MACRO_AI_BOT_ID)
+        {
+            return None;
+        }
+        let requesting_user = candidate.invoking_user()?;
+        let requesting_user = &requesting_user;
         let parent_id = candidate.thread_id?;
 
         let transcript = self
@@ -134,13 +182,18 @@ where
     }
 }
 
-fn transcript_message(sender_id: &str, content: &str) -> TranscriptMessage {
-    let from_agent = bot_id::BotIdStr::parse_from_str(sender_id)
-        .is_ok_and(|bot| bot.bot_id() == bot_id::MACRO_AI_BOT_ID);
+/// Macro AI's messages are the agent's; other bots go by their public name.
+fn transcript_message(message: &Message) -> TranscriptMessage {
+    let from_agent =
+        message.sender_id.as_bot().map(|bot| bot.bot_id()) == Some(bot_id::MACRO_AI_BOT_ID);
+    let sender = match &message.bot_profile {
+        Some(profile) if !from_agent => profile.name.clone(),
+        _ => sender_label(message.sender_id.as_ref()),
+    };
     TranscriptMessage {
         from_agent,
-        sender: sender_label(sender_id),
-        content: content.trim().to_string(),
+        sender,
+        content: message.content.trim().to_string(),
     }
 }
 
@@ -150,24 +203,22 @@ where
     I: InferredTriggerClassifier,
 {
     async fn detect(&self, candidate: &MessagePostedMetadata) -> Vec<BotInvocation> {
-        if candidate.sender.as_user().is_none() {
-            return Vec::new();
-        }
-        let Some(user) = candidate.sender.as_user() else {
+        let Some(user) = candidate.invoking_user() else {
             return Vec::new();
         };
-        if self
-            .access
-            .user_write(user, &candidate.parent)
-            .await
-            .is_err()
-        {
+        let Ok(access) = self.access.user_write(&user, &candidate.parent).await else {
+            return Vec::new();
+        };
+        if candidate.sender.as_bot().is_some() && !self.within_hop_limit(candidate, access).await {
             return Vec::new();
         }
         let mentioned = messages::domain::mentions::bot_mention_ids(&candidate.mentions);
         if !mentioned.is_empty() {
             return mentioned
                 .into_iter()
+                .filter(|bot_id| {
+                    candidate.sender.as_bot().map(|sender| sender.bot_id()) != Some(*bot_id)
+                })
                 .map(|bot_id| BotInvocation {
                     bot_id,
                     trigger: BotTrigger::Mention,

@@ -9,17 +9,38 @@ mod test;
 use super::{DynamicSort, EnrichedSoupItem, SoupDocumentServerFacts, SoupPropertiesField};
 use indexmap::IndexMap;
 use item_filters::ast::EntityFilterAst;
-use models_grouping::{GroupByField, date_bucket_label, date_bucket_order};
+pub use models_grouping::GroupByField;
+use models_grouping::{date_bucket_label, date_bucket_order};
 use models_pagination::{Base64Str, CursorVal, CursorWithValAndFilter, Identify, SortOn};
 use models_soup::item::SoupItem;
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+/// Display text for group keys the client cannot label from the key alone,
+/// resolved for the caller's grouping field and access. A key absent here
+/// keeps itself as its label.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct GroupLabels(HashMap<String, String>);
+
+impl GroupLabels {
+    /// The display text resolved for `key`, if any.
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).map(String::as_str)
+    }
+}
+
+impl FromIterator<(String, String)> for GroupLabels {
+    fn from_iter<I: IntoIterator<Item = (String, String)>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
 /// Resolve label and display order for a group key based on the grouping field.
 pub(super) fn resolve_group_label_and_order(
     key: &str,
     group_by: &GroupByField,
+    labels: &GroupLabels,
 ) -> (String, Option<i32>) {
     if let Some((_, ranges)) = group_by.date_ranges() {
         let order = ranges
@@ -38,7 +59,9 @@ pub(super) fn resolve_group_label_and_order(
             entity_type_labels::label(key).to_string(),
             Some(entity_type_labels::display_order(key)),
         ),
+        // Project keys are initiative IDs; keep the dedicated unassigned label.
         GroupByField::Project if key.is_empty() => ("No Project".to_string(), Some(i32::MAX)),
+        GroupByField::Project => (labels.get(key).unwrap_or(key).to_string(), None),
         GroupByField::Property { .. } if key.is_empty() => ("Not Set".to_string(), Some(i32::MAX)),
         _ => (key.to_string(), None),
     }
@@ -77,13 +100,15 @@ pub struct GroupedResponse {
     pub document_server_facts: HashMap<Uuid, SoupDocumentServerFacts>,
 }
 
-/// Build a grouped response from grouped soup items.
+/// Build a grouped response from grouped soup items, labeling groups from
+/// `labels` where the grouping field leaves the key unlabeled.
 pub fn build_grouped_response(
     items: impl IntoIterator<Item = ItemGroupingInfo<SoupPropertiesField>>,
     group_by: &GroupByField,
     sort_method: impl Into<DynamicSort>,
     requested_group_key: Option<String>,
     filters: EntityFilterAst,
+    labels: &GroupLabels,
 ) -> GroupedResponse {
     let sort_method = sort_method.into();
     let mut document_server_facts = HashMap::new();
@@ -116,7 +141,7 @@ pub fn build_grouped_response(
         };
 
         let entry = group_stats.entry(key.clone()).or_insert_with(|| {
-            let (label, display_order) = resolve_group_label_and_order(&key, group_by);
+            let (label, display_order) = resolve_group_label_and_order(&key, group_by, labels);
             GroupData {
                 total_count: grouped_item.total_group_count.min(u32::MAX as usize) as u32,
                 item_ids: Vec::new(),

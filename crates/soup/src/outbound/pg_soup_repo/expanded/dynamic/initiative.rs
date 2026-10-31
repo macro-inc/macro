@@ -6,7 +6,7 @@ use item_filters::ast::initiative::InitiativeLiteral;
 use models_pagination::SimpleSortMethod;
 use system_properties::SystemPropertyKey;
 
-use super::{sql_string_literal, top_needs_user_history};
+use super::{build_notification_state_clause, sql_string_literal, top_needs_user_history};
 use crate::outbound::pg_soup_repo::candidate_gates::PER_CANDIDATE;
 
 /// The initiative listing policy: explicit grants and the owner's team link.
@@ -53,6 +53,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_initiative_filter(
             ),
             Expr::Literal(InitiativeLiteral::DueBefore(date)) => due_date_filter("<=", date),
             Expr::Literal(InitiativeLiteral::DueAfter(date)) => due_date_filter(">=", date),
+            Expr::Literal(InitiativeLiteral::NotificationState(state)) => {
+                build_notification_state_clause("i.id", "initiative", *state)
+            }
         }
     }
     fn due_date_filter(operator: &str, date: &DateTime<Utc>) -> String {

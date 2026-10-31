@@ -223,6 +223,7 @@ impl<E: SoupEntityEdges> GroupedSoup<E> {
                 .groups
                 .into_iter()
                 .map(|group| GraphqlSoupBin {
+                    label: (group.label != group.key).then_some(group.label),
                     key: group.key,
                     total_count: group.total_count as usize,
                     display_order: group.display_order,
@@ -255,6 +256,10 @@ impl<E: SoupEntityEdges> GroupedSoup<E> {
 pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     /// The grouping key.
     key: String,
+    /// Display text for a group whose key alone does not identify it client
+    /// side, limited to what the viewer can read. Null when the client labels
+    /// the key itself or the viewer cannot read the entity behind it.
+    label: Option<String>,
     /// Total number of items in this group across all pages.
     total_count: usize,
     /// Stored option order or calendar bucket order, when available.

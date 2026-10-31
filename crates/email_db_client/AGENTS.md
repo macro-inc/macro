@@ -53,8 +53,25 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 - Forwarded-attachment delivery reads preserve `source_link_id` from the original
   message; the destination draft inbox is only the query access scope.
+- `insert_message_with_tx` leaves labels with an unexpired
+  `email_gmail_pending_label_writes` marker, and the read and starred flags
+  they drive, in their local state when it re-syncs a stored message. Given a
+  `ResyncSnapshot` from before the Gmail fetch, it changes only labels where
+  Gmail disagrees with that snapshot, so a write made during the fetch stays.
+- `email_gmail_pending_label_writes` keeps one row per write on a message's
+  label, newest by `seq` (staging order, which write ids need not follow).
+  Only the newest row's write sends; older ones wait while a newer row hasn't
+  expired, so abandoning a write can put the label back for the newest older
+  write whose row hasn't expired (`label_present`) or the state before it
+  (`label_present_before`, passed on by older writes given up). Code that
+  stages, confirms or abandons a Gmail label write takes
+  `lock_thread_label_writes` for its threads first.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
+- A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its
+  thread in the inbox only when `email_threads.has_received_mail` is true.
+  `recompute_thread_metadata` and the email crate's
+  `thread_mail_projections_by_ids` restate this rule; change both together.
 
 ## Related
 

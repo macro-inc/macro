@@ -14,21 +14,6 @@ export function ProjectDescriptionSkeleton() {
   );
 }
 
-export function ProjectsSidebarSkeleton() {
-  return (
-    <ListSkeleton.Root label="Loading projects">
-      <For each={[0, 1, 2, 3]}>
-        {() => (
-          <ListSkeleton.Row>
-            <ListSkeleton.Bar class="size-4 shrink-0 rounded" />
-            <ListSkeleton.Bar class="w-28 max-w-full" />
-          </ListSkeleton.Row>
-        )}
-      </For>
-    </ListSkeleton.Root>
-  );
-}
-
 /** Matches the overview's content width, insets, and wrapping property pills. */
 export function ProjectContentSkeleton(props: { section: ProjectSection }) {
   return (

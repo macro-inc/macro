@@ -56,12 +56,13 @@ pub trait ConnectionRepo: Send + Sync {
     /// Deletes a [StoredConnectionEntity] from the database
     async fn remove_entity(&self, entity: &EntityConnection<'_>) -> anyhow::Result<()>;
 
-    /// Updates the last_ping timestamp for a given connection entity
+    /// Updates the last_ping timestamp for a given connection entity, or
+    /// returns `None` when there is no entry for it
     async fn update_last_entity_ping(
         &self,
         entity: &EntityConnection<'_>,
         timestamp: u64,
-    ) -> anyhow::Result<StoredConnectionEntity>;
+    ) -> anyhow::Result<Option<StoredConnectionEntity>>;
 
     /// Updates the last_ping timestamp for a given top level connection
     async fn update_user_connection_last_ping(
@@ -182,23 +183,40 @@ impl ConnectionManager {
 
     /// Updates the last_ping timestamp for a given connection entity
     /// This also propogates to the last_ping timestamp for the top level user connection
+    ///
+    /// A ping for an entity with no entry re-creates it: the client is still
+    /// watching, so a lost `open` (a failed write, a row cleared under a live
+    /// connection) must not hide the user until they reopen the entity.
     #[tracing::instrument(err, skip(self))]
-    pub async fn refresh_connection_entity(&self, entity: &EntityConnection<'_>) -> Result<()> {
+    pub async fn refresh_connection_entity(
+        &self,
+        connection_entity: UserEntityConnection<'_>,
+    ) -> Result<()> {
         let updated_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_millis() as u64;
-        let connection_id = entity.connection_id.clone();
+        let connection_id = connection_entity.extra.connection_id.to_string();
+        let user_id = connection_entity.user_id.to_string();
 
-        // Update the last_ping on the specific entity associated with the connection_id
-        let entity = self
+        let refreshed = self
             .persistence
-            .update_last_entity_ping(entity, updated_timestamp)
+            .update_last_entity_ping(&connection_entity.extra, updated_timestamp)
             .await?;
+        if refreshed.is_none() {
+            tracing::warn!(
+                connection_id = %connection_id,
+                entity_type = %connection_entity.extra.extra.entity_type,
+                entity_id = %connection_entity.extra.extra.entity_id,
+                "ping for an untracked entity; re-creating its entry"
+            );
+            self.persistence
+                .insert_connection_entry(connection_entity)
+                .await?;
+        }
 
-        // // Update the user connection last_ping
         self.persistence
-            .update_user_connection_last_ping(&connection_id, &entity.user_id, updated_timestamp)
+            .update_user_connection_last_ping(&connection_id, &user_id, updated_timestamp)
             .await?;
 
         Ok(())

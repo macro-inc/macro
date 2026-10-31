@@ -29,11 +29,11 @@ function renderSubmit() {
   return onClick;
 }
 
-it('shows the keyboard shortcut on the submit button with a keyboard', () => {
+it('keeps the submit button label free of shortcut text with a keyboard', () => {
   const onClick = renderSubmit();
   const submit = screen.getByRole('button', { name: /Create Task/ });
 
-  expect(submit.textContent).toContain('⌘');
+  expect(submit.textContent).toBe('Create Task');
   fireEvent.click(submit);
   expect(onClick).toHaveBeenCalledOnce();
 });

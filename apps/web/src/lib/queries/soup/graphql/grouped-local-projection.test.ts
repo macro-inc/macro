@@ -1,3 +1,4 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { describe, expect, it } from 'vitest';
 import { parseCacheRevision } from '../../../graphql-cache/protocol';
 import type {
@@ -5,6 +6,11 @@ import type {
   GroupSoupQuery,
   SoupItemFieldsFragment,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
+import { mapGraphqlSoupItem } from '../../../service-clients/service-storage/graphql-soup';
+import {
+  computeGroupKeysForItem,
+  resolveGroupMetaForKey,
+} from '../grouped/api';
 import {
   localSoupGroupKeys,
   mergeGroupedSoupBins,
@@ -53,6 +59,7 @@ describe('loaded grouped pages', () => {
             {
               key: 'todo',
               displayOrder: null,
+              label: null,
               totalCount: 300 - index * 10,
               nextCursor: `page-${index + 1}`,
               items: items.slice(index * 10, index * 10 + 10),
@@ -69,6 +76,7 @@ describe('loaded grouped pages', () => {
             {
               key: 'todo',
               displayOrder: null,
+              label: null,
               totalCount: 0,
               nextCursor: null,
               items: [groupedDocument('0', ['done'])],
@@ -142,6 +150,7 @@ describe('local grouped Soup projection', () => {
             key: 'review_soon',
             items: [a, b],
             displayOrder: null,
+            label: null,
             totalCount: 30,
             nextCursor: 'more',
           },
@@ -149,6 +158,7 @@ describe('local grouped Soup projection', () => {
             key: 'review_later',
             items: [],
             displayOrder: null,
+            label: null,
             totalCount: 4,
             nextCursor: 'later',
           },
@@ -163,6 +173,7 @@ describe('local grouped Soup projection', () => {
         key: 'review_soon',
         items: [b],
         displayOrder: null,
+        label: null,
         totalCount: 29,
         nextCursor: 'more',
       },
@@ -170,6 +181,7 @@ describe('local grouped Soup projection', () => {
         key: 'review_later',
         items: [moved],
         displayOrder: null,
+        label: null,
         totalCount: 5,
         nextCursor: 'later',
       },
@@ -186,6 +198,7 @@ describe('local grouped Soup projection', () => {
         [
           {
             key: 'server-group',
+            label: null,
             items: [before],
             displayOrder: null,
             totalCount: 30,
@@ -200,6 +213,7 @@ describe('local grouped Soup projection', () => {
     ).toEqual([
       {
         key: 'server-group',
+        label: null,
         items: [next],
         displayOrder: null,
         totalCount: 30,
@@ -215,6 +229,7 @@ describe('local grouped Soup projection', () => {
     const baseline = [
       {
         key: 'todo',
+        label: null,
         items: [a, b, unknown],
         displayOrder: null,
         totalCount: 30,
@@ -234,6 +249,7 @@ describe('local grouped Soup projection', () => {
         key: 'todo',
         items: [unknown],
         displayOrder: null,
+        label: null,
         totalCount: 28,
         nextCursor: 'more',
       },
@@ -241,6 +257,7 @@ describe('local grouped Soup projection', () => {
         key: 'done',
         items: [next],
         displayOrder: null,
+        label: null,
         totalCount: 1,
         nextCursor: null,
       },
@@ -272,6 +289,7 @@ describe('local grouped Soup projection', () => {
         [
           {
             key: 'todo',
+            label: null,
             items: [selectedBefore, retained, missing, excluded],
             displayOrder: null,
             totalCount: 30,
@@ -286,6 +304,7 @@ describe('local grouped Soup projection', () => {
     ).toEqual([
       {
         key: 'todo',
+        label: null,
         items: [selected, current, missing],
         displayOrder: null,
         totalCount: 29,
@@ -302,6 +321,7 @@ describe('local grouped Soup projection', () => {
         [
           {
             key: 'todo',
+            label: null,
             items: [before],
             displayOrder: null,
             totalCount: 30,
@@ -311,6 +331,7 @@ describe('local grouped Soup projection', () => {
             key: 'done',
             items: [],
             displayOrder: null,
+            label: null,
             totalCount: 20,
             nextCursor: 'done-more',
           },
@@ -325,6 +346,7 @@ describe('local grouped Soup projection', () => {
         key: 'todo',
         items: [],
         displayOrder: null,
+        label: null,
         totalCount: 29,
         nextCursor: 'todo-more',
       },
@@ -332,6 +354,7 @@ describe('local grouped Soup projection', () => {
         key: 'done',
         items: [after],
         displayOrder: null,
+        label: null,
         totalCount: 20,
         nextCursor: 'done-more',
       },
@@ -359,6 +382,7 @@ describe('local grouped Soup projection', () => {
             key: 'today',
             items: [row],
             displayOrder: null,
+            label: null,
             totalCount: 8,
             nextCursor: 'more',
           },
@@ -373,6 +397,7 @@ describe('local grouped Soup projection', () => {
         key: 'today',
         items: [],
         displayOrder: null,
+        label: null,
         totalCount: 7,
         nextCursor: 'more',
       },
@@ -380,6 +405,7 @@ describe('local grouped Soup projection', () => {
         key: 'yesterday',
         items: [row],
         displayOrder: null,
+        label: null,
         totalCount: 1,
         nextCursor: null,
       },
@@ -432,6 +458,70 @@ describe('local grouped Soup projection', () => {
     ).toBeUndefined();
   });
 
+  it('moves project groups with the initiative property despite a different folder', () => {
+    const task = groupedDocument('a');
+    task.projectId = 'legacy-folder';
+    task.properties[0] = {
+      ...task.properties[0],
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      value: {
+        __typename: 'GraphqlEntityReferencePropertyValue',
+        references: [
+          {
+            entityId: 'initiative-1',
+            entityType: 'INITIATIVE',
+            specificMessageId: null,
+          },
+        ],
+      },
+    };
+    const projectInput: GroupedSoupInitialInput = {
+      groupBy: { field: 'PROJECT' },
+    };
+    expect(localSoupGroupKeys(task, projectInput, now)).toEqual([
+      'initiative-1',
+    ]);
+    const apiTask = mapGraphqlSoupItem(task);
+    expect(apiTask).toBeDefined();
+    if (!apiTask) throw new Error('Task must map to the REST item shape');
+    expect(computeGroupKeysForItem(apiTask, { type: 'project' })).toEqual([
+      'initiative-1',
+    ]);
+    expect(resolveGroupMetaForKey({ type: 'project' }, '')?.label).toBe(
+      'No Project'
+    );
+
+    const unassigned = { ...task, properties: [] };
+    const result = projectLocalGroupedSoup(
+      [
+        {
+          key: 'initiative-1',
+          items: [task],
+          label: 'Project One',
+          displayOrder: null,
+          totalCount: 1,
+          nextCursor: null,
+        },
+      ],
+      new Map(),
+      snapshot([unassigned]),
+      projectInput,
+      now
+    );
+    expect(
+      result.find((bin) => bin.key === '')?.items.map((item) => item.id)
+    ).toEqual(['a']);
+    expect(result.find((bin) => bin.key === 'initiative-1')?.totalCount).toBe(
+      0
+    );
+    // The server's name stays with its group; a group created locally has
+    // none until the next grouped page labels it.
+    expect(result.find((bin) => bin.key === 'initiative-1')?.label).toBe(
+      'Project One'
+    );
+    expect(result.find((bin) => bin.key === '')?.label).toBeNull();
+  });
+
   it('distinguishes known empty property values from unknown grouping evidence', () => {
     expect(localSoupGroupKeys(groupedDocument('a', []), input, now)).toEqual([
       '',
@@ -442,7 +532,7 @@ describe('local grouped Soup projection', () => {
         { ...input, groupBy: { field: 'PROJECT' } },
         now
       )
-    ).toEqual(['project-2']);
+    ).toEqual(['']);
     const linked = groupedDocument('a');
     linked.properties[0].value = {
       __typename: 'GraphqlLinkPropertyValue',

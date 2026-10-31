@@ -2,6 +2,13 @@
 
 use models_grouping::{GroupByField, date_bucket_sql_key, date_bucket_sql_order};
 use std::borrow::Cow;
+use system_properties::SystemPropertyKey;
+
+const PROJECT_GROUPING: GroupByField = GroupByField::Property {
+    property_definition_id: SystemPropertyKey::PROJECT_UUID,
+    entity_type: None,
+    bucketing: None,
+};
 
 /// SQL expressions derived from one property value and its definition.
 pub(super) struct PropertyValueSql {
@@ -132,7 +139,7 @@ pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
     match field {
         GroupByField::Date => Cow::Owned(date_bucket_sql_key("sort_ts")),
         GroupByField::EntityType => Cow::Borrowed("item_type"),
-        GroupByField::Project => Cow::Borrowed("COALESCE(project_id::text, '')"),
+        GroupByField::Project => group_select_expr(&PROJECT_GROUPING),
         GroupByField::Property { .. } => Cow::Owned(
             property_value_sql(
                 "ep_group",
@@ -150,7 +157,8 @@ pub fn group_select_expr(field: &GroupByField) -> Cow<'static, str> {
 pub fn group_order_expr(field: &GroupByField) -> Cow<'static, str> {
     match field {
         GroupByField::Date => Cow::Owned(date_bucket_sql_order("sort_ts")),
-        GroupByField::EntityType | GroupByField::Project => Cow::Borrowed("\"group_key\""),
+        GroupByField::EntityType => Cow::Borrowed("\"group_key\""),
+        GroupByField::Project => group_order_expr(&PROJECT_GROUPING),
         GroupByField::Property { .. } => {
             Cow::Borrowed("(\"group_key\" = '') ASC, \"group_order\" ASC NULLS LAST, \"group_key\"")
         }
@@ -168,6 +176,9 @@ pub struct GroupJoinClause {
 /// Expand option, tag, entity and link values into their server-derived groups.
 /// Scalar values never expand arrays, including malformed DATE payloads.
 pub fn group_join_clause(field: &GroupByField) -> Option<GroupJoinClause> {
+    if matches!(field, GroupByField::Project) {
+        return group_join_clause(&PROJECT_GROUPING);
+    }
     let GroupByField::Property {
         property_definition_id,
         entity_type,

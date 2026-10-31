@@ -11,7 +11,13 @@
 #![deny(missing_docs)]
 pub mod domain;
 
-#[cfg(any(feature = "outbound", feature = "sync"))]
+pub mod broker;
+
+#[cfg(any(
+    feature = "outbound",
+    feature = "sync",
+    feature = "installation_claims"
+))]
 pub mod outbound;
 
 #[cfg(feature = "inbound")]

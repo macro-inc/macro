@@ -175,7 +175,7 @@ export function taskBoardColumns(
         status: 'No status',
         priority: 'No priority',
         assignee: 'Unassigned',
-        project: 'No project',
+        project: 'No Project',
         due_date: 'No due date',
       }[grouping]
     );

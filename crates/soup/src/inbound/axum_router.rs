@@ -45,6 +45,7 @@ use item_filters::{
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
         github_pull_request::GithubPullRequestLiteral,
+        initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
     },
@@ -745,9 +746,26 @@ where
         let sort = *request.cursor.sort_method();
         let filters = request.cursor.filter().clone();
         let grouping = request.grouping.clone();
-        let items = self.service.get_user_soup_grouped(request).await?;
-        let response =
-            build_grouped_response(items, &grouping.field, sort, grouping.group_key, filters);
+        let items: Vec<_> = self.service.get_user_soup_grouped(request).await?.collect();
+        let mut keys: Vec<String> = items
+            .iter()
+            .map(|item| item.key.clone())
+            .filter(|key| !key.is_empty())
+            .collect();
+        keys.sort_unstable();
+        keys.dedup();
+        let labels = self
+            .service
+            .group_labels(user_for_favorites.copied(), &grouping.field, &keys)
+            .await?;
+        let response = build_grouped_response(
+            items,
+            &grouping.field,
+            sort,
+            grouping.group_key,
+            filters,
+            &labels,
+        );
 
         let mut items: HashMap<String, SoupApiItem> = response
             .items
@@ -1350,6 +1368,12 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "asf")]
     #[schema(value_type = serde_json::Value)]
     pub agent_session_filter: LiteralTree<AgentSessionLiteral>,
+    /// Filters applied to initiatives (wire key `if`). Opt-in like agent
+    /// sessions: an omitted filter returns no initiatives, and any literal,
+    /// a notification state included, opts them in.
+    #[serde(default, rename = "if")]
+    #[schema(value_type = serde_json::Value)]
+    pub initiative_filter: LiteralTree<InitiativeLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[schema(value_type = serde_json::Value)]
@@ -1458,6 +1482,7 @@ impl ApiEntityFilterAst {
             crm_company_filter,
             crm_contact_filter,
             agent_session_filter,
+            initiative_filter,
             properties_filter,
             email_crm_domains,
             email_crm_addresses,
@@ -1531,7 +1556,7 @@ impl ApiEntityFilterAst {
             github_pull_request_filter,
             agent_session_filter,
             properties_filter,
-            initiative_filter: None,
+            initiative_filter,
             database_row_filter: None,
         })
     }

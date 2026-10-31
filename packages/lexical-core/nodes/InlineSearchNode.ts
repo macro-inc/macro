@@ -112,6 +112,22 @@ export function validTriggerPosition(
 
 const CLEAN_REGEX = /^[@:\/;#]/g; // Matches menu triggers to clean the search term.
 
+/**
+ * While a keyboard composes a word, Lexical keeps a zero-width space in the
+ * node's text and removes it only when the word is committed. Android
+ * keyboards compose every word, so without this the search would never match
+ * until the word ends.
+ */
+const COMPOSITION_PLACEHOLDER_REGEX = /\u200b/g;
+
+/** The search term typed after a menu trigger. */
+function inlineSearchTerm(text: string) {
+  return text
+    .replace(COMPOSITION_PLACEHOLDER_REGEX, '')
+    .trim()
+    .replace(CLEAN_REGEX, '');
+}
+
 export class InlineSearchNode extends TextNode {
   static getType() {
     return 'inline-search';
@@ -209,10 +225,7 @@ export function $handleInlineSearchNodeMutation(
         const search = state.read(() =>
           $getNodeByKey(nodeKey)?.getTextContent()
         );
-        if (search) {
-          let cleanedSearch = search.trim().replace(CLEAN_REGEX, '');
-          actions.onUpdate(cleanedSearch);
-        }
+        if (search) actions.onUpdate(inlineSearchTerm(search));
       }
     }
   }

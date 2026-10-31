@@ -168,7 +168,7 @@ impl DatabaseOptionWriter for PropertiesPgRepo {
         property_definition_id: Uuid,
         option_id: Uuid,
     ) -> Result<bool, Self::Err> {
-        let deleted = property_option_queries::delete_options_in_tx(
+        let (deleted, _) = property_option_queries::delete_options_in_tx(
             transaction,
             property_definition_id,
             &[option_id],

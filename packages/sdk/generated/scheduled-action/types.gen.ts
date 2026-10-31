@@ -155,6 +155,11 @@ export type EmptyResponse = {
 /**
  * An event name AND an entity ID must match within the same filter. A
  * condition further requires the event's content to answer it with yes.
+ *
+ * `github` comes from outside Macro and carries its payload: it stands
+ * alone in its filter, takes no ids, and may require
+ * exact payload values with `match`. A `github` filter narrows deliveries
+ * with its `github` selector.
  */
 export type EventFilter = {
     /**
@@ -163,7 +168,12 @@ export type EventFilter = {
      */
     condition?: string | null;
     events: Array<EventName>;
+    github?: null | GithubSelector;
     ids?: Array<string> | null;
+    /**
+     * Exact tests on the payload, all of which must pass.
+     */
+    match?: Array<PayloadCondition> | null;
 };
 
 /**
@@ -175,7 +185,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -201,6 +211,30 @@ export type ExecutionResult = {
     version: number;
 };
 
+/**
+ * Which GitHub deliveries match.
+ */
+export type GithubSelector = {
+    /**
+     * Payload actions, such as `completed` or `opened`; any when empty.
+     */
+    actions?: Array<string>;
+    /**
+     * GitHub event names, such as `workflow_run` or `pull_request`; any when empty.
+     */
+    events?: Array<string>;
+    /**
+     * Also run for deliveries caused by bots and apps, including Macro's own.
+     */
+    includeBots?: boolean;
+    /**
+     * Repositories as `owner/name`, matched without regard to case; every
+     * repository the owner's installations cover when empty. A renamed
+     * repository stops matching until it is chosen again.
+     */
+    repositories?: Array<string>;
+};
+
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
@@ -222,9 +256,70 @@ export type LegacyActionConfiguration = {
 };
 
 /**
+ * `path` walks objects by key; `*` steps into every element of an array and
+ * a number into one. Give exactly one test. `notIn` also passes when the
+ * path finds nothing.
+ */
+export type PayloadCondition = {
+    equals?: null | PayloadScalar;
+    /**
+     * Whether the path finds a non-null value.
+     */
+    exists?: boolean | null;
+    /**
+     * Some text found matches this glob; `*` matches any run of characters.
+     */
+    glob?: string | null;
+    /**
+     * Some value found is one of these.
+     */
+    in?: Array<PayloadScalar> | null;
+    /**
+     * No value found is one of these.
+     */
+    notIn?: Array<PayloadScalar> | null;
+    /**
+     * Keys from the payload's root, e.g. `["workflow_run", "conclusion"]`.
+     */
+    path: Array<string>;
+};
+
+/**
+ * A JSON text, number, boolean or null that payload values are compared with.
+ */
+export type PayloadScalar = null | boolean | number | string;
+
+/**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.
  */
 export type RoutineModelId = string;
+
+/**
+ * A shared routine's snapshot, readable by signed-in users with sharing enabled.
+ */
+export type RoutineTemplate = {
+    /**
+     * Routines activated from this template, including stopped ones.
+     */
+    active_count: number;
+    /**
+     * Who shared it: the source routine's owner.
+     */
+    author: string;
+    created_at: string;
+    description: string;
+    /**
+     * The routine it was shared from.
+     */
+    id: string;
+    name: string;
+    task: {
+        [key: string]: unknown;
+    };
+    trigger: ActionTrigger;
+    updated_at: string;
+    variables: Array<TemplateVariable>;
+};
 
 /**
  * An individual trigger in a routine's trigger list.
@@ -290,6 +385,10 @@ export type ScheduledAction = {
     task: {
         [key: string]: unknown;
     };
+    /**
+     * The shared template this routine was activated from, if any.
+     */
+    template_id?: string | null;
     trigger: ActionTrigger;
     updated_at: string;
 };
@@ -342,9 +441,45 @@ export type SetScheduledActionEnabled = {
 };
 
 /**
+ * What the owner supplies when sharing; the rest is snapshotted from the routine.
+ */
+export type ShareRoutineTemplate = {
+    description: string;
+    variables: Array<TemplateVariable>;
+};
+
+/**
+ * A user-specific part of a shared routine.
+ */
+export type TemplateVariable = {
+    fill: VariableFill;
+    id: string;
+    kind: 'user';
+    label: string;
+} | {
+    /**
+     * The mention's block name, such as `channel` or `md`.
+     */
+    block_name: string;
+    fill: VariableFill;
+    id: string;
+    kind: 'item';
+    label: string;
+} | {
+    fill: VariableFill;
+    kind: 'time_zone';
+    timezone: string;
+};
+
+/**
  * Full replacement of client configuration, not of server-owned action state.
  */
 export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
+
+/**
+ * How a variable is filled when someone activates the template.
+ */
+export type VariableFill = 'activator' | 'shared' | 'choice';
 
 export type ScheduledActionHealthData = {
     body?: never;
@@ -588,3 +723,116 @@ export type ListScheduledActionHistoryResponses = {
 };
 
 export type ListScheduledActionHistoryResponse = ListScheduledActionHistoryResponses[keyof ListScheduledActionHistoryResponses];
+
+export type UnshareScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type UnshareScheduledActionTemplateErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type UnshareScheduledActionTemplateError = UnshareScheduledActionTemplateErrors[keyof UnshareScheduledActionTemplateErrors];
+
+export type UnshareScheduledActionTemplateResponses = {
+    204: void;
+};
+
+export type UnshareScheduledActionTemplateResponse = UnshareScheduledActionTemplateResponses[keyof UnshareScheduledActionTemplateResponses];
+
+export type GetScheduledActionTemplateData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type GetScheduledActionTemplateErrors = {
+    401: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type GetScheduledActionTemplateError = GetScheduledActionTemplateErrors[keyof GetScheduledActionTemplateErrors];
+
+export type GetScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type GetScheduledActionTemplateResponse = GetScheduledActionTemplateResponses[keyof GetScheduledActionTemplateResponses];
+
+export type ShareScheduledActionTemplateData = {
+    body: ShareRoutineTemplate;
+    path: {
+        /**
+         * ID of the routine to share
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template';
+};
+
+export type ShareScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ShareScheduledActionTemplateError = ShareScheduledActionTemplateErrors[keyof ShareScheduledActionTemplateErrors];
+
+export type ShareScheduledActionTemplateResponses = {
+    200: RoutineTemplate;
+};
+
+export type ShareScheduledActionTemplateResponse = ShareScheduledActionTemplateResponses[keyof ShareScheduledActionTemplateResponses];
+
+export type ActivateScheduledActionTemplateData = {
+    body: CreateScheduledAction;
+    path: {
+        /**
+         * ID of the shared routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/template/activate';
+};
+
+export type ActivateScheduledActionTemplateErrors = {
+    400: string;
+    401: string;
+    403: string;
+    /**
+     * The routine is not shared
+     */
+    404: string;
+    500: string;
+};
+
+export type ActivateScheduledActionTemplateError = ActivateScheduledActionTemplateErrors[keyof ActivateScheduledActionTemplateErrors];
+
+export type ActivateScheduledActionTemplateResponses = {
+    201: ScheduledActionResponse;
+};
+
+export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];

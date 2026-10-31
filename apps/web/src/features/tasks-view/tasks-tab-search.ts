@@ -1,5 +1,6 @@
 import { createSearchParamsCodec } from '@app/lib/split-router';
 import { z } from 'zod';
+import { TASK_TAB_IDS } from './core/task-navigation';
 import type {
   TaskGroupBy,
   TaskSortId,
@@ -10,7 +11,7 @@ import type {
 export const tasksTabSearch = {
   namespace: 'tasks',
   schema: z.object({
-    tab: z.enum(['my-tasks', 'created-by-me', 'team-tasks', 'projects']),
+    tab: z.enum(TASK_TAB_IDS),
     savedView: z
       .string()
       .uuid()

@@ -22,18 +22,21 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 const DEFAULT_MAX_TURNS: usize = 200;
-const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// A session's system prompt, optionally split where the part every session
-/// of the agent repeats byte for byte ends.
+/// of the agent repeats byte for byte ends, with an optional tail that
+/// changes every turn.
 ///
 /// Anthropic caches the shared part apart from the per-session rest
 /// (instructions, memory), so a session reads the shared part back even when
-/// its rest is new. Other providers receive the two joined.
+/// its rest is new. The turn's part comes last, after anything the loop adds
+/// (the model id, connected integrations), so a change to it costs only what
+/// follows it. Other providers receive the parts joined.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SystemPrompt {
     shared: Option<String>,
     rest: String,
+    turn: String,
 }
 
 impl SystemPrompt {
@@ -43,7 +46,15 @@ impl SystemPrompt {
         Self {
             shared: Some(shared.into()),
             rest: rest.into(),
+            turn: String::new(),
         }
+    }
+
+    /// This prompt with `turn`, the part only this turn sends, at its end.
+    #[must_use]
+    pub fn with_turn(mut self, turn: impl Into<String>) -> Self {
+        self.turn = turn.into();
+        self
     }
 
     /// The shared part, when the prompt is split.
@@ -51,9 +62,9 @@ impl SystemPrompt {
         self.shared.as_deref()
     }
 
-    /// The per-session part, or the whole prompt when it is not split.
-    pub fn rest(&self) -> &str {
-        &self.rest
+    /// Everything after the shared part: the session's own, then the turn's.
+    pub fn rest(&self) -> String {
+        format!("{}{}", self.rest, self.turn)
     }
 
     /// The whole prompt as one string.
@@ -70,16 +81,21 @@ impl std::fmt::Display for SystemPrompt {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "{}{}",
+            "{}{}{}",
             self.shared.as_deref().unwrap_or_default(),
-            self.rest
+            self.rest,
+            self.turn
         )
     }
 }
 
 impl From<String> for SystemPrompt {
     fn from(rest: String) -> Self {
-        Self { shared: None, rest }
+        Self {
+            shared: None,
+            rest,
+            turn: String::new(),
+        }
     }
 }
 
@@ -108,7 +124,8 @@ pub struct AgentLoop {
     reasoning_effort: Option<ReasoningEffort>,
     speed: ModelSpeed,
     max_turns: usize,
-    max_tokens: u64,
+    /// The output cap per model response; `None` asks for the model's maximum.
+    max_tokens: Option<u64>,
     recorder: Arc<dyn UsageRecorder>,
     user_tool_finisher: Option<UserToolFinisher>,
     result_limit: Option<ToolResultLimit>,
@@ -119,6 +136,8 @@ pub struct AgentLoop {
     /// Whether this loop enriches the runtime's GenAI spans (see
     /// [`Self::with_genai_telemetry`]).
     genai_telemetry: bool,
+    /// See [`Self::with_streamed_tool_calls`].
+    stream_tool_calls: bool,
     /// The router this loop's model calls use instead of the shared one, when
     /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
     router: Option<ModelRouter<MeteredHttpClient>>,
@@ -139,13 +158,14 @@ impl AgentLoop {
             reasoning_effort: None,
             speed: ModelSpeed::Standard,
             max_turns: DEFAULT_MAX_TURNS,
-            max_tokens: DEFAULT_MAX_TOKENS,
+            max_tokens: None,
             recorder,
             user_tool_finisher: None,
             result_limit: None,
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
+            stream_tool_calls: false,
             router: None,
         }
     }
@@ -223,9 +243,10 @@ impl AgentLoop {
         self
     }
 
-    /// Override the default max output tokens.
+    /// Cap each model response at `n` output tokens instead of the model's
+    /// maximum.
     pub fn with_max_tokens(mut self, n: u64) -> Self {
-        self.max_tokens = n;
+        self.max_tokens = Some(n);
         self
     }
 
@@ -259,6 +280,24 @@ impl AgentLoop {
     /// calls run with `RequestContext::genai_telemetry` off.
     pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
         self.genai_telemetry = enabled;
+        self
+    }
+
+    /// Report each tool call as soon as the model names it, then its
+    /// arguments as they stream ([`StreamPart::ToolCallStarted`],
+    /// [`StreamPart::ToolCallArgs`]), before the finished
+    /// [`StreamPart::ToolCall`]. Off by default: a host that only renders
+    /// finished calls has nothing to do with the extra parts.
+    ///
+    /// A streamed call uses the provider id available on its first delta,
+    /// or rig's correlation id when none is available. Its final invocation
+    /// and result keep that id so the host updates the existing row.
+    ///
+    /// [`StreamPart::ToolCallStarted`]: crate::StreamPart::ToolCallStarted
+    /// [`StreamPart::ToolCallArgs`]: crate::StreamPart::ToolCallArgs
+    /// [`StreamPart::ToolCall`]: crate::StreamPart::ToolCall
+    pub fn with_streamed_tool_calls(mut self) -> Self {
+        self.stream_tool_calls = true;
         self
     }
 
@@ -325,7 +364,7 @@ impl AgentLoop {
             &SystemPrompt,
             &ToolSearch,
             usize,
-            u64,
+            Option<u64>,
             GenAiContext,
         ) -> ProviderAgent,
     ) -> Session
@@ -478,6 +517,7 @@ impl AgentLoop {
                 register_loaded,
                 tool_loads: tool_search.loads.clone(),
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                stream_tool_calls: self.stream_tool_calls,
                 result_limit: self.result_limit.clone(),
             },
             recorder: self.recorder.clone(),

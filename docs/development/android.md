@@ -131,8 +131,9 @@ its fingerprint to production associations before testing Play-installed links.
 ### Releasing to Google Play from a pull request
 
 Android releases are driven from pull requests, like iOS (see
-`apps/web/docs/ios-releases.md`); they are not tied to the production
-deployment cycle. Three generated workflows plus the `Android Native Check`
+`apps/web/docs/ios-releases.md`). Unlike iOS, whose approved version is held
+until the prod deploy, they are not tied to the production deployment cycle.
+Three generated workflows plus the `Android Native Check`
 job of the web app PR checks enforce it:
 
 **`Android Native Check`** runs on every PR against `main`. Its native tree
@@ -150,33 +151,46 @@ Add **`skip-android-update`** instead for native changes that don't break
 the native/web contract: it skips the whole gate, bump included, like
 `skip-ios-update`. Such a PR never releases, and the bump only feeds the
 Play release, which checks it again before building; the next PR that
-releases bumps against whatever `main` has by then. The `Native Check
-Label` workflow re-runs just the gate job when that label is added or
-removed.
+releases bumps against whatever `main` has by then. Because it never
+releases, the gate still refuses a skipped PR that raises the Android floor
+in `apps/web/min-native-build.json`. The `Native Check Label` workflow
+re-runs just the gate job when that label is added or removed.
 
 To release:
 
-1. Bump and commit: `just android-bump` in `apps/web`.
+1. Bump and commit: `just android-bump` in `apps/web`. It also raises the
+   Android floor in `min-native-build.json` to the new versionCode, so the
+   next prod web deploy (`just build-prod`) stops serving shared JS to older
+   Android installs, which show the update-required prompt instead. Use
+   `just android-bump --no-min` for a release older installs don't need.
+   The gate accepts only those two floors: the new versionCode or the base
+   branch's. A PR without Android native changes may raise the floor only as
+   far as the base branch's versionCode.
 2. Add the **`android-update`** label once the PR is ready to merge. The
    **`Android Play Release`** workflow (`.github/workflows/android-play-release.yml`)
    first refuses drafts, PRs with failing checks (pending ones are waited on,
    up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
-   the merge result, so such a bundle could never pass it; merge `main`,
-   bump, re-add the label). It then builds the signed App Bundle from the PR
-   head on a hosted Ubuntu runner (Android SDK, Nix, signing and Firebase
-   config from Doppler `android-release/prd`), verifies it with bundletool,
+   the merge result, so such a bundle could never pass it; the refusal lists
+   the native files `main` changed; merge `main`, bump, re-add the label).
+   When GitHub has no merge result (the PR conflicts with `main`, or GitHub
+   hasn't computed it yet) the check compares `main` with the PR's branch
+   point instead and goes ahead if `main`'s native code hasn't moved. It
+   then builds the signed App Bundle from the PR head on a hosted Ubuntu
+   runner (Android SDK, Nix, signing and Firebase config from Doppler
+   `android-release/prd`), verifies it with bundletool,
    checks again that neither the PR head nor `main` changed native code
    during the build, uploads it to the **internal** track with
    `status=completed`, and promotes it to **production** as a full rollout
    (Google review applies). The bundle and R8 mapping are kept as a workflow
    artifact for 90 days. The release notes carry a provenance stamp,
    `native tree <hash> for PR #<n>`, the twin of the iOS TestFlight stamp.
-   The run comments the outcome on the PR; remove and re-add the label to
-   retry. Click **Enable auto-merge** on the PR to merge the moment it is
-   live. The label only works on a PR that is mergeable: GitHub does not
-   run `pull_request` workflows on a PR that conflicts with `main`, so the
-   release never starts there. The **`Release Label Check`** workflow
+   The run comments the outcome on the PR (a failure names the step that
+   failed and, for the checking steps, quotes the end of its output);
+   remove and re-add the label to retry. Click **Enable auto-merge** on the
+   PR to merge the moment it is live. The label only works on a PR that is
+   mergeable: GitHub does not run `pull_request` workflows on a PR that
+   conflicts with `main`, so the release never starts there. The **`Release Label Check`** workflow
    (`.github/workflows/release-label-check.yml`, a `pull_request_target`
    workflow, which GitHub does run) then comments and removes the label;
    resolve the conflicts and re-add it. On a mergeable PR that workflow
@@ -729,7 +743,9 @@ never use it for Play uploads. To build an emulator APK, run
 `apps/web/tauri/src-tauri` inside the Android Nix shell. ARM64 uses the launcher
 above. Keep OTA enabled for update acceptance; `--no-default-features` qualifies
 only embedded behavior. Shared OTA builds need both `MIN_NATIVE_BUILD_ANDROID`
-and `MIN_NATIVE_BUILD_IOS`; see the
+and `MIN_NATIVE_BUILD_IOS`; production builds read them from
+`apps/web/min-native-build.json`, whose Android floor `just android-bump`
+raises. See the
 [native compatibility contract](../../apps/web/tauri/src-tauri/README.md).
 
 Android ConnectivityManager reports the validated default network and takes a
@@ -875,9 +891,14 @@ retry but cannot authorize an answer. Logout/account switching ends native calls
 The **Calls** notification channel presents Answer/Decline and an ongoing End
 call action. Telecom handles headset/system actions and coordinates interruptions.
 Android's full-screen-intent setting controls whether a locked phone opens the
-call activity automatically; when unavailable, the call notification remains the
-entry point. Android 14+ revokes it by default for Play installs unless the Play
-Console's full-screen intent declaration names calling as core functionality;
+incoming-call screen automatically; when unavailable, Android keeps a heads-up
+call notification with Answer/Decline. Answer opens the call activity directly,
+so microphone permission requests and verification errors remain accessible
+without a background receiver launching an activity. Content, Answer, and
+Decline intents are bound to the offered call; stale notification actions cannot
+act on a replacement call. Android 14+ revokes full-screen access by default for
+Play installs unless the Play Console's full-screen intent declaration names calling
+as core functionality;
 check with `adb shell appops get <package> USE_FULL_SCREEN_INTENT`. Once
 notifications are on, Macro shows a toast while the setting is off; **Allow**
 opens Android's per-app setting, and the toast stays until returning to Macro
@@ -888,8 +909,59 @@ camera access is requested when enabling video, and Bluetooth access when select
 that route on Android 12 or newer. A denied permission does not silently enable
 capture.
 
-The native call activity presents a themed drawer at approximately 92% of the
-safe screen height, above navigation bars/cutouts. A large participant tile sits
+While ringing, the native call activity fills the screen with an opaque themed
+background, caller initials and name (or channel name when unavailable), channel
+context, and large Answer/Decline controls. It has no drawer handle or participant
+tiles. Back hides the screen while leaving the notification available; cancellation,
+expiry and answering elsewhere dismiss it. A full-screen intent lets Android
+choose this screen while locked or a notification while the phone is in use.
+Test full-screen access allowed/denied, including notification Answer with
+microphone permission missing and a stale action after another call arrives.
+
+### Native call tracing
+
+The Kotlin call plugin uses OpenTelemetry to export through the same OTLP endpoint
+and enablement decision as browser telemetry. The guarded `configure_tracing`
+command persists only the endpoint and environment, so incoming calls can export
+without starting the WebView. Older binaries without the capability flag skip
+this command. Reapplying an unchanged configuration preserves an active trace;
+changing the endpoint or disabling telemetry closes and detaches it before shutting
+down the provider, without ending the call. Disabled calls do not propagate the
+old trace context in subsequent requests.
+
+The outbound notification adapter adds `traceparent`/`tracestate` to the existing
+Android call offer under `call.push.send`; older consumers ignore them. Native
+`call.incoming` adopts that producer context. Children cover `call.push.receive`,
+`call.notification`, `call.activity`, `call.permission.microphone`, `call.answer`,
+`call.ring_status` and `call.connect`. Notification intents carry W3C context;
+status requests inject it into HTTP headers so the backend request joins the
+trace. Older pushes without valid context start a native root. Search by
+`resource.service.name="android-calls"` and the opaque `call.id`; `call.outcome`
+records permission, retry, cancellation and connection outcomes. Durations come
+from span boundaries. Only exception classes are recorded: never caller/channel
+names, JWTs, authorization headers or connection URLs.
+
+The SDK uses a bounded 512-span queue and a three-second exporter timeout. It
+shares the native media stack's OkHttp 4 transport and enables core library
+desugaring, preserving the existing Android/Kotlin baseline. Consumer R8 rules
+retain the HTTP transport provider, and optional SDK interfaces and annotation
+types are present for release shrinking. Debug builds permit HTTP exporters for
+local device testing; releases require HTTPS. Export is best effort when the
+device is offline or terminated.
+
+Run `CallTracingTest` with the native connected-test command below. It uses local
+HTTP fixtures to verify producer context, real notification intents, permission
+outcomes, downstream headers, protobuf export, mid-call telemetry changes and
+connection failure without sending real pushes. With local Tempo on port 4318,
+add `-Pandroid.testInstrumentationRunnerArguments.tracesUrl=http://10.0.2.2:4318/v1/traces`.
+The synthetic trace ID is saved to `/sdcard/Download/native-call-trace-id.txt`;
+fetch it from Tempo at `http://localhost:3200/api/traces/<trace-id>` to inspect
+the connected backend producer, native phases and status-request server span.
+
+### Active call controls
+
+After answering, the native call activity presents a themed drawer at approximately
+92% of the safe screen height, above navigation bars/cutouts. A large participant tile sits
 above a horizontally scrolling participant strip; tapping a strip tile selects
 it as primary. Agent participants such as the transcriber are hidden. Speaker,
 Mute and Video form a labelled control row of Phosphor icons, with Leave in the

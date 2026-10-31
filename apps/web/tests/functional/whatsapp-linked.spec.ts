@@ -620,6 +620,8 @@ test('External lists groups in Macro with unread counts and read-only tags', asy
 test('chats sort into direct messages, groups and communities on the page and in External', async ({
   page,
 }) => {
+  // Three full fixture navigations share this test's timeout.
+  test.slow();
   const state = server();
   state.account = {
     id: 'account-1',
@@ -1353,7 +1355,7 @@ for (const mobile of [false, true]) {
         page.getByRole('textbox', { name: 'Message Design Crit' })
       ).toBeVisible();
       await page
-        .getByRole('button', { name: mobile ? 'Show details' : /side panel/i })
+        .getByRole('button', { name: 'Show details', exact: true })
         .click();
       const members = page.getByRole('list', { name: 'WhatsApp members' });
       await expect(members).toBeVisible();

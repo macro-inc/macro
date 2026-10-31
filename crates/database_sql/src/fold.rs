@@ -140,11 +140,12 @@ pub fn fold_relations(
 /// Give the rows of relation `index` the cells of its table's derived
 /// columns the plan reads, computed from their other cells.
 fn derive(catalog: &Catalog, plan: &Plan, index: usize, rows: &mut [Row]) {
-    let Some(table) = catalog
-        .tables
-        .iter()
-        .find(|table| table.id == plan.relations[index].relation.table)
-    else {
+    let Some(table) = plan.relations.get(index).and_then(|relation| {
+        catalog
+            .tables
+            .iter()
+            .find(|table| table.id == relation.relation.table)
+    }) else {
         return;
     };
     let key = |definition: Uuid| column_key(index, definition);
@@ -184,7 +185,7 @@ fn fold_joined(catalog: &Catalog, plan: &Plan, rows: Vec<Row>) -> (Table, Vec<Ro
     match &plan.shape {
         Shape::Rows(columns) => {
             let mut rows = rows;
-            sort::rows(catalog, plan, &mut rows);
+            sort::rows(catalog, plan, columns, &mut rows);
             let projected = rows.into_iter().map(|row| {
                 let cells: Vec<Option<Cell>> = columns
                     .iter()

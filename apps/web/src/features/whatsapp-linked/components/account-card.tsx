@@ -38,7 +38,7 @@ export function ConnectCard(props: {
         <Item.Actions class="self-center">
           <Button
             type="button"
-            variant="strong"
+            variant="primary"
             disabled={props.pending}
             onClick={props.onConnect}
           >

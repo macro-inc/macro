@@ -255,7 +255,7 @@ enum GraphqlGroupByField {
     Date,
     /// Group by Soup entity type.
     EntityType,
-    /// Group by containing project.
+    /// Group by the Project property (initiative membership).
     Project,
     /// Group by a property value.
     Property,

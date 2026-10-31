@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.net.Uri
 import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.core.content.ContextCompat
@@ -31,11 +32,17 @@ class CallService : Service() {
             service.stopSelf()
         }
         fun action(ctx: Context, name: String, id: String): PendingIntent = PendingIntent.getBroadcast(
-            ctx, name.hashCode(), Intent(ctx, CallReceiver::class.java).setAction(name).putExtra("callId", id),
+            ctx, name.hashCode(), Intent(ctx, CallReceiver::class.java).setAction(name)
+                .setData(Uri.parse("macro-call:$id/$name")).putExtra("callId", id),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        fun screen(ctx: Context): PendingIntent = PendingIntent.getActivity(ctx, 0,
-            Intent(ctx, CallActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        fun screen(ctx: Context, id: String?, answer: Boolean = false): PendingIntent = PendingIntent.getActivity(ctx, if (answer) 1 else 0,
+            Intent(ctx, CallActivity::class.java).setData(Uri.parse("macro-call:$id/${if (answer) "answer" else "screen"}"))
+                .putExtra("callId", id).apply {
+                    if (answer) putExtra("answer", id)
+                    Calls.trace?.takeIf { it.callId == id }?.write(this)
+                },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
     private var foregroundTypes = 0
     private var callId: String? = null
@@ -108,25 +115,41 @@ class CallService : Service() {
             enableVibration(true)
         })
         val ringing = call != null && Calls.room == null
-        val builder = NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.sym_call_incoming).setContentTitle(Calls.title ?: call?.title ?: "Macro call")
-            .setCategory(NotificationCompat.CATEGORY_CALL).setOngoing(true).setOnlyAlertOnce(true)
-            .setSilent(!ringing)
-            // Like the system dialer and CallKit, show who is calling and the call controls on the lock screen.
-            .setContentIntent(screen(this)).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setFullScreenIntent(if (ringing) screen(this) else null, ringing)
-        if (call != null) {
-            val person = Person.Builder().setName((Calls.title ?: call.title).ifBlank { "Macro call" }).setImportant(true).build()
-            builder.setStyle(if (ringing) NotificationCompat.CallStyle.forIncomingCall(person,
-                action(this, "end", call.callId), action(this, "answer", call.callId))
-                else NotificationCompat.CallStyle.forOngoingCall(person, action(this, "end", call.callId)))
+        val presentation = if (ringing) Calls.trace?.phase("call.notification") else null
+        presentation?.attribute("android.full_screen.allowed", Build.VERSION.SDK_INT < 34 || manager.canUseFullScreenIntent())
+        presentation?.attribute("android.keyguard.locked", getSystemService(KeyguardManager::class.java).isKeyguardLocked)
+        try {
+            val title = Calls.title ?: call?.title ?: "Macro call"
+            val caller = call?.callerName ?: title
+            val builder = NotificationCompat.Builder(this, CHANNEL)
+                .setSmallIcon(android.R.drawable.sym_call_incoming).setContentTitle(if (ringing) caller else title)
+                .setContentText(if (ringing && call?.callerName != null) "Incoming Macro call · $title"
+                    else if (ringing) "Incoming Macro call" else "Call in progress")
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+                .setCategory(NotificationCompat.CATEGORY_CALL).setOngoing(true).setOnlyAlertOnce(true)
+                .setSilent(!ringing)
+                // Like the system dialer and CallKit, show who is calling and the call controls on the lock screen.
+                .setContentIntent(screen(this, call?.callId)).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                // Android downgrades this to a heads-up call notification when full-screen access is denied.
+                .setFullScreenIntent(if (ringing) screen(this, call?.callId) else null, ringing)
+            if (call != null) {
+                val person = Person.Builder().setName((if (ringing) caller else title).ifBlank { "Macro call" }).setImportant(true).build()
+                builder.setStyle(if (ringing) NotificationCompat.CallStyle.forIncomingCall(person,
+                    action(this, "end", call.callId), screen(this, call.callId, answer = true))
+                    else NotificationCompat.CallStyle.forOngoingCall(person, action(this, "end", call.callId)))
+            }
+            val notification = builder.build().apply { if (ringing) this.flags = this.flags or Notification.FLAG_INSISTENT }
+            var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
+            if (media || Calls.room != null) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            if (camera || Calls.video) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+            promote(notification, types)
+            foregroundTypes = types
+            presentation?.end("posted")
+        } catch (error: Exception) {
+            presentation?.end("notification_error", failed = true, error = error)
+            throw error
         }
-        val notification = builder.build().apply { if (ringing) this.flags = this.flags or Notification.FLAG_INSISTENT }
-        var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL
-        if (media || Calls.room != null) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-        if (camera || Calls.video) types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
-        promote(notification, types)
-        foregroundTypes = types
     }
     override fun onDestroy() {
         if (instance === this) instance = null

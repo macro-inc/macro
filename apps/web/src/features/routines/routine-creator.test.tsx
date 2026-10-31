@@ -26,6 +26,8 @@ const host = vi.hoisted(() => ({
   success: vi.fn(),
   alert: vi.fn(),
   editorMount: vi.fn(),
+  githubLinked: true as boolean | undefined,
+  connectGithub: vi.fn(),
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
@@ -37,6 +39,26 @@ vi.mock('@components/app/split-layout/layout', () => ({
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { close: vi.fn() } }),
+}));
+vi.mock('@queries/agent-repositories/repositories', () => ({
+  useAgentRepositoriesQuery: () => ({
+    isSuccess: true,
+    isLoading: false,
+    isError: false,
+    data: {
+      repositories: [
+        { url: 'https://github.com/macro-inc/macro' },
+        { url: 'https://github.com/macro-inc/docs' },
+      ],
+    },
+  }),
+}));
+vi.mock('./queries/github-link', () => ({
+  createGithubConnection: () => () => ({
+    linked: host.githubLinked,
+    connecting: false,
+    connect: host.connectGithub,
+  }),
 }));
 vi.mock('./routine-event-scope', () => ({
   RoutineEventScope: () => <span>Any document</span>,
@@ -140,6 +162,7 @@ vi.mock('@queries/agents/models', () => ({
 let styles: HTMLStyleElement;
 beforeEach(() => {
   vi.clearAllMocks();
+  host.githubLinked = true;
   localStorage.clear();
   setCatalogState('success');
   styles = document.createElement('style');
@@ -563,6 +586,77 @@ describe('routine composer execution selection', () => {
         ],
       },
     });
+  });
+
+  it('saves a GitHub workflow trigger narrowed to one repository and workflow', async () => {
+    host.create.mockImplementation(async (body) => created(body));
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Workflow failed' })
+    );
+    const panel = screen.getByRole('dialog', { name: 'Add trigger' });
+    fireEvent.click(
+      within(panel).getByRole('checkbox', { name: 'macro-inc/macro' })
+    );
+    fireEvent.click(
+      within(panel).getByRole('button', { name: 'Add a field test' })
+    );
+    const fields = within(panel).getAllByRole('textbox', {
+      name: 'Payload field',
+    });
+    fireEvent.input(fields[1], { target: { value: 'workflow_run.name' } });
+    const values = within(panel).getAllByRole('textbox', { name: 'Value' });
+    fireEvent.input(values[1], { target: { value: 'CI' } });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
+    expect(
+      screen.getByRole('button', { name: 'Edit Workflow failed trigger' })
+        .textContent
+    ).toContain('Workflow failed · macro-inc/macro');
+    fireEvent.click(screen.getByRole('button', { name: /Create routine/i }));
+    await waitFor(() => expect(host.create).toHaveBeenCalledTimes(1));
+    expect(host.create.mock.calls[0][0]).toMatchObject({
+      trigger: {
+        type: 'events',
+        filters: [
+          {
+            events: ['github'],
+            github: {
+              events: ['workflow_run'],
+              actions: ['completed'],
+              repositories: ['macro-inc/macro'],
+              includeBots: false,
+            },
+            match: [
+              {
+                path: ['workflow_run', 'conclusion'],
+                in: ['failure', 'timed_out'],
+              },
+              { path: ['workflow_run', 'name'], equals: 'CI' },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('asks to connect GitHub before offering GitHub triggers', async () => {
+    host.githubLinked = false;
+    await mount();
+    inputPrompt();
+    fireEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    const panel = await screen.findByRole('dialog', { name: 'Add trigger' });
+    expect(
+      within(panel).queryByRole('button', { name: 'Workflow failed' })
+    ).toBeNull();
+    expect(
+      within(panel).queryByRole('button', { name: 'Webhook received' })
+    ).toBeNull();
+    fireEvent.click(
+      within(panel).getByRole('button', { name: 'Connect GitHub' })
+    );
+    expect(host.connectGithub).toHaveBeenCalledOnce();
   });
 
   it('keeps trigger edits local until confirmed and leaves an add chip', async () => {

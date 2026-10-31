@@ -257,6 +257,7 @@ describe('the GraphQL row source', () => {
             {
               key: WON,
               displayOrder: null,
+              label: null,
               totalCount: 2,
               nextCursor: null,
               items: [],
@@ -264,6 +265,7 @@ describe('the GraphQL row source', () => {
             {
               key: LEAD,
               displayOrder: null,
+              label: null,
               totalCount: 1,
               nextCursor: null,
               items: [],
@@ -271,6 +273,7 @@ describe('the GraphQL row source', () => {
             {
               key: '',
               displayOrder: null,
+              label: null,
               totalCount: 4,
               nextCursor: null,
               items: [],
@@ -383,7 +386,11 @@ describe('the GraphQL row source', () => {
       [],
       null,
       500,
-      { request: () => {}, headers: () => ({}) }
+      {
+        decode: (_rows, operation) => operation(),
+        request: () => {},
+        headers: () => ({}),
+      }
     );
 
     expect(page._unsafeUnwrap().rows).toEqual([

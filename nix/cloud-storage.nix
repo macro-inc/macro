@@ -116,9 +116,10 @@
         };
 
       # Workspace-root files that crates read across crate boundaries: the
-      # .sqlx offline cache (sqlx macros resolve it from the workspace root)
-      # and shared assets under static_assets/ (include_bytes!-ed from workspace
-      # crates). Included in every pruned source, so a
+      # .sqlx offline cache (sqlx macros resolve it from the workspace root),
+      # shared assets under static_assets/ (include_bytes!-ed from workspace
+      # crates), and the [patch.crates-io] crates under vendor/, which
+      # mkDummySrc would otherwise stub out. Included in every pruned source, so a
       # sqlx prepare still invalidates all leaves — coarser than ideal, but
       # the query-to-crate mapping is not recoverable from the file names.
       rootDepsSrc = pkgs.lib.cleanSourceWith {
@@ -137,6 +138,9 @@
           || (pkgs.lib.hasPrefix ".sqlx/" rel)
           || (rel == "static_assets")
           || (pkgs.lib.hasPrefix "static_assets/" rel)
+          || (rel == "vendor")
+          || (rel == "vendor/utoipa-swagger-ui")
+          || (pkgs.lib.hasPrefix "vendor/utoipa-swagger-ui/" rel)
           || (
             type == "regular"
             && !(pkgs.lib.hasInfix "/" rel)
@@ -406,6 +410,11 @@
           ];
         }
         {
+          serviceName = "email-focus-worker";
+          packageName = "email_focus_worker";
+          binaries = [ "email_focus_worker" ];
+        }
+        {
           serviceName = "image-proxy-service";
           packageName = "image_proxy_service";
           binaries = [ "image_proxy_service" ];
@@ -544,6 +553,24 @@
           mkdir -p $out/bin
           cp ${deployServiceBinaryPackages.deploy-service-binaries-document-storage-service}/bin/* $out/bin/
           cp ${deployServiceBinaryPackages.deploy-service-binaries-slack-import-worker}/bin/* $out/bin/
+          ${checkBinaries}
+        '';
+
+      # Same for the email service and its Focus worker.
+      emailServiceDeployBinaries =
+        let
+          cfg = builtins.fromJSON (builtins.readFile ../.github/services-config.json);
+          checkBinaries = pkgs.lib.concatMapStringsSep "\n" (binary: ''
+            test -x "$out/bin/${binary}" || {
+              echo "Missing deploy binary: ${binary}" >&2
+              exit 1
+            }
+          '') cfg.services.email-service.deploy_binaries;
+        in
+        pkgs.runCommand "cloud-storage-email-service-deploy-binaries" { } ''
+          mkdir -p $out/bin
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-email-service}/bin/* $out/bin/
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-email-focus-worker}/bin/* $out/bin/
           ${checkBinaries}
         '';
 
@@ -868,10 +895,46 @@
           '';
         };
 
+      # GoAlert MCP server (github.com/amitray007/goalert-mcp, MIT), built from
+      # the reviewed v0.1.0 commit rather than the npm tarball. Bump `rev`,
+      # `hash` and `npmDepsHash` together, after re-reviewing the source.
+      goalert-mcp = pkgs.buildNpmPackage {
+        pname = "goalert-mcp";
+        version = "0.1.0";
+        src = pkgs.fetchFromGitHub {
+          owner = "amitray007";
+          repo = "goalert-mcp";
+          rev = "c8c285f35ce31426c576a69c25f5bb1a365a7565";
+          hash = "sha256-TDBI06V6boZ3RihwirGchDcKkZ7nKCyyB1pEebqEMiU=";
+        };
+        npmDepsHash = "sha256-PhanjTUmHoXzXsu9H3wKWVrZ89tfk8T4/QYdFcMGZ+M=";
+        nodejs = pkgs.nodejs_24;
+        # Only dev dependencies (esbuild, fsevents) ship install scripts.
+        npmFlags = [ "--ignore-scripts" ];
+        meta.mainProgram = "goalert-mcp";
+      };
+
+      # Starts goalert-mcp against Macro's GoAlert with the admin login read
+      # from Doppler at launch, read-only unless GOALERT_READ_ONLY=false.
+      goalert-mcp-macro = pkgs.writeShellApplication {
+        name = "goalert-mcp-macro";
+        runtimeInputs = [ pkgs.doppler ];
+        text = ''
+          GOALERT_PASSWORD="$(doppler secrets get GOALERT_ADMIN_PASSWORD --project observability --config prd --plain)"
+          export GOALERT_PASSWORD
+          export GOALERT_BASE_URL=https://oncall.macro-internal.com
+          export GOALERT_USERNAME=admin
+          export GOALERT_READ_ONLY="''${GOALERT_READ_ONLY:-true}"
+          exec ${pkgs.lib.getExe goalert-mcp} "$@"
+        '';
+      };
+
       shellTools =
         with pkgs;
         [
           daytona
+          goalert-mcp
+          goalert-mcp-macro
           nsc
           parallel
           docker-compose
@@ -939,6 +1002,8 @@
           doppler
           biome
           jq
+          prek
+          gitleaks
           # TEMP: nixpkgs stripe-cli 1.43.2 checkPhase fails in the sandbox
           # (TestResolvePluginForInstallSucceedsForGAPluginWhenNotLoggedIn).
           # stripe-cli
@@ -961,6 +1026,13 @@
               test -s "$source/crates/code_execution/src/outbound/deno/$asset"
             done
           done
+          touch $out
+        '';
+        # Deploy builds compile [patch.crates-io] crates from the pruned
+        # source, so their real code (not mkDummySrc's stubs) must be there.
+        pruned-deploy-src-vendored-patches = pkgs.runCommand "cloud-storage-pruned-vendored-patches" { } ''
+          grep -q "fn write_embed_code" \
+            ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}/vendor/utoipa-swagger-ui/build.rs
           touch $out
         '';
         fmt = craneLib.cargoFmt {
@@ -1035,6 +1107,8 @@
           openApiBins
           dopplerConfigBins
           nextestArchive
+          goalert-mcp
+          goalert-mcp-macro
           ;
         default = cargoArtifacts;
       }
@@ -1042,6 +1116,7 @@
       // deployServiceBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
+        deploy-service-binaries-email-service = emailServiceDeployBinaries;
       }
       // deployLambdaPackages
       // pkgs.lib.optionalAttrs isLinux {
@@ -1076,7 +1151,29 @@
               # entries while switching compilers, breaking aws-lc and librdkafka.
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
-              shellHook = pkgs.lib.optionalString isLinux ''
+              shellHook = ''
+                if command -v prek >/dev/null 2>&1; then
+                  repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+                  if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then
+                    # Install into .git/hooks. If Cursor Cloud owns core.hooksPath,
+                    # unset it only for this install so we do not overwrite the
+                    # dispatcher; git still runs our hook via that dispatcher.
+                    hooks_path="$(git -C "$repo_root" config --get core.hooksPath || true)"
+                    cursor_hooks=""
+                    if [ -n "$hooks_path" ] && [ -f "$hooks_path/.cursor-original-hooks-path" ]; then
+                      cursor_hooks="$hooks_path"
+                      git -C "$repo_root" config --local --unset-all core.hooksPath || true
+                    fi
+                    if ! (cd "$repo_root" && prek install --overwrite >/dev/null); then
+                      echo "warning: prek hook install failed" >&2
+                    fi
+                    if [ -n "$cursor_hooks" ]; then
+                      git -C "$repo_root" config --local core.hooksPath "$cursor_hooks"
+                    fi
+                  fi
+                fi
+              ''
+              + pkgs.lib.optionalString isLinux ''
                 target_dir="''${CARGO_TARGET_DIR:-target}"
                 current_cc="$(type -P "''${CC:-cc}" || true)"
                 if [ -n "$current_cc" ] && [ -d "$target_dir" ]; then
@@ -1104,6 +1201,14 @@
               # the Nix lambda derivations. The default cc builder rejects
               # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
               AWS_LC_SYS_CMAKE_BUILDER = "1";
+              # Android builds compile with the NDK's clang, which the cc
+              # builder accepts. The CMake builder needs CMake to locate the
+              # NDK itself, which fails in the tauri-android shell ("Neither
+              # the NDK or a standalone toolchain was found").
+              AWS_LC_SYS_CMAKE_BUILDER_aarch64_linux_android = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_armv7_linux_androideabi = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_i686_linux_android = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_x86_64_linux_android = "0";
               # cargo-zigbuild compiles C with zig cc, which ignores the Nix
               # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
               # buildInputs provides to host builds (see the note on `libraries`;

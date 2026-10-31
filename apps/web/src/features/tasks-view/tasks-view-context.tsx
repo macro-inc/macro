@@ -59,6 +59,7 @@ import {
 import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { toTaskBoardGrouping } from './core/task-board';
 import type { DateBucketBoundaries } from './core/task-due-date';
+import { isProjectTab } from './core/task-navigation';
 import type { TaskFacetContext } from './filters/task-facets';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
@@ -101,6 +102,8 @@ export type TasksViewProviderProps = ContextProviderProps & {
   onCloseTask?: () => void;
   /** Host-owned task creation, including scope and permissions for embedded views. */
   onCreateTask?: (options?: TaskCreateOptions) => void;
+  /** Hides each task's project when every task shares the host's project. */
+  hideTaskProject?: boolean;
   savedViewTeam?: Accessor<{ id: string; name: string } | undefined>;
   /** Main Tasks supplies independent queries; embedded lists leave them out. */
   savedViewsSource?: () => SavedViewsSource;
@@ -137,6 +140,7 @@ export type TasksViewContext = {
   facetContext: Accessor<TaskFacetContext>;
   createTask?: TasksViewProviderProps['onCreateTask'];
   projectsEnabled: Accessor<boolean>;
+  showTaskProject: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
   selectedTask: Accessor<TaskDetailTarget | undefined>;
@@ -193,6 +197,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const [savedViewNavigation, setSavedViewNavigation] = createSignal({});
   const projectsFlag = useFeatureFlag(enableProjects);
   const projectsEnabled = () => projectsFlag().enabled;
+  const showTaskProject = () => projectsEnabled() && !props.hideTaskProject;
   const ganttFlag = useFeatureFlag(enableGantt);
   const ganttEnabled = () => ganttFlag().enabled;
   const calendar = createDateBucketBoundariesSignal();
@@ -250,15 +255,17 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return persistedState.layout;
     },
     get groupBy() {
+      if (persistedState.groupBy === 'project' && !projectsEnabled()) {
+        return 'status';
+      }
       if (state.layout !== 'board') {
         return persistedState.groupBy;
       }
 
-      const grouping = toTaskBoardGrouping(persistedState.groupBy);
-      return grouping === 'project' && !projectsEnabled() ? 'status' : grouping;
+      return toTaskBoardGrouping(persistedState.groupBy);
     },
     get tab(): TasksTab {
-      return persistedState.tab === 'projects' && !projectsEnabled()
+      return isProjectTab(persistedState.tab) && !projectsEnabled()
         ? 'my-tasks'
         : persistedState.tab;
     },
@@ -266,7 +273,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 
   const routeTab = (): TasksTab => {
     if (props.scopeKey) return initialTab;
-    if (routeParams.projectId || routeParams.projectsTab) return 'projects';
+    if (routeParams.projectId || routeParams.projectsTab)
+      return isProjectTab(tabSearch.tab) ? tabSearch.tab : 'projects';
 
     return tabSearch.tab;
   };
@@ -490,7 +498,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
       },
-      isNavigable: (row) => row.kind !== 'section-header',
+      // Continuation rows load on their own when scrolled into view.
+      isNavigable: (row) =>
+        row.kind === 'entity' || row.kind === 'group-header',
       isSelectable: (row) => row.kind === 'entity',
       onActivate: (value) => activation.current?.(value),
     })
@@ -524,8 +534,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     fireAndForget(
       navigate(
         {
-          route:
-            state.tab === 'projects' ? tasksProjectsRoute : tasksSplitRoute,
+          route: isProjectTab(state.tab) ? tasksProjectsRoute : tasksSplitRoute,
           params: {},
         },
         {
@@ -579,10 +588,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
           fireAndForget(
             navigate(
               {
-                route:
-                  state.tab === 'projects'
-                    ? tasksProjectsRoute
-                    : tasksSplitRoute,
+                route: isProjectTab(state.tab)
+                  ? tasksProjectsRoute
+                  : tasksSplitRoute,
                 params: {},
               },
               {
@@ -608,7 +616,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   );
 
   const setTab = (tab: TasksTab) => {
-    if (tab === 'projects' && !projectsEnabled()) return;
+    if (isProjectTab(tab) && !projectsEnabled()) return;
     const leavingSavedView = state.savedViewActive;
     if (leavingSavedView) leaveSavedView();
     if (persistedState.tab === tab && !leavingSavedView) {
@@ -669,6 +677,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     state,
     calendar,
     projectsEnabled,
+    showTaskProject,
     ganttEnabled,
     setState: setStateWithSearch,
     selectedTask,

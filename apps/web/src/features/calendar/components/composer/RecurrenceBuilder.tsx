@@ -1,5 +1,4 @@
-import { RadioGroup } from '@kobalte/core/radio-group';
-import { Button, Select } from '@ui';
+import { Button, RadioGroup, Select } from '@ui';
 import { addMonths, format } from 'date-fns';
 import { createMemo, For, Show } from 'solid-js';
 import {
@@ -136,7 +135,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
                 {(code) => (
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     size="icon-sm"
                     class="text-xxs"
                     aria-label={code}
@@ -168,10 +167,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
             onClick={() => changeEndsKind('never')}
           >
             <div class="flex flex-wrap items-center gap-2">
-              <RadioGroup.ItemInput />
-              <RadioGroup.ItemControl class="flex size-4 shrink-0 items-center justify-center rounded-full border border-edge data-checked:border-accent">
-                <RadioGroup.ItemIndicator class="size-2 rounded-full bg-accent" />
-              </RadioGroup.ItemControl>
+              <RadioGroup.ItemControl />
               <RadioGroup.ItemLabel class="shrink-0 font-medium text-ink">
                 Never
               </RadioGroup.ItemLabel>
@@ -187,10 +183,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
             onClick={() => changeEndsKind('on')}
           >
             <div class="flex min-w-0 flex-wrap items-center gap-2">
-              <RadioGroup.ItemInput />
-              <RadioGroup.ItemControl class="flex size-4 shrink-0 items-center justify-center rounded-full border border-edge data-checked:border-accent">
-                <RadioGroup.ItemIndicator class="size-2 rounded-full bg-accent" />
-              </RadioGroup.ItemControl>
+              <RadioGroup.ItemControl />
               <RadioGroup.ItemLabel class="shrink-0 font-medium text-ink">
                 On
               </RadioGroup.ItemLabel>
@@ -216,10 +209,7 @@ export function RecurrenceBuilder(props: RecurrenceBuilderProps) {
             onClick={() => changeEndsKind('after')}
           >
             <div class="flex flex-wrap items-center gap-2">
-              <RadioGroup.ItemInput />
-              <RadioGroup.ItemControl class="flex size-4 shrink-0 items-center justify-center rounded-full border border-edge data-checked:border-accent">
-                <RadioGroup.ItemIndicator class="size-2 rounded-full bg-accent" />
-              </RadioGroup.ItemControl>
+              <RadioGroup.ItemControl />
               <RadioGroup.ItemLabel class="shrink-0 font-medium text-ink">
                 After
               </RadioGroup.ItemLabel>

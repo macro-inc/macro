@@ -48,6 +48,7 @@ use models_soup::{
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
 use system_properties::{StatusOption, SystemPropertyKey};
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::domain::models::{
@@ -869,7 +870,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_notification_state_clause(
 }
 
 // A union of exact states for one EXISTS predicate. Do not intersect these on
-// AND: separate literals may be witnessed by different notification rows.
+// AND: separate literals may be witnessed by different notification rows. A
+// conjunction folds only when one side implies the other, since the narrower
+// side's witness row satisfies both.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::outbound::pg_soup_repo) struct NotificationPredicate(u8);
 
@@ -881,6 +884,11 @@ impl NotificationPredicate {
             Seen => 2,
             Done => 4,
         })
+    }
+
+    /// Whether every row matching `self` also matches `other`.
+    fn implies(self, other: Self) -> bool {
+        self.0 & other.0 == self.0
     }
 
     pub(in crate::outbound::pg_soup_repo) fn sql(self) -> &'static str {
@@ -953,7 +961,13 @@ fn push_not_inward<T: Clone>(expr: &Expr<T>, negated: bool) -> Expr<T> {
     }
 }
 
-fn strip_notification_conjunction<T: Clone>(
+/// Splits one notification-state predicate off the top-level conjunction of
+/// `expr`, returning it with whatever remains of the tree, so the query can
+/// drive from the viewer's notifications instead of probing them per row.
+/// `None` when the tree has no such conjunct that is equivalent to the whole
+/// tree's notification constraint (NOT, a notification literal under OR with
+/// other predicates, or two conjuncts neither of which implies the other).
+pub(in crate::outbound::pg_soup_repo) fn strip_notification_conjunction<T: Clone>(
     expr: &Expr<T>,
     notification_predicate: impl Fn(&T) -> Option<NotificationPredicate> + Copy,
 ) -> Option<(NotificationPredicate, Option<Expr<T>>)> {
@@ -964,14 +978,22 @@ fn strip_notification_conjunction<T: Clone>(
             let right = strip_notification_conjunction(b, notification_predicate);
             match (left, right) {
                 (Some((left_pred, left_expr)), Some((right_pred, right_expr)))
-                    if left_pred == right_pred =>
+                    if left_pred.implies(right_pred) || right_pred.implies(left_pred) =>
                 {
+                    // The client's unread feed asks for `(unseen OR seen) AND
+                    // unseen`: the narrower side's witness row is also one for
+                    // the wider side, so only the narrower predicate remains.
+                    let pred = if left_pred.implies(right_pred) {
+                        left_pred
+                    } else {
+                        right_pred
+                    };
                     let stripped = match (left_expr, right_expr) {
                         (Some(left), Some(right)) => Some(Expr::and(left, right)),
                         (Some(expr), None) | (None, Some(expr)) => Some(expr),
                         (None, None) => None,
                     };
-                    Some((left_pred, stripped))
+                    Some((pred, stripped))
                 }
                 (Some((pred, left_expr)), None)
                     if !expr_contains_notification(b, notification_predicate) =>
@@ -2078,7 +2100,6 @@ impl SoupRow {
         }
     }
 
-    #[tracing::instrument(err)]
     fn into_projection_hydration(self) -> Result<SoupProjectionHydration, sqlx::Error> {
         let document_server_facts = self.document_server_facts();
         Ok(SoupProjectionHydration {
@@ -2088,7 +2109,6 @@ impl SoupRow {
         })
     }
 
-    #[tracing::instrument(err)]
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
@@ -2281,6 +2301,15 @@ async fn expanded_dynamic_cursor_soup_hydrated(
     for ids in document_ids.into_binds() {
         query = query.bind(ids);
     }
+    let mut connection = db
+        .acquire()
+        .instrument(tracing::info_span!(
+            "soup.pool.acquire",
+            pool_size = db.size(),
+            pool_idle = db.num_idle()
+        ))
+        .await?;
+    let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let items = query
         // Unnamed statement: the SQL text varies per filter shape and per
         // interpolated literal (dates change daily), so a cached prepared
@@ -2294,8 +2323,11 @@ async fn expanded_dynamic_cursor_soup_hydrated(
             item.sort_key = row.try_get("sort_key")?;
             Ok(item)
         })
-        .fetch_all(db)
+        .fetch_all(&mut *connection)
+        .instrument(query_span.clone())
         .await?;
+    query_span.record("rows", items.len());
+    drop(query_span);
 
     Ok(items)
 }
@@ -2407,11 +2439,15 @@ fn build_grouped_items_cte(
     }) = group_join_clause(&grouping.field)
     {
         builder.push(sql);
-        if let GroupByField::Property {
-            property_definition_id,
-            ..
-        } = &grouping.field
-        {
+        let property_definition_id = match &grouping.field {
+            GroupByField::Property {
+                property_definition_id,
+                ..
+            } => Some(*property_definition_id),
+            GroupByField::Project => Some(SystemPropertyKey::PROJECT_UUID),
+            _ => None,
+        };
+        if let Some(property_definition_id) = property_definition_id {
             builder.push(format!(
                 " LEFT JOIN property_options po_group ON po_group.property_definition_id = '{property_definition_id}' AND po_group.id::text = ep_group.val#>>'{{}}' "
             ));
@@ -2789,40 +2825,54 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
         query = query.bind(ids);
     }
 
+    let mut connection = db
+        .acquire()
+        .instrument(tracing::info_span!(
+            "soup.pool.acquire",
+            pool_size = db.size(),
+            pool_idle = db.num_idle()
+        ))
+        .await?;
+    let query_span = tracing::info_span!("soup.sql.fetch_decode", rows = tracing::field::Empty);
     let rows: Vec<GroupedSoupRow> = query
         // Unnamed statement — same rationale as expanded_dynamic_cursor_soup:
         // filter-shaped SQL text gets no reuse from the statement cache but
         // does get generic-plan flips.
         .persistent(false)
-        .fetch_all(db)
+        .fetch_all(&mut *connection)
+        .instrument(query_span.clone())
         .await?;
+    query_span.record("rows", rows.len());
+    drop(query_span);
+    drop(connection);
 
-    let items = rows
-        .into_iter()
-        .map(|row| {
-            Ok(ItemGroupingInfo {
-                document_server_facts: row.item.document_server_facts(),
-                sort_key: row.group.sort_key,
-                display_order: row.group.group_order.map(|order| order as i32),
-                item: row.item.into_soup_item()?,
-                key: if let Some((_, ranges)) = grouping.field.date_ranges() {
-                    row.group
-                        .group_key
-                        .parse::<usize>()
-                        .ok()
-                        .and_then(|index| ranges.ranges.get(index))
-                        .map(|range| range.key.clone())
-                        .unwrap_or_else(|| ranges.missing_value_bucket_key.clone())
-                } else {
-                    row.group.group_key
-                },
-                total_group_count: usize::try_from(row.group.group_total_count)
-                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
-                index_in_group: usize::try_from(row.group.row_in_group)
-                    .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+    let items = tracing::info_span!("soup.rows.convert", rows = rows.len()).in_scope(|| {
+        rows.into_iter()
+            .map(|row| {
+                Ok(ItemGroupingInfo {
+                    document_server_facts: row.item.document_server_facts(),
+                    sort_key: row.group.sort_key,
+                    display_order: row.group.group_order.map(|order| order as i32),
+                    item: row.item.into_soup_item()?,
+                    key: if let Some((_, ranges)) = grouping.field.date_ranges() {
+                        row.group
+                            .group_key
+                            .parse::<usize>()
+                            .ok()
+                            .and_then(|index| ranges.ranges.get(index))
+                            .map(|range| range.key.clone())
+                            .unwrap_or_else(|| ranges.missing_value_bucket_key.clone())
+                    } else {
+                        row.group.group_key
+                    },
+                    total_group_count: usize::try_from(row.group.group_total_count)
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                    index_in_group: usize::try_from(row.group.row_in_group)
+                        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
+                })
             })
-        })
-        .collect::<Result<Vec<_>, sqlx::Error>>()?;
+            .collect::<Result<Vec<_>, sqlx::Error>>()
+    })?;
 
     Ok(items.into_iter())
 }

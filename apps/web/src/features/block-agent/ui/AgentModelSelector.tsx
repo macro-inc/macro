@@ -20,10 +20,6 @@ import type { ModelOption } from '@service-agent-fold/generated/types';
 import { type Component, createMemo, Show } from 'solid-js';
 import { withoutRedundantGroups } from './model-groups';
 
-/** Compact ghost pill — the same trigger for every session composer. */
-const PILL_TRIGGER_CLASS =
-  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-sm text-ink-subtle hover:bg-ink/10 touch:h-8 touch:max-w-[60vw] touch:gap-1.5 touch:rounded-lg touch:bg-transparent touch:px-1.5 touch:hover:bg-hover';
-
 export interface AgentModelSelectorProps {
   /** Current model id, when the fold has learned it. */
   model: string | null;
@@ -51,7 +47,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         shown() ?? undefined,
         props.options.find((option) => option.id === shown())?.name
       ),
-      props.effortLabel,
+      isTouchDevice() ? props.effortLabel : undefined,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -79,7 +75,8 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         pending={isTouchDevice() && props.changingTo !== undefined}
         ariaLabel="Agent model"
         emptyMessage="Waiting for the agent to report its models."
-        triggerClass={PILL_TRIGGER_CLASS}
+        triggerClass="w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-sm text-ink-subtle hover:bg-ink/10 touch:max-w-[60vw] touch:gap-1.5 touch:rounded-lg touch:bg-transparent touch:px-1.5 touch:hover:bg-hover"
+        triggerSize="md"
         contentClass="overflow-hidden"
         placement="top-start"
       />

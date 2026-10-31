@@ -1,0 +1,97 @@
+id: tsx-no-inline-query-callbacks
+language: tsx
+# Twin of ts-no-inline-query-callbacks — ast-grep rules are
+# single-language, and `tsx` only scans .tsx files.
+severity: error
+message: Build query callbacks in a module-scope options factory over plain values, then call it from the options accessor.
+note: |-
+  Rule FE-69 in .agents/rules/web/data.md. A query keeps its last observer's
+  options after the view unmounts: for gcTime, or for the whole session. A
+  callback created in a hook or component keeps that scope alive, and with it
+  accessors, Solid owners and the closed view's DOM.
+files:
+  - apps/web/src/**
+ignores:
+  # urql observers are per mount and destroyed on cleanup.
+  - apps/web/src/lib/urql-solid/**
+  - apps/web/src/**/*.test.ts
+  - apps/web/src/**/*.test.tsx
+  - apps/web/src/**/browser-test/**
+rule:
+  all:
+    - any:
+        - kind: arrow_function
+        - kind: function_expression
+        - kind: method_definition
+    # An option's value, also behind a ternary, cast or fallback.
+    - any:
+        - kind: method_definition
+        - inside:
+            kind: pair
+            stopBy:
+              not:
+                any:
+                  - kind: parenthesized_expression
+                  - kind: ternary_expression
+                  - kind: binary_expression
+                  - kind: as_expression
+                  - kind: satisfies_expression
+                  - kind: non_null_expression
+    # useQueries' combine runs on the per-mount observer, not the cache.
+    - not:
+        any:
+          - has:
+              field: name
+              regex: ^combine$
+          - inside:
+              stopBy: end
+              any:
+                - kind: pair
+                  has:
+                    field: key
+                    regex: ^combine$
+                - kind: method_definition
+                  has:
+                    field: name
+                    regex: ^combine$
+    - inside:
+        stopBy: end
+        any:
+          # Query hooks only run in a hook or component scope.
+          - kind: call_expression
+            has:
+              field: function
+              regex: ^(use|create)(Query|InfiniteQuery|Queries)$
+          # Factories and client calls are fine at module scope, not in a hook,
+          # a component, or a method that runs in one.
+          - kind: call_expression
+            has:
+              field: function
+              regex: (^queryOptions|^infiniteQueryOptions|\.(fetchQuery|prefetchQuery|ensureQueryData|fetchInfiniteQuery|prefetchInfiniteQuery|ensureInfiniteQueryData))$
+            inside:
+              stopBy: end
+              any:
+                - kind: method_definition
+                - kind: function_declaration
+                  all:
+                    - has:
+                        field: name
+                        regex: ^(use|create)[A-Z0-9]|^[A-Z]
+                    - not:
+                        has:
+                          field: name
+                          regex: Options$
+                - kind: variable_declarator
+                  all:
+                    - has:
+                        field: name
+                        regex: ^(use|create)[A-Z0-9]|^[A-Z]
+                    - not:
+                        has:
+                          field: name
+                          regex: Options$
+                    - has:
+                        field: value
+                        any:
+                          - kind: arrow_function
+                          - kind: function_expression

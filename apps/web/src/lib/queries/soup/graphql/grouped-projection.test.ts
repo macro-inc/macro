@@ -26,7 +26,9 @@ vi.mock('../transform-utils', () => ({
 vi.mock('../grouped/api', () => ({
   makeGroupComparator: () => (a: { key: string }, b: { key: string }) =>
     a.key.localeCompare(b.key),
-  resolveGroupMetaForKey: (_field: unknown, key: string) => ({ label: key }),
+  // Project keys are initiative ids the client cannot name itself.
+  resolveGroupMetaForKey: (field: { type: string }, key: string) =>
+    field.type === 'project' ? undefined : { label: key },
 }));
 
 import { createGraphqlGroupedSoupProjection } from './grouped-projection';
@@ -83,6 +85,7 @@ function page(count: number): GroupSoupQuery {
           {
             key: 'a',
             displayOrder: null,
+            label: null,
             totalCount: count,
             nextCursor: null,
             items: Array.from({ length: count }, (_, id) => row(id)),
@@ -90,6 +93,7 @@ function page(count: number): GroupSoupQuery {
           {
             key: 'b',
             displayOrder: null,
+            label: null,
             totalCount: 0,
             nextCursor: null,
             items: [],
@@ -201,6 +205,28 @@ describe('grouped Soup projections', () => {
         expect(projected()).toBeUndefined();
         setSource(page(1));
         expect(projected()!.entities.map(({ id }) => id)).toEqual(['0']);
+      } finally {
+        dispose();
+      }
+    });
+  });
+
+  it('labels a project group with the server name and falls back to its key', () => {
+    createRoot((dispose) => {
+      try {
+        const source = page(1);
+        source.user.groupSoup.bins[0].label = 'Project One';
+        const projected = createGraphqlGroupedSoupProjection(
+          () => source,
+          () => ({ type: 'project' }),
+          () => ({})
+        );
+        expect(
+          projected()!.groups?.map((group) => [group.key, group.label])
+        ).toEqual([
+          ['a', 'Project One'],
+          ['b', 'b'],
+        ]);
       } finally {
         dispose();
       }

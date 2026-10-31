@@ -20,6 +20,7 @@ it.each(['view', 'comment', 'edit'] as const)(
       id: 'access-notification',
       entityId: 'document',
       entityType: 'DOCUMENT' as const,
+      targetEntityType: 'DOCUMENT' as const,
       state: 'UNSEEN' as const,
       sent: true,
       senderId: 'owner',
@@ -111,6 +112,21 @@ describe('email thread sort keys', () => {
     );
   });
 
+  it.each([false, true])(
+    'keeps whether an archived row has received mail (%s)',
+    (hasReceivedMail) => {
+      const item = mapGraphqlSoupItem({
+        ...thread,
+        inboxVisible: false,
+        hasReceivedMail,
+      } as SoupItemFieldsFragment);
+      expect(item?.data).toMatchObject({
+        inboxVisible: false,
+        hasReceivedMail,
+      });
+    }
+  );
+
   it('falls back to the thread update time when the view has no key', () => {
     const bare = {
       ...thread,
@@ -179,6 +195,7 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
     id: 'notification-1',
     entityId: 'thread-1',
     entityType: 'EMAIL_THREAD',
+    targetEntityType: 'EMAIL_THREAD',
     eventType: 'reminder',
     state: 'UNSEEN',
     sent: true,
@@ -570,6 +587,7 @@ describe('legacy channel list notifications', () => {
     eventType: 'channel_message_send',
     entityId: 'channel',
     entityType: 'CHANNEL',
+    targetEntityType: 'CHANNEL',
     state: 'UNSEEN',
     sent: true,
     senderId: 'sender',
@@ -1511,7 +1529,8 @@ it('preserves canonical external chat identity and notification metadata through
     id: 'notification',
     eventType: 'external_chat_message',
     entityId: 'chat-1',
-    entityType: 'EXTERNAL_CHAT',
+    entityType: 'DOCUMENT',
+    targetEntityType: 'EXTERNAL_CHAT',
     state: 'UNSEEN',
     sent: true,
     senderId: null,

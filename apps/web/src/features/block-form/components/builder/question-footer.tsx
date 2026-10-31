@@ -28,20 +28,22 @@ export function QuestionFooter(props: {
   return (
     <div class="mt-1 flex items-center gap-1 border-t border-edge-divider pt-2">
       <Button
+        aria-label="Duplicate question"
+        tooltip="Duplicate question"
         variant="ghost"
         size="icon-sm"
-        label="Duplicate question"
         onClick={props.onDuplicate}
       >
-        <Copy />
+        <Copy class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
       <Button
+        aria-label="Remove from form (keeps the column)"
+        tooltip="Remove from form (keeps the column)"
         variant="ghost"
         size="icon-sm"
-        label="Remove from form (keeps the column)"
         onClick={props.onRemove}
       >
-        <Trash />
+        <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
       <Dropdown>
         <Dropdown.Trigger
@@ -49,7 +51,7 @@ export function QuestionFooter(props: {
           size="icon-sm"
           aria-label="More question actions"
         >
-          <DotsThree />
+          <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content class="w-60">
           <Dropdown.Group>

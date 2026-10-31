@@ -51,6 +51,15 @@ export function operationBlocksEditing(
   );
 }
 
+/** Moving a draft is how rejected content recovers, but not mid-move. */
+export function operationBlocksInboxSwitch(
+  operation?: MessageOperation | null
+): boolean {
+  return (
+    operationBlocksEditing(operation) || !!operation?.issue?.startsWith('MOVE_')
+  );
+}
+
 export function operationActions(
   operation: MessageOperation
 ): MessageResolutionAction[] {

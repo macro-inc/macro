@@ -153,7 +153,7 @@ function ChoiceList(props: {
                   onChange={(checked) => toggle(option.id, checked)}
                   class="flex min-h-9 gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover"
                 >
-                  <Checkbox.Control class="border-ink-extra-muted" />
+                  <Checkbox.Control />
                   <Checkbox.Label class="flex min-h-9 flex-1 items-center wrap-anywhere">
                     {option.label}
                   </Checkbox.Label>
@@ -179,7 +179,7 @@ function ChoiceList(props: {
                 value={option.id}
                 class="min-h-9 gap-3 rounded-lg px-2 text-sm text-ink hover:bg-hover"
               >
-                <RadioGroup.ItemControl class="border-ink-extra-muted" />
+                <RadioGroup.ItemControl />
                 <RadioGroup.ItemLabel class="flex min-h-9 flex-1 items-center wrap-anywhere">
                   {option.label}
                 </RadioGroup.ItemLabel>
@@ -489,7 +489,7 @@ export function QuestionField(props: {
               props.onChange({ type: 'boolean', value: checked })
             }
           >
-            <Checkbox.Control class="border-ink-extra-muted" />
+            <Checkbox.Control />
             <Checkbox.Label class="flex min-h-9 flex-1 items-center">
               Yes
             </Checkbox.Label>

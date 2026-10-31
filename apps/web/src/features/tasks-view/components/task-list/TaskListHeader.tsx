@@ -68,12 +68,12 @@ function SortableHeader(props: {
 }
 
 export function TaskListHeader() {
-  const { projectsEnabled } = useTasksView();
+  const { showTaskProject } = useTasksView();
   return (
     <div
       role="row"
       class="task-grid-row grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
-      style={taskGridTemplate({ indicator: true, project: projectsEnabled() })}
+      style={taskGridTemplate({ indicator: true, project: showTaskProject() })}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
       <span
@@ -92,7 +92,7 @@ export function TaskListHeader() {
         sortId="due_date_earliest"
         reverseSortId="due_date_latest"
       />
-      <Show when={projectsEnabled()}>
+      <Show when={showTaskProject()}>
         <SortableHeader label="Project" area="initiative" />
       </Show>
       <SortableHeader

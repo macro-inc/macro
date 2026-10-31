@@ -152,7 +152,7 @@ export function ImagePreview(props: ImagePreviewProps) {
           <div class="group-hover:visible invisible absolute top-2 right-2 bg-surface rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
             <Dialog.Trigger disabled={props.isContext}>
               <Button variant="ghost" size="icon-md">
-                <ExpandIcon />
+                <ExpandIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Dialog.Trigger>
             <Dropdown>
@@ -161,7 +161,7 @@ export function ImagePreview(props: ImagePreviewProps) {
                 size="icon-md"
                 disabled={props.isContext}
               >
-                <ThreeDotsIcon />
+                <ThreeDotsIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               </Dropdown.Trigger>
               <Dropdown.Content>
                 <Dropdown.Group>

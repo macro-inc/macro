@@ -35,7 +35,9 @@ threads, pins, recents, notifications, folders, activity.
 - Guest call chat is mounted outside account auth at `/call/guest-chat/{call_id}`;
   `call` verifies the RTC session and `messages` owns the shared discussion.
 - `src/service/entity_mutation.rs`: generic entity-mutation plumbing used
-  across item types.
+  across item types. Folder duplication runs on its own task and copies
+  documents and chats through `entity_mutation/project_contents.rs`, the
+  projects domain's `ProjectContentCopier` port.
 - `src/outbound/docx_export.rs`: primary-database parts and immutable DOCX export
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.

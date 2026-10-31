@@ -14,6 +14,8 @@ import type {
   ChatMessageError,
   CompleteOnboardingRequest,
   CreateChatRequest,
+  DatabaseQueryAnswer,
+  DatabaseQueryRequest,
   DecisionErrorBody,
   DecisionRequest,
   DecisionResponse,
@@ -23,6 +25,9 @@ import type {
   DocumentTextPart,
   ErrorBody,
   ErrorResponse,
+  GenerateImageErrorBody,
+  GenerateImageRequest,
+  GenerateImageResponse,
   GetBatchPreviewRequest,
   GetBatchPreviewResponse,
   GetChatPermissionsResponse,
@@ -1191,6 +1196,87 @@ export const getCitationHandler = async (
   } as getCitationHandlerResponse;
 };
 
+export type generateDatabaseQueryResponse200 = {
+  data: DatabaseQueryAnswer;
+  status: 200;
+};
+
+export type generateDatabaseQueryResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type generateDatabaseQueryResponse402 = {
+  data: StructuredCompletionError;
+  status: 402;
+};
+
+export type generateDatabaseQueryResponse403 = {
+  data: StructuredCompletionError;
+  status: 403;
+};
+
+export type generateDatabaseQueryResponse500 = {
+  data: StructuredCompletionError;
+  status: 500;
+};
+
+export type generateDatabaseQueryResponse503 = {
+  data: StructuredCompletionError;
+  status: 503;
+};
+
+export type generateDatabaseQueryResponse504 = {
+  data: StructuredCompletionError;
+  status: 504;
+};
+
+export type generateDatabaseQueryResponseSuccess =
+  generateDatabaseQueryResponse200 & {
+    headers: Headers;
+  };
+export type generateDatabaseQueryResponseError = (
+  | generateDatabaseQueryResponse401
+  | generateDatabaseQueryResponse402
+  | generateDatabaseQueryResponse403
+  | generateDatabaseQueryResponse500
+  | generateDatabaseQueryResponse503
+  | generateDatabaseQueryResponse504
+) & {
+  headers: Headers;
+};
+
+export type generateDatabaseQueryResponse =
+  | generateDatabaseQueryResponseSuccess
+  | generateDatabaseQueryResponseError;
+
+export const getGenerateDatabaseQueryUrl = () => {
+  return `/database-query`;
+};
+
+export const generateDatabaseQuery = async (
+  databaseQueryRequest: DatabaseQueryRequest,
+  options?: RequestInit
+): Promise<generateDatabaseQueryResponse> => {
+  const res = await fetch(getGenerateDatabaseQueryUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(databaseQueryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: generateDatabaseQueryResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateDatabaseQueryResponse;
+};
+
 export type decisionsResponse200 = {
   data: DecisionResponse;
   status: 200;
@@ -1315,6 +1401,100 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
+};
+
+/**
+ * @summary Generate an image with Nano Banana and store it as a static file owned by
+the caller. Charged to the acting user's AI allowance.
+ */
+export type generateImageResponse200 = {
+  data: GenerateImageResponse;
+  status: 200;
+};
+
+export type generateImageResponse400 = {
+  data: GenerateImageErrorBody;
+  status: 400;
+};
+
+export type generateImageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type generateImageResponse402 = {
+  data: GenerateImageErrorBody;
+  status: 402;
+};
+
+export type generateImageResponse403 = {
+  data: GenerateImageErrorBody;
+  status: 403;
+};
+
+export type generateImageResponse422 = {
+  data: GenerateImageErrorBody;
+  status: 422;
+};
+
+export type generateImageResponse500 = {
+  data: GenerateImageErrorBody;
+  status: 500;
+};
+
+export type generateImageResponse502 = {
+  data: GenerateImageErrorBody;
+  status: 502;
+};
+
+export type generateImageResponse503 = {
+  data: GenerateImageErrorBody;
+  status: 503;
+};
+
+export type generateImageResponseSuccess = generateImageResponse200 & {
+  headers: Headers;
+};
+export type generateImageResponseError = (
+  | generateImageResponse400
+  | generateImageResponse401
+  | generateImageResponse402
+  | generateImageResponse403
+  | generateImageResponse422
+  | generateImageResponse500
+  | generateImageResponse502
+  | generateImageResponse503
+) & {
+  headers: Headers;
+};
+
+export type generateImageResponse =
+  | generateImageResponseSuccess
+  | generateImageResponseError;
+
+export const getGenerateImageUrl = () => {
+  return `/images/generate`;
+};
+
+export const generateImage = async (
+  generateImageRequest: GenerateImageRequest,
+  options?: RequestInit
+): Promise<generateImageResponse> => {
+  const res = await fetch(getGenerateImageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(generateImageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: generateImageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateImageResponse;
 };
 
 /**
@@ -1768,11 +1948,17 @@ export const updateMcpServer = async (
 };
 
 /**
- * @summary Add a new MCP server for the authenticated user.
+ * @summary Add a new MCP server for the authenticated user. A URL the user already
+has is returned as stored, keeping its credentials.
  */
 export type addMcpServerResponse201 = {
   data: ServerResponse;
   status: 201;
+};
+
+export type addMcpServerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
 };
 
 export type addMcpServerResponse401 = {
@@ -1789,6 +1975,7 @@ export type addMcpServerResponseSuccess = addMcpServerResponse201 & {
   headers: Headers;
 };
 export type addMcpServerResponseError = (
+  | addMcpServerResponse400
   | addMcpServerResponse401
   | addMcpServerResponse500
 ) & {

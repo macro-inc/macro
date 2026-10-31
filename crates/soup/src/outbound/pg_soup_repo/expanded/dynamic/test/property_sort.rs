@@ -39,10 +39,12 @@ async fn seed_property(
 ) -> anyhow::Result<Uuid> {
     let property_id = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select) VALUES ($1, 'macro|user-1@test.com', $2, $3::text::property_data_type, false)",
+        r#"INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select)
+           SELECT $1, owner, $2, $3::text::property_data_type, false FROM "Document" WHERE id = $4"#,
         property_id,
         format!("Sort {property_id}"),
         data_type,
+        A.to_string(),
     )
     .execute(pool)
     .await?;
@@ -95,10 +97,16 @@ async fn flat(
     cursor: Query<Uuid, DynamicSort, EntityFilterAst>,
     limit: u16,
 ) -> anyhow::Result<Vec<crate::domain::models::SoupProjectionHydration>> {
+    let user_id = sqlx::query_scalar!(
+        r#"SELECT owner FROM "Document" WHERE id = $1"#,
+        A.to_string()
+    )
+    .fetch_one(pool)
+    .await?;
     Ok(expanded_dynamic_cursor_soup_with_projection(
         pool,
         ExpandedDynamicCursorArgs {
-            user_id: MacroUserIdStr::parse_from_str("macro|user-1@test.com")?,
+            user_id: MacroUserIdStr::parse_from_str(&user_id)?,
             limit,
             cursor,
             exclude_frecency: false,
@@ -114,10 +122,16 @@ async fn grouped(
     group_key: Option<&str>,
     limit: u16,
 ) -> anyhow::Result<Vec<crate::domain::models::grouping::ItemGroupingInfo>> {
+    let user_id = sqlx::query_scalar!(
+        r#"SELECT owner FROM "Document" WHERE id = $1"#,
+        A.to_string()
+    )
+    .fetch_one(pool)
+    .await?;
     Ok(expanded_dynamic_cursor_soup_grouped(
         pool,
         GroupedDynamicCursorArgs {
-            user_id: MacroUserIdStr::parse_from_str("macro|user-1@test.com")?,
+            user_id: MacroUserIdStr::parse_from_str(&user_id)?,
             limit,
             cursor,
             exclude_frecency: false,
@@ -171,8 +185,9 @@ async fn property_sort_flat_and_grouped_pages_preserve_keys_and_missing_values(
                 // Keep options tied to the definition inserted below.
                 let property_id = Uuid::now_v7();
                 sqlx::query!(
-                    "INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select) VALUES ($1, 'macro|user-1@test.com', $2, $3::text::property_data_type, true)",
-                    property_id, format!("Sort {property_id}"), data_type,
+                    r#"INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select)
+                       SELECT $1, owner, $2, $3::text::property_data_type, true FROM "Document" WHERE id = $4"#,
+                    property_id, format!("Sort {property_id}"), data_type, A.to_string(),
                 ).execute(&pool).await?;
                 for (id, order) in [(early, 1), (middle, 2), (late, 3), (deleted, 0)] {
                     if data_type == "SELECT_NUMBER" {
@@ -526,9 +541,11 @@ async fn deleted_options_use_the_empty_group_and_live_options_follow_display_ord
     let second = Uuid::now_v7();
     let deleted = Uuid::now_v7();
     sqlx::query!(
-        "INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select) VALUES ($1, 'macro|user-1@test.com', $2, 'SELECT_STRING', false)",
+        r#"INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select)
+           SELECT $1, owner, $2, 'SELECT_STRING', false FROM "Document" WHERE id = $3"#,
         property_id,
         format!("Sort {property_id}"),
+        A.to_string(),
     )
     .execute(&pool)
     .await?;

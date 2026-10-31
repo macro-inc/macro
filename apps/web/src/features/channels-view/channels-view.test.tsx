@@ -210,6 +210,7 @@ vi.mock('./queries', () => ({
   useChannelsSources: (enabled: (scope: string) => boolean) => {
     mocks.sourceEnabled = enabled;
     return {
+      team_channels: { items: () => mocks.rows() },
       channels: { items: () => mocks.rows() },
       direct_messages: { items: () => mocks.rows() },
       recents: { items: () => mocks.rows() },

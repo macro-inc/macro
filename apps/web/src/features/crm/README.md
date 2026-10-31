@@ -75,6 +75,38 @@ links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
 visible company domains/contact addresses in the viewer's own mailbox, without
 team-scope widening or requiring a property link on the email.
 
+Databases is a row-linked activity view, not a direct database-to-CRM relation.
+It opts into database rows with the same server-resolved CRM selector and lists
+each containing database once, intersected with authorized database discovery.
+A company includes rows linked to its visible contacts; a contact does not inherit
+its company's rows. Empty row matches never fall back to all databases. Preserve
+Soup pagination and CRM-link invalidation rather than enumerating CRM IDs or table
+IDs in the browser. Database creation uses the existing app action; a database
+joins the CRM list only after a row has a Companies or Contacts link.
+
+CRM collection and record lists use full-height empty states, horizontally
+centered and raised toward the toolbar, with
+creation guidance, distinct search-empty actions, retryable error states, and
+shared list skeletons. Keep search and available header actions visible in every
+state. A failed continuation retains rows and retries that page.
+Workspace activity uses the shared single-row desktop header with New and an
+expandable Search control; record-detail tabs retain their section toolbar.
+Company and contact headers keep desktop section tabs; touch uses a labeled
+header island that opens the shared bottom drawer with the current section
+checked under **Switch view**. A collapsed host keeps the section icon and
+accessible label; embedded phone headers put the switcher below the breadcrumb
+and action row. Keep the
+workspace's mobile view strip separate. Copy-link islands
+are square on touch, with a 24px glyph and the standard 40px icon control.
+On touch, record list search has space below the header and fills the row beside
+any filter button. Email filters use the shared filter drawer. Each section's
+creation action replaces the default floating action above the navigation dock
+through `FloatRegion`; keyboard focus, higher-priority composers, and inactive
+panes suppress it. Preserve record context, disabled states, and feature gates.
+Keep the disabled New email action mounted when company email sync is off so
+the unrelated app-wide action does not replace it.
+Desktop creation controls remain in the toolbar.
+
 Activity rows render stored Companies and Contacts reference properties as inline
 pills through the shared Soup row. Pills use the shared property preview and open
 a record independently of the row; additional values use the shared overflow menu.

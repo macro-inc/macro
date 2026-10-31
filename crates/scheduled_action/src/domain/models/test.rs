@@ -235,6 +235,7 @@ fn action_owned_by(owner: Owner) -> ScheduledAction {
         next_run_at: Some(next_run_at),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        template_id: None,
     }
 }
 

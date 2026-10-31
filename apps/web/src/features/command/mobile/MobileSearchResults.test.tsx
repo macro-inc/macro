@@ -1,5 +1,9 @@
 import type { EntryState } from '@components/app/split-layout/layoutManager';
-import type { EntityItem, UserItem } from '@core/context/quickAccess';
+import type {
+  EntityItem,
+  QuickAccessItem,
+  UserItem,
+} from '@core/context/quickAccess';
 import type { EntityData, SearchLocation } from '@entity';
 import {
   cleanup,
@@ -13,7 +17,6 @@ import { CombinedError } from '@urql/core';
 import { type Accessor, createSignal, onMount, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mergeCommandPeople } from '../contact-items';
-import type { EntitySearchItem } from '../queries/entity-search';
 import { MobileSearchInput } from './MobileSearchInput';
 import { MobileSearchResults } from './MobileSearchResults';
 import { SearchState } from './mobileSearchState';
@@ -37,7 +40,7 @@ const mocks = vi.hoisted(() => ({
   deferLayout: false,
   measureLayout: () => {},
   fetchNextPage: vi.fn(),
-  items: (() => []) as Accessor<EntitySearchItem[]>,
+  items: (() => []) as Accessor<QuickAccessItem[]>,
   loadingEntities: (() => false) as Accessor<boolean>,
   refreshError: (() => false) as Accessor<boolean>,
   fullTextError: (() => undefined) as Accessor<Error | undefined>,
@@ -112,7 +115,7 @@ vi.mock('@queries/storage/databases', () => ({
   useDatabaseDiscoverySync: vi.fn(),
 }));
 vi.mock('../CommandItem', () => ({
-  ItemDisplay: (props: { item: EntitySearchItem }) => (
+  ItemDisplay: (props: { item: QuickAccessItem }) => (
     <span>{props.item.searchText}</span>
   ),
 }));
@@ -153,7 +156,7 @@ vi.mock('@entity', () => ({
 vi.mock('../queries/entity-search', () => ({
   useEntitySearch: () => ({
     items: () => mocks.items(),
-    rankItems: (items: EntitySearchItem[]) => items,
+    rankItems: (items: QuickAccessItem[]) => items,
     isLoadingEntities: () => mocks.loadingEntities(),
     isSettling: () => mocks.loadingEntities(),
     hasError: () => mocks.refreshError(),
@@ -278,7 +281,7 @@ it('offers full text above empty results, only mounts it explicitly, and keeps t
 });
 
 it('omits full text for Projects and hides search on result opening', async () => {
-  const [items, setItems] = createSignal<EntitySearchItem[]>([]);
+  const [items, setItems] = createSignal<QuickAccessItem[]>([]);
   mocks.items = items;
   render(() => <MobileSearchResults />);
   SearchState.setQuery('teo');
@@ -289,9 +292,14 @@ it('omits full text for Projects and hides search on result opening', async () =
   setItems([
     {
       id: 'project',
-      kind: 'initiative',
+      kind: 'entity',
       bucket: 'initiative',
-      name: 'Teo project',
+      data: {
+        id: 'project',
+        type: 'initiative',
+        name: 'Teo project',
+        ownerId: 'owner',
+      },
       searchText: 'Teo project',
       sortTimestamp: 0,
       timestamps: {},
@@ -387,9 +395,14 @@ it('bounds mounted recent rows while keeping the first result usable', () => {
   mocks.items = () =>
     Array.from({ length: 2000 }, (_, index) => ({
       id: `project-${index}`,
-      kind: 'initiative',
+      kind: 'entity',
       bucket: 'initiative',
-      name: `Project ${index}`,
+      data: {
+        id: `project-${index}`,
+        type: 'initiative',
+        name: `Project ${index}`,
+        ownerId: 'owner',
+      },
       searchText: `Project ${index}`,
       sortTimestamp: 0,
       timestamps: {},
@@ -528,13 +541,18 @@ it('reveals the same scrolled results when native Back uncovers search', () => {
 
 it('restores the name list order and scroll after opening promotes a result by recency', async () => {
   mocks.hasMore = false;
-  const originalItems: EntitySearchItem[] = Array.from(
+  const originalItems: QuickAccessItem[] = Array.from(
     { length: 100 },
     (_, index) => ({
       id: `project-${index}`,
-      kind: 'initiative',
+      kind: 'entity',
       bucket: 'initiative',
-      name: `Project ${index}`,
+      data: {
+        id: `project-${index}`,
+        type: 'initiative',
+        name: `Project ${index}`,
+        ownerId: 'owner',
+      },
       searchText: `Project ${index}`,
       sortTimestamp: 0,
       timestamps: {},
@@ -675,13 +693,18 @@ it.each(['before navigation', 'while away'])(
 );
 
 it('reloads name rows on remount instead of storing them in history', async () => {
-  const savedItems: EntitySearchItem[] = Array.from(
+  const savedItems: QuickAccessItem[] = Array.from(
     { length: 100 },
     (_, index) => ({
       id: `project-${index}`,
-      kind: 'initiative',
+      kind: 'entity',
       bucket: 'initiative',
-      name: `Project ${index}`,
+      data: {
+        id: `project-${index}`,
+        type: 'initiative',
+        name: `Project ${index}`,
+        ownerId: 'owner',
+      },
       searchText: `Project ${index}`,
       sortTimestamp: 0,
       timestamps: {},
@@ -730,9 +753,14 @@ it('does not show a loading footer for available name results during a backgroun
   mocks.items = () => [
     {
       id: 'project',
-      kind: 'initiative',
+      kind: 'entity',
       bucket: 'initiative',
-      name: 'Project',
+      data: {
+        id: 'project',
+        type: 'initiative',
+        name: 'Project',
+        ownerId: 'owner',
+      },
       searchText: 'Project',
       sortTimestamp: 0,
       timestamps: {},
@@ -751,21 +779,31 @@ it.each(['name', 'full-text'] as const)(
     const [authenticated, setAuthenticated] = createSignal(true);
     mocks.accountId = accountId;
     mocks.authenticated = authenticated;
-    const [nameItems, setNameItems] = createSignal<EntitySearchItem[]>([
+    const [nameItems, setNameItems] = createSignal<QuickAccessItem[]>([
       {
         id: 'first',
-        kind: 'initiative',
+        kind: 'entity',
         bucket: 'initiative',
-        name: 'First',
+        data: {
+          id: 'first',
+          type: 'initiative',
+          name: 'First',
+          ownerId: 'owner',
+        },
         searchText: 'First',
         sortTimestamp: 0,
         timestamps: {},
       },
       {
         id: 'second',
-        kind: 'initiative',
+        kind: 'entity',
         bucket: 'initiative',
-        name: 'Second',
+        data: {
+          id: 'second',
+          type: 'initiative',
+          name: 'Second',
+          ownerId: 'owner',
+        },
         searchText: 'Second',
         sortTimestamp: 0,
         timestamps: {},
@@ -868,12 +906,17 @@ it.each(['name', 'full-text'] as const)(
 );
 
 it('does not revive saved name rows after a failed refresh or successful empty result', () => {
-  const [items, setItems] = createSignal<EntitySearchItem[]>([
+  const [items, setItems] = createSignal<QuickAccessItem[]>([
     {
       id: 'project',
-      kind: 'initiative',
+      kind: 'entity',
       bucket: 'initiative',
-      name: 'Project',
+      data: {
+        id: 'project',
+        type: 'initiative',
+        name: 'Project',
+        ownerId: 'owner',
+      },
       searchText: 'Project',
       sortTimestamp: 0,
       timestamps: {},
@@ -972,9 +1015,14 @@ it('loads another name page near the end without a persistent paging bar', async
   mocks.items = () =>
     Array.from({ length: 100 }, (_, index) => ({
       id: `project-${index}`,
-      kind: 'initiative',
+      kind: 'entity',
       bucket: 'initiative',
-      name: `Project ${index}`,
+      data: {
+        id: `project-${index}`,
+        type: 'initiative',
+        name: `Project ${index}`,
+        ownerId: 'owner',
+      },
       searchText: `Project ${index}`,
       sortTimestamp: 0,
       timestamps: {},
@@ -1019,7 +1067,7 @@ it('loads full-text pages near the end without a persistent paging bar', () => {
 });
 
 it('fills an empty name page without requiring a scroll and stops once rows fill the viewport', async () => {
-  const [items, setItems] = createSignal<EntitySearchItem[]>([]);
+  const [items, setItems] = createSignal<QuickAccessItem[]>([]);
   mocks.items = items;
   mocks.loadMore.mockImplementationOnce(async () => {
     setItems([]);
@@ -1028,9 +1076,14 @@ it('fills an empty name page without requiring a scroll and stops once rows fill
     setItems(
       Array.from({ length: 100 }, (_, index) => ({
         id: `project-${index}`,
-        kind: 'initiative',
+        kind: 'entity',
         bucket: 'initiative',
-        name: `Project ${index}`,
+        data: {
+          id: `project-${index}`,
+          type: 'initiative',
+          name: `Project ${index}`,
+          ownerId: 'owner',
+        },
         searchText: `Project ${index}`,
         sortTimestamp: 0,
         timestamps: {},
@@ -1166,9 +1219,14 @@ it('resumes viewport paging when editing a restored search in the dock', async (
   mocks.items = () => [
     {
       id: 'first',
-      kind: 'initiative',
+      kind: 'entity',
       bucket: 'initiative',
-      name: 'First',
+      data: {
+        id: 'first',
+        type: 'initiative',
+        name: 'First',
+        ownerId: 'owner',
+      },
       searchText: 'First',
       sortTimestamp: 0,
       timestamps: {},

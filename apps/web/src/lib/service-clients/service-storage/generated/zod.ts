@@ -17729,6 +17729,45 @@ export const getBatchPreviewHandlerResponse = zod.object({
 });
 
 /**
+ * Returns existing tasks similar to an unsaved draft. Runs vector retrieval +
+rerank only and persists nothing.
+ * @summary Handler for `POST /documents/similarity_search`.
+ */
+export const taskSimilaritySearchHandlerBody = zod
+  .object({
+    markdown: zod
+      .string()
+      .nullish()
+      .describe(
+        "Draft task body as embedding-format markdown. The composer produces it\nclient-side with lexical-core's `markdownToEmbeddingText` (the same\nformat lexical-service's `\/markdown\/{id}?target=embedding` renders), so\nthis latency-sensitive endpoint embeds the text as-is without a\nlexical-service round trip."
+      ),
+    taskName: zod.string().describe('Draft task title.'),
+  })
+  .describe('Request body for searching tasks similar to an unsaved draft.');
+
+export const taskSimilaritySearchHandlerResponse = zod
+  .object({
+    results: zod
+      .array(
+        zod
+          .object({
+            taskId: zod.string().describe('The matching existing task.'),
+            taskName: zod
+              .string()
+              .describe("The matching task's display name."),
+            vectorScore: zod
+              .number()
+              .describe('Cosine similarity from vector search.'),
+          })
+          .describe(
+            'A similar existing task computed for an unsaved draft, returned to the task\ncomposer without persisting any embedding or match state.'
+          )
+      )
+      .describe('Existing tasks similar to the draft.'),
+  })
+  .describe('Response for searching tasks similar to an unsaved draft.');
+
+/**
  * Returns document metadata, user access level, and view location.
  * @summary Handler for `GET /documents/slug/{slug}`.
  */
@@ -32127,7 +32166,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .optional()
           .describe(
-            'Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in.'
+            'Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids`, `owners` or `notification_filters`\nalso opts in.'
           ),
         initiative_ids: zod
           .array(zod.string())
@@ -32139,11 +32178,28 @@ export const postItemsSoupBody = zod
           .string()
           .nullish()
           .describe('Case-insensitive name substring.'),
+        notification_filters: zod
+          .object({
+            states: zod
+              .array(
+                zod
+                  .enum(['unseen', 'seen', 'done'])
+                  .describe(
+                    "The mutually exclusive lifecycle states of a user's notification."
+                  )
+              )
+              .optional()
+              .describe(
+                'Include entities with a non-deleted notification in any of these exact states.\nEmpty means no notification restriction. Active means `[unseen, seen]`.'
+              ),
+          })
+          .optional()
+          .describe('Notification-level filters that apply to an entity type.'),
         owners: zod
           .array(zod.string())
           .optional()
           .describe(
-            "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           ),
       })
       .optional()
@@ -36640,6 +36696,12 @@ export const postItemsSoupAstBody = zod
       .describe(
         'the filters that should be applied to GitHub pull request records, on top of `fef`'
       ),
+    if: zod
+      .unknown()
+      .optional()
+      .describe(
+        'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
+      ),
     pf: zod
       .unknown()
       .optional()
@@ -41033,6 +41095,12 @@ export const postItemsSoupAstGroupedBody = zod
           .describe(
             'the filters that should be applied to GitHub pull request records, on top of `fef`'
           ),
+        if: zod
+          .unknown()
+          .optional()
+          .describe(
+            'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
+          ),
         pf: zod
           .unknown()
           .optional()
@@ -41321,6 +41389,12 @@ export const postItemsSoupAstGroupedBody = zod
           .optional()
           .describe(
             'the filters that should be applied to GitHub pull request records, on top of `fef`'
+          ),
+        if: zod
+          .unknown()
+          .optional()
+          .describe(
+            'Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in.'
           ),
         pf: zod
           .unknown()
@@ -50421,6 +50495,12 @@ export const messageTimelineResponse = zod
               .string()
               .nullish()
               .describe('User who triggered a bot-authored message.'),
+            triggered_via: zod
+              .string()
+              .nullish()
+              .describe(
+                'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+              ),
             updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
           })
           .describe(
@@ -50771,6 +50851,12 @@ export const messageTimelineResponse = zod
                             .nullish()
                             .describe(
                               'User who triggered a bot-authored message.'
+                            ),
+                          triggered_via: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                             ),
                           updated_at: zod.iso
                             .datetime({})
@@ -51129,6 +51215,12 @@ export const entityMessageCreateResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51291,6 +51383,12 @@ export const entityMessageGetMessageResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51457,6 +51555,12 @@ export const entityMessageDeleteMessageResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51719,6 +51823,12 @@ export const entityMessageEditResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -51889,6 +51999,12 @@ export const entityMessageReactResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -52058,6 +52174,12 @@ export const entityMessageLegacyResponse = zod
       .string()
       .nullish()
       .describe('User who triggered a bot-authored message.'),
+    triggered_via: zod
+      .string()
+      .nullish()
+      .describe(
+        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
   })
   .describe(
@@ -52247,6 +52369,12 @@ export const entityMessageGetThreadResponse = zod
               .string()
               .nullish()
               .describe('User who triggered a bot-authored message.'),
+            triggered_via: zod
+              .string()
+              .nullish()
+              .describe(
+                'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+              ),
             updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
           })
           .describe(
@@ -52412,6 +52540,12 @@ export const entityMessageGetThreadResponse = zod
           .string()
           .nullish()
           .describe('User who triggered a bot-authored message.'),
+        triggered_via: zod
+          .string()
+          .nullish()
+          .describe(
+            'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+          ),
         updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
       })
       .describe(
@@ -53012,6 +53146,12 @@ export const messageTimelineEntriesResponse = zod
                       .string()
                       .nullish()
                       .describe('User who triggered a bot-authored message.'),
+                    triggered_via: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+                      ),
                     updated_at: zod.iso
                       .datetime({})
                       .describe('Last persisted update.'),
@@ -53386,6 +53526,12 @@ export const messageTimelineEntriesResponse = zod
                                     .nullish()
                                     .describe(
                                       'User who triggered a bot-authored message.'
+                                    ),
+                                  triggered_via: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
                                     ),
                                   updated_at: zod.iso
                                     .datetime({})

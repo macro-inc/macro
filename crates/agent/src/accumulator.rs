@@ -26,8 +26,9 @@ impl StreamAccumulator {
     /// as, accumulate it, and return a reference to the stored part.
     ///
     /// Returns `None` (accumulating nothing) for parts that carry no
-    /// persistable content: token [`Usage`](StreamPart::Usage) events and empty
-    /// text or thinking deltas. The returned reference is the unmerged part, so
+    /// persistable content: token [`Usage`](StreamPart::Usage) events, empty
+    /// text or thinking deltas, and the progress of a tool call still being
+    /// written. The returned reference is the unmerged part, so
     /// a consumer can forward it as an individual streamed chunk.
     pub fn push(&mut self, part: StreamPart) -> Option<&AssistantMessagePart> {
         let part = stream_part_to_message_part(part)?;
@@ -93,7 +94,12 @@ fn stream_part_to_message_part(part: StreamPart) -> Option<AssistantMessagePart>
             description,
             id,
         }),
-        // Empty text/thinking deltas and usage events carry nothing to persist.
-        StreamPart::Content(_) | StreamPart::Thinking(_) | StreamPart::Usage(_) => None,
+        // Empty text/thinking deltas and usage events carry nothing to persist,
+        // and a call still being written persists once it is finished.
+        StreamPart::Content(_)
+        | StreamPart::Thinking(_)
+        | StreamPart::Usage(_)
+        | StreamPart::ToolCallStarted(_)
+        | StreamPart::ToolCallArgs { .. } => None,
     }
 }

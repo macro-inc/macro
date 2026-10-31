@@ -297,23 +297,28 @@
         '';
       };
 
+      # Both Tauri workspaces reach the webauthn fork through src-tauri. The
+      # fork lists an absent device-catalog README, and crane inspects every
+      # workspace package while vendoring, including this unused one.
+      vendorWebauthnGitCheckout = packages: drv:
+        if lib.any (package: package.name == "webauthn-authenticator-rs") packages then
+          drv.overrideAttrs (old: {
+            postPatch = (old.postPatch or "") + ''
+              cp README.md device-catalog/README.md
+            '';
+          })
+        else
+          drv;
+      webauthnOutputHashes = {
+        "git+https://github.com/beeper/webauthn-rs?rev=579f9144d37161bedf25ed1236d73486ce303de6#579f9144d37161bedf25ed1236d73486ce303de6" =
+          "sha256-0s6M8lB4EpY6FiUtRqsDXdrzqsfMxWkTBl/wVYvbV/I=";
+      };
+
       tauriCargoVendorDir = craneLib.vendorCargoDeps {
         src = ../apps/web/tauri;
         cargoLock = ../apps/web/tauri/Cargo.lock;
-        # The pinned fork lists an absent device-catalog README. Crane inspects
-        # every workspace package while vendoring, including this unused one.
-        overrideVendorGitCheckout = packages: drv:
-          if lib.any (package: package.name == "webauthn-authenticator-rs") packages then
-            drv.overrideAttrs (old: {
-              postPatch = (old.postPatch or "") + ''
-                cp README.md device-catalog/README.md
-              '';
-            })
-          else
-            drv;
-        outputHashes = {
-          "git+https://github.com/beeper/webauthn-rs?rev=579f9144d37161bedf25ed1236d73486ce303de6#579f9144d37161bedf25ed1236d73486ce303de6" =
-            "sha256-0s6M8lB4EpY6FiUtRqsDXdrzqsfMxWkTBl/wVYvbV/I=";
+        overrideVendorGitCheckout = vendorWebauthnGitCheckout;
+        outputHashes = webauthnOutputHashes // {
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
           "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
@@ -392,6 +397,7 @@
         nativeBuildInputs = [ pkgs.makeWrapper ];
         postBuild = ''
           wrapProgram "$out/bin/app" \
+            --prefix PATH : ${lib.makeBinPath [ pkgs.desktop-file-utils ]} \
             --prefix LD_LIBRARY_PATH : ${
               lib.makeLibraryPath [
                 pkgs.webkitgtk_4_1
@@ -874,7 +880,8 @@
       cefCargoVendorDir = cefCraneLib.vendorCargoDeps {
         src = ../apps/web/tauri/desktop-cef;
         cargoLock = ../apps/web/tauri/desktop-cef/Cargo.lock;
-        outputHashes = {
+        overrideVendorGitCheckout = vendorWebauthnGitCheckout;
+        outputHashes = webauthnOutputHashes // {
           "git+https://github.com/macro-inc/plugins-workspace?rev=bc6ec3b8e80eed80ef4969f4463a357d46adb3b1#bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" =
             "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
@@ -889,6 +896,36 @@
             "sha256-OdEp5mw0l5Euj0ry7gzNVxdB0jlGUq0N7XINXUhtE+c=";
         };
       };
+      # Both Tauri workspaces build offline from their own vendor dirs. A
+      # src-tauri dependency added to one lockfile but not the other only failed
+      # the macOS release build, so resolve both lockfiles on Linux PRs too.
+      tauriCargoLockfilesCheck =
+        let
+          lockfileSrc = lib.fileset.toSource {
+            root = ../.;
+            fileset = lib.fileset.unions [
+              (cefCraneLib.fileset.commonCargoSources ../.)
+              ../apps/web/tauri/Cargo.lock
+              ../apps/web/tauri/desktop-cef/Cargo.lock
+            ];
+          };
+        in
+        pkgs.runCommand "tauri-cargo-lockfiles" { nativeBuildInputs = [ cefRustToolchain ]; } ''
+          cp -r ${lockfileSrc} source
+          chmod -R u+w source
+          resolve_offline() {
+            export CARGO_HOME="$TMPDIR/cargo-home-$2"
+            install -Dm0644 "$3/config.toml" "$CARGO_HOME/config.toml"
+            if ! cargo metadata --locked --offline --format-version 1 \
+              --manifest-path "source/$1" > /dev/null; then
+              echo "$1: Cargo.lock does not match its manifests. Run cargo metadata in that workspace and commit the lockfile." >&2
+              exit 1
+            fi
+          }
+          resolve_offline apps/web/tauri/Cargo.toml wry ${tauriCargoVendorDir}
+          resolve_offline apps/web/tauri/desktop-cef/Cargo.toml cef ${cefCargoVendorDir}
+          touch "$out"
+        '';
       cefCargoSources = cefCraneLib.fileset.commonCargoSources ../.;
       cefAppSrc = lib.fileset.toSource {
         root = ../.;
@@ -917,6 +954,43 @@
           cef.embed = true;
         };
       };
+      # CEF CDN builds omit H.264, HEVC, and AAC, so the app could not play
+      # most videos. The `Build CEF with codecs` workflow publishes the same
+      # CEF version built with proprietary codecs; lay it out the way
+      # `cef-dll-sys` caches a download (`<CEF_PATH>/<version>/cef_macos_aarch64`
+      # plus `archive.json`), which the CEF Tauri CLI also reads, so neither
+      # downloads from the CDN.
+      cefCodecs = builtins.fromJSON (builtins.readFile ../apps/web/tauri/desktop-cef/cef-codecs.json);
+      cefCodecsVersion = builtins.head (lib.splitString "+" cefCodecs.cefVersion);
+      # The `cef` crate's build metadata is the CEF version it loads. A crate
+      # bump without a new manifest would fall back to the codec-less CDN build.
+      cefCrateVersion =
+        let
+          lock = builtins.fromTOML (builtins.readFile ../apps/web/tauri/desktop-cef/Cargo.lock);
+          cef = lib.findFirst (p: p.name == "cef") null lock.package;
+        in
+        lib.last (lib.splitString "+" cef.version);
+      cefCodecsArchive = pkgs.fetchurl {
+        url = "https://github.com/macro-inc/macro/releases/download/${cefCodecs.releaseTag}/${cefCodecs.asset}";
+        sha256 =
+          assert lib.assertMsg (cefCodecsVersion == cefCrateVersion)
+            "desktop-cef loads CEF ${cefCrateVersion} but cef-codecs.json pins ${cefCodecsVersion}; update the manifest and rebuild";
+          assert lib.assertMsg (cefCodecs.sha256 != "")
+            "apps/web/tauri/desktop-cef/cef-codecs.json has no sha256; run the `Build CEF with codecs` workflow and pin its output";
+          cefCodecs.sha256;
+      };
+      cefCodecsDistribution = pkgs.runCommand "cef-codecs-${cefCodecsVersion}" { } ''
+        tar -xjf ${cefCodecsArchive}
+        src=$(echo cef_binary_*_macosarm64_minimal)
+        dest="$out/${cefCodecsVersion}/cef_macos_aarch64"
+        mkdir -p "$(dirname "$dest")"
+        mv "$src/Release" "$dest"
+        for entry in CMakeLists.txt cmake include libcef_dll CREDITS.html; do
+          mv "$src/$entry" "$dest/$entry"
+        done
+        printf '{"type":"minimal","name":"%s","sha1":""}' "$src" > "$dest/archive.json"
+        test -d "$dest/Chromium Embedded Framework.framework"
+      '';
       tauriDesktopCefApp = cefCraneLib.mkCargoDerivation {
         pname = "macro-tauri-desktop-cef-app";
         version = appVersion;
@@ -943,6 +1017,9 @@
         preBuild = ''
           export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
           export CEF_PATH="$TMPDIR/tauri-cef"
+          mkdir -p "$CEF_PATH"
+          cp -R ${cefCodecsDistribution}/. "$CEF_PATH/"
+          chmod -R u+w "$CEF_PATH"
           cp ${../apps/web/package.json} apps/web/package.json
           rm -rf apps/web/dist
           cp -r ${frontend} apps/web/dist
@@ -1295,6 +1372,7 @@
     {
       checks = lib.optionalAttrs isX86_64Linux {
         tauri-appimage-packaging = tauriAppImagePackagingTests;
+        tauri-cargo-lockfiles = tauriCargoLockfilesCheck;
       };
 
       apps = lib.optionalAttrs isLinux {

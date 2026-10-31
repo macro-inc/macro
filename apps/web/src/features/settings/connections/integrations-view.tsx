@@ -1,24 +1,55 @@
+import { SearchBar } from '@app/components/view-shell';
 import { toast } from '@core/component/Toast/Toast';
+import { createPipedreamCatalogSearch } from '@core/pipedream/catalog';
 import {
   clearPendingConnectApp,
   pendingConnectApp,
 } from '@core/pipedream/pendingConnect';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { connectPipedreamApp } from '@queries/pipedream-connectors';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import { queryReadyGate } from '@queries/gate';
+import {
+  connectPipedreamApp,
+  overlaidAppSlug,
+  usePipedreamConnectedSlugs,
+  usePipedreamOverlaysQuery,
+} from '@queries/pipedream-connectors';
 import { Button } from '@ui';
 import {
+  type Accessor,
   createEffect,
+  createMemo,
   createSignal,
+  For,
   on,
-  type ParentProps,
   Show,
   Suspense,
 } from 'solid-js';
-import { SettingsPage, SettingsSurface } from '../primitives';
-import { ConnectedView } from './ConnectedView';
-import { DiscoverView } from './DiscoverView';
-import { capabilitiesFor, type ProviderId } from './model';
+import { SettingsPage } from '../primitives';
+import { AddCustomMcpDialog } from './add-custom-mcp-dialog';
+import { CatalogRows } from './catalog-rows';
+import {
+  aiAppItems,
+  type IntegrationItemHosts,
+  useAgentProviderItem,
+  useEmailItems,
+  useGithubItem,
+  useGranolaItem,
+} from './integration-items';
+import {
+  IntegrationItemRow,
+  IntegrationsListHeader,
+  matchesIntegration,
+} from './integrations-list';
+import { LeftoverRow, leftoverCategories } from './leftover-row';
+import {
+  type ConnectionsModel,
+  capabilitiesFor,
+  type Leftover,
+  type ProviderId,
+} from './model';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
+import { PIPEDREAM_BROWSE_HIDDEN_SLUGS } from './provider-meta';
 import { SlackChannelImportFlow } from './slack-channel-import/SlackChannelImportFlow';
 import { useConnectionsModel } from './use-connections-model';
 import {
@@ -27,49 +58,9 @@ import {
   useConnectionsView,
 } from './view-state';
 
-function IntegrationSetupCallouts(props: {
-  onOpenMacroMcp: () => void;
-  onOpenLocalAgents?: () => void;
-}) {
-  return (
-    <div class="flex flex-col gap-2">
-      <SettingsSurface class="flex items-center justify-between gap-4 px-4 py-2">
-        <p class="text-base font-medium text-ink">
-          Use Macro in your favorite AI harness with the official Macro MCP
-        </p>
-        <Button
-          variant="ghost"
-          size="md"
-          aria-label="Set up Macro in AI apps"
-          onClick={props.onOpenMacroMcp}
-        >
-          Set up
-        </Button>
-      </SettingsSurface>
-      <Show when={props.onOpenLocalAgents}>
-        <SettingsSurface class="flex items-center justify-between gap-4 px-4 py-2">
-          <p class="text-base font-medium text-ink">
-            Stream sessions from your local AI harness to Macro
-          </p>
-          <Button
-            variant="ghost"
-            size="md"
-            aria-label="Set up local agents"
-            onClick={props.onOpenLocalAgents}
-          >
-            Set up
-          </Button>
-        </SettingsSurface>
-      </Show>
-    </div>
-  );
-}
-
-type IntegrationsViewProps = ParentProps<{
-  onOpenMacroMcp: () => void;
-  onOpenLocalAgents?: () => void;
+type IntegrationsViewProps = IntegrationItemHosts & {
   initialProvider?: ProviderId;
-}>;
+};
 
 export function IntegrationsView(props: IntegrationsViewProps) {
   const view = createConnectionsViewState({ provider: props.initialProvider });
@@ -120,90 +111,47 @@ function ConnectionsContent(props: IntegrationsViewProps) {
       when={importSlackChannels()}
       fallback={
         <Show
-          when={!error()}
+          when={ready() && view.provider()}
+          keyed
           fallback={
             <SettingsPage
               title="Integrations"
-              onBack={view.provider() ? view.closeProvider : undefined}
-              backLabel="Integrations"
+              bodyClass="mt-6 gap-4"
+              contentClass="max-w-none px-8"
             >
-              <IntegrationSetupCallouts
-                onOpenMacroMcp={props.onOpenMacroMcp}
-                onOpenLocalAgents={props.onOpenLocalAgents}
-              />
-              {props.children}
-              <div class="flex items-center gap-3 text-sm text-ink-muted">
-                Couldn't load Connections.
-                <Button variant="outline" size="sm" depth={3} onClick={retry}>
-                  Retry
-                </Button>
-              </div>
+              <Show when={error() || partialError()}>
+                <div
+                  role="status"
+                  class="flex items-center gap-3 text-sm text-ink-muted"
+                >
+                  {error()
+                    ? "Couldn't load agent tools."
+                    : "Some connections couldn't be loaded."}
+                  <Button variant="secondary" size="sm" onClick={retry}>
+                    Retry
+                  </Button>
+                </div>
+              </Show>
+              <Show
+                when={ready() || error()}
+                fallback={
+                  <p class="text-sm text-ink-muted">Loading integrations…</p>
+                }
+              >
+                <Suspense>
+                  <IntegrationsOverview
+                    {...props}
+                    model={model}
+                    agentToolsAvailable={!error()}
+                  />
+                </Suspense>
+              </Show>
             </SettingsPage>
           }
         >
-          <Show
-            when={ready() && view.provider()}
-            keyed
-            fallback={
-              <SettingsPage title="Integrations" bodyClass="mt-6 gap-6">
-                <IntegrationSetupCallouts
-                  onOpenMacroMcp={props.onOpenMacroMcp}
-                  onOpenLocalAgents={props.onOpenLocalAgents}
-                />
-                {props.children}
-                <Show when={partialError()}>
-                  <div
-                    role="status"
-                    class="flex items-center gap-3 text-sm text-ink-muted"
-                  >
-                    Some connections couldn't be loaded.
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      depth={3}
-                      onClick={retry}
-                    >
-                      Retry
-                    </Button>
-                  </div>
-                </Show>
-                <Show
-                  when={ready()}
-                  fallback={
-                    <p class="text-sm text-ink-muted">Loading Connections…</p>
-                  }
-                >
-                  <section
-                    aria-label="Agent Integrations"
-                    class="flex min-w-0 flex-col gap-4"
-                  >
-                    <h2 class="text-lg font-medium text-ink">
-                      Agent Integrations
-                    </h2>
-                    <section
-                      aria-label="Installed integrations"
-                      class="min-w-0 w-full"
-                    >
-                      <h3 class="mb-2 text-base font-medium text-ink">
-                        Installed
-                      </h3>
-                      <ConnectedView model={model()} />
-                    </section>
-                    <section
-                      aria-label="Available integrations"
-                      class="min-w-0 w-full"
-                    >
-                      <DiscoverView model={model()} />
-                    </section>
-                  </section>
-                </Show>
-              </SettingsPage>
-            }
-          >
-            {(provider) => (
-              <PipedreamAiProvider model={model()} provider={provider} />
-            )}
-          </Show>
+          {(provider) => (
+            <PipedreamAiProvider model={model()} provider={provider} />
+          )}
         </Show>
       }
     >
@@ -221,5 +169,189 @@ function ConnectionsContent(props: IntegrationsViewProps) {
         </Suspense>
       </Show>
     </Show>
+  );
+}
+
+function leftoverMatches(
+  leftover: Leftover,
+  overlaidAppSlug: string | undefined,
+  query: string
+): boolean {
+  return matchesIntegration(
+    {
+      name: leftover.title,
+      description: leftover.kind === 'native-mcp' ? leftover.subtitle : '',
+      categories: leftoverCategories(leftover, overlaidAppSlug),
+    },
+    query
+  );
+}
+
+/**
+ * Every integration in one list: custom MCP servers first, then those in use,
+ * then the rest, then the app catalog. One search filters all of them.
+ */
+function IntegrationsOverview(
+  props: IntegrationsViewProps & {
+    model: Accessor<ConnectionsModel>;
+    /** False when connector records failed to load. */
+    agentToolsAvailable: boolean;
+  }
+) {
+  const [query, setQuery] = createSignal('');
+  const [addingCustom, setAddingCustom] = createSignal(false);
+  const view = useConnectionsView();
+  const catalog = createPipedreamCatalogSearch(
+    () => PIPEDREAM_BROWSE_HIDDEN_SLUGS
+  );
+  const search = (value: string) => {
+    setQuery(value);
+    catalog.onSearchInput(value);
+  };
+
+  const agentTools = [
+    useAgentProviderItem(props.model, 'slack'),
+    useAgentProviderItem(props.model, 'linear'),
+    useAgentProviderItem(props.model, 'notion'),
+  ];
+  const items = [
+    ...useEmailItems(props),
+    useGithubItem(props.model),
+    ...agentTools,
+    useGranolaItem(),
+    ...aiAppItems(props),
+  ];
+  // Agent tool rows need connector records; without them their state is unknown.
+  const matching = () =>
+    items.filter(
+      (item) =>
+        (props.agentToolsAvailable || !agentTools.includes(item)) &&
+        matchesIntegration(item, query())
+    );
+  const inUse = () => matching().filter((item) => item.status !== 'available');
+  const available = () =>
+    matching().filter((item) => item.status === 'available');
+  // Overlaid catalog apps connect as native MCP servers; show them as the app.
+  const overlays = usePipedreamOverlaysQuery();
+  const overlaidSlugFor = (leftover: Leftover) =>
+    leftover.kind === 'native-mcp' && queryReadyGate(overlays)
+      ? overlaidAppSlug(overlays.data, leftover.url)
+      : undefined;
+  // Until overlays load, a native server can't be told apart from a custom one;
+  // hold those rows back so an overlaid app doesn't flash at the top.
+  const leftovers = () =>
+    props
+      .model()
+      .leftovers.filter(
+        (row) =>
+          !(row.kind === 'native-mcp' && overlays.isPlaceholderData) &&
+          leftoverMatches(row, overlaidSlugFor(row), query())
+      );
+  // Servers the user added themselves lead the list.
+  const isCustom = (leftover: Leftover) =>
+    leftover.kind === 'native-mcp' && !overlaidSlugFor(leftover);
+  const customLeftovers = () => leftovers().filter(isCustom);
+  const otherLeftovers = () =>
+    leftovers().filter((leftover) => !isCustom(leftover));
+
+  // Includes overlaid apps, which are connected as native MCP servers.
+  const connected = usePipedreamConnectedSlugs();
+  const alreadyHave = createMemo(() => {
+    const slugs = new Set<string>(connected.slugs());
+    for (const row of props.model().capabilities) {
+      if (row.status !== 'not-connected') slugs.add(row.provider);
+    }
+    for (const leftover of props.model().leftovers) {
+      if (leftover.kind === 'pipedream') slugs.add(leftover.appSlug);
+    }
+    return slugs;
+  });
+  const catalogEntries = createMemo(() =>
+    props.agentToolsAvailable
+      ? catalog.entries().filter(
+          (entry) =>
+            !alreadyHave().has(entry.app_slug) &&
+            matchesIntegration(
+              {
+                name: entry.display_name,
+                description: `${entry.description ?? ''} ${entry.app_slug}`,
+                categories: entry.categories ?? [],
+              },
+              query()
+            )
+        )
+      : []
+  );
+  const nothingMatches = () =>
+    matching().length === 0 &&
+    leftovers().length === 0 &&
+    catalogEntries().length === 0 &&
+    !catalog.query.isFetching;
+
+  return (
+    <>
+      <div class="flex items-center gap-2">
+        <SearchBar
+          size="sm"
+          label="Search integrations"
+          placeholder="Search integrations"
+          value={query()}
+          onValueChange={search}
+          onEscape={() => search('')}
+          class="min-w-0 flex-1"
+        />
+        <Show when={props.agentToolsAvailable}>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => setAddingCustom(true)}
+          >
+            <PlusIcon class="size-4" /> Add custom
+          </Button>
+        </Show>
+      </div>
+      <div
+        role="table"
+        aria-label="Integrations"
+        class="@container/integrations -mx-3 flex min-w-0 flex-col"
+      >
+        <IntegrationsListHeader />
+        <div
+          role="rowgroup"
+          class="flex flex-col [&>[role=row]+[role=row]]:border-t [&>[role=row]+[role=row]]:border-ink/5"
+        >
+          <For each={customLeftovers()}>
+            {(leftover) => <LeftoverRow leftover={leftover} />}
+          </For>
+          <For each={inUse()}>
+            {(item) => <IntegrationItemRow item={item} />}
+          </For>
+          <For each={otherLeftovers()}>
+            {(leftover) => (
+              <LeftoverRow
+                leftover={leftover}
+                overlaidAppSlug={overlaidSlugFor(leftover)}
+              />
+            )}
+          </For>
+          <For each={available()}>
+            {(item) => <IntegrationItemRow item={item} />}
+          </For>
+          <Show when={props.agentToolsAvailable}>
+            <CatalogRows catalog={catalog} entries={catalogEntries} />
+          </Show>
+        </div>
+        <Show when={nothingMatches()}>
+          <p class="px-3 py-6 text-sm text-ink-muted">
+            No integrations match “{query().trim()}”.
+          </p>
+        </Show>
+      </div>
+      <AddCustomMcpDialog
+        open={addingCustom()}
+        onOpenChange={setAddingCustom}
+        onAdded={view.showOverview}
+      />
+    </>
   );
 }

@@ -35,9 +35,8 @@ function SharingInfo() {
         as={Button}
         variant="ghost"
         size="icon-xs"
-        label="About team sharing"
-        tooltip={SHARING_DESCRIPTION}
-        tooltipDisabled={open()}
+        aria-label="About team sharing"
+        tooltip={{ content: SHARING_DESCRIPTION, disabled: open() }}
         onKeyDown={closeOnEscape}
       >
         <InfoIcon class="size-3.5" />
@@ -133,7 +132,7 @@ export function SavedViewForm(
         </Button>
         <Button
           type="submit"
-          variant="strong"
+          variant="primary"
           disabled={props.pending || !name().trim()}
         >
           {props.pending ? 'Saving…' : (props.submitLabel ?? 'Save view')}

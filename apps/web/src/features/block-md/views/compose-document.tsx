@@ -14,7 +14,7 @@ import { Button, EntityComposer } from '@ui';
 import { createSignal, onMount, Show, Suspense } from 'solid-js';
 import { DocumentFields } from '../../document-composer/components/document-fields';
 import { createDocumentEditor } from '../../document-composer/primitives/create-document-editor';
-import type { ComposeTaskSuccess } from '../component/ComposeTask';
+import type { ComposeTaskSuccess } from '../../task-composer/core/types';
 import { createDocumentWithTags } from '../queries/create-document-with-tags';
 import { createDocumentComposerTags } from '../util/documentComposerProperties';
 
@@ -149,25 +149,27 @@ export function ComposeDocument(props: ComposeDocumentProps) {
         <div class="flex-1 flex items-center">
           <Show when={panel.handle.isPopover()}>
             <Button
+              variant="ghost"
               onMouseDown={() =>
                 fireAndForget(submit(true), 'compose-document')
               }
               disabled={isCreating()}
               tabIndex={-1}
               tooltip="Continue editing in split"
-              size="icon-composer"
+              size="icon-md"
             >
-              <ArrowsOutIcon />
+              <ArrowsOutIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </div>
         <Button
+          variant="ghost"
           onClick={() => panel.handle.close()}
           tabIndex={-1}
           tooltip="Close"
-          size="icon-composer"
+          size="icon-md"
         >
-          <XIcon />
+          <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </EntityComposer.Header>
       <DocumentFields
@@ -196,7 +198,7 @@ export function ComposeDocument(props: ComposeDocumentProps) {
           ref={(button) => {
             submitButton = button;
           }}
-          variant="strong"
+          variant="primary"
           onClick={() => fireAndForget(submit(), 'compose-document')}
           disabled={!title().trim() || isCreating()}
           hasContent={!!title().trim()}

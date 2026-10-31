@@ -28,7 +28,12 @@ type TimelineMenuItemProps = {
 export function TimelineMenu(props: TimelineMenuItemProps) {
   return (
     <Dropdown>
-      <Dropdown.Trigger variant="ghost" size="md" square label="Timeline menu">
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-md"
+        aria-label="Timeline menu"
+        tooltip="Timeline menu"
+      >
         <DotsIcon class="size-4" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-48">
