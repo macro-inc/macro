@@ -108,7 +108,10 @@ impl AsyncTool<RoutineToolContext> for ListRoutines {
                 self.enabled
                     .is_none_or(|enabled| routine.enabled == enabled)
                     && (routine.name.to_lowercase().contains(&query)
-                        || routine.task.to_string().to_lowercase().contains(&query))
+                        || serde_json::to_string(&routine.configuration)
+                            .unwrap_or_default()
+                            .to_lowercase()
+                            .contains(&query))
             })
             .collect();
         Ok(RoutineList {
@@ -122,7 +125,7 @@ impl AsyncTool<RoutineToolContext> for ListRoutines {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadRoutine",
-    description = "Read a routine owned by the authenticated user, including its saved configuration and recent run history. Reading a run transcript still requires its own access."
+    description = "Read a routine owned by the authenticated user: its saved configuration in the shape CreateRoutine and UpdateRoutine take (name, triggers, steps, requiredApps), and its recent run history. When part of a routine can only be edited on its page in Macro (GitHub or payload filters), `notEditableHere` says why instead. Reading a run transcript still requires its own access."
 )]
 pub struct ReadRoutine {
     /// Routine UUID from CreateRoutine or ListRoutines.
@@ -167,7 +170,7 @@ pub enum RoutineChange {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "UpdateRoutine",
-    description = "Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send the complete configuration (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Routines saved before steps existed read back as a single agent step. Does not change ownership. A running routine can be paused but cannot be reconfigured until it finishes."
+    description = "Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send its `configuration` back with only your change (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Omit requiredApps to keep the routine's apps. Routines ReadRoutine marks `notEditableHere` can only be paused or resumed here. Does not change ownership or the description. A running routine can be paused but cannot be reconfigured until it finishes."
 )]
 pub struct UpdateRoutine {
     /// Routine UUID.

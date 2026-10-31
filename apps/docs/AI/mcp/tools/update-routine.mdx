@@ -7,7 +7,7 @@ description: >-
 
 # UpdateRoutine
 
-Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send the complete configuration (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Routines saved before steps existed read back as a single agent step. Does not change ownership. A running routine can be paused but cannot be reconfigured until it finishes.
+Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send its `configuration` back with only your change (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Omit requiredApps to keep the routine's apps. Routines ReadRoutine marks `notEditableHere` can only be paused or resumed here. Does not change ownership or the description. A running routine can be paused but cannot be reconfigured until it finishes.
 
 ## Parameters
 

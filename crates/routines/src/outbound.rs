@@ -124,12 +124,13 @@ struct WireRoutine {
 }
 impl From<WireRoutine> for RoutineInfo {
     fn from(r: WireRoutine) -> Self {
+        let configuration = RoutineConfiguration::from_saved(&r.name, &r.trigger, &r.task);
         Self {
             id: r.id,
             name: r.name,
             enabled: r.enabled,
-            trigger: r.trigger,
-            task: r.task,
+            not_editable_here: configuration.as_ref().err().map(ToString::to_string),
+            configuration: configuration.ok(),
             next_run_at: r.next_run_at,
         }
     }
@@ -141,7 +142,7 @@ impl RoutineService for RoutineClient {
         user: &MacroUserIdStr<'static>,
         config: &RoutineConfiguration,
     ) -> Result<RoutineInfo> {
-        let mut body = configuration_body(config, Utc::now())?;
+        let mut body = configuration_body(config, Utc::now(), None)?;
         body["enabled"] = true.into();
         Ok(self
             .request::<WireRoutine>(user, Method::POST, "scheduled-actions", Some(body))
@@ -186,12 +187,18 @@ impl RoutineService for RoutineClient {
         id: Uuid,
         config: &RoutineConfiguration,
     ) -> Result<RoutineInfo> {
+        // A replacement is built against what is saved: it must not drop what
+        // these tools can't state, and it keeps the saved apps unless told.
+        let saved = self
+            .request::<WireRoutine>(user, Method::GET, &format!("scheduled-actions/{id}"), None)
+            .await?;
+        RoutineConfiguration::from_saved(&saved.name, &saved.trigger, &saved.task)?;
         Ok(self
             .request::<WireRoutine>(
                 user,
                 Method::PUT,
                 &format!("scheduled-actions/{id}"),
-                Some(configuration_body(config, Utc::now())?),
+                Some(configuration_body(config, Utc::now(), Some(&saved.task))?),
             )
             .await?
             .into())
@@ -244,13 +251,17 @@ struct WireExecution {
     #[serde(default)]
     resource: Option<Value>,
 }
-fn configuration_body(config: &RoutineConfiguration, now: DateTime<Utc>) -> Result<Value> {
+fn configuration_body(
+    config: &RoutineConfiguration,
+    now: DateTime<Utc>,
+    saved_task: Option<&Value>,
+) -> Result<Value> {
     config.validate(now)?;
     Ok(serde_json::json!({
         "name": config.name,
         "kind": "Agent",
         "trigger": config.trigger(now)?,
-        "task": config.task(),
+        "task": config.task(saved_task),
     }))
 }
 

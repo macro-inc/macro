@@ -8,9 +8,15 @@ persona/model to run later.
 
 ## Start here
 
-- `src/domain.rs`: `RoutineTarget` (model vs. agent persona) and
-  `RoutineSchedule` (`Once` / `Cron`) — the validated command shapes.
+- `src/domain.rs`: `RoutineConfiguration` — name, `triggers`
+  (`RoutineTrigger`: `Once`, `Cron` or activity `Event`s) and `steps` (a
+  [`routine_program`](../routine_program/AGENTS.md) program, sent as a JSON
+  string) — the validated command shape. `deserialize_configuration` still
+  accepts the old single-agent input (`instructions`, `target`, `schedule`)
+  and turns it into one agent step.
 - `src/inbound.rs`: the AI toolset exposed to MCP and embedded agents.
+- `src/create_routine.md`: `CreateRoutine`'s description — the step types,
+  allowed tools and placeholders agents compose routines from.
 - `CreateRoutine` tells agents to use `m-document-mention` with the routine ID,
   name, and `blockName: "routine"` in replies.
 - `src/outbound.rs`: the HTTP client to the owning scheduled-action service.
@@ -24,7 +30,8 @@ persona/model to run later.
 
 ## Boundaries
 
-- Depends on: `ai_toolset`, `macro_authorization`, `macro_user_id`.
+- Depends on: `ai_toolset`, `macro_authorization`, `macro_user_id`,
+  `routine_program` (the step model and its validation).
 - Used by: `ai_tools`.
 
 ## Recipes

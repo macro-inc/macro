@@ -8297,7 +8297,7 @@ export interface CreateProjectResponse {
  * - `choose`: an optional `question` and 2-8 `options` (label, optional description, steps); the best fitting option runs, else `otherwise`. With `"multiple": true`, every option that fits runs instead, in order. Use it to classify, e.g. email triage, or to let the classifier pick values: one option per label, tag, priority or person, each with the single step that applies it (`multiple` for labels and tags).
  * - `agent`: hand off to a model (`model`) or an agent from ListAgents (`agent.bot_id`, optional `model` override) with `instructions`, for open-ended work such as drafting, research or filling CRM fields. It sees the triggering event and what earlier steps did. A run reaches at most one agent; agents in different branches are fine. To schedule yourself, use your own persona id as `agent.bot_id`. Apps the agent needs beyond its own go in `requiredApps`.
  *
- * Decisions (`if`, `choose`) are answered by a fast classifier in one call, so prefer them over agents for routing. Tool arguments may embed placeholders: `{{trigger.entity_id}}` (the email thread, task, document or channel that triggered the run), `{{trigger.message_id}}`, `{{trigger.message.thread_id}}` (the thread a reply to the triggering message joins), the item's content such as `{{trigger.email.subject}}`, `{{trigger.email.from.email}}`, `{{trigger.message.text}}` or `{{trigger.item.name}}`, and an earlier tool step's output by its `id`, e.g. `{{steps.task.documentId}}`. A value that is exactly one placeholder keeps its JSON type. Decisions and `{{trigger…}}` placeholders need event triggers only.
+ * Decisions (`if`, `choose`) are answered by a fast classifier in one call, so prefer them over agents for routing. Tool arguments may embed placeholders: `{{trigger.entity_id}}` (the email thread, task, document or channel that triggered the run), `{{trigger.message_id}}`, `{{trigger.message.thread_id}}` (the thread a reply to the triggering message joins), the item's content such as `{{trigger.email.subject}}`, `{{trigger.email.from.email}}`, `{{trigger.message.text}}` or `{{trigger.item.name}}`, and a tool step's output by its `id`, e.g. `{{steps.task.documentId}}`, when that step always runs first: earlier in the same list or in a list that encloses this one, never in a sibling branch or inside a decision that comes before this step. A value that is exactly one placeholder keeps its JSON type. Decisions and `{{trigger…}}` placeholders need event triggers only.
  *
  * Example, file invoices and archive newsletters. Its `steps` string holds:
  * [{"type":"choose","question":"What kind of email is this?","options":[{"label":"Invoice","description":"bills, receipts, payment requests","steps":[{"type":"tool","tool":"UpdateThreadLabels","arguments":{"thread_id":"{{trigger.entity_id}}","label":"Finance","add":true}},{"type":"tool","id":"task","tool":"CreateDocument","arguments":{"documentName":"Pay: {{trigger.email.subject}}","fileContent":"","fileExtension":"md","isTask":true}}]},{"label":"Newsletter","steps":[{"type":"tool","tool":"UpdateThreadLabels","arguments":{"thread_id":"{{trigger.entity_id}}","label":"INBOX","add":false}}]}]}]
@@ -8328,10 +8328,10 @@ export interface RoutineConfiguration {
   /**
    * Apps its agent step needs, on top of the agent's own. The user must
    * already have each one connected (offer a connect link via
-   * DiscoverConnectors if not). Updates replace the list: restate it to
-   * keep the apps.
+   * DiscoverConnectors if not). On update, omit it to keep the routine's
+   * current apps; a list replaces them, and an empty list removes them.
    */
-  requiredApps?: RoutineApp[];
+  requiredApps?: RoutineApp[] | null;
 }
 /**
  * A Pipedream app a routine requires.
@@ -8363,17 +8363,15 @@ export interface RoutineInfo {
    */
   enabled: boolean;
   /**
-   * Cron expression or event trigger, as stored by the scheduler.
+   * The saved configuration in the shape CreateRoutine and UpdateRoutine
+   * take. To change it, send it back with only the intended change.
    */
-  trigger: {
-    [k: string]: unknown;
-  };
+  configuration?: RoutineConfiguration | null;
   /**
-   * Execution target and instructions.
+   * Why `configuration` is absent: part of this routine can only be
+   * edited on its page in Macro, so UpdateRoutine refuses to replace it.
    */
-  task: {
-    [k: string]: unknown;
-  };
+  notEditableHere?: string | null;
   /**
    * Next scheduled firing, absent after a one-off completes.
    */
@@ -14655,7 +14653,7 @@ export interface ProjectItem {
   updatedAt?: string | null;
 }
 /**
- * Read a routine owned by the authenticated user, including its saved configuration and recent run history. Reading a run transcript still requires its own access.
+ * Read a routine owned by the authenticated user: its saved configuration in the shape CreateRoutine and UpdateRoutine take (name, triggers, steps, requiredApps), and its recent run history. When part of a routine can only be edited on its page in Macro (GitHub or payload filters), `notEditableHere` says why instead. Reading a run transcript still requires its own access.
  */
 export interface ReadRoutine {
   /**
@@ -15961,7 +15959,7 @@ export interface ToolFieldChange {
   };
 }
 /**
- * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send the complete configuration (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Routines saved before steps existed read back as a single agent step. Does not change ownership. A running routine can be paused but cannot be reconfigured until it finishes.
+ * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send its `configuration` back with only your change (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Omit requiredApps to keep the routine's apps. Routines ReadRoutine marks `notEditableHere` can only be paused or resumed here. Does not change ownership or the description. A running routine can be paused but cannot be reconfigured until it finishes.
  */
 export interface UpdateRoutine {
   /**

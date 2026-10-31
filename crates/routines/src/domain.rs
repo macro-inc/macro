@@ -168,10 +168,10 @@ pub struct RoutineConfiguration {
     pub steps: Vec<Step>,
     /// Apps its agent step needs, on top of the agent's own. The user must
     /// already have each one connected (offer a connect link via
-    /// DiscoverConnectors if not). Updates replace the list: restate it to
-    /// keep the apps.
-    #[serde(default)]
-    pub required_apps: Vec<RoutineApp>,
+    /// DiscoverConnectors if not). On update, omit it to keep the routine's
+    /// current apps; a list replaces them, and an empty list removes them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub required_apps: Option<Vec<RoutineApp>>,
 }
 /// A Pipedream app a routine requires.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -241,12 +241,55 @@ mod steps_json {
     }
 }
 
+/// A saved routine whose configuration these tools can't express without
+/// losing part of it, so it is only edited on its page in Macro.
+#[derive(Debug, Clone)]
+pub struct NotEditableHere(String);
+
+impl std::fmt::Display for NotEditableHere {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} Edit it on the routine's page in Macro.", self.0)
+    }
+}
+
+impl std::error::Error for NotEditableHere {}
+
 impl RoutineConfiguration {
+    /// The saved routine in the shape CreateRoutine and UpdateRoutine take, so
+    /// it can be sent back with only the intended change.
+    pub fn from_saved(name: &str, trigger: &Value, task: &Value) -> Result<Self, NotEditableHere> {
+        let program = RoutineProgram::from_task(task)
+            .map_err(|_| NotEditableHere("Its steps can't be read here.".into()))?;
+        Ok(Self {
+            name: name.to_owned(),
+            triggers: saved_triggers(trigger)?,
+            steps: program.steps,
+            required_apps: Some(
+                program
+                    .mcp_servers
+                    .into_iter()
+                    .map(|app| RoutineApp {
+                        app_slug: app.app_slug,
+                        name: app.server_name,
+                    })
+                    .collect(),
+            ),
+        })
+    }
+
     /// Validate the user's intent independently of its transport representation.
     pub fn validate(&self, now: DateTime<Utc>) -> Result<()> {
         ensure!(!self.name.trim().is_empty(), "A routine name is required.");
         self.trigger(now)?;
-        let summary = RoutineProgram::from_task(&self.task())
+        // Validate as a program, so a lone agent step gets every check too.
+        let apps: Vec<Value> = self
+            .required_apps
+            .iter()
+            .flatten()
+            .map(|app| serde_json::json!({ "app_slug": app.app_slug, "server_name": app.name }))
+            .collect();
+        let program = serde_json::json!({ "steps": self.steps, "mcp_servers": apps });
+        let summary = RoutineProgram::from_task(&program)
             .map_err(|error| anyhow::anyhow!("Invalid steps: {error}."))?
             .validate()
             .map_err(|error| anyhow::anyhow!("Invalid steps: {error}."))?;
@@ -261,14 +304,38 @@ impl RoutineConfiguration {
         Ok(())
     }
 
-    /// The scheduler's task: the steps and the apps they require. The apps
-    /// are always stated, so an update replaces them.
-    pub fn task(&self) -> Value {
-        let mcp_servers: Vec<Value> = self
-            .required_apps
-            .iter()
-            .map(|app| serde_json::json!({ "app_slug": app.app_slug, "server_name": app.name }))
-            .collect();
+    /// The scheduler's task, replacing `saved` when updating. Apps are always
+    /// stated: the listed ones, or the saved ones when the caller omitted them.
+    /// A lone agent step is stored as the single agent task routines had
+    /// before steps, as the app does, so every scheduler version can run it;
+    /// a saved program stays a program.
+    pub fn task(&self, saved: Option<&Value>) -> Value {
+        let mcp_servers: Vec<Value> = match &self.required_apps {
+            Some(apps) => apps
+                .iter()
+                .map(|app| serde_json::json!({ "app_slug": app.app_slug, "server_name": app.name }))
+                .collect(),
+            None => saved
+                .and_then(|task| task.get("mcp_servers"))
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default(),
+        };
+        let saved_program = saved.is_some_and(|task| task.get("steps").is_some());
+        if !saved_program && let [Step::Agent(agent)] = self.steps.as_slice() {
+            let mut task = serde_json::json!({
+                "mcp_servers": mcp_servers,
+                "prompt": "",
+                "user_prompt": agent.instructions,
+            });
+            if let Some(model) = &agent.model {
+                task["model"] = model.clone().into();
+            }
+            if let Some(selection) = &agent.agent {
+                task["agent"] = serde_json::json!({ "bot_id": selection.bot_id });
+            }
+            return task;
+        }
         serde_json::json!({ "steps": self.steps, "mcp_servers": mcp_servers })
     }
 
@@ -339,6 +406,78 @@ fn cron_trigger((schedule, timezone): (String, String)) -> Value {
     serde_json::json!({ "type": "cron", "schedule": schedule, "timezone": timezone })
 }
 
+/// The saved scheduler trigger as these tools' triggers: schedules stay cron
+/// expressions; each activity filter becomes one event trigger.
+fn saved_triggers(trigger: &Value) -> Result<Vec<RoutineTrigger>, NotEditableHere> {
+    let unreadable = || NotEditableHere("Its triggers can't be read here.".into());
+    match trigger.get("type").and_then(Value::as_str) {
+        Some("cron") => Ok(vec![RoutineTrigger::Cron {
+            expression: string_field(trigger, "schedule").ok_or_else(unreadable)?,
+            timezone: string_field(trigger, "timezone").ok_or_else(unreadable)?,
+        }]),
+        Some("events") => trigger
+            .get("filters")
+            .and_then(Value::as_array)
+            .ok_or_else(unreadable)?
+            .iter()
+            .map(saved_filter)
+            .collect(),
+        Some("multiple") => {
+            let mut triggers = Vec::new();
+            for trigger in trigger
+                .get("triggers")
+                .and_then(Value::as_array)
+                .ok_or_else(unreadable)?
+            {
+                triggers.extend(saved_triggers(trigger)?);
+            }
+            Ok(triggers)
+        }
+        _ => Err(unreadable()),
+    }
+}
+
+/// One activity filter, refused when it holds what an event trigger here
+/// can't state (GitHub selectors, payload tests, older event kinds), since
+/// sending it back would drop them.
+fn saved_filter(filter: &Value) -> Result<RoutineTrigger, NotEditableHere> {
+    let Value::Object(fields) = filter else {
+        return Err(NotEditableHere("Its triggers can't be read here.".into()));
+    };
+    if let Some(key) = fields
+        .keys()
+        .find(|key| !matches!(key.as_str(), "events" | "ids" | "condition"))
+    {
+        return Err(NotEditableHere(match key.as_str() {
+            "github" | "match" => {
+                "It has GitHub or payload filters these tools can't state.".into()
+            }
+            _ => format!("Its trigger has a `{key}` setting these tools can't state."),
+        }));
+    }
+    let events: Vec<RoutineEvent> = serde_json::from_value(fields["events"].clone())
+        .map_err(|_| NotEditableHere("It uses events these tools can't state.".into()))?;
+    let ids = match fields.get("ids") {
+        None | Some(Value::Null) => None,
+        Some(ids) => Some(
+            serde_json::from_value(ids.clone())
+                .map_err(|_| NotEditableHere("Its trigger's items can't be read here.".into()))?,
+        ),
+    };
+    Ok(RoutineTrigger::Event {
+        events,
+        ids,
+        condition: fields
+            .get("condition")
+            .and_then(Value::as_str)
+            .map(str::to_owned),
+    })
+}
+
+fn string_field(value: &Value, key: &str) -> Option<String> {
+    value.get(key).and_then(Value::as_str).map(str::to_owned)
+}
+
 /// Compact routine details returned to the caller.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -349,10 +488,14 @@ pub struct RoutineInfo {
     pub name: String,
     /// Whether automatic runs are enabled.
     pub enabled: bool,
-    /// Cron expression or event trigger, as stored by the scheduler.
-    pub trigger: serde_json::Value,
-    /// Execution target and instructions.
-    pub task: serde_json::Value,
+    /// The saved configuration in the shape CreateRoutine and UpdateRoutine
+    /// take. To change it, send it back with only the intended change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub configuration: Option<RoutineConfiguration>,
+    /// Why `configuration` is absent: part of this routine can only be
+    /// edited on its page in Macro, so UpdateRoutine refuses to replace it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_editable_here: Option<String>,
     /// Next scheduled firing, absent after a one-off completes.
     pub next_run_at: Option<DateTime<Utc>>,
 }

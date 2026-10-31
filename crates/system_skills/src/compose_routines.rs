@@ -10,7 +10,7 @@ static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to create a
 
 ## Start from what exists
 
-1. When the user means an existing routine (attached, mentioned, or "my invoice routine"), find it with `ListRoutines` and call `ReadRoutine`. Its saved `triggers`, `steps` and `requiredApps` are the starting point.
+1. When the user means an existing routine (attached, mentioned, or "my invoice routine"), find it with `ListRoutines` and call `ReadRoutine`. Its `configuration` (name, `triggers`, `steps`, `requiredApps`) is the starting point. When it has `notEditableHere` instead (GitHub or payload filters), you can only pause or resume it; send the user to the routine's page for anything else.
 2. Before creating one, check `ListRoutines` for a routine that already does this, and offer to change it instead of adding a duplicate.
 
 ## Choose the triggers
@@ -27,7 +27,7 @@ Steps run in order and a failed step stops the run.
 - Route with decisions rather than an agent: `if` for a yes/no question, `choose` for 2 to 8 labelled options, with `"multiple": true` when several can apply (labels, tags). One classifier call answers every decision before any step runs, so a decision judges the triggering item, not what earlier steps did.
 - Use an `agent` step only for open-ended work: drafting, research, summarizing many items. A run reaches at most one agent (agents in different branches are fine). It sees the triggering event and what earlier steps did, so put it last. Apps it needs beyond its own go in `requiredApps`, and the user must already have them connected.
 - Decisions and `{{trigger.…}}` placeholders read the triggering item, so they need activity triggers only: a routine that also has a schedule is rejected. A schedule-only routine uses fixed arguments or an agent step.
-- To act on what an earlier step made, give that step an `id` and pass its output, e.g. `{{steps.task.documentId}}` for the task a `CreateDocument` step created.
+- To act on what an earlier step made, give that step an `id` and pass its output, e.g. `{{steps.task.documentId}}` for the task a `CreateDocument` step created. The step must always run first: earlier in the same list or in an enclosing one. A step in another branch, or inside a decision before this step, may not have run, so put the follow-up in the same branch.
 - Resolve every id before writing (ListTags, GetEntityProperties, ListTeamMembers, channel search). Never invent an id or pass a name where an id is required; label steps take the label's name.
 - Limits: 40 steps in all, decisions nested at most 4 deep, 32 questions across decisions (each option of a choice is one), option labels up to 80 characters, choice questions and option descriptions up to 200.
 
@@ -35,7 +35,7 @@ Steps run in order and a failed step stops the run.
 
 1. When something is ambiguous - which channel, label, folder or person, or whether it should run on a schedule or on activity - ask before writing.
 2. Pass `steps` as a JSON array encoded in a string.
-3. To change a routine, call `UpdateRoutine` with `"type": "configuration"` and the complete configuration: it replaces the name, triggers, steps and `requiredApps`, so carry over everything the user didn't ask to change. Pause or resume with `"type": "enabled"` instead. A running routine can be paused but not reconfigured until its run ends.
+3. To change a routine, call `UpdateRoutine` with `"type": "configuration"` and its `configuration` from ReadRoutine with only the user's change: it replaces the name, triggers and steps, so carry over everything the user didn't ask to change. Omit `requiredApps` to keep its apps; a list replaces them. Pause or resume with `"type": "enabled"` instead. A running routine can be paused but not reconfigured until its run ends.
 4. If the tool refuses, fix what its message names and try once more; otherwise relay the reason.
 
 ## Report
