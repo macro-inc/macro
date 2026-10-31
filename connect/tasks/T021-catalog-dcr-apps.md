@@ -78,3 +78,65 @@ OAuth client: `managed_oauth_app` (we registered an app with the vendor:
   the Result.
 
 ## Result
+
+### Changed
+
+- `connect/crates/connect_client/src/{wire,test}.rs`, `connect/services/connect_api/src/{main,test}.rs`, and `connect/services/connect_demo/src/{main,test}.rs`: added optional `oauth_client` (`managed_oauth_app` or `dcr`) to catalog JSON and OpenAPI, mapped it from registration type, and rendered the demo badge. API-key entries omit the field.
+- `connect/crates/connect_registry/src/{embedded,test}.rs`, 33 existing `connect/registry/apps/*/app.toml` files, and new `apify`, `exa`, `highlevel`, `mailchimp`, and `zendesk` app directories with SVG icons: re-probed the used apps, corrected metadata and statuses, and loaded the new entries. There are 41 registry entries; 30 are live candidates covering 1,160 existing connections.
+- `connect/tests/connect_integration/src/{main,test}.rs` and `connect/tooling/integration.sh`: added a per-app authorization-page acceptance table, local DCR mode, and an isolated Compose project option.
+- `connect/docs/catalog.md` and `connect/docs/plan.md`: documented the label policy, all 40 conformance classifications, probe URLs, icon sources, and updated coverage.
+- `connect/crates/connect_client/AGENTS.md`, `connect/crates/connect_registry/AGENTS.md`, `connect/services/connect_api/AGENTS.md`, `connect/services/connect_demo/AGENTS.md`, and `connect/tests/connect_integration/AGENTS.md`: updated local guidance for the changed behavior and checks.
+
+### Checks
+
+All Rust and repository commands ran inside `nix develop --command` with the worktree's `CONNECT_CARGO_TARGET_DIR` and `CONNECT_DATABASE_URL` exported as `CARGO_TARGET_DIR` and `DATABASE_URL`.
+
+| Check | Outcome |
+| --- | --- |
+| `cargo nextest run --all-features -p connect_registry -p connect_api -p connect_client -p connect_demo` | Pass: 44 tests, 0 failed, 0 skipped. |
+| `cargo clippy -p connect_registry -p connect_api -p connect_client -p connect_demo -p connect_integration --all-features --all-targets -- -D warnings` | Pass. |
+| `cargo test -p connect_integration` | Pass: 2 tests. |
+| `cargo x deps --check` | Pass. |
+| `cargo fmt --all -- --check` | Pass. |
+| `just check` | Pass: cargo fmt, ast-grep, PII scan, and PII scanner tests (12). The pinned ast-grep binary needed the Nix glibc loader in this environment. |
+| `connect/tooling/integration.sh local-acceptance` and final `connect_integration --acceptance --dcr-only` rerun | Pass: 12 of 12 live DCR app authorization pages; final table below. |
+| `connect/tooling/integration.sh local` | Pass: all 26 reported local scenarios. |
+| Headless Chromium demo check | Pass: `/demo` rendered 30 DCR badges; screenshot inspected. |
+
+### Local DCR acceptance
+
+The final probe used a rebuilt local API with `CONNECT_PUBLIC_URL=https://connect-dev.macro.com` and the local HTTP transport. Each row reached the vendor authorization flow without completing sign-in.
+
+| App | Result | Vendor response |
+| --- | --- | --- |
+| attio | PASS | 302 login redirect to `app.attio.com` |
+| calendly | PASS | 302 login redirect to `calendly.com` |
+| clickup | PASS | 200 HTML sign-in or consent page |
+| fathom | PASS | 302 login redirect to `fathom.video` |
+| highlevel | PASS | 302 login redirect to `marketplace.leadconnectorhq.com` |
+| mailchimp | PASS | 200 HTML sign-in or consent page |
+| netlify | PASS | 200 HTML sign-in or consent page |
+| paypal | PASS | 302 login redirect to `www.paypal.com` |
+| quo | PASS | 200 HTML sign-in or consent page |
+| stripe | PASS | 302 login redirect to `dashboard.stripe.com` |
+| supabase | PASS | 200 HTML sign-in or consent page |
+| webflow | PASS | 200 HTML sign-in or consent page |
+
+An earlier probe also reached Coda: Connect returned `502 Bad Gateway` with `{"error":"oauth_failed"}` during client registration, although direct DCR returned 201. Coda is classified `broken` and remains pending, so it is absent from the final live-app run.
+
+### Open questions
+
+- Why does Connect's Coda registration fail after the vendor accepts the same DCR request directly? This needs diagnosis before Coda can be live.
+- CIMD client-ID acceptance and full sign-in, refresh, tools, and read-only call conformance await the dev deployment and vendor test accounts, as scoped in the task Context.
+
+### Proposed commits
+
+1. `feat(connect): label catalog OAuth clients`
+   - Why: Catalog consumers need the registration model for each OAuth app.
+   - What: Add the optional wire/OpenAPI label, API mapping, demo badge, and contract tests.
+2. `feat(connect): classify used remote MCP apps`
+   - Why: Used apps need dated evidence before appearing in the catalog.
+   - What: Re-probe registry entries, add qualifying entries and icons, classify all used apps, and update coverage and guidance.
+3. `test(connect): check vendor authorization pages`
+   - Why: Metadata and DCR registration alone do not show whether an app reaches sign-in.
+   - What: Add per-app acceptance reporting, local DCR mode, redirect checks, and integration guidance.
