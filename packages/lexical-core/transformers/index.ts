@@ -1,6 +1,7 @@
 import type { Transformer } from '@lexical/markdown';
 import { I_AGENT_ACTIVITY } from './agentActivity';
 import { I_AGENT_CONTEXT } from './agentContext';
+import { I_ATTACHMENT } from './attachment';
 import { AUTO_LINK, ESCAPED_AUTO_LINK } from './auto-link';
 import { I_AWAIT_NODE } from './await';
 import { HTML_BLOCKQUOTE, I_MACRO_QUOTE } from './classedBlock';
@@ -82,6 +83,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   HR,
   I_VIDEO,
   I_IMAGE_CONSTRAINED,
+  I_ATTACHMENT,
   IMAGE, // Standard markdown images (fallback)
   I_USER_MENTION,
   I_GROUP_MENTION,
@@ -177,6 +179,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   HR,
   I_VIDEO,
   I_IMAGE_CONSTRAINED,
+  I_ATTACHMENT,
   IMAGE,
   BR_TAG_TO_LINE_BREAK,
   I_TABLE_NODE,

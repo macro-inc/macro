@@ -485,6 +485,7 @@ dependencies = [
  "serde_json",
  "shared_entity_registry",
  "sqlx",
+ "static_file_service_client",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -11549,12 +11550,14 @@ dependencies = [
  "base64 0.22.1",
  "macro_tower_layers",
  "messages",
+ "nom 8.0.0",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "trigger_context",
+ "uuid",
  "workspace-hack",
 ]
 

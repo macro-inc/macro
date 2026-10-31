@@ -413,6 +413,7 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
         Arc::new(messages),
         Arc::new(EditingAccess),
         LexicalClient::new("test-key".to_owned(), lexical.uri()),
+        KnownFiles(vec![]),
     );
 
     announcer
@@ -517,6 +518,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
             Arc::new(messages),
             Arc::new(EditingAccess),
             LexicalClient::new("test-key".to_owned(), lexical.uri()),
+            KnownFiles(vec![]),
         );
         announcer
             .present(ReplyPresentation {
@@ -555,4 +557,440 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
         Some("TOKEN=private-value run-report"),
         "snapshot serialization leaves live session details intact"
     );
+}
+
+/// Static files the attachment tests know: their media types by id.
+struct KnownFiles(Vec<(Uuid, &'static str)>);
+
+impl ReplyFiles for KnownFiles {
+    async fn content_type(&self, static_file_id: Uuid) -> Result<Option<String>> {
+        Ok(self
+            .0
+            .iter()
+            .find(|(id, _)| *id == static_file_id)
+            .map(|(_, content_type)| (*content_type).to_owned()))
+    }
+}
+
+/// The prose of every reply Lexical was asked to compose.
+async fn composed_prose(lexical: &wiremock::MockServer) -> Vec<String> {
+    lexical
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .flat_map(|request| {
+            let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+            body["chatReply"]["body"]["segments"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|segment| segment["markdown"].as_str().map(str::to_owned))
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+/// An agent's reply that pastes an attachment marker is posted with that
+/// file as a sized image attachment, and without the marker in its text.
+#[tokio::test]
+async fn a_resolved_reply_attaches_the_file_its_marker_names() {
+    use agent_fold::domain::model::Segment;
+    let lexical = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::method("POST"))
+        .and(wiremock::matchers::path("/agent-announcement"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "markdown": "composed answer" })),
+        )
+        .expect(1)
+        .mount(&lexical)
+        .await;
+    let parent = MessageParent::Channel(Uuid::from_u128(1));
+    let reply_id = Uuid::from_u128(3);
+    let image_id = Uuid::from_u128(7);
+    let replied = Message {
+        id: reply_id,
+        parent: parent.clone(),
+        thread_id: Some(Uuid::from_u128(2)),
+        sender_id: channel_sender::ChannelSender::new_from_user(
+            MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+        ),
+        triggered_via: None,
+        triggered_by: None,
+        bot_profile: None,
+        mentions: vec![],
+        guest_name: None,
+        imported_author: None,
+        content: "composed answer".to_owned(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        edited_at: None,
+        deleted_at: None,
+        attachments: vec![],
+        reactions: vec![],
+    };
+    let mut messages = messages::domain::api::MockMessageCommands::new();
+    messages
+        .expect_patch()
+        .times(1)
+        .returning(move |_, id, patch| {
+            assert_eq!(id, reply_id);
+            let AttachmentChange::Replace(attachments) = patch.attachments else {
+                panic!("expected the marker's file to replace the reply's attachments");
+            };
+            assert_eq!(
+                attachments,
+                vec![NewAttachment {
+                    entity_type: "static/image".to_owned(),
+                    entity_id: image_id.to_string(),
+                    width: Some(1184),
+                    height: Some(864),
+                }]
+            );
+            Ok(replied.clone())
+        });
+    let announcer = MessageAnnouncer::new(
+        Arc::new(messages),
+        Arc::new(EditingAccess),
+        LexicalClient::new("test-key".to_owned(), lexical.uri()),
+        KnownFiles(vec![(image_id, "image/png")]),
+    );
+    let answer = format!(
+        "Here is the lighthouse.\n\n<m-attachment>{{\"staticFileId\":\"{image_id}\",\"kind\":\"image\",\"width\":1184,\"height\":864}}</m-attachment>"
+    );
+
+    announcer
+        .resolve(ResolvedReply {
+            session_id: SESSION,
+            bot_id: BotId::TEST_A,
+            is_coding: false,
+            message_id: reply_id,
+            origin_parent: parent,
+            triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+            outcome: ReplyOutcome::Answered(answer.clone()),
+            turn: TurnId(0),
+            segments: vec![ProjectedSegment {
+                segment: Segment {
+                    index: 0,
+                    kind: SegmentKind::Prose,
+                    start: 0,
+                    end: 1,
+                    sealed: true,
+                    rows: vec![],
+                },
+                text: Some(answer),
+            }],
+        })
+        .await
+        .expect("the answer replaces the spinner");
+
+    assert_eq!(composed_prose(&lexical).await, ["Here is the lighthouse."]);
+}
+
+/// Every marker is taken from the text; only files that exist and are the
+/// media their marker says are attached.
+#[tokio::test]
+async fn markers_naming_missing_or_mismatched_files_attach_nothing() {
+    use agent_fold::domain::model::Segment;
+    let lexical = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::method("POST"))
+        .and(wiremock::matchers::path("/agent-announcement"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "markdown": "composed answer" })),
+        )
+        .mount(&lexical)
+        .await;
+    let parent = MessageParent::Channel(Uuid::from_u128(1));
+    let reply_id = Uuid::from_u128(3);
+    let image_id = Uuid::from_u128(7);
+    let video_id = Uuid::from_u128(8);
+    let missing_id = Uuid::from_u128(9);
+    let text_file_id = Uuid::from_u128(10);
+    let replied = Message {
+        id: reply_id,
+        parent: parent.clone(),
+        thread_id: Some(Uuid::from_u128(2)),
+        sender_id: channel_sender::ChannelSender::new_from_user(
+            MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+        ),
+        triggered_via: None,
+        triggered_by: None,
+        bot_profile: None,
+        mentions: vec![],
+        guest_name: None,
+        imported_author: None,
+        content: "composed answer".to_owned(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        edited_at: None,
+        deleted_at: None,
+        attachments: vec![],
+        reactions: vec![],
+    };
+    let mut messages = messages::domain::api::MockMessageCommands::new();
+    messages
+        .expect_patch()
+        .times(1)
+        .returning(move |_, _, patch| {
+            let AttachmentChange::Replace(attachments) = patch.attachments else {
+                panic!("expected the found files to replace the reply's attachments");
+            };
+            assert_eq!(
+                attachments,
+                vec![
+                    NewAttachment {
+                        entity_type: "static/image".to_owned(),
+                        entity_id: image_id.to_string(),
+                        width: None,
+                        height: None,
+                    },
+                    NewAttachment {
+                        entity_type: "static/video".to_owned(),
+                        entity_id: video_id.to_string(),
+                        width: Some(1920),
+                        height: Some(1080),
+                    },
+                ]
+            );
+            Ok(replied.clone())
+        });
+    let announcer = MessageAnnouncer::new(
+        Arc::new(messages),
+        Arc::new(EditingAccess),
+        LexicalClient::new("test-key".to_owned(), lexical.uri()),
+        KnownFiles(vec![
+            (image_id, "image/png"),
+            (video_id, "video/mp4"),
+            (text_file_id, "text/plain"),
+        ]),
+    );
+    let answer = format!(
+        "Done: <m-attachment>{{\"staticFileId\":\"{image_id}\",\"kind\":\"image\"}}</m-attachment> and the clip.\n<m-attachment>{{\"staticFileId\":\"{video_id}\",\"kind\":\"video\",\"width\":1920,\"height\":1080}}</m-attachment>\n<m-attachment>{{\"staticFileId\":\"{missing_id}\",\"kind\":\"image\"}}</m-attachment>\n<m-attachment>{{\"staticFileId\":\"{text_file_id}\",\"kind\":\"image\"}}</m-attachment>\n<m-attachment>{{\"staticFileId\":\"{image_id}\",\"kind\":\"image\"}}</m-attachment>"
+    );
+
+    announcer
+        .resolve(ResolvedReply {
+            session_id: SESSION,
+            bot_id: BotId::TEST_A,
+            is_coding: false,
+            message_id: reply_id,
+            origin_parent: parent,
+            triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+            outcome: ReplyOutcome::Answered(answer.clone()),
+            turn: TurnId(0),
+            segments: vec![ProjectedSegment {
+                segment: Segment {
+                    index: 0,
+                    kind: SegmentKind::Prose,
+                    start: 0,
+                    end: 1,
+                    sealed: true,
+                    rows: vec![],
+                },
+                text: Some(answer),
+            }],
+        })
+        .await
+        .expect("the answer replaces the spinner");
+
+    assert_eq!(composed_prose(&lexical).await, ["Done: and the clip."]);
+}
+
+/// A reply without markers, or with one only inside code, keeps its text
+/// and leaves the message's attachments alone.
+#[tokio::test]
+async fn a_reply_without_markers_outside_code_is_posted_as_written() {
+    use agent_fold::domain::model::Segment;
+    let image_id = Uuid::from_u128(7);
+    for answer in [
+        "Plain answer.".to_owned(),
+        format!(
+            "Paste this:\n\n```\n<m-attachment>{{\"staticFileId\":\"{image_id}\",\"kind\":\"image\"}}</m-attachment>\n```"
+        ),
+    ] {
+        let lexical = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("POST"))
+            .and(wiremock::matchers::path("/agent-announcement"))
+            .respond_with(
+                wiremock::ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ "markdown": "composed answer" })),
+            )
+            .expect(1)
+            .mount(&lexical)
+            .await;
+        let parent = MessageParent::Channel(Uuid::from_u128(1));
+        let reply_id = Uuid::from_u128(3);
+        let replied = Message {
+            id: reply_id,
+            parent: parent.clone(),
+            thread_id: Some(Uuid::from_u128(2)),
+            sender_id: channel_sender::ChannelSender::new_from_user(
+                MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+            ),
+            triggered_via: None,
+            triggered_by: None,
+            bot_profile: None,
+            mentions: vec![],
+            guest_name: None,
+            imported_author: None,
+            content: "composed answer".to_owned(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            edited_at: None,
+            deleted_at: None,
+            attachments: vec![],
+            reactions: vec![],
+        };
+        let mut messages = messages::domain::api::MockMessageCommands::new();
+        messages
+            .expect_patch()
+            .times(1)
+            .returning(move |_, _, patch| {
+                assert!(matches!(patch.attachments, AttachmentChange::Preserve));
+                Ok(replied.clone())
+            });
+        let announcer = MessageAnnouncer::new(
+            Arc::new(messages),
+            Arc::new(EditingAccess),
+            LexicalClient::new("test-key".to_owned(), lexical.uri()),
+            KnownFiles(vec![(image_id, "image/png")]),
+        );
+
+        announcer
+            .resolve(ResolvedReply {
+                session_id: SESSION,
+                bot_id: BotId::TEST_A,
+                is_coding: false,
+                message_id: reply_id,
+                origin_parent: parent,
+                triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+                outcome: ReplyOutcome::Answered(answer.clone()),
+                turn: TurnId(0),
+                segments: vec![ProjectedSegment {
+                    segment: Segment {
+                        index: 0,
+                        kind: SegmentKind::Prose,
+                        start: 0,
+                        end: 1,
+                        sealed: true,
+                        rows: vec![],
+                    },
+                    text: Some(answer.clone()),
+                }],
+            })
+            .await
+            .expect("the answer replaces the spinner");
+
+        assert_eq!(composed_prose(&lexical).await, [answer]);
+    }
+}
+
+/// A reply shown in segments attaches a passage's files to the message that
+/// shows the passage, including one already posted while the turn ran.
+#[tokio::test]
+async fn a_presented_passage_attaches_the_file_its_marker_names() {
+    use agent_fold::domain::model::Segment;
+    let lexical = wiremock::MockServer::start().await;
+    wiremock::Mock::given(wiremock::matchers::method("POST"))
+        .and(wiremock::matchers::path("/agent-announcement"))
+        .respond_with(
+            wiremock::ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({ "markdown": "closing passage" })),
+        )
+        .expect(1)
+        .mount(&lexical)
+        .await;
+    let parent = MessageParent::Channel(Uuid::from_u128(1));
+    let message_id = Uuid::from_u128(3);
+    let image_id = Uuid::from_u128(7);
+    let wanted = vec![NewAttachment {
+        entity_type: "static/image".to_owned(),
+        entity_id: image_id.to_string(),
+        width: Some(768),
+        height: Some(1024),
+    }];
+    let shown = Message {
+        id: message_id,
+        parent: parent.clone(),
+        thread_id: None,
+        sender_id: channel_sender::ChannelSender::new_from_user(
+            MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+        ),
+        triggered_via: None,
+        triggered_by: None,
+        bot_profile: None,
+        mentions: vec![],
+        guest_name: None,
+        imported_author: None,
+        content: "closing passage".to_owned(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+        edited_at: None,
+        deleted_at: None,
+        attachments: vec![],
+        reactions: vec![],
+    };
+    let mut messages = messages::domain::api::MockMessageCommands::new();
+    let posted = wanted.clone();
+    let existing = shown.clone();
+    messages
+        .expect_post_from_event()
+        .times(1)
+        .returning(move |_, _, post| {
+            assert_eq!(post.attachments, posted);
+            Ok(existing.clone())
+        });
+    let patched = wanted.clone();
+    messages
+        .expect_patch()
+        .times(1)
+        .returning(move |_, id, patch| {
+            assert_eq!(id, message_id);
+            let AttachmentChange::Replace(attachments) = patch.attachments else {
+                panic!("expected the file to replace the message's attachments");
+            };
+            assert_eq!(attachments, patched);
+            Ok(shown.clone())
+        });
+    let announcer = MessageAnnouncer::new(
+        Arc::new(messages),
+        Arc::new(EditingAccess),
+        LexicalClient::new("test-key".to_owned(), lexical.uri()),
+        KnownFiles(vec![(image_id, "image/webp")]),
+    );
+
+    announcer
+        .present(ReplyPresentation {
+            session_id: SESSION,
+            bot_id: BotId::TEST_A,
+            triggered_by: MacroUserIdStr::try_from_email("user@example.com").unwrap(),
+            parent,
+            thread_id: None,
+            message_id,
+            turn: TurnId(0),
+            segments: vec![ProjectedSegment {
+                segment: Segment {
+                    index: 0,
+                    kind: SegmentKind::Prose,
+                    start: 0,
+                    end: 1,
+                    sealed: true,
+                    rows: vec![],
+                },
+                text: Some(format!(
+                    "Portrait version:\n<m-attachment>{{\"staticFileId\":\"{image_id}\",\"kind\":\"image\",\"width\":768,\"height\":1024}}</m-attachment>"
+                )),
+            }],
+            link: false,
+            pending: false,
+            outcome: Some(ReplyOutcome::Answered("closing passage".to_owned())),
+            notify: true,
+        })
+        .await
+        .expect("the closing message is shown with its file");
+
+    assert_eq!(composed_prose(&lexical).await, ["Portrait version:"]);
 }

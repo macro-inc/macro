@@ -8961,6 +8961,7 @@ export const GenerateImageResponse = z.object({
   width: z.union([z.number().int().gte(0), z.null()]).optional(),
   height: z.union([z.number().int().gte(0), z.null()]).optional(),
   markdown: z.union([z.string(), z.null()]).optional(),
+  attachment: z.union([z.string(), z.null()]).optional(),
   note: z.union([z.string(), z.null()]).optional(),
 });
 

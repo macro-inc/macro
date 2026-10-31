@@ -79,6 +79,7 @@ use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
+use agent_harness::outbound::reply_files::StaticFileReplyFiles;
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
 use agent_harness::outbound::tool_approvals::{
@@ -1131,6 +1132,10 @@ async fn run() -> anyhow::Result<()> {
         message_service.clone(),
         Arc::clone(&entity_access),
         lexical.clone(),
+        StaticFileReplyFiles::new(static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.clone(),
+            macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+        )),
     );
     let prompt_mentions =
         LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));

@@ -637,9 +637,13 @@ ahead, and a reply in that same thread approving it ("yes, send it" / "go ahead"
 confirmation - the agent then sends or creates directly (`SendConfirmedEmail`,
 `CreateConfirmedCalendarEvent`), with no session visit needed. Being asked to send or
 schedule something only produces the draft; nothing goes out before that approving reply.
-Images made with `GenerateImage` are saved to static file service. The bot embeds
-the returned URL as a Markdown image in its channel reply; generated images have
-no document mention or filename card.
+Images made with `GenerateImage` are saved to static file service. An agent
+attaches an image or video to its reply by writing an `<m-attachment>` marker
+(the tool returns one ready to paste); the posted message carries the file as a
+sized attachment in the same grid as a person's upload (single-click opens the
+lightbox), and the marker is not shown. Markers inside code stay as text, and a
+marker naming a missing or mismatched file attaches nothing. Generated images
+have no document mention or filename card.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. A mention of an image document (PNG, JPG, GIF, SVG, WebP)
 also unfurls beneath the message text as an image card: a header with the filename

@@ -75,7 +75,7 @@ pub enum ToolMessageKind {
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ChannelAttachmentKind {
-    /// An inline image uploaded with CreateChannelMediaUpload.
+    /// An inline image uploaded with CreateChannelMediaUpload or made by GenerateImage.
     Image,
     /// An inline, playable video uploaded with CreateChannelMediaUpload.
     Video,
@@ -97,14 +97,14 @@ impl ChannelAttachmentKind {
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ChannelMessageAttachmentInput {
-    /// The attachmentId from CreateChannelMediaUpload, or a document ID.
+    /// The attachmentId from CreateChannelMediaUpload, a GenerateImage staticFileId, or a document ID.
     #[schemars(
-        description = "The attachmentId returned by CreateChannelMediaUpload (after its upload succeeded), or the ID of a Macro document."
+        description = "The attachmentId returned by CreateChannelMediaUpload (after its upload succeeded), the staticFileId returned by GenerateImage, or the ID of a Macro document."
     )]
     pub id: String,
     /// How the attachment renders.
     #[schemars(
-        description = "image or video for media from CreateChannelMediaUpload (use the kind it returned); document for a Macro document ID."
+        description = "image or video for media from CreateChannelMediaUpload (use the kind it returned); image for a GenerateImage staticFileId; document for a Macro document ID."
     )]
     pub kind: ChannelAttachmentKind,
     /// Optional pixel width of an image or video, used to lay it out before it loads.

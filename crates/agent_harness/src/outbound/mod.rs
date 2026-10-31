@@ -21,6 +21,7 @@ pub mod namespace;
 pub mod notifications;
 pub mod prompt_mentions;
 pub(crate) mod provision;
+pub mod reply_files;
 pub mod routing;
 pub mod runtime_registry;
 pub mod session_tasks;

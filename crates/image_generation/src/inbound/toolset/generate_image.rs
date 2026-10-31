@@ -17,6 +17,7 @@ use crate::domain::{
     },
     ports::ImageGenerationService,
 };
+use lexical_client::attachment_marker::{AttachmentKind, AttachmentMarker};
 use model_owner::CreationPrincipal;
 
 #[cfg(test)]
@@ -76,7 +77,7 @@ impl From<ImageReferenceInput> for ImageReference {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "GenerateImage",
-    description = "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. In channel messages without tool cards, copy the returned markdown verbatim on its own line; it includes dimensions so the image reserves space before loading. Do not cite it as a document. Generation takes several seconds."
+    description = "Generate or edit an image with Google's Nano Banana image model and save the result in static file service. Use for pictures, illustrations, diagram concepts, logo ideas, mockups, or edits based on reference photos. When the user supplies photos or asks to modify an existing image, pass them in referenceImages; describing a photo in the prompt alone does not send it to the image model. Describe the subject, style, composition, lighting, and any text to render; only the prompt is required. Refer to reference images by their order (image 1, image 2, image 3) when explaining how to use them. Returns the static file ID and image URL. The tool displays the image inline in chat. To show the image in a reply that is posted to a channel or thread, paste the returned attachment marker verbatim on its own line: the image is attached to the posted message at its size, and the marker is removed from the text. Never write image markdown in a channel message. To send it with SendChannelMessage instead, pass staticFileId as an attachment of kind image with the returned width and height. Only Macro markdown documents take the returned markdown, copied verbatim on its own line. Do not cite it as a document. Generation takes several seconds."
 )]
 /// Generate an image and save it as a static file.
 pub struct GenerateImage {
@@ -115,9 +116,14 @@ pub struct GenerateImageResponse {
     /// Intrinsic pixel height. Absent only in historical tool results.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
-    /// Ready-to-send channel image markup with dimensions. Copy verbatim on its own line.
+    /// Image markup with dimensions for Macro markdown documents, never channel messages.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub markdown: Option<String>,
+    /// Marker to paste on its own line in a channel or thread reply; the
+    /// image is attached to the posted message. Absent only in historical
+    /// tool results.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachment: Option<String>,
     /// Commentary the model produced alongside the image, when any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
@@ -183,6 +189,15 @@ impl From<StoredGeneratedImage> for GenerateImageResponse {
             width: Some(created.width),
             height: Some(created.height),
             markdown: Some(created.markdown),
+            attachment: Some(
+                AttachmentMarker {
+                    static_file_id: created.static_file.id,
+                    kind: AttachmentKind::Image,
+                    width: Some(created.width),
+                    height: Some(created.height),
+                }
+                .render(),
+            ),
             note: created.note,
         }
     }

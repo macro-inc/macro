@@ -1335,6 +1335,47 @@ async fn send_channel_message_maps_attachments_to_message_references() {
     );
 }
 
+#[tokio::test]
+async fn send_channel_message_attaches_a_generated_image_by_its_static_file_id() {
+    let static_file_id = Uuid::new_v4().to_string();
+    let messages = RecordingMessages::default();
+    let posts = messages.posts.clone();
+    let tool: SendChannelMessage = serde_json::from_value(serde_json::json!({
+        "content": "Here is the logo.",
+        "channel_id": Uuid::new_v4(),
+        "attachments": [
+            { "id": static_file_id, "kind": "image", "width": 1024, "height": 768 },
+        ],
+    }))
+    .expect("generated image attachment deserializes");
+
+    tool.call(
+        ServiceContext(ChannelToolContext::new(
+            Arc::new(messages),
+            ToolTestChannelService::default(),
+            ToolTestAccessService::default(),
+        )),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("member can post a generated image");
+
+    let posts = posts.lock().expect("post lock");
+    let [(_, input)] = posts.as_slice() else {
+        panic!("expected one post, got {}", posts.len());
+    };
+    assert_eq!(input.content, "Here is the logo.");
+    assert_eq!(
+        input.attachments,
+        vec![messages::domain::models::NewAttachment {
+            entity_type: "static/image".to_string(),
+            entity_id: static_file_id,
+            width: Some(1024),
+            height: Some(768),
+        }]
+    );
+}
+
 #[test]
 fn send_channel_message_without_attachments_still_deserializes() {
     let tool: SendChannelMessage = serde_json::from_value(serde_json::json!({

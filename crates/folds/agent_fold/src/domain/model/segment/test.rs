@@ -392,3 +392,26 @@ fn session_activity_retains_command_and_tool_input_details_for_authorized_live_v
     assert_eq!(live[0].rows[0].detail.as_deref(), Some(command));
     assert_eq!(live[0].rows[1].detail.as_deref(), Some(query));
 }
+
+/// Replies saved before images moved into reply markers carry an `images`
+/// list on their segments; reading one back ignores it.
+#[test]
+fn a_saved_segment_with_the_retired_images_field_still_reads() {
+    let saved = serde_json::json!({
+        "segment": {
+            "index": 1,
+            "kind": "activity",
+            "start": 1,
+            "end": 2,
+            "sealed": true,
+            "rows": [],
+        },
+        "text": null,
+        "images": [{ "staticFileId": "0198f2c4-5b6a-7c8d-9e0f-1a2b3c4d5e6f", "width": 1024, "height": 768 }],
+    });
+
+    let segment: ProjectedSegment = serde_json::from_value(saved).expect("old rows still read");
+
+    assert_eq!(segment.segment.kind, SegmentKind::Activity);
+    assert_eq!(segment.text, None);
+}

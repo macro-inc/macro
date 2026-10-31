@@ -241,6 +241,9 @@ pub enum NewThreadAnchor {
     },
 }
 
+/// Most attachments one message carries.
+pub const MAX_ATTACHMENTS: usize = 10;
+
 /// Longest marked-text snapshot kept with a discussion. A comment marks a
 /// phrase or a paragraph; a longer range is elided so that one highlight
 /// cannot crowd out the rest of an agent prompt.
