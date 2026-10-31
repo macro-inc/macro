@@ -3,6 +3,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { getNativeNetworkAbortSignal } from '../mobile/native-network-status';
 
 import {
   confirmSessionExpired,
@@ -10,6 +11,11 @@ import {
   fetchWithToken,
   unsetTokenPromise,
 } from './fetchWithToken';
+
+const nativeNetwork = vi.hoisted(() => ({ controller: new AbortController() }));
+vi.mock('../mobile/native-network-status', () => ({
+  getNativeNetworkAbortSignal: vi.fn(() => nativeNetwork.controller.signal),
+}));
 
 const RESOURCE_URL = 'https://localhost/resource';
 
@@ -55,6 +61,10 @@ describe('fetchWithToken refresh latch', () => {
 
   beforeEach(() => {
     unsetTokenPromise();
+    nativeNetwork.controller = new AbortController();
+    vi.mocked(getNativeNetworkAbortSignal).mockImplementation(
+      () => nativeNetwork.controller.signal
+    );
     global.fetch = mockFetch as typeof fetch;
   });
 
@@ -62,10 +72,130 @@ describe('fetchWithToken refresh latch', () => {
     global.fetch = originalFetch;
     mockFetch.mockReset();
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   const refreshCalls = () =>
     mockFetch.mock.calls.filter(([input]) => isRefresh(input)).length;
+
+  test('refreshes on runtimes without AbortSignal.any', async () => {
+    vi.spyOn(AbortSignal, 'any').mockImplementation(() => {
+      throw new TypeError('AbortSignal.any is unavailable');
+    });
+    mockFetch.mockResolvedValue(jsonResponse(200));
+
+    expect((await fetchToken()).isOk()).toBe(true);
+  });
+
+  test('clears failed refresh setup and its timer so the next caller can retry', async () => {
+    vi.useFakeTimers();
+    vi.mocked(getNativeNetworkAbortSignal).mockImplementationOnce(() => {
+      throw new Error('Reachability setup failed');
+    });
+    mockFetch.mockResolvedValue(jsonResponse(200));
+
+    await expect(fetchToken()).rejects.toThrow('Reachability setup failed');
+    expect(vi.getTimerCount()).toBe(0);
+    expect((await fetchToken()).isOk()).toBe(true);
+    expect(refreshCalls()).toBe(1);
+  });
+
+  test('a stalled refresh times out and permits retry without expiring the session', async () => {
+    vi.useFakeTimers();
+    const response = deferred<Response>();
+    const started = Promise.withResolvers<void>();
+    let refreshSignal: AbortSignal | null | undefined;
+    mockFetch.mockImplementation((_input, init) => {
+      refreshSignal = init?.signal;
+      started.resolve();
+      // Model a native bridge that does not settle when aborted.
+      return response.promise;
+    });
+
+    const first = fetchToken();
+    await started.promise;
+    await vi.advanceTimersByTimeAsync(12_000);
+
+    expect(refreshSignal?.aborted).toBe(true);
+    const result = await first;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toEqual([
+        { code: 'NETWORK_ERROR', message: 'Authentication refresh timed out' },
+      ]);
+    }
+
+    mockFetch.mockResolvedValue(jsonResponse(200));
+    await expect(confirmSessionExpired()).resolves.toBe(false);
+    expect(refreshCalls()).toBe(2);
+
+    // The retired refresh must not latch its late rejection over a new session.
+    response.resolve(textResponse(400, REFRESH_REJECTED_BODY));
+    await vi.advanceTimersByTimeAsync(0);
+    expect((await fetchToken()).isOk()).toBe(true);
+    expect(refreshCalls()).toBe(3);
+  });
+
+  test('cancels one caller while preserving the shared refresh for another', async () => {
+    const response = deferred<Response>();
+    const started = Promise.withResolvers<void>();
+    let refreshSignal: AbortSignal | null | undefined;
+    mockFetch.mockImplementation((input, init) => {
+      if (isRefresh(input)) {
+        refreshSignal = init?.signal;
+        started.resolve();
+        return response.promise;
+      }
+      return Promise.resolve(jsonResponse(401));
+    });
+    const controller = new AbortController();
+    const request = fetchWithToken(RESOURCE_URL, { signal: controller.signal });
+    await started.promise;
+    const other = fetchToken();
+    controller.abort();
+
+    const result = await request;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error[0]?.code).toBe('NETWORK_ERROR');
+    expect(refreshSignal?.aborted).toBe(false);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    response.resolve(jsonResponse(200));
+    expect((await other).isOk()).toBe(true);
+    expect(refreshCalls()).toBe(1);
+  });
+
+  test('does not start refresh for an already cancelled caller', async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    expect((await fetchToken(controller.signal)).isErr()).toBe(true);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  test('releases a stalled refresh when native connectivity drops and retries online', async () => {
+    const started = Promise.withResolvers<void>();
+    const response = deferred<Response>();
+    mockFetch.mockImplementation(() => {
+      started.resolve();
+      return response.promise;
+    });
+    const first = fetchToken();
+    await started.promise;
+
+    expect(getNativeNetworkAbortSignal()).toBe(nativeNetwork.controller.signal);
+    nativeNetwork.controller.abort();
+    expect(mockFetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    const result = await first;
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error[0]?.code).toBe('NETWORK_ERROR');
+
+    nativeNetwork.controller = new AbortController();
+    mockFetch.mockResolvedValue(jsonResponse(200));
+    expect((await fetchToken()).isOk()).toBe(true);
+    expect(refreshCalls()).toBe(2);
+    response.resolve(jsonResponse(200));
+  });
 
   test('fires at most one doomed refresh across sequential 401s', async () => {
     mockFetch.mockImplementation((input) =>
