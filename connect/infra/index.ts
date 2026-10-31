@@ -507,6 +507,8 @@ if (demoCustomerKey) {
     }),
   });
   const demoTarget = new aws.lb.TargetGroup(`${demoName}-target`, {
+    // Target group names are limited to 32 characters.
+    namePrefix: 'demo-',
     port: 3000,
     protocol: 'HTTP',
     targetType: 'ip',
