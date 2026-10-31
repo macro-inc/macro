@@ -271,7 +271,7 @@ fn answers(announcer: &AnnouncerMock) -> Vec<String> {
 }
 
 #[tokio::test]
-async fn a_private_reply_posts_each_passage_with_its_steps_and_only_the_answer_is_news() {
+async fn a_private_reply_posts_each_passage_with_the_steps_before_it_and_only_the_answer_is_news() {
     use agent_fold::domain::model::{SegmentKind, TurnPhase};
     let ((service, _, containers, announcer, _), turns) =
         harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
@@ -289,11 +289,11 @@ async fn a_private_reply_posts_each_passage_with_its_steps_and_only_the_answer_i
     .await;
     assert!(
         announcer.presented().is_empty(),
-        "an unfinished passage streams live and is not posted"
+        "an unfinished passage is not posted"
     );
 
     runs(&agent, "t1", "in_progress", "cargo test");
-    eventually("the narration is posted with its open steps", || {
+    eventually("the narration is posted once finished", || {
         !announcer.presented().is_empty()
     })
     .await;
@@ -305,7 +305,8 @@ async fn a_private_reply_posts_each_passage_with_its_steps_and_only_the_answer_i
             .iter()
             .map(|segment| (segment.segment.kind, segment.segment.sealed))
             .collect::<Vec<_>>(),
-        [(SegmentKind::Prose, true), (SegmentKind::Activity, false)]
+        [(SegmentKind::Prose, true)],
+        "the running step shows in the typing row, not the message"
     );
     assert_eq!(
         narration.segments[0].text.as_deref(),
@@ -330,26 +331,25 @@ async fn a_private_reply_posts_each_passage_with_its_steps_and_only_the_answer_i
     assert_eq!(
         finals[0]
             .segments
-            .last()
-            .and_then(|segment| segment.text.as_deref()),
-        Some("All green.")
+            .iter()
+            .map(|segment| (segment.segment.kind, segment.text.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            (SegmentKind::Activity, None),
+            (SegmentKind::Prose, Some("All green."))
+        ],
+        "the answer carries the steps that led to it"
     );
     assert_ne!(
         finals[0].message_id, narration.message_id,
         "the answer is a message of its own"
     );
-    // The narration's message is rewritten once its steps sealed, never posted twice.
-    let narration_updates: Vec<_> = presented
-        .iter()
-        .filter(|reply| reply.message_id == narration.message_id)
-        .collect();
     assert!(
-        narration_updates
-            .last()
-            .unwrap()
-            .segments
+        presented
             .iter()
-            .all(|segment| segment.segment.sealed)
+            .flat_map(|reply| &reply.segments)
+            .all(|segment| segment.segment.sealed),
+        "no message ever shows a step running: {presented:#?}"
     );
     assert!(
         matches!(announcer.typed().last(), Some(typing) if !typing.active),
@@ -1124,20 +1124,20 @@ async fn an_open_conversation_answers_while_another_one_bootstraps(pool: sqlx::P
     assert!(prompt_text(&container.agent(), 1).contains("Asked during the bootstrap"));
 }
 
-/// A replica that dies mid-turn leaves the messages it posted showing their
-/// steps running. Recovery shows each of them closed, the last one with how
-/// the turn ended.
+/// A replica that dies mid-run has posted its finished passages but not the
+/// steps it was running. Recovery posts those steps closed, after the
+/// passages, with how the turn ended.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn recovery_closes_the_messages_a_lost_replica_posted(pool: sqlx::PgPool) {
+async fn recovery_posts_the_steps_a_lost_replica_left_running(pool: sqlx::PgPool) {
     use crate::domain::conversation_turns::{ConversationTurnState, ConversationTurnStore};
-    use agent_fold::domain::model::ActivityStatus;
+    use agent_fold::domain::model::{ActivityStatus, SegmentKind};
     let journal = pg_journal(&pool);
     let (service, announcer, _signals, container, command) =
         journaled_conversation(pool, journal.clone()).await;
     let agent = container.agent();
     says(&agent, "Checking the tests first.");
     runs(&agent, "t1", "in_progress", "cargo test");
-    eventually("the narration is posted with its step running", || {
+    eventually("the narration is posted once its step starts", || {
         !announcer.presented().is_empty()
     })
     .await;
@@ -1164,7 +1164,23 @@ async fn recovery_closes_the_messages_a_lost_replica_posted(pool: sqlx::PgPool) 
 
     let presented = announcer.presented();
     let closed = presented.last().unwrap();
-    assert_eq!(closed.message_id, narration, "{presented:#?}");
+    assert_ne!(closed.message_id, narration, "{presented:#?}");
+    assert!(
+        presented
+            .iter()
+            .filter(|reply| reply.message_id == narration)
+            .flat_map(|reply| &reply.segments)
+            .all(|segment| segment.segment.kind == SegmentKind::Prose),
+        "the narration never shows the steps after it: {presented:#?}"
+    );
+    assert_eq!(
+        closed
+            .segments
+            .iter()
+            .map(|segment| segment.segment.kind)
+            .collect::<Vec<_>>(),
+        [SegmentKind::Activity]
+    );
     assert_eq!(closed.outcome, Some(ReplyOutcome::Failed));
     assert!(closed.notify);
     assert!(closed.segments.iter().all(|segment| segment.segment.sealed));
