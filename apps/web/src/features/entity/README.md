@@ -15,13 +15,13 @@ only changed rows; task and project focus subscriptions update the old and new
 rows without invalidating every visible row.
 
 Task list status and priority editing use `extractors-property/task-property-control.tsx`
-in the leading icon slots before the title. Status and Urgent glyphs use 18px on
-both desktop and phones; other priority glyphs use 16px on desktop and 20px on
-phones, inside unchanged hit targets. Priority stays directly before the title.
+in the leading icon slots before the title. Status glyphs use 18px on desktop
+and phones; priority glyphs use 16px on desktop and 20px on phones and never
+flex-shrink. Hit targets stay unchanged. Priority stays directly before the title.
 The controls share the property editor and mutation path across wide task rows and narrow entity rows,
 including optimistic values and rollback. Dedicated task rows omit duplicate trailing
 Status and Priority properties and their separate columns. Mixed search rows retain a
-trailing status property with an 18px icon on desktop and phones.
+trailing status property with shared responsive property-icon sizing.
 Phone task rows reserve an 8px unread-dot rail without a checkbox column and place
 status and priority controls edge-to-edge while preserving their 36px touch targets
 and row selection. Other trailing property icons use 20px phone glyphs.

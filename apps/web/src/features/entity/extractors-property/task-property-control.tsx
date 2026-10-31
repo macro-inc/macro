@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { Property } from '@property';
-import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -93,17 +93,13 @@ export function TaskPropertyControl(props: {
                   <Match when={hasValue(shown())}>
                     <Property.Icon
                       property={shown()}
-                      class={
-                        statusId() === PROPERTY_OPTION_IDS.PRIORITY.URGENT
-                          ? 'min-h-4 min-w-4'
-                          : 'min-h-4 min-w-4 mobile:min-h-5 mobile:min-w-5'
-                      }
+                      class="size-4 shrink-0 mobile:size-5"
                     />
                   </Match>
                   <Match when={true}>
                     <PropertyEmptyIcon
                       propertyDefinitionId={definitionId()}
-                      class="size-4 text-ink-extra-muted mobile:size-5"
+                      class="size-4 shrink-0 text-ink-extra-muted mobile:size-5"
                     />
                   </Match>
                 </Switch>
