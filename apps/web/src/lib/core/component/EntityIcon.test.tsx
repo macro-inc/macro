@@ -15,6 +15,7 @@ import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HashIcon from '@icon/system/regular/hash-straight.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import LockIcon from '@icon/system/regular/lock-simple.svg';
 import PhoneIcon from '@icon/system/regular/phone-call.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import SpreadsheetIcon from '@icon/system/regular/table.svg';
@@ -64,7 +65,7 @@ const entityGlyphs: [
   ],
   ['task', { type: 'document', subType: { type: 'task' } }, ListChecksIcon],
   ['channel', { type: 'channel', channelType: 'public' }, HashIcon],
-  ['message', { type: 'channel_message', channelType: 'private' }, HashIcon],
+  ['message', { type: 'channel_message', channelType: 'private' }, LockIcon],
   ['thread', { type: 'channel_thread', channelType: 'team' }, HashIcon],
   [
     'direct message',
