@@ -22,6 +22,13 @@ pub fn require_authenticated_user(
         .ok_or_else(|| async_graphql::Error::new("authentication required"))
 }
 
+/// The authenticated user the mounting inbound HTTP adapter inserted, or
+/// `None` for a caller with no account. Reads open to anyone with View, such
+/// as an item behind a public link, take this instead of requiring a user.
+pub fn optional_authenticated_user(ctx: &Context<'_>) -> Option<MacroUserIdStr<'static>> {
+    ctx.data_opt::<MacroUserIdStr<'static>>().cloned()
+}
+
 /// Extract the authorized caller (reusing the `Cached` entry primed by the
 /// mounting HTTP handler) and require an authenticated user.
 pub async fn require_authorized_user<Auth, St>(

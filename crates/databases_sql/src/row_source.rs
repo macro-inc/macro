@@ -367,6 +367,7 @@ fn rows_filter(
     EntityFilterAst {
         favorites_only: None,
         crm_association: None,
+        viewable_project: None,
         calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         document_filter: Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil())))),
         project_filter: Some(Arc::new(Expr::val(ProjectLiteral::ProjectIdSelf(

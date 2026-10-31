@@ -24,8 +24,8 @@ use uuid::Uuid;
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
-        Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-        ParticipantRole, RequiredPermission,
+        Entity, EntityAccessReceipt, EntityPermission, EntityType, ParticipantRole,
+        RequiredPermission,
     },
     ports::EntityAccessService,
 };
@@ -126,17 +126,15 @@ where
 
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
+                entity_access_receipt: EntityAccessReceipt::trusted_internal(
+                    Entity {
                         entity_id: call_id,
                         entity_type: EntityType::Call,
                     },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::ChannelRole {
+                    EntityPermission::ChannelRole {
                         role: ParticipantRole::Owner,
                     },
-                    _marker: PhantomData,
-                },
+                ),
                 share_permission_id: call_info.share_permission_id,
                 channel_id: call_info.channel_id,
                 _marker: PhantomData,
@@ -152,20 +150,15 @@ where
             .await
             .map_err(ExtractorError::from)?;
 
-        if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        }
-
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                macro_user_id,
+                Entity {
                     entity_id: call_id,
                     entity_type: EntityType::Call,
                 },
-                auth: EntityAccessAuth::Authenticated(macro_user_id),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+                permission,
+            )?,
             share_permission_id: call_info.share_permission_id,
             channel_id: call_info.channel_id,
             _marker: PhantomData,
@@ -260,17 +253,15 @@ where
 
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
+                entity_access_receipt: EntityAccessReceipt::trusted_internal(
+                    Entity {
                         entity_id: channel_id,
                         entity_type: EntityType::Channel,
                     },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::ChannelRole {
+                    EntityPermission::ChannelRole {
                         role: ParticipantRole::Owner,
                     },
-                    _marker: PhantomData,
-                },
+                ),
                 share_permission_id: call_info.share_permission_id,
                 channel_id: channel_id_uuid,
                 _marker: PhantomData,
@@ -293,20 +284,15 @@ where
             .await
             .map_err(ExtractorError::from)?;
 
-        if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        }
-
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                macro_user_id,
+                Entity {
                     entity_id: channel_id,
                     entity_type: EntityType::Channel,
                 },
-                auth: EntityAccessAuth::Authenticated(macro_user_id),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+                permission,
+            )?,
             share_permission_id: call_info.share_permission_id,
             channel_id: channel_id_uuid,
             _marker: PhantomData,

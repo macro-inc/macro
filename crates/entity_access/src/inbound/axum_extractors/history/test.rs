@@ -1,5 +1,5 @@
 use axum::{
-    Router,
+    Json, Router,
     body::{Body, to_bytes},
     http::{Request, StatusCode, header},
     routing::post,
@@ -14,7 +14,8 @@ use tower::ServiceExt;
 use super::*;
 use crate::{
     domain::models::{
-        AccessLevel, BotAccessScope, EditAccessLevel, EntityAccessAuth, EntityType, ViewAccessLevel,
+        AccessLevel, BotAccessScope, EditAccessLevel, EntityAccessAuth, EntityPermission,
+        EntityType, ViewAccessLevel,
     },
     inbound::axum_extractors::test_support::{
         AccessCall, BOT_ACTING_USER_ID, BOT_ACTING_USER_ORGANIZATION_ID, BOT_ID, BOT_TEAM_ID,
@@ -36,6 +37,10 @@ async fn view_handler(access: ViewExtractor) -> &'static str {
 
 async fn edit_handler(access: EditExtractor) -> &'static str {
     receipt_auth_name(access.entity_access_receipt.auth())
+}
+
+async fn view_permission_handler(access: ViewExtractor) -> Json<EntityPermission> {
+    Json(*access.entity_access_receipt.entity_permission())
 }
 
 fn receipt_auth_name(auth: &EntityAccessAuth) -> &'static str {
@@ -101,6 +106,37 @@ async fn anonymous_history_access_uses_public_acl() {
         }]
     );
     assert!(state.entity_access.bot_calls().is_empty());
+}
+
+#[tokio::test]
+async fn a_public_edit_link_gives_a_signed_out_caller_view() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let response = Router::new()
+        .route(
+            "/history/{item_type}/{item_id}",
+            post(view_permission_handler),
+        )
+        .with_state(state)
+        .oneshot(request().body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response_body(response).await,
+        r#"{"type":"access_level","access_level":"view"}"#
+    );
+}
+
+#[tokio::test]
+async fn a_public_edit_link_refuses_a_signed_out_caller_on_edit_routes() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let response = edit_router(state)
+        .oneshot(request().body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]

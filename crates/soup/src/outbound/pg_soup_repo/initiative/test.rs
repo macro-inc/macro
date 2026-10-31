@@ -288,3 +288,52 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
     }
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    fixtures("test/initiatives.sql"),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn viewable_reads_hydrate_initiatives_the_listing_never_reaches(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Rows 5 and 6 carry no grant the viewer can use: only a left channel and nothing.
+    let requested = [5, 6].map(|id| {
+        EntityType::Initiative.with_entity_string(
+            Uuid::from_u128(0xad000000000000000000000000000000 + id).to_string(),
+        )
+    });
+    assert!(
+        by_ids(
+            &pool,
+            AdvancedSortParams {
+                user_id: user(),
+                entities: &requested,
+            },
+        )
+        .await?
+        .is_empty(),
+        "the listing's by-ID read keeps its access predicate"
+    );
+
+    for viewer in [Some(user()), None] {
+        let mut names = viewable_by_ids(&pool, viewer, &requested)
+            .await?
+            .into_iter()
+            .map(|item| match item {
+                SoupItem::Initiative(initiative) => initiative.name,
+                _ => unreachable!("only initiatives were requested"),
+            })
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(
+            names,
+            ["Launch 5", "Launch 6"],
+            "a receipt already authorized the read"
+        );
+    }
+    Ok(())
+}

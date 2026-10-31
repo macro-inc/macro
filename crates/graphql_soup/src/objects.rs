@@ -2673,7 +2673,7 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
             async_graphql::Error::new("SoupItemDataLoader is required to hydrate Soup updates")
         })?;
         let item = loader
-            .load_one((user_id.clone(), entity.clone()))
+            .load_one((Some(user_id.clone()), entity.clone()))
             .await
             .inspect_err(|error| {
                 tracing::error!(

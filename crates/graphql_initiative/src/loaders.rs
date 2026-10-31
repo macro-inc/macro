@@ -6,6 +6,7 @@ use async_graphql::{
     Context,
     dataloader::{DataLoader, Loader},
 };
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use futures::{StreamExt, stream};
 use initiative::domain::{
     models::InitiativeDetail,
@@ -27,10 +28,11 @@ pub struct LoadedInitiative {
     summary: OnceCell<Arc<InitiativePageRow>>,
 }
 
-/// Viewer-scoped initiative reader; authorization remains in the capability bridge.
+/// Viewer-scoped initiative reader; authorization remains in the capability
+/// bridge. `viewer` is `None` for a caller with no account.
 pub struct InitiativeLoader {
     context: InitiativeGraphqlContext,
-    user: MacroUserIdStr<'static>,
+    viewer: Option<MacroUserIdStr<'static>>,
 }
 
 impl Loader<Uuid> for InitiativeLoader {
@@ -42,7 +44,7 @@ impl Loader<Uuid> for InitiativeLoader {
             let result = self
                 .context
                 .0
-                .read(self.user.clone(), id)
+                .read(self.viewer.clone(), id)
                 .await
                 .map(|read| {
                     Arc::new(LoadedInitiative {
@@ -63,9 +65,9 @@ impl Loader<Uuid> for InitiativeLoader {
 /// Coalesce concurrent initiative fields without retaining data across mutations or subscription events.
 pub fn initiative_loader(
     context: InitiativeGraphqlContext,
-    user: MacroUserIdStr<'static>,
+    viewer: Option<MacroUserIdStr<'static>>,
 ) -> DataLoader<InitiativeLoader> {
-    DataLoader::new(InitiativeLoader { context, user }, tokio::spawn)
+    DataLoader::new(InitiativeLoader { context, viewer }, tokio::spawn)
 }
 
 async fn load_initiative(
@@ -86,6 +88,20 @@ pub async fn load_initiative_detail(
 ) -> async_graphql::Result<Arc<InitiativeDetail>> {
     let loader = ctx.data::<DataLoader<InitiativeLoader>>()?;
     Ok(load_initiative(loader, id).await?.detail.clone())
+}
+
+/// Load the view receipts of the tasks this viewer may see, from the same
+/// read as detail, so hydrating them checks no access again.
+pub async fn load_initiative_task_receipts(
+    ctx: &Context<'_>,
+    id: Uuid,
+) -> async_graphql::Result<Vec<EntityAccessReceipt<ViewAccessLevel>>> {
+    let loader = ctx.data::<DataLoader<InitiativeLoader>>()?;
+    Ok(load_initiative(loader, id)
+        .await?
+        .read
+        .task_receipts()
+        .to_vec())
 }
 
 /// Load task progress only when a count field is requested, from the same visible tasks as detail.

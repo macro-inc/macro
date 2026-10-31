@@ -68,3 +68,52 @@ async fn initiative_detail_query_does_not_expose_a_project_missing_from_authoriz
     );
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
 }
+
+#[tokio::test]
+async fn a_public_link_opens_an_initiative_at_the_root_for_a_caller_with_no_account() {
+    let harness = harness();
+    let public = Uuid::from_u128(43);
+    let private = Uuid::from_u128(44);
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_initiative(public), soup_initiative(private)]);
+    harness
+        .state
+        .entity_access
+        .public_links
+        .lock()
+        .unwrap()
+        .insert(public, AccessLevel::Edit);
+    let anonymous = |query: String| {
+        harness
+            .request(&query, HttpRequest::new(()).into_parts().0)
+            .data(graphql_initiative::InitiativeEntityLoader(
+                graphql_soup::soup_item_loader(
+                    harness.soup_service.clone(),
+                    Arc::new(harness.email_service.clone()),
+                    harness.state.entity_access.as_ref().clone(),
+                ),
+            ))
+    };
+
+    let opened = harness
+        .schema
+        .execute(anonymous(format!(
+            r#"{{ initiative(initiativeId: "{public}") {{ __typename id displayName }} }}"#
+        )))
+        .await;
+    assert!(opened.errors.is_empty(), "{:?}", opened.errors);
+    let data = opened.data.into_json().unwrap();
+    assert_eq!(data["initiative"]["id"], public.to_string());
+
+    let refused = harness
+        .schema
+        .execute(anonymous(format!(
+            r#"{{ initiative(initiativeId: "{private}") {{ id }} }}"#
+        )))
+        .await;
+    assert_eq!(
+        refused.errors[0].extensions.as_ref().unwrap().get("code"),
+        Some(&async_graphql::Value::from("NOT_FOUND"))
+    );
+}

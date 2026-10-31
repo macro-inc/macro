@@ -1344,7 +1344,39 @@ fn document_top_clause(sort_method: SimpleSortMethod, needs_sub_type_join: bool)
     )
 }
 
-fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
+/// The document access gate. With a project Soup has confirmed the viewer
+/// can view, the request's filter already admits only that project's tasks,
+/// and the viewer can view every one of them, so the gate is the project's
+/// task set alone. Unioning it with the viewer's grants made the planner
+/// hash every document a heavy user can reach (hundreds of milliseconds on
+/// production-sized data, against about two for the task set). The project
+/// id is a literal so a generic plan can prove the partial predicate of
+/// `idx_ep_project_value_gin`; it is a parsed `Uuid`, safe to interpolate. A
+/// Project value holds exactly one reference, as entity access requires.
+fn document_access_gate(viewable_project: Option<Uuid>) -> String {
+    let Some(project) = viewable_project else {
+        return access_semi_join("d.id", "document");
+    };
+    format!(
+        r#"d.id IN (
+                    SELECT ep.entity_id
+                    FROM entity_properties ep
+                    WHERE ep.property_definition_id = '{definition}'
+                      AND ep.entity_type = 'TASK'
+                      AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object(
+                          'entity_id', '{project}', 'entity_type', 'INITIATIVE'
+                      ))
+                      AND CASE WHEN jsonb_typeof(ep.values -> 'value') = 'array'
+                               THEN jsonb_array_length(ep.values -> 'value') END = 1
+                )"#,
+        definition = SystemPropertyKey::PROJECT_UUID,
+    )
+}
+
+fn document_top_where_clause(
+    sort_method: SimpleSortMethod,
+    viewable_project: Option<Uuid>,
+) -> String {
     let user_history_join = if top_needs_user_history(sort_method) {
         r#"                LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
 "#
@@ -1355,7 +1387,7 @@ fn document_top_where_clause(sort_method: SimpleSortMethod) -> String {
         r#"{user_history_join}                WHERE d."deletedAt" IS NULL
                 AND {}
 "#,
-        access_semi_join("d.id", "document")
+        document_access_gate(viewable_project)
     )
 }
 
@@ -1545,7 +1577,10 @@ fn build_query<'a>(
         if needs_task_property_joins {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method));
+        builder.push(document_top_where_clause(
+            sort_method,
+            filter_ast.viewable_project,
+        ));
         builder.push(build_document_filter(document_filter, Some(document_ids)));
         builder.push(build_properties_filter(
             filter_ast.properties_filter.as_deref(),
@@ -2224,7 +2259,10 @@ fn build_grouped_query<'a>(
         if document_filter_needs_task_property_joins(filter_ast.document_filter.as_deref()) {
             builder.push(DOCUMENT_TASK_PROPERTY_JOINS);
         }
-        builder.push(document_top_where_clause(sort_method));
+        builder.push(document_top_where_clause(
+            sort_method,
+            filter_ast.viewable_project,
+        ));
         builder.push(build_document_filter(
             filter_ast.document_filter.as_deref(),
             Some(document_ids),

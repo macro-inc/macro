@@ -10,11 +10,12 @@ use item_filters::ast::{
     agent_session::{AgentSessionLiteral, AgentSessionSource, AgentSessionVisibility},
     properties::{PropertiesLiteral, properties_filter_matches_propertyless},
 };
-use model_entity::EntityType;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::{Entity, EntityType};
 use model_owner::Owner;
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{agent_session::SoupAgentSession, item::SoupItem};
-use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
+use sqlx::{Arguments, FromRow, PgPool, Postgres, QueryBuilder, postgres::PgArguments};
 use uuid::Uuid;
 
 use crate::domain::models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest};
@@ -121,7 +122,7 @@ pub(super) async fn cursor_soup(
     // id CTE, the history join, and any `Owner` literal that binds it again.
     query.push_bind(req.user_id.as_ref().to_string());
     let named_ids = explicitly_named_ids(filter);
-    query.push(ACCESS_SQL);
+    push_listing_rows(&mut query);
     // A session the query names is also readable through its thread's parent,
     // like the session's own REST read; GraphQL `agentSession` loads this way.
     // Broad lists stay limited to session grants so every document thread's
@@ -165,19 +166,14 @@ pub(super) async fn by_ids(
     db: &PgPool,
     req: AdvancedSortParams<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    let ids = req
-        .entities
-        .iter()
-        .filter(|entity| entity.entity_type == EntityType::AgentSession)
-        .filter_map(|entity| entity.entity_id.parse::<Uuid>().ok())
-        .collect::<Vec<_>>();
+    let ids = session_ids(req.entities);
     if ids.is_empty() {
         return Ok(Vec::new());
     }
 
     let mut query = QueryBuilder::<Postgres>::new(SELECT_SQL);
     query.push_bind(req.user_id.as_ref().to_string());
-    query.push(ACCESS_SQL);
+    push_listing_rows(&mut query);
     // Every session here is named, so its thread's parent grants apply too.
     query.push("(");
     query.push(SESSION_GRANT_SQL);
@@ -193,6 +189,53 @@ pub(super) async fn by_ids(
         .into_iter()
         .map(row_to_item)
         .collect()
+}
+
+/// Hydrate sessions the caller already holds view receipts for. No access
+/// predicate: a public link authorizes a single-item read that the listing
+/// never enumerates. `viewer` only joins view history.
+pub(super) async fn viewable_by_ids(
+    db: &PgPool,
+    viewer: Option<MacroUserIdStr<'_>>,
+    entities: &[Entity<'_>],
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    let ids = session_ids(entities);
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    // `ROW_SQL` reads the viewer as `$1`, so it is bound before the ids.
+    let mut arguments = PgArguments::default();
+    arguments
+        .add(viewer.as_ref().map(|user| user.as_ref().to_owned()))
+        .map_err(sqlx::Error::Encode)?;
+    let mut query = QueryBuilder::<Postgres>::with_arguments(ROW_SQL, arguments);
+    query.push(" WHERE s.id = ANY(");
+    query.push_bind(ids);
+    query.push(")");
+    query
+        .build_query_as::<AgentSessionRow>()
+        .fetch_all(db)
+        .await?
+        .into_iter()
+        .map(row_to_item)
+        .collect()
+}
+
+fn session_ids(entities: &[Entity<'_>]) -> Vec<Uuid> {
+    entities
+        .iter()
+        .filter(|entity| entity.entity_type == EntityType::AgentSession)
+        .filter_map(|entity| entity.entity_id.parse::<Uuid>().ok())
+        .collect()
+}
+
+/// Pushes the listing's source ids, row, and history join after the `$1`
+/// user bind that [`SELECT_SQL`] ends on, ending at `WHERE` so the caller
+/// appends its access predicate.
+fn push_listing_rows(query: &mut QueryBuilder<'_, Postgres>) {
+    query.push(SOURCE_IDS_SQL);
+    query.push(ROW_SQL);
+    query.push("\n    WHERE ");
 }
 
 fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
@@ -242,16 +285,17 @@ const SELECT_SQL: &str = r#"
         FROM comms_channel_participants cp
         WHERE cp.user_id = "#;
 
-/// Continues [`SELECT_SQL`] after the user id bind: the remaining source-id
-/// arms, the row projection, and the history join, ending at `WHERE` so the
-/// caller appends its access predicate. Every `$1` here refers back to that
-/// same bind.
-const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
+/// Continues [`SELECT_SQL`] after the user id bind with the remaining
+/// source-id arms. Every `$1` here refers back to that same bind.
+const SOURCE_IDS_SQL: &str = r#" AND cp.left_at IS NULL
         UNION ALL
         SELECT t.team_id::text FROM team_user t WHERE t.user_id = $1
         UNION ALL
         SELECT $1
-    )
+    )"#;
+
+/// The row projection and the viewer's history join. `$1` is the viewer.
+const ROW_SQL: &str = r#"
     SELECT
         s.id,
         s.name,
@@ -276,10 +320,9 @@ const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
     LEFT JOIN "UserHistory" uh
         ON uh."itemId" = s.id::text
         AND uh."itemType" = 'agent_session'
-        AND uh."userId" = $1
-    WHERE "#;
+        AND uh."userId" = $1"#;
 
-/// Continues [`ACCESS_SQL`]: the viewer holds a grant on the session itself.
+/// Continues the listing rows: the viewer holds a grant on the session itself.
 const SESSION_GRANT_SQL: &str = r#"EXISTS (
         SELECT 1 FROM entity_access ea
         WHERE ea.entity_id = s.id

@@ -4,7 +4,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use entity_access::domain::{
     models::{
-        AccessError, EditAccessLevel, EntityAccessReceipt, EntityType, OwnerAccessLevel,
+        AccessError, EditAccessLevel, Entity, EntityAccessReceipt, EntityType, OwnerAccessLevel,
         RequiredPermission, ViewAccessLevel,
     },
     ports::EntityAccessService,
@@ -23,7 +23,11 @@ pub(crate) type ApiFuture<'a, T> =
 
 /// Transport-facing service bundle; implementations mint receipts and delegate policy.
 pub(crate) trait InitiativeApi: Send + Sync {
-    fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead>;
+    fn read(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        id: Uuid,
+    ) -> ApiFuture<'_, InitiativeRead>;
     fn summarize<'a>(&'a self, read: &'a InitiativeRead) -> ApiFuture<'a, InitiativePageRow>;
     fn ensure_description_surface(
         &self,
@@ -32,7 +36,7 @@ pub(crate) trait InitiativeApi: Send + Sync {
     ) -> ApiFuture<'_, ()>;
     fn tasks(
         &self,
-        user: MacroUserIdStr<'static>,
+        viewer: Option<MacroUserIdStr<'static>>,
         id: Uuid,
         input: InitiativeTasksRequest,
     ) -> ApiFuture<'_, InitiativeTasksPage>;
@@ -65,6 +69,15 @@ pub trait InitiativeAuthorizer: Send + Sync + 'static {
         id: &str,
         entity_type: EntityType,
     ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
+
+    /// Verify that a viewer, signed in or not, may view an entity. A caller
+    /// with no account holds at most View, whatever link opened the entity.
+    fn authorize_view(
+        &self,
+        viewer: Option<&MacroUserIdStr<'static>>,
+        id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<EntityAccessReceipt<ViewAccessLevel>, AccessError>> + Send;
 }
 
 impl<A: EntityAccessService> InitiativeAuthorizer for A {
@@ -76,6 +89,25 @@ impl<A: EntityAccessService> InitiativeAuthorizer for A {
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
         self.generate_entity_access_receipt::<T>(user, None, id, entity_type)
             .await
+    }
+
+    async fn authorize_view(
+        &self,
+        viewer: Option<&MacroUserIdStr<'static>>,
+        id: &str,
+        entity_type: EntityType,
+    ) -> Result<EntityAccessReceipt<ViewAccessLevel>, AccessError> {
+        let permission = self
+            .get_entity_permission(viewer.map(|user| &**user), id, entity_type, None)
+            .await?;
+        EntityAccessReceipt::try_new_for_user(
+            viewer.cloned(),
+            Entity {
+                entity_id: id.to_owned(),
+                entity_type,
+            },
+            permission,
+        )
     }
 }
 
@@ -96,11 +128,15 @@ struct InitiativeApiAdapter<S, A> {
 }
 
 impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for InitiativeApiAdapter<S, A> {
-    fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead> {
+    fn read(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        id: Uuid,
+    ) -> ApiFuture<'_, InitiativeRead> {
         Box::pin(async move {
             let receipt = self
                 .access
-                .authorize::<ViewAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
+                .authorize_view(viewer.as_ref(), &id.to_string(), EntityType::Initiative)
                 .await?;
             self.service.read(receipt).await
         })
@@ -126,14 +162,14 @@ impl<S: InitiativeService, A: InitiativeAuthorizer> InitiativeApi for Initiative
 
     fn tasks(
         &self,
-        user: MacroUserIdStr<'static>,
+        viewer: Option<MacroUserIdStr<'static>>,
         id: Uuid,
         input: InitiativeTasksRequest,
     ) -> ApiFuture<'_, InitiativeTasksPage> {
         Box::pin(async move {
             let receipt = self
                 .access
-                .authorize::<ViewAccessLevel>(&user, &id.to_string(), EntityType::Initiative)
+                .authorize_view(viewer.as_ref(), &id.to_string(), EntityType::Initiative)
                 .await?;
             self.service.tasks_page(receipt, input).await
         })

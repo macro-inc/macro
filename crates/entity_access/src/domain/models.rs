@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod test;
 
-use std::marker::PhantomData;
+mod receipt;
 
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
@@ -23,6 +23,7 @@ pub use models_permissions::share_permission::access_level::AccessLevel;
 pub use models_permissions::share_permission::access_level::{
     CommentAccessLevel, EditAccessLevel, OwnerAccessLevel, ViewAccessLevel,
 };
+pub use receipt::EntityAccessReceipt;
 
 /// The access scope under which a bot-authorized request is resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -471,200 +472,6 @@ pub enum EntityAccessAuth {
     Unauthenticated,
     /// Internally authenticated
     Internal,
-}
-
-/// Represents that a given user has a given permission for the provided id.
-///
-/// The type parameter `T` encodes the minimum permission that was verified
-/// when this receipt was created.
-#[derive(Debug, Clone)]
-pub struct EntityAccessReceipt<T: RequiredPermission> {
-    /// The entity access authentication method
-    pub(crate) auth: EntityAccessAuth,
-    /// The entity that was requested access
-    pub(crate) entity: Entity,
-    /// The permission for the user on the entity
-    pub(crate) entity_permission: EntityPermission,
-    /// Phantom data to carry the access level type
-    pub(crate) _marker: PhantomData<T>,
-}
-
-impl<T: RequiredPermission> EntityAccessReceipt<T> {
-    /// Re-tag this receipt for another permission requirement after
-    /// revalidating the already-resolved permission.
-    ///
-    /// This safely supports passing a stronger receipt to a read-only domain
-    /// method without repeating the underlying access lookup.
-    pub fn try_into_requirement<U: RequiredPermission>(
-        self,
-    ) -> Result<EntityAccessReceipt<U>, AccessError> {
-        EntityAccessReceipt::<U>::try_new(self.auth, self.entity, self.entity_permission)
-    }
-
-    /// Creates an access receipt for the given auth after validating the
-    /// provided permission against the required level `T`.
-    pub fn try_new(
-        auth: EntityAccessAuth,
-        entity: Entity,
-        entity_permission: EntityPermission,
-    ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        if !entity_permission.satisfies::<T>() {
-            return Err(AccessError::Unauthorized);
-        }
-
-        Ok(EntityAccessReceipt {
-            auth,
-            entity,
-            entity_permission,
-            _marker: PhantomData,
-        })
-    }
-
-    /// Creates an access receipt for an authenticated user after validating the provided permission.
-    pub fn try_new_authenticated_user(
-        user_id: MacroUserIdStr<'static>,
-        entity: Entity,
-        entity_permission: EntityPermission,
-    ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Self::try_new(
-            EntityAccessAuth::Authenticated(user_id),
-            entity,
-            entity_permission,
-        )
-    }
-
-    /// Creates an access receipt for an authenticated bot after validating the provided permission.
-    pub fn try_new_bot(
-        bot_id: BotIdStr<'static>,
-        scope: BotReceiptScope,
-        entity: Entity,
-        entity_permission: EntityPermission,
-    ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Self::try_new(
-            EntityAccessAuth::Bot(BotReceiptAuth::new(bot_id, scope)),
-            entity,
-            entity_permission,
-        )
-    }
-
-    /// Get the authenticated user or return an authorization error.
-    pub fn get_authenticated_user(&self) -> Result<&MacroUserIdStr<'static>, AccessError> {
-        match &self.auth {
-            EntityAccessAuth::Authenticated(user) => Ok(user),
-            EntityAccessAuth::Bot(_)
-            | EntityAccessAuth::Unauthenticated
-            | EntityAccessAuth::Internal => Err(AccessError::Unauthorized),
-        }
-    }
-
-    /// Get the authenticated bot's canonical storage principal or return an authorization error.
-    pub fn get_authenticated_bot(&self) -> Result<&BotIdStr<'static>, AccessError> {
-        Ok(self.get_authenticated_bot_auth()?.bot_id_str())
-    }
-
-    /// Get the authenticated bot and receipt scope or return an authorization error.
-    pub fn get_authenticated_bot_auth(&self) -> Result<&BotReceiptAuth, AccessError> {
-        match &self.auth {
-            EntityAccessAuth::Bot(bot_auth) => Ok(bot_auth),
-            EntityAccessAuth::Authenticated(_)
-            | EntityAccessAuth::Unauthenticated
-            | EntityAccessAuth::Internal => Err(AccessError::Unauthorized),
-        }
-    }
-
-    /// Returns the direct user or verified acting user represented by this receipt.
-    pub fn acting_user_id(&self) -> Option<&MacroUserIdStr<'static>> {
-        match &self.auth {
-            EntityAccessAuth::Authenticated(user_id) => Some(user_id),
-            EntityAccessAuth::Bot(bot_auth) => bot_auth.scope().acting_user_id(),
-            EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => None,
-        }
-    }
-
-    /// Getter for auth
-    pub fn auth(&self) -> &EntityAccessAuth {
-        &self.auth
-    }
-
-    /// Getter for entity
-    pub fn entity(&self) -> &Entity {
-        &self.entity
-    }
-
-    /// Getter for entity permission
-    pub fn entity_permission(&self) -> &EntityPermission {
-        &self.entity_permission
-    }
-
-    /// Dangerously generates a EntityAccessReceipt for an internal user
-    /// **NOTE** This should only be used in specific circumstances and not as a way
-    /// to circumvent AI tool permissioning
-    /// This **DOES NOT** assert the existence of the item
-    pub fn dangerously_assert_internal_user(
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> EntityAccessReceipt<T> {
-        EntityAccessReceipt {
-            auth: EntityAccessAuth::Internal,
-            entity: Entity {
-                entity_id: entity_id.to_string(),
-                entity_type,
-            },
-            entity_permission: EntityPermission::AccessLevel {
-                access_level: AccessLevel::Owner,
-            },
-            _marker: PhantomData,
-        }
-    }
-
-    /// Dangerously generates an `EntityAccessReceipt` for an authenticated user
-    /// without performing the underlying access check.
-    ///
-    /// **NOTE** This is intended for tests. It **DOES NOT** assert the
-    /// existence of the item or that the user actually has the required
-    /// permission.
-    pub fn dangerously_assert_authenticated_user(
-        user_id: MacroUserIdStr<'static>,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> EntityAccessReceipt<T> {
-        EntityAccessReceipt {
-            auth: EntityAccessAuth::Authenticated(user_id),
-            entity: Entity {
-                entity_id: entity_id.to_string(),
-                entity_type,
-            },
-            entity_permission: EntityPermission::AccessLevel {
-                access_level: AccessLevel::Owner,
-            },
-            _marker: PhantomData,
-        }
-    }
-
-    /// Dangerously generates an `EntityAccessReceipt` for an authenticated bot
-    /// without performing the underlying access check.
-    ///
-    /// **NOTE** This is intended for tests. It **DOES NOT** assert the
-    /// existence of the item or that the bot actually has the required
-    /// permission.
-    pub fn dangerously_assert_bot(
-        bot_id: BotIdStr<'static>,
-        scope: BotReceiptScope,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> EntityAccessReceipt<T> {
-        EntityAccessReceipt {
-            auth: EntityAccessAuth::Bot(BotReceiptAuth::new(bot_id, scope)),
-            entity: Entity {
-                entity_id: entity_id.to_string(),
-                entity_type,
-            },
-            entity_permission: EntityPermission::AccessLevel {
-                access_level: AccessLevel::Owner,
-            },
-            _marker: PhantomData,
-        }
-    }
 }
 
 /// Information about a call's channel association and share permission.

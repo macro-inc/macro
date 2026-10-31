@@ -99,11 +99,45 @@ async fn the_public_api_mints_tokens_for_an_owned_surface() {
     let svc = service_with(repo, MockSurfaceInitializer::new());
 
     let token = svc
-        .mint_token(&user("macro|a@b.c"), initiative_receipt(id), id)
+        .mint_token(Some(&user("macro|a@b.c")), initiative_receipt(id), id)
         .await
         .unwrap();
     let claims: model::document::DocumentPermissionsToken =
         macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
     assert_eq!(claims.document_id, id.to_string());
     assert_eq!(claims.access_level, AccessLevel::Edit);
+}
+
+#[tokio::test]
+async fn a_caller_with_no_account_reads_a_public_initiative_description() {
+    let id = Uuid::now_v7();
+    let repo = MemRepo::holding(ready_initiative_surface(id));
+    let svc = service_with(repo, MockSurfaceInitializer::new());
+    // A public link shared at Edit still gives a caller with no account View.
+    let anonymous = EntityAccessReceipt::try_new(
+        entity_access::domain::models::EntityAccessAuth::Unauthenticated,
+        entity_access::domain::models::Entity {
+            entity_id: id.to_string(),
+            entity_type: EntityType::Initiative,
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Edit,
+        },
+    )
+    .unwrap();
+
+    let token = svc.mint_token(None, anonymous.clone(), id).await.unwrap();
+    let claims: model::document::DocumentPermissionsToken =
+        macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
+    assert_eq!(claims.access_level, AccessLevel::View);
+    assert_eq!(claims.user_id, None);
+
+    let err = svc
+        .mint_token(Some(&user("macro|a@b.c")), anonymous, id)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, CollabSurfaceError::AccessDenied),
+        "a receipt minted for no account is not a signed-in caller's"
+    );
 }

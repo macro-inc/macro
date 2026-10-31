@@ -2,7 +2,10 @@ use crate::{
     domain::models::SoupDocumentServerFacts,
     outbound::pg_soup_repo::{
         expanded::{
-            by_ids::{expanded_soup_by_ids, expanded_soup_by_ids_with_projection},
+            by_ids::{
+                expanded_soup_by_ids, expanded_soup_by_ids_with_projection,
+                expanded_viewable_by_ids,
+            },
             dynamic::{
                 ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup,
                 expanded_dynamic_cursor_soup_with_projection,
@@ -5899,6 +5902,7 @@ async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Re
 fn mock_empty_ast() -> EntityFilterAst {
     EntityFilterAst {
         crm_association: None,
+        viewable_project: None,
         document_filter: None,
         calendar_event_filter: None,
         project_filter: None,
@@ -7065,6 +7069,112 @@ async fn crm_document_literals_match_attachments_and_associations(
     .await;
     assert!(!not_acme.contains(DOC_A));
     assert!(not_acme.contains(DOC_B) && not_acme.contains(DOC_D));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    )
+)]
+async fn viewable_reads_hydrate_documents_and_chats_the_listing_never_reaches(
+    pool: Pool<Postgres>,
+) {
+    let stranger = MacroUserIdStr::parse_from_str("macro|stranger@example.com").unwrap();
+    let entities = [
+        EntityType::Document.with_entity_str("11111111-0000-0000-0000-000000000000"),
+        EntityType::Chat.with_entity_str("22222222-0000-0000-0000-000000000000"),
+    ];
+    assert!(
+        expanded_soup_by_ids(&pool, stranger.copied(), &entities)
+            .await
+            .unwrap()
+            .is_empty(),
+        "the listing's by-ID read keeps its access predicate"
+    );
+
+    for viewer in [Some(stranger), None] {
+        let items = expanded_viewable_by_ids(&pool, viewer, &entities)
+            .await
+            .unwrap();
+        assert_eq!(items.len(), 2, "a receipt already authorized the read");
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    )
+)]
+async fn a_viewable_project_lists_its_tasks_without_a_grant_on_each(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::ast::properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue};
+
+    let task = "11111111-0000-0000-0000-000000000000";
+    let project = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (
+            $1,
+            $2,
+            'TASK',
+            $3,
+            jsonb_build_object('type', 'EntityReference', 'value', jsonb_build_array(
+                jsonb_build_object('entity_id', $4::text, 'entity_type', 'INITIATIVE')
+            ))
+        )
+        "#,
+        Uuid::new_v4(),
+        task,
+        SystemPropertyKey::PROJECT_UUID,
+        project.to_string(),
+    )
+    .execute(&pool)
+    .await?;
+    let stranger = MacroUserIdStr::parse_from_str("macro|stranger@example.com")?;
+    let list = |viewable_project: Option<Uuid>| {
+        let filter = EntityFilterAst {
+            properties_filter: Some(Arc::new(Expr::Literal(PropertiesLiteral {
+                property_definition_id: SystemPropertyKey::PROJECT_UUID,
+                entity_type: None,
+                value: PropertyMatchValue::EntityRef(
+                    EntityRefId::new(project.to_string()).unwrap(),
+                ),
+            }))),
+            viewable_project,
+            ..EntityFilterAst::default()
+        };
+        expanded_dynamic_cursor_soup(
+            &pool,
+            ExpandedDynamicCursorArgs {
+                user_id: stranger.clone(),
+                limit: 20,
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filter),
+                exclude_frecency: false,
+            },
+        )
+    };
+
+    assert!(
+        list(None).await?.is_empty(),
+        "without a grant on the task, the listing leaves it out"
+    );
+    let ids: Vec<String> = list(Some(project))
+        .await?
+        .iter()
+        .map(|item| item.id().to_string())
+        .collect();
+    assert_eq!(ids, [task], "a viewer of the project lists its task");
+    assert!(
+        list(Some(Uuid::new_v4())).await?.is_empty(),
+        "another project's scope admits none of this project's tasks"
+    );
     Ok(())
 }
 

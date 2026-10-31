@@ -67,6 +67,8 @@ auth response to check this on desktop and touch devices. Account-only lists, co
 notifications, activity, and gateway/storage WebSockets must stay idle until
 sign-in; public document metadata, properties, and sync still load normally.
 Check that signing in restores account services and signing out stops them.
+A Public link set to Comment or Edit still gives signed-out readers View only:
+the backend refuses their comments, edits, and renames.
 Private files still prompt for sign-in. Signed-out Drive list URLs (My Files,
 Recent, Shared with me, or folders without a document target) show **Sign in to
 view your files** with Login and Sign Up actions, never an indefinite loader.
