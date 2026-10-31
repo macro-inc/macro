@@ -61,7 +61,6 @@ function EntityEditorBody(props: EntityEditorProps) {
   const [selectedRefs, setSelectedRefs] =
     createSignal<EntityReference[]>(initialRefs);
   const [dirty, setDirty] = createSignal(false);
-  const pickedNames = new Map<string, string>();
 
   const refsEqual = (a: EntityReference[], b: EntityReference[]) => {
     if (a.length !== b.length) return false;
@@ -82,7 +81,7 @@ function EntityEditorBody(props: EntityEditorProps) {
         refs: refs.length > 0 ? refs : null,
       };
       try {
-        await ctx.onSave?.(property, apiValues, pickedNames);
+        await ctx.onSave?.(property, apiValues);
       } catch {
         // mutation onError owns toast
       }
@@ -108,9 +107,6 @@ function EntityEditorBody(props: EntityEditorProps) {
           }}
           selectedOptions={() => entityReferencesToIdSet(selectedRefs())}
           setSelectedOptions={(newOptions, entityInfo) => {
-            for (const info of entityInfo ?? []) {
-              pickedNames.set(info.id, info.name);
-            }
             const updated = updateEntityReferences(
               selectedRefs(),
               newOptions,
