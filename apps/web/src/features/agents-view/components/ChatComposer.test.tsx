@@ -9,6 +9,8 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   createEditor,
   type LexicalEditor,
 } from 'lexical';
@@ -253,6 +255,31 @@ describe('Chat session input', () => {
     ));
     expect(editor.setMarkdown).toHaveBeenCalledWith('Document context');
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('leaves the caret after a seeded draft', () => {
+    // Markdown import puts the selection at the start, as Lexical's does.
+    editor.setMarkdown.mockImplementationOnce((markdown: string) =>
+      editor.lexical?.update(
+        () => {
+          const paragraph = $createParagraphNode().append(
+            $createTextNode(markdown)
+          );
+          $getRoot().clear().append(paragraph);
+          paragraph.selectStart();
+        },
+        { discrete: true }
+      )
+    );
+    render(() => (
+      <ChatSessionInput initialInput="Ask about @Routine" onSend={vi.fn()} />
+    ));
+    editor.lexical?.read(() => {
+      const selection = $getSelection();
+      expect($isRangeSelection(selection) && selection.anchor.offset).toBe(
+        'Ask about @Routine'.length
+      );
+    });
   });
 
   it('shows only the model control and submits a trimmed follow-up', () => {

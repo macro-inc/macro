@@ -31,10 +31,12 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import {
+  $addUpdateTag,
   $getRoot,
   $getSelection,
   $isRangeSelection,
   $isTextNode,
+  SKIP_DOM_SELECTION_TAG,
 } from 'lexical';
 import {
   createEffect,
@@ -182,8 +184,18 @@ export function ChatComposer(props: {
     on(
       () => props.draft,
       (draft) => {
-        if (draft !== editor.controls.getMarkdown())
-          editor.controls.setMarkdown(draft);
+        if (draft === editor.controls.getMarkdown()) return;
+        editor.controls.setMarkdown(draft);
+        // Markdown import leaves the selection at the start, and focusing the
+        // editor later restores it there. Keep it after a seeded draft (Ask
+        // AI's mentions) so typing continues it, without taking focus.
+        const focused = editor.lexical
+          .getRootElement()
+          ?.contains(document.activeElement);
+        editor.lexical.update(() => {
+          if (!focused) $addUpdateTag(SKIP_DOM_SELECTION_TAG);
+          $getRoot().selectEnd();
+        });
       }
     )
   );
