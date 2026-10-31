@@ -11,8 +11,8 @@ import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
-import { cn } from '@ui';
-import { For, Show, Suspense } from 'solid-js';
+import { cn, ProgressPill } from '@ui';
+import { For, Match, Show, Suspense, Switch } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
 import { canEditProject } from '../core/project';
 
@@ -170,11 +170,20 @@ export function ProjectRow(props: {
             placement="createdBy"
             class="min-w-0 text-xs text-ink-muted @max-[1220px]/u-list:hidden"
           >
-            <span aria-label="Completed tasks">
-              {props.row.project.taskCount === undefined
-                ? '—'
-                : `${props.row.project.completedTaskCount ?? 0}/${props.row.project.taskCount}`}
-            </span>
+            <Switch fallback={<span>—</span>}>
+              <Match
+                when={
+                  props.row.project.taskCount !== undefined &&
+                  props.row.project.completedTaskCount !== undefined
+                }
+              >
+                <ProgressPill
+                  label="Task progress"
+                  value={props.row.project.completedTaskCount ?? 0}
+                  max={props.row.project.taskCount ?? 0}
+                />
+              </Match>
+            </Switch>
           </Entity.Slot>
           <Entity.Slot
             placement="timestamp"

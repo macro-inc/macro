@@ -20,7 +20,7 @@ vi.mock('@entity/extractors-property/property-helpers', () => ({
   soupPropertyToProperty: vi.fn(),
 }));
 
-import type { SoupQuery } from '@service-storage/graphql/generated/graphql';
+import type { ProjectSoupQuery } from '@service-storage/graphql/generated/graphql';
 import type { ProjectFilters } from '../core/project';
 import {
   createProjectSoupSource,
@@ -44,6 +44,8 @@ const initiative = (id: string) => ({
     accessLevel: 'EDIT' as const,
   },
   properties: [],
+  taskCount: 8,
+  completedTaskCount: 3,
   notifications: [],
   cacheProjection: null,
   frecencyScore: null,
@@ -311,7 +313,7 @@ describe('project Soup source', () => {
     const items = [
       initiative('launch'),
       { __typename: 'GraphqlSoupProject', id: 'folder' },
-    ] as SoupQuery['user']['soup']['items'];
+    ] as ProjectSoupQuery['user']['soup']['items'];
     expect(projectSoupRows(items)).toEqual([
       {
         project: {
@@ -320,6 +322,8 @@ describe('project Soup source', () => {
           updatedAt: '2026-09-27',
           createdAt: '2026-09-26',
           access: 'edit',
+          taskCount: 8,
+          completedTaskCount: 3,
         },
         properties: [],
       },
@@ -412,7 +416,8 @@ describe('project Soup source', () => {
       requests.mock.calls.every(([op]) =>
         op.query.definitions.some(
           (node: { kind: string; name?: { value: string } }) =>
-            node.kind === 'OperationDefinition' && node.name?.value === 'Soup'
+            node.kind === 'OperationDefinition' &&
+            node.name?.value === 'ProjectSoup'
         )
       )
     ).toBe(true);

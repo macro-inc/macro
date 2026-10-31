@@ -61,6 +61,22 @@ fragment InitiativeDetailFields on GraphqlSoupInitiative {
   }
 }
 
+# Only project lists request the permission-aware task summary, not shared previews.
+query ProjectSoup($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        ...SoupItemFields
+        ... on GraphqlSoupInitiative {
+          taskCount
+          completedTaskCount
+        }
+      }
+      nextCursor
+    }
+  }
+}
 query Initiative($initiativeId: ID!) {
   user {
     id
