@@ -109,7 +109,8 @@ tables. It reaches a provider only through its `ChatProvider` port
 outbox); `ExternalChatService<P: ChatProvider>` is generic over it, with no
 trait objects or registry. `crates/whatsapp_linked` implements the port
 (`WhatsAppProvider`) and keeps everything WhatsApp: pairing, the account's
-chat list, rosters, ingest, dispatch and the `/whatsapp` router; its ingest
+chat list (with saved contacts) and phone-number lookups, rosters, ingest,
+dispatch and the `/whatsapp` router; its ingest
 writes the generic tables with `external_chat::outbound::pg` helpers.
 Dependencies point from `whatsapp_linked` to `external_chat`, never back.
 DSS composes `ExternalChatService<WhatsAppProvider>` in

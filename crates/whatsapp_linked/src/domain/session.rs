@@ -258,7 +258,7 @@ impl SessionService {
         &self,
         scope: SessionScope,
         chats: &[ChatUpdate],
-    ) -> ExternalChatResult<bool> {
+    ) -> ExternalChatResult<()> {
         let valid: Vec<ChatUpdate> = chats
             .iter()
             .filter(|chat| match chat.kind {
@@ -278,7 +278,7 @@ impl SessionService {
             );
         }
         if valid.is_empty() {
-            return Ok(false);
+            return Ok(());
         }
         self.repository.update_chats(scope, &valid).await
     }
@@ -292,6 +292,31 @@ impl SessionService {
         let work = self.repository.backfill_work(scope).await?;
         tracing::Span::current().record("count", work.len());
         Ok(work)
+    }
+
+    /// Phone-number lookups the account's session should answer now.
+    pub async fn pending_lookups(
+        &self,
+        scope: SessionScope,
+    ) -> ExternalChatResult<Vec<LookupWork>> {
+        self.repository.pending_lookups(scope).await
+    }
+
+    /// Record what WhatsApp answered about a looked-up number; a registered
+    /// number's direct chat joins the chat list, ready to add.
+    #[tracing::instrument(name = "whatsapp.session.complete_lookup", skip_all, err, fields(account_id = %scope.account_id, lookup_id = %lookup))]
+    pub async fn complete_lookup(
+        &self,
+        scope: SessionScope,
+        lookup: Uuid,
+        answer: &LookupAnswer,
+    ) -> ExternalChatResult<()> {
+        if let LookupAnswer::Found { jid, .. } = answer
+            && Jid::parse(jid).is_none_or(|jid| jid.kind != JidKind::Phone)
+        {
+            return Err(ExternalChatError::Invalid("a lookup found no phone-number JID").into());
+        }
+        self.repository.complete_lookup(scope, lookup, answer).await
     }
 
     /// No message of an added chat is known to start importing from.

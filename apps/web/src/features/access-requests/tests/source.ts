@@ -17,6 +17,7 @@ export function fakeSharingSource(initial: Partial<RequestState> = {}) {
     state,
     grants: () => [],
     loading: () => false,
+    notFound: () => false,
     busy: () => false,
     error: () => undefined,
     refresh: vi.fn(async () => {}),

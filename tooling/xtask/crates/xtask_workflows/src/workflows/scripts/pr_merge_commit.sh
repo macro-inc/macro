@@ -16,11 +16,11 @@ pr_merge_commit() {
       return 0
     fi
     if [[ "$mergeable" == "CONFLICTING" ]]; then
-      echo "::error::PR #${PR_NUMBER} conflicts with its base branch, so there is no merge result to check; resolve the conflicts first." >&2
+      echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
       return 1
     fi
     if (( $(date +%s) > deadline )); then
-      echo "::error::GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable}); retry in a minute." >&2
+      echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
       return 1
     fi
     echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2

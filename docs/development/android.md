@@ -59,6 +59,11 @@ Build commands embed the production frontend. Outputs are under
 Release builds automatically prepare the signing configuration below and produce
 signed artifacts. Debug builds do not fetch release signing credentials.
 
+The app's Gradle packaging excludes the duplicate
+`META-INF/versions/9/OSGI-INF/MANIFEST.MF` from JSpecify and OpenTelemetry. This
+OSGi metadata is unused on Android. Keep the exclusion exact: broad `META-INF`
+exclusions can remove service-provider registrations used by OpenTelemetry.
+
 ## Release signing
 
 The existing upload keystore and signing credentials are stored in Doppler
@@ -131,8 +136,9 @@ its fingerprint to production associations before testing Play-installed links.
 ### Releasing to Google Play from a pull request
 
 Android releases are driven from pull requests, like iOS (see
-`apps/web/docs/ios-releases.md`); they are not tied to the production
-deployment cycle. Three generated workflows plus the `Android Native Check`
+`apps/web/docs/ios-releases.md`). Unlike iOS, whose approved version is held
+until the prod deploy, they are not tied to the production deployment cycle.
+Three generated workflows plus the `Android Native Check`
 job of the web app PR checks enforce it:
 
 **`Android Native Check`** runs on every PR against `main`. Its native tree
@@ -170,21 +176,26 @@ To release:
    first refuses drafts, PRs with failing checks (pending ones are waited on,
    up to 30 minutes), PRs without a bump, and PRs whose head lacks Android
    native code that landed on `main` since they branched (the gate hashes
-   the merge result, so such a bundle could never pass it; merge `main`,
-   bump, re-add the label). It then builds the signed App Bundle from the PR
-   head on a hosted Ubuntu runner (Android SDK, Nix, signing and Firebase
-   config from Doppler `android-release/prd`), verifies it with bundletool,
+   the merge result, so such a bundle could never pass it; the refusal lists
+   the native files `main` changed; merge `main`, bump, re-add the label).
+   When GitHub has no merge result (the PR conflicts with `main`, or GitHub
+   hasn't computed it yet) the check compares `main` with the PR's branch
+   point instead and goes ahead if `main`'s native code hasn't moved. It
+   then builds the signed App Bundle from the PR head on a hosted Ubuntu
+   runner (Android SDK, Nix, signing and Firebase config from Doppler
+   `android-release/prd`), verifies it with bundletool,
    checks again that neither the PR head nor `main` changed native code
    during the build, uploads it to the **internal** track with
    `status=completed`, and promotes it to **production** as a full rollout
    (Google review applies). The bundle and R8 mapping are kept as a workflow
    artifact for 90 days. The release notes carry a provenance stamp,
    `native tree <hash> for PR #<n>`, the twin of the iOS TestFlight stamp.
-   The run comments the outcome on the PR; remove and re-add the label to
-   retry. Click **Enable auto-merge** on the PR to merge the moment it is
-   live. The label only works on a PR that is mergeable: GitHub does not
-   run `pull_request` workflows on a PR that conflicts with `main`, so the
-   release never starts there. The **`Release Label Check`** workflow
+   The run comments the outcome on the PR (a failure names the step that
+   failed and, for the checking steps, quotes the end of its output);
+   remove and re-add the label to retry. Click **Enable auto-merge** on the
+   PR to merge the moment it is live. The label only works on a PR that is
+   mergeable: GitHub does not run `pull_request` workflows on a PR that
+   conflicts with `main`, so the release never starts there. The **`Release Label Check`** workflow
    (`.github/workflows/release-label-check.yml`, a `pull_request_target`
    workflow, which GitHub does run) then comments and removes the label;
    resolve the conflicts and re-add it. On a mergeable PR that workflow
@@ -198,9 +209,13 @@ To release:
    the bundle stale: **`Android Release Drift`** cancels an in-progress build,
    removes the label and comments. A Play production release cannot be
    withdrawn once submitted, so if the stale bundle was already promoted the
-   comment says so and the follow-up should ship as soon as possible (after
-   a force-push the old head is gone, so drift checks Play for the new
-   head's version code instead).
+   comment says so and the follow-up should ship as soon as possible. If the
+   previous native tree cannot be verified (for example, after a force-push),
+   drift skips the Play lookup and reports production status as unknown; the
+   new head's version code cannot identify the prior release. Authentication
+   or Play lookup failures also report unknown status. Keep the reviewed-SHA
+   restriction and verify through an approved check or Play Console before
+   treating the prior release as stopped.
 
 Play is the source of truth for what is live; nothing ties Android bundles
 to production release tags any more. `publish-android-play.yml` remains as
@@ -222,6 +237,10 @@ Nix cache mount. Do not invoke the shared `teardown-nix` cache-volume action
 there: its `fuser -km /nix` can kill the runner when `/nix` is on the root
 filesystem, preventing GitHub from receiving the build logs. Let the hosted
 VM be discarded.
+
+The shared authenticated Git fetch helper clears `LD_LIBRARY_PATH` for Git only.
+After Nix setup, the host Git HTTPS helper cannot safely load the build shell's
+Nix libraries; keep this isolation in the helper used by the release head guard.
 
 Testers install through Google Play's internal testing track once the
 bundle is uploaded; an AAB cannot be installed directly on a device.
@@ -292,8 +311,10 @@ attribute.repository_id=assertion.repository_id
 
 Use issuer `https://token.actions.githubusercontent.com`. Restrict the provider's
 attribute condition to the numeric repository and owner IDs (available from
-`gh api repos/macro-inc/macro --jq '{repository: .id, owner: .owner.id}'`), the
-publishing workflow on `main`, and its branch identity:
+`gh api repos/macro-inc/macro --jq '{repository: .id, owner: .owner.id}'`).
+The initial condition below permits only the manual publishing workflow on
+`main`; automatic PR releases also need the explicit grants described in
+"Authorize an approved PR release" below:
 
 ```text
 assertion.repository_id == '1092407718' &&
@@ -310,8 +331,8 @@ principalSet://iam.googleapis.com/projects/1024168288732/locations/global/worklo
 
 In GitHub → Settings → Secrets and variables → Actions → Variables, add these
 **repository variables**, which contain identifiers, not secrets. The workflow
-checks its branch, and the Google provider independently enforces both the branch
-and workflow identity:
+checks its branch, and the Google provider independently enforces the approved
+ref and workflow identity:
 
 | Variable | Value |
 | --- | --- |
@@ -351,6 +372,87 @@ gh variable set GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER --repo macro-inc/macro \
 gh variable set GOOGLE_PLAY_SERVICE_ACCOUNT --repo macro-inc/macro \
   --body google-play-publisher@macro-435922.iam.gserviceaccount.com
 ```
+
+#### Authorize an approved PR release
+
+The initial provider condition rejects the PR-based native check and release
+workflows. Before releasing a reviewed same-repository PR, an identity
+administrator must extend that condition with narrowly scoped alternatives:
+
+- Keep the numeric repository and owner ID checks around every alternative,
+  and retain the existing manual publisher on `main`.
+- Permit `android-release-watch.yml@refs/heads/main` only with the main ref and
+  main subject, for `schedule` or `workflow_dispatch` events.
+- Permit the specific approved `refs/pull/<PR_NUMBER>/merge` only for
+  `pull_request` events, the `repo:macro-inc/macro:pull_request` subject,
+  `base_ref == 'main'`, the reviewed merge commit in `assertion.sha`, and these
+  exact workflow paths at that same merge ref:
+  `web-app-check-main.yml`, `android-play-release.yml`, and
+  `android-release-drift.yml` under `macro-inc/macro/.github/workflows/`.
+
+Check the PR's head repository and review its merge commit before granting access.
+Do not replace the approved PR ref or SHA with a wildcard: PR workflows execute
+the proposed code with the publishing identity. For `pull_request` workflows,
+`assertion.sha` identifies the event's merge commit, not the PR head. A later push
+or base-branch update creates a different merge commit; review the changes before
+updating the grant. Reruns retain the original event SHA, and release jobs request
+credentials after building. Retain each reviewed event SHA in an explicit
+`assertion.sha in [...]` allowlist while its approved gate, release, or drift run
+still needs credentials, then remove it. Remove the PR's alternative after it
+merges or closes. Keep the main watcher permission so it can verify releases and
+rerun native gates.
+
+Back up the existing provider, then create the complete condition below. Replace
+`<PR_NUMBER>` and `<REVIEWED_MERGE_SHA>` with the approved PR number and full
+40-character merge commit SHA. This example preserves the initial publisher and
+adds the watcher; preserve any other independently approved grants already in
+`provider-before.json` instead of overwriting them.
+
+```sh
+gcloud iam workload-identity-pools providers describe macro \
+  --project=macro-435922 --location=global \
+  --workload-identity-pool=github-play --format=json > provider-before.json
+
+cat > approved-play-condition.cel <<'CEL'
+assertion.repository_id == '1092407718' &&
+assertion.repository_owner_id == '65687018' &&
+(
+  (
+    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/publish-android-play.yml@refs/heads/main' &&
+    assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main'
+  ) ||
+  (
+    assertion.workflow_ref == 'macro-inc/macro/.github/workflows/android-release-watch.yml@refs/heads/main' &&
+    assertion.ref == 'refs/heads/main' &&
+    assertion.sub == 'repo:macro-inc/macro:ref:refs/heads/main' &&
+    assertion.event_name in ['schedule', 'workflow_dispatch']
+  ) ||
+  (
+    assertion.event_name == 'pull_request' &&
+    assertion.sub == 'repo:macro-inc/macro:pull_request' &&
+    assertion.ref == 'refs/pull/<PR_NUMBER>/merge' &&
+    assertion.base_ref == 'main' &&
+    assertion.sha == '<REVIEWED_MERGE_SHA>' &&
+    assertion.workflow_ref in [
+      'macro-inc/macro/.github/workflows/web-app-check-main.yml@refs/pull/<PR_NUMBER>/merge',
+      'macro-inc/macro/.github/workflows/android-play-release.yml@refs/pull/<PR_NUMBER>/merge',
+      'macro-inc/macro/.github/workflows/android-release-drift.yml@refs/pull/<PR_NUMBER>/merge'
+    ]
+  )
+)
+CEL
+
+gcloud iam workload-identity-pools providers update-oidc macro \
+  --project=macro-435922 --location=global \
+  --workload-identity-pool=github-play \
+  --attribute-condition="$(cat approved-play-condition.cel)"
+```
+
+Keep the existing attribute mappings and service-account role binding. Verify the
+updated condition, then rerun the failed Android native-check job: successful
+authentication must reach the Play status check before triggering the release.
+See [GitHub's OIDC claims](https://docs.github.com/en/actions/reference/security/oidc)
+for the distinction between PR subjects and branch subjects.
 
 #### Manual upload (fallback)
 
@@ -410,9 +512,9 @@ retrying. Failed or no-op attempts discard their pending edit when possible;
 commits are never automatically retried. The workflow summary reports submission,
 not confirmation that the release is already available to users.
 
-Promotion remains a separate manual action; building a GitHub release or uploading
-to internal testing never triggers production promotion. It uses the existing
-workflow identity, so no Google identity-provider changes are required.
+The fallback promotion command is a separate manual action and uses the existing
+main publishing identity. The PR release workflow promotes automatically after
+its internal upload and requires the approved PR identity grant described above.
 
 ## Firebase
 

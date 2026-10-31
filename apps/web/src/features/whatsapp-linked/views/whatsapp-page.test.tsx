@@ -70,6 +70,7 @@ const launch = (announcements: boolean) => ({
 
 const chat = {
   kind: 'group' as const,
+  phoneNumber: undefined,
   lastActivityAt: undefined,
   archived: false,
   inMacro: undefined,
@@ -469,6 +470,7 @@ describe('connected', () => {
           jid: '14155550123@s.whatsapp.net',
           kind: 'direct' as const,
           name: '+1 415-555-0123',
+          lastActivityAt: '2025-03-04T10:00:00Z',
           canAdd: false,
           cannotAddReason: 'not_in_chat_list' as const,
         },
@@ -505,7 +507,11 @@ describe('connected', () => {
     expect(screen.queryByText('Ana Ruiz')).toBeNull();
 
     fireEvent.input(search, { target: { value: 'nothing like it' } });
-    expect(screen.getByText('No chats to add match your search.')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'No chats or contacts match your search. To message someone else, start a new chat with their number.'
+      )
+    ).toBeTruthy();
   });
 
   it('adds a group in one click, without a dialog', async () => {
@@ -533,6 +539,7 @@ describe('connected', () => {
           jid: '15550001111@s.whatsapp.net',
           kind: 'direct' as const,
           name: 'Ben Ode',
+          lastActivityAt: '2025-03-04T10:00:00Z',
         },
       ],
     });
@@ -575,6 +582,7 @@ describe('connected', () => {
           jid: '14155550177@s.whatsapp.net',
           kind: 'direct' as const,
           name: 'Ben Ode',
+          lastActivityAt: '2025-03-04T10:00:00Z',
         },
         {
           ...chat,

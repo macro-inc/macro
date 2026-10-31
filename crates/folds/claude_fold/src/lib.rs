@@ -43,7 +43,7 @@ impl Fold for ClaudeLog {
         };
         match entry.get("type").and_then(Value::as_str) {
             Some("assistant") => assistant(message),
-            Some("user") => user_message(message, origin(&entry)),
+            Some("user") => user_message(&entry, message),
             _ => Vec::new(),
         }
     }
@@ -112,7 +112,21 @@ fn origin(entry: &Value) -> Option<&str> {
     entry.pointer("/origin/kind").and_then(Value::as_str)
 }
 
-fn user_message(message: &Value, origin: Option<&str>) -> Vec<LogEvent> {
+/// Marks the CLI writes as a user line when Esc stops a turn. Newer CLIs also
+/// tag the line with `interruptedMessageId`; older ones only write the text.
+const INTERRUPTED: &str = "[Request interrupted by user";
+
+/// Local slash commands (`/model`, `/clear`, `/compact`) echo their name and
+/// output as untagged user lines. No assistant turn answers them.
+const LOCAL_COMMAND_TAGS: &[&str] = &[
+    "<command-name>",
+    "<command-message>",
+    "<local-command-stdout>",
+    "<local-command-stderr>",
+    "<local-command-caveat>",
+];
+
+fn user_message(entry: &Value, message: &Value) -> Vec<LogEvent> {
     let mut events = tool_results(message);
     let text = match message.get("content") {
         Some(Value::String(text)) => text.clone(),
@@ -122,12 +136,25 @@ fn user_message(message: &Value, origin: Option<&str>) -> Vec<LogEvent> {
             .collect::<Vec<_>>()
             .join("\n"),
     };
-    if !text.is_empty() {
+    if entry.get("interruptedMessageId").is_some() || text.starts_with(INTERRUPTED) {
+        events.push(LogEvent::TurnEnded("cancelled"));
+        return events;
+    }
+    // Only a prompt may open a turn: a user chunk outside a Macro prompt
+    // starts one, and CLI bookkeeping is never followed by the `end_turn`
+    // that would close it.
+    let flag = |key| entry.get(key).and_then(Value::as_bool) == Some(true);
+    let bookkeeping = flag("isMeta")
+        || flag("isCompactSummary")
+        || LOCAL_COMMAND_TAGS
+            .iter()
+            .any(|tag| text.trim_start().starts_with(tag));
+    if !text.is_empty() && !bookkeeping {
         let mut update = json!({
             "sessionUpdate": "user_message_chunk",
             "content": {"type": "text", "text": text},
         });
-        if let Some(origin) = origin {
+        if let Some(origin) = origin(entry) {
             update["_meta"] = json!({"claudeCode": {"origin": origin}});
         }
         events.push(LogEvent::Update(update));

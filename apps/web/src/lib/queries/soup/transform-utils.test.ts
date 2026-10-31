@@ -1,3 +1,4 @@
+import { canMarkNotDone } from '@app/features/next-soup/actions/can-mark-not-done';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -132,6 +133,43 @@ describe('email soup entities', () => {
       hasFileAttachment,
     });
   });
+
+  it.each([
+    [false, false],
+    [true, true],
+    [undefined, true],
+  ])(
+    'an archived row with received mail %s offers Mark not done: %s',
+    (hasReceivedMail, offered) => {
+      // GraphQL rows carry the flag beyond the REST preview type.
+      const data = {
+        id: 'email',
+        ownerId: 'owner',
+        properties: [],
+        attachments: [],
+        labels: [],
+        participants: [],
+        createdAt: '2026-09-01T00:00:00Z',
+        updatedAt: '2026-09-01T00:00:00Z',
+        sortTs: '2026-09-01T00:00:00Z',
+        inboxVisible: false,
+        hasReceivedMail,
+        isDraft: false,
+        isRead: true,
+        isImportant: false,
+        isSignal: false,
+      };
+      const item = {
+        tag: 'emailThread',
+        frecency_score: 0,
+        is_favorited: false,
+        data,
+      } satisfies SoupApiItem;
+      const entity = mapApiSoupItemToEntity(item);
+      expect(entity).toMatchObject({ type: 'email', done: true });
+      expect(canMarkNotDone(entity)).toBe(offered);
+    }
+  );
 });
 
 describe('initiative soup entities', () => {

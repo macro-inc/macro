@@ -70,6 +70,8 @@ export function EventGuestPicker(props: {
   excluded?: SelectedEventEditorGuest[];
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   onClose: () => void;
+  /** Fill a sized container, such as a sheet, rather than a popover's height. */
+  fillHeight?: boolean;
 }) {
   const known = () => [...(props.excluded ?? []), ...props.selected];
   const users = createMemo((): IUser[] => {
@@ -93,6 +95,7 @@ export function EventGuestPicker(props: {
         users,
         excludedIds,
         allowCustomEmail: true,
+        fillHeight: props.fillHeight,
       }}
       selectedOptions={() => new Set(props.selected.map((guest) => guest.id))}
       setSelectedOptions={(ids) => {

@@ -199,6 +199,7 @@ fn calendar(id: Uuid, link_id: Uuid) -> VisibleCalendar {
         is_primary: true,
         is_writable: true,
         is_subscription: false,
+        contributes_to_availability: true,
         sync_error: None,
         default_reminders: Vec::new(),
         provider: CalendarProvider::Google,

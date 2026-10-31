@@ -17,6 +17,8 @@ pub mod events;
 pub mod ics;
 /// Asking to join a calendar event shared with a channel.
 pub mod join_requests;
+/// What says whose calendar an event is on, and what the user is there.
+pub mod labels;
 /// Macro meeting links carried by calendar events.
 pub mod meeting_links;
 /// Domain models.

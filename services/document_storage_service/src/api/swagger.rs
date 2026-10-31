@@ -474,6 +474,9 @@ use utoipa::OpenApi;
         whatsapp_linked::inbound::router::passkey,
         whatsapp_linked::inbound::router::disconnect,
         whatsapp_linked::inbound::router::chats,
+        whatsapp_linked::inbound::router::start_lookup,
+        whatsapp_linked::inbound::router::lookup,
+        whatsapp_linked::inbound::router::import_history,
 
         access_requests::inbound::axum_router::state_handler,
         access_requests::inbound::axum_router::submit_handler,

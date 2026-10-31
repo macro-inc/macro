@@ -18,6 +18,10 @@ export type ChatSummary = {
   unreadCount: number;
   /** False for viewers who can only read. */
   canSend: boolean;
+  /** Why the viewer can't send, when they can't. */
+  sendReason?: ExternalChatReplyBlock;
+  /** Importing earlier messages from the owner's phone. */
+  backfill?: ChatBackfill;
   /** The provider community the group belongs to. */
   community?: { id: string; name: string; announcements: boolean };
 };
@@ -226,8 +230,8 @@ export function backfillStatus(
     .with(P.union('pending', 'running'), () => 'Importing history…')
     .with('waiting_for_phone', () =>
       viewerOwns
-        ? 'Waiting for your phone to import history'
-        : "Waiting for the owner's phone to import history"
+        ? 'Earlier messages not imported. Open WhatsApp on your phone, then import them.'
+        : "Earlier messages wait for the owner's phone"
     )
     .with(P.union('waiting_for_message', 'done', 'partial'), () => undefined)
     .exhaustive();

@@ -60,6 +60,7 @@ where
             .await
             .map_err(internal)?
         {
+            self.announce_answer(&target, &resolved).await;
             return Ok(resolved);
         }
         // Another acceptance landed first; report where it left the request.
@@ -68,6 +69,24 @@ where
             .await
             .map_err(internal)?
             .ok_or(CalendarMutationError::NotFound)
+    }
+
+    /// Refresh everyone with this request on screen, once the answer is
+    /// stored so their refetch finds it; the nudge an acceptance's invite
+    /// sends goes out before that. The request list's readers, the owner and
+    /// delegates of the sharer's inbox, hear it here because the notification
+    /// delete reaches only a sharer who still holds one.
+    async fn announce_answer(
+        &self,
+        target: &CalendarEventMutationTarget,
+        answered: &CalendarJoinRequest,
+    ) {
+        self.refresh
+            .calendar_changed(&target.owner_id, target.email_link_id, false)
+            .await;
+        self.refresh
+            .join_request_answered(&answered.requester_id, answered.event_id)
+            .await;
     }
 }
 

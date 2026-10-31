@@ -241,6 +241,13 @@ impl CalendarRepository for FakeRepo {
         Ok(None)
     }
 
+    async fn event_copies(
+        &self,
+        _event_ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::labels::EventCopy>, Report> {
+        Ok(Vec::new())
+    }
+
     async fn owned_inboxes(
         &self,
         _requester_id: &str,

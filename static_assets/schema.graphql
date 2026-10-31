@@ -8908,6 +8908,11 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	latestInboundMessageTs: String
 	"""
+	Whether any message was received rather than drafted or sent. Only
+	threads with received mail can return to the inbox.
+	"""
+	hasReceivedMail: Boolean!
+	"""
 	Most recent explicit return from an email reminder.
 	"""
 	reminderReturnedAt: String

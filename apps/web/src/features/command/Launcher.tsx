@@ -9,6 +9,7 @@ import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queri
 import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { raiseKeyboardForNewTaskTitle } from '@app/features/task-composer/new-task-title-focus';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import {
@@ -380,6 +381,8 @@ export function runCreateAction(
       }).catch(reportCreateBlockError);
       return;
     case 'task':
+      // Raise the keyboard within this gesture; the composer mounts later.
+      raiseKeyboardForNewTaskTitle();
       createComponent({
         componentId: 'task-compose',
         asPopover: true,

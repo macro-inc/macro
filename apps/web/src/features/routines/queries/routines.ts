@@ -4,7 +4,7 @@ import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { scheduledActionKeys } from './keys';
 
-function routineQueryOptions(id: string) {
+export function routineQueryOptions(id: string) {
   return queryOptions({
     queryKey: scheduledActionKeys.detail({ scheduleId: id }).queryKey,
     queryFn: () => throwOnErr(() => scheduledActionClient.getRoutine(id)),

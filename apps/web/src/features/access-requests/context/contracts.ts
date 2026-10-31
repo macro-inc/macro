@@ -11,6 +11,8 @@ export type SharingSource = {
   state: Accessor<RequestState | undefined>;
   grants: Accessor<DirectAccess[]>;
   loading: Accessor<boolean>;
+  /** The entity is gone, so its last cached state no longer applies. */
+  notFound: Accessor<boolean>;
   busy: Accessor<boolean>;
   error: Accessor<string | undefined>;
   refresh(): Promise<void>;

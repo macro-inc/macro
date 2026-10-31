@@ -3716,7 +3716,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.52"
+version = "0.6.53"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4581,6 +4581,7 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "arboard",
+ "base64 0.22.1",
  "bot_id",
  "channel_sender",
  "channels",
@@ -6719,6 +6720,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6805,6 +6807,7 @@ dependencies = [
  "uuid",
  "webhook",
  "whatsapp_linked",
+ "wiremock",
  "work_feed",
  "workspace-hack",
  "zip 9.0.5",
@@ -9025,6 +9028,7 @@ dependencies = [
  "model_owner",
  "model_user",
  "models_permissions",
+ "models_properties",
  "notification",
  "redis",
  "regex",
@@ -17747,6 +17751,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
+ "calendar_events",
  "channels",
  "chrono",
  "comms_db_client",
