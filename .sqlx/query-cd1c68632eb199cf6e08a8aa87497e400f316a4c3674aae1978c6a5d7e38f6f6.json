@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM github_app_installation i\n                WHERE i.id = $1\n                  AND EXISTS (SELECT 1 FROM github_links l WHERE l.macro_id = $2)\n                  AND (\n                    (i.source_type = 'user' AND i.source_id = $2 AND NOT EXISTS (\n                        SELECT 1 FROM github_app_installation_installer installer\n                        WHERE installer.installation_id = i.id\n                          AND installer.github_user_id NOT IN (\n                              SELECT l.github_user_id FROM github_links l WHERE l.macro_id = $2\n                          )\n                    ))\n                    OR (i.source_type = 'team' AND EXISTS (\n                        SELECT 1 FROM team_user t\n                        WHERE t.team_id::text = i.source_id AND t.user_id = $2\n                    ))\n                  )\n            ) AS \"claimed!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "claimed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cd1c68632eb199cf6e08a8aa87497e400f316a4c3674aae1978c6a5d7e38f6f6"
+}

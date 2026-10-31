@@ -452,3 +452,53 @@ describe('run visibility', () => {
     });
   });
 });
+
+describe('routine required apps', () => {
+  it('reads, creates, and updates the apps a routine requires', () => {
+    const withApps: ScheduledAction = {
+      ...cron,
+      task: {
+        model: 'claude-sonnet-4-6',
+        user_prompt: 'Summarize updates',
+        prompt: '',
+        mcp_servers: [{ app_slug: 'linear', server_name: 'Linear' }],
+      },
+    };
+    const restored = loadedDraft(withApps);
+    expect(restored.apps).toEqual([
+      { app_slug: 'linear', server_name: 'Linear' },
+    ]);
+    expect(draftToCreateBody(restored).task.mcp_servers).toEqual([
+      { app_slug: 'linear', server_name: 'Linear' },
+    ]);
+    expect(draftToCreateBody(loadedDraft(cron)).task.mcp_servers).toEqual([]);
+
+    // Untouched apps keep the stored task as it was.
+    expect(draftToUpdateBody(restored, withApps)?.task).toBe(withApps.task);
+
+    // Removing every app sends an explicit empty list.
+    expect(
+      draftToUpdateBody({ ...restored, apps: [] }, withApps)?.task
+    ).toEqual({
+      model: 'claude-sonnet-4-6',
+      user_prompt: 'Summarize updates',
+      prompt: '',
+      mcp_servers: [],
+    });
+
+    expect(
+      draftToUpdateBody(
+        {
+          ...loadedDraft(cron),
+          apps: [{ app_slug: 'slack', server_name: 'Slack' }],
+        },
+        cron
+      )?.task
+    ).toEqual({
+      model: 'claude-sonnet-4-6',
+      user_prompt: 'Summarize updates',
+      prompt: '',
+      mcp_servers: [{ app_slug: 'slack', server_name: 'Slack' }],
+    });
+  });
+});

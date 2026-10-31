@@ -73,7 +73,13 @@ async function unregisterVoipForLogout(): Promise<void> {
 }
 
 type VoipTokenPayload = { token: string };
-type CallAnsweredPayload = { channelId: string; nativeMedia?: boolean };
+type CallAnsweredPayload = {
+  channelId: string;
+  nativeMedia?: boolean;
+  callId?: string;
+  /** When CallKit fulfilled the answer, epoch ms. */
+  answeredAtMs?: number;
+};
 type CallEndedPayload = { callId: string };
 type DrawerOpenedPayload = { channelId: string };
 type ParticipantIdentitiesPayload = { identities: string[] };
@@ -104,7 +110,25 @@ type GetActiveCallStateResponse = {
 type GetPendingAnsweredCallResponse = {
   channelId: string | null;
   nativeMedia?: boolean | null;
+  callId?: string | null;
+  answeredAtMs?: number | null;
 };
+
+/**
+ * How old a CallKit answer can be when the webview handles it. Answers reach
+ * JS late when the webview was suspended or cold-started; past this, the call
+ * may already be over or left, and joining it would be unprompted.
+ */
+const ANSWERED_CALL_MAX_AGE_MS = 60_000;
+
+/** One CallKit answer: its call when native names it, else its channel. */
+function answeredCallIdentity(
+  answer: Pick<CallAnsweredPayload, 'channelId' | 'nativeMedia' | 'callId'>
+): string {
+  return answer.callId
+    ? `call:${answer.callId.toLowerCase()}`
+    : `${answer.channelId}:${answer.nativeMedia ?? false}`;
+}
 
 type NativeCallChannelMetadata = {
   channelId: string;
@@ -352,10 +376,25 @@ export function useCallKitSetup() {
     }
 
     const handleCallAnswered = (
-      { channelId, nativeMedia }: CallAnsweredPayload,
+      { channelId, nativeMedia, callId, answeredAtMs }: CallAnsweredPayload,
       source: 'channel' | 'pending' = 'channel'
     ) => {
-      const answeredCallKey = `${channelId}:${nativeMedia ?? false}`;
+      const ageMs =
+        answeredAtMs === undefined ? undefined : Date.now() - answeredAtMs;
+      if (ageMs !== undefined && ageMs > ANSWERED_CALL_MAX_AGE_MS) {
+        console.info('[callkit] ignoring stale answered call', {
+          channelId,
+          callId,
+          ageMs,
+          source,
+        });
+        return;
+      }
+      const answeredCallKey = answeredCallIdentity({
+        channelId,
+        nativeMedia,
+        callId,
+      });
       const now = Date.now();
       if (
         lastHandledAnsweredCall?.key === answeredCallKey &&
@@ -393,20 +432,31 @@ export function useCallKitSetup() {
       invoke<GetPendingAnsweredCallResponse>(
         'plugin:call-kit|get_pending_answered_call'
       )
-        .then(({ channelId, nativeMedia }) => {
+        .then(({ channelId, nativeMedia, callId, answeredAtMs }) => {
           console.info('[callkit] drained pending answered call', {
             channelId,
             nativeMedia,
+            callId,
           });
           if (!channelId) return;
           if (
-            handled?.channelId === channelId &&
-            (handled.nativeMedia ?? false) === (nativeMedia ?? false)
+            handled &&
+            answeredCallIdentity(handled) ===
+              answeredCallIdentity({
+                channelId,
+                nativeMedia: nativeMedia ?? false,
+                callId: callId ?? undefined,
+              })
           ) {
             return;
           }
           handleCallAnswered(
-            { channelId, nativeMedia: nativeMedia ?? false },
+            {
+              channelId,
+              nativeMedia: nativeMedia ?? false,
+              callId: callId ?? undefined,
+              answeredAtMs: answeredAtMs ?? undefined,
+            },
             'pending'
           );
         })

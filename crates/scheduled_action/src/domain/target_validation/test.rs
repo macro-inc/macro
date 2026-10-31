@@ -168,13 +168,92 @@ fn requires_explicit_null_to_remove_even_an_unparseable_historical_selection() {
         agent_task(),
         json!({"agent":{"bot_id":"deleted-legacy-id"}}),
     ] {
-        let error = require_explicit_agent(&previous, &json!({"model":"model"})).unwrap_err();
+        let error = require_explicit_selection(&previous, &json!({"model":"model"})).unwrap_err();
         assert_eq!(
             error.downcast_ref(),
             Some(&TargetValidationError::ExplicitAgentRequired)
         );
-        require_explicit_agent(&previous, &json!({"agent":null,"model":"model"})).unwrap();
-        require_explicit_agent(&previous, &agent_task()).unwrap();
+        require_explicit_selection(&previous, &json!({"agent":null,"model":"model"})).unwrap();
+        require_explicit_selection(&previous, &agent_task()).unwrap();
     }
-    require_explicit_agent(&json!({"model":"old"}), &json!({"model":"new"})).unwrap();
+    require_explicit_selection(&json!({"model":"old"}), &json!({"model":"new"})).unwrap();
+}
+
+#[tokio::test]
+async fn hands_the_routine_apps_to_the_session_check() {
+    let sessions = Arc::new(Sessions::default());
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    TargetValidation::new(sessions.clone(), true)
+        .validate_task(
+            &json!({
+                "agent": {"bot_id": BOT},
+                "mcp_servers": [{"app_slug": "linear", "server_name": "Linear"}],
+                "prompt": "instructions",
+                "user_prompt": "task",
+            }),
+            &owner,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        sessions.validations.lock().unwrap()[0].mcp_servers,
+        vec![bots::domain::models::AgentMcpServer {
+            app_slug: "linear".into(),
+            server_name: "Linear".into(),
+        }]
+    );
+
+    *sessions.error.lock().unwrap() = Some(RoutineSessionError::AppNotConnected);
+    let error = TargetValidation::new(sessions.clone(), true)
+        .validate_task(
+            &json!({
+                "model": "runtime/model",
+                "mcp_servers": [{"app_slug": "linear", "server_name": "Linear"}],
+                "prompt": "instructions",
+                "user_prompt": "task",
+            }),
+            &owner,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&RoutineSessionError::AppNotConnected)
+    );
+}
+
+#[tokio::test]
+async fn a_validator_that_cannot_check_connections_rejects_routine_apps() {
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let error = ModelOnlyTargets
+        .validate_task(
+            &json!({
+                "model": "runtime/model",
+                "mcp_servers": [{"app_slug": "linear", "server_name": "Linear"}],
+                "prompt": "instructions",
+                "user_prompt": "task",
+            }),
+            &owner,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::AgentsDisabled)
+    );
+}
+
+#[test]
+fn an_update_must_restate_the_routine_apps_to_keep_or_clear_them() {
+    let previous = json!({
+        "model": "model",
+        "mcp_servers": [{"app_slug": "linear", "server_name": "Linear"}],
+    });
+    let error = require_explicit_selection(&previous, &json!({"model":"model"})).unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::ExplicitAppsRequired)
+    );
+    require_explicit_selection(&previous, &json!({"model":"model","mcp_servers":[]})).unwrap();
+    require_explicit_selection(&json!({"model":"old"}), &json!({"model":"new"})).unwrap();
 }

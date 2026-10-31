@@ -1,6 +1,9 @@
 use super::*;
+use calendar_events::domain::meeting_links::attach_macro_call;
 use chrono::{NaiveDate, TimeZone, Utc};
 use opensearch_client::search::model::{Highlight, SearchHit};
+
+const CALL_URL: &str = "https://macro.com/app/meet/join/0123456789abcdef0123456789abcdef";
 
 fn hit(entity_id: Uuid) -> SearchHit {
     SearchHit {
@@ -29,6 +32,7 @@ fn timed_series(id: Uuid) -> CalendarEventSearchInfo {
         organizer_email: Some("jacob@example.com".to_string()),
         organizer_name: Some("Jacob Beckerman".to_string()),
         description: None,
+        holds_meeting: true,
         is_read_only: false,
         created_at: Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
         updated_at: Utc.with_ymd_and_hms(2024, 1, 2, 0, 0, 0).unwrap(),
@@ -38,6 +42,62 @@ fn timed_series(id: Uuid) -> CalendarEventSearchInfo {
         occurrence_start_date: None,
         occurrence_end_date: None,
     }
+}
+
+/// The description a row returns for an event stored with `description`.
+fn returned_description(description: &str, holds_meeting: bool) -> Option<String> {
+    let id = Uuid::new_v4();
+    let mut info = timed_series(id);
+    info.description = Some(description.to_string());
+    info.holds_meeting = holds_meeting;
+    let results =
+        construct_search_result(vec![hit(id)], HashMap::from([(id, info)]), HashMap::new());
+    results
+        .into_iter()
+        .next()
+        .and_then(|row| row.metadata)
+        .and_then(|metadata| metadata.description)
+}
+
+#[test]
+fn a_channel_member_reads_the_description_without_the_macro_call() {
+    let (stored, _) = attach_macro_call(Some("Quarterly planning"), None, CALL_URL);
+    assert_eq!(
+        returned_description(&stored, false).as_deref(),
+        Some("Quarterly planning")
+    );
+}
+
+#[test]
+fn a_description_holding_only_the_join_line_comes_back_empty() {
+    let (stored, _) = attach_macro_call(None, None, CALL_URL);
+    assert_eq!(returned_description(&stored, false), None);
+}
+
+#[test]
+fn a_join_line_closing_a_long_description_still_comes_out() {
+    // The mention preview's trap: a cap ahead of the strip would cut the join
+    // line short of what the rule recognizes. Search caps nothing.
+    let text = "Agenda ".repeat(1_000);
+    let (stored, _) = attach_macro_call(Some(&text), None, CALL_URL);
+    let returned = returned_description(&stored, false).expect("the text stays");
+    assert!(!returned.contains("/meet/join/"), "{returned}");
+    assert!(returned.starts_with("Agenda"), "{returned}");
+}
+
+#[test]
+fn a_holder_keeps_the_macro_call() {
+    let (stored, _) = attach_macro_call(Some("Quarterly planning"), None, CALL_URL);
+    assert_eq!(
+        returned_description(&stored, true).as_deref(),
+        Some(stored.as_str())
+    );
+}
+
+#[test]
+fn a_share_without_a_macro_call_keeps_its_markup() {
+    let stored = "<p>See <a href=\"https://example.com/notes\">the notes</a></p>";
+    assert_eq!(returned_description(stored, false).as_deref(), Some(stored));
 }
 
 #[test]

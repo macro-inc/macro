@@ -6,8 +6,8 @@
 
 import type { PublishedAsset } from '@core/fig-engine/library-types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowsClockwise from '@phosphor/arrows-clockwise.svg';
-import BookOpen from '@phosphor/book-open.svg';
+import ArrowsClockwise from '@icon/system/regular/arrows-clockwise.svg';
+import BookOpen from '@icon/system/regular/book-open.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { LibrariesDialog } from '../components/libraries-dialog';
 import { LibraryAssets } from '../components/library-assets';

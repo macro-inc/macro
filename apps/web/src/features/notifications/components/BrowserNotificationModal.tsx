@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { isPlatform } from '@core/util/platform';
-import Bell from '@phosphor/bell.svg';
+import Bell from '@icon/system/regular/bell.svg';
 import { useIsAuthenticated } from '@queries/auth';
 import { createMemo, onMount, Show } from 'solid-js';
 import {
@@ -33,15 +33,20 @@ export const BrowserNotificationModal = () => {
   );
 };
 
+/** Native apps ask for app notifications; only the web app uses the browser's. */
+function promptTitle() {
+  if (isPlatform('desktop')) return 'Enable Desktop Notifications';
+  if (isPlatform('android')) return 'Enable Notifications';
+  return 'Enable Browser Notifications';
+}
+
 function NotificationToastTrigger(props: {
   settings: SupportedNotificationSettings;
 }) {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: isPlatform('desktop')
-          ? 'Enable Desktop Notifications'
-          : 'Enable Browser Notifications',
+        title: promptTitle(),
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (

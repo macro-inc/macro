@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT note.event_id, note.occurrence_key, document.name AS document_name,\n                calendar_note_event_visible($1, note.event_id, note.occurrence_key) AS \"can_view_meeting!\",\n                CASE WHEN calendar_note_event_visible($1, note.event_id, note.occurrence_key)\n                     THEN CASE WHEN event.owner_id = $1 OR EXISTS (\n                         SELECT 1 FROM macro_user_links delegate\n                         WHERE delegate.link_id = event.source_link_id AND delegate.primary_macro_id = $1\n                     ) THEN event.title ELSE 'Shared meeting' END\n                     ELSE 'Unavailable meeting' END AS \"event_title!\",\n                team.id AS \"team_id?\", team.name AS \"team_name?\"\n            FROM calendar_event_notes note\n            JOIN \"Document\" document ON document.id = note.document_id AND document.\"deletedAt\" IS NULL\n            JOIN calendar_events event ON event.id = note.event_id\n            LEFT JOIN team ON team.id = note.team_id\n            WHERE note.document_id = $2\n              AND (document.owner = $1 OR calendar_note_event_visible($1, note.event_id, note.occurrence_key))\n            ORDER BY note.created_at, note.event_id, note.occurrence_key\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "occurrence_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "can_view_meeting!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "team_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "team_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "3f0661915621c25f5bf5d3e5eb78c9e0a854c45a3b724820be55853a0eee4740"
+}

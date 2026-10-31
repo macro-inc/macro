@@ -11,7 +11,7 @@
  * native control does.
  */
 
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import type {
   ElicitationOption,
   ElicitationProperty,

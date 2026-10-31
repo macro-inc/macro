@@ -20,11 +20,21 @@ enforced by the ordinary backend APIs.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row handles.
+- `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
+  `external_chat`) and their message/send/upload/participant handles.
+- `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
+  returns an `ExternalChat`.
+- `src/entities/images/`: `macro.images.generate()` (cognition
+  `POST /images/generate`, admitted against the user's AI allowance) returns a
+  sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
+  { images })` and `thread.reply` as `static/image` attachments.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
+- Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
@@ -45,19 +55,30 @@ the existing gateway prefixes.
 
 ## Gotchas
 
-- Code mode puts at most 48 KiB of SDK docs in each agent turn; a section
-  larger than that (calendar is about 78 KB) arrives as its namespace class
-  page only. Put rules an agent must follow on the namespace class or the
-  methods it lists, not only on an entity's methods, which agents read only
-  when they request the section.
+- Code mode puts each relevant entity's index in the agent turn, at most 48
+  KiB: a method's signature and the first sentence of its doc, cut at 160
+  characters. Anything else reaches an agent only through `ReadCodeDocs`, which
+  it calls for the methods a program uses and rarely for a class. Open a
+  method's doc with the rule an agent must follow, and put the detail on that
+  method, not only on the namespace class.
 - Calendar occurrences carry each copy's `inbox` and `role`; one meeting on
   several of the user's inboxes is one event per inbox. `update`,
   `inviteGuests` and `delete` take the copy's `inbox`, and an agent run that
   omits it on such a meeting is refused with `copy_choice_required`.
+- `inbox` is the account syncing a calendar, so it stays the user's address on
+  a colleague's calendar. Occurrences name the calendar (`calendarName`) and
+  whether it is on the user's schedule (`contributesToAvailability`); provider
+  access says nothing about whose calendar it is, and `role` counts `organize`
+  only on such a calendar, since writing someone's calendar grants it too. An
+  own attendee row marked organizer counts only on a copy the user can change
+  (`isReadOnly` false): Outlook names the mailbox owner as organizer on every
+  event of a read-only calendar. `eventRole` and `ToolEventRole::of` must stay
+  in step.
 - Calendar notes accept a document handle and the occurrence returned by calendar
   reads. `CalendarNote` owns optional team sharing and unlinking; clearing its team
   sends explicit null and never changes the document's other permissions.
-  `Document.meetingNotes()` discovers durable grants for revocation after losing
+  `Document.meetingNotes()` discovers visible meeting links for readers and
+  durable grants for owners to revoke after losing
   meeting access.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
@@ -80,6 +101,10 @@ the existing gateway prefixes.
 - Handles must serialize identity or loaded detail, never authenticated clients.
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
+- Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
+  or `initiatives.summaries` (the list response); `name()` per handle loads each
+  entity. Task create `propertyValues` replace the service defaults (creator
+  assigned, Not started), so `Task.create` spells them out when it sends any.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
 - Keep access-request resolution snapshots: resolved requests leave pending lists.
@@ -93,3 +118,6 @@ the existing gateway prefixes.
   draft read and explicit reapproval; never refresh the generation to replay an
   old edit.
 - SQL result schemas are dynamic typed-cell unions; inspect `truncatedTables` before interpreting aggregates. Queries can write and are never retried automatically.
+
+- Workspace-import report/cancel endpoints remain app-only review plumbing,
+  explicitly classified alongside the existing Notion routes in coverage skips.

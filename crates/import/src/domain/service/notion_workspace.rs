@@ -37,22 +37,22 @@ use mcp_select::ConnectorSelect;
 use object::{Outcome, Target};
 use run::{IMPORT_STOPPED, JobControl, Stop, WriteSet};
 
-mod events;
 mod object;
-mod plan;
+pub(super) mod plan;
 mod report;
-mod run;
-mod scan;
-mod sharing;
-mod triage;
+use super::workspace::Importer;
+use super::workspace::run;
+use super::workspace::scan;
+pub(super) mod sharing;
+pub(super) mod triage;
 mod values;
-mod write;
+pub(super) mod write;
 
 pub(super) use report::report;
 /// How often a running write checks whether the user cancelled it.
-const CANCEL_CHECK_EVERY: Duration = Duration::from_secs(3);
+pub(super) const CANCEL_CHECK_EVERY: Duration = Duration::from_secs(3);
 /// How often progress is pushed to the client while a job runs.
-const NOTIFY_EVERY: Duration = Duration::from_secs(2);
+pub(super) const NOTIFY_EVERY: Duration = Duration::from_secs(2);
 
 /// The default: no Notion workspace is reachable, so workspace imports report
 /// Notion as not connected.
@@ -178,29 +178,32 @@ where
         self.adopt_stalled(Some(user)).await;
         if !self
             .repo
-            .start_run(user, ImportSource::Notion, &SETTLED)
+            .start_run(user, self.workspace_source, &SETTLED)
             .await?
         {
             return Err(ImportError::NotReady(
-                "A Notion import is already being planned or written. Check its status, or cancel it first.",
+                "A workspace import is already being planned or written. Check its status, or cancel it first.",
             ));
         }
         self.hold_new_run(
             user,
             RunStatus::Running,
-            &NotionJob::Plan {
-                scope: scope.clone(),
-                sharing,
+            &if self.workspace_source == ImportSource::Notion {
+                NotionJob::Plan {
+                    scope: scope.clone(),
+                    sharing,
+                }
+            } else {
+                NotionJob::TrackerPlan { sharing }
             },
         )
         .await?;
         self.notify(user).await;
         let service = self.clone();
         let owner = user.clone();
-        let job = self
-            .jobs
-            .tracker
-            .spawn(async move { service.plan_workspace(&owner, scope, sharing).await });
+        let job = self.jobs.tracker.spawn(
+            async move { service.plan_workspace(&owner, scope, sharing).await }.in_current_span(),
+        );
         // The job keeps going if the wait runs out or the caller goes away.
         let _ = tokio::time::timeout(wait, job).await;
         self.notion_import_report(user).await
@@ -228,7 +231,7 @@ where
     ) -> Result<u64> {
         let attached = self
             .repo
-            .attach_review(user, ImportSource::Notion, review_id, session_id)
+            .attach_review(user, self.workspace_source, review_id, session_id)
             .await?;
         self.notify(user).await;
         Ok(attached)
@@ -240,9 +243,16 @@ where
         review_id: Uuid,
         choices: NotionWriteChoices,
     ) -> Result<NotionImportReport> {
+        if self.workspace_source != ImportSource::Notion {
+            return self.start_tracker_write(user, review_id, choices).await;
+        }
         let staged = self
             .repo
-            .list(user, Some(ImportSource::Notion), Some(ImportStatus::Staged))
+            .list(
+                user,
+                Some(self.workspace_source),
+                Some(ImportStatus::Staged),
+            )
             .await?;
         let mut planned: Vec<(ImportEntity, write::WriteItem)> = staged
             .into_iter()
@@ -274,7 +284,7 @@ where
             .repo
             .transition_run(
                 user,
-                ImportSource::Notion,
+                self.workspace_source,
                 &SETTLED,
                 RunStatus::Importing,
                 None,
@@ -282,7 +292,7 @@ where
             .await?
         {
             return Err(ImportError::NotReady(
-                "A Notion import is already being planned or written.",
+                "A workspace import is already being planned or written.",
             ));
         }
         self.hold_new_run(user, RunStatus::Importing, &NotionJob::Write { review_id })
@@ -327,7 +337,7 @@ where
         };
         self.jobs
             .tracker
-            .spawn(async move { service.write_plan(&owner, set).await });
+            .spawn(async move { service.write_plan(&owner, set).await }.in_current_span());
         self.notion_import_report(user).await
     }
 
@@ -336,7 +346,7 @@ where
             .repo
             .transition_run(
                 user,
-                ImportSource::Notion,
+                self.workspace_source,
                 &[RunStatus::Running, RunStatus::Importing],
                 RunStatus::Dismissed,
                 Some("Cancelled"),
@@ -357,7 +367,7 @@ where
 {
     /// Hold the run that just moved to `status` and record its job, so it
     /// survives this process; fails the run when that is not possible.
-    async fn hold_new_run(
+    pub(super) async fn hold_new_run(
         &self,
         user: &MacroUserIdStr<'static>,
         status: RunStatus,
@@ -369,7 +379,7 @@ where
         self.repo
             .transition_run(
                 user,
-                ImportSource::Notion,
+                self.workspace_source,
                 &[status],
                 RunStatus::Failed,
                 Some(IMPORT_STOPPED),
@@ -381,14 +391,15 @@ where
     }
 
     /// Plan and record the outcome on the run.
-    fn plan_workspace<'a>(
+    pub(super) fn plan_workspace<'a>(
         &'a self,
         user: &'a MacroUserIdStr<'static>,
         scope: ImportScope,
         sharing: NotionSharing,
     ) -> futures::future::BoxFuture<'a, ()> {
         let span = tracing::info_span!(
-            "notion_import.plan",
+            "workspace_import.plan",
+            source = self.workspace_source.as_ref(),
             %user,
             sharing = sharing.as_ref(),
             already_in_macro = tracing::field::Empty,
@@ -397,7 +408,7 @@ where
         async move {
             let (control, _held) = self.hold_run(user);
             let outcome = tokio::select! {
-                outcome = self.try_plan_workspace(user, scope, sharing, &control) => Some(outcome),
+                outcome = Importer::plan(self, user, scope, sharing, &control) => Some(outcome),
                 () = control.stopped() => None,
             };
             if let Some(reason) = control.reason() {
@@ -432,7 +443,7 @@ where
         .boxed()
     }
 
-    async fn try_plan_workspace(
+    pub(super) async fn try_plan_workspace(
         &self,
         user: &MacroUserIdStr<'static>,
         scope: ImportScope,
@@ -457,7 +468,10 @@ where
             drop(counts);
             found
         };
-        let (found, ()) = tokio::join!(walk, scan::record_scan(&self.repo, user, scanned));
+        let (found, ()) = tokio::join!(
+            walk,
+            scan::record_scan(&self.repo, user, scanned, ImportSource::Notion)
+        );
         let found = found?;
         if control.reason().is_some() {
             return Ok(());
@@ -471,7 +485,7 @@ where
         self.repo
             .replace_plan(
                 user,
-                ImportSource::Notion,
+                self.workspace_source,
                 &tree.staged_rows(sharing, team, &already_imported),
             )
             .await?;
@@ -481,6 +495,7 @@ where
         let usage = ai_usage::UsageContext::new(ai_usage::AiFeature::Import, user.clone());
         let batches = triage::decide(
             &items,
+            ImportSource::Notion,
             sharing,
             || {
                 let service = self.clone();
@@ -503,7 +518,7 @@ where
         clippy::too_many_arguments,
         reason = "the planning run's state, passed once"
     )]
-    async fn stage_verdicts(
+    pub(super) async fn stage_verdicts(
         &self,
         user: &MacroUserIdStr<'static>,
         tree: &plan::PlanTree,
@@ -523,7 +538,7 @@ where
             self.repo
                 .update_plan_rows(
                     user,
-                    ImportSource::Notion,
+                    self.workspace_source,
                     &tree.decided_rows(&verdicts, sharing, team),
                 )
                 .await?;
@@ -543,7 +558,7 @@ where
             self.repo
                 .update_plan_rows(
                     user,
-                    ImportSource::Notion,
+                    self.workspace_source,
                     &tree.decided_rows(&unanswered, sharing, team),
                 )
                 .await?;
@@ -562,11 +577,11 @@ where
             stopped = tracing::field::Empty,
             waiting_on_teammates = tracing::field::Empty,
         ),
-        name = "notion_import.write"
+        name = "workspace_import.write"
     )]
-    async fn write_plan(&self, user: &MacroUserIdStr<'static>, set: WriteSet) {
+    pub(super) async fn write_plan(&self, user: &MacroUserIdStr<'static>, set: WriteSet) {
         let (control, _held) = self.hold_run(user);
-        let outcome = self.try_write_plan(user, &set, &control).await;
+        let outcome = Importer::write(self, user, set.review_id, &control).await;
         if let Some(reason) = control.reason() {
             tracing::Span::current().record("stopped", reason.as_ref());
         }
@@ -613,12 +628,18 @@ where
         if let Err(error) = self.end_write(user, to, error.as_deref()).await {
             tracing::warn!(error = ?error, "could not record the notion write outcome");
         }
+        if self.workspace_source != ImportSource::Notion {
+            let _ = self
+                .repo
+                .settle_importing(user, "The import stopped before this object finished")
+                .await;
+        }
         self.notify(user).await;
     }
 
     /// Write every pending object, reusing what earlier attempts wrote;
     /// returns how many failed.
-    async fn try_write_plan(
+    pub(super) async fn try_write_plan(
         &self,
         user: &MacroUserIdStr<'static>,
         set: &WriteSet,
@@ -821,10 +842,10 @@ where
     }
 
     /// Whether the user cancelled the import.
-    async fn cancelled(&self, user: &MacroUserIdStr<'static>) -> bool {
+    pub(super) async fn cancelled(&self, user: &MacroUserIdStr<'static>) -> bool {
         match self.repo.list_runs(user).await {
             Ok(runs) => runs.iter().any(|run| {
-                run.source == ImportSource::Notion && run.status == RunStatus::Dismissed
+                run.source == self.workspace_source && run.status == RunStatus::Dismissed
             }),
             Err(error) => {
                 tracing::warn!(error = ?error, "could not read the notion run");

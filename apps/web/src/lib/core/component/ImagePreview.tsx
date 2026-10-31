@@ -5,14 +5,14 @@ false && internalDrag;
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { throwOnErr } from '@core/util/result';
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
+import ExpandIcon from '@icon/system/regular/arrows-out-simple.svg';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import ThreeDotsIcon from '@icon/system/regular/dots-three-vertical.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
-import ExpandIcon from '@phosphor/arrows-out-simple.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import ThreeDotsIcon from '@phosphor/dots-three-vertical.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
 import { fetchBinary } from '@service-storage/util/fetchBinary';
 import { Button, cn, Dropdown } from '@ui';
@@ -152,7 +152,7 @@ export function ImagePreview(props: ImagePreviewProps) {
           <div class="group-hover:visible invisible absolute top-2 right-2 bg-surface rounded-2xl border border-edge flex flex-row items-center gap-1 z-10">
             <Dialog.Trigger disabled={props.isContext}>
               <Button variant="ghost" size="icon-md">
-                <ExpandIcon />
+                <ExpandIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Dialog.Trigger>
             <Dropdown>
@@ -161,7 +161,7 @@ export function ImagePreview(props: ImagePreviewProps) {
                 size="icon-md"
                 disabled={props.isContext}
               >
-                <ThreeDotsIcon />
+                <ThreeDotsIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               </Dropdown.Trigger>
               <Dropdown.Content>
                 <Dropdown.Group>

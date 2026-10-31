@@ -7,10 +7,14 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarInvitation } from '../email-message/core/calendar-invitation';
-import { invitationFixture } from '../email-message/core/calendar-invitation-fixtures';
+import {
+  invitationFixture,
+  invitationFixtures,
+} from '../email-message/core/calendar-invitation-fixtures';
 import { EmailCalendarInvitation } from './calendar-invitation';
 
-const calendarUi = vi.hoisted(() => ({ enabled: true }));
+const calendarUi = vi.hoisted(() => ({ enabled: true, addSharedEvent: true }));
+const copyState = vi.hoisted(() => ({ mutate: vi.fn() }));
 const queryState = vi.hoisted(() => ({
   failed: (): boolean => false,
   data: {} as Record<string, InvitationResolution>,
@@ -33,11 +37,31 @@ vi.mock('@queries/calendar/invitations', () => ({
     refetch: queryState.refetch,
   }),
   getCachedCalendarInvitations: () => queryState.data,
+  useCopyCalendarInvitationMutation: () => ({
+    isPending: false,
+    mutate: copyState.mutate,
+  }),
+}));
+vi.mock('@queries/calendar/calendars', () => ({
+  useVisibleCalendarsQuery: () => ({
+    isPending: false,
+    data: [
+      {
+        id: 'work-calendar',
+        name: 'you@example.com',
+        emailAddress: 'you@example.com',
+        provider: 'google',
+        isWritable: true,
+        isSubscription: false,
+      },
+    ],
+  }),
 }));
 vi.mock('@core/email-link', () => ({ useAddInboxFlow: () => vi.fn() }));
 vi.mock('@core/util/url', () => ({ openExternalUrl: vi.fn() }));
 vi.mock('../calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarUiFlag: () => () => calendarUi.enabled,
+  useCalendarAddSharedEventFlag: () => () => calendarUi.addSharedEvent,
 }));
 vi.mock('../calendar/hooks/create-calendar-rsvp-controller', () => ({
   createCalendarRsvpController: () => ({
@@ -66,6 +90,8 @@ vi.mock('@ui', async () => ({
 afterEach(() => {
   cleanup();
   calendarUi.enabled = true;
+  calendarUi.addSharedEvent = true;
+  copyState.mutate.mockReset();
 });
 
 const time = {
@@ -198,6 +224,75 @@ it('shows the saved invitation without calendar state when the calendar UI is of
   expect(screen.queryByRole('group', { name: 'Your response' })).toBeNull();
 });
 
+describe('forwarded event email', () => {
+  const shared = invitationFixtures.shared;
+  const key = `message:${shared.id}`;
+  const renderShared = () =>
+    render(() => (
+      <EmailCalendarInvitation
+        threadId="thread"
+        messageId="message"
+        invitation={shared}
+        hour12
+      />
+    ));
+
+  it('reads as a shared event and adds it to the calendar when the viewer does not hold it', () => {
+    queryState.failed = () => false;
+    queryState.data = { [key]: { kind: 'no_match' } };
+    renderShared();
+    expect(screen.getByText('Shared event')).toBeTruthy();
+    expect(screen.getByText(/organized by Alex Chen/)).toBeTruthy();
+    expect(screen.getByText('Not on your calendar.')).toBeTruthy();
+    expect(screen.queryByText(/Saved invitation/)).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Yes' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add to calendar' }));
+    expect(copyState.mutate).toHaveBeenCalledWith({
+      threadId: 'thread',
+      messageId: 'message',
+      invitationId: shared.id,
+      calendarId: 'work-calendar',
+    });
+  });
+
+  it('shows a held copy as on the calendar, never as a response waiting on sync', () => {
+    queryState.failed = () => false;
+    queryState.data = {
+      [key]: { ...wire, is_stale: true, can_respond: false },
+    };
+    renderShared();
+    expect(screen.getByText('On your calendar.')).toBeTruthy();
+    expect(screen.queryByText(/Waiting for your calendar/)).toBeNull();
+    expect(screen.queryByText(/does not allow a response/)).toBeNull();
+    expect(screen.queryByText(/Last response/)).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'Yes' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Add to calendar' })
+    ).toBeNull();
+  });
+
+  it('withholds Add to calendar while the calendar check is failing', () => {
+    queryState.failed = () => true;
+    queryState.data = { [key]: { kind: 'no_match' } };
+    renderShared();
+    expect(screen.getByText('Not on your calendar.')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Add to calendar' })
+    ).toBeNull();
+  });
+
+  it('offers no Add to calendar while the rollout flag is off', () => {
+    calendarUi.addSharedEvent = false;
+    queryState.failed = () => false;
+    queryState.data = { [key]: { kind: 'no_match' } };
+    renderShared();
+    expect(screen.getByText('Not on your calendar.')).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Add to calendar' })
+    ).toBeNull();
+  });
+});
+
 it('leaves before opening the calendar so a dialog around the card can close first', () => {
   queryState.failed = () => false;
   queryState.data = { [`message:${invitationFixture.id}`]: wire };
@@ -212,9 +307,7 @@ it('leaves before opening the calendar so a dialog around the card can close fir
       onNavigate={() => order.push('leave')}
     />
   ));
-  // The mocked Button forwards `label` as an attribute, not an accessible name.
-  const open = document.querySelector('button[label="Open in calendar"]');
-  if (!open) throw new Error('Open in calendar is missing');
+  const open = screen.getByRole('button', { name: 'Open in calendar' });
   fireEvent.click(open);
   expect(order).toEqual(['leave', 'open event']);
 });
@@ -232,8 +325,7 @@ it('asks for a new split when Open in calendar is shift-clicked', () => {
       openCalendar={(target) => opened.push(target.openInNewSplit)}
     />
   ));
-  const open = document.querySelector('button[label="Open in calendar"]');
-  if (!open) throw new Error('Open in calendar is missing');
+  const open = screen.getByRole('button', { name: 'Open in calendar' });
   fireEvent.click(open);
   fireEvent.click(open, { shiftKey: true });
   expect(opened).toEqual([false, true]);

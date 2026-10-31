@@ -97,7 +97,10 @@ impl LocalEnv {
         } else {
             frontend::https_origin(instance)?
         };
-        let infra = InfraEnv::local(&frontend_origin);
+        // Presigned file URLs are opened by a browser that may be on another
+        // machine (a laptop on the tailnet), so they use this machine's name,
+        // which the proxy certificate covers in both flavors, not localhost.
+        let infra = InfraEnv::local(&frontend::https_origin(instance)?);
         Ok(LocalEnv {
             // Both local flavors run against local infra (`local` env defaults).
             environment: mode.environment_var(),
@@ -165,6 +168,9 @@ impl LocalEnv {
         // Calendar search ships dark too: off in deployed envs until each has
         // its calendar index created and backfilled.
         env.insert("CALENDAR_SEARCH_ENABLED".into(), "true".into());
+        // Deployed envs turn this on only after every email worker decodes
+        // batches; a local stack runs producers and workers from one build.
+        env.insert("GMAIL_LABEL_WRITE_BATCHES_ENABLED".into(), "true".into());
         env.insert(
             "OVERRIDE_PREVIEW_GATEWAY_URL".into(),
             "http://agent-harness-service:8080/preview".into(),
@@ -226,13 +232,13 @@ struct InfraEnv {
 }
 
 impl InfraEnv {
-    fn local(frontend_origin: &str) -> Self {
+    fn local(browser_origin: &str) -> Self {
         InfraEnv {
             database_url: "postgres://user:password@postgres:5432/macrodb".into(),
             redis_uri: "redis://redis:6379".into(),
             opensearch_url: "http://search:9200".into(),
             local_aws_url: "http://localstack:4566".into(),
-            local_aws_public_url: format!("{frontend_origin}/local-storage"),
+            local_aws_public_url: format!("{browser_origin}/local-storage"),
             // The broker's in-network listener (see docker/docker-compose-databases.yml);
             // host processes use localhost:9092 instead.
             kafka_brokers: "kafka:29092".into(),
@@ -380,6 +386,10 @@ impl InfraEnv {
         env.insert(
             "CODEX_OAUTH_KMS_KEY_ID".into(),
             resources::CODEX_OAUTH_KMS_ALIAS.into(),
+        );
+        env.insert(
+            "MCP_OAUTH_KMS_KEY_ID".into(),
+            resources::MCP_OAUTH_KMS_ALIAS.into(),
         );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
@@ -693,8 +703,17 @@ impl BootStubEnv {
             "MACRO_DB_URL".into(),
             "postgres://user:password@postgres:5432/macrodb".into(),
         );
-        // search_processing_service; the local cluster has the security plugin
-        // disabled so these are accepted but ignored (same as opensearch.rs).
+        // The harness requires Pipedream credentials even when integrations
+        // are unused. Real credentials can override these boot placeholders.
+        env.insert(
+            "PIPEDREAM_CLIENT_ID".into(),
+            "local-pipedream-client".into(),
+        );
+        env.insert(
+            "PIPEDREAM_CLIENT_SECRET".into(),
+            "local-pipedream-secret".into(),
+        );
+        env.insert("PIPEDREAM_PROJECT_ID".into(), "proj_local".into());
         // the harness cognition module mounts the Pipedream webhook when both
         // values are set. Nothing local can receive Pipedream's callbacks, so
         // these only need to be well-formed: the URI must carry the same
@@ -704,6 +723,8 @@ impl BootStubEnv {
             "http://localhost:8080/pipedream/mcp/webhook?secret=local".into(),
         );
         env.insert("PIPEDREAM_WEBHOOK_SECRET".into(), "local".into());
+        // search_processing_service; the local cluster has the security plugin
+        // disabled so these are accepted but ignored (same as opensearch.rs).
         env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
         env.insert("OPENSEARCH_PASSWORD".into(), "local".into());
         // Local document URLs use the instance endpoint supplied by InfraEnv;

@@ -590,3 +590,107 @@ async fn unlisted_runs_leave_lists_that_exclude_them(pool: PgPool) -> anyhow::Re
     assert_eq!(ids(&listed), vec![fixture.shared]);
     Ok(())
 }
+
+/// A session started from a document or call thread inherits the parent's
+/// viewers, as the session's REST read and its inline chip already do, so
+/// opening it by id works for someone who prompted it or saw it in the thread.
+/// Broad lists stay limited to grants on the session itself.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn by_ids_inherits_the_parent_thread_access(pool: PgPool) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.private.to_string())];
+
+    for kind in ["document", "call"] {
+        let root = Uuid::now_v7();
+        // A call's thread root carries the call's own id.
+        let parent = if kind == "call" { root } else { Uuid::now_v7() };
+        sqlx::query!(
+            r#"INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content)
+               VALUES ($1, $2, $3, $4, '@macro look')"#,
+            root,
+            kind,
+            parent.to_string(),
+            OWNER,
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query!(
+            "UPDATE agent_session SET thread_id = $1 WHERE id = $2",
+            root,
+            fixture.private,
+        )
+        .execute(&pool)
+        .await?;
+        let stranger_items = by_ids(
+            &pool,
+            AdvancedSortParams {
+                entities: &entities,
+                user_id: MacroUserIdStr::parse_from_str(STRANGER)?,
+            },
+        )
+        .await?;
+        assert!(
+            stranger_items.is_empty(),
+            "no access to the {kind} means no access to its session"
+        );
+
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, $2, $3, 'user', 'view')
+            "#,
+            parent,
+            kind,
+            STRANGER,
+        )
+        .execute(&pool)
+        .await?;
+        let viewer_items = by_ids(
+            &pool,
+            AdvancedSortParams {
+                entities: &entities,
+                user_id: MacroUserIdStr::parse_from_str(STRANGER)?,
+            },
+        )
+        .await?;
+        assert_eq!(ids(&viewer_items), vec![fixture.private], "{kind} viewer");
+
+        // GraphQL `agentSession` loads through a cursor query naming the id.
+        let named = cursor_soup(
+            &pool,
+            request(
+                STRANGER,
+                Some(Expr::val(AgentSessionLiteral::Id(fixture.private))),
+            ),
+        )
+        .await?;
+        assert_eq!(ids(&named), vec![fixture.private], "{kind} viewer by id");
+
+        let listed = cursor_soup(
+            &pool,
+            request(STRANGER, Some(Expr::val(AgentSessionLiteral::Include))),
+        )
+        .await?;
+        assert!(listed.is_empty(), "{kind} access does not list the session");
+
+        sqlx::query!(
+            "UPDATE comms_message_threads SET deleted_at = NOW() WHERE root_id = $1",
+            root,
+        )
+        .execute(&pool)
+        .await?;
+        let after_delete = by_ids(
+            &pool,
+            AdvancedSortParams {
+                entities: &entities,
+                user_id: MacroUserIdStr::parse_from_str(STRANGER)?,
+            },
+        )
+        .await?;
+        assert!(
+            after_delete.is_empty(),
+            "a deleted {kind} thread no longer shares its session"
+        );
+    }
+    Ok(())
+}

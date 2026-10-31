@@ -1006,6 +1006,9 @@ pub struct CalendarMentionEvent {
     /// exactly when that is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_copy: Option<CalendarMentionViewerCopy>,
+    /// The calendars holding `viewer_event_id`, the canonical copy's first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub viewer_calendar_ids: Vec<Uuid>,
     /// Display title.
     pub title: String,
     /// Provider description, plain text or HTML, truncated for the preview.
@@ -1488,6 +1491,11 @@ pub struct CalendarEventMutationTarget {
     pub guest_policy: GuestPolicy,
     /// Whether the entity is a snapshot of a shared meeting.
     pub is_snapshot: bool,
+    /// Another writable calendar of the copy's inbox that holds the
+    /// organizer's own copy, as when the inbox is invited to an event made
+    /// on its secondary calendar. Changes only the organizer may make go
+    /// through that copy, as in Google's own client.
+    pub organizer_copy_calendar_id: Option<Uuid>,
 }
 
 impl CalendarEventMutationTarget {
@@ -1564,6 +1572,12 @@ pub struct VisibleCalendar {
     /// Whether this is one of Google's shared system calendars (holidays,
     /// birthdays) the account subscribes to rather than one a person maintains.
     pub is_subscription: bool,
+    /// Whether this calendar counts toward the requester's busy time: their
+    /// setting, by default only the primary calendars of inboxes they own.
+    /// The nearest thing to "this is the requester's own": a provider's
+    /// access role only says what they may do, on a colleague's calendar too.
+    #[serde(default)]
+    pub contributes_to_availability: bool,
     /// A persistent sync failure isolated to this calendar, surfaced so the
     /// settings row can badge it. `None` while the calendar is syncing
     /// normally or a failure has not yet crossed the persistence threshold.
@@ -1847,8 +1861,20 @@ pub struct GoogleCalendarSyncSnapshot {
     pub cancelled_provider_event_ids: Vec<String>,
 }
 
+/// A guest copy of a meeting whose stored guest policy changed to follow
+/// the organizer's copy.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AlignedGuestCopy {
+    /// The copy's entity.
+    pub event_id: Uuid,
+    /// The copy's owner.
+    pub owner_id: String,
+    /// The inbox the copy syncs through.
+    pub email_link_id: Uuid,
+}
+
 /// What one Google backfill run changed, for change-driven notifications.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct GoogleBackfillRunReport {
     /// A source, calendar, or failed coverage check may have changed OOO access.
     pub team_ooo_changed: bool,
@@ -1860,6 +1886,9 @@ pub struct GoogleBackfillRunReport {
     /// retired: unobserved by a full snapshot, or on a calendar the account
     /// no longer lists.
     pub events_retired: usize,
+    /// Guest copies in other inboxes whose guest policy changed to follow an
+    /// organizer's copy this run wrote; their viewers need a refresh too.
+    pub aligned_copies: Vec<AlignedGuestCopy>,
 }
 
 impl GoogleBackfillRunReport {

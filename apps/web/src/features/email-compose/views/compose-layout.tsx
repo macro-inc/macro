@@ -29,6 +29,38 @@ type ComposeLayoutRefs = {
   messageInput: HTMLElement | undefined;
 };
 
+function ComposeSender() {
+  const ctx = useCompose();
+  return (
+    <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
+      <span class="w-14 shrink-0 text-sm text-ink-placeholder">From</span>
+      <Show
+        when={ctx.fromInboxes?.().length}
+        fallback={
+          <Show
+            when={ctx.fromAddress?.() || !ctx.inboxesLoading?.()}
+            fallback={
+              <span class="h-6 w-40 rounded-full bg-skeleton skeleton-shimmer" />
+            }
+          >
+            <span class="truncate text-sm">{ctx.fromAddress?.()}</span>
+          </Show>
+        }
+      >
+        <FromInboxSelector
+          pill
+          class="min-w-0"
+          disabled={ctx.disabled()}
+          links={ctx.fromInboxes?.() ?? []}
+          activeInboxId={ctx.selectedInboxId?.()}
+          activeEmail={ctx.fromAddress?.()}
+          onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
+        />
+      </Show>
+    </div>
+  );
+}
+
 /**
  * Pure UI layout for the email compose form.
  * Renders recipients, subject, body, and toolbar.
@@ -190,42 +222,18 @@ export function ComposeLayout(props: {
             when={
               props.header ||
               (!ctx.isMobile() &&
-                (ctx.fromInboxes?.().length || ctx.fromAddress?.()))
+                (ctx.fromInboxes?.().length ||
+                  ctx.fromAddress?.() ||
+                  ctx.inboxesLoading?.()))
             }
           >
             <div
               role="group"
               aria-label="Sending inbox"
+              aria-busy={ctx.inboxesLoading?.() || undefined}
               class="min-h-12 flex items-center gap-2 border-b border-edge-muted"
             >
-              <Show
-                when={props.header}
-                fallback={
-                  <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
-                    <span class="w-14 shrink-0 text-sm text-ink-placeholder">
-                      From
-                    </span>
-                    <Show
-                      when={ctx.fromInboxes?.().length}
-                      fallback={
-                        <span class="truncate text-sm">
-                          {ctx.fromAddress?.()}
-                        </span>
-                      }
-                    >
-                      <FromInboxSelector
-                        pill
-                        class="min-w-0"
-                        disabled={ctx.disabled()}
-                        links={ctx.fromInboxes?.() ?? []}
-                        activeInboxId={ctx.selectedInboxId?.()}
-                        activeEmail={ctx.fromAddress?.()}
-                        onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
-                      />
-                    </Show>
-                  </div>
-                }
-              >
+              <Show when={props.header} fallback={<ComposeSender />}>
                 {props.header}
               </Show>
             </div>
@@ -258,6 +266,7 @@ export function ComposeLayout(props: {
               <div class="flex shrink-0 items-center">
                 <Show when={!isCcVisible()}>
                   <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => setShowCc(true)}
                     disabled={ctx.disabled()}
@@ -267,6 +276,7 @@ export function ComposeLayout(props: {
                 </Show>
                 <Show when={!isBccVisible()}>
                   <Button
+                    variant="ghost"
                     size="sm"
                     onClick={() => setShowBcc(true)}
                     disabled={ctx.disabled()}

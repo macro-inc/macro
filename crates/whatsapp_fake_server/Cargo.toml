@@ -11,6 +11,7 @@ async-trait = { workspace = true }
 axum = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+flate2 = { workspace = true }
 futures = { workspace = true }
 hmac = { workspace = true }
 nom = { workspace = true }

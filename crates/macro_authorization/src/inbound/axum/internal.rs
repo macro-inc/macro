@@ -5,7 +5,8 @@ use ::axum::{
 use rootcause::Report;
 
 use crate::{
-    InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError, MacroAuthorizationService,
+    CredentialOrigin, InternalIdentityClaims, MacroAuthorization, MacroAuthorizationError,
+    MacroAuthorizationService,
 };
 
 use super::{
@@ -74,7 +75,9 @@ where
         .authorize_internal(provided_key, claims)
         .await
         .map_err(internal_authorization_rejection)?;
-    let acting_user = user_context.map(authenticated_user).transpose()?;
+    let acting_user = user_context
+        .map(|user_context| authenticated_user(user_context, CredentialOrigin::Internal))
+        .transpose()?;
 
     Ok(Some(MacroAuthorization::Internal(acting_user)))
 }

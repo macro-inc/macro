@@ -22,10 +22,7 @@ export function createNotesController(
     disposed = true;
     onDialogChange(false);
   });
-  const picker = source.picker(
-    query,
-    () => !!dialog() && dialog()?.kind !== 'unlink'
-  );
+  const picker = source.picker(query, () => dialog()?.kind === 'link');
 
   function reportOpen() {
     if (disposed) return;
@@ -51,7 +48,17 @@ export function createNotesController(
   async function save() {
     const active = dialog();
     const document = selected();
-    if (!active || !document || saving()) return;
+    if (!active || active.kind === 'sharing' || !document || saving()) return;
+    if (active.kind === 'link') {
+      const linkedNotes = source.notes().data;
+      // PUT also changes an existing link's team grant. An early or stale
+      // selection must never turn "link" into an unintended sharing update.
+      if (!linkedNotes) return;
+      if (linkedNotes.some((note) => note.documentId === document.documentId)) {
+        setError('This note is already linked to the meeting.');
+        return;
+      }
+    }
     setSaving(true);
     setError(undefined);
     const result =

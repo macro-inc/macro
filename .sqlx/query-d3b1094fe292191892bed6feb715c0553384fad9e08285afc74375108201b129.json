@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT m.id AS \"id!\"\n        FROM unnest($1::uuid[]) AS m(id)\n        WHERE EXISTS (\n            SELECT 1 FROM email_effective_message_labels ml\n            JOIN email_labels l ON l.id = ml.label_id\n            WHERE ml.message_id = m.id AND l.link_id = $2 AND l.provider_label_id = $3\n        ) <> $4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d3b1094fe292191892bed6feb715c0553384fad9e08285afc74375108201b129"
+}

@@ -1,5 +1,5 @@
-import Circle from '@phosphor/circle.svg';
-import CheckCircle from '@phosphor-fill/check-circle-fill.svg';
+import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
+import Circle from '@icon/system/regular/circle.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';

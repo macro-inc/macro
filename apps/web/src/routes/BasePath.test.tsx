@@ -209,7 +209,7 @@ describe('BasePathComponent', () => {
     resolveIdentity({ authenticated: true, userId: recipientId });
     await vi.waitFor(() =>
       expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith(
-        '/channel/11111111-1111-4111-8111-111111111111?channel_message_id=22222222-2222-4222-8222-222222222222&channel_thread_id=22222222-2222-4222-8222-222222222222',
+        '/home/~/channel/11111111-1111-4111-8111-111111111111?channel_message_id=22222222-2222-4222-8222-222222222222&channel_thread_id=22222222-2222-4222-8222-222222222222',
         { replace: true }
       )
     );

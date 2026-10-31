@@ -5,6 +5,7 @@ import {
   DictationPanel,
 } from '@app/features/dictation/components/dictation-controls';
 import { createComposerDictation } from '@app/features/dictation/composer-dictation';
+import { t } from '@app/lib/i18n';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -39,6 +40,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -57,6 +59,7 @@ export function ChatComposer(props: {
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
   supportsImages?: boolean | null;
+  modelName?: string;
   selector: JSX.Element;
   onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
   session?: AgentInputProps;
@@ -114,7 +117,6 @@ export function ChatComposer(props: {
   const disabled = () => !!props.blockedReason || props.session?.disabled;
   const canSendNext = () =>
     !hasContent() &&
-    !props.session?.sendNextHeld &&
     props.session?.hasQueuedMessages &&
     props.session.onStop &&
     !disabled();
@@ -175,11 +177,16 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
-  // Apply host-supplied drafts (Home suggestions) to the existing editor.
-  createEffect(() => {
-    if (props.draft !== editor.controls.getMarkdown())
-      editor.controls.setMarkdown(props.draft);
-  });
+  // Only host draft changes should replace the editor contents.
+  createEffect(
+    on(
+      () => props.draft,
+      (draft) => {
+        if (draft !== editor.controls.getMarkdown())
+          editor.controls.setMarkdown(draft);
+      }
+    )
+  );
 
   onMount(() => {
     if (props.collapseOnBlur) {
@@ -213,8 +220,8 @@ export function ChatComposer(props: {
     )
       return;
     const attached = attachments();
-    editor.controls.clear();
     props.onDraftChange('');
+    editor.controls.clear();
     hapticImpact('light');
     props.onSend(prompt, attached);
   };
@@ -279,7 +286,7 @@ export function ChatComposer(props: {
       class="min-w-0 flex-1 self-center overflow-y-auto px-[9.375px] not-touch:group-data-[composer-compact=false]/composer:px-1.5 group-data-[composer-compact=true]/composer:px-0 group-data-[composer-coding=true]/composer:min-h-[58px] touch:group-data-[composer-compact=false]/composer:min-h-18 group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:basis-full"
     >
       <MarkdownShell
-        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+        class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
         config={editor}
         initialValue={props.draft}
         placeholder={
@@ -410,9 +417,19 @@ export function ChatComposer(props: {
                     <Input.AttachFilesAction
                       accept={null}
                       disabled={disabled()}
-                      trigger={(openFiles) => (
+                      trigger={(openFiles, openImages) => (
                         <AgentComposerAddMenu
                           openFiles={openFiles}
+                          openImages={openImages}
+                          imageUnsupportedReason={
+                            props.supportsImages === false
+                              ? t('common.imagesUnsupported', {
+                                  model:
+                                    props.modelName ??
+                                    t('common.selectedModel'),
+                                })
+                              : undefined
+                          }
                           openLibrary={() => openTypeahead('library')}
                           openSkills={() => openTypeahead('skills')}
                           getEditor={() => editor.lexical.getRootElement()}
@@ -472,10 +489,11 @@ export function ChatComposer(props: {
                         when={canSendNext()}
                         fallback={
                           <Button
-                            variant="strong"
+                            aria-label="Stop"
+                            tooltip="Stop"
+                            variant="secondary"
                             class="touch:glass touch:bg-chrome touch:text-ink touch:data-disabled:bg-chrome"
-                            size="icon-composer"
-                            label="Stop"
+                            size="icon-md"
                             disabled={disabled()}
                             onClick={() => props.session?.onStop?.()}
                           >
@@ -488,8 +506,10 @@ export function ChatComposer(props: {
                           class="touch:bg-transparent touch:text-ink touch:data-disabled:bg-transparent"
                           intent="flush"
                           aria-label="Flush queued messages"
-                          tooltip="Flush queued messages"
-                          shortcut="Enter"
+                          tooltip={{
+                            content: 'Flush queued messages',
+                            shortcut: 'Enter',
+                          }}
                           onClick={sendNext}
                         />
                       </Show>
@@ -501,11 +521,6 @@ export function ChatComposer(props: {
           </Input.DropZone>
           <DictationPanel dictation={dictation} />
         </ComposerSurface>
-        <Show when={props.supportsImages === false}>
-          <p role="status" class="px-3 py-1 text-xs text-ink-muted">
-            {IMAGE_INPUT_WARNING}
-          </p>
-        </Show>
         <Show when={!isTouchDevice()}>{repositoryDrawer()}</Show>
         <DictationFeedback dictation={dictation} />
       </div>
@@ -530,6 +545,7 @@ export function ChatSessionInput(props: AgentInputProps) {
       onSend={props.onSend}
       session={props}
       supportsImages={props.supportsImages}
+      modelName={props.modelName}
       attachments={props.attachments}
       onAttachFiles={props.onAttachFiles}
       onRemoveAttachment={props.onRemoveAttachment}

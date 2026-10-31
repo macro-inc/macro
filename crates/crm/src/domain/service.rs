@@ -32,7 +32,9 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     /// properties and references make an item associated with it: a company
     /// with every contact the viewer may see, or a single contact. Scoped
     /// like [`Self::list_contacts_for_soup`]; a record the viewer cannot see
-    /// is reported as not found.
+    /// is reported as not found. Activity resolves all visible records across
+    /// CRM-enabled teams without hidden rows or contact-email deduplication;
+    /// team-scoped bot receipts limit it to their verified team.
     fn resolve_association(
         &self,
         user_id: &str,
@@ -957,12 +959,18 @@ where
     ) -> Result<super::association::CrmRecordAssociation, CrmError> {
         use super::association::CrmAssociation;
         let scope = viewer_scope(user_id, access)?;
+        if record == CrmAssociation::Activity {
+            return self.companies_repository.resolve_activity(scope).await;
+        }
         self.companies_repository
             .resolve_association(scope, record)
             .await?
             .ok_or(match record {
                 CrmAssociation::Company(_) => CrmError::CompanyNotFoundForTeam,
                 CrmAssociation::Contact(_) => CrmError::ContactNotFoundForTeam,
+                CrmAssociation::Activity => {
+                    CrmError::InvalidRequest("activity scope unavailable".into())
+                }
             })
     }
 
@@ -1030,16 +1038,21 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self, access), err)]
+    /// Logs by cause rather than with `err`: callers look up whatever address
+    /// they were given, so one that is not an email is theirs to fix, while a
+    /// repository failure stays at ERROR.
+    #[tracing::instrument(skip(self, access))]
     async fn get_contact_by_email(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         email: &str,
     ) -> Result<Option<CrmContact>, CrmError> {
-        let email = normalize_contact_email(email)?;
+        let email =
+            normalize_contact_email(email).inspect_err(|error| tracing::info!(error = %error))?;
         self.companies_repository
             .get_contact_by_email_for_team(&access.team_id(), &email, access.include_hidden())
             .await
+            .inspect_err(|error| tracing::error!(error = %error))
     }
 
     #[tracing::instrument(skip(self, access), err)]
@@ -1140,6 +1153,9 @@ impl CrmService for NoOpCrmService {
         Err(match record {
             CrmAssociation::Company(_) => CrmError::CompanyNotFoundForTeam,
             CrmAssociation::Contact(_) => CrmError::ContactNotFoundForTeam,
+            CrmAssociation::Activity => {
+                CrmError::InvalidRequest("activity scope unavailable".into())
+            }
         })
     }
 

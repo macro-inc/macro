@@ -39,6 +39,9 @@ pub trait SessionAuthority: Send + Sync {
 /// OAuth.
 pub trait McpCredentials: Send + Sync {
     /// The upstream and credential for `destination`, on behalf of `owner`.
+    /// `agent` is the session's bound agent: Macro's own server signs it into
+    /// the credential so tool writes are attributed to it; connected and
+    /// custom servers ignore it.
     ///
     /// Resolution is scoped to `owner`: a slug that names somebody else's
     /// server is never somebody else's server. [`McpResolution::Connected`]
@@ -49,6 +52,7 @@ pub trait McpCredentials: Send + Sync {
     fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: bot_id::BotId,
         destination: &McpDestination,
     ) -> impl Future<Output = Result<McpResolution, EgressError>> + Send;
 }

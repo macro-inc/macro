@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH mine AS (\n            SELECT c.message_id, c.provider_label_id, c.seq, c.label_present_before,\n                (SELECT min(newer.seq) FROM email_gmail_pending_label_writes newer\n                 WHERE newer.message_id = c.message_id\n                    AND newer.provider_label_id = c.provider_label_id\n                    AND newer.seq > c.seq) AS newer_seq,\n                (SELECT older.label_present FROM email_gmail_pending_label_writes older\n                 WHERE older.message_id = c.message_id\n                    AND older.provider_label_id = c.provider_label_id\n                    AND older.seq < c.seq AND older.expires_at > now()\n                 ORDER BY older.seq DESC\n                 LIMIT 1) AS older_present\n            FROM email_gmail_pending_label_writes c\n            WHERE c.message_id = ANY($1) AND c.write_id = $2\n        ), inherited AS (\n            UPDATE email_gmail_pending_label_writes c\n            SET label_present_before = mine.label_present_before\n            FROM mine\n            WHERE c.seq = mine.newer_seq\n        ), removed AS (\n            DELETE FROM email_gmail_pending_label_writes c\n            USING mine\n            WHERE c.seq = mine.seq\n        )\n        SELECT\n            message_id AS \"message_id!\",\n            provider_label_id AS \"provider_label_id!\",\n            COALESCE(older_present, label_present_before) AS \"label_present!\"\n        FROM mine\n        WHERE newer_seq IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_label_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "label_present!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "19fa9694e53b16f5b7496271333b14edf2ed03fec3d2e31c396ad389769d4bad"
+}

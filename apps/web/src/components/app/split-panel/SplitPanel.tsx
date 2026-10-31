@@ -1,7 +1,7 @@
 import { TOKENS } from '@core/hotkey/tokens';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CloseIcon from '@phosphor/x.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Button, type ButtonProps, cn, pressHandlers } from '@ui';
 import {
   createContext,
@@ -19,6 +19,7 @@ export type SplitPanelController = {
   goForward: () => void;
   canClose: () => boolean;
   close: () => void;
+  closeButtonPlacement?: 'header' | 'frame';
 };
 
 const SplitPanelControllerContext = createContext<
@@ -167,34 +168,34 @@ function BackButton(props: SplitControlButtonProps) {
     'children',
     'class',
     'disabled',
-    'hotkey',
-    'label',
+    'tooltip',
     'size',
-    'square',
     'type',
     'variant',
   ]);
-  const label = () => local.label ?? 'Go back';
+  const label = () => local['aria-label'] ?? 'Go back';
 
   return (
     <Button
       {...rest}
+      tooltip={
+        local.tooltip ?? { content: label(), hotkey: TOKENS.split.go.back }
+      }
       type={local.type ?? 'button'}
       variant={local.variant}
-      size={local.size ?? 'sm'}
-      square={local.square ?? true}
+      size={local.size ?? 'icon-sm'}
       class={cn(
         !local.size && 'p-1',
         'transition-none touch:active:bg-transparent',
         local.class
       )}
-      aria-label={local['aria-label']}
-      label={label()}
-      hotkey={local.hotkey ?? TOKENS.split.go.back}
+      aria-label={label()}
       disabled={Boolean(local.disabled) || !controller.canGoBack()}
       {...pressHandlers(() => controller.goBack())}
     >
-      {local.children ?? <CaretLeftIcon />}
+      {local.children ?? (
+        <CaretLeftIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      )}
     </Button>
   );
 }
@@ -206,34 +207,34 @@ function ForwardButton(props: SplitControlButtonProps) {
     'children',
     'class',
     'disabled',
-    'hotkey',
-    'label',
+    'tooltip',
     'size',
-    'square',
     'type',
     'variant',
   ]);
-  const label = () => local.label ?? 'Go forward';
+  const label = () => local['aria-label'] ?? 'Go forward';
 
   return (
     <Button
       {...rest}
+      tooltip={
+        local.tooltip ?? { content: label(), hotkey: TOKENS.split.go.forward }
+      }
       type={local.type ?? 'button'}
       variant={local.variant}
-      size={local.size ?? 'sm'}
-      square={local.square ?? true}
+      size={local.size ?? 'icon-sm'}
       class={cn(
         !local.size && 'p-1',
         'transition-none touch:active:bg-transparent',
         local.class
       )}
-      aria-label={local['aria-label']}
-      label={label()}
-      hotkey={local.hotkey ?? TOKENS.split.go.forward}
+      aria-label={label()}
       disabled={Boolean(local.disabled) || !controller.canGoForward()}
       {...pressHandlers(() => controller.goForward())}
     >
-      {local.children ?? <CaretRightIcon />}
+      {local.children ?? (
+        <CaretRightIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+      )}
     </Button>
   );
 }
@@ -246,32 +247,34 @@ function CloseButton(props: SplitControlButtonProps) {
     'children',
     'class',
     'disabled',
-    'hotkey',
-    'label',
+    'tooltip',
     'size',
-    'square',
     'type',
     'variant',
   ]);
-  const label = () => local.label ?? 'Close';
+  const label = () => local['aria-label'] ?? 'Close';
 
   return (
-    <Show when={controller?.canClose()}>
+    <Show
+      when={
+        controller?.canClose() && controller.closeButtonPlacement !== 'frame'
+      }
+    >
       <Button
         {...rest}
+        tooltip={
+          local.tooltip ?? { content: label(), hotkey: TOKENS.split.close }
+        }
         type={local.type ?? 'button'}
-        variant={local.variant}
+        variant={local.variant ?? 'ghost'}
         size={local.size ?? 'icon-sm'}
-        square={local.square ?? true}
         class={cn('transition-none', local.class)}
-        aria-label={local['aria-label']}
-        label={label()}
-        hotkey={local.hotkey ?? TOKENS.split.close}
+        aria-label={label()}
         disabled={Boolean(local.disabled)}
         data-split-panel-close=""
         {...pressHandlers(() => controller?.close())}
       >
-        {local.children ?? <CloseIcon class="size-4" />}
+        {local.children ?? <CloseIcon class="size-3.5" />}
       </Button>
     </Show>
   );

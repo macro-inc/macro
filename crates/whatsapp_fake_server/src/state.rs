@@ -75,6 +75,19 @@ pub(crate) struct Group {
     pub(crate) created: u64,
     /// Members by phone number, in join order.
     pub(crate) members: Vec<String>,
+    /// Members made admins (the creator is always the super admin).
+    pub(crate) admins: Vec<String>,
+    /// The group description, if set.
+    pub(crate) description: Option<String>,
+    /// Disappearing-messages timer in seconds; `Some(0)` once turned off,
+    /// which WhatsApp still lists as `<ephemeral expiration="0"/>`.
+    pub(crate) disappearing: Option<u32>,
+    /// This is a community (it has no chat of its own).
+    pub(crate) community_parent: bool,
+    /// The community this group belongs to, by group id.
+    pub(crate) community: Option<String>,
+    /// The community's announcement group.
+    pub(crate) announcements: bool,
 }
 
 /// A connection that is pairing a new device.
@@ -122,6 +135,9 @@ pub(crate) struct State {
     pub(crate) submitted: Vec<(DeviceAddress, String)>,
     /// Devices whose submitted messages are routed but never acked.
     pub(crate) withheld_acks: std::collections::HashSet<DeviceAddress>,
+    /// Groups whose messages name the sender by LID only, without
+    /// `participant_pn`, as WhatsApp does for some senders.
+    pub(crate) lid_only_groups: std::collections::HashSet<String>,
 }
 
 /// A device JID in the phone-number or LID domain.
@@ -271,9 +287,52 @@ impl State {
                 ];
                 if user.phone == group.creator {
                     attrs.push(("type", text("superadmin")));
+                } else if group.admins.contains(&user.phone) {
+                    attrs.push(("type", text("admin")));
                 }
                 node("participant", attrs, None)
             })
+            .collect::<Vec<_>>();
+        let description = group.description.iter().map(|description| {
+            node(
+                "description",
+                vec![
+                    ("id", text(format!("{:X}", group.created))),
+                    ("t", text(group.created.to_string())),
+                ],
+                children(vec![node("body", vec![], bytes(description.as_bytes()))]),
+            )
+        });
+        let mut settings = vec![];
+        if let Some(seconds) = group.disappearing {
+            settings.push(node(
+                "ephemeral",
+                vec![("expiration", text(seconds.to_string()))],
+                None,
+            ));
+        }
+        if group.community_parent {
+            settings.push(node(
+                "parent",
+                vec![("default_membership_approval_mode", text("request_required"))],
+                None,
+            ));
+        }
+        if let Some(community) = &group.community {
+            settings.push(node(
+                "linked_parent",
+                vec![("jid", jid(&group_jid(community)))],
+                None,
+            ));
+        }
+        if group.announcements {
+            settings.push(node("announcement", vec![], None));
+            settings.push(node("default_sub_group", vec![], None));
+        }
+        let group_children = participants
+            .into_iter()
+            .chain(description)
+            .chain(settings)
             .collect();
         let creator_lid = self
             .users
@@ -293,7 +352,7 @@ impl State {
                 ("addressing_mode", text("lid")),
                 ("size", text(group.members.len().to_string())),
             ],
-            children(participants),
+            children(group_children),
         )
     }
 
@@ -383,20 +442,19 @@ impl State {
                 if content.is_empty() {
                     continue;
                 }
-                let delivery = node(
-                    "message",
-                    vec![
-                        ("from", jid(&to)),
-                        ("participant", jid(&participant)),
-                        ("participant_pn", jid(&participant_pn)),
-                        ("addressing_mode", text("lid")),
-                        ("id", text(&id)),
-                        ("t", timestamp.clone()),
-                        ("type", text(&message_type)),
-                        ("notify", text(&push_name)),
-                    ],
-                    children(content),
-                );
+                let mut attrs = vec![
+                    ("from", jid(&to)),
+                    ("participant", jid(&participant)),
+                    ("addressing_mode", text("lid")),
+                    ("id", text(&id)),
+                    ("t", timestamp.clone()),
+                    ("type", text(&message_type)),
+                    ("notify", text(&push_name)),
+                ];
+                if !self.lid_only_groups.contains(&to.user) {
+                    attrs.push(("participant_pn", jid(&participant_pn)));
+                }
+                let delivery = node("message", attrs, children(content));
                 self.deliver(&target, delivery);
             }
             return ack;
@@ -405,6 +463,35 @@ impl State {
         let Some(_) = self.phone_of(&to) else {
             return with_error(ack, 404);
         };
+        // A linked device's peer message (requests to its phone): one top-level
+        // `<enc>` for the user's primary device.
+        if attr_string(stanza, "category") == "peer" && direct.is_empty() {
+            let primary = DeviceAddress {
+                phone: sender.phone.clone(),
+                device: 0,
+            };
+            let content: Vec<Node> = stanza
+                .get_children()
+                .iter()
+                .filter(|child| child.tag == "enc")
+                .cloned()
+                .collect();
+            if primary != *sender && !content.is_empty() {
+                let delivery = node(
+                    "message",
+                    vec![
+                        ("from", jid(&self.jid_of(sender, true))),
+                        ("id", text(&id)),
+                        ("t", timestamp.clone()),
+                        ("type", text(&message_type)),
+                        ("category", text("peer")),
+                    ],
+                    children(with_identity(content)),
+                );
+                self.deliver(&primary, delivery);
+            }
+            return ack;
+        }
         for (target_jid, enc) in direct {
             let Some(target) = self.resolve(&target_jid) else {
                 continue;
@@ -421,6 +508,9 @@ impl State {
                 ("type", text(&message_type)),
                 ("notify", text(&push_name)),
             ];
+            if attr_string(stanza, "category") == "peer" {
+                attrs.push(("category", text("peer")));
+            }
             if target.phone == sender.phone {
                 attrs.push(("recipient", jid(&to)));
                 if let Some(pn) = stanza.attrs.get("peer_recipient_pn") {
@@ -625,7 +715,9 @@ impl State {
             .get_children()
             .iter()
             .filter_map(|user| {
-                let requested = attr_jid(user, "jid")?;
+                let Some(requested) = attr_jid(user, "jid") else {
+                    return self.contact_lookup(user);
+                };
                 let phone = self.phone_of(&requested)?;
                 let record = self.users.get(&phone)?;
                 let lid = requested.server == HIDDEN_USER_SERVER;
@@ -686,6 +778,40 @@ impl State {
                 children(vec![node("list", vec![], children(users))]),
             )],
         )
+    }
+
+    /// Whether a phone number (`<contact>+<digits>@c.us</contact>`, as
+    /// `IsOnWhatsApp` asks) is registered, answered LID-first like WhatsApp:
+    /// the LID as `jid` with the number as `pn_jid`. Unknown numbers are `out`.
+    fn contact_lookup(&self, user: &Node) -> Option<Node> {
+        let contact = user.get_child_by_tag(&["contact"]);
+        let query = match &contact.content {
+            Some(NodeContent::String(query)) => query.clone(),
+            Some(NodeContent::Bytes(query)) => String::from_utf8_lossy(query).into_owned(),
+            _ => return None,
+        };
+        let phone = query.strip_prefix('+')?.strip_suffix("@c.us")?;
+        let answer = |user_attrs: Vec<(&str, AttributeValue)>, registered: &str| {
+            node(
+                "user",
+                user_attrs,
+                children(vec![node(
+                    "contact",
+                    vec![("type", text(registered))],
+                    bytes(query.as_bytes()),
+                )]),
+            )
+        };
+        Some(match self.users.get(phone) {
+            Some(record) => answer(
+                vec![
+                    ("jid", jid(&device_jid(&record.lid, 0, true))),
+                    ("pn_jid", jid(&device_jid(&record.phone, 0, false))),
+                ],
+                "in",
+            ),
+            None => answer(vec![("jid", jid(&device_jid(phone, 0, false)))], "out"),
+        })
     }
 }
 

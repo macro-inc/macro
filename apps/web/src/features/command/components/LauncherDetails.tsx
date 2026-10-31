@@ -1,4 +1,5 @@
 import { WorkspaceTexture } from '@app/components/WorkspaceTexture';
+import { t } from '@app/lib/i18n';
 import { ENTITY_ICON_CONFIGS } from '@core/component/EntityIcon';
 import { cn, Hotkey } from '@ui';
 import { createEffect, createUniqueId, For, on, Show } from 'solid-js';
@@ -59,14 +60,14 @@ export function LauncherDetails(props: {
             role="status"
             class="flex flex-1 items-center justify-center text-sm text-ink-muted"
           >
-            No matching create options
+            {t('create.noMatchingCreateOptions')}
           </div>
         }
       >
         <div
           ref={list}
           role="listbox"
-          aria-label="Create options"
+          aria-label={t('create.createOptions')}
           class="w-[38%] min-w-0 shrink-0 overflow-y-auto p-2 sm:w-64"
         >
           <For each={props.sections}>
@@ -156,7 +157,7 @@ export function LauncherDetails(props: {
             <Show when={selected()}>
               {(item) => (
                 <section
-                  aria-label={`${item().label} details`}
+                  aria-label={t('create.itemDetails', { label: item().label })}
                   class="flex min-h-full flex-col items-center justify-center px-5 py-6 text-center sm:px-7"
                 >
                   <div class="mb-6 flex size-18 shrink-0 items-center justify-center rounded-[22px] dark-mode:glass bg-dialog bg-linear-145 from-ink/[0.06] to-transparent light-mode:bg-composer light-mode:bg-none light-mode:composer-shadow">
@@ -173,13 +174,13 @@ export function LauncherDetails(props: {
                   </p>
                   <Show when={props.showHotkeys}>
                     <div class="mt-4 flex shrink-0 items-center gap-1.5 text-xs text-ink-extra-muted">
-                      Shortcut
+                      {t('create.shortcut')}
                       <Hotkey
                         shortcut="c"
                         theme="subtle"
                         class="border-ink/12"
                       />
-                      then
+                      {t('create.shortcutThen')}
                       <Hotkey
                         token={item().hotkeyToken}
                         shortcut={shortcut(item())}

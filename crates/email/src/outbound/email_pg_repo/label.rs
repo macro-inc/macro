@@ -1,6 +1,6 @@
 use crate::domain::models::{
     LabelListVisibility, LabelType, LinkLabel, MessageListVisibility, SimpleMessage,
-    label::system_labels,
+    StagedLabelChange, label::system_labels,
 };
 use crate::outbound::email_pg_repo::db_types::{
     LabelListVisibilityDbRow, LabelTypeDbRow, MessageListVisibilityDbRow,
@@ -163,9 +163,9 @@ pub(crate) async fn get_label_by_id(
     Ok(row.map(Into::into))
 }
 
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(executor), err)]
 pub(crate) async fn get_thread_label_messages(
-    pool: &PgPool,
+    executor: impl sqlx::PgExecutor<'_>,
     thread_id: Uuid,
     link_id: Uuid,
 ) -> Result<Vec<SimpleMessage>, sqlx::Error> {
@@ -202,48 +202,136 @@ pub(crate) async fn get_thread_label_messages(
         thread_id,
         link_id
     )
-    .fetch_all(pool)
+    .fetch_all(executor)
     .await?;
 
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-/// Commit every local representation of a thread's read state together.
-#[tracing::instrument(skip(pool, message_ids), err)]
-pub(super) async fn set_thread_read_state(
+/// Stage a label change on a thread for Gmail in one transaction: read which
+/// messages gain or lose the label, apply the change to every message with the
+/// flags it drives, and mark the changed messages Gmail knows about as waiting
+/// on `write_id`. `None` when the thread has no messages.
+#[tracing::instrument(skip(pool), err)]
+pub(super) async fn stage_thread_label_change(
     pool: &PgPool,
     thread_id: Uuid,
     link_id: Uuid,
-    message_ids: &[Uuid],
-    is_read: bool,
+    provider_label_id: &str,
+    add: bool,
+    write_id: Uuid,
+) -> Result<Option<StagedLabelChange>, sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    email_db_client::labels::pending_writes::lock_thread_label_writes(&mut tx, &[thread_id])
+        .await?;
+
+    let messages = get_thread_label_messages(&mut *tx, thread_id, link_id).await?;
+    if messages.is_empty() {
+        return Ok(None);
+    }
+    let message_ids: Vec<Uuid> = messages.iter().map(|message| message.db_id).collect();
+    let changed_ids = email_db_client::labels::get::messages_changing_label(
+        &mut *tx,
+        link_id,
+        &message_ids,
+        provider_label_id,
+        add,
+    )
+    .await?;
+
+    if add {
+        insert_message_labels_batch(&mut *tx, &message_ids, provider_label_id, link_id).await?;
+    } else {
+        delete_message_labels_batch(&mut *tx, &message_ids, provider_label_id, link_id).await?;
+    }
+    if provider_label_id == system_labels::INBOX {
+        set_thread_inbox_visible(&mut tx, thread_id, link_id, add).await?;
+    } else if provider_label_id == system_labels::UNREAD {
+        update_message_read_status_batch(&mut *tx, &message_ids, link_id, !add).await?;
+        super::thread::update_thread_read_status(&mut *tx, thread_id, link_id, !add).await?;
+    } else if provider_label_id == system_labels::STARRED {
+        update_message_starred_status_batch(&mut *tx, &message_ids, link_id, add).await?;
+    }
+
+    let pending_ids: Vec<Uuid> = messages
+        .iter()
+        .filter(|message| {
+            changed_ids.contains(&message.db_id)
+                && message
+                    .provider_id
+                    .as_ref()
+                    .is_some_and(|id| !id.is_empty())
+        })
+        .map(|message| message.db_id)
+        .collect();
+    email_db_client::labels::pending_writes::mark_pending_label_writes(
+        &mut *tx,
+        link_id,
+        &pending_ids,
+        provider_label_id,
+        add,
+        write_id,
+    )
+    .await?;
+    tx.commit().await?;
+
+    Ok(Some(StagedLabelChange {
+        messages,
+        changed_ids,
+    }))
+}
+
+/// Undo a staged label change Gmail will never receive, in one transaction
+/// holding the thread's label-write lock: labels of `provider_message_ids`
+/// go back to the state Gmail will end up with (see
+/// `abandon_pending_label_writes`), `local_message_ids` (Macro-only drafts)
+/// lose the change, and the thread's state is derived again.
+#[tracing::instrument(skip(pool, provider_message_ids, local_message_ids), err)]
+#[expect(clippy::too_many_arguments, reason = "the parts of one staged change")]
+pub(super) async fn revert_staged_label_change(
+    pool: &PgPool,
+    thread_id: Uuid,
+    link_id: Uuid,
+    provider_label_id: &str,
+    add: bool,
+    write_id: Uuid,
+    provider_message_ids: &[Uuid],
+    local_message_ids: &[Uuid],
 ) -> Result<(), sqlx::Error> {
     let mut tx = pool.begin().await?;
-    if is_read {
-        delete_message_labels_batch(&mut *tx, message_ids, system_labels::UNREAD, link_id).await?;
+    email_db_client::labels::pending_writes::lock_thread_label_writes(&mut tx, &[thread_id])
+        .await?;
+    email_db_client::labels::pending_writes::abandon_pending_label_writes(
+        &mut tx,
+        link_id,
+        provider_message_ids,
+        write_id,
+    )
+    .await?;
+
+    if add {
+        delete_message_labels_batch(&mut *tx, local_message_ids, provider_label_id, link_id)
+            .await?;
     } else {
-        insert_message_labels_batch(&mut *tx, message_ids, system_labels::UNREAD, link_id).await?;
+        insert_message_labels_batch(&mut *tx, local_message_ids, provider_label_id, link_id)
+            .await?;
     }
-    update_message_read_status_batch(&mut *tx, message_ids, link_id, is_read).await?;
-    super::thread::update_thread_read_status(&mut *tx, thread_id, link_id, is_read).await?;
+    if provider_label_id == system_labels::UNREAD {
+        update_message_read_status_batch(&mut *tx, local_message_ids, link_id, add).await?;
+    } else if provider_label_id == system_labels::STARRED {
+        update_message_starred_status_batch(&mut *tx, local_message_ids, link_id, !add).await?;
+    }
+
+    super::thread::update_thread_metadata(&mut tx, thread_id, link_id).await?;
     tx.commit().await
 }
 
-/// Commit INBOX assignments and the canonical thread flag in one transaction.
-#[tracing::instrument(skip(pool, message_ids), err)]
-pub(super) async fn set_thread_inbox_state(
-    pool: &PgPool,
+async fn set_thread_inbox_visible(
+    tx: &mut sqlx::PgConnection,
     thread_id: Uuid,
     link_id: Uuid,
-    message_ids: &[Uuid],
-    add: bool,
     inbox_visible: bool,
 ) -> Result<(), sqlx::Error> {
-    let mut tx = pool.begin().await?;
-    if add {
-        insert_message_labels_batch(&mut *tx, message_ids, system_labels::INBOX, link_id).await?;
-    } else {
-        delete_message_labels_batch(&mut *tx, message_ids, system_labels::INBOX, link_id).await?;
-    }
     sqlx::query!(
         r#"
         UPDATE email_threads
@@ -254,9 +342,9 @@ pub(super) async fn set_thread_inbox_state(
         thread_id,
         link_id,
     )
-    .execute(&mut *tx)
+    .execute(tx)
     .await?;
-    tx.commit().await
+    Ok(())
 }
 
 #[tracing::instrument(skip(executor), err)]
@@ -356,9 +444,9 @@ pub(crate) async fn update_message_read_status_batch(
     Ok(())
 }
 
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(executor), err)]
 pub(crate) async fn update_message_starred_status_batch(
-    pool: &PgPool,
+    executor: impl sqlx::PgExecutor<'_>,
     message_ids: &[Uuid],
     link_id: Uuid,
     is_starred: bool,
@@ -381,7 +469,7 @@ pub(crate) async fn update_message_starred_status_batch(
         message_ids,
         link_id
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
 
     Ok(())

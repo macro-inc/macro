@@ -2,10 +2,12 @@ import { createEmailInboxSource } from '@app/features/email-compose/queries/inbo
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type { MailAccountsQuery } from '@service-storage/graphql/generated/graphql';
 import { QueryClient } from '@tanstack/solid-query';
 import { type Client, createClient, fetchExchange } from '@urql/core';
 import { ok } from 'neverthrow';
+import { createEffect, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emailKeys } from './keys';
 import { useMailAccountsQuery } from './mail-accounts';
@@ -26,9 +28,6 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: { patchSettings: fixture.patchSettings },
-}));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: fixture.reportError },
 }));
 vi.mock('../client', () => ({
   get queryClient() {
@@ -69,8 +68,9 @@ function accounts(signature: string, replySignature = true): MailAccountsQuery {
   };
 }
 
-function setupCatalog() {
-  let stored: unknown = accounts('Old signature');
+function setupCatalog(initial: unknown = accounts('Old signature')) {
+  let stored: unknown = initial;
+  const persisted = Promise.withResolvers<void>();
   let server = accounts('Old signature');
   let offline = false;
   let persistence: Promise<void> | undefined;
@@ -88,10 +88,14 @@ function setupCatalog() {
     onCacheGenerationChanged: () => () => {},
     onMutationSettled: () => () => {},
     claimNextMutation: async () => undefined,
-    readQuery: async () => ({ kind: 'hit', data: structuredClone(stored) }),
+    readQuery: async () =>
+      stored === null
+        ? { kind: 'miss' }
+        : { kind: 'hit', data: structuredClone(stored) },
     writeQuery: async (args) => {
       await persistence;
       stored = structuredClone(args.data);
+      persisted.resolve();
       return {
         revision: INITIAL_CACHE_REVISION,
         revisionAdvanced: false,
@@ -127,6 +131,7 @@ function setupCatalog() {
   return {
     fetch,
     stored: () => stored,
+    persisted: persisted.promise,
     setServer: (data: MailAccountsQuery) => {
       server = data;
     },
@@ -156,6 +161,7 @@ function mountComposerAccounts() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(Telemetry, 'error').mockImplementation(fixture.reportError);
   fixture.cacheEnabled = true;
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -225,7 +231,8 @@ describe('email settings account reconciliation', () => {
           signature_on_replies_forwards: false,
         },
       },
-      'inbox-1'
+      'inbox-1',
+      undefined
     );
 
     catalog.goOffline();
@@ -259,4 +266,34 @@ describe('email settings account reconciliation', () => {
       links: [{ id: 'inbox-1', settings: { signature: 'Saved signature' } }],
     });
   });
+});
+
+it('warms an empty sender catalog before first composition and reopens it offline', async () => {
+  const catalog = setupCatalog(null);
+  const disposeBackground = createRoot((dispose) => {
+    useMailAccountsQuery(() => true);
+    return dispose;
+  });
+  await catalog.persisted;
+  expect(catalog.stored()).toEqual(accounts('Old signature'));
+  disposeBackground();
+  catalog.goOffline();
+  catalog.newClient();
+  const composer = mountComposerAccounts();
+  const loaded = Promise.withResolvers<void>();
+  const stop = createRoot((dispose) => {
+    createEffect(() => {
+      if (composer.inboxes.inboxes().length) loaded.resolve();
+    });
+    return dispose;
+  });
+  try {
+    await loaded.promise;
+    expect(composer.inboxes.inboxes()[0]?.id).toBe('inbox-1');
+    expect(composer.inboxes.inboxes()[0]?.email_address).toBe(
+      'self@example.com'
+    );
+  } finally {
+    stop();
+  }
 });

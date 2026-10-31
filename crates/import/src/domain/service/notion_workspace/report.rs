@@ -62,9 +62,24 @@ pub(in crate::domain::service) fn report(
     };
     let mut importers: HashMap<&str, u32> = HashMap::new();
     for (row, meta) in &current {
+        if let Some(warnings) = row
+            .metadata
+            .get("warnings")
+            .and_then(serde_json::Value::as_array)
+        {
+            for warning in warnings.iter().filter_map(serde_json::Value::as_str) {
+                if !report.warnings.iter().any(|existing| existing == warning) {
+                    report.warnings.push(warning.to_string());
+                }
+            }
+        }
         let Some(plan) = &meta.plan else { continue };
         match row.kind {
             ImportKind::DataSource => report.data_sources += 1,
+            ImportKind::Issue | ImportKind::JiraIssue => report.issues += 1,
+            ImportKind::Project | ImportKind::JiraProject | ImportKind::JiraEpic => {
+                report.projects += 1
+            }
             _ => report.pages += 1,
         }
         if let Some(copy) = &plan.already_imported {
@@ -78,6 +93,16 @@ pub(in crate::domain::service) fn report(
         };
         let rows = plan.rows.unwrap_or(0);
         match (decision, row.kind) {
+            (NotionDecision::Copy, ImportKind::Issue | ImportKind::JiraIssue) => {
+                report.tasks += 1;
+                report.task_rows += 1;
+            }
+            (
+                NotionDecision::Copy,
+                ImportKind::Project | ImportKind::JiraProject | ImportKind::JiraEpic,
+            ) => {
+                report.copy += 1;
+            }
             (NotionDecision::Copy, ImportKind::DataSource) => {
                 report.copy += 1;
                 report.databases += 1;

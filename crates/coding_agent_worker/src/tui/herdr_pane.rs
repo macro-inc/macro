@@ -356,6 +356,9 @@ pub async fn run_herdr_pane(socket: &Path, session: &str) -> rootcause::Result<(
 
     let mut terminal = ratatui::init();
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste);
+    // Under herdr-core the window reports the session's state itself.
+    let reports_status =
+        crate::herdr::HerdrSession::detect().is_some_and(|herdr| herdr.panes_report_status());
     let mut view = PaneView::new(session);
     let mut ticker = tokio::time::interval(TICK);
     let outcome = loop {
@@ -382,6 +385,11 @@ pub async fn run_herdr_pane(socket: &Path, session: &str) -> rootcause::Result<(
                         view.disconnected();
                         break;
                     };
+                    if reports_status
+                        && let ToPane::State { state, detail } = &message
+                    {
+                        report_status(*state, detail.as_deref());
+                    }
                     view.apply(message);
                     match message_rx.try_recv() {
                         Ok(message) => next = Some(message),
@@ -395,4 +403,16 @@ pub async fn run_herdr_pane(socket: &Path, session: &str) -> rootcause::Result<(
     ratatui::restore();
     outcome.context("the window's terminal failed")?;
     Ok(())
+}
+
+/// Tell herdr-core what the session is doing, between frames.
+fn report_status(state: AgentState, detail: Option<&str>) {
+    use std::io::Write as _;
+    let mut stdout = std::io::stdout();
+    if let Err(error) = stdout
+        .write_all(state.osc_7501(detail).as_bytes())
+        .and_then(|()| stdout.flush())
+    {
+        tracing::debug!(%error, "could not report the session's status to herdr");
+    }
 }

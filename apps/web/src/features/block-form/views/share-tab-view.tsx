@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import UsersThree from '@phosphor/users-three.svg';
+import UsersThree from '@icon/system/regular/users-three.svg';
 import { Button, Input, ToggleSwitch } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
@@ -211,7 +211,7 @@ export function ShareTabView(props: {
               Posting the form in a channel lets its members respond.
             </span>
           </div>
-          <Button variant="outline" size="sm" onClick={props.onOpenShare}>
+          <Button variant="secondary" size="sm" onClick={props.onOpenShare}>
             Manage access
           </Button>
         </div>

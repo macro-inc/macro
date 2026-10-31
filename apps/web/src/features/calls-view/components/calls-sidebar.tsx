@@ -8,12 +8,12 @@ import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
 import { usePreference } from '@app/preferences/use-preference';
 import { fireAndForget } from '@core/util/fireAndForget';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import PhoneSlashIcon from '@phosphor/phone-slash.svg';
-import PhoneXIcon from '@phosphor/phone-x.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import PhoneSlashIcon from '@icon/system/regular/phone-slash.svg';
+import PhoneXIcon from '@icon/system/regular/phone-x.svg';
 import {
   SidebarTagsSection,
   selectSidebarTag,

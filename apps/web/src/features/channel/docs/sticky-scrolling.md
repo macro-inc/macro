@@ -52,21 +52,28 @@ uses `initialOffset`; replaying the saved offset after measuring would discard t
 anchor corrections for changed rows.
 
 Rows are positioned inside one sizer that includes the floating header/composer
-insets. Short conversations are bottom aligned. Before TanStack writes a scroll
-correction, `scrollToFn` synchronously commits the current total to the sizer;
+insets. Short conversations are bottom aligned. Before a scroll correction is
+written, `writeScroll` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
-so our own corrections do not prolong gesture compensation.
+including scroll events dispatched while our own `scrollTo` runs, so our own
+corrections neither start nor prolong gesture compensation.
 
 Safari wheel scrolling and iOS touch scrolling use a separate logical offset while a gesture is
 active. Size and prepend corrections counter-shift the rows instead of writing
-`scrollTop`, which interrupts native momentum. Scroll observations and saved
-snapshots include that adjustment. After touch release and 150ms without input or scrolling,
-the adjustment is removed and committed to the DOM offset in the same task.
+`scrollTop`: WebKit drops a write that lands while native scrolling is still moving,
+and the list jumps by the whole adjustment. Any native scroll event activates
+compensation, because iOS sends no `touchstart` for a fling that begins during momentum.
+Scroll observations and saved snapshots include that adjustment. After touch release,
+once 150ms pass without input or scrolling and `scrollTop` has not moved in that time,
+the adjustment is removed and committed to the DOM offset in the same task. A busy
+main thread can delay scroll events beyond 150ms while momentum continues, so the
+timer alone is not proof that scrolling stopped.
 The sizer retains its logical height and clips shifted overflow during this period.
-Reaching either scroll boundary releases the shifted origin; explicit message,
-reply, latest, and pinned viewport/inset navigation flush it before computing targets.
+Scroll boundaries follow the same rule: momentum bounces there, and a finger can hold
+the list against an edge. Explicit message, reply, latest, and pinned viewport/inset
+navigation flush the adjustment before computing targets.
 Elastic overscroll must return in bounds before a correction is committed. Touch end
 and cancellation listeners stay on the original event target even if its row unmounts.
 The `@tanstack/virtual-core` patch adds `useIOSScrollDeferral`, enabled by default.
@@ -88,7 +95,15 @@ map lookup can disappear while a queued measurement effect is still running.
 Measurement effects track index changes and register rows in a microtask after child
 effects fill their Markdown, still before paint. Measuring the empty shell can
 temporarily shrink the sizer and clamp the browser scroll position, especially
-with floating mobile insets. Later size changes belong to ResizeObserver.
+with floating mobile insets. Rows registered in the same tick are measured
+together: every height is read from one layout, then the resizes are applied and
+only the last scroll correction is written. Measuring row by row interleaves
+reads with sizer and scroll writes and forces a full list layout per row, which
+cost a channel open over 100ms. Later size changes belong to ResizeObserver.
+The end offset comes from the virtualizer's own sizes, `max(0, total - viewport)`,
+not `scrollHeight`: the scroller holds only the sizer, and reading the DOM there
+forced a layout of just-mounted rows on every scroll to latest, reconcile frame,
+and end check.
 `targetId` keeps the pending thread mounted for precise navigation to nested replies;
 only the list translates that ID into a virtual index. Snapshot
 restoration pairs the offset with `takeSnapshot()`.

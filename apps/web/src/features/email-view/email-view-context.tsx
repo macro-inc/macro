@@ -8,7 +8,6 @@ import {
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   createSearchParams,
@@ -22,7 +21,6 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { enableReminders } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -45,7 +43,7 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import { DEFAULT_EMAIL_TAB } from './constants';
+import { DEFAULT_EMAIL_FOCUS_SORT, DEFAULT_EMAIL_TAB } from './constants';
 import {
   emailDetailSearch,
   emailTabSearch,
@@ -59,7 +57,9 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
+import { useEmailTabAvailability } from './tab-availability';
 import type {
+  EmailFocusSort,
   EmailTab,
   EmailThreadTarget,
   EmailViewState,
@@ -87,6 +87,7 @@ export type EmailViewContext = {
   setInboxIds: (ids: string[] | undefined) => void;
   setAliasFilter: (alias: NonNullable<EmailViewState['aliasFilter']>) => void;
   setFacets: (facets: EmailViewState['facets']) => void;
+  setFocusSort: (sort: EmailFocusSort) => void;
   /**
    * Shows the given tags across the whole mailbox: a non-empty selection
    * lands on the All tab. Clearing keeps the current tab.
@@ -139,11 +140,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   const tagSets = useTagSets();
   const tagSetsReady = useTagSetsReady();
   const initial = props.initialState ?? {};
-  const reminders = useFeatureFlag(enableReminders);
+  const tabAvailability = useEmailTabAvailability();
+  // A flag-gated tab stays put while its flags load, then falls back if off.
+  const isTabOff = (tab: EmailTab) => tabAvailability(tab) === 'off';
   const availableTab = (tab: EmailTab) =>
-    tab === 'reminders' && !reminders().enabled && !reminders().loading
-      ? DEFAULT_EMAIL_TAB
-      : tab;
+    isTabOff(tab) ? DEFAULT_EMAIL_TAB : tab;
 
   const [persistedState, setState] = makePersistedState(
     createStore<EmailViewState>({
@@ -154,6 +155,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         : normalizeInboxSelection(initial.inboxIds),
       ...(initial.aliasFilter ? { aliasFilter: initial.aliasFilter } : {}),
       facets: normalizeFacetSelection(initial.facets),
+      focusSort: initial.focusSort ?? DEFAULT_EMAIL_FOCUS_SORT,
       collapsedSidebarSectionIds: [
         ...(initial.collapsedSidebarSectionIds ?? []),
       ],
@@ -186,11 +188,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   );
 
   createEffect(() => {
-    if (
-      state.tab === 'reminders' &&
-      !reminders().enabled &&
-      !reminders().loading
-    ) {
+    if (isTabOff(state.tab)) {
       setState({ tab: DEFAULT_EMAIL_TAB, search: '', facets: {} });
     }
   });
@@ -399,6 +397,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
 
+  const setFocusSort = (sort: EmailFocusSort) => setState('focusSort', sort);
+
   // A tag reaches across every mailbox slice, so choosing one from a narrower
   // tab moves to All; as with `setTab`, that move drops the tab's other filters.
   const showTags = (tagIds: string[]) => {
@@ -454,6 +454,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setInboxIds,
     setAliasFilter,
     setFacets,
+    setFocusSort,
     showTags,
     filterByTag,
     tagViewTitle,

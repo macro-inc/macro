@@ -2,7 +2,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { isEmojiOnly } from '@core/util/string';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Button, cn } from '@ui';
 import {
   createMemo,
@@ -20,6 +20,7 @@ import {
 } from './context';
 import { createSearchHighlightOverlay } from './highlightOverlay';
 import { MentionedImages } from './MentionedImages';
+import { MentionedRoutineTemplates } from './MentionedRoutineTemplates';
 
 // Height (px) a long body is cut to while collapsed.
 const COLLAPSED_MAX_HEIGHT = 240;
@@ -56,6 +57,7 @@ export function Content(props: ContentProps) {
         rootRef={setMarkdownRoot}
       />
       <MentionedImages content={content()} />
+      <MentionedRoutineTemplates content={content()} />
     </>
   );
 
@@ -132,7 +134,7 @@ function CollapsibleBody(props: { children: JSX.Element }) {
         >
           <CaretRight
             aria-hidden="true"
-            class="transition-transform"
+            class="transition-transform size-3 touch:size-6 shrink-0 pointer-events-none"
             classList={{ 'rotate-90': expanded() }}
           />
           {expanded() ? 'Show less' : 'Show more'}

@@ -7,9 +7,9 @@
  * collapses to a stack of dots.
  */
 
-import VideoIcon from '@phosphor/file-video.svg';
-import ImageIcon from '@phosphor/image.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
+import VideoIcon from '@icon/system/regular/file-video.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 

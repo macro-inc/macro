@@ -56,6 +56,17 @@ function testPhrase(test: GateTest, column: FormColumn | undefined): string {
         .exhaustive();
       return `${verb} ${ruleDate(value)}`;
     })
+    .with({ kind: 'dateRange' }, ({ operator, value }) => {
+      const verb = match(operator)
+        .with('contains', () => 'includes')
+        .with('doesNotContain', () => 'does not include')
+        .with('endsBefore', () => 'ends before')
+        .with('endsOnOrAfter', () => 'ends on or after')
+        .with('startsAfter', () => 'starts after')
+        .with('startsOnOrBefore', () => 'starts on or before')
+        .exhaustive();
+      return `${verb} ${ruleDate(value)}`;
+    })
     .with({ kind: 'checkbox' }, ({ checked }) =>
       checked ? 'is checked' : 'is unchecked'
     )

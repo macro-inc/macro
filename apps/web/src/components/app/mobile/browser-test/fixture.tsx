@@ -5,18 +5,22 @@ import { SettingsPage, SettingsRow } from '@app/features/settings/primitives';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   Button,
   ConfirmDialog,
+  confirmDialog,
   Dialog,
   ImperativeDialogHost,
+  Input,
   type ManagedDialogProps,
   openDialog,
   useImperativeDialog,
 } from '@ui';
-import { createSignal, getOwner, Show } from 'solid-js';
+import { createSignal, getOwner, Match, Show, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroLightTheme } from '../../../../features/theme/themes/macro-light';
+import { ConfirmDrawer } from '../ConfirmDrawer';
 import { MobileDrawer } from '../MobileDrawer';
 
 for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
@@ -33,7 +37,13 @@ function EmailSettingsPage() {
   const connectEmail = () => {
     const handle = openDialog(
       EmailProviderDialog,
-      { outlookAvailable: true, onSelect: () => handle.close() },
+      {
+        outlookAvailable: true,
+        onSelect: (provider) => {
+          press(`Connect ${provider}`);
+          handle.close();
+        },
+      },
       { owner }
     );
   };
@@ -45,7 +55,7 @@ function EmailSettingsPage() {
         </Button>
       </SettingsRow>
       <SettingsRow label="Add another inbox">
-        <Button variant="outline" onClick={connectEmail}>
+        <Button variant="secondary" onClick={connectEmail}>
           Add account
         </Button>
       </SettingsRow>
@@ -91,13 +101,18 @@ function DeleteEventDialog(props: ManagedDialogProps) {
 function EventDetailsDrawer(props: { onClose: () => void }) {
   const [guests, setGuests] = createSignal(false);
   const [rsvpScope, setRsvpScope] = createSignal(false);
+  const [share, setShare] = createSignal(false);
   const deleteDialog = useImperativeDialog(DeleteEventDialog);
   return (
     <MobileDrawer
       side="bottom"
       open
       onOpenChange={(open) => {
-        if (!open && (guests() || rsvpScope() || deleteDialog.isOpen())) return;
+        if (
+          !open &&
+          (guests() || rsvpScope() || share() || deleteDialog.isOpen())
+        )
+          return;
         props.onClose();
       }}
     >
@@ -112,13 +127,16 @@ function EventDetailsDrawer(props: { onClose: () => void }) {
             <Button onClick={() => press('Edit')}>Edit</Button>
             <Button onClick={() => setGuests(true)}>Add guests</Button>
             <Button onClick={() => setRsvpScope(true)}>RSVP</Button>
+            <Button onClick={() => setShare(true)}>Share note</Button>
             <Button onClick={() => deleteDialog.open({})}>Delete</Button>
           </MobileDrawer.ScrollBody>
           <Dialog open={guests()} onOpenChange={setGuests}>
             <Dialog.Title class="px-4 pb-2 text-base font-semibold">
               Add guests
             </Dialog.Title>
-            <div class="h-40 px-4">Guest picker</div>
+            <div class="h-40 px-4">
+              <Button onClick={() => press('Add guest')}>Add Priya</Button>
+            </div>
           </Dialog>
           <MobileDrawer
             side="bottom"
@@ -129,10 +147,30 @@ function EventDetailsDrawer(props: { onClose: () => void }) {
               <MobileDrawer.Overlay />
               <MobileDrawer.Content aria-label="RSVP to recurring event">
                 <MobileDrawer.Handle />
-                <div class="h-40 px-6">This event or all events</div>
+                <div class="h-40 px-6">
+                  <Button onClick={() => press('All events')}>
+                    All events
+                  </Button>
+                </div>
               </MobileDrawer.Content>
             </MobileDrawer.Portal>
           </MobileDrawer>
+          <Show when={share()}>
+            <MobileDrawer
+              side="bottom"
+              open
+              onOpenChange={setShare}
+              closeOnOutsidePointerStrategy="pointerdown"
+            >
+              <MobileDrawer.Portal>
+                <MobileDrawer.Overlay />
+                <MobileDrawer.Content aria-label="Share note">
+                  <MobileDrawer.Handle />
+                  <div class="h-40 px-6">Share note</div>
+                </MobileDrawer.Content>
+              </MobileDrawer.Portal>
+            </MobileDrawer>
+          </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>
@@ -148,6 +186,128 @@ function EventScenario() {
   );
 }
 
+/**
+ * Shaped like the event composer: unmounted on close, and a close request
+ * asks first from a prompt outside the sheet's dismiss stack.
+ */
+function DirtyComposerScenario() {
+  const owner = getOwner();
+  const [open, setOpen] = createSignal(true);
+  let asking = false;
+  const requestClose = async () => {
+    if (asking) return;
+    asking = true;
+    const discard = await confirmDialog(
+      {
+        title: 'You still have remaining changes',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      },
+      { owner }
+    );
+    asking = false;
+    if (discard) setOpen(false);
+  };
+  return (
+    <Show when={open()}>
+      <MobileDrawer
+        side="bottom"
+        open
+        onOpenChange={(next) => {
+          if (!next) fireAndForget(requestClose(), 'stacked-sheets-fixture');
+        }}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content aria-label="New event" maxHeight={92}>
+            <MobileDrawer.Handle />
+            <MobileDrawer.ScrollBody class="h-80 gap-3 px-6">
+              <Input aria-label="Title" />
+              <Button onClick={() => press('Create event')}>
+                Create event
+              </Button>
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </Show>
+  );
+}
+
+/** A confirmation mid-request refuses every close until the request settles. */
+function PendingConfirmScenario() {
+  return (
+    <ConfirmDialog
+      open
+      pending
+      onOpenChange={() => press('Close pending')}
+      title="Delete event"
+      confirmLabel="Delete"
+      tone="danger"
+      onConfirm={() => press('Confirm delete')}
+    />
+  );
+}
+
+/** Nothing controls this sheet: its trigger opens it. */
+function UncontrolledScenario() {
+  return (
+    <MobileDrawer side="bottom">
+      <MobileDrawer.Trigger as={Button} class="fixed top-20 left-4">
+        Open filters
+      </MobileDrawer.Trigger>
+      <MobileDrawer.Portal>
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content aria-label="Filters">
+          <MobileDrawer.Handle />
+          <div class="h-40 px-6">Filters</div>
+        </MobileDrawer.Content>
+      </MobileDrawer.Portal>
+    </MobileDrawer>
+  );
+}
+
+/** Shaped like the Android share sheet: closing it asks to discard first. */
+function DiscardScenario() {
+  const [open, setOpen] = createSignal(true);
+  const [confirmDiscard, setConfirmDiscard] = createSignal(false);
+  return (
+    <>
+      <MobileDrawer
+        side="bottom"
+        open={open()}
+        onOpenChange={(next) => {
+          if (!next) setConfirmDiscard(true);
+        }}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content aria-label="Share to Macro" targetHeight={80}>
+            <MobileDrawer.Handle />
+            <div class="h-40 px-6">
+              <Button onClick={() => press('Send')}>Send</Button>
+            </div>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+      <ConfirmDrawer
+        open={confirmDiscard()}
+        onOpenChange={setConfirmDiscard}
+        title="Discard this share?"
+        body="Your message and shared attachments will be removed."
+        cancelLabel="Keep editing"
+        confirmLabel="Discard"
+        tone="danger"
+        onConfirm={() => {
+          setConfirmDiscard(false);
+          setOpen(false);
+        }}
+      />
+    </>
+  );
+}
+
 function Fixture() {
   const scenario = new URLSearchParams(location.search).get('scenario');
   return (
@@ -158,9 +318,23 @@ function Fixture() {
       <output aria-label="Pressed" class="fixed top-2 left-4 text-xs">
         {pressed().join(', ')}
       </output>
-      <Show when={scenario === 'settings'} fallback={<EventScenario />}>
-        <SettingsScenario />
-      </Show>
+      <Switch fallback={<EventScenario />}>
+        <Match when={scenario === 'settings'}>
+          <SettingsScenario />
+        </Match>
+        <Match when={scenario === 'discard'}>
+          <DiscardScenario />
+        </Match>
+        <Match when={scenario === 'composer'}>
+          <DirtyComposerScenario />
+        </Match>
+        <Match when={scenario === 'pending'}>
+          <PendingConfirmScenario />
+        </Match>
+        <Match when={scenario === 'uncontrolled'}>
+          <UncontrolledScenario />
+        </Match>
+      </Switch>
       <ImperativeDialogHost />
     </>
   );

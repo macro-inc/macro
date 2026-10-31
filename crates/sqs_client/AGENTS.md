@@ -48,6 +48,13 @@ crate that produces or consumes an SQS queue.
 - `cargo test -p sqs_client --no-default-features --features <area>` when
   changing a single feature's gating.
 
+## Gotchas
+
+- A new message type for a queue reaches workers that may not decode it yet:
+  producers and consumers deploy in parallel. Keep producing the old form until
+  every consumer is rolled out, behind a deployment switch (see
+  `gmail_label_write_batches` and its test against the released worker format).
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`

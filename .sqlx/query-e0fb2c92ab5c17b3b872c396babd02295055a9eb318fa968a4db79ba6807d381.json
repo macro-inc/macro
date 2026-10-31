@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT newest.recipient AS \"recipient!\", LEFT(m.body_text, $3) AS body\n            FROM (\n                SELECT LOWER(rc.email_address) AS recipient, m.id, m.internal_date_ts\n                FROM email_contacts rc\n                JOIN email_message_recipients r ON r.contact_id = rc.id\n                JOIN email_messages m ON m.id = r.message_id\n                WHERE rc.link_id = $1\n                  AND LOWER(rc.email_address) = ANY($2)\n                  AND m.is_sent\n                  AND NOT m.is_draft\n                ORDER BY m.internal_date_ts DESC NULLS LAST\n                LIMIT $4\n            ) newest\n            JOIN email_messages m ON m.id = newest.id\n            ORDER BY newest.internal_date_ts DESC NULLS LAST\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recipient!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "body",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "e0fb2c92ab5c17b3b872c396babd02295055a9eb318fa968a4db79ba6807d381"
+}

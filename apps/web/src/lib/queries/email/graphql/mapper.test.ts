@@ -112,6 +112,7 @@ function thread(
     providerId: 'provider-thread-1',
     linkId: 'link-1',
     inboxVisible: true,
+    hasReceivedMail: true,
     isRead: false,
     projectId: 'project-1',
     latestInboundMessageTs: '2026-08-06T12:00:00Z',

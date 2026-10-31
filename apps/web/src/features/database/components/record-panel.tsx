@@ -1,9 +1,9 @@
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import EyeSlashIcon from '@phosphor/eye-slash.svg';
-import RowsIcon from '@phosphor/rows.svg';
-import TrashIcon from '@phosphor/trash-simple.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
+import RowsIcon from '@icon/system/regular/rows.svg';
+import TrashIcon from '@icon/system/regular/trash-simple.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, buttonClasses } from '@ui/components/Button';
 import { Dialog } from '@ui/components/Dialog';
@@ -93,28 +93,30 @@ export function RecordPanel(props: RecordPanelProps) {
           </span>
         </Show>
         <Button
+          variant="ghost"
+          aria-label="Previous record"
+          tooltip={{ content: 'Previous record', disabled: true }}
           size="icon-sm"
-          label="Previous record"
-          tooltipDisabled
           disabled={props.position <= 0}
           onClick={() => props.onNavigate(-1)}
         >
-          <ArrowUpIcon />
+          <ArrowUpIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          variant="ghost"
+          aria-label="Next record"
+          tooltip={{ content: 'Next record', disabled: true }}
           size="icon-sm"
-          label="Next record"
-          tooltipDisabled
           disabled={props.position < 0 || props.position >= props.total - 1}
           onClick={() => props.onNavigate(1)}
         >
-          <ArrowDownIcon />
+          <ArrowDownIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Dialog.CloseButton
           aria-label="Close record"
           class={buttonClasses({ size: 'icon-sm' })}
         >
-          <XIcon />
+          <XIcon class="size-3.5 shrink-0 touch:size-6" />
         </Dialog.CloseButton>
       </div>
       <div class="min-h-0 overflow-auto px-5 py-4">
@@ -145,7 +147,8 @@ export function RecordPanel(props: RecordPanelProps) {
               class="hover:text-failure-ink"
               onClick={props.onRequestDelete}
             >
-              <TrashIcon /> Delete record
+              <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Delete record
             </Button>
           </div>
         </Show>
@@ -156,7 +159,12 @@ export function RecordPanel(props: RecordPanelProps) {
           class="flex items-center gap-3 border-t border-warning/20 bg-warning/5 px-5 py-3 text-xs text-ink-muted"
         >
           <span class="flex-1">{props.saveError}</span>
-          <Button size="xs" disabled={props.pending} onClick={props.onRetry}>
+          <Button
+            variant="ghost"
+            size="xs"
+            disabled={props.pending}
+            onClick={props.onRetry}
+          >
             Retry
           </Button>
         </div>

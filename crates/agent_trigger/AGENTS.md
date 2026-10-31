@@ -14,7 +14,9 @@ session that results.
 - `src/domain/sources.rs`: the trigger sources (explicit mention, implicit
   reply, task/project assignment).
 - `src/domain/context.rs`: structured context assembled for the agent
-  prompt (thread history, people, discussion).
+  prompt (thread history, people, discussion). Message attachments travel on
+  each `ContextMessage` so the prompt XML and ACP file links can see files
+  that were not on the mentioning message.
 - `src/domain/task_assignment.rs` / `src/domain/project_assignment.rs`:
   non-message trigger paths.
 - `src/outbound/fast_model_judge.rs`: the Haiku-class implicit-trigger
@@ -49,6 +51,11 @@ session that results.
 
 - A new trigger variant must also be taught to `crates/webhook` ingestion
   and the SSE fan-out, or it will be silently dropped end to end.
+- Attributed bot messages (`MessagePostedMetadata::invoking_user`) trigger
+  exactly like human ones: explicit, reply-target and inferred. The agent hop
+  limit (`messages::domain::agent_hops`) is the loop guard and runs before any
+  routing or judge call; a bot's message never targets its own bot's session.
+  Unattributed bot posts trigger nothing.
 
 ## Related
 

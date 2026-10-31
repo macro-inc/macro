@@ -1,11 +1,11 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { ThemeChipPill } from '@theme/components/ThemeChipPill';
 import { ThemeChips } from '@theme/components/ThemeChips';
 import { ThemeEditor } from '@theme/components/ThemeEditor';
@@ -44,6 +44,7 @@ import {
 } from '@ui/signals/signals';
 import { createSignal, For, Show } from 'solid-js';
 import { AppearanceModePicker } from './components/appearance-mode-picker';
+import { LanguageSettings } from './LanguageSettings';
 import {
   SettingsCard,
   SettingsPage,
@@ -59,9 +60,9 @@ function CopyThemeButton(props: {
 }) {
   return (
     <Button
+      aria-label={`Copy ${props.name}`}
       variant="ghost"
       size={props.size}
-      label={`Copy ${props.name}`}
       tooltip="Copy theme"
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
@@ -85,9 +86,9 @@ function CopyThemeButton(props: {
 function EditThemeButton(props: { name: string; onEdit: () => void }) {
   return (
     <Button
+      aria-label={`Edit ${props.name}`}
       variant="ghost"
       size="icon-md"
-      label={`Edit ${props.name}`}
       tooltip="Edit theme"
       onClick={(e) => {
         e.preventDefault();
@@ -323,9 +324,10 @@ function InterfaceThemeSelect(props: {
         <CopyThemeButton themeId={theme.id} name={theme.name} size="icon-xs" />
         <Show when={editable}>
           <Button
+            aria-label={`Edit ${theme.name}`}
+            tooltip={`Edit ${theme.name}`}
             variant="ghost"
             size="icon-xs"
-            label={`Edit ${theme.name}`}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -338,9 +340,10 @@ function InterfaceThemeSelect(props: {
             <PencilIcon class="size-3 touch:size-3.5" />
           </Button>
           <Button
+            aria-label={`Delete ${theme.name}`}
+            tooltip={`Delete ${theme.name}`}
             variant="ghost"
             size="icon-xs"
-            label={`Delete ${theme.name}`}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
             onClick={(e) => {
@@ -572,6 +575,8 @@ export function Appearance() {
             </SettingsRow>
           </SettingsCard>
         </SettingsSection>
+
+        <LanguageSettings />
       </SettingsPage>
     </div>
   );
