@@ -42,6 +42,13 @@ threads, pins, recents, notifications, folders, activity.
   objects keyed by part paths/hashes. The export route maps the documents domain's
   pending result to 409 with `Retry-After`; never reuse document-id-only archives.
   Location and export URLs share signing helpers in `src/service/cloudfront.rs`.
+- `src/outbound/calendar_refresh.rs`: the `refresh_calendar` nudge for a new
+  request to join a calendar event, which this service hosts while answers
+  belong to `calendar_service`. It finds delegates by `link_id` alone, as the
+  request list admits them; `get_primaries_for_link` also filters on the child,
+  which a promoted shared mailbox's older events do not carry as their owner.
+  Nudges follow a committed write, so they share `event_broker_tracker`'s
+  bounded shutdown drain with event broker publishes.
 - `src/service/delete_document_worker.rs`: background worker handling document
   deletion side effects (feature-gated: `delete_document_worker`).
 - `src/service/conn_gateway.rs`: pushes realtime updates through

@@ -218,6 +218,18 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   unchanged and stays quiet; the client reads a status other than its decision
   as already answered. Only an acceptance whose invitation is being written
   overrules a decline (`resolve_join_request`), and it returns `accepted`.
+  A new request reaches open lists the same way: `request_to_join` sends
+  `calendar_changed` for the inbox of the sharer's copy once the row is stored,
+  and only when this ask created it, so a repeat or a refused ask stays quiet.
+  Each inbox holds its own entity, so however many of its calendars hold the
+  event there is one list and one nudge, and another inbox's copy has its own
+  list. The signal names that inbox, so it goes only to the list's readers;
+  the requester is never one, since a reader's own view of the event is
+  `OwnCopy`, which refuses the ask. The web also refetches the list when the
+  sharer's notification lands, but that is not the signal: it reaches no
+  delegate, a muted category never sends it, and the notifier only queues.
+  `document_storage_service` hosts the ask, so it has its own
+  `CalendarRefreshNotifier` (`src/outbound/calendar_refresh.rs`).
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with
