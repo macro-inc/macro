@@ -196,6 +196,35 @@ describe('routine triggers on the routine page', () => {
     ]);
   });
 
+  it('drops a GitHub preset’s own test when the new preset has none', () => {
+    const merged: RoutineTriggerDraft = {
+      id: 'merged',
+      kind: 'event',
+      events: ['github'],
+      github: {
+        events: ['pull_request'],
+        actions: ['closed'],
+        repositories: [],
+        includeBots: false,
+      },
+      match: [{ path: 'pull_request.merged', op: 'equals', value: 'true' }],
+    };
+    const { triggers } = renderRows([merged]);
+    press(
+      screen.getByRole('button', {
+        name: 'Change Pull request merged trigger',
+      }),
+      'Enter'
+    );
+    press(item('GitHub'), 'ArrowRight');
+    press(item(/^Pull request opened/), 'Enter');
+    // "Opened" must not keep matching only merged pull requests.
+    expect(triggers()[0]).not.toHaveProperty('match.0');
+    expect(triggers()).toMatchObject([
+      { github: { events: ['pull_request'], actions: ['opened'] } },
+    ]);
+  });
+
   it('searches every submenu, and a typed schedule becomes the top row', () => {
     const { triggers } = renderRows([]);
     const search = openAddTrigger();

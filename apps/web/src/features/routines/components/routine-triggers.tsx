@@ -504,7 +504,8 @@ function switchGithub(
       repositories: current.github.repositories,
       includeBots: current.github.includeBots,
     },
-    ...(match.length ? { match } : {}),
+    // Set even when empty: the old choice's own tests must not carry over.
+    match: match.length ? match : undefined,
   };
 }
 
