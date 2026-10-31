@@ -97,9 +97,9 @@ where
 {
     type Output = SetSenderPolicyResponse;
 
+    // The sender's address is personal data; the span keeps the policy only.
     #[tracing::instrument(skip_all, fields(
         user_id=?request_context.user_id,
-        sender_email=%self.sender_email,
         policy=?self.policy,
     ), err)]
     async fn call(
