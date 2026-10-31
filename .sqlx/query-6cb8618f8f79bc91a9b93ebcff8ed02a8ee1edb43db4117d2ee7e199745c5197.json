@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                    SELECT\n                        event.id,\n                        event.source_link_id,\n                        event.status,\n                        event.organizer_email,\n                        event.is_read_only,\n                        event.is_snapshot,\n                        event.guests_can_modify,\n                        event.guests_can_invite_others,\n                        event.guests_can_see_other_guests\n                    FROM calendar_events event\n                    WHERE event.id = ANY($1)\n                    ",
+  "query": "\n            SELECT\n                event.id,\n                event.source_link_id,\n                event.status,\n                event.organizer_email,\n                event.is_read_only,\n                event.is_snapshot,\n                event.guests_can_modify,\n                event.guests_can_invite_others,\n                event.guests_can_see_other_guests\n            FROM calendar_events event\n            WHERE event.id = ANY($1)\n            ",
   "describe": {
     "columns": [
       {
@@ -66,5 +66,5 @@
       false
     ]
   },
-  "hash": "beff4015b3e0152e2d5314d3237d20382b958b55a144c2917014945769a7c964"
+  "hash": "6cb8618f8f79bc91a9b93ebcff8ed02a8ee1edb43db4117d2ee7e199745c5197"
 }

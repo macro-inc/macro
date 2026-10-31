@@ -4,7 +4,6 @@ use std::collections::HashMap;
 
 use chrono::Utc;
 use futures::future::{BoxFuture, Either, select};
-use futures::try_join;
 use rootcause::Report;
 use uuid::Uuid;
 
@@ -143,13 +142,13 @@ where
         if event_ids.is_empty() {
             return Ok(HashMap::new());
         }
-        let (copies, calendars, inboxes) = try_join!(
-            self.repository.event_copies(event_ids),
-            self.repository.list_visible_calendars(requester_id),
-            self.repository.owned_inboxes(requester_id),
-        )?;
-        let calendars = CalendarLabels::from_calendars(calendars);
-        let viewer = ActorInboxes::from_owned(inboxes);
+        // One read at a time: search runs this on every keystroke with calendar
+        // hits, and a burst of searches must not fan out across the read pool.
+        let copies = self.repository.event_copies(event_ids).await?;
+        let calendars = CalendarLabels::from_calendars(
+            self.repository.list_visible_calendars(requester_id).await?,
+        );
+        let viewer = ActorInboxes::from_owned(self.repository.owned_inboxes(requester_id).await?);
         Ok(copies
             .into_iter()
             .map(|copy| {

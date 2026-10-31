@@ -371,6 +371,10 @@ export type CalendarEventSearchTime =
       kind: 'allDay';
     };
 /**
+ * What the user is on one copy of an event, through the inbox holding it.
+ */
+export type CalendarEventSearchRole = 'organizer' | 'guest';
+/**
  * Side of a folded conversation.
  */
 export type AgentSessionAuthor = 'user' | 'agent';
@@ -6829,9 +6833,33 @@ export interface CalendarEventMetadata {
    */
   isReadOnly: boolean;
   /**
-   * The event's organizer (creator), when the source names one.
+   * The organizer the provider names, when it names one.
    */
   organizer?: CalendarEventOrganizer | null;
+  /**
+   * Display name of the calendar holding this copy. Absent on an event
+   * shared with the user, which is on none of their calendars.
+   */
+  calendarName?: string | null;
+  /**
+   * Whether a calendar holding this copy is on the user's schedule. The
+   * user can see calendars that are not theirs, such as a colleague's: a
+   * row without this, and that they do not attend, says what that calendar
+   * shows, not where the user is.
+   */
+  contributesToAvailability?: boolean | null;
+  /**
+   * The connected inbox syncing that calendar. It stays the user's own
+   * address on a colleague's calendar, so it never says whose calendar it
+   * is.
+   */
+  inbox?: string | null;
+  /**
+   * Whether the user organizes this copy or is a guest on it. Absent when
+   * they are neither, when they can only write that calendar, or when a
+   * read-only calendar names them organizer.
+   */
+  role?: CalendarEventSearchRole | null;
   /**
    * Free-text description, when the event carries one. May contain HTML from
    * the source; clients render a plain-text preview.
@@ -6855,8 +6883,10 @@ export interface CalendarEventSearchOccurrence {
   time: CalendarEventSearchTime;
 }
 /**
- * The event's organizer — its creator, in Google's model. Either field can be
- * absent when the source does not name it.
+ * The organizer the provider names on the event. Either field can be absent
+ * when the source does not name it. On a read-only Outlook calendar, such as
+ * its holidays, Microsoft names the mailbox owner on every event, so this
+ * does not say the user organized anything: `role` does.
  */
 export interface CalendarEventOrganizer {
   /**
@@ -12767,7 +12797,7 @@ export interface MuteNotificationsResponse {
   snoozeUntil?: string | null;
 }
 /**
- * Search items by their name or title: document name, email subject, agent session title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
+ * Search items by their name or title: document name, email subject, agent session title, channel name, project name, call-record name, or calendar event title. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist). A calendar event result is one copy of the event on a calendar the user can see, not all of them theirs: calendarName names that calendar, contributesToAvailability says whether it is on the user's schedule, and role says whether they organize it or are a guest. Only role says the user organizes an event: organizer is whoever the provider names, which on a read-only calendar can be the user's own mailbox, so without a role tell them they do not organize it. Say "your calendar" only for a contributesToAvailability result or one with a role. Any other result is what that calendar shows, not where the user is or what they are doing, even when they ask about "my" event: never call it their appointment, trip or meeting. Say nothing on their own schedule matches, then "alex@example.com's calendar has..." when calendarName shows whose it is; if it does not, say you cannot tell rather than guess.
  */
 export interface NameSearch {
   /**
