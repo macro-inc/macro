@@ -4935,6 +4935,7 @@ name = "connect_demo"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "chrono",
  "connect_client",
  "connect_platform",
  "futures",

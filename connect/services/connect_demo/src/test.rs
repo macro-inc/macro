@@ -5,7 +5,7 @@ use serde_json::json;
 use tower::ServiceExt as _;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{method, path, path_regex},
+    matchers::{method, path, path_regex, query_param},
 };
 
 fn state(server: &MockServer) -> AppState {
@@ -14,6 +14,81 @@ fn state(server: &MockServer) -> AppState {
         http: reqwest::Client::new(),
         public_url: Url::parse("https://demo.test/demo").unwrap(),
     }
+}
+
+#[tokio::test]
+async fn dashboard_renders_counts_users_filters_and_empty_state() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET")).and(path("/v1/catalog"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"id":"notion","name":"<Notes>","description":"Notes","access":["mcp"],"mcp_url":"https://vendor.test/mcp","icon_url":"/v1/catalog/notion/icon.svg"},
+            {"id":"linear","name":"Linear","description":"Tasks","access":["mcp"],"mcp_url":"https://vendor.test/mcp","icon_url":null}
+        ]))).mount(&server).await;
+    Mock::given(method("GET")).and(path("/v1/connections/summary"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"users":2,"connections":2,"needsReauth":1,"apps":[{"appId":"notion","active":1,"needsReauth":1}]})))
+        .mount(&server).await;
+    Mock::given(method("GET"))
+        .and(path("/v1/users"))
+        .and(query_param("app_id", "linear"))
+        .and(query_param("status", "active"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"items":[],"nextCursor":null})),
+        )
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET")).and(path("/v1/users"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"items":[
+            {"externalUserId":"123e4567-e89b-42d3-a456-426614174000","firstConnectedAt":"2026-10-30T09:00:00Z","connections":[
+                {"externalUserId":"123e4567-e89b-42d3-a456-426614174000","appId":"linear","status":"needs_reauth","scopes":[],"createdAt":"2026-10-31T09:00:00Z","updatedAt":"2026-10-31T09:00:00Z","accessTokenExpiresAt":null},
+                {"externalUserId":"123e4567-e89b-42d3-a456-426614174000","appId":"notion","status":"active","scopes":[],"createdAt":"2026-10-30T09:00:00Z","updatedAt":"2026-10-30T09:00:00Z","accessTokenExpiresAt":"2099-10-30T10:00:00Z"}
+            ]},
+            {"externalUserId":"<bad-user>","firstConnectedAt":"2026-10-29T09:00:00Z","connections":[
+                {"externalUserId":"<bad-user>","appId":"notion","status":"needs_reauth","scopes":[],"createdAt":"2026-10-29T09:00:00Z","updatedAt":"2026-10-29T09:00:00Z","accessTokenExpiresAt":null}
+            ]}
+        ],"nextCursor":"next+page"}))).mount(&server).await;
+    let app = router(state(&server));
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/demo/dashboard")
+                .header(
+                    header::COOKIE,
+                    "connect_demo_user=123e4567-e89b-42d3-a456-426614174000",
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let html = body(response).await;
+    assert!(html.contains("<strong>2</strong><span>Users</span>"));
+    assert!(html.contains("<strong>2</strong><span>Connections</span>"));
+    assert!(html.contains("<strong>1</strong><span>Needs re-auth</span>"));
+    assert!(html.contains("<span class=\"badge\">you</span>"));
+    assert!(html.contains("&lt;Notes&gt;"));
+    assert!(html.contains("title=\"&lt;bad-user&gt;\""));
+    assert!(!html.contains("title=\"<bad-user>\""));
+    assert!(html.contains("/demo/icons/notion"));
+    assert!(html.contains("More users"));
+    assert!(html.contains("Linear: needs re-auth"));
+    assert!(html.contains("cursor=next%2Bpage"));
+    assert!(html.contains("data-label=\"Active\">0</td>"));
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/demo/dashboard?app_id=linear&status=active")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let html = body(response).await;
+    assert!(html.contains("No connected users match these filters."));
+    assert!(html.contains("value=\"linear\" selected"));
+    assert!(html.contains("value=\"active\" selected"));
 }
 
 async fn body(response: Response) -> String {
