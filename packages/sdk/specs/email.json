@@ -4576,6 +4576,17 @@
             "type": ["string", "null"],
             "format": "uuid"
           },
+          "scheduled_send_source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScheduledSendSource",
+                "description": "What created the unsent schedule; `sequence` marks a sequence step,\nwhich is not the user's own draft while it is pending."
+              }
+            ]
+          },
           "scheduled_send_status": {
             "oneOf": [
               {
