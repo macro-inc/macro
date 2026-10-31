@@ -180,16 +180,13 @@ function SectionStatus(props: { group: ChannelsGroup }) {
           !row.labelId
       );
   return (
-    <div class="px-2">
+    <div>
       <Switch>
-        <Match when={source().isLoading() && source().items().length === 0}>
-          <RailListLoading />
+        <Match when={source().isLoading() || source().isLoadingMore()}>
+          <RailListLoadingMore variant="channel" />
         </Match>
         <Match when={source().error()}>
           <RailListError retry={source().refresh} compact />
-        </Match>
-        <Match when={source().isLoadingMore()}>
-          <RailListLoadingMore variant="channel" />
         </Match>
         <Match when={source().hasMore()}>
           <Button
@@ -201,7 +198,7 @@ function SectionStatus(props: { group: ChannelsGroup }) {
           </Button>
         </Match>
         <Match when={!hasConversations()}>
-          <p class="py-2 text-xs text-ink-extra-muted">
+          <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-extra-muted">
             {rail.sectionPreferences(props.group).unreadOnly
               ? t('channelSections.noUnreadConversations')
               : t('channelSections.empty')}
@@ -243,6 +240,20 @@ function BrowseRow(props: { row: ChannelRailRow }) {
         </Match>
         <Match when={props.row.kind === 'status' ? props.row : undefined}>
           {(row) => <SectionStatus group={row().group} />}
+        </Match>
+        <Match
+          when={props.row.kind === 'reference-status' ? props.row : undefined}
+        >
+          {(row) => (
+            <Show
+              when={row().state === 'loading'}
+              fallback={
+                <RailListError retry={rail.retryReferencedChannels} compact />
+              }
+            >
+              <RailListLoadingMore variant="channel" />
+            </Show>
+          )}
         </Match>
         <Match when={props.row.kind === 'label' ? props.row : undefined}>
           {(row) => <ChannelLabelRow label={row().label} />}

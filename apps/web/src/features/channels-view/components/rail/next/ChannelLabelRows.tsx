@@ -58,6 +58,14 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
       .some(
         (row) => row.kind === 'conversation' && row.labelId === props.label.id
       );
+  const hasReferenceStatus = () =>
+    rail.list.items
+      .all()
+      .some(
+        (row) =>
+          row.kind === 'reference-status' &&
+          row.id === `reference-status:label:${props.label.id}`
+      );
 
   return (
     <div
@@ -97,11 +105,7 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
         </ChannelSectionDropdown>
       </ChannelSectionHeading>
       <Show
-        when={
-          state().open &&
-          (props.label.channelIds.length === 0 ||
-            (unreadOnly() && !hasVisibleChannels()))
-        }
+        when={state().open && !hasVisibleChannels() && !hasReferenceStatus()}
       >
         <p class="pr-2 pb-2 pl-4 text-xs text-ink-extra-muted">
           {unreadOnly()

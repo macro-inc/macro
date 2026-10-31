@@ -41,6 +41,13 @@ export type ChannelRailRow =
       group: ChannelsGroup;
     }
   | {
+      /** Loading or retry feedback after an open section's available channels. */
+      kind: 'reference-status';
+      id: `reference-status:${ChannelSectionKey}`;
+      group: 'favorites' | 'team_channels';
+      state: 'loading' | 'error';
+    }
+  | {
       kind: 'favorite';
       id: `favorite:${string}`;
       group: 'favorites';
@@ -133,10 +140,7 @@ export type ChannelsRailContext = {
   selectTab: (tab: ChannelsTab) => void;
   sources: ChannelsSources;
   favorites: Accessor<readonly Favorite[]>;
-  /**
-   * A channel the rail has loaded, from its sections or fetched by id for a
-   * label or favorite row. Undefined until the fetch settles.
-   */
+  /** A channel available from loaded pages, normalized cache, or a by-ID lookup. */
   channelById: (channelId: string) => ChannelEntity | undefined;
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   /** Whether the Threads tab is available to this user. */
@@ -154,6 +158,8 @@ export type ChannelsRailContext = {
   /** Why labels are unavailable, for the create menu and refused drops. */
   labelsUnavailableReason: Accessor<string>;
   retryLabels: () => Promise<void>;
+  /** Retry unresolved channels referenced by section membership or favorites. */
+  retryReferencedChannels: () => Promise<void>;
   isLabelOpen: (labelId: string) => boolean;
   toggleLabel: (labelId: string) => void;
   /** The Channels section's rendered rows: label headings and channels. */

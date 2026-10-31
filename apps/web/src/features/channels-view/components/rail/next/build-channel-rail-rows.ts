@@ -76,6 +76,8 @@ type SectionOptions = {
   preferences: Partial<Record<ChannelSectionKey, ChannelSectionPreferences>>;
   channelById: (id: string) => ChannelEntity | undefined;
   unreadChannelIds: ReadonlySet<string>;
+  /** Referenced-channel feedback; include custom sections only while expanded. */
+  referenceStatuses?: Partial<Record<ChannelSectionKey, 'loading' | 'error'>>;
 };
 
 /** Filter after assigning membership so hidden channels never leak into another section. */
@@ -174,6 +176,20 @@ export function buildChannelRailRows(
   }
 
   const rows: ChannelRailRow[] = [];
+  const appendReferenceStatus = (
+    section: ChannelSectionKey,
+    group: 'favorites' | 'team_channels'
+  ) => {
+    const state = sectionOptions?.referenceStatuses?.[section];
+    if (state) {
+      rows.push({
+        kind: 'reference-status',
+        id: `reference-status:${section}`,
+        group,
+        state,
+      });
+    }
+  };
   rows.push({
     kind: 'section',
     id: 'section:favorites',
@@ -190,6 +206,7 @@ export function buildChannelRailRows(
         })
       )
     );
+    appendReferenceStatus('favorites', 'favorites');
   }
 
   const labelledIds = new Set(
@@ -224,8 +241,13 @@ export function buildChannelRailRows(
     rows.push({ kind: 'status', id: `status:${group}`, group });
   }
 
+  let previousLabelId: string | undefined;
   for (const row of channelSectionRows) {
     if (row.kind === 'label') {
+      if (previousLabelId) {
+        appendReferenceStatus(`label:${previousLabelId}`, 'team_channels');
+      }
+      previousLabelId = row.label.id;
       rows.push({
         kind: 'label',
         id: rowKeyForLabel(row.label.id),
@@ -244,6 +266,9 @@ export function buildChannelRailRows(
         labelId: row.labelId,
       });
     }
+  }
+  if (previousLabelId) {
+    appendReferenceStatus(`label:${previousLabelId}`, 'team_channels');
   }
   // Every upper row shares one virtualizer and one scroll position.
   rows.forEach((row, index) => {

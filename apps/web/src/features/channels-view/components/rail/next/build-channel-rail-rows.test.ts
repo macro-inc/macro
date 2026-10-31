@@ -616,6 +616,77 @@ describe('section preferences', () => {
       'team_channels'
     );
   });
+
+  it('keeps loaded rows ahead of per-section loading and retry feedback', () => {
+    const channelsById = new Map([acme, deals].map((item) => [item.id, item]));
+    const sections = buildChannelSectionRows({
+      labels: [
+        label('partial', 'Partial', ['acme', 'zeta']),
+        label('ready', 'Ready', ['deals']),
+        label('failed', 'Failed', ['globex']),
+      ],
+      channels: [],
+      channelsById,
+      isLabelOpen: () => true,
+    });
+    const rows = buildChannelRailRows(
+      'browse',
+      {
+        favorites: true,
+        team_channels: true,
+        channels: true,
+        direct_messages: true,
+      },
+      {
+        favorites: [
+          {
+            entityType: 'channel',
+            entityId: 'acme',
+            createdAt: '2026-01-01',
+            sortOrder: 0,
+          },
+        ],
+        team_channels: [],
+        channels: [],
+        direct_messages: [],
+        recents: [],
+        threads: [],
+      },
+      sections,
+      {
+        preferences: { 'label:partial': { unreadOnly: true, sort: 'name' } },
+        channelById: (id) => channelsById.get(id),
+        unreadChannelIds: new Set(['acme']),
+        referenceStatuses: {
+          favorites: 'loading',
+          'label:partial': 'loading',
+          'label:failed': 'error',
+        },
+      }
+    );
+
+    expect(rows.map((row) => row.id)).toEqual([
+      'section:favorites',
+      'favorite:channel:acme',
+      'reference-status:favorites',
+      'section:team_channels',
+      'status:team_channels',
+      'label:partial',
+      'channel:acme:label:partial',
+      'reference-status:label:partial',
+      'label:ready',
+      'channel:deals:label:ready',
+      'label:failed',
+      'reference-status:label:failed',
+      'section:direct_messages',
+    ]);
+    expect(
+      rows.find((row) => row.id === 'reference-status:label:failed')
+    ).toMatchObject({ kind: 'reference-status', state: 'error' });
+    expect(
+      rows.find((row) => row.id === 'channel:deals:label:ready')
+    ).toMatchObject({ localIndex: 9 });
+  });
 });
 
 describe('legacy Chat rollout row ordering', () => {

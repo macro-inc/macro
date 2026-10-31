@@ -70,7 +70,9 @@ import {
   resolveReferencedChannels,
   useChannelsByIdsQuery,
 } from '../../queries';
+import { useReferencedChannels } from '../../queries/referenced-channels';
 import type {
+  ChannelSectionKey,
   ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsTab,
@@ -391,9 +393,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       .map((favorite) => favorite.entityId)
   );
 
-  // A labelled or favorited channel has a row before the paginated Team
-  // channels source reaches it, so fetch the ones the sources have not loaded: a label
-  // needs them to list its channels, a favorite row to act on its channel.
+  // Sections and favorites can reference channels outside the loaded pages.
+  // Resolve their records independently without exhausting the main lists.
   const referencedChannelIds = createMemo(() => [
     ...new Set([
       ...labels().flatMap((label) => label.channelIds),
@@ -404,9 +405,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
     const loaded = new Set(channels().map((channel) => channel.id));
     return referencedChannelIds().filter((id) => !loaded.has(id));
   });
-  const referencedChannelsQuery = useChannelsByIdsQuery(missingChannelIds);
+  const referencedChannelsQuery = useChannelsByIdsQuery(() =>
+    sectionsEnabled() ? [] : missingChannelIds()
+  );
+  const nextReferencedChannels = useReferencedChannels(
+    referencedChannelIds,
+    channels,
+    sectionsEnabled
+  );
   const referencedChannels = createMemo<ChannelEntity[]>(
-    (previous) => resolveReferencedChannels(previous, referencedChannelsQuery),
+    (previous) =>
+      sectionsEnabled()
+        ? nextReferencedChannels.channels()
+        : resolveReferencedChannels(previous, referencedChannelsQuery),
     []
   );
   // Only a label puts a fetched channel in the channel-section lists.
@@ -463,6 +474,28 @@ export function ChannelsRail(props: ChannelsRailProps) {
     ).length;
   };
 
+  const referenceStatuses = createMemo(() => {
+    const statuses: Partial<Record<ChannelSectionKey, 'loading' | 'error'>> =
+      {};
+    if (!sectionsEnabled()) return statuses;
+    const pending = nextReferencedChannels.pendingIds();
+    const failed = nextReferencedChannels.failedIds();
+    const statusFor = (ids: readonly string[]) => {
+      if (ids.some((id) => failed.has(id) && !channelById(id))) return 'error';
+      if (ids.some((id) => pending.has(id) && !channelById(id)))
+        return 'loading';
+    };
+    if (state.expandedGroups.favorites) {
+      statuses.favorites = statusFor(favoriteChannelIds());
+    }
+    for (const label of labels()) {
+      if (isLabelOpen(label.id)) {
+        statuses[`label:${label.id}`] = statusFor(label.channelIds);
+      }
+    }
+    return statuses;
+  });
+
   const visibleRows = createMemo(() => {
     if (props.searchOpen) {
       return searchResults().map(
@@ -501,6 +534,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         preferences: state.sectionPreferences,
         channelById,
         unreadChannelIds: channelActivity.unreadChannelIds(),
+        referenceStatuses: referenceStatuses(),
       }
     );
   });
@@ -511,7 +545,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       items: visibleRows,
       getKey: (row) => row.id,
       isSelectable: () => false,
-      isNavigable: (row) => row.kind !== 'status',
+      isNavigable: (row) =>
+        row.kind !== 'status' && row.kind !== 'reference-status',
       initialFocusKey: visibleRows().find(
         (row) =>
           row.kind === 'conversation' &&
@@ -522,7 +557,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         previewAfterNavigation.clear();
         const openInNewSplit =
           metadata?.newSplit === true || metadata?.event?.shiftKey === true;
-        if (item.kind === 'status') return;
+        if (item.kind === 'status' || item.kind === 'reference-status') return;
 
         if (item.kind === 'all-threads') {
           setThreadsChannelId(undefined);
@@ -1109,6 +1144,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       await labelsQuery.refetch();
       if (sectionsEnabled()) await personalLabelsQuery.refetch();
     },
+    retryReferencedChannels: nextReferencedChannels.retry,
     isLabelOpen,
     toggleLabel: (labelId) => setLabelOpen(labelId, !isLabelOpen(labelId)),
     channelSectionRows,

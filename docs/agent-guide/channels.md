@@ -948,6 +948,14 @@ and sidebar width remain personal preferences. Search covers channels and DMs
 regardless of section placement. Mobile retains the recent-conversation feed
 described below.
 
+Section membership comes from the server's complete visible channel-ID lists.
+The sidebar shows available channel rows immediately, reuses normalized cached
+channel data, and fetches only missing records. Each expanded section appends
+skeleton rows while its remaining channels load; a failed fetch keeps available
+rows and replaces that section's loading feedback with Retry. Loading sections
+must not briefly show an empty-state hint. Collapsing a section hides its loading
+feedback without changing membership or stopping shared channel hydration.
+
 Favorites open the same channel detail as ordinary rows. Shift-clicking a
 favorite, channel, or DM opens it in a new split. Rejected navigation and failed
 hydration must not mark notifications read. Context menus retain Mark Read,
