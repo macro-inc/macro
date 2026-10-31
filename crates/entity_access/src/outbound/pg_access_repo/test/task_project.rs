@@ -4,7 +4,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const OWNER: &str = "macro|owner@containment.com";
+const OWNER: &str = "macro|owner@containment.example.com";
 
 async fn insert_owner(pool: &PgPool) -> anyhow::Result<()> {
     let macro_user_id = Uuid::now_v7();
