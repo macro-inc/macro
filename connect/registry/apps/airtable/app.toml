@@ -6,5 +6,5 @@ mcp_url = "https://mcp.airtable.com/mcp"
 client_registration = "cimd"
 scopes = []
 pipedream_app_slugs = ["airtable_oauth"]
-status = "pending"
-probed = 2026-10-30
+status = "live"
+probed = 2026-10-31
