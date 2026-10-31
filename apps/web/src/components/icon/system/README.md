@@ -75,7 +75,8 @@ color, and display box as Low/Medium/High, with all three bars at 30% opacity in
 the SVG and no additional empty-icon dimming. Empty assignees use
 `user-circle-dashed`, a dashed ring around a filled person. Set projects use
 `cube`; empty projects use `cube-dashed`, with a dash at every corner rather than
-a dashed stack.
+a dashed stack. Use the same dashed cube for empty Project values in title pills,
+list cells, side-panel values, and group headers.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
 tokens for icons and group-header tints. Their defaults are muted gray, blended

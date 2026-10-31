@@ -695,7 +695,22 @@ function SinglePill(props: {
       <Show
         when={!empty()}
         fallback={
-          <SidePanel.EmptyPill label={props.getEmptyLabel?.(props.property)} />
+          <Show
+            when={
+              props.property.propertyDefinitionId ===
+              SYSTEM_PROPERTY_IDS.PROJECT
+            }
+            fallback={
+              <SidePanel.EmptyPill
+                label={props.getEmptyLabel?.(props.property)}
+              />
+            }
+          >
+            <PropertyNS.Empty
+              propertyDefinitionId={props.property.propertyDefinitionId}
+              label={props.getEmptyLabel?.(props.property)}
+            />
+          </Show>
         }
       >
         <Show
