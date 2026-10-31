@@ -2,6 +2,11 @@ use super::EmbeddedApp;
 
 pub(super) const EMBEDDED: &[EmbeddedApp] = &[
     EmbeddedApp {
+        directory: "apify",
+        toml: include_str!("../../../registry/apps/apify/app.toml"),
+        icon_svg: Some(include_str!("../../../registry/apps/apify/icon.svg")),
+    },
+    EmbeddedApp {
         directory: "airtable",
         toml: include_str!("../../../registry/apps/airtable/app.toml"),
         icon_svg: Some(include_str!("../../../registry/apps/airtable/icon.svg")),
@@ -57,6 +62,11 @@ pub(super) const EMBEDDED: &[EmbeddedApp] = &[
         icon_svg: Some(include_str!("../../../registry/apps/dropbox/icon.svg")),
     },
     EmbeddedApp {
+        directory: "exa",
+        toml: include_str!("../../../registry/apps/exa/app.toml"),
+        icon_svg: Some(include_str!("../../../registry/apps/exa/icon.svg")),
+    },
+    EmbeddedApp {
         directory: "fathom",
         toml: include_str!("../../../registry/apps/fathom/app.toml"),
         icon_svg: Some(include_str!("../../../registry/apps/fathom/icon.svg")),
@@ -77,6 +87,11 @@ pub(super) const EMBEDDED: &[EmbeddedApp] = &[
         icon_svg: Some(include_str!("../../../registry/apps/granola/icon.svg")),
     },
     EmbeddedApp {
+        directory: "highlevel",
+        toml: include_str!("../../../registry/apps/highlevel/app.toml"),
+        icon_svg: Some(include_str!("../../../registry/apps/highlevel/icon.svg")),
+    },
+    EmbeddedApp {
         directory: "intercom",
         toml: include_str!("../../../registry/apps/intercom/app.toml"),
         icon_svg: Some(include_str!("../../../registry/apps/intercom/icon.svg")),
@@ -95,6 +110,11 @@ pub(super) const EMBEDDED: &[EmbeddedApp] = &[
         directory: "linear",
         toml: include_str!("../../../registry/apps/linear/app.toml"),
         icon_svg: Some(include_str!("../../../registry/apps/linear/icon.svg")),
+    },
+    EmbeddedApp {
+        directory: "mailchimp",
+        toml: include_str!("../../../registry/apps/mailchimp/app.toml"),
+        icon_svg: Some(include_str!("../../../registry/apps/mailchimp/icon.svg")),
     },
     EmbeddedApp {
         directory: "monday",
@@ -180,5 +200,10 @@ pub(super) const EMBEDDED: &[EmbeddedApp] = &[
         directory: "webflow",
         toml: include_str!("../../../registry/apps/webflow/app.toml"),
         icon_svg: Some(include_str!("../../../registry/apps/webflow/icon.svg")),
+    },
+    EmbeddedApp {
+        directory: "zendesk",
+        toml: include_str!("../../../registry/apps/zendesk/app.toml"),
+        icon_svg: Some(include_str!("../../../registry/apps/zendesk/icon.svg")),
     },
 ];

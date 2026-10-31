@@ -3,12 +3,12 @@ use super::*;
 #[test]
 fn every_app_toml_parses() {
     let apps = all_apps().expect("embedded registry must parse");
-    assert_eq!(apps.len(), 36);
+    assert_eq!(apps.len(), 41);
     assert!(apps.iter().all(|app| !app.name.is_empty()));
 }
 
 #[test]
-fn only_first_slice_apps_are_live() {
+fn only_conformant_candidates_are_live() {
     let live: HashSet<_> = all_apps()
         .expect("embedded registry must parse")
         .iter()
@@ -17,7 +17,38 @@ fn only_first_slice_apps_are_live() {
         .collect();
     assert_eq!(
         live,
-        HashSet::from(["linear", "notion", "posthog", "sentry"])
+        HashSet::from([
+            "airtable",
+            "apify",
+            "apollo",
+            "attio",
+            "calendly",
+            "canva",
+            "clickup",
+            "cloudflare",
+            "confluence",
+            "exa",
+            "fathom",
+            "granola",
+            "highlevel",
+            "jira",
+            "klaviyo",
+            "linear",
+            "mailchimp",
+            "monday",
+            "netlify",
+            "notion",
+            "paypal",
+            "posthog",
+            "quo",
+            "sentry",
+            "stripe",
+            "supabase",
+            "todoist",
+            "trello",
+            "typeform",
+            "webflow",
+        ])
     );
 }
 
