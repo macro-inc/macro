@@ -41,6 +41,7 @@ function managerHarness(initiallyReady = false) {
     { equals: false }
   );
   const manager = {
+    presentation: { pending: () => undefined },
     contentNavigationReady: ready,
     contentNavigationVersion: version,
     events: event,

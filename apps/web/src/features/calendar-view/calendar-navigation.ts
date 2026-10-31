@@ -72,6 +72,7 @@ export function openCalendarView(
     mergeHistory?: boolean;
     referredFrom?: ReferredFrom;
     onApplied?: VoidFunction;
+    onPresented?: VoidFunction;
     /** False retargets an open Calendar split without taking focus from the caller. */
     activate?: boolean;
   } = {}
@@ -94,7 +95,7 @@ export function openCalendarView(
 
   const content = calendarViewContent(target);
   const existing = manager.getSplitByContent('component', CALENDAR_VIEW_ID);
-  if (existing) {
+  if (existing && !options.onPresented) {
     existing.replace({
       next: content,
       mergeHistory: options.mergeHistory ?? true,
@@ -112,6 +113,7 @@ export function openCalendarView(
     handle: options.handle,
     mergeHistory: options.mergeHistory,
     ...(options.onApplied ? { onApplied: reportApplied } : {}),
+    ...(options.onPresented ? { onPresented: options.onPresented } : {}),
   });
   reportImmediateResult(result);
   return result !== undefined && result.status !== 'unavailable';

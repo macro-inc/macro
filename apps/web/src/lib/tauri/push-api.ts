@@ -95,11 +95,7 @@ export function createPushApi(platform: 'android' | 'ios') {
           payload: { deliveryId },
         });
       else if (supportsNotificationLaunch()) {
-        // Let the destination's route/loading shell draw before native removes
-        // its resume cover. In the background this waits until the next frame.
-        await new Promise<void>((resolve) =>
-          requestAnimationFrame(() => resolve())
-        );
+        // Navigation owns destination presentation; IPC only acknowledges receipt.
         await invoke('plugin:notifications|acknowledge_notification', {
           deliveryId,
         });

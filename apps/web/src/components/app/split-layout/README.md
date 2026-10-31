@@ -33,8 +33,19 @@ leave guards, middleware, URL updates, and single-owner content claims.
 Resolve restoration keys and initial entry-state slices from the current router
 entry, not the layout mirror: an outlet can mount before the mirror updates.
 
-The remaining notes below describe the original split layout.
+## Destination presentation
 
+`openWithSplit({ ... }, { onApplied })` reports router commitment or reuse.
+`onPresented` requests an immediate destination instead: the router still runs
+guards, middleware, and content claims, while the mobile renderer skips its slide.
+The callback runs after the matching active route shell connects and reaches
+layout, including when the destination was already mounted. Register shell
+readiness inside the content's Suspense boundary with `usePresentedContent`.
+Presentation is keyed by pane and router entry; a superseded open or stale shell
+cannot complete a newer request. The layout owns this coordination; native IPC
+only acknowledges the receipt. Notification timeouts do not consume the target.
+
+The remaining notes below describe the original split layout.
 
 SplitLayoutRouter is responsible for handling the routing of the splits.
 

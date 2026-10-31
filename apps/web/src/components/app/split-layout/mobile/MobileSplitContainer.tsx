@@ -21,6 +21,7 @@ import { createMobileSplitMotion } from './createMobileSplitMotion';
 
 export type MobileSplitContainerProps = {
   splitManager: Pick<SplitManager, 'getSplit'>;
+  immediateOwner?: Accessor<SplitId | undefined>;
   stack: MobilePaneStack;
   splits: Accessor<ReadonlyArray<SplitState>>;
   panelRefs: Map<SplitId, HTMLDivElement>;
@@ -63,7 +64,10 @@ export function MobileSplitContainer(props: MobileSplitContainerProps) {
     })
   );
 
-  const motion = createMobileSplitMotion({ stack });
+  const motion = createMobileSplitMotion({
+    stack,
+    immediateOwner: props.immediateOwner,
+  });
   const slots = createPaneSlots(stack);
 
   const paneFor = (id: SplitId) =>

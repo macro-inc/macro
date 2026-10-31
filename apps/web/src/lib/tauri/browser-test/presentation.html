@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notification destination presentation fixture</title>
+    <style>
+      body { margin: 16px; font: 16px system-ui; }
+      button { margin: 4px; padding: 8px; }
+      #viewport { position: relative; height: 480px; overflow: hidden; }
+      .screen, #cover { position: absolute; inset: 0; background: #fafafa; }
+      #cover { z-index: 2; background: #ddd; }
+    </style>
+  </head>
+  <body>
+    <p>Simulated routing and native IPC; real mobile motion and presentation.</p>
+    <div id="root"></div>
+    <script type="module" src="./presentation.tsx"></script>
+  </body>
+</html>

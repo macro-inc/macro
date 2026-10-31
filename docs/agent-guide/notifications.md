@@ -91,6 +91,15 @@ delivery must not restart that deadline; a newer tap must get its own deadline.
 frontend recovery requires responsive JavaScript and native IPC; verify actual
 iOS presentation separately from browser bridge simulations.
 
+For a warm push open, the previous screen must not flash or slide into the
+destination. Native notification navigation commits the target through the
+router, presents its shell without the ordinary mobile transition, and then
+acknowledges the tap. Test a new channel, a channel already behind another pane,
+and another message in the current channel. A delayed destination shell must
+retain the receipt; ordinary in-app navigation must still animate. Cold launches
+choose the destination before the router mounts and may show boot/loading UI.
+The existing eight-second recovery remains a last resort when presentation stalls.
+
 On iOS, Macro requests provisional authorization at launch, so
 **Settings → Apps → Macro → Notifications** exists before any prompt, and a
 signed-in device registers for pushes that arrive quietly in Notification

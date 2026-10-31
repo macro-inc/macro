@@ -8,7 +8,7 @@ import {
 } from '@core/constant/featureFlags';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { getNotificationById } from '@queries/notification/user-notifications';
-import { createRoot } from 'solid-js';
+import { createEffect, createRoot, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest';
 import {
   openNotification,
@@ -129,6 +129,31 @@ function setup(location: 'preview' | 'split' | 'closed') {
   return { layout, activate, navigate, release, createBlockInstance, first };
 }
 
+/** The routing fixture has no renderer; supply its active destination shell. */
+function mountPresentation(layout: ReturnType<typeof setup>['layout']) {
+  const element = document.createElement('div');
+  document.body.append(element);
+  onTestFinished(() => element.remove());
+  vi.spyOn(element, 'getClientRects').mockReturnValue({
+    0: new DOMRect(0, 0, 420, 900),
+    length: 1,
+    item: () => null,
+    [Symbol.iterator]() {
+      return [new DOMRect(0, 0, 420, 900)][Symbol.iterator]();
+    },
+  });
+  createRoot((dispose) => {
+    onTestFinished(dispose);
+    createEffect(() => {
+      const request = layout.presentation.pending();
+      if (!request) return;
+      onCleanup(
+        layout.presentation.register(request.owner, request.entryId, element)
+      );
+    });
+  });
+}
+
 it.each([
   'channel_message_send',
   'channel_message_reply',
@@ -170,7 +195,8 @@ it('opens a direct push target without looking up the notification or loading th
   const { layout, navigate } = setup('closed');
   const notifications = vi.fn();
   const source = { notifications } as unknown as NotificationSource;
-  const onApplied = vi.fn();
+  const presented = Promise.withResolvers<void>();
+  const onApplied = vi.fn(() => presented.resolve());
   const result = await openNotificationFromId('notification', layout, source, {
     target: {
       type: 'channel',
@@ -183,10 +209,16 @@ it('opens a direct push target without looking up the notification or loading th
   expect(result.isOk()).toBe(true);
   expect(notifications).not.toHaveBeenCalled();
   expect(getNotificationById).not.toHaveBeenCalled();
-  expect(navigate).toHaveBeenCalledWith({
+  expect(navigate).not.toHaveBeenCalled();
+  expect(
+    layout.getSplitByContent('channel', 'channel')?.content().params
+  ).toEqual({
     channel_message_id: 'message',
     channel_thread_id: 'message',
   });
+  expect(onApplied).not.toHaveBeenCalled();
+  mountPresentation(layout);
+  await presented.promise;
   expect(onApplied).toHaveBeenCalledOnce();
 });
 
@@ -245,6 +277,7 @@ it('returns to Home from a channel opened by a cold push launch', async () => {
 
 it('acknowledges a failed lookup and opens the next native tap', async () => {
   const { layout } = setup('closed');
+  mountPresentation(layout);
   const lookup = Promise.withResolvers<UnifiedNotification | undefined>();
   vi.mocked(getNotificationById).mockReturnValueOnce(lookup.promise);
   const source = { notifications: () => [] };
@@ -305,6 +338,29 @@ it('acknowledges a failed lookup and opens the next native tap', async () => {
   expect(acknowledge).toHaveBeenCalledWith('next-delivery');
   expect(pendingNotificationNavigation()).toBeUndefined();
   expect(layout.getSplitByContent('channel', 'channel')).toBeDefined();
+  expect(getNotificationById).toHaveBeenCalledTimes(2);
+});
+
+it('retargets an already open channel when another tap names the same message', async () => {
+  const { layout, navigate } = setup('split');
+  const source = { notifications: () => [] };
+  const target = {
+    type: 'channel' as const,
+    channelId: 'channel',
+    messageId: 'message',
+    threadId: null,
+  };
+  await openNotificationFromId('notification', layout, source, {
+    target,
+    onApplied: vi.fn(),
+  });
+  const firstEntry = layout.presentation.pending()?.entryId;
+  await openNotificationFromId('notification', layout, source, {
+    target,
+    onApplied: vi.fn(),
+  });
+  expect(layout.presentation.pending()?.entryId).not.toBe(firstEntry);
+  expect(navigate).not.toHaveBeenCalled();
 });
 
 it.each(['direct', 'cached'] as const)(

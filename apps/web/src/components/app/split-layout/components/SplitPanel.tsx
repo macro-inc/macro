@@ -3,7 +3,11 @@ import { AccessRequestVisitProvider } from '@app/features/access-requests/contex
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
-import { type PaneId, SplitRouter } from '@app/lib/split-router';
+import {
+  type PaneId,
+  SplitRouter,
+  useSplitRouter,
+} from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
@@ -17,13 +21,21 @@ import { getSafeAreaInset } from '@core/mobile/safeAreaInsets';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, Panel } from '@ui';
-import { createEffect, createSignal, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  Show,
+  Suspense,
+  useContext,
+} from 'solid-js';
 import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
 import { splitBackInterceptor } from '../back-interceptor';
+import { usePresentedContent } from '../content-presentation';
 import {
   type SplitBottomPanelRegistration,
   type SplitFileMenuActionGroups,
+  SplitLayoutContext,
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
@@ -45,6 +57,24 @@ type SplitPanelProps = {
   active: boolean;
   index: number;
 };
+
+function PresentedShell(props: {
+  owner: SplitHandle['id'];
+  active: boolean;
+  element: HTMLDivElement | null;
+}) {
+  const layout = useContext(SplitLayoutContext);
+  if (!layout) return null;
+  const router = useSplitRouter();
+  usePresentedContent({
+    presentation: layout.manager.presentation,
+    owner: props.owner,
+    entryId: () => router.entry(props.owner as string as PaneId)?.id,
+    element: () => props.element,
+    active: () => props.active,
+  });
+  return null;
+}
 
 export function SplitPanel(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
@@ -201,6 +231,11 @@ export function SplitPanel(props: SplitPanelProps) {
             fallback={<Dynamic component={props.split.mount.element} />}
           />
         </Show>
+        <PresentedShell
+          owner={props.handle.id}
+          active={props.active}
+          element={panelRef()}
+        />
       </Suspense>
     </SplitPanelControllerProvider>
   );

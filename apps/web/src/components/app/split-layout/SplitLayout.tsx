@@ -143,6 +143,7 @@ export function SplitLayout() {
         {(stack) => (
           <MobileSplitContainer
             splitManager={splitManager}
+            immediateOwner={() => splitManager.presentation.pending()?.owner}
             stack={stack()}
             splits={splits}
             panelRefs={panelRefs}

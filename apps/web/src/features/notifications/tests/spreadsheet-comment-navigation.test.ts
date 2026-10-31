@@ -292,6 +292,42 @@ it('opens a project notification at the exact discussion in a native component v
   expect(open).not.toHaveBeenCalled();
 });
 
+it('waits for presentation before acknowledging a native push to an open project discussion', async () => {
+  vi.mocked(isFeatureEnabled).mockReturnValue(true);
+  const open = vi.fn().mockReturnValue({ status: 'reused' });
+  const activate = vi.fn();
+  const onApplied = vi.fn();
+  const layout = {
+    getSplitByContent: vi.fn(() => ({ activate })),
+    openWithSplit: open,
+  };
+  const notification = {
+    entity_id: 'project',
+    entity_type: 'initiative',
+    notification_metadata: {
+      tag: 'initiative_discussion',
+      content: { messageId: 'discussion' },
+    },
+  } as UnifiedNotification;
+  const result = await openNotification(
+    notification,
+    layout as unknown as SplitManager,
+    false,
+    undefined,
+    undefined,
+    { source: 'native_push', onApplied }
+  );
+  expect(result.isOk()).toBe(true);
+  expect(onApplied).not.toHaveBeenCalled();
+  expect(activate).not.toHaveBeenCalled();
+  expect(open).toHaveBeenCalledWith(
+    { type: 'component', id: 'initiative-view~project~overview~discussion' },
+    expect.objectContaining({ onPresented: expect.any(Function) })
+  );
+  open.mock.calls[0][1].onPresented();
+  expect(onApplied).toHaveBeenCalledOnce();
+});
+
 it('does not open project notifications when the rollout is disabled', async () => {
   vi.mocked(isFeatureEnabled).mockReturnValue(false);
   const open = vi.fn();

@@ -589,7 +589,7 @@ ring-status requests, and keep caller names, tokens and URLs out of spans.
 
 Read iOS's durable pending tap before mounting the router, then choose its
 destination only after the authenticated account matches `recipientId`. Keep
-the native receipt pending until the destination route is applied; release the
+the native receipt pending until the destination shell is presented; release the
 resume cover for auth/retry UI without consuming the receipt. Use the existing
 pending-notification intent for bootstrap and live taps so newer taps supersede
 older work. Older native builds and pushes retain authenticated notification
@@ -599,6 +599,12 @@ lookup. The local bridge and native release requirement are documented in
 Cold channel push launches retain Home behind the target channel so the mobile
 header Back control and swipe-back have a destination. Keep this launch layout
 in `notificationLaunchPath`; warm taps retain their current pane stack.
+
+Open native notification destinations through the layout's `onPresented`
+contract: commit the route and target together, bypass the mobile pane slide,
+and acknowledge only after its matching active shell reaches layout. Keep
+ordinary navigation animated; never use a frame delay in push IPC to infer
+destination readiness. Record `notification.destination_presented` on the open trace.
 
 Bound the pre-router bridge handoff to 1.5 seconds and release the native cover
 on failure or timeout without consuming the pending tap. Late responses must
@@ -614,9 +620,10 @@ the existing error toast. Keep the startup cover fallback in the same owner,
 and let it defer to a pending tap's deadline. The deadline requires responsive
 JavaScript and IPC; it cannot recover a frozen WebContent process.
 
-The frontend cover deadline has a backend-free phone browser regression:
+Cover recovery and destination presentation have a backend-free phone regression:
 `bunx playwright test --config src/lib/tauri/browser-test/playwright.config.ts`.
-It uses the real navigation intent and push API with simulated native IPC;
+It uses the real intent, push API, presentation controller, and mobile motion
+with simulated routing/native IPC; checks the screen exposed at acknowledgment;
 UIKit presentation still requires an iOS device or simulator.
 
 Generate APNs validators with `scripts/generate-api-schema.ts`; its compact
