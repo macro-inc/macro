@@ -57,7 +57,9 @@ browser regression for backdrop taps that must not press what the scrim covers,
 including mixed pointerdown/pointerup dismissal, for taps inside the top
 sheet that must still press its own controls, and for swipes whose owner keeps
 the sheet open (a discard prompt, a pending confirmation, event details under a
-stacked sheet), which must bring it back on screen:
+stacked sheet), which must bring it back on screen. It also keeps a persistent
+prompt under an open sheet and its picker, above a transient notice, and that
+notice on top of the sheet:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
@@ -830,7 +832,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 ### Creation choices and notifications
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
-- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button.
+- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Sidebar tag dragging

@@ -118,7 +118,8 @@ says **Enable Notifications** and requests the Android notification permission
 through the same native provider. The web prompt says **Enable Browser
 Notifications** and uses browser permissions.
 Select **Hide** to dismiss the prompt. It waits in the same region as other
-prompts, one card at a time.
+prompts, one card at a time. On phones it stays under open sheets and their
+pickers.
 
 ### Notification snoozes
 
