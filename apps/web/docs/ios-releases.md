@@ -10,6 +10,12 @@ sheet. The web bundle probes availability and keeps Web Share on older binaries,
 so it does not raise the native floor. The picker itself still needs an App Store
 release; see [file exports](../tauri/file_export_plugin/AGENTS.md).
 
+Holding update reloads across a native auth sheet needs the same: the bundle
+updater's `set_bundle_reload_hold` command only exists on newer binaries. Older
+ones reject it, which the web bundle ignores, so it does not raise the native
+floor, but they keep reloading on foreground and can still lose a sign-in. See
+[reload diagnostics](../tauri/src-tauri/README.md#diagnosing-unexpected-webview-reloads).
+
 (The Android counterpart — `android-update`, `Android Native Check`, Google
 Play as the source of truth — is described in `docs/development/android.md`.)
 

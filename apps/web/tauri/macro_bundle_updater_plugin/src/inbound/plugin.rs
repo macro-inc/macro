@@ -319,6 +319,10 @@ pub async fn apply_completed_update_from<R: Runtime>(
         result
     };
 
+    if apply_result == ApplyUpdateResult::Held {
+        tracing::info!(source, "[bundle-update] page is holding reloads");
+    }
+
     if apply_result == ApplyUpdateResult::ReloadNeeded {
         // Reload to pick up the new bundle. Using location.reload() instead of
         // navigating to a new URL preserves WKWebView's cookie store.
@@ -353,6 +357,20 @@ pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Resu
     apply_completed_update(&app_handle).await
 }
 
+/// Hold or release automatic reloads for work the page would lose to one.
+///
+/// A native auth sheet returns its result only to the document that opened it,
+/// and this process applies completed updates on foreground without asking
+/// that document, so the hold has to live here.
+#[tauri::command]
+pub async fn set_bundle_reload_hold(
+    service: tauri::State<'_, Mutex<PluginService>>,
+    held: bool,
+) -> Result<(), String> {
+    service.lock().await.set_reload_held(held);
+    Ok(())
+}
+
 /// Acknowledge that the webview mounted after an applied bundle update reload.
 #[tauri::command]
 pub async fn ack_bundle_update_reload<R: Runtime>(
@@ -364,9 +382,11 @@ pub async fn ack_bundle_update_reload<R: Runtime>(
         .path()
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
+    let mut service = service.lock().await;
+    // Every document acknowledges on mount, and a new document holds nothing:
+    // a hold whose owner died must not block updates until the next launch.
+    service.set_reload_held(false);
     service
-        .lock()
-        .await
         .acknowledge_update_reload(&cache_dir, loaded_bundle_build)
         .await
         .map_err(|e| e.to_string())
@@ -499,7 +519,7 @@ impl<R: Runtime> Plugin<R> for MacroBundleUpdaterPlugin {
                     Ok(ApplyUpdateResult::ReloadAlreadyDispatched) => {
                         acknowledge_setup_apply = true;
                     }
-                    Ok(ApplyUpdateResult::NoUpdate) => {
+                    Ok(ApplyUpdateResult::NoUpdate | ApplyUpdateResult::Held) => {
                         tracing::warn!(
                             "[bundle-update] restored pending bundle had no update to apply during plugin initialization"
                         );
