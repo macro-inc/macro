@@ -288,12 +288,30 @@ async fn call(
     Span::current().record("outcome", if result.is_ok() { "ok" } else { "error" });
     match result {
         Ok(value) => {
-            let text = serde_json::to_string_pretty(&value).unwrap_or_else(|_| "null".to_owned());
+            let text = serde_json::to_string_pretty(&expand_text_json(value))
+                .unwrap_or_else(|_| "null".to_owned());
             let id = path_id(&app_id);
             Html(format!("<section class=\"panel\"><h2>{}</h2><pre>{}</pre><form class=\"ajax\" method=\"post\" action=\"/demo/apps/{id}/tools\"><button>Back to tools</button></form></section>", escape(&form.name), escape(&text))).into_response()
         }
         Err(error) => error_fragment(error),
     }
+}
+
+/// Parses JSON carried in MCP text content so results read as nested JSON.
+fn expand_text_json(mut value: Value) -> Value {
+    if let Some(content) = value.get_mut("content").and_then(Value::as_array_mut) {
+        for item in content {
+            let parsed = item
+                .get("text")
+                .and_then(Value::as_str)
+                .and_then(|text| serde_json::from_str::<Value>(text).ok())
+                .filter(|parsed| parsed.is_object() || parsed.is_array());
+            if let Some(parsed) = parsed {
+                item["text"] = parsed;
+            }
+        }
+    }
+    value
 }
 
 fn router(state: AppState) -> Router {
