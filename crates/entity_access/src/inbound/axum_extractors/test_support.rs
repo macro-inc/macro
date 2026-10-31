@@ -241,6 +241,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_bot(
         &self,
         token: &str,
@@ -281,6 +290,7 @@ pub(super) fn user_scoped_bot_authentication() -> BotAuthentication {
         bot_scope: BotScope::User,
         team_id: None,
         acting_user: Some(MacroUserAuthentication {
+            origin: macro_authorization::CredentialOrigin::Bot,
             agent_id: None,
             macro_user_id: MacroUserIdStr::try_from(BOT_ACTING_USER_ID.to_string())
                 .expect("valid bot acting user id"),

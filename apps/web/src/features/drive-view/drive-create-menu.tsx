@@ -1,4 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import {
   CREATABLE_BLOCKS,
@@ -6,16 +7,29 @@ import {
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
+import { type TranslationKey, t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { useDriveView } from './context/drive-context';
 import { driveCreateDestinationLabel } from './core/location-label';
+
+/** Each choice's description, translated where it renders. */
+const creationDescriptions: Partial<Record<CreatableName, TranslationKey>> = {
+  md: 'create.guideDocument',
+  snippet: 'create.guideSnippet',
+  spreadsheet: 'create.guideSpreadsheet',
+  canvas: 'create.guideCanvas',
+  code: 'create.guideCode',
+  project: 'create.guideFolderProject',
+  database: 'create.guideDatabase',
+  form: 'create.guideForm',
+};
 
 function SidebarTrigger(props: { label: string }) {
   return (
@@ -23,7 +37,7 @@ function SidebarTrigger(props: { label: string }) {
       <ViewSidebar.Icon>
         <PlusIcon class="size-4" />
       </ViewSidebar.Icon>
-      <span class="truncate">New</span>
+      <span class="truncate">{t('create.new')}</span>
       <ViewSidebar.Trailing>
         <CaretDownIcon class="size-3 shrink-0" />
       </ViewSidebar.Trailing>
@@ -33,9 +47,9 @@ function SidebarTrigger(props: { label: string }) {
 
 function ToolbarTrigger(props: { label: string }) {
   return (
-    <Dropdown.Trigger variant="outline" size="md" aria-label={props.label}>
+    <Dropdown.Trigger variant="secondary" size="md" aria-label={props.label}>
       <PlusIcon class="size-4" />
-      <span>New</span>
+      <span>{t('create.new')}</span>
       <CaretDownIcon class="size-3" />
     </Dropdown.Trigger>
   );
@@ -55,7 +69,8 @@ export function DriveCreateMenu(props: {
   const destination = () =>
     driveCreateDestinationLabel(state.projectId(), sidebar.folders());
 
-  const label = () => `New file or folder in ${destination()}`;
+  const label = () =>
+    t('create.newFileOrFolderIn', { destination: destination() });
 
   const options = () =>
     CREATABLE_BLOCKS.filter(
@@ -105,10 +120,10 @@ export function DriveCreateMenu(props: {
           aria-label={label()}
         />
       </Show>
-      <Dropdown.Content class="min-w-48 max-w-72">
+      <Dropdown.Content class="w-80 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto">
         <Dropdown.Group>
           <Dropdown.GroupLabel class="min-w-0 gap-1.5">
-            <span class="shrink-0">Create in</span>
+            <span class="shrink-0">{t('create.createIn')}</span>
             <FolderIcon aria-hidden="true" class="size-3.5 shrink-0" />
             <span class="min-w-0 truncate font-medium text-ink-muted">
               {destination()}
@@ -116,27 +131,31 @@ export function DriveCreateMenu(props: {
           </Dropdown.GroupLabel>
           <For each={options()}>
             {(option) => (
-              <Dropdown.Item onSelect={() => select(option.blockName)}>
-                <span
-                  aria-hidden="true"
-                  class="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4"
-                >
-                  <Dynamic component={option.icon} />
-                </span>
-                <span>{option.label}</span>
-              </Dropdown.Item>
+              <CreateMenuItem
+                icon={option.icon ?? FileIcon}
+                title={option.label}
+                description={t(
+                  creationDescriptions[option.blockName] ??
+                    'create.guideInThisFolder'
+                )}
+                onSelect={() => select(option.blockName)}
+              />
             )}
           </For>
         </Dropdown.Group>
         <Dropdown.Group>
-          <Dropdown.Item onSelect={actions.uploadFiles}>
-            <UploadIcon aria-hidden="true" class="size-4 shrink-0" />
-            <span>Upload files</span>
-          </Dropdown.Item>
-          <Dropdown.Item onSelect={actions.uploadFolder}>
-            <FolderIcon aria-hidden="true" class="size-4 shrink-0" />
-            <span>Upload folder</span>
-          </Dropdown.Item>
+          <CreateMenuItem
+            icon={UploadIcon}
+            title={t('create.uploadFiles')}
+            description={t('create.guideUploadFiles')}
+            onSelect={actions.uploadFiles}
+          />
+          <CreateMenuItem
+            icon={FolderIcon}
+            title={t('create.uploadFolder')}
+            description={t('create.guideUploadFolder')}
+            onSelect={actions.uploadFolder}
+          />
         </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>

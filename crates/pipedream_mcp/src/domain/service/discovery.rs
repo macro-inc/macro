@@ -2,7 +2,10 @@
 
 use crate::domain::{
     models::MacroUserIdStr,
-    ports::{ConnectionStore, ConnectorCapabilities, ConnectorDirectory},
+    ports::{
+        ConnectionStore, ConnectorCapabilities, ConnectorDirectory, ConnectorOverlays,
+        OverlayConnections,
+    },
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -19,7 +22,7 @@ const MAX_TOOLS: usize = 100;
 pub enum DiscoveryRequest {
     /// Find connectable apps by name.
     Search {
-        /// App name, e.g. "LinkedIn" or "Linear", not a task description.
+        /// App name, e.g. "Notion" or "Linear", not a task description.
         query: String,
     },
     /// Verify capabilities and connection status for one catalog app.
@@ -64,7 +67,9 @@ pub enum DiscoveryResult {
     Inspect {
         /// App from the directory.
         app: DiscoveredApp,
-        /// Whether this caller has an enabled connection.
+        /// Whether this caller has an enabled connection. For an app that
+        /// connects through its own MCP server, that connection is checked
+        /// there, not in Pipedream.
         connected: bool,
         /// Advertised tools. Use SearchTools after connecting to load them.
         tools: Vec<ConnectorTool>,
@@ -74,17 +79,28 @@ pub enum DiscoveryResult {
 }
 
 /// Orchestrates discovery through directory, capability, and connection ports.
-pub struct ConnectorDiscovery<D, S> {
+pub struct ConnectorDiscovery<D, S, N> {
     directory: Option<Arc<D>>,
     connections: Arc<S>,
+    overlay_connections: Arc<N>,
 }
 
-impl<D: ConnectorDirectory + ConnectorCapabilities, S: ConnectionStore> ConnectorDiscovery<D, S> {
+impl<D, S, N> ConnectorDiscovery<D, S, N>
+where
+    D: ConnectorDirectory + ConnectorCapabilities,
+    S: ConnectionStore + ConnectorOverlays,
+    N: OverlayConnections,
+{
     /// An absent directory makes unconfigured deployments fail explicitly.
-    pub fn new(directory: Option<Arc<D>>, connections: Arc<S>) -> Self {
+    pub fn new(
+        directory: Option<Arc<D>>,
+        connections: Arc<S>,
+        overlay_connections: Arc<N>,
+    ) -> Self {
         Self {
             directory,
             connections,
+            overlay_connections,
         }
     }
 
@@ -116,14 +132,7 @@ impl<D: ConnectorDirectory + ConnectorCapabilities, S: ConnectionStore> Connecto
                 let Some(app) = directory.retrieve(app_slug).await? else {
                     anyhow::bail!("No connectable app has that slug; search the catalog first");
                 };
-                let connected = self
-                    .connections
-                    .load(user_id, &app.app_slug)
-                    .await
-                    .map_err(|error| {
-                        anyhow::anyhow!("Could not check connector status: {error:?}")
-                    })?
-                    .is_some_and(|connection| connection.enabled);
+                let connected = self.connected(user_id, &app.app_slug).await?;
                 let mut tools = directory.tools(user_id, &app.app_slug).await?;
                 let tools_truncated = tools.len() > MAX_TOOLS;
                 tools.truncate(MAX_TOOLS);
@@ -135,6 +144,26 @@ impl<D: ConnectorDirectory + ConnectorCapabilities, S: ConnectionStore> Connecto
                 })
             }
         }
+    }
+
+    async fn connected(
+        &self,
+        user_id: &MacroUserIdStr<'static>,
+        app_slug: &str,
+    ) -> anyhow::Result<bool> {
+        if let Some(overlay) = self.connections.overlay(app_slug).await? {
+            return Ok(self
+                .overlay_connections
+                .connected_name(user_id, &overlay)
+                .await?
+                .is_some());
+        }
+        Ok(self
+            .connections
+            .load(user_id, app_slug)
+            .await
+            .map_err(|error| anyhow::anyhow!("Could not check connector status: {error:?}"))?
+            .is_some_and(|connection| connection.enabled))
     }
 }
 

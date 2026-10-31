@@ -28,7 +28,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import Download from '@phosphor/download-simple.svg';
+import Download from '@icon/system/regular/download-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
@@ -92,8 +92,12 @@ export const TopBar: Component<{
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
-      buttonComponent: () => (
-        <ChatWithAgentButton entity={chatEntity()} label="Ask Macro" />
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={chatEntity()}
+          label="Ask Macro"
+        />
       ),
     },
     {

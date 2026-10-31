@@ -336,6 +336,28 @@ async fn run() -> anyhow::Result<()> {
         config.ai_pricing(),
         config.settlement_route()?,
     );
+    let input_service = Arc::new(universal_input::domain::UniversalInputService::new(
+        config
+            .typesafe_api_key
+            .value()
+            .map(jev::outbound::SystemOneJev::typesafe)
+            .transpose()?
+            .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone())),
+        universal_input::domain::temporal::WithTemporalExtraction::new(
+            universal_input::domain::search::WithSearchExtraction::new(
+                universal_input::domain::FallbackFieldExtractor::new(
+                    universal_input::outbound::clairic::ClairicFieldExtractor::from_config(
+                        &config.cloudflare_account_id,
+                        &config.cloudflare_api_token,
+                        recorder.clone(),
+                    )?,
+                    universal_input::outbound::AgentFieldExtractor::new(recorder.clone()),
+                ),
+            ),
+            universal_input::outbound::temporal::AgentTemporalExtractor::new(recorder.clone()),
+        ),
+        admission.clone(),
+    ));
     let lifecycle_publisher = Arc::new(BrokerLifecyclePublisher::new(broker.clone()));
     // Shared with every replica: runtime command forwarding, model probes,
     // and the agent session log stream.
@@ -354,8 +376,19 @@ async fn run() -> anyhow::Result<()> {
             ),
             redis.clone(),
         ),
+        // After each finished turn Jev decides whether a generated name has
+        // stopped fitting; only then does Haiku propose a new one. Without a
+        // TypeSafe key, names stay as first generated.
         agent_session::domain::name_generation::AdmittedAgentSessionNameGenerator::new(
-            HaikuAgentSessionNameGenerator::new(recorder.clone()),
+            agent_session::domain::name_generation::ClassifiedRetitle::new(
+                HaikuAgentSessionNameGenerator::new(recorder.clone()),
+                config
+                    .typesafe_api_key
+                    .value()
+                    .map(jev::outbound::SystemOneJev::typesafe)
+                    .transpose()?
+                    .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone())),
+            ),
             admission.clone(),
         ),
         turn_observer.clone(),
@@ -603,8 +636,8 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
-    // `ai-code-mode` decides, per user, whether agent sessions and the public
-    // MCP present the SDK in place of the tools it covers.
+    // `ai-code-mode` decides, per user, whether agent sessions hide
+    // SDK-covered tools and whether the public MCP lists only code mode.
     let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
         match (&code_runner, config.posthog_api_key.value()) {
             (Some(_), Some(key)) => {
@@ -644,6 +677,8 @@ async fn run() -> anyhow::Result<()> {
         &config,
         &secrets,
         tool_context.clone(),
+        pool.clone(),
+        aws_sdk_kms::Client::new(&aws_config),
         macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
             config.environment,
             &secrets,
@@ -1039,8 +1074,14 @@ async fn run() -> anyhow::Result<()> {
         channels::domain::message_delivery::ChannelMessageDelivery::new(
             PgChannelsRepo::new(pool.clone()),
             SpawnedChannelEventDispatcher::new(side_effects),
-            channels::domain::service::NoopChannelReferenceSharePermissions,
+            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+                pool.clone(),
+                entity_access.clone(),
+            ),
             message_realtime.clone(),
+            channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                pool.clone(),
+            ),
         ),
         messages::domain::delivery::DiscussionDelivery::new(
             messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
@@ -1436,6 +1477,7 @@ async fn run() -> anyhow::Result<()> {
         draining_sessions.clone(),
         broker.clone(),
         session_repo.clone(),
+        PgConnectionRepo::new(pool.clone()),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let coding_agents = coding_agents::router(
@@ -1457,12 +1499,53 @@ async fn run() -> anyhow::Result<()> {
             ),
             draining_sessions.clone(),
             (*harness).clone(),
+            routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    // Served to the app by `POST /agent-mode-choice` for the composer's Auto mode.
+    let mode_classifier = match (
+        config.cloudflare_account_id.value(),
+        config.cloudflare_api_token.value(),
+    ) {
+        (Some(account_id), Some(token)) => Some(jev::domain::JevClassifier::new(
+            jev::outbound::SystemOneJev::clef_flash(account_id, token)
+                .context("failed to configure Clef Flash")?,
+            recorder.clone(),
+        )),
+        _ => None,
+    };
+    // Auto mode is limited to users with `enable-composer-auto-mode`.
+    let mode_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                std::time::Duration::from_secs(3),
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let mode_choice = agent_harness::inbound::mode_choice::agent_mode_choice_router(
+        agent_harness::inbound::mode_choice::AgentModeChoiceRouterState::new(
+            Arc::new(
+                agent_harness::domain::mode_choice::ModeChoiceServiceImpl::new(
+                    mode_classifier,
+                    mode_flags,
+                    admission.clone(),
+                ),
+            ),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
     );
     // Served to the app by `GET /agent-repositories`; see `open_repositories`.
     let repositories_state = AgentRepositoriesRouterState::new(
@@ -1526,6 +1609,9 @@ async fn run() -> anyhow::Result<()> {
                     Arc::new(
                         agent_harness::outbound::connected_apps::PipedreamConnectedApps::new(
                             Arc::clone(&mcp_connections),
+                            Arc::new(mcp_select::NativeOverlayConnections::new(Some(Arc::clone(
+                                &mcp_servers,
+                            )))),
                         ),
                     ),
                     Arc::clone(&notification_service),
@@ -1558,12 +1644,19 @@ async fn run() -> anyhow::Result<()> {
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
             .with_capabilities(capabilities)
+            .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
             .with_tool_approvals(tool_approval_answers)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
             .with_notifications(notification_ingress)
             .with_cognition(cognition_router)
+            .with_universal_input(universal_input::inbound::axum_router::axum_router(
+                universal_input::inbound::axum_router::UniversalInputRouterState::new(
+                    input_service,
+                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                ),
+            ))
             .with_scheduling(scheduling_router)
             .with_preview(preview_router)
             .with_public_mcp(public_mcp_router)

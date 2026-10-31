@@ -1,6 +1,6 @@
 import { BookingPicker } from '@app/features/scheduling/components/booking-picker';
-import Check from '@phosphor/check-circle.svg';
-import Eye from '@phosphor/eye.svg';
+import Check from '@icon/system/regular/check-circle.svg';
+import Eye from '@icon/system/regular/eye.svg';
 import { Match, Show, Switch } from 'solid-js';
 import { SectionHeading } from '../components/respond/respond-screens';
 import { useFormContext } from '../context/form-context';

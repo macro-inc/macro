@@ -218,6 +218,9 @@ async fn links_a_task_and_answers_its_link_and_reference() {
             title: "Task 6f".to_owned(),
             url: format!("https://macro.com/app/task/{TASK}"),
             reference: "ENG-6f".to_owned(),
+            mention: format!(
+                r#"<m-document-mention>{{"documentId":"{TASK}","blockName":"task","documentName":"Task 6f","blockParams":{{}},"collapsed":false}}</m-document-mention>"#
+            ),
             pull_request: None,
         }
     );

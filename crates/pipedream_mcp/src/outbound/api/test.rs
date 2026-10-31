@@ -1,6 +1,6 @@
 use super::{AppResponse, PipedreamClient, PipedreamConfig, connectable_catalog_entry};
 use crate::domain::models::{MacroUserIdStr, PipedreamConnection};
-use crate::domain::ports::ConnectedAppProxy;
+use crate::domain::ports::{ConnectedAppProxy, PipedreamConnect};
 use http::{HeaderMap, HeaderValue, Method, StatusCode};
 use std::time::Duration;
 use wiremock::matchers::{body_json, header, method, path, query_param};
@@ -36,6 +36,11 @@ fn an_app_without_an_auth_flow_is_not_connectable() {
 #[test]
 fn a_different_slug_than_the_one_asked_for_is_not_that_app() {
     assert!(connectable_catalog_entry("linear", app("slack", Some("oauth"))).is_none());
+}
+
+#[test]
+fn a_hidden_app_is_not_connectable() {
+    assert!(connectable_catalog_entry("linkedin", app("linkedin", Some("oauth"))).is_none());
 }
 
 #[test]
@@ -109,4 +114,56 @@ async fn the_proxy_addresses_the_upstream_url_for_the_connected_account() {
     assert_eq!(response.status, StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(response.retry_after(), Some(Duration::from_secs(3)));
     assert_eq!(response.body, r#"{"object":"error","code":"rate_limited"}"#);
+}
+
+#[tokio::test]
+async fn listing_accounts_filters_by_user_and_app_and_keeps_creation_times() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/oauth/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(
+            serde_json::json!({"access_token": "project-token", "expires_in": 3600}),
+        ))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1/connect/proj_fixture/accounts"))
+        .and(query_param("external_user_id", "macro|caller@example.com"))
+        .and(query_param("app", "linear"))
+        .and(header("authorization", "Bearer project-token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "page_info": {"total_count": 1},
+            "data": [{
+                "id": "apn_1",
+                "external_id": "macro|caller@example.com",
+                "healthy": true,
+                "created_at": "2026-10-27T18:54:23.000Z",
+                "app": {"name_slug": "linear", "name": "Linear"}
+            }]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = PipedreamClient::new(PipedreamConfig {
+        client_id: "fixture".into(),
+        client_secret: "fixture".into(),
+        project_id: "proj_fixture".into(),
+        environment: "development".into(),
+        allowed_origins: vec![],
+        api_url: server.uri(),
+        mcp_url: format!("{}/mcp", server.uri()),
+    })
+    .unwrap();
+
+    let accounts = client
+        .list_accounts("macro|caller@example.com", "linear")
+        .await
+        .unwrap();
+
+    assert_eq!(accounts.len(), 1);
+    assert_eq!(accounts[0].id, "apn_1");
+    assert_eq!(
+        accounts[0].created_at,
+        Some("2026-10-27T18:54:23Z".parse().unwrap())
+    );
 }

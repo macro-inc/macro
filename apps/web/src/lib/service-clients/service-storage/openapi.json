@@ -9937,6 +9937,67 @@
         }
       }
     },
+    "/documents/similarity_search": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Handler for `POST /documents/similarity_search`.",
+        "description": "Returns existing tasks similar to an unsaved draft. Runs vector retrieval +\nrerank only and persists nothing.",
+        "operationId": "task_similarity_search_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskSimilaritySearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "Response for searching tasks similar to an unsaved draft.",
+                  "required": ["results"],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskSimilarityResult"
+                      },
+                      "description": "Existing tasks similar to the draft."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/slug/{slug}": {
       "get": {
         "tags": ["document"],
@@ -12051,6 +12112,497 @@
         }
       }
     },
+    "/external-chats": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "List external chats the caller can view, including without a provider account.",
+        "operationId": "external_chats",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalChatSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Add one of the caller's provider chats as their own external chat.",
+        "operationId": "external_chat_add",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalChatAdd"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalChatAdded"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "An external chat the caller can read.",
+        "operationId": "external_chat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalChatDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Stop syncing the chat, locally. Owner only, in their own session.",
+        "operationId": "external_chat_remove",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}/attachments": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Stage one attachment for a later media send in this chat.",
+        "operationId": "external_chat_upload",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalChatUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalChatUploadedAttachment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}/delivery": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "The caller's send progress for intents or messages.",
+        "operationId": "external_chat_delivery",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalChatSendProgress"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}/messages": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Newest-first timeline through ordinary view access.",
+        "operationId": "external_chat_messages",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Last message id in the previous page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, up to [`PAGE_LIMIT`]; [`DEFAULT_PAGE`] when absent.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalChatMessages"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}/messages/attachments": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Attachment states of messages, by message id (at most 100).",
+        "operationId": "external_chat_message_attachments",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalChatMessageAttachments"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}/messages/{message_id}": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "One message of the timeline, as the timeline shows it.",
+        "operationId": "external_chat_message",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalChatMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}/permissions": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Generic Share dialog policy.",
+        "operationId": "external_chat_permissions",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharePermissionV2"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "The owner, in their own session, updates link, team and channel sharing.",
+        "operationId": "external_chat_update_permissions",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}/read": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Advance this viewer's read position.",
+        "operationId": "external_chat_read",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkRead"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/external-chats/{chat_id}/sends": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Caller-owned pending, failed and uncertain sends.",
+        "operationId": "external_chat_sends",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExternalChatSendProgress"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Send to the chat from the caller's own provider account (one request per second per user).",
+        "operationId": "external_chat_send",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExternalChatSendReply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExternalChatSendProgress"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "One send request per second per user; Retry-After: 1"
+          }
+        }
+      }
+    },
     "/favorites": {
       "get": {
         "tags": ["favorites"],
@@ -12090,7 +12642,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "external_chat"
                 ]
               }
             },
@@ -12309,7 +12862,8 @@
                 "initiative",
                 "database",
                 "database_row",
-                "form"
+                "form",
+                "external_chat"
               ]
             }
           },
@@ -18813,6 +19367,264 @@
           }
         }
       }
+    },
+    "/whatsapp/account": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "The caller's own account.",
+        "operationId": "whatsapp_account",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppAccountView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/chats": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "The caller's WhatsApp chat list (groups and direct chats), newest\nactivity first, with what can be added to Macro.",
+        "operationId": "whatsapp_chats",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppChats"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/connect": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Start or resume the caller's pairing transaction.",
+        "operationId": "whatsapp_connect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppConnect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppPairing"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/disconnect": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "End the caller's observation consent.",
+        "operationId": "whatsapp_disconnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppDisconnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppDisconnect"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/history-import": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Import earlier messages of the caller's chats that wait for their phone\n(`backfill.state` `waiting_for_phone`). WhatsApp must be open on the phone.",
+        "operationId": "whatsapp_import_history",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppHistoryImport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/lookups": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Ask whether a phone number has a WhatsApp account, to start a direct chat\nwith it; poll the lookup until it is no longer `pending`. Found numbers\njoin the chat list, so `POST /external-chats` adds them.",
+        "operationId": "whatsapp_start_lookup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppLookupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppLookup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/lookups/{id}": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Poll the caller's phone-number lookup.",
+        "operationId": "whatsapp_lookup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppLookup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/pairing/{id}": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Poll the caller's pairing transaction, including its current QR code.",
+        "operationId": "whatsapp_pairing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppPairState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Cancel the caller's pairing transaction.",
+        "operationId": "whatsapp_cancel_pairing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/whatsapp/pairing/{id}/passkey": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Forward the owner's WebAuthn assertion to the pairing replica.",
+        "operationId": "whatsapp_passkey",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
     }
   },
   "components": {
@@ -19102,7 +19914,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "external_chat"
                 ]
               }
             ],
@@ -20317,6 +21130,9 @@
           },
           "ghprf": {
             "description": "the filters that should be applied to GitHub pull request records, on top of `fef`"
+          },
+          "if": {
+            "description": "Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in."
           },
           "pf": {
             "description": "the filters that should be applied to the project entity"
@@ -21582,6 +22398,14 @@
             "format": "date-time",
             "description": "Entity update time of the previewed copy."
           },
+          "viewerCalendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The calendars holding `viewer_event_id`, the canonical copy's first."
+          },
           "viewerCopy": {
             "oneOf": [
               {
@@ -22299,6 +23123,21 @@
                 "type": "string",
                 "format": "date-time",
                 "description": "A date-time."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A span of time; its end may not come before its start.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["date_range"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "A span of time; its end may not come before its start."
               }
             }
           },
@@ -23456,7 +24295,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "external_chat"
                 ]
               }
             ],
@@ -23931,6 +24771,17 @@
               "type": {
                 "type": "string",
                 "enum": ["date"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A span from one date-time to another.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["date_range"]
               }
             }
           },
@@ -25754,6 +26605,11 @@
                 "description": "Items associated with the contact."
               }
             }
+          },
+          {
+            "type": "string",
+            "description": "Activity across visible CRM-enabled teams, excluding hidden records.",
+            "enum": ["activity"]
           }
         ],
         "description": "The CRM record an association filter names."
@@ -26054,6 +26910,7 @@
         "enum": [
           "BOOLEAN",
           "DATE",
+          "DATE_RANGE",
           "NUMBER",
           "STRING",
           "SELECT_NUMBER",
@@ -26417,6 +27274,35 @@
         "type": "string",
         "description": "How a date cell compares to a date-time.",
         "enum": ["before", "after", "onOrBefore", "onOrAfter"]
+      },
+      "DateRange": {
+        "type": "object",
+        "description": "A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Where it ends; never before the start."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Where it starts."
+          }
+        }
+      },
+      "DateRangeOperator": {
+        "type": "string",
+        "description": "How a date-range cell stands to a day: the whole day starting at the\ntest's date-time, so a range from 1 PM to 5 PM contains its day.",
+        "enum": [
+          "contains",
+          "doesNotContain",
+          "endsBefore",
+          "endsOnOrAfter",
+          "startsAfter",
+          "startsOnOrBefore"
+        ]
       },
       "DeleteEntityMentionResponse": {
         "type": "object",
@@ -28142,7 +29028,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "external_chat"
                 ]
               }
             ],
@@ -28545,6 +29432,1192 @@
           }
         }
       },
+      "ExternalChatAdd": {
+        "type": "object",
+        "description": "Explicit request to add a chat; the provider account is selected\nserver-side. The chat's name always follows the provider.",
+        "required": ["provider", "remoteId", "kind"],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ExternalChatKind",
+            "description": "Group or direct chat; must match what `remote_id` is."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ExternalChatProvider",
+            "description": "The service the chat lives in."
+          },
+          "remoteId": {
+            "type": "string",
+            "description": "The chat's id at the provider, as its chat list names it. WhatsApp: a\ngroup the requester's account has joined, or a direct chat's other\nperson's JID."
+          }
+        }
+      },
+      "ExternalChatAdded": {
+        "type": "object",
+        "description": "The added chat.",
+        "required": ["chatId"],
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Shareable entity identifier."
+          }
+        }
+      },
+      "ExternalChatAttachment": {
+        "type": "object",
+        "description": "One attachment of a message.",
+        "required": ["ordinal", "state", "fileName", "mime", "size"],
+        "properties": {
+          "durationSeconds": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Length of audio or video in whole seconds, when declared.",
+            "minimum": 0
+          },
+          "fileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file holding it, once ready."
+          },
+          "fileName": {
+            "type": "string",
+            "description": "Display filename."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Pixel height, when declared.",
+            "minimum": 0
+          },
+          "mime": {
+            "type": "string",
+            "description": "Declared MIME type."
+          },
+          "ordinal": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Position within the message."
+          },
+          "presentation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatMediaPresentation",
+                "description": "Sticker, GIF or voice note; `null` for an ordinary file of its kind."
+              }
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Declared size in bytes.",
+            "minimum": 0
+          },
+          "state": {
+            "$ref": "#/components/schemas/ExternalChatAttachmentState",
+            "description": "Current state."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Pixel width of an image, sticker or video, when WhatsApp declared it.",
+            "minimum": 0
+          }
+        }
+      },
+      "ExternalChatAttachmentState": {
+        "type": "string",
+        "description": "Where an attachment of a message stands.",
+        "enum": ["loading", "ready", "unavailable", "unsupported"]
+      },
+      "ExternalChatBackfill": {
+        "type": "object",
+        "description": "Earlier messages imported after adding a chat.",
+        "required": ["state", "imported"],
+        "properties": {
+          "imported": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Messages received from the phone so far (including ones already shown).",
+            "minimum": 0
+          },
+          "state": {
+            "$ref": "#/components/schemas/ExternalChatBackfillState",
+            "description": "Progress."
+          }
+        }
+      },
+      "ExternalChatBackfillState": {
+        "type": "string",
+        "description": "Where importing a group's earlier messages stands.",
+        "enum": [
+          "waiting_for_message",
+          "pending",
+          "running",
+          "waiting_for_phone",
+          "done",
+          "partial"
+        ]
+      },
+      "ExternalChatCall": {
+        "type": "object",
+        "description": "A call in the group.",
+        "required": ["video", "outcome"],
+        "properties": {
+          "durationSeconds": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Length, when it connected.",
+            "minimum": 0
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/ExternalChatCallOutcome",
+            "description": "How it went for the account that saw it."
+          },
+          "video": {
+            "type": "boolean",
+            "description": "Video rather than voice."
+          }
+        }
+      },
+      "ExternalChatCallOutcome": {
+        "type": "string",
+        "description": "How a call went.",
+        "enum": ["answered", "missed", "rejected", "other"]
+      },
+      "ExternalChatCapabilities": {
+        "type": "object",
+        "description": "Operations implemented for a chat, independent of current permission.",
+        "required": [
+          "textLimitBytes",
+          "mutations",
+          "mutationWindowSeconds",
+          "maxAttachments",
+          "attachmentLimitBytes",
+          "attachmentTypes"
+        ],
+        "properties": {
+          "attachmentLimitBytes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Largest attachment in bytes.",
+            "minimum": 0
+          },
+          "attachmentTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Supported attachment MIME types."
+          },
+          "maxAttachments": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Attachments per send.",
+            "minimum": 0
+          },
+          "mutationWindowSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Edits and deletes are offered this long after sending.",
+            "minimum": 0
+          },
+          "mutations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatMutation"
+            },
+            "description": "Supported message operations."
+          },
+          "textLimitBytes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum UTF-8 bytes per text send.",
+            "minimum": 0
+          }
+        }
+      },
+      "ExternalChatCommunity": {
+        "type": "object",
+        "description": "The WhatsApp community a group belongs to.",
+        "required": ["id", "name", "announcements"],
+        "properties": {
+          "announcements": {
+            "type": "boolean",
+            "description": "This group is the community's announcement group."
+          },
+          "id": {
+            "type": "string",
+            "description": "The community's WhatsApp JID."
+          },
+          "name": {
+            "type": "string",
+            "description": "The community's name."
+          }
+        }
+      },
+      "ExternalChatContactCard": {
+        "type": "object",
+        "description": "One contact card, from its vCard.",
+        "required": ["name", "phones"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "phones": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Phone numbers as written on the card."
+          }
+        }
+      },
+      "ExternalChatContacts": {
+        "type": "object",
+        "description": "Contact cards.",
+        "required": ["contacts"],
+        "properties": {
+          "contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatContactCard"
+            },
+            "description": "The cards, in order."
+          }
+        }
+      },
+      "ExternalChatDeliveryState": {
+        "type": "string",
+        "description": "Observed send state. `unknown` means the request may have reached WhatsApp;\nit is never sent again automatically.",
+        "enum": ["pending", "sending", "unknown", "accepted", "failed"]
+      },
+      "ExternalChatDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExternalChatSummary",
+            "description": "List metadata."
+          },
+          {
+            "type": "object",
+            "required": ["sharePermission", "accessLevel", "limits"],
+            "properties": {
+              "accessLevel": {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "Caller's effective permission."
+              },
+              "disappearingSeconds": {
+                "type": ["integer", "null"],
+                "format": "int32",
+                "description": "The provider's disappearing-messages timer in seconds while it is on;\nMacro keeps the messages anyway. `null` when off or unknown.",
+                "minimum": 0
+              },
+              "limits": {
+                "$ref": "#/components/schemas/ExternalChatCapabilities",
+                "description": "Size and mutation limits."
+              },
+              "members": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ExternalChatMembers",
+                    "description": "Who is in the chat as an observer last read it; absent when no\nobserver is connected."
+                  }
+                ]
+              },
+              "sendingIdentity": {
+                "type": ["string", "null"],
+                "description": "Caller's own phone identity, never another account's identity."
+              },
+              "sharePermission": {
+                "$ref": "#/components/schemas/SharePermissionV2",
+                "description": "Owner-controlled standard sharing configuration."
+              }
+            }
+          }
+        ],
+        "description": "Full chat detail and current viewer capabilities."
+      },
+      "ExternalChatEvent": {
+        "type": "object",
+        "description": "A WhatsApp event.",
+        "required": ["name"],
+        "properties": {
+          "canceled": {
+            "type": "boolean",
+            "description": "Canceled by its organizer."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Description."
+          },
+          "endAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "End."
+          },
+          "joinLink": {
+            "type": ["string", "null"],
+            "description": "Call link for an online event."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Place name or address."
+          },
+          "name": {
+            "type": "string",
+            "description": "Title."
+          },
+          "startAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Start."
+          }
+        }
+      },
+      "ExternalChatKind": {
+        "type": "string",
+        "description": "Whether an external chat is a group or a one-to-one chat.",
+        "enum": ["group", "direct"]
+      },
+      "ExternalChatLocation": {
+        "type": "object",
+        "description": "A shared place.",
+        "required": ["latitude", "longitude"],
+        "properties": {
+          "address": {
+            "type": ["string", "null"],
+            "description": "Street address."
+          },
+          "comment": {
+            "type": ["string", "null"],
+            "description": "Caption or comment."
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "description": "Degrees."
+          },
+          "live": {
+            "type": "boolean",
+            "description": "Shared as a live location (this is where it started)."
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "description": "Degrees."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Place name."
+          },
+          "url": {
+            "type": ["string", "null"],
+            "description": "Link the sender attached."
+          }
+        }
+      },
+      "ExternalChatMediaKind": {
+        "type": "string",
+        "description": "Attachment categories WhatsApp distinguishes.",
+        "enum": ["image", "audio", "video", "document"]
+      },
+      "ExternalChatMediaPresentation": {
+        "type": "string",
+        "description": "How WhatsApp shows an attachment, when not as a plain file of its kind.",
+        "enum": ["sticker", "gif", "voice_note"]
+      },
+      "ExternalChatMembers": {
+        "type": "object",
+        "description": "A chat's members as the caller's account last read them.",
+        "required": ["name", "participants", "announce", "observedAt"],
+        "properties": {
+          "announce": {
+            "type": "boolean",
+            "description": "Only admins may post."
+          },
+          "name": {
+            "type": "string",
+            "description": "The chat's name at the provider."
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this was read from WhatsApp."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatParticipant"
+            },
+            "description": "Everyone in the chat."
+          }
+        }
+      },
+      "ExternalChatMention": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExternalChatPersonRef",
+            "description": "Who it is."
+          },
+          {
+            "type": "object",
+            "required": ["token"],
+            "properties": {
+              "token": {
+                "type": "string",
+                "description": "What follows the `@` in the body (WhatsApp: the digits of the\nperson's id); replace `@<token>` with the name."
+              }
+            }
+          }
+        ],
+        "description": "An @-mention in a message body."
+      },
+      "ExternalChatMessage": {
+        "type": "object",
+        "description": "One message in an external chat.",
+        "required": [
+          "id",
+          "sender",
+          "body",
+          "sentAt",
+          "receivedAt",
+          "deleted",
+          "reactions",
+          "attachments",
+          "kind",
+          "forwarded",
+          "viewOnce",
+          "mentions"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatAttachment"
+            },
+            "description": "Imported or pending attachments."
+          },
+          "body": {
+            "type": "string",
+            "description": "Plain text."
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "Deleted for everyone."
+          },
+          "deliveryState": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatDeliveryState",
+                "description": "Delivery state for the caller's deliberate send only."
+              }
+            ]
+          },
+          "editedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last edit timestamp."
+          },
+          "forwarded": {
+            "type": "boolean",
+            "description": "Forwarded from another chat."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable message id."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ExternalChatMessageKind",
+            "description": "A message, or a system line."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatMention"
+            },
+            "description": "People the body @-mentions."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatReaction"
+            },
+            "description": "Reactions grouped by emoji."
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp first received by Macro."
+          },
+          "replyTo": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Message quoted by this one."
+          },
+          "rich": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatRichContent",
+                "description": "Poll, location, contact cards, event or system line."
+              }
+            ]
+          },
+          "sender": {
+            "$ref": "#/components/schemas/ExternalChatSender",
+            "description": "Sender."
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp assigned by the provider."
+          },
+          "viewOnce": {
+            "type": "boolean",
+            "description": "Sent as view-once; Macro shows it like any media."
+          }
+        }
+      },
+      "ExternalChatMessageAttachments": {
+        "type": "object",
+        "description": "The attachments of one message.",
+        "required": ["messageId", "attachments"],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatAttachment"
+            },
+            "description": "Its attachments in order; deleted ones are omitted."
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The message."
+          }
+        }
+      },
+      "ExternalChatMessageKind": {
+        "type": "string",
+        "description": "What a timeline entry is.",
+        "enum": ["message", "system"]
+      },
+      "ExternalChatMessages": {
+        "type": "object",
+        "description": "Newest-first timeline page; `before` is the last returned message id.",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatMessage"
+            },
+            "description": "Messages in descending sent_at, id order."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Cursor for older messages."
+          }
+        }
+      },
+      "ExternalChatMutation": {
+        "type": "string",
+        "description": "Deliberate operations on an existing message.",
+        "enum": ["reaction", "edit", "delete"]
+      },
+      "ExternalChatParticipant": {
+        "type": "object",
+        "description": "Someone in an external chat; Macro access is a separate grant.",
+        "required": ["jid", "admin"],
+        "properties": {
+          "admin": {
+            "type": "boolean",
+            "description": "Group admin."
+          },
+          "alternateJid": {
+            "type": ["string", "null"],
+            "description": "The other address the provider verified for them."
+          },
+          "displayName": {
+            "type": ["string", "null"],
+            "description": "Their name at the provider, untrusted."
+          },
+          "jid": {
+            "type": "string",
+            "description": "Their id at the provider (WhatsApp: phone-number or LID JID)."
+          }
+        }
+      },
+      "ExternalChatPersonRef": {
+        "type": "object",
+        "description": "A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name, never authentication evidence."
+          },
+          "userId": {
+            "type": ["string", "null"],
+            "description": "Verified Macro user, if any."
+          }
+        }
+      },
+      "ExternalChatPoll": {
+        "type": "object",
+        "description": "A poll, read-only in Macro.",
+        "required": ["question", "options", "selectableCount", "voters"],
+        "properties": {
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatPollOption"
+            },
+            "description": "Options in order, with tallies."
+          },
+          "question": {
+            "type": "string",
+            "description": "The question."
+          },
+          "selectableCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many options one person may choose; 0 means any number.",
+            "minimum": 0
+          },
+          "voters": {
+            "type": "integer",
+            "format": "int64",
+            "description": "People who voted for anything."
+          }
+        }
+      },
+      "ExternalChatPollOption": {
+        "type": "object",
+        "description": "One option of a poll with its votes.",
+        "required": ["name", "votes", "mine", "voters"],
+        "properties": {
+          "mine": {
+            "type": "boolean",
+            "description": "The caller chose it."
+          },
+          "name": {
+            "type": "string",
+            "description": "Option text."
+          },
+          "voters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatPersonRef"
+            },
+            "description": "Who chose it."
+          },
+          "votes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "People who chose it."
+          }
+        }
+      },
+      "ExternalChatProvider": {
+        "type": "string",
+        "description": "The messaging service an external chat lives in.",
+        "enum": ["whatsapp"]
+      },
+      "ExternalChatReaction": {
+        "type": "object",
+        "description": "Grouped reactions.",
+        "required": ["emoji", "count", "mine"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of reacting people."
+          },
+          "emoji": {
+            "type": "string",
+            "description": "Emoji."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Caller has this reaction."
+          }
+        }
+      },
+      "ExternalChatReference": {
+        "type": "object",
+        "description": "An external chat entity bound to a remote chat.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "External chat entity id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, following WhatsApp."
+          }
+        }
+      },
+      "ExternalChatReplyBlock": {
+        "type": "string",
+        "description": "Why the viewer cannot send now.",
+        "enum": [
+          "no_account",
+          "disconnected",
+          "not_added",
+          "not_allowed",
+          "unavailable"
+        ]
+      },
+      "ExternalChatReplyContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Plain text.",
+            "required": ["text", "type"],
+            "properties": {
+              "mentions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Group participants the text @-mentions, by their WhatsApp id\n(`jid` of a roster participant); the text must contain\n`@<digits before the @ of the id>` for each."
+              },
+              "text": {
+                "type": "string",
+                "description": "UTF-8 text, at most [`TEXT_LIMIT_BYTES`] bytes."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["text"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One attachment staged through the attachments route.",
+            "required": ["uploadId", "type"],
+            "properties": {
+              "caption": {
+                "type": ["string", "null"],
+                "description": "Optional caption; audio has none."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["media"]
+              },
+              "uploadId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The staged upload, imported as the message's static file."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An operation on an existing message in this chat.",
+            "required": ["messageId", "operation", "type"],
+            "properties": {
+              "messageId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Existing message, resolved to its provider source by the server."
+              },
+              "operation": {
+                "$ref": "#/components/schemas/ExternalChatMutation",
+                "description": "Explicit operation."
+              },
+              "text": {
+                "type": ["string", "null"],
+                "description": "Replacement text or emoji; absent for delete, empty to remove a reaction."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["mutation"]
+              }
+            }
+          }
+        ],
+        "description": "Content of a deliberate send."
+      },
+      "ExternalChatRichContent": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExternalChatPoll",
+                "description": "A poll with current votes."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["poll"]
+                  }
+                }
+              }
+            ],
+            "description": "A poll with current votes."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExternalChatLocation",
+                "description": "A place (or the start of a live location); link to a maps URL."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["location"]
+                  }
+                }
+              }
+            ],
+            "description": "A place (or the start of a live location); link to a maps URL."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExternalChatContacts",
+                "description": "Contact cards."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["contacts"]
+                  }
+                }
+              }
+            ],
+            "description": "Contact cards."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExternalChatEvent",
+                "description": "An event invitation."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["event"]
+                  }
+                }
+              }
+            ],
+            "description": "An event invitation."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExternalChatSystemLine",
+                "description": "A system line."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["system"]
+                  }
+                }
+              }
+            ],
+            "description": "A system line."
+          }
+        ],
+        "description": "Structured content of a message besides its body."
+      },
+      "ExternalChatSendProgress": {
+        "type": "object",
+        "description": "Durable result of a deliberate send.",
+        "required": ["id", "userId", "chatId", "payload", "state", "createdAt"],
+        "properties": {
+          "chatId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "External chat."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Intent creation time."
+          },
+          "errorCode": {
+            "type": ["string", "null"],
+            "description": "Sanitized failure code."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable intent id."
+          },
+          "messageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The chat's message, once the provider accepted it."
+          },
+          "payload": {
+            "$ref": "#/components/schemas/ExternalChatSendReply",
+            "description": "The original request, so a failed draft can be recovered."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ExternalChatDeliveryState",
+            "description": "Current state."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Person who submitted it."
+          }
+        }
+      },
+      "ExternalChatSendReply": {
+        "type": "object",
+        "description": "Explicit send action from a person. Only deliberate sends reach WhatsApp.",
+        "required": ["idempotencyKey", "message"],
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable client intent key. A changed payload with this key is a conflict."
+          },
+          "message": {
+            "$ref": "#/components/schemas/ExternalChatReplyContent",
+            "description": "Content."
+          },
+          "replyTo": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Message being quoted, within this chat."
+          }
+        }
+      },
+      "ExternalChatSender": {
+        "type": "object",
+        "description": "Message sender from protocol-verified identity evidence.",
+        "required": ["personId", "name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Display name, never authentication evidence."
+          },
+          "personId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "External person identity."
+          },
+          "userId": {
+            "type": ["string", "null"],
+            "description": "Verified Macro user association, if present."
+          }
+        }
+      },
+      "ExternalChatSummary": {
+        "type": "object",
+        "description": "An external chat visible through ordinary entity sharing.",
+        "required": [
+          "id",
+          "provider",
+          "name",
+          "kind",
+          "userId",
+          "unreadCount",
+          "canSend"
+        ],
+        "properties": {
+          "backfill": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatBackfill",
+                "description": "Importing earlier messages after the chat was added; `null` when\nthere is nothing to import."
+              }
+            ]
+          },
+          "canSend": {
+            "type": "boolean",
+            "description": "Caller may currently send from their own account."
+          },
+          "community": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatCommunity",
+                "description": "The community (a WhatsApp community) this group belongs to, if any."
+              }
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Entity identifier."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ExternalChatKind",
+            "description": "A group, or a direct chat with one person (only its owner sends)."
+          },
+          "lastMessageAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Latest message timestamp."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name: the group's, or a direct chat's other person."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ExternalChatProvider",
+            "description": "The service the chat lives in."
+          },
+          "sendReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatReplyBlock",
+                "description": "Reason sending is blocked."
+              }
+            ]
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Unread live messages for this viewer, counted up to\n[`UNREAD_COUNT_CAP`]."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Actual entity owner."
+          }
+        }
+      },
+      "ExternalChatSystemAction": {
+        "type": "string",
+        "description": "Kinds of system lines.",
+        "enum": [
+          "group_created",
+          "participants_added",
+          "participants_removed",
+          "participants_left",
+          "participants_joined",
+          "participants_promoted",
+          "participants_demoted",
+          "subject_changed",
+          "icon_changed",
+          "description_changed",
+          "disappearing_changed",
+          "message_pinned",
+          "message_unpinned",
+          "call"
+        ]
+      },
+      "ExternalChatSystemLine": {
+        "type": "object",
+        "description": "Something that happened in the chat.",
+        "required": ["action", "participants"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ExternalChatSystemAction",
+            "description": "What happened."
+          },
+          "actor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatPersonRef",
+                "description": "Who did it; absent when WhatsApp did not say."
+              }
+            ]
+          },
+          "call": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatCall",
+                "description": "For `call`: video or voice, and how it went."
+              }
+            ]
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatPersonRef"
+            },
+            "description": "Who it happened to (added, removed, promoted, …)."
+          },
+          "value": {
+            "type": ["string", "null"],
+            "description": "New subject or description; disappearing-messages timer in seconds\n(`\"0\"` is off)."
+          }
+        }
+      },
+      "ExternalChatUploadRequest": {
+        "type": "object",
+        "description": "Multipart body of the attachments route.",
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "One supported image, audio, video, PDF or text file."
+          }
+        }
+      },
+      "ExternalChatUploadedAttachment": {
+        "type": "object",
+        "description": "A staged attachment, sent only by a later deliberate send.",
+        "required": ["uploadId", "filename", "kind"],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Display filename."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ExternalChatMediaKind",
+            "description": "Category."
+          },
+          "uploadId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Use as `upload_id` in a media send."
+          }
+        }
+      },
       "Favorite": {
         "type": "object",
         "description": "A single favorited entity, including display metadata hydrated from the\nfavorited entity where available. Display names are deliberately not\nincluded: clients resolve them from the entity previews pipeline, which\nis viewer-relative for DM channels and updated by renames.\n\nA favorite is identified by `(entity_type, entity_id)` within the user's\ncollection; there is no surrogate id.",
@@ -28599,7 +30672,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "external_chat"
                 ]
               }
             ],
@@ -28653,7 +30727,8 @@
                   "initiative",
                   "database",
                   "database_row",
-                  "form"
+                  "form",
+                  "external_chat"
                 ]
               }
             ],
@@ -29327,6 +31402,26 @@
                 "type": "string",
                 "format": "date-time",
                 "description": "The date-time compared against."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A date-range column.",
+            "required": ["operator", "value", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["dateRange"]
+              },
+              "operator": {
+                "$ref": "#/components/schemas/DateRangeOperator",
+                "description": "How the cell's range stands to the day."
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The start of the day compared against."
               }
             }
           },
@@ -32190,7 +34285,7 @@
           },
           "include": {
             "type": "boolean",
-            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids`, `owners` or `notification_filters`\nalso opts in."
           },
           "initiative_ids": {
             "type": "array",
@@ -32203,12 +34298,16 @@
             "type": ["string", "null"],
             "description": "Case-insensitive name substring."
           },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by initiative notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "description": "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           }
         }
       },
@@ -32778,6 +34877,18 @@
       "MacroUserIdStr": {
         "type": "string"
       },
+      "MarkRead": {
+        "type": "object",
+        "description": "Mark messages through this message read.",
+        "required": ["messageId"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message in the addressed group."
+          }
+        }
+      },
       "Meeting": {
         "type": "object",
         "description": "Persistent meeting metadata. No channel contents or archived media are exposed.",
@@ -32995,6 +35106,10 @@
           "triggered_by": {
             "type": ["string", "null"],
             "description": "User who triggered a bot-authored message."
+          },
+          "triggered_via": {
+            "type": ["string", "null"],
+            "description": "Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only."
           },
           "updated_at": {
             "type": "string",
@@ -33621,6 +35736,17 @@
           "actor": {
             "$ref": "#/components/schemas/ChannelSender",
             "description": "Actor that patched the message."
+          },
+          "completed_reply": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessagePostedMetadata",
+                "description": "Completed bot answer, evaluated for agent triggers like a new post.\nOrdinary edits and streaming updates omit this; older producers remain\ncompatible with the trigger consumer."
+              }
+            ]
           },
           "content": {
             "type": "string",
@@ -35984,6 +38110,21 @@
           },
           {
             "type": "object",
+            "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["DateRange"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}"
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
             "required": ["value", "type"],
             "properties": {
@@ -36370,9 +38511,48 @@
                 "description": "The column a card is titled by. Left out, a board keeps the\ntitle it has, and a new board takes the table's first column."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Bars on a calendar, one per row, spanning its date-range cell.",
+            "required": ["range", "groupBy", "colorBy", "kind"],
+            "properties": {
+              "barFields": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "The columns a bar shows after its title, in order."
+              },
+              "colorBy": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The select or tag column whose options color the bars, if any."
+              },
+              "groupBy": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The single-select or single-person column grouping the bars, if\nany."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timeline"]
+              },
+              "range": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The date-range column whose cells are the bars."
+              },
+              "title": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column a bar is labelled by. Left out, a timeline keeps the\ntitle it has, and a new timeline takes the table's first column."
+              }
+            }
           }
         ],
-        "description": "A layout as an op asks for it: a board may leave its card title out."
+        "description": "A layout as an op asks for it: a board or timeline may leave its title\nout."
       },
       "ResolveRequest": {
         "type": "object",
@@ -37378,6 +39558,20 @@
           },
           {
             "type": "object",
+            "description": "Date range value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["date_range"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange"
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Numeric value",
             "required": ["value", "type"],
             "properties": {
@@ -37534,7 +39728,8 @@
           "database",
           "call",
           "email_thread",
-          "agent_session"
+          "agent_session",
+          "external_chat"
         ]
       },
       "SharePermissionV2": {
@@ -37607,6 +39802,26 @@
         "type": "string",
         "description": "Controls whether shared email threads are included in results.",
         "enum": ["exclude", "include", "only"]
+      },
+      "SharedExternalChatReference": {
+        "type": "object",
+        "description": "Another person's external chat entity the caller can view.",
+        "required": ["id", "name", "ownerId"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "External chat entity id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, following WhatsApp."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Macro user who added the chat and shared it."
+          }
+        }
       },
       "ShortIdResponse": {
         "type": "object",
@@ -39866,6 +42081,21 @@
           },
           {
             "type": "object",
+            "description": "A span from one date-time to another.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["dateRange"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "A span from one date-time to another."
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "The selected option ids; one for single-select columns.",
             "required": ["value", "type"],
             "properties": {
@@ -40025,7 +42255,16 @@
       "SqlOutcomeKind": {
         "type": "string",
         "description": "The value kind of a result column.",
-        "enum": ["text", "number", "boolean", "date", "select", "entity", "row"]
+        "enum": [
+          "text",
+          "number",
+          "boolean",
+          "date",
+          "dateRange",
+          "select",
+          "entity",
+          "row"
+        ]
       },
       "SqlSelectOption": {
         "type": "object",
@@ -40986,6 +43225,55 @@
           "include_cbm_atm_nc": {
             "type": ["boolean", "null"],
             "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
+          }
+        }
+      },
+      "TaskSimilarityResult": {
+        "type": "object",
+        "description": "A similar existing task computed for an unsaved draft, returned to the task\ncomposer without persisting any embedding or match state.",
+        "required": ["taskId", "taskName", "vectorScore"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "description": "The matching existing task."
+          },
+          "taskName": {
+            "type": "string",
+            "description": "The matching task's display name."
+          },
+          "vectorScore": {
+            "type": "number",
+            "format": "double",
+            "description": "Cosine similarity from vector search."
+          }
+        }
+      },
+      "TaskSimilaritySearchRequest": {
+        "type": "object",
+        "description": "Request body for searching tasks similar to an unsaved draft.",
+        "required": ["taskName"],
+        "properties": {
+          "markdown": {
+            "type": ["string", "null"],
+            "description": "Draft task body as embedding-format markdown. The composer produces it\nclient-side with lexical-core's `markdownToEmbeddingText` (the same\nformat lexical-service's `/markdown/{id}?target=embedding` renders), so\nthis latency-sensitive endpoint embeds the text as-is without a\nlexical-service round trip."
+          },
+          "taskName": {
+            "type": "string",
+            "description": "Draft task title."
+          }
+        }
+      },
+      "TaskSimilaritySearchResponse": {
+        "type": "object",
+        "description": "Response for searching tasks similar to an unsaved draft.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskSimilarityResult"
+            },
+            "description": "Existing tasks similar to the draft."
           }
         }
       },
@@ -42718,6 +45006,45 @@
                 "description": "The column a card is titled by, of any type. Removing it titles\nthe cards by the table's first remaining column."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "Bars on a calendar, one per row, spanning its date-range cell. Rows\nwith an empty range are listed apart as undated.",
+            "required": ["range", "title", "groupBy", "colorBy", "kind"],
+            "properties": {
+              "barFields": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "description": "The columns a bar shows after its title, in order."
+              },
+              "colorBy": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The select or tag column whose options color the bars, if any."
+              },
+              "groupBy": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The single-select or single-person column whose values group the\nbars, if any; moving a bar to another group sets this column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["timeline"]
+              },
+              "range": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The date-range column whose cells are the bars."
+              },
+              "title": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column a bar is labelled by, of any type. Removing it labels\nthe bars by the table's first remaining column."
+              }
+            }
           }
         ],
         "description": "How a view draws its rows."
@@ -43083,9 +45410,320 @@
           }
         }
       },
+      "WhatsAppAccount": {
+        "type": "object",
+        "description": "One person's account, never owned by a workspace.",
+        "required": ["id", "userId", "state", "authorizationGeneration"],
+        "properties": {
+          "authorizationGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Explicit consent generation; reconnecting a socket never changes it."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable account identity."
+          },
+          "identityJid": {
+            "type": ["string", "null"],
+            "description": "WhatsApp-verified identity, absent until the first pairing succeeds."
+          },
+          "state": {
+            "$ref": "#/components/schemas/WhatsAppAccountState",
+            "description": "Lifecycle."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Authenticated owner."
+          }
+        }
+      },
+      "WhatsAppAccountState": {
+        "type": "string",
+        "description": "Account lifecycle. Transport outages are not stored: a connected account\nstays connected while its session service reconnects.",
+        "enum": ["pairing", "connected", "logged_out", "disconnected"]
+      },
+      "WhatsAppAccountView": {
+        "type": "object",
+        "description": "Owner-scoped account state, including not connected.",
+        "properties": {
+          "account": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhatsAppAccount",
+                "description": "The caller's account, when one exists."
+              }
+            ]
+          }
+        }
+      },
+      "WhatsAppCannotAdd": {
+        "type": "string",
+        "description": "Why a chat can't be added to Macro; the app words it from the code.",
+        "enum": ["not_in_group", "community", "own_chat", "not_in_chat_list"]
+      },
+      "WhatsAppChat": {
+        "type": "object",
+        "description": "One chat of the caller's WhatsApp chat list, as WhatsApp Web lists it.",
+        "required": ["jid", "kind", "name", "archived", "pinned", "canAdd"],
+        "properties": {
+          "added": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatReference",
+                "description": "The caller's own external chat for this chat, once added."
+              }
+            ]
+          },
+          "archived": {
+            "type": "boolean",
+            "description": "Archived in WhatsApp."
+          },
+          "canAdd": {
+            "type": "boolean",
+            "description": "\"Add to Macro\" works now."
+          },
+          "cannotAddReason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/WhatsAppCannotAdd",
+                "description": "Why it can't be added, when it is neither added, shared nor addable."
+              }
+            ]
+          },
+          "community": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ExternalChatCommunity",
+                "description": "The community a group belongs to (a community's group or its\nannouncement group); `null` otherwise."
+              }
+            ]
+          },
+          "jid": {
+            "type": "string",
+            "description": "WhatsApp chat JID: a group, or the other person's phone-number JID\n(LID when WhatsApp never told us the number)."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ExternalChatKind",
+            "description": "Group or direct chat."
+          },
+          "lastActivityAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Newest activity WhatsApp reported (message or history sync); `null`\nwhen unknown, as for saved contacts never messaged. The list is\nsorted by it, newest first, unknown last."
+          },
+          "name": {
+            "type": "string",
+            "description": "Group: the subject, or member names for an unnamed group. Direct: the\ncontact or WhatsApp name, else `+<phone>`. Always non-empty."
+          },
+          "phoneNumber": {
+            "type": ["string", "null"],
+            "description": "The other person's phone number (`+<digits>`) of a direct chat, when\nWhatsApp told us it."
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Pinned in WhatsApp."
+          },
+          "shared": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SharedExternalChatReference",
+                "description": "Someone else's external chat for this chat shared with the caller,\nwhen the caller has not added their own."
+              }
+            ]
+          }
+        }
+      },
+      "WhatsAppChats": {
+        "type": "object",
+        "description": "The caller's WhatsApp chat list.",
+        "required": ["chats"],
+        "properties": {
+          "chats": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WhatsAppChat"
+            },
+            "description": "Newest activity first; chats with unknown activity last, by name."
+          }
+        }
+      },
+      "WhatsAppConnect": {
+        "type": "object",
+        "description": "Explicit pairing intent; replacement is a separate deliberate action.",
+        "properties": {
+          "replace": {
+            "type": "boolean",
+            "description": "Replace the retained identity with a different WhatsApp account."
+          }
+        }
+      },
+      "WhatsAppDisconnect": {
+        "type": "object",
+        "description": "Result of disconnecting an account.",
+        "required": ["remoteUnlinkRequested"],
+        "properties": {
+          "remoteUnlinkRequested": {
+            "type": "boolean",
+            "description": "The session service was asked to log the device out of WhatsApp. It\nunlinks asynchronously; WhatsApp's Linked devices list is authoritative."
+          }
+        }
+      },
+      "WhatsAppDisconnectRequest": {
+        "type": "object",
+        "description": "The consent generation the owner deliberately disconnects.",
+        "required": ["authorizationGeneration"],
+        "properties": {
+          "authorizationGeneration": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Fences retries against a later reconnect or replacement."
+          }
+        }
+      },
+      "WhatsAppHistoryImport": {
+        "type": "object",
+        "description": "Result of the owner's Import.",
+        "required": ["started"],
+        "properties": {
+          "started": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Chats that started importing earlier messages from the phone.",
+            "minimum": 0
+          }
+        }
+      },
+      "WhatsAppLookup": {
+        "type": "object",
+        "description": "The owner asking whether a phone number has a WhatsApp account, to start\na direct chat with it.",
+        "required": ["id", "phoneNumber", "state"],
+        "properties": {
+          "chatJid": {
+            "type": ["string", "null"],
+            "description": "Found: the direct chat's JID, now addable from the chat list."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Poll `GET /whatsapp/lookups/{id}` with it."
+          },
+          "phoneNumber": {
+            "type": "string",
+            "description": "The number asked about, E.164 (`+<digits>`)."
+          },
+          "state": {
+            "$ref": "#/components/schemas/WhatsAppLookupState",
+            "description": "Progress."
+          }
+        }
+      },
+      "WhatsAppLookupRequest": {
+        "type": "object",
+        "description": "A phone number to start a direct chat with.",
+        "required": ["phoneNumber"],
+        "properties": {
+          "phoneNumber": {
+            "type": "string",
+            "description": "E.164: `+`, the country code and the number, without spacing."
+          }
+        }
+      },
+      "WhatsAppLookupState": {
+        "type": "string",
+        "description": "Where a phone-number lookup is.",
+        "enum": ["pending", "found", "not_on_whatsapp", "failed"]
+      },
+      "WhatsAppPairState": {
+        "type": "object",
+        "description": "Owner-only pairing status. Deliberately has no `Debug` implementation: the\nQR and pairing code are secrets for the duration of the transaction.",
+        "required": ["state", "expiresAt"],
+        "properties": {
+          "challenge": {
+            "type": ["object", "null"],
+            "description": "WhatsApp's WebAuthn request options while the state is `passkey`; the\nnative authenticator answers through the passkey route."
+          },
+          "code": {
+            "type": ["string", "null"],
+            "description": "Pairing code to type on the phone, when phone-number pairing is used."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Same owner-bound deadline."
+          },
+          "identityJid": {
+            "type": ["string", "null"],
+            "description": "Verified identity once paired."
+          },
+          "qr": {
+            "type": ["string", "null"],
+            "description": "Current QR content; rotates while the transaction waits."
+          },
+          "state": {
+            "$ref": "#/components/schemas/WhatsAppPairingState",
+            "description": "Current state."
+          }
+        }
+      },
+      "WhatsAppPairing": {
+        "type": "object",
+        "description": "Owner-bound pairing transaction, without its QR or pairing code.",
+        "required": ["id", "accountId", "state", "expiresAt"],
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Account being connected."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Database-assigned deadline."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "One-use transaction id."
+          },
+          "state": {
+            "$ref": "#/components/schemas/WhatsAppPairingState",
+            "description": "Current state."
+          }
+        }
+      },
+      "WhatsAppPairingState": {
+        "type": "string",
+        "description": "Pairing transaction state.",
+        "enum": [
+          "waiting",
+          "qr",
+          "passkey",
+          "success",
+          "expired",
+          "cancelled",
+          "failed"
+        ]
+      },
       "Widget": {
         "type": "string",
-        "description": "How a question is asked. Each column kind takes a few, the first its\ndefault; kinds asked one way only (numbers, checkboxes, entity and row\npickers) take none.",
+        "description": "How a question is asked. Each column kind takes a few, the first its\ndefault; kinds asked one way only (numbers, checkboxes, date ranges,\nentity and row pickers) take none.",
         "enum": [
           "short",
           "paragraph",

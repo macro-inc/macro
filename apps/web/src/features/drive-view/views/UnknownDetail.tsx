@@ -83,6 +83,7 @@ export function UnknownDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="unknown"
       label="file"
       load={loadUnknownDocument}
     >

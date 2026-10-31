@@ -17,7 +17,7 @@ export function LoginButton() {
   return (
     <div class="flex gap-2 justify-center w-max items-center">
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         onClick={() => {
           setPostLoginRedirect(window.location.href);
@@ -28,7 +28,7 @@ export function LoginButton() {
       </Button>
       <span class="text-xs text-ink-muted italic">or</span>
       <Button
-        variant="accent"
+        variant="primary"
         size="sm"
         onClick={() => {
           setPostLoginRedirect(window.location.href);

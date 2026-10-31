@@ -8,18 +8,30 @@ version = "0.1.0"
 [features]
 default = ["inbound", "outbound"]
 inbound = [
+  "dep:ai_toolset",
   "dep:axum",
+  "dep:bot_id",
   "dep:macro_auth",
   "dep:macro_user_id",
   "dep:tower",
   "dep:tower-http",
 ]
-outbound = ["dep:fusionauth"]
+outbound = [
+  "dep:chrono",
+  "dep:cursor_api_key",
+  "dep:fusionauth",
+  "dep:sqlx",
+  "dep:zeroize",
+]
 
 [dependencies]
 anyhow = { workspace = true }
+ai_toolset = { path = "../../crates/ai_toolset", optional = true }
 axum = { workspace = true, features = ["tower-log"], optional = true }
 base64 = { workspace = true }
+bot_id = { path = "../../crates/bot_id", optional = true }
+chrono = { workspace = true, optional = true }
+cursor_api_key = { path = "../../crates/cursor_api_key", optional = true }
 fusionauth = { path = "../../crates/fusionauth", optional = true }
 macro_auth = { path = "../../crates/macro_auth", optional = true }
 macro_user_id = { path = "../../crates/macro_user_id", optional = true }
@@ -27,6 +39,7 @@ redis = { workspace = true, features = ["aio", "tokio-comp"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tower = { workspace = true, features = ["util"], optional = true }
 tower-http = { workspace = true, optional = true }
@@ -35,7 +48,10 @@ url = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+zeroize = { workspace = true, optional = true }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
-tokio = { workspace = true }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

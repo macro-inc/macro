@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
-import CaretRight from '@phosphor/caret-right.svg';
-import PaperPlaneTilt from '@phosphor-icons/core/regular/paper-plane-tilt.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { cn } from '@ui';

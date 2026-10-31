@@ -68,6 +68,7 @@ pub(crate) fn message(id: u128, thread: Option<Uuid>, body: &str) -> Message {
         mentions: vec![],
         guest_name: None,
         imported_author: None,
+        triggered_via: None,
         triggered_by: None,
         content: body.into(),
         created_at: chrono::Utc::now(),

@@ -8,6 +8,8 @@ use super::*;
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventJoinRequestMetadata {
     /// Stable request identity, answered from the event's details.
+    // Database triggers read this from the stored metadata as `requestId`, to
+    // retire the notification when the request is answered.
     pub request_id: Uuid,
     /// The shared calendar event entity the request is for.
     pub event_id: Uuid,
@@ -37,7 +39,8 @@ impl NotificationTitle for CalendarEventJoinRequestMetadata {
 }
 impl NotificationExtIos for CalendarEventJoinRequestMetadata {
     type NotifData = PushNotificationData;
-    // A request reopened after a decline replaces its earlier banner.
+    // A redelivered notification replaces its own banner, and each person's
+    // request keeps a banner of its own.
     fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
         NotifCollapseKey::new(Self::TYPE_NAME).append(&self.request_id.to_string())
     }

@@ -8,9 +8,9 @@ use email::domain::models::{
     EmailSyncStatus, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
     EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility,
     LabelType, Link, LinkLabel, Message, MessageAttachment, MessageListVisibility, ParsedMessage,
-    ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest, Thread,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings,
-    UserProvider,
+    ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest,
+    SetThreadsArchivedResult, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+    UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -371,6 +371,15 @@ impl SoupService for CountingSoupService {
         .into_iter())
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, soup::domain::models::SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
@@ -591,6 +600,24 @@ impl EmailService for CountingEmailService {
             .unwrap()
             .push((user_id, thread_id, archived));
         Ok(())
+    }
+
+    async fn set_threads_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<SetThreadsArchivedResult, EmailErr> {
+        *self.thread_archived.lock().unwrap() = archived;
+        self.archive_mutation_calls.lock().unwrap().extend(
+            thread_ids
+                .iter()
+                .map(|thread_id| (user_id.clone(), *thread_id, archived)),
+        );
+        Ok(SetThreadsArchivedResult {
+            updated_thread_ids: thread_ids,
+            failed_thread_ids: vec![],
+        })
     }
 
     async fn get_email_thread_previews(
@@ -838,6 +865,7 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                     graphql_email::EmailThreadMetadataLoad::Found(EmailThreadMetadata {
                         thread_id,
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
+                        has_received_mail: true,
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
                         latest_outbound_message_ts: (thread_id.as_u128() % 2 == 1)
@@ -1344,6 +1372,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -1614,10 +1651,12 @@ impl TestHarness {
             ))
             .data(graphql_email::email_thread_metadata_loader(
                 user_id.clone(),
+                None,
                 self.email_content_reader.clone(),
             ))
             .data(graphql_email::email_thread_mail_projection_loader(
                 user_id,
+                None,
                 self.email_content_reader.clone(),
             ))
             .data(NoOpEntityFavoriteEdgeReader)

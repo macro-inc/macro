@@ -3,8 +3,8 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import MacroLogo from '@core/component/MacroLogo';
 import { isMobile } from '@core/mobile/isMobile';
 import LogoIcon from '@icon/macro-logo.svg';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import CloseIcon from '@phosphor/x.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { Button, Dialog, Hotkey } from '@ui';
 import { type Component, createSignal, Match, Show, Switch } from 'solid-js';
@@ -86,9 +86,9 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
                 </p>
               </div>
               <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-                <Button variant="strong" size="xl" onClick={props.onSkip}>
+                <Button variant="secondary" size="xl" onClick={props.onSkip}>
                   Continue
-                  <ArrowRightIcon />
+                  <ArrowRightIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </div>
             </>
@@ -101,9 +101,9 @@ function StartScreen(props: { onStart: () => void; onSkip: () => void }) {
             </p>
           </div>
           <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-            <Button variant="strong" size="xl" onClick={props.onStart}>
+            <Button variant="secondary" size="xl" onClick={props.onStart}>
               Play tutorial
-              <ArrowRightIcon />
+              <ArrowRightIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <Button variant="ghost" size="xl" onClick={props.onSkip}>
               Skip tutorial
@@ -127,9 +127,9 @@ function EndScreen(props: { onFinish: () => void; onReplay: () => void }) {
           </p>
         </div>
         <div class="w-full max-w-xs flex flex-col gap-2 pt-2">
-          <Button variant="strong" size="xl" onClick={props.onFinish}>
+          <Button variant="secondary" size="xl" onClick={props.onFinish}>
             Let’s go
-            <ArrowRightIcon />
+            <ArrowRightIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button variant="ghost" size="xl" onClick={props.onReplay}>
             Replay tutorial
@@ -167,7 +167,7 @@ function ModalFooter(props: { lesson: LessonState }) {
           </Button>
           <Button
             ref={onboarding.setContinueButtonRef}
-            variant="strong"
+            variant="secondary"
             size="xl"
             onClick={onboarding.handleContinue}
             disabled={!onboarding.readyToContinue()}

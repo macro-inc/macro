@@ -14,6 +14,20 @@ impl NoteRepository for Repo {
     async fn document_links(&self, _: &str, _: &str) -> Result<Vec<DocumentNoteLink>, Self::Err> {
         Ok(vec![])
     }
+    async fn team_reference_sources(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<Vec<NoteReferenceSource>, rootcause::Report> {
+        Ok(vec![])
+    }
+    async fn reference_previews(
+        &self,
+        _: &str,
+        _: Vec<NoteTarget>,
+    ) -> Result<Vec<CalendarMentionPreview>, rootcause::Report> {
+        Ok(vec![])
+    }
     async fn visible(&self, _: &str, _: &NoteTarget) -> Result<bool, Self::Err> {
         Ok(self.visible)
     }
@@ -142,4 +156,23 @@ async fn an_owner_can_revoke_sharing_after_losing_meeting_access() {
         .await
         .unwrap();
     assert_eq!(service.repo.writes.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn document_references_require_a_document_view_receipt() {
+    let service = MeetingNotes::new(Repo {
+        visible: true,
+        markdown: true,
+        member: false,
+        writes: AtomicUsize::new(0),
+    });
+    for (entity_type, allowed) in [(EntityType::Document, true), (EntityType::Project, false)] {
+        let receipt = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+            MacroUserIdStr::parse_from_str("macro|reader@example.com").unwrap(),
+            "019f85aa-984e-7022-a018-4a242bcafe23",
+            entity_type,
+        );
+        assert_eq!(service.document_links(receipt).await.is_ok(), allowed);
+    }
+    assert_eq!(service.repo.writes.load(Ordering::SeqCst), 0);
 }

@@ -1,5 +1,5 @@
 import { isDesktopPlatform } from '@core/util/platform';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

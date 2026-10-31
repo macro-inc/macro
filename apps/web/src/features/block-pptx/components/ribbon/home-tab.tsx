@@ -3,52 +3,52 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import AlignBottom from '@phosphor/align-bottom.svg';
-import AlignCenterHorizontal from '@phosphor/align-center-horizontal.svg';
-import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
-import AlignLeft from '@phosphor/align-left.svg';
-import AlignRight from '@phosphor/align-right.svg';
-import AlignTop from '@phosphor/align-top.svg';
-import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowLineDown from '@phosphor/arrow-line-down.svg';
-import ArrowLineUp from '@phosphor/arrow-line-up.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import ArrowsHorizontal from '@phosphor/arrows-horizontal.svg';
-import ArrowsVertical from '@phosphor/arrows-vertical.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import CopySimple from '@phosphor/copy-simple.svg';
-import Eraser from '@phosphor/eraser.svg';
-import FlipHorizontal from '@phosphor/flip-horizontal.svg';
-import FlipVertical from '@phosphor/flip-vertical.svg';
-import Highlighter from '@phosphor/highlighter.svg';
-import ListBullets from '@phosphor/list-bullets.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import MagnifyingGlass from '@phosphor/magnifying-glass.svg';
-import PaintBrush from '@phosphor/paint-brush.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import PenNib from '@phosphor/pen-nib.svg';
-import Plus from '@phosphor/plus.svg';
-import Scissors from '@phosphor/scissors.svg';
-import SelectionAll from '@phosphor/selection-all.svg';
-import ShapesIcon from '@phosphor/shapes.svg';
-import Stack from '@phosphor/stack.svg';
-import TextAa from '@phosphor/text-aa.svg';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignJustify from '@phosphor/text-align-justify.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
-import TextB from '@phosphor/text-b.svg';
-import TextIndent from '@phosphor/text-indent.svg';
-import TextItalic from '@phosphor/text-italic.svg';
-import TextOutdent from '@phosphor/text-outdent.svg';
-import TextStrikethrough from '@phosphor/text-strikethrough.svg';
-import TextSubscript from '@phosphor/text-subscript.svg';
-import TextSuperscript from '@phosphor/text-superscript.svg';
-import TextUnderline from '@phosphor/text-underline.svg';
-import Trash from '@phosphor/trash.svg';
+import AlignBottom from '@icon/system/regular/align-bottom.svg';
+import AlignCenterHorizontal from '@icon/system/regular/align-center-horizontal.svg';
+import AlignCenterVertical from '@icon/system/regular/align-center-vertical.svg';
+import AlignLeft from '@icon/system/regular/align-left.svg';
+import AlignRight from '@icon/system/regular/align-right.svg';
+import AlignTop from '@icon/system/regular/align-top.svg';
+import ArrowClockwise from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowLineDown from '@icon/system/regular/arrow-line-down.svg';
+import ArrowLineUp from '@icon/system/regular/arrow-line-up.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import ArrowsHorizontal from '@icon/system/regular/arrows-horizontal.svg';
+import ArrowsVertical from '@icon/system/regular/arrows-vertical.svg';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import CopySimple from '@icon/system/regular/copy-simple.svg';
+import Eraser from '@icon/system/regular/eraser.svg';
+import FlipHorizontal from '@icon/system/regular/flip-horizontal.svg';
+import FlipVertical from '@icon/system/regular/flip-vertical.svg';
+import Highlighter from '@icon/system/regular/highlighter.svg';
+import ListBullets from '@icon/system/regular/list-bullets.svg';
+import ListNumbers from '@icon/system/regular/list-numbers.svg';
+import MagnifyingGlass from '@icon/system/regular/magnifying-glass.svg';
+import PaintBrush from '@icon/system/regular/paint-brush.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import PenNib from '@icon/system/regular/pen-nib.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Scissors from '@icon/system/regular/scissors.svg';
+import SelectionAll from '@icon/system/regular/selection-all.svg';
+import ShapesIcon from '@icon/system/regular/shapes.svg';
+import Stack from '@icon/system/regular/stack.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignJustify from '@icon/system/regular/text-align-justify.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
+import TextB from '@icon/system/regular/text-b.svg';
+import TextIndent from '@icon/system/regular/text-indent.svg';
+import TextItalic from '@icon/system/regular/text-italic.svg';
+import TextOutdent from '@icon/system/regular/text-outdent.svg';
+import TextStrikethrough from '@icon/system/regular/text-strikethrough.svg';
+import TextSubscript from '@icon/system/regular/text-subscript.svg';
+import TextSuperscript from '@icon/system/regular/text-superscript.svg';
+import TextUnderline from '@icon/system/regular/text-underline.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { For, type JSX, Show } from 'solid-js';
 import { CHARACTER_SPACINGS } from '../../core/formatting';
 import { swatchCss } from '../../core/palette';
@@ -400,7 +400,7 @@ export function HomeTab() {
     <>
       <RibbonGroup label="Clipboard">
         <RibbonButton
-          label="Paste"
+          aria-label="Paste"
           tooltip="Paste (⌘V)"
           disabled={ro()}
           onClick={env.paste}
@@ -408,21 +408,21 @@ export function HomeTab() {
           <ClipboardIcon />
         </RibbonButton>
         <RibbonButton
-          label="Cut"
+          aria-label="Cut"
           tooltip="Cut (⌘X)"
           disabled={ro()}
           onClick={env.cut}
         >
           <Scissors />
         </RibbonButton>
-        <RibbonButton label="Copy" tooltip="Copy (⌘C)" onClick={env.copy}>
+        <RibbonButton aria-label="Copy" tooltip="Copy (⌘C)" onClick={env.copy}>
           <CopyIcon />
         </RibbonButton>
         <RibbonButton
-          label="Format Painter"
+          aria-label="Format Painter"
           tooltip="Format Painter: click to paint once, double-click to keep painting (⇧⌘C / ⇧⌘V)"
           disabled={ro() || env.selection().length === 0}
-          active={env.formatPainter.active()}
+          aria-pressed={env.formatPainter.active()}
           data-testid="pptx-format-painter"
           onClick={() => {
             if (env.formatPainter.active()) env.formatPainter.cancel();
@@ -437,7 +437,7 @@ export function HomeTab() {
       </RibbonGroup>
       <RibbonGroup label="Slides">
         <RibbonTextButton
-          label="New slide"
+          aria-label="New slide"
           tooltip="New slide (⌘M)"
           disabled={ro()}
           data-testid="pptx-new-slide"
@@ -493,7 +493,7 @@ export function HomeTab() {
         </RibbonPopover>
         <SectionMenu />
         <RibbonButton
-          label="Duplicate slide"
+          aria-label="Duplicate slide"
           tooltip="Duplicate slide"
           disabled={ro()}
           onClick={() => fireAndForget(c.duplicateSlide(), 'pptx-editor')}
@@ -501,7 +501,7 @@ export function HomeTab() {
           <CopySimple />
         </RibbonButton>
         <RibbonButton
-          label="Delete slide"
+          aria-label="Delete slide"
           tooltip="Delete slide"
           disabled={ro() || (env.deck()?.slides.length ?? 0) <= 1}
           onClick={() => {
@@ -526,7 +526,7 @@ export function HomeTab() {
           onPick={(size) => fireAndForget(c.setFontSize(size), 'pptx-editor')}
         />
         <RibbonButton
-          label="Increase font size"
+          aria-label="Increase font size"
           tooltip="Increase font size (⇧⌘>)"
           disabled={!text()}
           onClick={() => fireAndForget(c.stepSize(1), 'pptx-editor')}
@@ -536,7 +536,7 @@ export function HomeTab() {
           </span>
         </RibbonButton>
         <RibbonButton
-          label="Decrease font size"
+          aria-label="Decrease font size"
           tooltip="Decrease font size (⇧⌘<)"
           disabled={!text()}
           onClick={() => fireAndForget(c.stepSize(-1), 'pptx-editor')}
@@ -546,7 +546,7 @@ export function HomeTab() {
           </span>
         </RibbonButton>
         <RibbonButton
-          label="Clear formatting"
+          aria-label="Clear formatting"
           tooltip="Clear all formatting"
           disabled={!text()}
           onClick={() => fireAndForget(c.clearFormatting(), 'pptx-editor')}
@@ -554,47 +554,47 @@ export function HomeTab() {
           <Eraser />
         </RibbonButton>
         <RibbonButton
-          label="Bold"
+          aria-label="Bold"
           tooltip="Bold (⌘B)"
           data-testid="pptx-bold"
           disabled={!text()}
-          active={text() && f().bold}
+          aria-pressed={text() && f().bold}
           onClick={() => fireAndForget(c.toggle('bold'), 'pptx-editor')}
         >
           <TextB />
         </RibbonButton>
         <RibbonButton
-          label="Italic"
+          aria-label="Italic"
           tooltip="Italic (⌘I)"
           disabled={!text()}
-          active={text() && f().italic}
+          aria-pressed={text() && f().italic}
           onClick={() => fireAndForget(c.toggle('italic'), 'pptx-editor')}
         >
           <TextItalic />
         </RibbonButton>
         <RibbonButton
-          label="Underline"
+          aria-label="Underline"
           tooltip="Underline (⌘U)"
           disabled={!text()}
-          active={text() && f().underline}
+          aria-pressed={text() && f().underline}
           onClick={() => fireAndForget(c.toggle('underline'), 'pptx-editor')}
         >
           <TextUnderline />
         </RibbonButton>
         <RibbonButton
-          label="Strikethrough"
+          aria-label="Strikethrough"
           tooltip="Strikethrough"
           disabled={!text()}
-          active={text() && f().strike}
+          aria-pressed={text() && f().strike}
           onClick={() => fireAndForget(c.toggle('strike'), 'pptx-editor')}
         >
           <TextStrikethrough />
         </RibbonButton>
         <RibbonButton
-          label="Superscript"
+          aria-label="Superscript"
           tooltip="Superscript (⇧⌘=)"
           disabled={!text()}
-          active={text() && (f().baseline ?? 0) > 0}
+          aria-pressed={text() && (f().baseline ?? 0) > 0}
           onClick={() =>
             fireAndForget(c.toggleBaseline('super'), 'pptx-editor')
           }
@@ -602,10 +602,10 @@ export function HomeTab() {
           <TextSuperscript />
         </RibbonButton>
         <RibbonButton
-          label="Subscript"
+          aria-label="Subscript"
           tooltip="Subscript (⌘=)"
           disabled={!text()}
-          active={text() && (f().baseline ?? 0) < 0}
+          aria-pressed={text() && (f().baseline ?? 0) < 0}
           onClick={() => fireAndForget(c.toggleBaseline('sub'), 'pptx-editor')}
         >
           <TextSubscript />
@@ -698,10 +698,10 @@ export function HomeTab() {
       </RibbonGroup>
       <RibbonGroup label="Paragraph">
         <RibbonButton
-          label="Bullets"
+          aria-label="Bullets"
           tooltip="Bullets"
           disabled={!text()}
-          active={text() && f().bullet}
+          aria-pressed={text() && f().bullet}
           onClick={() => fireAndForget(c.toggleBullets(), 'pptx-editor')}
         >
           <ListBullets />
@@ -739,7 +739,7 @@ export function HomeTab() {
           )}
         </RibbonPopover>
         <RibbonButton
-          label="Numbering"
+          aria-label="Numbering"
           tooltip="Numbering"
           disabled={!text()}
           onClick={() => fireAndForget(c.toggleNumbering(), 'pptx-editor')}
@@ -776,7 +776,7 @@ export function HomeTab() {
           )}
         </RibbonPopover>
         <RibbonButton
-          label="Decrease list level"
+          aria-label="Decrease list level"
           tooltip="Decrease list level (⇧Tab)"
           disabled={!text()}
           onClick={() => fireAndForget(c.indent(-1), 'pptx-editor')}
@@ -784,7 +784,7 @@ export function HomeTab() {
           <TextOutdent />
         </RibbonButton>
         <RibbonButton
-          label="Increase list level"
+          aria-label="Increase list level"
           tooltip="Increase list level (Tab)"
           disabled={!text()}
           onClick={() => fireAndForget(c.indent(1), 'pptx-editor')}
@@ -831,10 +831,10 @@ export function HomeTab() {
         >
           {([value, label, Icon]) => (
             <RibbonButton
-              label={label.split(' (')[0]}
+              aria-label={label.split(' (')[0]}
               tooltip={label}
               disabled={!text()}
-              active={text() && f().align === value}
+              aria-pressed={text() && f().align === value}
               onClick={() => fireAndForget(c.align(value), 'pptx-editor')}
             >
               <Icon />
@@ -924,14 +924,14 @@ export function HomeTab() {
       </RibbonGroup>
       <RibbonGroup label="Editing">
         <RibbonButton
-          label="Find"
+          aria-label="Find"
           tooltip="Find (⌘F)"
           onClick={() => env.find(false)}
         >
           <MagnifyingGlass />
         </RibbonButton>
         <RibbonTextButton
-          label="Replace"
+          aria-label="Replace"
           tooltip="Replace (⌘H)"
           disabled={ro()}
           onClick={() => env.find(true)}
@@ -939,7 +939,7 @@ export function HomeTab() {
           Replace
         </RibbonTextButton>
         <RibbonButton
-          label="Select all"
+          aria-label="Select all"
           tooltip="Select all (⌘A)"
           onClick={() => c.selectAll()}
         >

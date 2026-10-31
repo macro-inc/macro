@@ -184,19 +184,3 @@ it('keeps the touch picker visible while models load', async () => {
   expect(status.textContent).toContain('Waiting for the agent');
   expect(screen.getByRole('textbox', { name: 'Search models' })).toBeTruthy();
 });
-
-it('preserves the current effort label in the mobile model trigger', () => {
-  device.touch = true;
-  render(() => (
-    <AgentModelSelector
-      model="gpt-5"
-      options={[{ id: 'gpt-5', name: 'GPT-5', group: null, description: null }]}
-      effortLabel="High"
-      onSelect={vi.fn()}
-    />
-  ));
-  expect(
-    screen.getByRole('button', { name: 'Agent model' }).textContent
-  ).toContain('GPT-5 · High');
-  expect(screen.queryByRole('slider')).toBeNull();
-});

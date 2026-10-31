@@ -1,5 +1,6 @@
 use anyhow::Result;
 use bot_id::BotId;
+use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Duration, Utc};
 use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
@@ -108,6 +109,10 @@ pub struct AgentTask {
     /// Absent when using Macro's agent-session runtime with a selected model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentTaskAgent>,
+    /// Apps the routine requires on top of the agent's own. The owner must
+    /// have each one connected to save the routine and for it to run.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mcp_servers: Vec<AgentMcpServer>,
     pub prompt: String,
     pub user_prompt: String,
 }
@@ -308,6 +313,8 @@ pub enum ActionPolicyError {
     EventManagementDisabled,
     #[error("trigger conditions are not enabled")]
     ConditionsDisabled,
+    #[error("connect GitHub before enabling a GitHub trigger")]
+    GithubNotLinked,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
 }
@@ -342,6 +349,10 @@ pub struct ScheduledAction {
     pub enabled: bool,
     /// Whether the action's runs are listed in Home and the Agents list.
     pub run_visibility: RunVisibility,
+    /// The shared template this routine was activated from, if any.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub template_id: Option<Uuid>,
 }
 
 impl ScheduledAction {

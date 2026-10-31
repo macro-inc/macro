@@ -220,3 +220,53 @@ describe('uploadInputAttachments', () => {
     ]);
   });
 });
+
+describe('attachment upload cancellation', () => {
+  beforeEach(() => toastFailureMock.mockReset());
+  afterEach(() => vi.restoreAllMocks());
+  it.each(['removed', 'closed'] as const)(
+    'does not restore an image when the draft is %s during upload',
+    async (reason) => {
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:cancelled-image');
+      const revoke = vi.spyOn(URL, 'revokeObjectURL');
+      const tracker = createInputAttachmentTracker();
+      let active = true;
+      let finish!: (result: {
+        failed: false;
+        destination: 'static';
+        id: string;
+      }) => void;
+      const upload = uploadInputAttachments({
+        files: [new File(['image'], 'image.png', { type: 'image/png' })],
+        tracker,
+        isActive: () => active,
+        uploadFile: () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      });
+      if (reason === 'removed')
+        tracker.removeAttachment(tracker.attachments()[0].id);
+      else active = false;
+      finish({ failed: false, destination: 'static', id: 'uploaded-image' });
+      await upload;
+      expect(tracker.attachments()).toEqual([]);
+      expect(revoke).toHaveBeenCalledWith('blob:cancelled-image');
+    }
+  );
+
+  it('does not upload files that cannot fit in the attachment tracker', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:rejected-image');
+    const revoke = vi.spyOn(URL, 'revokeObjectURL');
+    const uploadFile = vi.fn();
+    const tracker = createInputAttachmentTracker({ maxAttachments: 0 });
+    await uploadInputAttachments({
+      files: [new File(['image'], 'image.png', { type: 'image/png' })],
+      tracker,
+      uploadFile,
+    });
+    expect(uploadFile).not.toHaveBeenCalled();
+    expect(toastFailureMock).toHaveBeenCalledOnce();
+    expect(revoke).toHaveBeenCalledWith('blob:rejected-image');
+  });
+});

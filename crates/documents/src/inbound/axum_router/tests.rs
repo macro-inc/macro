@@ -414,6 +414,7 @@ impl DocumentService for FakeDocumentService {
     async fn update_task_status(
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _credited_user: Option<MacroUserIdStr<'static>>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")
@@ -863,6 +864,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         Ok(user_context(JWT_USER_ID))
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -901,6 +911,7 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
                     agent_id: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),

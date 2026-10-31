@@ -5,6 +5,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { ViewCreateMenu } from '@app/features/command/view-create-menu';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { PrOriginIcon } from '@block-pr/component/PrLinks';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
@@ -19,14 +20,14 @@ import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { githubLabelColor } from '@entity/components/GithubLabelPill';
 import type { GithubPullRequestLabel } from '@entity/types/entity';
+import SplitIcon from '@icon/system/regular/columns.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import StarIcon from '@icon/system/regular/star.svg';
+import UserIcon from '@icon/system/regular/user.svg';
+import UserCircleCheckIcon from '@icon/system/regular/user-circle-check.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import SplitIcon from '@phosphor/columns.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import StarIcon from '@phosphor/star.svg';
-import UserIcon from '@phosphor/user.svg';
-import UserCircleCheckIcon from '@phosphor/user-circle-check.svg';
-import UsersThreeIcon from '@phosphor/users-three.svg';
 import { selectSidebarTag } from '@property/tags/SidebarTagsSection';
 import {
   useFavoritesData,
@@ -86,10 +87,10 @@ function ReviewFavoriteRow(props: {
         </ViewSidebar.Item>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenuContent class="w-56 text-xs text-ink-muted">
+        <ContextMenuContent class="min-w-56 max-w-[22rem] text-xs text-ink-muted">
           <MenuItem
             icon={SplitIcon}
-            text="Open in new split"
+            text={t('entityActions.openInNewSplit')}
             disabled={!globalSplitManager()?.canAppendSplit()}
             onClick={() => {
               if (globalSplitManager()?.canAppendSplit())
@@ -98,7 +99,7 @@ function ReviewFavoriteRow(props: {
           />
           <MenuItem
             icon={StarIcon}
-            text="Remove from favorites"
+            text={t('entityActions.removeFromFavorites')}
             onClick={() =>
               removeFavorite.mutate({
                 entityType: 'foreign_entity',
@@ -236,7 +237,9 @@ function ReviewAgents(props: {
             <For each={props.tools}>
               {(tool) => (
                 <ViewSidebar.Item
-                  title={`Started from ${PR_ORIGIN_LABELS[tool]}`}
+                  title={t('viewMenus.startedFrom', {
+                    origin: PR_ORIGIN_LABELS[tool],
+                  })}
                   active={props.activeTools.includes(tool)}
                   onClick={() =>
                     props.onActiveToolsChange(

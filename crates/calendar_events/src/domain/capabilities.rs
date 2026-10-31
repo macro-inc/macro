@@ -103,9 +103,11 @@ impl ViewerCapabilities {
     /// it would never reach the meeting. The organizer may do
     /// everything, and so may anyone on a writable event without attendees,
     /// which is treated as the actor's own, except that only a Google copy
-    /// has a guest policy to set. A guest of a Google copy follows
-    /// the event's [`GuestPolicy`]: modify allows everything except changing
-    /// the policy, invite allows adding guests, and every guest may answer.
+    /// has a guest policy to set, and only a Google organizer may answer:
+    /// Outlook fixes the organizer's response and refuses their answer. A
+    /// guest of a Google copy follows the event's [`GuestPolicy`]: modify
+    /// allows everything except changing the policy, invite allows adding
+    /// guests, and every guest may answer.
     /// A guest may change the guest list only while it is visible: Google
     /// takes guest additions as a whole new list, and a guest's copy of a
     /// hidden list holds only themselves and the organizer. Outlook gives
@@ -114,7 +116,10 @@ impl ViewerCapabilities {
     ///
     /// Only the copy's own inbox counts: another of the actor's inboxes
     /// organizing or attending the event makes them nothing on this copy,
-    /// which is written through this inbox's grant. `None` is an actor who
+    /// which is written through this inbox's grant. The inbox organizes the
+    /// event when the organizer is its address or a calendar it can write
+    /// ([`OwnedInbox::organizes`]), as for an event made on a secondary
+    /// calendar, even on the copy the organizer's calendar invited it to. `None` is an actor who
     /// does not own the copy's inbox, such as a delegate, or a teammate or
     /// channel member looking at someone else's projection; they may do
     /// nothing beyond the event-without-attendees rule. Answering always
@@ -151,20 +156,20 @@ impl ViewerCapabilities {
         let is_organizer = inbox.is_some_and(|inbox| {
             access
                 .organizer_email
-                .is_some_and(|email| inbox.matches(email))
+                .is_some_and(|email| inbox.organizes(email))
                 || access
                     .attendees
                     .iter()
                     .any(|attendee| attendee.is_organizer && inbox.matches(&attendee.email))
         });
         if is_organizer || access.attendees.is_empty() {
+            let is_google = inbox.is_some_and(|inbox| inbox.provider == CalendarProvider::Google);
             return Self {
                 edit_details: true,
                 invite_guests: true,
                 remove_guests: true,
-                set_guest_policy: inbox
-                    .is_some_and(|inbox| inbox.provider == CalendarProvider::Google),
-                rsvp: is_guest,
+                set_guest_policy: is_google,
+                rsvp: is_guest && is_google,
                 organize: true,
             };
         }

@@ -94,8 +94,7 @@ describe('connector import dialog', () => {
     await waitFor(() => expect(open()).toBe(false));
     expect(context.startAgentImport).toHaveBeenCalledWith(
       expect.objectContaining({
-        input:
-          'Import my most recent issues and tasks from Jira into Macro tasks.',
+        input: 'Import my Jira workspace into Macro.',
       })
     );
   });

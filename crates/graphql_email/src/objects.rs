@@ -503,9 +503,9 @@ where
     let loader = ctx.data::<DataLoader<EmailThreadMetadataLoader<R>>>()?;
     match loader.load_one(thread_id).await? {
         Some(EmailThreadMetadataLoad::Found(metadata)) => Ok(metadata),
-        Some(EmailThreadMetadataLoad::Missing | EmailThreadMetadataLoad::Failed) | None => Err(
-            async_graphql::Error::new("email thread metadata is unavailable"),
-        ),
+        Some(EmailThreadMetadataLoad::Unavailable(_)) | None => Err(async_graphql::Error::new(
+            "email thread metadata is unavailable",
+        )),
     }
 }
 
@@ -520,10 +520,9 @@ where
     let loader = ctx.data::<DataLoader<EmailThreadMailProjectionLoader<R>>>()?;
     match loader.load_one(thread_id).await? {
         Some(EmailThreadMailProjectionLoad::Found(projection)) => Ok(projection),
-        Some(EmailThreadMailProjectionLoad::Missing | EmailThreadMailProjectionLoad::Failed)
-        | None => Err(async_graphql::Error::new(
-            "email thread Mail projection is unavailable",
-        )),
+        Some(EmailThreadMailProjectionLoad::Unavailable(_)) | None => Err(
+            async_graphql::Error::new("email thread Mail projection is unavailable"),
+        ),
     }
 }
 
@@ -572,7 +571,7 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::{SoupEmailContentEdgeReader, email_content_loader};
+    use crate::{EmailThreadUnavailable, SoupEmailContentEdgeReader, email_content_loader};
 
     struct ContentQuery;
 
@@ -613,6 +612,7 @@ mod tests {
                         EmailThreadMetadataLoad::Found(EmailThreadMetadata {
                             thread_id,
                             link_id: Uuid::from_u128(3),
+                            has_received_mail: true,
                             latest_inbound_message_ts: None,
                             latest_outbound_message_ts: None,
                             latest_non_spam_message_ts: None,
@@ -632,7 +632,12 @@ mod tests {
         ) -> HashMap<Uuid, EmailThreadMailProjectionLoad> {
             thread_ids
                 .into_iter()
-                .map(|thread_id| (thread_id, EmailThreadMailProjectionLoad::Missing))
+                .map(|thread_id| {
+                    (
+                        thread_id,
+                        EmailThreadMailProjectionLoad::Unavailable(EmailThreadUnavailable::NoRow),
+                    )
+                })
                 .collect()
         }
     }

@@ -131,7 +131,7 @@ where
     Forward: Forwarder + 'static,
     Approvals: OwnerApprovals,
 {
-    #[tracing::instrument(skip_all, err, fields(
+    #[tracing::instrument(skip_all, fields(
         destination = ?target,
         method = %request.method(),
         session = tracing::field::Empty,
@@ -139,6 +139,27 @@ where
         upstream_status = tracing::field::Empty,
     ))]
     async fn proxy(
+        &self,
+        token: &SessionToken,
+        target: EgressTarget,
+        request: ProxyRequest,
+    ) -> Result<ProxyResponse, EgressError> {
+        self.authorize_and_forward(token, target, request)
+            .await
+            .inspect_err(log_proxy_error)
+    }
+}
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
+where
+    Sessions: SessionAuthority + 'static,
+    Credentials: McpCredentials,
+    Tokens: GithubTokens,
+    Forward: Forwarder + 'static,
+    Approvals: OwnerApprovals,
+{
+    async fn authorize_and_forward(
         &self,
         token: &SessionToken,
         target: EgressTarget,
@@ -225,7 +246,7 @@ where
             ) => {
                 let (call, answer): (UpstreamCall, Option<Answer>) = match self
                     .credentials
-                    .resolve(&grant.owner, destination)
+                    .resolve(&grant.owner, grant.agent, destination)
                     .await?
                 {
                     McpResolution::Connected(call) => (call, None),
@@ -444,6 +465,19 @@ where
         }
 
         Ok(response)
+    }
+}
+
+/// Logs a failed proxy call in the current span.
+///
+/// Unlike `#[instrument(err)]`, whose level is fixed, this keeps a closed
+/// session at INFO: ending a session revokes its egress, and the session's MCP
+/// clients still make a last reconnect or `DELETE` after it closes. Every other
+/// refusal or failure stays at ERROR.
+fn log_proxy_error(error: &EgressError) {
+    match error {
+        EgressError::SessionClosed => tracing::info!(error = %error),
+        _ => tracing::error!(error = %error),
     }
 }
 

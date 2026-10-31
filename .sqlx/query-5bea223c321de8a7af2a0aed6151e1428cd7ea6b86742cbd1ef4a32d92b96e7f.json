@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM whatsapp_privacy_token\n            WHERE account_id = $1 AND token_timestamp < $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5bea223c321de8a7af2a0aed6151e1428cd7ea6b86742cbd1ef4a32d92b96e7f"
+}

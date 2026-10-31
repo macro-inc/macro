@@ -97,6 +97,7 @@ pub(super) fn opted_in(expr: &Expr<AgentSessionLiteral>) -> bool {
     out.include || out.named
 }
 
+#[tracing::instrument(err, skip_all, fields(limit = req.limit))]
 pub(super) async fn cursor_soup(
     db: &PgPool,
     req: SimpleSortRequest<'_>,
@@ -120,15 +121,26 @@ pub(super) async fn cursor_soup(
     // `$1` is the requesting user for every clause in this query: the source
     // id CTE, the history join, and any `Owner` literal that binds it again.
     query.push_bind(req.user_id.as_ref().to_string());
-    push_access_rows(&mut query);
-    query.push(" AND (");
+    let named_ids = explicitly_named_ids(filter);
+    push_listing_rows(&mut query);
+    // A session the query names is also readable through its thread's parent,
+    // like the session's own REST read; GraphQL `agentSession` loads this way.
+    // Broad lists stay limited to session grants so every document thread's
+    // sessions do not flood Home and Recent.
+    query.push("(");
+    query.push(SESSION_GRANT_SQL);
+    query.push(" OR (s.id = ANY(");
+    query.push_bind(named_ids.clone());
+    query.push(") AND ");
+    query.push(PARENT_THREAD_GRANT_SQL);
+    query.push(")) AND (");
     push_filter(&mut query, filter);
     query.push(")");
     // Hidden inline mentions and DM contexts are absent from broad lists. A
     // query that names the session still returns it, so favorites and direct
     // id lookups keep working.
     query.push(" AND (s.visibility <> 'hidden' OR s.id = ANY(");
-    query.push_bind(explicitly_named_ids(filter));
+    query.push_bind(named_ids);
     query.push("))");
     if let (Some(timestamp), Some(id)) = (parts.timestamp, parts.id) {
         query.push(format!(" AND ({sort}, s.id) < ("));
@@ -149,6 +161,7 @@ pub(super) async fn cursor_soup(
         .collect()
 }
 
+#[tracing::instrument(err, skip_all, fields(entity_count = req.entities.len()))]
 pub(super) async fn by_ids(
     db: &PgPool,
     req: AdvancedSortParams<'_>,
@@ -160,8 +173,13 @@ pub(super) async fn by_ids(
 
     let mut query = QueryBuilder::<Postgres>::new(SELECT_SQL);
     query.push_bind(req.user_id.as_ref().to_string());
-    push_access_rows(&mut query);
-    query.push(" AND s.id = ANY(");
+    push_listing_rows(&mut query);
+    // Every session here is named, so its thread's parent grants apply too.
+    query.push("(");
+    query.push(SESSION_GRANT_SQL);
+    query.push(" OR ");
+    query.push(PARENT_THREAD_GRANT_SQL);
+    query.push(") AND s.id = ANY(");
     query.push_bind(ids);
     query.push(") ORDER BY s.modified_at DESC, s.id DESC");
     query
@@ -211,12 +229,13 @@ fn session_ids(entities: &[Entity<'_>]) -> Vec<Uuid> {
         .collect()
 }
 
-/// Pushes the listing's source ids, row, and access predicate after the
-/// `$1` user bind that [`SELECT_SQL`] ends on.
-fn push_access_rows(query: &mut QueryBuilder<'_, Postgres>) {
+/// Pushes the listing's source ids, row, and history join after the `$1`
+/// user bind that [`SELECT_SQL`] ends on, ending at `WHERE` so the caller
+/// appends its access predicate.
+fn push_listing_rows(query: &mut QueryBuilder<'_, Postgres>) {
     query.push(SOURCE_IDS_SQL);
     query.push(ROW_SQL);
-    query.push(ACCESS_SQL);
+    query.push("\n    WHERE ");
 }
 
 fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
@@ -258,8 +277,8 @@ fn parts_from_query<F>(
     }
 }
 
-/// Opens the listing's source-id CTE. Ends right before the first bind so `$1`
-/// is the user id.
+/// Selects the row shape and joins the requesting user's view history. Ends
+/// right before the first bind so `$1` is the user id.
 const SELECT_SQL: &str = r#"
     WITH user_source_ids AS (
         SELECT cp.channel_id::text AS source_id
@@ -303,12 +322,25 @@ const ROW_SQL: &str = r#"
         AND uh."itemType" = 'agent_session'
         AND uh."userId" = $1"#;
 
-/// The listing's access predicate over the source ids of [`SOURCE_IDS_SQL`].
-const ACCESS_SQL: &str = r#"
-    WHERE EXISTS (
+/// Continues the listing rows: the viewer holds a grant on the session itself.
+const SESSION_GRANT_SQL: &str = r#"EXISTS (
         SELECT 1 FROM entity_access ea
         WHERE ea.entity_id = s.id
             AND ea.entity_type = 'agent_session'
+            AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+    )"#;
+
+/// The viewer holds a grant on the document or call whose live thread the
+/// session runs in. Mirrors the parent inheritance `entity_access` applies to
+/// agent sessions, over the same stored grants Soup reads for documents.
+const PARENT_THREAD_GRANT_SQL: &str = r#"EXISTS (
+        SELECT 1 FROM comms_messages m
+        JOIN comms_message_threads t ON t.root_id = m.id AND t.deleted_at IS NULL
+        JOIN entity_access ea
+            ON ea.entity_id::text = m.parent_entity_id
+            AND ea.entity_type = m.parent_entity_type
+        WHERE m.id = s.thread_id
+            AND m.parent_entity_type IN ('document', 'call')
             AND ea.source_id IN (SELECT source_id FROM user_source_ids)
     )"#;
 

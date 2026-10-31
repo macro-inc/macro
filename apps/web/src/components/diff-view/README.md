@@ -32,6 +32,9 @@ the sticky row on hover. Hovering the header highlights the row but does not tog
 it; only the disclosure and path controls toggle collapse. Toolbar parts use
 standard `Button` and `Tabs` sizes, and backgrounds come from the
 card's depth.
+The disclosure caret keeps `aria-expanded` and rotates with the diff state, but
+an expanded diff does not give its Button a selected fill. Open popup triggers
+and genuine `aria-pressed` action toggles keep their separate active styling.
 
 The host composes the rest:
 
@@ -44,6 +47,8 @@ The host composes the rest:
 - Toolbar parts, `DiffView.CollapseAll` and `DiffView.StyleToggle`, anywhere
   inside `Root`.
 - Collapse state that persists, by passing `collapse`; the default lives in memory.
+  Files with at most 40 additions + deletions start expanded; larger files start
+  collapsed. Individual toggles and Collapse all / Expand all override defaults.
 - `DiffCounts` for compact numeric totals, or `DiffStats` for those same totals
   beside five green/red squares showing the addition/deletion proportion. A static
   diagonal hatch and inset edge give the squares texture without changing their size.

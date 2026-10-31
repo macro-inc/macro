@@ -40,7 +40,7 @@ function DescriptionSession(props: {
         }
       />
       <Show when={session.connectionError()}>
-        <Button size="sm" onClick={props.onRetry}>
+        <Button variant="ghost" size="sm" onClick={props.onRetry}>
           Retry description
         </Button>
       </Show>

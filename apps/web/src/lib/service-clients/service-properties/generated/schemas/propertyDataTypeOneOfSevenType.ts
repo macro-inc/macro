@@ -10,5 +10,5 @@ export type PropertyDataTypeOneOfSevenType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyDataTypeOneOfSevenType = {
-  string: 'string',
+  number: 'number',
 } as const;

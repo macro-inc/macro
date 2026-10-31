@@ -1,6 +1,6 @@
-import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import FileTextIcon from '@phosphor/file-text.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Button, Dropdown } from '@ui';
 import { For, onCleanup, Show } from 'solid-js';
 import type { MeetingNote, NoteRead } from '../core/types';
@@ -46,67 +46,61 @@ export function NotesSection(props: {
                 {props.state.data?.length}
               </span>
             </Show>
+            <Show when={props.state.pending && !props.state.data}>
+              <span role="status" aria-label="Loading meeting notes">
+                <SpinnerIcon class="size-3 animate-spin text-ink-extra-muted" />
+              </span>
+            </Show>
           </div>
-          <Show when={props.state.data}>
-            <div class="flex shrink-0 items-center gap-1">
-              <Button
-                variant={props.state.data?.length ? 'ghost' : 'strong'}
-                size="xs"
-                label={createLabel()}
-                disabled={props.creating}
-                onClick={props.onCreate}
-              >
-                {props.creating || props.createdUnlinked
-                  ? createLabel()
-                  : 'Create'}
-              </Button>
-              <Button
-                variant="ghost"
-                size="xs"
-                depth={3}
-                label="Link existing"
-                disabled={props.creating}
-                onClick={props.onLink}
-              >
-                Link
-              </Button>
-            </div>
-          </Show>
+          <div class="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="xs"
+              aria-label={createLabel()}
+              tooltip={createLabel()}
+              disabled={props.creating}
+              onClick={props.onCreate}
+            >
+              {props.creating || props.createdUnlinked
+                ? createLabel()
+                : 'Create'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              aria-label="Link existing"
+              tooltip="Link existing"
+              disabled={props.creating}
+              onClick={props.onLink}
+            >
+              Link
+            </Button>
+          </div>
         </div>
-        <Show when={props.state.pending && !props.state.data}>
-          <div
-            role="status"
-            aria-label="Loading meeting notes"
-            class="flex flex-col gap-2 py-2"
-          >
-            <ListSkeleton.Bar class="h-4 w-3/4" />
-            <ListSkeleton.Bar class="h-3 w-1/2" />
-          </div>
-        </Show>
         <Show when={props.state.error}>
           <div
             role="alert"
             class="flex items-center justify-between gap-2 py-2 text-xs text-ink-muted"
           >
             <span>{props.state.error}</span>
-            <Button size="sm" variant="outline" onClick={props.onRetry}>
+            <Button size="sm" variant="secondary" onClick={props.onRetry}>
               Retry
             </Button>
           </div>
         </Show>
-        <div class="flex flex-col gap-1">
+        <div class="flex flex-col gap-2">
           <For each={props.state.data}>
             {(note) => {
               onCleanup(() => props.onMenuChange(note.documentId, false));
               return (
                 <div class="min-w-0">
-                  <div class="flex min-w-0 items-center gap-1">
+                  <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                     <Button
                       variant="ghost"
                       size="sm"
-                      depth={3}
-                      class="min-w-0 flex-1"
-                      label={`Open ${note.name}`}
+                      class="min-w-0 justify-start"
+                      aria-label={`Open ${note.name}`}
+                      tooltip={`Open ${note.name}`}
                       onClick={() => props.onOpen(note)}
                     >
                       <span class="min-w-0 flex-1 truncate text-left">
@@ -122,13 +116,14 @@ export function NotesSection(props: {
                         }
                       >
                         <Dropdown.Trigger
-                          variant="ghost"
+                          variant="secondary"
                           size="xs"
-                          label={`Options for ${note.name}`}
+                          aria-label={`Options for ${note.name}`}
+                          tooltip={`Options for ${note.name}`}
                           disabled={props.creating}
                         >
                           Options
-                          <CaretDownIcon />
+                          <CaretDownIcon class="size-3 shrink-0 touch:size-6" />
                         </Dropdown.Trigger>
                         <Dropdown.Content
                           portalScope="local"
@@ -141,7 +136,7 @@ export function NotesSection(props: {
                             <Dropdown.Item
                               onSelect={() => props.onSharing(note)}
                             >
-                              Manage access
+                              Share
                             </Dropdown.Item>
                             <Dropdown.Item
                               onSelect={() => props.onUnlink(note)}

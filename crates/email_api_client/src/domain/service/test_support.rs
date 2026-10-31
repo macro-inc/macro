@@ -1,25 +1,27 @@
 use std::sync::{Arc, Mutex};
 
 use models_email::email::service::label::Label;
-use models_email::email::service::message::Message;
 use models_email::service::contact::{Contact, ContactList};
 use uuid::Uuid;
 
 use super::super::models::{
     AccessToken, ApiOperationKind, ChangeBatch, EmailApiError, ProviderSubscription,
-    RateLimitRefusal, SendRequest, SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
+    RateLimitRefusal, RequestPermit, SendRequest, SentIds, SyncCursor, ThreadListPage, TokenError,
+    TokenFreshness,
 };
 use super::super::ports::{
     MailboxAttachmentClient, MailboxBlocklistClient, MailboxContactsClient, MailboxLabelClient,
     MailboxMessageClient, MailboxSendClient, MailboxSubscriptionClient, MailboxSyncClient,
-    ProviderRateLimiter, ProviderTokenSource,
+    ProviderRequestGate, ProviderTokenSource,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Call {
     Token(Uuid, TokenFreshness),
     HealthNeutralToken(Uuid, TokenFreshness),
-    RateLimit(Uuid, ApiOperationKind),
+    Acquire(Uuid, ApiOperationKind),
+    Finish(Uuid, Option<EmailApiError>),
+    Abandon(Uuid),
     Repository(&'static str),
 }
 
@@ -94,28 +96,41 @@ impl ProviderTokenSource for FakeTokenSource {
 }
 
 #[derive(Clone)]
-pub(super) struct FakeRateLimiter {
+pub(super) struct FakeGate {
     calls: CallLog,
     result: Result<(), RateLimitRefusal>,
 }
 
-impl FakeRateLimiter {
+impl FakeGate {
     pub(super) fn new(calls: CallLog, result: Result<(), RateLimitRefusal>) -> Self {
         Self { calls, result }
     }
 }
 
-impl ProviderRateLimiter for FakeRateLimiter {
-    async fn check_rate_limit(
+impl ProviderRequestGate for FakeGate {
+    async fn acquire(
         &self,
         link_id: Uuid,
         operation: ApiOperationKind,
-    ) -> Result<(), RateLimitRefusal> {
+    ) -> Result<RequestPermit, RateLimitRefusal> {
         self.calls
             .lock()
             .unwrap()
-            .push(Call::RateLimit(link_id, operation));
-        self.result.clone()
+            .push(Call::Acquire(link_id, operation));
+        let calls = self.calls.clone();
+        self.result.clone().map(|()| {
+            RequestPermit::new(link_id, Uuid::nil(), move |link_id, _| {
+                calls.lock().unwrap().push(Call::Abandon(link_id));
+            })
+        })
+    }
+
+    async fn finish(&self, permit: RequestPermit, error: Option<&EmailApiError>) {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::Finish(permit.link_id(), error.cloned()));
+        permit.disarm();
     }
 }
 
@@ -201,7 +216,7 @@ impl MailboxMessageClient for FakeRepository {
         _: &AccessToken,
         _: Uuid,
         _: &str,
-    ) -> Result<Vec<Message>, EmailApiError> {
+    ) -> Result<Vec<crate::domain::models::MessageWithCalendarParts>, EmailApiError> {
         self.unavailable("get_thread")
     }
 
@@ -223,6 +238,16 @@ impl MailboxMessageClient for FakeRepository {
         _: &[String],
     ) -> Result<(), EmailApiError> {
         self.unavailable("modify_message_labels")
+    }
+
+    async fn batch_modify_message_labels(
+        &self,
+        _: &AccessToken,
+        _: &[String],
+        _: &[String],
+        _: &[String],
+    ) -> Result<(), EmailApiError> {
+        self.unavailable("batch_modify_message_labels")
     }
 }
 

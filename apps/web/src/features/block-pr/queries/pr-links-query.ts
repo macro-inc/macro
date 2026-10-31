@@ -18,7 +18,7 @@ import {
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { MessageParent } from '@service-agent-harness/generated/schemas';
 import { storageServiceClient } from '@service-storage/client';
-import { useQueries } from '@tanstack/solid-query';
+import { queryOptions, useQueries } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import {
   buildPrLinks,
@@ -252,6 +252,16 @@ const chunk = <T>(items: readonly T[], size: number): T[][] =>
     items.slice(index * size, (index + 1) * size)
   );
 
+function prLinksQueryOptions(pullRequests: readonly PrLinksTarget[]) {
+  return queryOptions({
+    queryKey: agentSessionPullRequestKeys.linksForPullRequests(
+      pullRequests.map((pullRequest) => pullRequest.url)
+    ).queryKey,
+    queryFn: () => fetchPrLinks(pullRequests),
+    staleTime: LINKS_STALE_TIME,
+  });
+}
+
 /**
  * Links for each pull request, fetched one page-sized chunk at a time so a
  * list that loads another page reuses the earlier chunks' cache entries.
@@ -261,13 +271,7 @@ export function usePrLinksQuery(
 ) {
   const chunks = createMemo(() => chunk(pullRequests(), LINKS_CHUNK_SIZE));
   const queries = useQueries(() => ({
-    queries: chunks().map((pullRequests) => ({
-      queryKey: agentSessionPullRequestKeys.linksForPullRequests(
-        pullRequests.map((pullRequest) => pullRequest.url)
-      ).queryKey,
-      queryFn: () => fetchPrLinks(pullRequests),
-      staleTime: LINKS_STALE_TIME,
-    })),
+    queries: chunks().map((pullRequests) => prLinksQueryOptions(pullRequests)),
   }));
 
   const page = createMemo<PrLinksPage>(() => {

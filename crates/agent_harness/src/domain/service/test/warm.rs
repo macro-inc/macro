@@ -163,6 +163,72 @@ async fn warming_initializes_without_a_prompt_or_visible_created_event() {
     );
 }
 
+/// A claimed warm session delivers the create's first prompt under the id the
+/// caller already shows it under, like a cold open.
+#[tokio::test]
+async fn a_warm_claim_delivers_its_first_prompt_under_the_callers_id() {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_warm_sessions(
+        Arc::new(WarmLifecycleStub {
+            claim: WarmClaim::Claimed,
+        }),
+        Arc::new(agent_session::domain::ports::NoOpToolCatalog),
+    );
+    let id = AgentSessionId::new();
+    let warm = service.warm_session(model_owner::Owner::User(sender()), id);
+    let drive = async {
+        let container = containers
+            .container(containers.first_spawned().await)
+            .expect("warm runtime");
+        complete_session_handshake(&container).await;
+    };
+    let (warmed, ()) = tokio::join!(warm, drive);
+    assert_eq!(warmed.unwrap().unwrap().id, id);
+
+    let action_id = AgentActionId::mint();
+    service
+        .open_managed_session(OpenManagedSession {
+            id: Some(id),
+            owner: model_owner::Owner::User(sender()),
+            prompt: Some(FirstPrompt {
+                action_id: Some(action_id),
+                prompt: "inspect".to_owned(),
+                attachments: Vec::new(),
+            }),
+            repo_url: None,
+            repo_branch: None,
+            instructions: None,
+            model: None,
+            profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+                bot_id: bot_id::MACRO_NEW_BOT_ID,
+                profile: None,
+            }),
+            source: SessionSource::User,
+            visibility: SessionVisibility::Listed,
+        })
+        .await
+        .expect("claim prepared session");
+    assert_eq!(
+        containers.spawned(),
+        1,
+        "claim must reuse the prepared runtime"
+    );
+
+    let prompt_ids: Vec<_> = repo
+        .list_by_session(id)
+        .await
+        .expect("session logs should be readable")
+        .into_iter()
+        .filter_map(|log| match log.entry.content {
+            Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(
+                request,
+            )))) if request.method.as_ref() == "session/prompt" => Some(request.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(prompt_ids, vec![action_id.to_request_id()]);
+}
+
 fn span_exporter() -> (
     opentelemetry_sdk::trace::InMemorySpanExporter,
     opentelemetry_sdk::trace::SdkTracerProvider,

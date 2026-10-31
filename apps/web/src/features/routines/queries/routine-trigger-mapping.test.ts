@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  eventTriggerLabel,
   newScheduleTrigger,
   routineEvents,
   routineTriggerSchema,
@@ -231,5 +232,118 @@ describe('completed routine classification', () => {
       ])
     ).toBe(false);
     expect(hasOnlyScheduledTriggers([])).toBe(false);
+  });
+});
+
+describe('GitHub triggers', () => {
+  const workflowFailed = routineEvents.find(
+    (event) => event.label === 'Workflow failed'
+  )!;
+
+  it('sends a GitHub preset as its selector and typed payload tests', () => {
+    const trigger = {
+      id: 'g',
+      kind: 'event' as const,
+      events: [workflowFailed.value],
+      ...structuredClone(workflowFailed.preset),
+    };
+    trigger.github!.repositories = ['macro-inc/macro'];
+    trigger.match!.push(
+      { path: 'workflow_run.name', op: 'equals', value: 'CI' },
+      { path: 'workflow_run.run_attempt', op: 'equals', value: '1' },
+      { path: 'workflow_run.head_branch', op: 'glob', value: 'release/*' },
+      { path: 'workflow_run.pull_requests', op: 'exists', value: '' }
+    );
+
+    const serialized = serializeTriggers([trigger]);
+
+    expect(serialized).toEqual({
+      type: 'events',
+      filters: [
+        {
+          events: ['github'],
+          github: {
+            events: ['workflow_run'],
+            actions: ['completed'],
+            repositories: ['macro-inc/macro'],
+            includeBots: false,
+          },
+          match: [
+            {
+              path: ['workflow_run', 'conclusion'],
+              in: ['failure', 'timed_out'],
+            },
+            { path: ['workflow_run', 'name'], equals: 'CI' },
+            { path: ['workflow_run', 'run_attempt'], equals: 1 },
+            { path: ['workflow_run', 'head_branch'], glob: 'release/*' },
+            { path: ['workflow_run', 'pull_requests'], exists: true },
+          ],
+        },
+      ],
+    });
+    expect(parseRoutineTriggers(serialized)).toEqual([
+      {
+        ...trigger,
+        id: expect.any(String),
+        ids: undefined,
+        condition: undefined,
+      },
+    ]);
+  });
+
+  it('labels a GitHub trigger by its preset until its events change', () => {
+    const trigger = {
+      id: 'g',
+      kind: 'event' as const,
+      events: [workflowFailed.value],
+      ...structuredClone(workflowFailed.preset),
+    };
+    expect(eventTriggerLabel(trigger)).toBe('Workflow failed');
+    trigger.github!.events = ['check_suite'];
+    expect(eventTriggerLabel(trigger)).toBe('GitHub check_suite');
+  });
+
+  it('rejects names GitHub never sends and incomplete payload tests', () => {
+    const github = (patch: object) => [
+      {
+        id: 'g',
+        kind: 'event' as const,
+        events: ['github' as const],
+        github: {
+          events: [],
+          actions: [],
+          repositories: [],
+          includeBots: false,
+          ...patch,
+        },
+      },
+    ];
+    expect(validateTriggers(github({}))).toBeNull();
+    expect(validateTriggers(github({ events: ['Workflow Run'] }))).toMatch(
+      /lowercase/
+    );
+    expect(validateTriggers(github({ repositories: ['macro'] }))).toMatch(
+      /owner\/name/
+    );
+    expect(
+      validateTriggers([
+        {
+          id: 'w',
+          kind: 'event',
+          events: ['github'],
+          match: [{ path: 'status', op: 'equals', value: ' ' }],
+        },
+      ])
+    ).toMatch(/value/);
+    expect(
+      validateTriggers([
+        {
+          id: 'w',
+          kind: 'event',
+          events: ['github'],
+          match: [{ path: 'alert..severity', op: 'exists', value: '' }],
+        },
+      ])
+    ).toMatch(/dots/);
   });
 });

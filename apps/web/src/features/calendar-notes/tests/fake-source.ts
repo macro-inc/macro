@@ -9,6 +9,10 @@ export function createFakeNotesSource(options: { fail?: boolean } = {}) {
     { documentId: 'roadmap', name: 'Q4 product roadmap' },
     { documentId: 'research', name: 'Customer research · October' },
     { documentId: 'retro', name: 'Team retrospective' },
+    {
+      documentId: 'long',
+      name: 'Agent: offers to add a meeting to another calendar after the organizer updates a recurring event',
+    },
   ];
   const team = { id: 'macro', name: 'Macro' };
   const [notes, setNotes] = createSignal<MeetingNote[]>([]);

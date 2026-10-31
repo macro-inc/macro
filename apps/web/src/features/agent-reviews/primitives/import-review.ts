@@ -151,7 +151,8 @@ export function createImportReview(sources: ImportReviewSources) {
     summary: () =>
       planSummary(
         progress()?.counts ?? planCounts(sources.entries()),
-        volume()
+        volume(),
+        draft().source
       ),
     sharingSummary: () =>
       sharingSummary(
@@ -160,7 +161,8 @@ export function createImportReview(sources: ImportReviewSources) {
         sources.report()?.onTeam ?? true
       ),
     totals: () => planTotals(sources.entries(), draft().excluded),
-    planningStatus: () => planningStatus(progress(), sources.entries()),
+    planningStatus: () =>
+      planningStatus(progress(), sources.entries(), draft().source),
     alreadyInMacroSummary: () => alreadyInMacroSummary(sources.entries()),
     alreadyInMacro: () => alreadyInMacro(sources.entries()),
     nodes: () => visiblePlanNodes(nodes(), collapsedIds()),

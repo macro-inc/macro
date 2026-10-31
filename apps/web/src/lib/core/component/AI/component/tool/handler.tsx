@@ -76,7 +76,11 @@ import {
   renameChannelHandler,
   shareWithChannelHandler,
 } from './ChannelMutations';
-import { describeCodeToolsHandler, executeCodeHandler } from './CodeMode';
+import {
+  describeCodeToolsHandler,
+  executeCodeHandler,
+  readCodeDocsHandler,
+} from './CodeMode';
 import {
   dispatchCodingAgentHandler,
   listCodingAgentsHandler,
@@ -90,6 +94,7 @@ import {
   readDiscussionHandler,
   resolveCommentHandler,
 } from './Comments';
+import { connectMcpServerHandler } from './ConnectMcpServer';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createSkillHandler } from './CreateSkill';
@@ -121,6 +126,8 @@ import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
   deleteImportEntityHandler,
+  importFromJiraHandler,
+  importFromLinearHandler,
   importFromNotionHandler,
   importNotionPageHandler,
   listImportEntitiesHandler,
@@ -210,6 +217,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ...initiativeToolHandlers,
   ExecuteCode: executeCodeHandler,
   DescribeCodeTools: describeCodeToolsHandler,
+  ReadCodeDocs: readCodeDocsHandler,
   DispatchCodingAgent: dispatchCodingAgentHandler,
   ListCodingAgents: listCodingAgentsHandler,
   ReadSpreadsheet: readSpreadsheetHandler,
@@ -258,7 +266,10 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
   ImportFromNotion: importFromNotionHandler,
+  ImportFromLinear: importFromLinearHandler,
+  ImportFromJira: importFromJiraHandler,
   ImportNotionPage: importNotionPageHandler,
+  ConnectMcpServer: connectMcpServerHandler,
   GetCompany: getCompanyHandler,
   CreateCompany: createCompanyHandler,
   CreateContact: createContactHandler,

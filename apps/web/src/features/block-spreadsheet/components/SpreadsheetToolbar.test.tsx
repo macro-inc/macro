@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, type ParentProps } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpreadsheetToolbarProps } from '../core/toolbar-types';
 import {
@@ -15,9 +15,6 @@ import {
 import { SpreadsheetToolbar } from './SpreadsheetToolbar';
 
 // App hotkey registries are outside this presentational menu fixture.
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
 
 let animationStyle: HTMLStyleElement;
 beforeEach(() => {

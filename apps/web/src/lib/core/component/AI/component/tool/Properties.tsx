@@ -1,5 +1,5 @@
-import PencilSimple from '@phosphor-icons/core/regular/pencil-simple.svg';
-import Sliders from '@phosphor-icons/core/regular/sliders.svg';
+import PencilSimple from '@icon/system/regular/pencil-simple.svg';
+import Sliders from '@icon/system/regular/sliders.svg';
 import { TagDot } from '@property/tags/TagDot';
 import { usePropertyOptionsQuery } from '@queries/properties/options';
 import { useTagsQuery } from '@queries/properties/tags';

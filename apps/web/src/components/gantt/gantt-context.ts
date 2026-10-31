@@ -5,9 +5,14 @@ import type { GanttGuide } from './gantt-interaction';
 export const HEADER_HEIGHT = 48;
 export type GanttContext = {
   today: Accessor<number>;
+  /** The current time to the minute. */
+  now: Accessor<Date>;
   range: Accessor<GanttRange>;
   scale: Accessor<GanttScale>;
   setScale: (scale: GanttScale) => void;
+  /** Whether the chart shows times of day: Gantt.Root's `hours`. */
+  hours: Accessor<boolean>;
+  maxPixelsPerDay: Accessor<number>;
   pixelsPerDay: Accessor<number>;
   zoomAt: (clientX: number, wheelDelta: number) => void;
   scrollZooming: Accessor<boolean>;
@@ -33,6 +38,8 @@ export type GanttContext = {
   updateViewport: () => void;
   panBy: (deltaX: number, deltaY: number) => void;
   scrollToToday: (behavior?: ScrollBehavior) => void;
+  /** Zoom so today, midnight to midnight, fills the chart beside its labels. */
+  fitToday: () => void;
   guide: Accessor<GanttGuide | undefined>;
   setGuide: (guide: GanttGuide | undefined) => void;
   editing: Accessor<boolean>;

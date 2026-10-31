@@ -6,7 +6,17 @@ use crate::{
 /// Google OAuth token operations.
 pub mod oauth;
 
+#[cfg(test)]
+mod test;
+
 impl FusionAuthClient {
+    /// Revokes a Google grant at Google, so the account's next consent screen
+    /// starts from nothing. `token` is an access or refresh token of the grant.
+    #[tracing::instrument(name = "google.revoke_grant", skip(self, token), err)]
+    pub async fn revoke_google_grant(&self, token: &str) -> Result<()> {
+        oauth::revoke_token(&self.unauth_client, oauth::GOOGLE_REVOKE_URL, token).await
+    }
+
     /// Refreshes a Google OAuth2 access token using a refresh token.
     #[tracing::instrument(skip(self, refresh_token), fields(client_id=%self.client_id))]
     pub async fn refresh_google_token(

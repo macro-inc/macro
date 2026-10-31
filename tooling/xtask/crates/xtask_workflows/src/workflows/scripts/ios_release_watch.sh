@@ -6,11 +6,12 @@ set -euo pipefail
 #    what the `iOS Release Drift` workflow does on push, except GitHub does
 #    not run pull_request workflows on a PR that conflicts with main, so a
 #    native push to such a PR only gets caught here.
-# 2. Ask App Store Connect whether the iOS version + build committed at the
-#    PR head is live, built from the native tree the PR's merge result would
-#    have (`merge` is GitHub's test merge commit; the gate hashes the same).
-#    When it is, and the PR's latest `iOS Native Check` job (of the web app
-#    PR checks run) failed — it fails until the release is live — re-run that
+# 2. Ask App Store Connect whether Apple approved the iOS version + build
+#    committed at the PR head (held for release, or live), built from the
+#    native tree the PR's merge result would have (`merge` is GitHub's test
+#    merge commit; the gate hashes the same). When it did, and the PR's latest
+#    `iOS Native Check` job (of the web app PR checks run) failed — it fails
+#    until Apple approves — re-run that
 #    job so the gate, and the `Web App Status Check` that depends on it, go
 #    green without anyone clicking "Re-run".
 #
@@ -20,7 +21,7 @@ conf_path="apps/web/tauri/src-tauri/tauri.ios.conf.json"
 bump='cd apps/web && doppler run --project ios-release --config prd -- just ios-bump'
 
 check_pr() {
-  local pr=$1 number sha merge conf version build head_tree native_tree run run_id status run_url job conclusion job_id reruns outputs withdrawn live
+  local pr=$1 number sha merge conf version build head_tree native_tree run run_id status run_url job conclusion job_id reruns outputs withdrawn held live
   number=$(jq -r '.number' <<<"$pr")
   sha=$(jq -r '.sha' <<<"$pr")
   merge=$(jq -r '.merge // empty' <<<"$pr")
@@ -37,10 +38,13 @@ check_pr() {
     >"$RUNNER_TEMP/withdraw-${number}.log" 2>&1 || true
   sed 's/^/  /' "$RUNNER_TEMP/withdraw-${number}.log"
   withdrawn=$(sed -n 's/^withdrawn=//p' "$outputs")
+  held=$(sed -n 's/^held=//p' "$outputs")
   live=$(sed -n 's/^live=//p' "$outputs")
-  if [[ "$withdrawn" == "true" || -n "$live" ]]; then
+  if [[ "$withdrawn" == "true" || -n "$held" || -n "$live" ]]; then
     gh pr edit "$number" --remove-label ios-update
-    if [[ -n "$live" ]]; then
+    if [[ -n "$held" ]]; then
+      gh pr comment "$number" --body "📱 Native changes were pushed to this PR after Apple had already approved iOS ${held}. That build is held for release, so it will not go live on its own, but it blocks the next submission: remove it in App Store Connect (Developer Reject). Then bump (\`${bump}\`), commit, push, and re-add \`ios-update\`. The label was removed."
+    elif [[ -n "$live" ]]; then
       gh pr comment "$number" --body "🚨 Native changes were pushed to this PR after Apple had already approved iOS ${live}, so that build is (or is about to be) live with native code this PR no longer matches. Bump (\`${bump}\`), commit, re-add the \`ios-update\` label, and ship the follow-up as soon as possible. The label was removed."
     else
       gh pr comment "$number" --body "📱 Native code changed after this PR's App Store release started (the push-time drift check could not run — does the PR conflict with \`main\`?), so the pending App Review submission was withdrawn and the \`ios-update\` label removed. When the PR is ready again, bump (\`${bump}\`; the marketing version stays, the build number moves), commit, push, and re-add \`ios-update\`."
@@ -49,7 +53,7 @@ check_pr() {
     return 0
   fi
 
-  # 2. Live check against the merge result.
+  # 2. Approval check against the merge result.
   if [[ -z "$merge" ]]; then
     echo "PR #${number}: no merge commit (conflicts with main?); cannot check the merge result"
     return 0
@@ -58,14 +62,14 @@ check_pr() {
   native_tree=$(native_tree_hash "$merge")
   echo "PR #${number}: iOS ${version} (build ${build}) at ${sha:0:10}, merge-result native tree ${native_tree:0:10}"
 
-  if ! bun scripts/ios-app-store.mjs status --require-live \
+  if ! bun scripts/ios-app-store.mjs status --require-approved \
       --version "$version" --build "$build" --native-tree "$native_tree" \
       >"$RUNNER_TEMP/status-${number}.log" 2>&1; then
-    echo "  not live yet:"
+    echo "  not approved yet:"
     sed 's/^/    /' "$RUNNER_TEMP/status-${number}.log"
     return 0
   fi
-  echo "  live on the App Store"
+  echo "  approved by Apple"
 
   run=$(gh run list --workflow web-app-check-main.yml --commit "$sha" \
     --json databaseId,status,url --limit 1 --jq '.[0] // empty')
@@ -108,7 +112,7 @@ check_pr() {
   fi
   echo "  re-running iOS Native Check (job ${job_id} of run ${run_id}; ${reruns} automatic re-runs so far)"
   gh run rerun --job "$job_id"
-  gh pr comment "$number" --body "📱 iOS ${version} (build ${build}) is live on the App Store. Re-ran the **iOS Native Check** ([run](${run_url})); this PR can merge once it passes."
+  gh pr comment "$number" --body "📱 Apple approved iOS ${version} (build ${build}). Re-ran the **iOS Native Check** ([run](${run_url})); this PR can merge once it passes, and the next prod deploy releases it on the App Store."
 }
 
 # One PR's API hiccup must not stop the others from being checked this

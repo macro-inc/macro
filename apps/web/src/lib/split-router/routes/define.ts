@@ -30,6 +30,7 @@ type SplitRouteDefinitionConstraint = {
     | readonly string[]
     | '*'
     | ((entry: Readonly<Entry>) => readonly string[]);
+  mountKey?: string;
   remountKey?: unknown;
   preload?: unknown;
   info?: SplitRouteInfo;

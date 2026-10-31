@@ -354,6 +354,74 @@ describe('standalone compose controller', () => {
     }
   });
 
+  const colleague = {
+    kind: 'custom',
+    id: 'colleague@example.com',
+    data: {
+      id: 'colleague@example.com',
+      email: 'colleague@example.com',
+      invalid: false,
+    },
+  } as const;
+  type Composer = ReturnType<typeof mountEmailComposer>;
+  const sendRequirements = [
+    {
+      type: 'no_recipient',
+      leaveUnmet: (root: Composer) => {
+        root.edit('Ready to send');
+        root.state.context.setRecipients('to', []);
+      },
+      meet: (root: Composer) =>
+        root.state.context.setRecipients('to', [colleague]),
+    },
+    {
+      type: 'no_message',
+      leaveUnmet: (root: Composer) => root.state.context.setSubject('Review'),
+      meet: (root: Composer) => root.edit('Ready to send'),
+    },
+    {
+      type: 'no_subject',
+      leaveUnmet: (root: Composer) => root.edit('Ready to send', ''),
+      meet: (root: Composer) => root.state.context.setSubject('Review'),
+    },
+  ] as const;
+
+  it.each(
+    (['GMAIL', 'OUTLOOK'] as const).flatMap((provider) =>
+      sendRequirements.map((requirement) => ({ provider, ...requirement }))
+    )
+  )(
+    'clears the $type error in a $provider inbox as soon as the draft meets it',
+    async ({ provider, leaveUnmet, meet, type }) => {
+      const context = createComposeContext();
+      context.accounts.inboxes = () => [
+        {
+          id: 'inbox',
+          email_address: 'me@example.com',
+          provider,
+          settings: {},
+        },
+      ];
+      const root = mountEmailComposer(context);
+      try {
+        leaveUnmet(root);
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(root.state.context.validationError(type)).toBeDefined();
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+
+        meet(root);
+        expect(root.state.context.validationError(type)).toBeUndefined();
+
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+      } finally {
+        root.dispose();
+      }
+    }
+  );
+
   it('keeps a picked time local and preserves it when explicit scheduling fails', async () => {
     const context = createComposeContext();
     const root = mountEmailComposer(context);

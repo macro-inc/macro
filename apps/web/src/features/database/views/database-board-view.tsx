@@ -137,6 +137,7 @@ export function DatabaseBoardView(props: DatabaseBoardViewProps) {
             <Show when={props.onViewChange}>
               {(changeView) => (
                 <Button
+                  variant="ghost"
                   size="sm"
                   class="mt-3"
                   onClick={() =>

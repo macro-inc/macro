@@ -395,6 +395,85 @@ export type CalendarJoinRequestDecision = 'accept' | 'decline';
 export type CalendarJoinRequestStatus = 'pending' | 'accepted' | 'declined';
 
 /**
+ * Meeting-level fields shown in a calendar event mention preview, taken from
+ * the requester's own projection of the meeting, or — when the requester has
+ * none — from the mentioned projection a channel they belong to was given.
+ */
+export type CalendarMentionEvent = {
+    /**
+     * Number of attendees on the previewed copy.
+     */
+    attendeeCount: number;
+    /**
+     * For a channel-shared preview, whether the person who shared it can
+     * add the requester as a guest. Always false for the requester's own
+     * copy.
+     */
+    canRequestToJoin?: boolean;
+    /**
+     * Provider description, plain text or HTML, truncated for the preview.
+     * Clients must sanitize it before rendering.
+     */
+    description?: string | null;
+    /**
+     * Whether the event repeats.
+     */
+    isRecurring: boolean;
+    joinRequestStatus?: null | CalendarJoinRequestStatus;
+    /**
+     * Location label, when set.
+     */
+    location?: string | null;
+    /**
+     * Key of the previewed instance, absent when no occurrence is
+     * materialized.
+     */
+    occurrenceKey?: string | null;
+    /**
+     * Organizer email.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer display name.
+     */
+    organizerName?: string | null;
+    /**
+     * Time of the previewed instance: the requested occurrence when it
+     * exists, else the next upcoming one, else the latest past one, else the
+     * series start.
+     */
+    time: EventTime;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Entity update time of the previewed copy.
+     */
+    updatedAt: string;
+    /**
+     * The calendars holding `viewer_event_id`, the canonical copy's first.
+     */
+    viewerCalendarIds?: Array<string>;
+    viewerCopy?: null | CalendarMentionViewerCopy;
+    /**
+     * The requester's own event entity for the mentioned meeting. Differs
+     * from the mentioned id when the mention came from another attendee.
+     * Absent when the meeting is on none of the requester's calendars and
+     * they see it only because it was shared with one of their channels:
+     * that preview is read-only and there is no event of theirs to open.
+     */
+    viewerEventId?: string | null;
+};
+
+/**
+ * How a requester holds a mentioned meeting on their own calendar, decided
+ * by the copy's own inbox, the way viewer capabilities decide organizer and
+ * guest.
+ */
+export type CalendarMentionViewerCopy = 'snapshot' | 'invitation' | 'event';
+
+/**
  * HTTP error body returned by calendar mutation endpoints.
  */
 export type CalendarMutationApiError = {
@@ -506,7 +585,7 @@ export type ConferenceChange = 'provider_default' | 'microsoft_teams' | 'google_
 export type ConferenceProvider = 'microsoft_teams' | 'google_meet' | 'other';
 
 /**
- * Request body adding a channel-shared event to the requester's calendar.
+ * Request body adding a shared event to the requester's calendar.
  */
 export type CopyCalendarEventRequest = {
     /**
@@ -573,13 +652,18 @@ export type CreateCalendarEventRequest = {
 };
 
 /**
- * An owner's durable sharing link, including meetings they can no longer open.
+ * A visible meeting link, or an owner's durable grant they can no longer open.
  */
 export type DocumentNoteLink = {
     /**
-     * Current name of the owned markdown document.
+     * Whether the reader may resolve this exact meeting's details right now.
+     */
+    canViewMeeting: boolean;
+    /**
+     * Current name of the markdown document.
      */
     documentName: string;
+    event?: null | CalendarMentionEvent;
     /**
      * Linked calendar copy.
      */
@@ -593,6 +677,7 @@ export type DocumentNoteLink = {
      */
     occurrenceKey: string;
     team?: null | NoteTeam;
+    teamEvent?: null | TeamCalendarItem;
 };
 
 /**
@@ -912,6 +997,80 @@ export type RsvpCalendarEventRequest = {
 };
 
 /**
+ * Disjoint busy/detail shapes prevent new event fields leaking by default.
+ */
+export type TeamCalendarContent = {
+    kind: 'busy';
+} | {
+    /**
+     * Detail projection.
+     */
+    details: TeamCalendarDetails;
+    kind: 'details';
+};
+
+/**
+ * Safe details from a single authorized source.
+ */
+export type TeamCalendarDetails = {
+    /**
+     * Attendees; self flags are relative to the requesting viewer.
+     */
+    attendees: Array<CalendarAttendee>;
+    /**
+     * Source calendar name, shown only with details.
+     */
+    calendarName: string;
+    /**
+     * Join URL, if supplied by this source.
+     */
+    conferenceUrl?: string | null;
+    /**
+     * Body, if supplied by this source.
+     */
+    description?: string | null;
+    /**
+     * Location, if supplied by this source.
+     */
+    location?: string | null;
+    /**
+     * Organizer address from this source.
+     */
+    organizerEmail?: string | null;
+    /**
+     * Organizer name from this source.
+     */
+    organizerName?: string | null;
+    /**
+     * Display title.
+     */
+    title: string;
+};
+
+/**
+ * A read-only team calendar occurrence.
+ */
+export type TeamCalendarItem = TeamCalendarContent & {
+    /**
+     * Whether this occurrence blocks the sharer's personal availability.
+     * A subscribed calendar's block can be shared without occupying the sharer.
+     */
+    contributesToAvailability: boolean;
+    /**
+     * Stable opaque projection identity, never an event entity id.
+     */
+    id: string;
+    /**
+     * The person sharing access to the source.
+     */
+    ownerId: string;
+    /**
+     * Occurrence interval.
+     */
+    time: EventTime;
+};
+
+/**
  * What a user exposes through their team membership.
  */
 export type TeamCalendarSharing = 'all' | 'busy_only' | 'none';
@@ -1019,6 +1178,13 @@ export type VisibleCalendar = {
      * Provider color.
      */
     color?: string | null;
+    /**
+     * Whether this calendar counts toward the requester's busy time: their
+     * setting, by default only the primary calendars of inboxes they own.
+     * The nearest thing to "this is the requester's own": a provider's
+     * access role only says what they may do, on a colleague's calendar too.
+     */
+    contributesToAvailability?: boolean;
     /**
      * Default reminders applied to events that keep `useDefault`.
      */

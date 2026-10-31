@@ -600,7 +600,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
           <div class="flex justify-end">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               data-testid="pptx-pane-corrections-reset"
               onClick={() =>
@@ -696,7 +696,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
           <div class="flex justify-end gap-1.5">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               onClick={() =>
                 fireAndForget(c.fitPictures('fill'), 'pptx-editor')
@@ -706,7 +706,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               onClick={() => fireAndForget(c.fitPictures('fit'), 'pptx-editor')}
             >
@@ -717,7 +717,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
         <div class="flex justify-end p-3">
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={ro()}
             data-testid="pptx-pane-picture-reset"
             onClick={() => fireAndForget(c.resetPictures(true), 'pptx-editor')}

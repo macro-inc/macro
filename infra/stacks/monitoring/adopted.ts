@@ -1,4 +1,6 @@
 import * as datadog from '@pulumi/datadog';
+import { goalertWebhooks } from './goalert';
+import { RENOTIFY_MINUTES } from './notify';
 
 /**
  * A monitor that already exists in Datadog and was adopted into this stack by
@@ -19,7 +21,13 @@ export function adopted(
   // default explicit after normalizing imported state; group delay wins.
   return new datadog.Monitor(
     name,
-    { requireFullWindow: false, newHostDelay: 300, ...args },
-    { protect: true }
+    {
+      requireFullWindow: false,
+      newHostDelay: 300,
+      renotifyInterval: RENOTIFY_MINUTES,
+      ...args,
+    },
+    // Messages mention the GoAlert webhooks, which must exist first.
+    { protect: true, dependsOn: goalertWebhooks }
   );
 }

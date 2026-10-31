@@ -1,0 +1,21 @@
+[package]
+name = "import_linear"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+strum = { workspace = true }
+async-trait = { workspace = true }
+http = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+pipedream_mcp = { path = "../pipedream_mcp" }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+import_tracker = { path = "../import_tracker" }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }

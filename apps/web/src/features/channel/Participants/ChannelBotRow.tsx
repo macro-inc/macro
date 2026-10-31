@@ -1,7 +1,7 @@
 import { BotAvatar } from '@channel/Bots/BotAvatar';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import CopyIcon from '@phosphor/copy.svg';
-import XIcon from '@phosphor/x.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Badge, Button, Item } from '@ui';
 import { Show } from 'solid-js';
@@ -56,20 +56,24 @@ export function ChannelBotRow(props: {
       <div class="absolute right-3 top-1/2 -translate-y-1/2">
         <Item.Actions>
           <Button
+            variant="ghost"
+            aria-label="Copy webhook URL"
+            tooltip="Copy webhook URL"
             size="icon-sm"
-            label="Copy webhook URL"
             onClick={props.onCopyWebhook}
           >
-            <CopyIcon />
+            <CopyIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Show when={props.editable}>
             <Button
+              variant="danger"
+              aria-label={`Remove ${props.bot.name}`}
+              tooltip={`Remove ${props.bot.name}`}
               size="icon-sm"
-              label={`Remove ${props.bot.name}`}
               disabled={props.removing}
               onClick={props.onRemove}
             >
-              <XIcon />
+              <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </Item.Actions>
