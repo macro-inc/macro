@@ -94,8 +94,9 @@ where
     }
 
     /// A document's own access or, when it grants the caller nothing, View
-    /// on a task whose project the caller can view: a project contains its
-    /// tasks, so whoever can see the project can see every task in it.
+    /// through a project that contains it that the caller can view: a project
+    /// contains its tasks, so whoever can see the project can see every task
+    /// in it, and the files attached to their discussions.
     async fn get_document_or_task_access(
         &self,
         document_id: &str,
@@ -104,14 +105,49 @@ where
         if let Some(level) = self.repo.get_document_access(document_id, user_id).await? {
             return Ok(Some(level));
         }
-        let Some(project) = self.repo.get_task_project(document_id).await? else {
-            return Ok(None);
-        };
-        Ok(self
+        for project in self.repo.get_containing_projects(document_id).await? {
+            if self
+                .repo
+                .get_initiative_access(&project.to_string(), user_id)
+                .await?
+                .is_some()
+            {
+                return Ok(Some(AccessLevel::View));
+            }
+        }
+        Ok(None)
+    }
+
+    /// [`Self::get_document_or_task_access`] for a bot scoped to a team.
+    async fn get_team_document_access(
+        &self,
+        bot_id: BotId,
+        team_id: Uuid,
+        document_id: &str,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        if let Some(level) = self
             .repo
-            .get_initiative_access(&project.to_string(), user_id)
+            .get_team_entity_access(bot_id, team_id, document_id, EntityType::Document)
             .await?
-            .map(|_| AccessLevel::View))
+        {
+            return Ok(Some(level));
+        }
+        for project in self.repo.get_containing_projects(document_id).await? {
+            if self
+                .repo
+                .get_team_entity_access(
+                    bot_id,
+                    team_id,
+                    &project.to_string(),
+                    EntityType::Initiative,
+                )
+                .await?
+                .is_some()
+            {
+                return Ok(Some(AccessLevel::View));
+            }
+        }
+        Ok(None)
     }
 
     /// Get access level for a channel.
@@ -235,33 +271,12 @@ where
         entity_type: EntityType,
     ) -> Result<EntityPermission, AccessError> {
         match entity_type {
-            EntityType::Document => {
-                let direct = self
-                    .repo
-                    .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
-                    .await?;
-                // A bot scoped to a team sees a task through its project the
-                // same way a user does.
-                let inherited = match direct {
-                    Some(_) => None,
-                    None => match self.repo.get_task_project(entity_id).await? {
-                        Some(project) => self
-                            .repo
-                            .get_team_entity_access(
-                                bot_id,
-                                team_id,
-                                &project.to_string(),
-                                EntityType::Initiative,
-                            )
-                            .await?
-                            .map(|_| AccessLevel::View),
-                        None => None,
-                    },
-                };
-                Ok(EntityPermission::AccessLevel {
-                    access_level: direct.or(inherited).ok_or(AccessError::Unauthorized)?,
-                })
-            }
+            EntityType::Document => Ok(EntityPermission::AccessLevel {
+                access_level: self
+                    .get_team_document_access(bot_id, team_id, entity_id)
+                    .await?
+                    .ok_or(AccessError::Unauthorized)?,
+            }),
             EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
@@ -280,10 +295,25 @@ where
             }
             EntityType::AgentSession => {
                 let direct = self.repo.get_team_entity_access(bot_id, team_id, entity_id, entity_type).await?;
-                let inherited = if let Some(parent) = self.repo.get_agent_session_parent(entity_id).await? {
-                    let parent: Entity = parent.into();
-                    self.repo.get_team_entity_access(bot_id, team_id, &parent.entity_id, parent.entity_type).await?.map(session_permission_from_parent)
-                } else { None };
+                let inherited = match self.repo.get_agent_session_parent(entity_id).await? {
+                    Some(AgentSessionParent::Document(document)) => self
+                        .get_team_document_access(bot_id, team_id, &document)
+                        .await?
+                        .map(session_permission_from_parent),
+                    Some(parent) => {
+                        let parent: Entity = parent.into();
+                        self.repo
+                            .get_team_entity_access(
+                                bot_id,
+                                team_id,
+                                &parent.entity_id,
+                                parent.entity_type,
+                            )
+                            .await?
+                            .map(session_permission_from_parent)
+                    }
+                    None => None,
+                };
                 Ok(EntityPermission::AccessLevel { access_level: direct.max(inherited).ok_or(AccessError::Unauthorized)? })
             }
             EntityType::Channel => {

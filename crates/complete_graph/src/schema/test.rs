@@ -1251,6 +1251,20 @@ impl EntityAccessService for CountingEntityAccessService {
         entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
+        // Documents reach this check only when the listing left them out;
+        // they are refused unless a test shares them by link.
+        if entity_type == EntityType::Document {
+            let id = Uuid::parse_str(entity_id).unwrap();
+            return self
+                .public_links
+                .lock()
+                .unwrap()
+                .get(&id)
+                .map(|access_level| EntityPermission::AccessLevel {
+                    access_level: *access_level,
+                })
+                .ok_or(AccessError::Unauthorized);
+        }
         if !matches!(
             entity_type,
             EntityType::Initiative | EntityType::AgentSession

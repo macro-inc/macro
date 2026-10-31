@@ -1322,13 +1322,24 @@ fn document_top_clause(sort_method: SimpleSortMethod, needs_sub_type_join: bool)
     )
 }
 
-/// Tasks of a project Soup has confirmed the viewer can view, listed without
-/// a grant on each task. The project id is a literal so a generic plan can
-/// prove the partial predicate of `idx_ep_project_value_gin`; it is a parsed
-/// `Uuid`, safe to interpolate.
-fn project_tasks_semi_join(id_sql: &str, project: Uuid) -> String {
+/// The document access gate, admitting as well the tasks of a project Soup
+/// has confirmed the viewer can view. Both sets sit under one `IN`, so the
+/// gate stays a single semi-join the planner can reorder, as
+/// [`access_semi_join`] explains. The project id is a literal so a generic
+/// plan can prove the partial predicate of `idx_ep_project_value_gin`; it is
+/// a parsed `Uuid`, safe to interpolate. A Project value holds exactly one
+/// reference, as entity access requires.
+fn document_access_gate(viewable_project: Option<Uuid>) -> String {
+    let Some(project) = viewable_project else {
+        return access_semi_join("d.id", "document");
+    };
     format!(
-        r#"{id_sql} IN (
+        r#"d.id IN (
+                    SELECT ea.entity_id::text
+                    FROM entity_access ea
+                    JOIN user_source_ids us ON us.source_id = ea.source_id
+                    WHERE ea.entity_type = 'document'
+                    UNION ALL
                     SELECT ep.entity_id
                     FROM entity_properties ep
                     WHERE ep.property_definition_id = '{definition}'
@@ -1336,6 +1347,8 @@ fn project_tasks_semi_join(id_sql: &str, project: Uuid) -> String {
                       AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object(
                           'entity_id', '{project}', 'entity_type', 'INITIATIVE'
                       ))
+                      AND CASE WHEN jsonb_typeof(ep.values -> 'value') = 'array'
+                               THEN jsonb_array_length(ep.values -> 'value') END = 1
                 )"#,
         definition = SystemPropertyKey::PROJECT_UUID,
     )
@@ -1355,14 +1368,7 @@ fn document_top_where_clause(
         r#"{user_history_join}                WHERE d."deletedAt" IS NULL
                 AND {}
 "#,
-        match viewable_project {
-            None => access_semi_join("d.id", "document"),
-            Some(project) => format!(
-                "({} OR {})",
-                access_semi_join("d.id", "document"),
-                project_tasks_semi_join("d.id", project)
-            ),
-        }
+        document_access_gate(viewable_project)
     )
 }
 

@@ -82,7 +82,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   checked through entity access), Soup sets the server-only
   `EntityFilterAst::viewable_project`, and the expanded document listing
   admits that project's tasks without a grant on each
-  (`project_tasks_semi_join`). Clients can't set the field; inbound adapters
+  (`document_access_gate`, one `IN` so the gate stays a semi-join). Clients can't set the field; inbound adapters
   leave it `None`. Realtime patches still reach only a task's own grantees.
 - Queries over a known id list (`*/by_ids.rs`, hydration) and the initiative
   listing (`initiative_access_clause`) check access per row with `EXISTS` on
