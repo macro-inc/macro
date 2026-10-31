@@ -246,7 +246,9 @@ pub async fn get_calendar_events_for_search(
 /// A grant counts only under the event's access check (live, neither private
 /// nor confidential). A meeting the requester also holds, owned or through a
 /// delegated inbox, is left out: a mention of it resolves to their own copy,
-/// which their own scope already finds.
+/// which their own scope finds under the title that copy carries. This runs
+/// before the search matches titles, so a held copy titled differently keeps
+/// the share out of a search for the share's title.
 ///
 /// Copies pair by `calendar_meeting_uid`, as `holds_meeting` does, but this
 /// asks which row to list rather than who may read the link, so a snapshot
