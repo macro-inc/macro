@@ -158,6 +158,17 @@ async fn a_file_in_a_task_discussion_is_contained_by_the_task_project(
 
     assert_eq!(repo.get_containing_projects("file").await?, [project]);
 
+    sqlx::query!(r#"UPDATE "Document" SET "deletedAt" = now() WHERE id = 'file'"#)
+        .execute(&pool)
+        .await?;
+    assert!(
+        repo.get_containing_projects("file").await?.is_empty(),
+        "a deleted file belongs to no project"
+    );
+    sqlx::query!(r#"UPDATE "Document" SET "deletedAt" = NULL WHERE id = 'file'"#)
+        .execute(&pool)
+        .await?;
+
     sqlx::query!(
         "UPDATE comms_messages SET deleted_at = now() WHERE id = $1",
         message

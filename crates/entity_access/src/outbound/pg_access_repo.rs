@@ -315,7 +315,11 @@ impl AccessRepository for PgAccessRepository {
                ) tasks
                JOIN "Document" task ON task.id = tasks.task_id AND task."deletedAt" IS NULL
                JOIN entity_properties ep ON ep.entity_id = task.id
-               WHERE ep.entity_type = 'TASK'
+               WHERE EXISTS (
+                     SELECT 1 FROM "Document" requested
+                     WHERE requested.id = $1 AND requested."deletedAt" IS NULL
+                 )
+                 AND ep.entity_type = 'TASK'
                  AND ep.property_definition_id = '00000001-0000-0000-0000-000000000014'
                  AND CASE WHEN jsonb_typeof(ep.values->'value') = 'array'
                           THEN jsonb_array_length(ep.values->'value') END = 1
