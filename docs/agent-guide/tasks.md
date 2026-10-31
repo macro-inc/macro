@@ -806,7 +806,9 @@ Opening a project without access shows `You don't have access to this project`
 with the same Request access row and access level as documents. The owner
 reviews it under Share's `Permission requests`, and once granted the open
 project loads in place. Losing access while the project is open switches to
-that view. A deleted project shows `Project unavailable` with Try again.
+that view through the project skeleton, without a `Project unavailable` or
+stale `Access requested` flash. A deleted project shows `Project unavailable`
+with Try again, also when it is deleted while its request view is open.
 
 Project information panels start closed and float over the content at every
 width, both in the Tasks project view and standalone initiative blocks. Opening

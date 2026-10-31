@@ -82,7 +82,10 @@ reloads when it receives the grant update. Signed-out visitors are prompted to
 sign in first; ordinary load failures retain **Try again**.
 An already-open document reloads after a permission upgrade on desktop and touch
 devices. Removing its last grant closes the editor and returns to Request access;
-a failed background refresh must not restore the revoked document.
+a failed background refresh must not restore the revoked document. The denied
+view shows **Loading access requests…** until its own request-state read lands,
+never a request row or **Could not load access requests** left over from before
+the change, and a document deleted while it is open shows the not-found view.
 
 In **People with access**, a non-owner can use **Request access** beneath the
 owner to request a supported upgrade (**Comment** or **Edit**). PDFs offer

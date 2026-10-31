@@ -71,19 +71,26 @@ it('keeps the unavailable notice when the viewer already has access', () => {
   expect(view.queryByRole('button', { name: 'Request access' })).toBeNull();
 });
 
-it('shows the project skeleton until the request state decides the view', () => {
+it('waits for its own request state instead of a cached one from before losing access', () => {
   const [loading, setLoading] = createSignal(true);
-  const [loaded, setLoaded] = createSignal(false);
-  const fake = fakeSharingSource({ accessLevel: null });
-  source = {
-    ...fake.source,
-    state: () => (loaded() ? fake.source.state() : undefined),
-    loading,
-  };
+  const fake = fakeSharingSource({ accessLevel: 'view' });
+  source = { ...fake.source, loading };
   const view = renderUnavailable();
   expect(view.getByText('Loading project')).toBeTruthy();
   expect(view.queryByRole('alert')).toBeNull();
-  setLoaded(true);
+  fake.setState((current) => ({ ...current, accessLevel: null }));
+  expect(view.queryByRole('button', { name: 'Request access' })).toBeNull();
   setLoading(false);
   expect(view.getByRole('button', { name: 'Request access' })).toBeTruthy();
+  expect(view.queryByText('Loading project')).toBeNull();
+});
+
+it('keeps the unavailable notice for a deleted project with a cached denied state', () => {
+  const [notFound, setNotFound] = createSignal(false);
+  source = { ...fakeSharingSource({ accessLevel: null }).source, notFound };
+  const view = renderUnavailable();
+  expect(view.getByRole('button', { name: 'Request access' })).toBeTruthy();
+  setNotFound(true);
+  expect(view.getByRole('alert').textContent).toContain('Project unavailable');
+  expect(view.queryByRole('button', { name: 'Request access' })).toBeNull();
 });
