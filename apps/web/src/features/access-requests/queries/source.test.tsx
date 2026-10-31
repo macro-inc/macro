@@ -219,6 +219,15 @@ it('hides grant rows once the viewer can no longer read them', async () => {
   expect(source.grants()).toEqual([]);
 });
 
+it('keeps grant rows while another page of requests loads', async () => {
+  const grants = [{ userId: 'macro|reader@macro.com', accessLevel: 'view' }];
+  mocks.grants.mockImplementation(() => okAsync(grants));
+  const { source } = mount({ accessLevel: 'view' });
+  await source.refresh();
+  snapshot.isPending = true;
+  expect(source.grants()).toEqual(grants);
+});
+
 it('does not refresh grants for an entity the refresh found deleted', async () => {
   const { source } = mount({ accessLevel: 'view' });
   await source.refresh();

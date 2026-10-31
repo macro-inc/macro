@@ -112,7 +112,9 @@ export function createSharingSource(
   return {
     state: () => (state.isPending ? undefined : state.data),
     grants: () =>
-      grantsReadable() && !grants.isPending ? (grants.data ?? []) : [],
+      grants.isPending || (!state.isPending && !canReadGrants(state.data))
+        ? []
+        : (grants.data ?? []),
     // A cached state can predate an access change, so each mount waits for
     // its own refetch.
     loading: () =>
