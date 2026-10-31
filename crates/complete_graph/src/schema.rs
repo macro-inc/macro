@@ -5,6 +5,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use crate::edges::GraphqlAgentSessionLogEntry;
 use crate::realtime::AgentSessionLogSubscriptions;
+use crate::saved_view::{GraphqlSavedView, GraphqlSavedViewPage, SavedViewMutationRoot};
 use agent_session::domain::model::AgentSessionId;
 use async_graphql::{Context, ID, MergedObject, MergedSubscription, Object, Schema, Subscription};
 use axum::extract::FromRef;
@@ -33,6 +34,7 @@ use graphql_common::{
 };
 use graphql_email::{
     GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader, SoupEmailEdgeReader,
+    load_email_focus_thread_ids,
 };
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{
@@ -59,8 +61,8 @@ use graphql_soup::{
     GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupInitiative,
     GraphqlSoupProject, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
     SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_folders, resolve_grouped_soup,
-    resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread, resolve_soup_entity,
-    resolve_soup_updates,
+    resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread,
+    resolve_soup_email_threads, resolve_soup_entity, resolve_soup_updates,
 };
 use graphql_work_feed::{
     GraphqlWorkFeedPage, WorkFeedInput, WorkFeedMutationRoot, WorkFeedSubscriptionRoot,
@@ -107,6 +109,7 @@ pub struct CompleteMutationRoot<
     InitiativeMutationRoot<E>,
     CalendarMutationRoot,
     WorkFeedMutationRoot<E>,
+    SavedViewMutationRoot,
 );
 
 impl<
@@ -133,6 +136,7 @@ impl<
             InitiativeMutationRoot::<E>::default(),
             CalendarMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
+            SavedViewMutationRoot,
         )
     }
 }
@@ -747,6 +751,26 @@ where
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
+    /// Visible personal and effectively shared definitions, bounded after visibility checks.
+    async fn saved_views(
+        &self,
+        ctx: &Context<'_>,
+        kind: Option<String>,
+        first: Option<i32>,
+        after: Option<String>,
+    ) -> async_graphql::Result<GraphqlSavedViewPage> {
+        crate::saved_view::list(ctx, self.user_id.as_ref(), kind, first, after).await
+    }
+
+    /// An authorized definition or null when not found or not visible.
+    async fn saved_view(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+    ) -> async_graphql::Result<Option<GraphqlSavedView>> {
+        crate::saved_view::get(ctx, self.user_id.as_ref(), id).await
+    }
+
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
@@ -813,7 +837,7 @@ where
         ctx: &Context<'_>,
         filter: Option<FavoritesFilterInput>,
     ) -> async_graphql::Result<Vec<GraphqlFavorite>> {
-        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()).await
+        resolve_favorites::<FR>(ctx, &self.user_id, filter.unwrap_or_default().into_model()?).await
     }
 
     /// Non-deleted projects the authenticated user can access, as a flat list.
@@ -949,6 +973,26 @@ where
             ctx,
             self.user_id.clone(),
             thread_id,
+        )
+        .await
+    }
+
+    /// The viewer's Focus: signal threads in their own inboxes worth their
+    /// attention, highest priority first (importance, halved for every 2 days
+    /// since the latest inbound mail), with mail in the last `days` days
+    /// (default 30, at most 90). Each thread's `focus` field explains why.
+    async fn email_focus(
+        &self,
+        ctx: &Context<'_>,
+        days: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupEmailThread<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        let days = u16::try_from(days.unwrap_or(30).clamp(1, 90)).unwrap_or(30);
+        let thread_ids = load_email_focus_thread_ids(ctx, &self.user_id, days).await?;
+        resolve_soup_email_threads::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            thread_ids,
         )
         .await
     }

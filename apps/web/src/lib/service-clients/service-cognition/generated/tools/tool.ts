@@ -47,6 +47,10 @@ type ToolParserMap = {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
   };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -235,6 +239,14 @@ type ToolParserMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromJira: {
+    call: types.ImportFromJira;
+    response: types.TrackerImportResponse;
+  };
+  ImportFromLinear: {
+    call: types.ImportFromLinear;
+    response: types.TrackerImportResponse;
+  };
   ImportFromNotion: {
     call: types.ImportFromNotion;
     response: types.ImportFromNotionResponse;
@@ -389,6 +401,7 @@ type ToolParserMap = {
     response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
+  ReadCodeDocs: { call: types.ReadCodeDocs; response: types.SymbolReferences };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadDiscussion: {
@@ -579,6 +592,10 @@ const toolParserMap = {
   ConfigureBot: {
     call: schemas.ConfigureBot,
     response: schemas.ConfigureBotResponse,
+  },
+  ConnectMcpServer: {
+    call: schemas.ConnectMcpServer,
+    response: schemas.ConnectMcpServerResponse,
   },
   ContentSearch: {
     call: schemas.ContentSearch,
@@ -783,6 +800,14 @@ const toolParserMap = {
     call: schemas.ImportCompaniesCsv,
     response: schemas.ImportCompaniesCsvResponse,
   },
+  ImportFromJira: {
+    call: schemas.ImportFromJira,
+    response: schemas.TrackerImportResponse,
+  },
+  ImportFromLinear: {
+    call: schemas.ImportFromLinear,
+    response: schemas.TrackerImportResponse,
+  },
   ImportFromNotion: {
     call: schemas.ImportFromNotion,
     response: schemas.ImportFromNotionResponse,
@@ -958,6 +983,10 @@ const toolParserMap = {
     response: schemas.ReadChannelThreadResponse,
   },
   ReadChat: { call: schemas.ReadChat, response: schemas.ReadChatResponse },
+  ReadCodeDocs: {
+    call: schemas.ReadCodeDocs,
+    response: schemas.SymbolReferences,
+  },
   ReadContent: {
     call: schemas.ReadContent,
     response: schemas.ReadContentResponse,
@@ -1181,6 +1210,10 @@ type ToolDataMap = {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
   };
+  ConnectMcpServer: {
+    call: types.ConnectMcpServer;
+    response: types.ConnectMcpServerResponse;
+  };
   ContentSearch: {
     call: types.ContentSearch;
     response: types.SearchToolResponse;
@@ -1369,6 +1402,14 @@ type ToolDataMap = {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
   };
+  ImportFromJira: {
+    call: types.ImportFromJira;
+    response: types.TrackerImportResponse;
+  };
+  ImportFromLinear: {
+    call: types.ImportFromLinear;
+    response: types.TrackerImportResponse;
+  };
   ImportFromNotion: {
     call: types.ImportFromNotion;
     response: types.ImportFromNotionResponse;
@@ -1523,6 +1564,7 @@ type ToolDataMap = {
     response: types.ReadChannelThreadResponse;
   };
   ReadChat: { call: types.ReadChat; response: types.ReadChatResponse };
+  ReadCodeDocs: { call: types.ReadCodeDocs; response: types.SymbolReferences };
   ReadContent: { call: types.ReadContent; response: types.ReadContentResponse };
   ReadDesign: { call: types.ReadDesign; response: types.ReadDesignResponse };
   ReadDiscussion: {

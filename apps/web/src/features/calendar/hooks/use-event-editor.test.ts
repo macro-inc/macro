@@ -504,6 +504,33 @@ describe('scheduling a Macro call', () => {
     }
   });
 
+  it('reports the created event before it closes', async () => {
+    const order: string[] = [];
+    const created = vi.fn(() => order.push('created'));
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            macroCallsEnabled: () => false,
+            event: () => undefined,
+            onCreated: created,
+            onSaved: () => order.push('saved'),
+          }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(created).toHaveBeenCalledExactlyOnceWith({
+        eventId: 'event-1',
+        time: values.time,
+      });
+      expect(order).toEqual(['created', 'saved']);
+    } finally {
+      dispose();
+    }
+  });
+
   it.each(['off', 'loading'] as const)(
     'preserves an existing Macro link without syncing it while %s',
     async (state) => {
@@ -1066,7 +1093,8 @@ describe('guests of an event the viewer was invited to', () => {
     event: CalendarEvent,
     invitesEnabled: boolean,
     onDetailsLocked?: () => void,
-    syncedEvent?: () => CalendarEvent | undefined
+    syncedEvent?: () => CalendarEvent | undefined,
+    forwardEnabled = invitesEnabled
   ) {
     return createRoot((dispose) => ({
       editor: useEventEditor({
@@ -1075,6 +1103,7 @@ describe('guests of an event the viewer was invited to', () => {
         onSaved: vi.fn(),
         macroCallsEnabled: () => false,
         guestInvitesEnabled: () => invitesEnabled,
+        invitationForwardEnabled: () => forwardEnabled,
         onDetailsLocked,
       }),
       dispose,
@@ -1183,10 +1212,21 @@ describe('guests of an event the viewer was invited to', () => {
     }
   });
 
-  it('explains why a guest the organizer does not let invite cannot add guests', () => {
+  it('explains why a guest the organizer does not let invite cannot add guests, and offers the forward', () => {
     const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), true);
     try {
       expect(editor.disabledFields()?.guests).toBe(true);
+      expect(editor.guestsReadOnlyReason()).toBe(
+        "Only the organizer can invite guests. You can forward the invitation instead. The people you send it to get the event by email but won't be on the guest list."
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('explains without offering the forward while forwarding is off', () => {
+    const { editor, dispose } = editorFor(invitedEvent(mayNotInvite), false);
+    try {
       expect(editor.guestsReadOnlyReason()).toBe(
         'Only the organizer can invite guests.'
       );
@@ -1351,6 +1391,42 @@ describe('guests of an event the viewer was invited to', () => {
       expect(mocks.updateEvent.mock.lastCall?.[0].patch).toEqual({
         reminders: thirtyMinutes,
       });
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps the viewer on a meeting their secondary calendar organizes', async () => {
+    // Google names the secondary calendar as the organizer and lists the
+    // viewer's own address as a plain guest.
+    const organized = invitedEvent(
+      { ...mayModify, setGuestPolicy: true, organize: true },
+      {
+        organizerEmail: 'c_0123abcd@group.calendar.google.com',
+        attendees: [
+          {
+            email: 'me@example.com',
+            isOrganizer: false,
+            isOptional: false,
+            isSelf: true,
+            responseStatus: 'accepted',
+          },
+        ],
+      }
+    );
+    const { editor, dispose } = editorFor(organized, true);
+    try {
+      expect(editor.initialValues()?.guests).toBe('me@example.com');
+
+      await editor.save({
+        ...unchanged,
+        guestEmails: ['me@example.com', 'dana@example.com'],
+      });
+
+      expect(mocks.updateEvent.mock.lastCall?.[0].patch.attendees).toEqual([
+        { email: 'me@example.com' },
+        { email: 'dana@example.com' },
+      ]);
     } finally {
       dispose();
     }

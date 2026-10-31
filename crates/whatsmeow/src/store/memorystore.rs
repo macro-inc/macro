@@ -758,9 +758,9 @@ impl LidStore for MemoryStore {
 
     async fn put_lid_mapping(&self, lid: &Jid, jid: &Jid) -> Result<(), StoreError> {
         if lid.server != HIDDEN_USER_SERVER || jid.server != DEFAULT_USER_SERVER {
-            return Err(StoreError::InvalidArgument(format!(
-                "invalid PutLIDMapping call {lid}/{jid}"
-            )));
+            return Err(StoreError::InvalidArgument(
+                "invalid PutLIDMapping call: expected a LID and a phone number JID".to_owned(),
+            ));
         }
         put_mapping(&mut self.state(), lid, jid);
         Ok(())
@@ -768,9 +768,9 @@ impl LidStore for MemoryStore {
 
     async fn get_pn_for_lid(&self, lid: &Jid) -> Result<Option<Jid>, StoreError> {
         if lid.server != HIDDEN_USER_SERVER {
-            return Err(StoreError::InvalidArgument(format!(
-                "invalid GetPNForLID call with non-LID JID {lid}"
-            )));
+            return Err(StoreError::InvalidArgument(
+                "invalid GetPNForLID call with non-LID JID".to_owned(),
+            ));
         }
         Ok(self.state().pn_by_lid.get(&lid.user).map(|user| Jid {
             user: user.clone(),
@@ -782,9 +782,9 @@ impl LidStore for MemoryStore {
 
     async fn get_lid_for_pn(&self, pn: &Jid) -> Result<Option<Jid>, StoreError> {
         if pn.server != DEFAULT_USER_SERVER {
-            return Err(StoreError::InvalidArgument(format!(
-                "invalid GetLIDForPN call with non-PN JID {pn}"
-            )));
+            return Err(StoreError::InvalidArgument(
+                "invalid GetLIDForPN call with non-PN JID".to_owned(),
+            ));
         }
         Ok(self.state().lid_by_pn.get(&pn.user).map(|user| Jid {
             user: user.clone(),

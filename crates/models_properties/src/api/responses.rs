@@ -100,6 +100,9 @@ pub enum PropertyValue {
     /// Date/timestamp value
     /// Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
     Date(DateTime<Utc>),
+    /// Date range value
+    /// Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
+    DateRange(crate::shared::DateRange),
     /// Select option(s) - always an array (check is_multi_select to determine if single or multi)
     /// Single-select: {"type": "SelectOption", "value": ["uuid"]} (length 0 or 1)
     /// Multi-select: {"type": "SelectOption", "value": ["uuid1", "uuid2", ...]} (length 0+)

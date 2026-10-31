@@ -74,6 +74,9 @@ impl SessionTasks for FixedTasks {
                 title: "Fix the thing".into(),
                 url: format!("https://macro.com/app/task/{task}"),
                 reference: "ENG-42".into(),
+                mention: format!(
+                    r#"<m-document-mention>{{"documentId":"{task}","blockName":"task","documentName":"Fix the thing","blockParams":{{}},"collapsed":false}}</m-document-mention>"#
+                ),
                 pull_request: None,
             })
         })
@@ -111,7 +114,12 @@ async fn rpc(
     method: &str,
     mut params: serde_json::Value,
 ) -> (StatusCode, serde_json::Value) {
-    if method == "tools/call" && params["name"] != "DescribeCodeTools" {
+    if method == "tools/call"
+        && !matches!(
+            params["name"].as_str(),
+            Some("DescribeCodeTools" | "ReadCodeDocs")
+        )
+    {
         params["arguments"]["acting_as"] = serde_json::json!("owner");
     }
     let mut request = Request::builder()
@@ -288,6 +296,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 "title": "Fix the thing",
                 "url": "https://macro.com/app/task/MACRO-abc",
                 "reference": "ENG-42",
+                "mention": "<m-document-mention>{\"documentId\":\"MACRO-abc\",\"blockName\":\"task\",\"documentName\":\"Fix the thing\",\"blockParams\":{},\"collapsed\":false}</m-document-mention>",
                 "pull_request": null,
             })
         );

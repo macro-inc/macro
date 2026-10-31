@@ -6,7 +6,7 @@
  * because the cards themselves appear once it opens.
  */
 
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import {

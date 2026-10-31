@@ -32,13 +32,14 @@ struct PullRequestStatusTransition {
 
 /// The webhook actor resolved to Macro users via `github_links`.
 ///
-/// `sender_id` is the single Macro user a notification is attributed to. A
+/// `sender_id` is the single Macro user a notification is attributed to, and
+/// the user a task status change from the same event is credited to. A
 /// GitHub account may be linked to several Macro users, so `actor_user_ids`
 /// carries every linked user; `send_github_notification` excludes all of them
 /// from recipients so nobody is notified about their own GitHub activity.
 #[derive(Default)]
 pub(super) struct NotificationSender {
-    sender_id: Option<MacroUserIdStr<'static>>,
+    pub(super) sender_id: Option<MacroUserIdStr<'static>>,
     actor_user_ids: HashSet<MacroUserIdStr<'static>>,
 }
 

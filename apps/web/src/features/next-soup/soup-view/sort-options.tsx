@@ -2,17 +2,18 @@ import type {
   SortConfig,
   SoupEntity,
 } from '@app/features/next-soup/create-soup-state';
+import { t } from '@app/lib/i18n';
 import { compareDateDesc } from '@core/util/date';
 import type { EntityData, TaskEntityWithProperties } from '@entity';
 import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
-import CalendarIcon from '@phosphor/calendar.svg';
-import EyeIcon from '@phosphor/eye.svg';
-import FlagIcon from '@phosphor/flag.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import EditIcon from '@phosphor/pencil-simple.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import FlagIcon from '@icon/system/regular/flag.svg';
+import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import EditIcon from '@icon/system/regular/pencil-simple.svg';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
 import type { JSX } from 'solid-js';
 
@@ -173,27 +174,37 @@ export const SORT_CONFIGS = {
 const SORT_OPTIONS = [
   {
     value: 'viewed_at',
-    label: 'Last viewed',
+    get label() {
+      return t('viewMenus.sortLastViewed');
+    },
     icon: () => <EyeIcon class="size-3.5" />,
   },
   {
     value: 'updated_at',
-    label: 'Last updated',
+    get label() {
+      return t('viewMenus.sortLastUpdated');
+    },
     icon: () => <EditIcon class="size-3.5" />,
   },
   {
     value: 'created_at',
-    label: 'Date created',
+    get label() {
+      return t('viewMenus.sortDateCreated');
+    },
     icon: () => <CalendarIcon class="size-3.5" />,
   },
   {
     value: 'priority',
-    label: 'Priority',
+    get label() {
+      return t('viewMenus.priority');
+    },
     icon: () => <FlagIcon class="size-3.5" />,
   },
   {
     value: 'status',
-    label: 'Status',
+    get label() {
+      return t('viewMenus.status');
+    },
     icon: () => <ListChecksIcon class="size-3.5" />,
   },
 ] as const satisfies SortOption[];

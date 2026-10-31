@@ -1,3 +1,5 @@
+mod telemetry;
+
 use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::folders_query::DssFoldersQueryReader;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -5,6 +7,7 @@ use async_graphql::{Data, http::GraphiQLSource};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     Router,
+    body::HttpBody,
     extract::{OriginalUri, State},
     http::{StatusCode, request::Parts},
     response::{Html, IntoResponse, Response},
@@ -17,9 +20,11 @@ use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use graphql_soup::email_mutation_thread_loader;
 use macro_authorization::{
-    OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
+    MacroUserAuthentication, OptionalMacroAuthorizationExtractor, UserOrInternalService,
+    UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use uuid::Uuid;
 
 mod websocket;
 
@@ -46,7 +51,6 @@ fn graphiql_source(endpoint: &str) -> String {
         .finish()
 }
 
-#[tracing::instrument(skip_all, name = "graphql.execute")]
 async fn graphql_handler(
     State(state): State<ApiContext>,
     Cached(auth): Cached<
@@ -54,22 +58,34 @@ async fn graphql_handler(
     >,
     request_parts: Parts,
     request: GraphQLRequest,
-) -> GraphQLResponse {
+) -> Response {
     let acting_user = auth
         .authorization
         .as_ref()
         .and_then(UserOrInternalServiceAuthorization::acting_user);
-    let request = graphql_query_context_data(
-        request.into_inner(),
-        &state,
-        acting_user.map(|user| user.macro_user_id.clone()),
-        acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
-    );
-    state
-        .graphql_soup_schema
-        .execute(request.data(GraphqlRequestParts::new(request_parts)))
-        .await
-        .into()
+    let result = telemetry::observe(request.into_inner(), acting_user.is_some(), |request| {
+        let request = graphql_query_context_data(
+            request,
+            &state,
+            acting_user.map(|user| user.macro_user_id.clone()),
+            acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
+            acting_user.and_then(opaque_viewer_id),
+        );
+        state
+            .graphql_soup_schema
+            .execute(request.data(GraphqlRequestParts::new(request_parts)))
+    })
+    .await;
+    graphql_response(result)
+}
+
+#[tracing::instrument(skip_all, name = "graphql.serialize", fields(response_bytes = tracing::field::Empty))]
+fn graphql_response(result: async_graphql::Response) -> Response {
+    let response = GraphQLResponse::from(result).into_response();
+    if let Some(bytes) = response.body().size_hint().exact() {
+        tracing::Span::current().record("response_bytes", bytes);
+    }
+    response
 }
 
 async fn subscription_handler(
@@ -92,19 +108,27 @@ async fn subscription_handler(
     };
     let macro_user_id = acting_user.macro_user_id.clone();
     let organization_id = acting_user.user_context.organization_id.map(i64::from);
+    let viewer_id = opaque_viewer_id(acting_user);
 
     let schema = state.graphql_soup_schema.clone();
-    let data = graphql_subscription_context_data(&state, macro_user_id, organization_id);
+    let data = graphql_subscription_context_data(&state, macro_user_id, organization_id, viewer_id);
     upgrade.serve(schema, data)
+}
+
+/// The viewer's opaque account id (`macro_user.id`, the FusionAuth user id),
+/// logged in place of the email-bearing Macro user id.
+fn opaque_viewer_id(user: &MacroUserAuthentication) -> Option<Uuid> {
+    Uuid::parse_str(&user.user_context.fusion_user_id).ok()
 }
 
 fn graphql_subscription_context_data(
     state: &ApiContext,
     user: MacroUserIdStr<'static>,
     organization_id: Option<i64>,
+    viewer_id: Option<Uuid>,
 ) -> Data {
     let mut data = Data::default();
-    insert_graphql_context_data(&mut data, state, Some(user), organization_id);
+    insert_graphql_context_data(&mut data, state, Some(user), organization_id, viewer_id);
     data
 }
 
@@ -113,8 +137,15 @@ fn graphql_query_context_data(
     state: &ApiContext,
     macro_user_id: Option<MacroUserIdStr<'static>>,
     organization_id: Option<i64>,
+    viewer_id: Option<Uuid>,
 ) -> async_graphql::Request {
-    insert_graphql_context_data(&mut req.data, state, macro_user_id, organization_id);
+    insert_graphql_context_data(
+        &mut req.data,
+        state,
+        macro_user_id,
+        organization_id,
+        viewer_id,
+    );
     req
 }
 
@@ -123,8 +154,12 @@ fn insert_graphql_context_data(
     state: &ApiContext,
     macro_user_id: Option<MacroUserIdStr<'static>>,
     organization_id: Option<i64>,
+    viewer_id: Option<Uuid>,
 ) {
     data.insert(state.clone());
+    let saved_views: std::sync::Arc<dyn saved_views::domain::SavedViewApi> =
+        std::sync::Arc::new(crate::service::saved_views::service(state.db.clone()));
+    data.insert(saved_views);
 
     // Single-item reads at the query root (`initiative`, `initiativeTasks`,
     // `agentSession`) and the entity edges they reach answer anyone with
@@ -229,11 +264,32 @@ fn insert_graphql_context_data(
     ));
     data.insert(complete_graph::email_thread_metadata_loader(
         macro_user_id.clone(),
+        viewer_id,
         email_content_reader.clone(),
     ));
     data.insert(complete_graph::email_thread_mail_projection_loader(
-        macro_user_id,
+        macro_user_id.clone(),
+        viewer_id,
         email_content_reader,
+    ));
+    data.insert(complete_graph::EmailFocusContext(
+        state.email_focus_reader.clone(),
+    ));
+    data.insert(complete_graph::email_thread_focus_loader(
+        macro_user_id.clone(),
+        state.email_focus_reader.clone(),
+    ));
+    data.insert(complete_graph::entity_favorite_loader(
+        macro_user_id.clone(),
+        state.favorites_service.clone(),
+    ));
+    data.insert(complete_graph::entity_permission_loader(
+        macro_user_id.clone(),
+        organization_id,
+        state.entity_access_service.clone(),
     ));
     data.insert(property_writer);
 }
+
+#[cfg(test)]
+mod test;

@@ -19,7 +19,6 @@ export function createProjectTasksDataSource(
 ): TasksDataSource {
   const source = useTasksDataSource(state, {
     ...options,
-    loadAll: true,
     reference: () => ({
       propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
       entityId: projectId,

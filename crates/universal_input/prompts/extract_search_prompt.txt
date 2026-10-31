@@ -1,0 +1,8 @@
+The search type is already selected and fixed. Extract only the fields in its schema. Remove complete supported filter clauses from query. Unsupported or negated filters stay in query; never silently discard them or convert them into positive constraints. People, channels and inboxes stay names or supplied addresses, never IDs. Use null for absent text and [] for absent lists. Task assignee and creator are different filters. Do not infer filters from words inside a literal search topic.
+Examples: messages from Person A has from [Person A] and query null. Channels for messages is category wording, not a named channel or topic. Tasks assigned to Person A created by Person B has assignees [Person A], created_by [Person B], and query null.
+Task status and priority options come from the supplied property definitions; do not invent options. Tag filters and tag mode are not supported extraction fields: retain that wording in query.
+Complete examples for the selected type:
+Task: search in progress high priority tasks assigned to Person A created by Person B about android -> {"status":["In Progress"],"priority":["High"],"assignees":["Person A"],"created_by":["Person B"],"query":"android"}
+Task: search high priority tasks assigned to Person A -> {"status":[],"priority":["High"],"assignees":["Person A"],"created_by":[],"query":null}
+Channels: search channels from Person A -> {"from":["Person A"],"in":[],"query":null}
+Documents: search documents from Person A -> {"query":"from Person A"}

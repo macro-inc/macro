@@ -2,8 +2,8 @@ import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { WEEKDAY_OPTIONS } from '@core/util/cron';
 import { parseTime } from '@core/util/dateSearch/parseTime';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
-import CalendarIcon from '@phosphor/calendar.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { Button, Input, Tabs } from '@ui';
 import { addDays, format } from 'date-fns';
 import { createSignal, For, onMount, Show } from 'solid-js';
@@ -185,7 +185,7 @@ function RecurringSettings(props: {
               <For each={WEEKDAY_OPTIONS}>
                 {(day) => (
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     class="flex-1"
                     aria-pressed={props.trigger.daysOfWeek.includes(day.value)}

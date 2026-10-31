@@ -25,6 +25,7 @@ use base64::engine::general_purpose::URL_SAFE;
 use chrono::{NaiveDateTime, Utc};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
+use tracing::Instrument;
 
 use crate::mediaconn::MediaConn;
 use crate::proto::wa_e2e::{
@@ -546,7 +547,47 @@ pub async fn download_media_with_path(
     Ok(data)
 }
 
+/// Macro addition: a `whatsmeow.media.fetch` span per host tried, with the
+/// size, retries and hash check outcome.
 async fn download_and_decrypt(
+    http: &MediaHttpClient,
+    url: &str,
+    media_key: Option<&[u8]>,
+    app_info: Option<MediaType>,
+    file_enc_sha256: Option<&[u8]>,
+    file_sha256: Option<&[u8]>,
+) -> Result<Vec<u8>, DownloadError> {
+    let span = tracing::info_span!(
+        "whatsmeow.media.fetch",
+        encrypted = media_key.is_some() || file_enc_sha256.is_some(),
+        size = tracing::field::Empty,
+        retries = tracing::field::Empty,
+        hash_check = tracing::field::Empty,
+        outcome = tracing::field::Empty,
+        otel.status_code = tracing::field::Empty,
+    );
+    let result =
+        download_and_decrypt_untraced(http, url, media_key, app_info, file_enc_sha256, file_sha256)
+            .instrument(span.clone())
+            .await;
+    let hash_check = match &result {
+        Ok(data) => {
+            span.record("size", data.len());
+            "ok"
+        }
+        Err(DownloadError::InvalidMediaEncSha256) => "enc_sha256_mismatch",
+        Err(DownloadError::InvalidMediaHmac) => "hmac_mismatch",
+        Err(DownloadError::InvalidMediaSha256 | DownloadError::InvalidUnencryptedMediaSha256) => {
+            "sha256_mismatch"
+        }
+        Err(_) => "not_checked",
+    };
+    span.record("hash_check", hash_check);
+    crate::telemetry::record_result(&span, &result);
+    result
+}
+
+async fn download_and_decrypt_untraced(
     http: &MediaHttpClient,
     url: &str,
     media_key: Option<&[u8]>,
@@ -659,6 +700,7 @@ async fn download_possibly_encrypted_media_with_retries(
         );
         tokio::time::sleep(retry_duration).await;
         retry_num += 1;
+        tracing::Span::current().record("retries", retry_num);
         if retry_num == 5 {
             return Err(error);
         }
@@ -765,7 +807,12 @@ fn retry_after_parse(retry_after: &str, fallback: Duration) -> Duration {
 impl crate::client::Client {
     /// Downloads and decrypts the attachment of a message part (e.g. its
     /// `image_message`), checking its hashes (`Download`).
-    #[tracing::instrument(name = "whatsmeow.download", skip_all, err)]
+    #[tracing::instrument(
+        name = "whatsmeow.download",
+        skip_all,
+        fields(media_type = ?get_media_type(msg)),
+        err
+    )]
     pub async fn download(
         &self,
         msg: &(dyn DownloadableMessage + Sync),
@@ -781,6 +828,12 @@ impl crate::client::Client {
     #[expect(
         clippy::too_many_arguments,
         reason = "mirrors Go's DownloadMediaWithPath"
+    )]
+    #[tracing::instrument(
+        name = "whatsmeow.download",
+        skip_all,
+        fields(media_type = ?media_type, mms_type = mms_type),
+        err
     )]
     pub async fn download_media_with_path(
         &self,

@@ -26,9 +26,14 @@ export function channelComposerActions(sendMessage?: () => void): Action[] {
  */
 export function createConfiguredChannelMarkdownEditor({
   sendMessage,
+  composerActions = true,
   ...options
-}: MessageEditorOptions & { sendMessage?: () => void }) {
-  const actions = channelComposerActions(sendMessage);
+}: MessageEditorOptions & {
+  sendMessage?: () => void;
+  /** Offer the channel's own `/poll` and `/form`. */
+  composerActions?: boolean;
+}) {
+  const actions = composerActions ? channelComposerActions(sendMessage) : [];
   return createConfiguredMessageEditor({
     groupMentions: true,
     floatingFormatMenu: true,

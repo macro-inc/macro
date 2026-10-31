@@ -7,13 +7,16 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::copies::{CopyChange, CopyRefusal};
-use super::ics::{CalendarEventExport, CalendarEventIcs};
+use super::ics::{
+    CalendarEventExport, CalendarEventForward, CalendarEventIcs, EventSnapshot, ForwardedCopy,
+    IcsParticipant,
+};
 use super::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
 use super::meeting_links::{
     CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
 };
 use super::models::{
-    ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
+    ActorInboxes, AlignedGuestCopy, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
     CalendarAttendeeInput, CalendarBackfillClaim, CalendarBackfillFailureDisposition,
     CalendarBackfillFailureOutcome, CalendarBackfillJobKey, CalendarCreationTarget, CalendarEvent,
     CalendarEventDraft, CalendarEventMutationTarget, CalendarEventPatch, CalendarEventUpsert,
@@ -184,6 +187,16 @@ pub trait CalendarMutationProvider: Send + Sync + 'static {
         patch: &CalendarEventPatch,
     ) -> impl Future<Output = Result<ProviderInstanceUpdateOutcome, CalendarProviderError>> + Send;
 
+    /// Read an event's series back from the target calendar, as after a
+    /// write through another of its copies. Returns `None` when the copy no
+    /// longer exists or was cancelled at the provider.
+    fn refresh_event(
+        &self,
+        access_token: &str,
+        target: &ProviderCalendarTarget,
+        master_provider_event_id: &str,
+    ) -> impl Future<Output = Result<Option<CalendarEventUpsert>, CalendarProviderError>> + Send;
+
     /// Delete an event. An event already gone at the provider is success.
     fn delete_event(
         &self,
@@ -270,7 +283,7 @@ pub trait CalendarMutationProvider: Send + Sync + 'static {
         &self,
         access_token: &str,
         target: &ProviderCalendarTarget,
-        source: &CalendarEventExport,
+        source: &EventSnapshot,
     ) -> impl Future<Output = Result<ProviderImportOutcome, CalendarProviderError>> + Send;
 
     /// Close a push notification channel. A channel Google no longer knows
@@ -518,6 +531,10 @@ pub struct CalendarEventWriteOutcome {
     pub change: CalendarEventChange,
     /// A changed source was or is OOO; it may revoke a teammate's status/title.
     pub team_ooo_changed: bool,
+    /// Guest copies of the same meeting, in any inbox Macro holds, whose
+    /// guest policy changed to follow this copy's organizer. Their viewers
+    /// need a refresh too.
+    pub aligned_copies: Vec<AlignedGuestCopy>,
 }
 
 /// One event's fate after its sources were retired.
@@ -616,6 +633,15 @@ pub trait CalendarRepository: Send + Sync + 'static {
         requester_id: &str,
         event_id: Uuid,
     ) -> impl Future<Output = Result<Option<CalendarEventExport>, Report>> + Send;
+
+    /// What the requester's own `event_id` copy shows about where its
+    /// invitation came from, and its conference link, for forwarding it.
+    /// `None` when the requester owns no live copy by that id.
+    fn forwarded_copy(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ForwardedCopy>, Report>> + Send;
 
     /// Record a pending request from the requester to join `event_id`,
     /// leaving an existing one, whatever its status, as it is. Returns the
@@ -1037,6 +1063,39 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         requester_id: &str,
         email_link_id: Uuid,
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
+}
+
+/// Inbound service port adding an event the requester holds as an
+/// iCalendar file, such as one forwarded to them by email, to one of their
+/// Google calendars.
+pub trait CalendarSnapshotImporter: Send + Sync + 'static {
+    /// Import `snapshot` into the selected calendar, or the requester's
+    /// primary inbox's primary calendar, the way
+    /// [`CalendarMutationService::copy_shared_event`] adds a channel share:
+    /// under the meeting's iCalendar UID, with the calendar as its only guest,
+    /// notifying no one. The caller has already authorized the file.
+    fn import_snapshot(
+        &self,
+        requester_id: &str,
+        snapshot: EventSnapshot,
+        calendar_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
+}
+
+/// Inbound service port reading what forwarding one of the requester's
+/// events by email sends, for the host that sends the email.
+pub trait CalendarEventForwardSource: Send + Sync + 'static {
+    /// The requester's own copy of `event_id` as an iCalendar document for
+    /// a forward to `invitees`, with the inbox holding that copy, which
+    /// sends it, and whether the document is an invitation naming them or
+    /// the shared-event file. `None` when the event is cancelled, unknown,
+    /// or not held through one of their own inboxes.
+    fn event_forward(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        invitees: &[IcsParticipant],
+    ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send;
 }
 
 /// Inbound service port creating events that carry a Macro call.

@@ -42,7 +42,7 @@ describe('native browser connection dialog', () => {
     expect(mocks.open).toHaveBeenLastCalledWith('plugin:opener|open_url', {
       url: url.href,
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).toBeNull();
     handlePipedreamCallback(
       PIPEDREAM_CALLBACK_PATH,

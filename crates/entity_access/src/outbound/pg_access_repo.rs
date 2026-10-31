@@ -469,6 +469,26 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::form_access::get_form_access(&self.pool, &form_uuid, &source_ids).await?)
     }
 
+    /// Resolve ordinary shares on an external chat.
+    async fn get_external_chat_access(
+        &self,
+        group_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let group_uuid = group_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid external chat ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::external_chat_access::get_external_chat_access(
+            &self.pool,
+            &group_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn get_database_row_access(
         &self,
@@ -660,6 +680,9 @@ impl AccessRepository for PgAccessRepository {
                     &source_ids,
                 )
                 .await
+            }
+            EntityType::ExternalChat => {
+                queries::external_chat_access::get_external_chat_access(&self.pool, &entity_uuid, &source_ids).await
             }
             EntityType::Form => {
                 queries::form_access::get_form_access(&self.pool, &entity_uuid, &source_ids).await

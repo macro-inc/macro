@@ -1,4 +1,4 @@
-import HashIcon from '@phosphor/hash.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
 import CheckCircleIcon from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { Button, Surface } from '@ui';
@@ -105,7 +105,12 @@ export function BotCreationResult(props: {
       </div>
 
       <div class="mt-8 flex justify-end border-t border-edge-muted pt-4">
-        <Button type="button" variant="cta" size="sm" onClick={props.onDone}>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          onClick={props.onDone}
+        >
           Done
         </Button>
       </div>

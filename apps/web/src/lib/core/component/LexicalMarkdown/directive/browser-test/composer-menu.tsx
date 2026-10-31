@@ -6,7 +6,7 @@ import { floatWithSelection } from '../floatWithSelection';
 const PANEL_DECORATION_HEIGHT = 18;
 const MAX_CONTENT_HEIGHT = 256;
 
-function Menu(props: { rows: number }) {
+function Menu(props: { rows: number; stealFocus?: boolean }) {
   const [availableHeight, setAvailableHeight] = createSignal<number>();
   const contentMaxHeight = () => {
     const h = availableHeight();
@@ -29,6 +29,9 @@ function Menu(props: { rows: number }) {
       }
     >
       <div class="menu-surface rounded-xl p-px py-2">
+        <Show when={props.stealFocus}>
+          <input data-testid="search" type="search" aria-label="Search" />
+        </Show>
         <div
           class="overflow-y-auto"
           style={{ 'max-height': `${contentMaxHeight()}px` }}
@@ -48,6 +51,8 @@ function Menu(props: { rows: number }) {
 function Fixture() {
   const caretAtTop =
     new URLSearchParams(location.search).get('caret') === 'top';
+  const stealFocus =
+    new URLSearchParams(location.search).get('stealFocus') === '1';
   const [open, setOpen] = createSignal(false);
   const [rows, setRows] = createSignal(1);
   let composer!: HTMLDivElement;
@@ -59,6 +64,15 @@ function Fixture() {
     document.getSelection()?.removeAllRanges();
     document.getSelection()?.addRange(range);
     setOpen(true);
+    if (stealFocus) {
+      // GIF picker's search field takes focus after open; the live Range
+      // from getSelection() would otherwise follow it and hide() the menu.
+      setTimeout(() => {
+        document
+          .querySelector<HTMLInputElement>('[data-testid=search]')
+          ?.focus();
+      }, 50);
+    }
     setTimeout(() => setRows(12), 100);
   });
   return (
@@ -73,10 +87,59 @@ function Fixture() {
         /
       </div>
       <Show when={open()}>
-        <Menu rows={rows()} />
+        <Menu rows={rows()} stealFocus={stealFocus} />
       </Show>
     </main>
   );
 }
 
-render(() => <Fixture />, document.getElementById('root')!);
+// A height-capped editor that scrolls, as the channel composer does, with a
+// selection that runs past its visible bottom.
+function ClippedSelectionFixture() {
+  const clip = new URLSearchParams(location.search).get('clip') !== '0';
+  const [open, setOpen] = createSignal(false);
+  let editor!: HTMLDivElement;
+  onMount(() => {
+    editor.focus();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    document.getSelection()?.removeAllRanges();
+    document.getSelection()?.addRange(range);
+    setOpen(true);
+  });
+  return (
+    <main class="relative h-screen bg-page p-4 text-ink">
+      <div
+        data-testid="editor-shell"
+        class="max-h-[160px] overflow-y-auto rounded-xl border border-edge p-2"
+      >
+        <div ref={editor} contentEditable aria-label="Editor">
+          <For each={Array.from({ length: 30 }, (_, i) => i + 1)}>
+            {(line) => <p>Line {line} of a long message being edited.</p>}
+          </For>
+        </div>
+      </div>
+      <Show when={open()}>
+        <div
+          data-testid="format-menu"
+          class="h-10 w-48 rounded-lg menu-surface"
+          ref={(el) =>
+            floatWithSelection(el, () => ({
+              selection: document.getSelection(),
+              reactiveOnContainer: editor,
+              clipToVisible: clip,
+            }))
+          }
+        />
+      </Show>
+    </main>
+  );
+}
+
+const isClippedSelection =
+  new URLSearchParams(location.search).get('fixture') === 'clipped-selection';
+
+render(
+  () => (isClippedSelection ? <ClippedSelectionFixture /> : <Fixture />),
+  document.getElementById('root')!
+);

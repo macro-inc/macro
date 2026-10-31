@@ -1008,7 +1008,7 @@
     "/meeting-notes/documents/{document_id}/links": {
       "get": {
         "tags": ["calendar_events"],
-        "summary": "List an owned document's meeting grants, including unavailable meetings.",
+        "summary": "List a document's visible meeting links; owners also see unavailable grants.",
         "operationId": "document_note_links",
         "parameters": [
           {
@@ -1665,6 +1665,105 @@
         "description": "Lifecycle of a request to be added as a guest of a shared event.",
         "enum": ["pending", "accepted", "declined"]
       },
+      "CalendarMentionEvent": {
+        "type": "object",
+        "description": "Meeting-level fields shown in a calendar event mention preview, taken from\nthe requester's own projection of the meeting, or — when the requester has\nnone — from the mentioned projection a channel they belong to was given.",
+        "required": [
+          "title",
+          "time",
+          "isRecurring",
+          "attendeeCount",
+          "updatedAt"
+        ],
+        "properties": {
+          "attendeeCount": {
+            "type": "integer",
+            "description": "Number of attendees on the previewed copy.",
+            "minimum": 0
+          },
+          "canRequestToJoin": {
+            "type": "boolean",
+            "description": "For a channel-shared preview, whether the person who shared it can\nadd the requester as a guest. Always false for the requester's own\ncopy."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Provider description, plain text or HTML, truncated for the preview.\nClients must sanitize it before rendering."
+          },
+          "isRecurring": {
+            "type": "boolean",
+            "description": "Whether the event repeats."
+          },
+          "joinRequestStatus": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarJoinRequestStatus",
+                "description": "For a channel-shared preview, the requester's request to join, if any."
+              }
+            ]
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Location label, when set."
+          },
+          "occurrenceKey": {
+            "type": ["string", "null"],
+            "description": "Key of the previewed instance, absent when no occurrence is\nmaterialized."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer email."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer display name."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Time of the previewed instance: the requested occurrence when it\nexists, else the next upcoming one, else the latest past one, else the\nseries start."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Entity update time of the previewed copy."
+          },
+          "viewerCalendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The calendars holding `viewer_event_id`, the canonical copy's first."
+          },
+          "viewerCopy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarMentionViewerCopy",
+                "description": "How the requester holds the meeting through `viewer_event_id`; absent\nexactly when that is."
+              }
+            ]
+          },
+          "viewerEventId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The requester's own event entity for the mentioned meeting. Differs\nfrom the mentioned id when the mention came from another attendee.\nAbsent when the meeting is on none of the requester's calendars and\nthey see it only because it was shared with one of their channels:\nthat preview is read-only and there is no event of theirs to open."
+          }
+        }
+      },
+      "CalendarMentionViewerCopy": {
+        "type": "string",
+        "description": "How a requester holds a mentioned meeting on their own calendar, decided\nby the copy's own inbox, the way viewer capabilities decide organizer and\nguest.",
+        "enum": ["snapshot", "invitation", "event"]
+      },
       "CalendarMutationApiError": {
         "type": "object",
         "description": "HTTP error body returned by calendar mutation endpoints.",
@@ -1809,7 +1908,7 @@
       },
       "CopyCalendarEventRequest": {
         "type": "object",
-        "description": "Request body adding a channel-shared event to the requester's calendar.",
+        "description": "Request body adding a shared event to the requester's calendar.",
         "properties": {
           "calendarId": {
             "type": ["string", "null"],
@@ -1942,12 +2041,33 @@
       },
       "DocumentNoteLink": {
         "type": "object",
-        "description": "An owner's durable sharing link, including meetings they can no longer open.",
-        "required": ["documentName", "eventId", "occurrenceKey", "eventTitle"],
+        "description": "A visible meeting link, or an owner's durable grant they can no longer open.",
+        "required": [
+          "documentName",
+          "eventId",
+          "occurrenceKey",
+          "eventTitle",
+          "canViewMeeting"
+        ],
         "properties": {
+          "canViewMeeting": {
+            "type": "boolean",
+            "description": "Whether the reader may resolve this exact meeting's details right now."
+          },
           "documentName": {
             "type": "string",
-            "description": "Current name of the owned markdown document."
+            "description": "Current name of the markdown document."
+          },
+          "event": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarMentionEvent",
+                "description": "Exact accessible calendar preview, resolved with this link's authorization snapshot."
+              }
+            ]
           },
           "eventId": {
             "type": "string",
@@ -1970,6 +2090,17 @@
               {
                 "$ref": "#/components/schemas/NoteTeam",
                 "description": "Independent optional team audience."
+              }
+            ]
+          },
+          "teamEvent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TeamCalendarItem",
+                "description": "Exact, sanitized team-calendar details when the meeting is shared through a team."
               }
             ]
           }
@@ -2386,6 +2517,110 @@
           }
         }
       },
+      "TeamCalendarContent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No provider or event metadata.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["busy"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Explicitly authorized source content.",
+            "required": ["details", "kind"],
+            "properties": {
+              "details": {
+                "$ref": "#/components/schemas/TeamCalendarDetails",
+                "description": "Detail projection."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["details"]
+              }
+            }
+          }
+        ],
+        "description": "Disjoint busy/detail shapes prevent new event fields leaking by default."
+      },
+      "TeamCalendarDetails": {
+        "type": "object",
+        "description": "Safe details from a single authorized source.",
+        "required": ["title", "attendees", "calendarName"],
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarAttendee"
+            },
+            "description": "Attendees; self flags are relative to the requesting viewer."
+          },
+          "calendarName": {
+            "type": "string",
+            "description": "Source calendar name, shown only with details."
+          },
+          "conferenceUrl": {
+            "type": ["string", "null"],
+            "description": "Join URL, if supplied by this source."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Body, if supplied by this source."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Location, if supplied by this source."
+          },
+          "organizerEmail": {
+            "type": ["string", "null"],
+            "description": "Organizer address from this source."
+          },
+          "organizerName": {
+            "type": ["string", "null"],
+            "description": "Organizer name from this source."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          }
+        }
+      },
+      "TeamCalendarItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TeamCalendarContent",
+            "description": "Authorized content variant."
+          },
+          {
+            "type": "object",
+            "required": ["id", "ownerId", "time", "contributesToAvailability"],
+            "properties": {
+              "contributesToAvailability": {
+                "type": "boolean",
+                "description": "Whether this occurrence blocks the sharer's personal availability.\nA subscribed calendar's block can be shared without occupying the sharer."
+              },
+              "id": {
+                "type": "string",
+                "description": "Stable opaque projection identity, never an event entity id."
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "The person sharing access to the source."
+              },
+              "time": {
+                "$ref": "#/components/schemas/EventTime",
+                "description": "Occurrence interval."
+              }
+            }
+          }
+        ],
+        "description": "A read-only team calendar occurrence."
+      },
       "TeamCalendarSharing": {
         "type": "string",
         "description": "What a user exposes through their team membership.",
@@ -2596,6 +2831,10 @@
           "color": {
             "type": ["string", "null"],
             "description": "Provider color."
+          },
+          "contributesToAvailability": {
+            "type": "boolean",
+            "description": "Whether this calendar counts toward the requester's busy time: their\nsetting, by default only the primary calendars of inboxes they own.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
           },
           "defaultReminders": {
             "type": "array",

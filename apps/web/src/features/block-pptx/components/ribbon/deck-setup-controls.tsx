@@ -5,8 +5,8 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import Hash from '@phosphor/hash.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import Hash from '@icon/system/regular/hash.svg';
 import { Show } from 'solid-js';
 import { presetOf } from '../../core/slide-size';
 import {
@@ -61,7 +61,7 @@ export function HeaderFooterButtons() {
   return (
     <Show when={env.deckSetup}>
       <RibbonTextButton
-        label="Header & Footer"
+        aria-label="Header & Footer"
         disabled={env.readonly()}
         data-testid="pptx-insert-header-footer"
         onClick={open}
@@ -70,7 +70,7 @@ export function HeaderFooterButtons() {
         Header & Footer
       </RibbonTextButton>
       <RibbonTextButton
-        label="Date & Time"
+        aria-label="Date & Time"
         disabled={env.readonly()}
         data-testid="pptx-insert-date-time"
         onClick={open}
@@ -79,7 +79,7 @@ export function HeaderFooterButtons() {
         Date & Time
       </RibbonTextButton>
       <RibbonTextButton
-        label="Slide Number"
+        aria-label="Slide Number"
         disabled={env.readonly()}
         data-testid="pptx-insert-slide-number"
         onClick={open}

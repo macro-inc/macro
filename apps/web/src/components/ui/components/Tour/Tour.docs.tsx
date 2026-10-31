@@ -56,7 +56,7 @@ function PopoverDemo() {
   const [open, setOpen] = createSignal(false);
   return (
     <div class="flex items-center gap-2">
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button variant="secondary" onClick={() => setOpen(true)}>
         Start tour
       </Button>
       <Button variant="ghost" ref={tourTarget(DEMO.search)}>
@@ -98,7 +98,7 @@ function EntryDemo() {
   const [shown, setShown] = createSignal(false);
   return (
     <div class="flex items-center gap-2">
-      <Button variant="outline" onClick={() => setOpen(true)}>
+      <Button variant="secondary" onClick={() => setOpen(true)}>
         Start tour
       </Button>
       <Button

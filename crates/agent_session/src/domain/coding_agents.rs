@@ -223,6 +223,7 @@ impl<Directory: CodingAgentDirectory, Sessions: RoutineSessions>
                         owner: command.user_id.clone(),
                         bot_id,
                         model: None,
+                        mcp_servers: Vec::new(),
                     },
                     session_id,
                     source: SessionSource::Agent,

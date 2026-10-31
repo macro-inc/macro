@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_attachment SET attempts = attempts + 1, claimed_until = NULL,\n                retry_at = now() + least(interval '1 minute' * power(2, attempts), interval '6 hours')\n            WHERE chat_id = $1 AND person_id = $2 AND source_id = $3 AND ordinal = $4 AND account_id = $5 AND state = 'pending'\n            RETURNING attempts",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attempts",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c01907e555260c71060ede87951a15c74894101f61f9436d80533b65cad3f725"
+}

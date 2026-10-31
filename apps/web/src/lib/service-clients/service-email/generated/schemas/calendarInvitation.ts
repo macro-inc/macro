@@ -13,6 +13,7 @@ import type { CalendarInvitationEnd } from './calendarInvitationEnd';
 import type { CalendarInvitationLastModified } from './calendarInvitationLastModified';
 import type { CalendarInvitationLocation } from './calendarInvitationLocation';
 import type { CalendarInvitationOrganizer } from './calendarInvitationOrganizer';
+import type { CalendarInvitationRecurrence } from './calendarInvitationRecurrence';
 import type { CalendarInvitationRecurrenceId } from './calendarInvitationRecurrenceId';
 import type { CalendarInvitationRecurrenceIdRaw } from './calendarInvitationRecurrenceIdRaw';
 import type { CalendarInvitationStart } from './calendarInvitationStart';
@@ -45,6 +46,10 @@ export interface CalendarInvitation {
   /** Original scheduling method. */
   method: InvitationMethod;
   organizer?: CalendarInvitationOrganizer;
+  /** Raw `RRULE`, `RDATE` and `EXDATE` lines, empty for a single event.
+`None` on snapshots saved before recurrence was recorded, where a
+series cannot be told apart from a single event. */
+  recurrence?: CalendarInvitationRecurrence;
   recurrence_id?: CalendarInvitationRecurrenceId;
   /** Original recurrence identifier spelling and parameters. */
   recurrence_id_raw?: CalendarInvitationRecurrenceIdRaw;

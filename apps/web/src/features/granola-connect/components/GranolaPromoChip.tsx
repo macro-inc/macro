@@ -1,6 +1,6 @@
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
-import ArrowRightIcon from '@phosphor/arrow-right.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Show } from 'solid-js';
 import { GRANOLA_APP_SLUG, GRANOLA_ICON_URL } from '../core/granola';
 

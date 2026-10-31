@@ -1,8 +1,8 @@
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import LockIcon from '@phosphor/lock-simple.svg';
-import TableIcon from '@phosphor/table.svg';
+import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import LockIcon from '@icon/system/regular/lock-simple.svg';
+import TableIcon from '@icon/system/regular/table.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button } from '@ui';
 import { type Accessor, createSignal, type JSX, Show } from 'solid-js';
@@ -115,6 +115,7 @@ function PipelineEntryCard(props: {
         </span>
         <Show when={!props.entry.pipeline.shared}>
           <LockIcon
+            aria-hidden={false}
             role="img"
             aria-label="Private pipeline"
             class="size-3 shrink-0 text-ink-placeholder"
@@ -124,11 +125,13 @@ function PipelineEntryCard(props: {
         <Show when={props.onOpenPipeline}>
           {(open) => (
             <Button
+              variant="ghost"
+              aria-label={`Open ${props.entry.pipeline.name}`}
+              tooltip={`Open ${props.entry.pipeline.name}`}
               size="icon-sm"
-              label={`Open ${props.entry.pipeline.name}`}
               onClick={() => open()()}
             >
-              <ArrowUpRightIcon />
+              <ArrowUpRightIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>

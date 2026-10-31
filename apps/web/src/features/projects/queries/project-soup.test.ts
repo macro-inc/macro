@@ -257,6 +257,48 @@ describe('project Soup source', () => {
       },
     });
   });
+  it('combines created-by-me with name, dates, status, and assignee predicates', () => {
+    const input = projectSoupInput({
+      owner: 'creator',
+      query: 'Launch',
+      dueBefore: '2026-12-31',
+      status: 'active',
+      assignee: 'viewer',
+    });
+    expect(input.initial?.filters?.initiativeFilter).toEqual({
+      and: {
+        left: {
+          and: {
+            left: {
+              and: {
+                left: { literal: { include: true } },
+                right: { literal: { owner: 'creator' } },
+              },
+            },
+            right: { literal: { nameContains: 'Launch' } },
+          },
+        },
+        right: { literal: { dueBefore: '2026-12-31' } },
+      },
+    });
+    expect(input.initial?.filters?.propertiesFilter).toMatchObject({
+      and: {
+        left: {
+          literal: {
+            propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
+            value: { selectOption: 'active' },
+          },
+        },
+        right: {
+          literal: {
+            propertyDefinitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+            value: { entityRef: 'viewer' },
+          },
+        },
+      },
+    });
+  });
+
   it('keeps canonical descending Soup cursors even for a legacy ascending preference', () => {
     expect(
       projectSoupInput({ sort: 'created', descending: false })

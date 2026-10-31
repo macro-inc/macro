@@ -1,5 +1,9 @@
 import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
-import { LIST_VIEW_PATHS, type ListView } from '@app/constants/list-views';
+import {
+  EXTERNAL_VIEW_PATH,
+  LIST_VIEW_PATHS,
+  type ListView,
+} from '@app/constants/list-views';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
@@ -12,6 +16,7 @@ import {
 } from '@app/features/team-invitations/invite-modal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -27,20 +32,21 @@ import {
   ENABLE_CALLS,
   enableCrm,
   enableTasksReviews,
-  isFeatureEnabled,
+  enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { getRunnableHotkeys } from '@core/hotkey/getCommands';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { clearPressedKeys } from '@core/hotkey/state';
+import { activeScope, clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import BellIcon from '@icon/system/regular/bell.svg';
+import HomeIcon from '@icon/system/regular/house.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
+import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import BellIcon from '@phosphor/bell.svg';
-import HomeIcon from '@phosphor/house.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import ActivityIcon from '@phosphor/pulse.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import {
@@ -69,7 +75,7 @@ const SIDEBAR_LINKS = [
   {
     id: 'home',
     get label() {
-      return isTouchDevice() ? 'Notifications' : 'Home';
+      return isTouchDevice() ? t('nav.notifications') : t('nav.home');
     },
     href: LIST_VIEW_PATHS.home,
     get icon() {
@@ -80,7 +86,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'search',
-    label: 'Search',
+    get label() {
+      return t('nav.search');
+    },
     href: LIST_VIEW_PATHS.search,
     icon: SearchIcon,
     hotkey: '/',
@@ -89,7 +97,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'agents',
-    label: 'Agents',
+    get label() {
+      return t('nav.agents');
+    },
     href: LIST_VIEW_PATHS.agents,
     icon: getIconConfig('agent').icon,
     hotkey: 'a',
@@ -97,7 +107,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'mail',
-    label: 'Email',
+    get label() {
+      return t('nav.email');
+    },
     href: LIST_VIEW_PATHS.mail,
     icon: getIconConfig('email').icon,
     hotkey: 'e',
@@ -105,7 +117,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'documents',
-    label: 'Files',
+    get label() {
+      return t('nav.files');
+    },
     href: LIST_VIEW_PATHS.documents,
     icon: getIconConfig('files').icon,
     hotkey: 'f',
@@ -113,7 +127,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'documents',
-    label: 'Documents',
+    get label() {
+      return t('nav.documents');
+    },
     href: LIST_VIEW_PATHS.documents,
     params: {
       initialFacets: { type: ['doc-markdown'] },
@@ -124,7 +140,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'tasks',
-    label: 'Tasks',
+    get label() {
+      return t('nav.tasks');
+    },
     href: LIST_VIEW_PATHS.tasks,
     icon: getIconConfig('task').icon,
     hotkey: 't',
@@ -132,7 +150,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'calendar',
-    label: 'Calendar',
+    get label() {
+      return t('nav.calendar');
+    },
     href: calendarPath('timeGridWeek'),
     icon: getIconConfig('calendar').icon,
     hotkey: 'r',
@@ -140,7 +160,9 @@ const SIDEBAR_LINKS = [
   },
   {
     id: 'channels',
-    label: 'Channels',
+    get label() {
+      return t('nav.channels');
+    },
     href: LIST_VIEW_PATHS.channels,
     icon: getIconConfig('channel').icon,
     hotkey: 'c',
@@ -148,6 +170,7 @@ const SIDEBAR_LINKS = [
   },
 ] satisfies SidebarItem[];
 
+// Global view switches restore session context; explicit split opens stay fresh.
 type OpenWithSplitFn = ReturnType<typeof useSplitLayout>['openWithSplit'];
 
 export function sidebarContent(
@@ -162,9 +185,8 @@ export function sidebarContent(
 }
 
 /**
- * Navigate to a sidebar view by pushing a fresh entry into the active split.
- * Holding shift opens it in a new split. Use in-app back/forward to return to
- * prior entries.
+ * Navigate through the layout, resuming only views that opted into retention.
+ * Holding shift opens a fresh view in a new split.
  */
 export function navigateToSidebarView(args: {
   viewId: SidebarItem['id'];
@@ -172,19 +194,31 @@ export function navigateToSidebarView(args: {
   shiftKey: boolean;
   openWithSplit: OpenWithSplitFn;
   referredFrom?: ReferredFrom;
+  onApplied?: () => void;
 }): SplitHandle | undefined {
-  const { viewId, params, shiftKey, openWithSplit, referredFrom } = args;
+  const { viewId, params, shiftKey, openWithSplit, referredFrom, onApplied } =
+    args;
 
   return openWithSplit(sidebarContent(viewId, params), {
     preferNewSplit: shiftKey,
+    resume: !shiftKey,
     mergeHistory: false,
     allowDuplicate: viewId !== 'calendar',
     referredFrom,
+    onApplied,
   }).split;
 }
 
 /** Whether the "g" leader key is currently awaiting a destination key. */
 const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
+
+/**
+ * True while the "g" leader awaits a destination, so nav buttons can show
+ * their destination key. Any key in the GoTo scope leaves it, including a
+ * view's own GoTo command (Email's g s), so the hints clear with it.
+ */
+export const isGoToLeaderActive = () =>
+  goToHotkeyVisible() && activeScope() === GO_TO_COMMAND_SCOPE;
 
 const resetGoToHotkeysState = () => {
   setGoToHotkeyVisible(false);
@@ -207,7 +241,7 @@ export const GoToHotkeys = () => {
   const inviteHotkey = registerHotkey({
     scopeId: 'global',
     hotkeyToken: TOKENS.global.inviteTeam,
-    description: 'Send Invites',
+    description: () => t('nav.sendInvites'),
     keyDownHandler: (e) => {
       e?.preventDefault();
       setInviteModalOpen(true);
@@ -219,12 +253,16 @@ export const GoToHotkeys = () => {
   const activityFeedEnabled = useActivityFeedFlag();
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
+  const external = useFeatureFlag(enableWhatsappLinked);
+  const crm = useFeatureFlag(enableCrm);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       calendarUiEnabled(),
       activityFeedEnabled(),
       recentViewEnabled(),
-      reviews().enabled
+      reviews().enabled,
+      external().enabled,
+      crm().enabled
     )
   );
 
@@ -239,7 +277,7 @@ export const GoToHotkeys = () => {
     hotkey: GO_TO_LEADER_KEY,
     scopeId: 'global',
     hotkeyToken: TOKENS.sidebar.goToLeader,
-    description: 'Go to page',
+    description: () => t('nav.goToPage'),
     keyDownHandler: () => {
       // We debounce the time till the hot keys are visible to allow other commands
       // like g+g to fire
@@ -321,6 +359,14 @@ export const GoToHotkeys = () => {
           params: link.params,
           shiftKey: !!e?.shiftKey,
           openWithSplit,
+          onApplied:
+            link.id === 'search'
+              ? () => {
+                  const split = globalSplitManager()?.activeSplit();
+                  if (split?.content().id === 'search')
+                    requestSearchFocus(split.id);
+                }
+              : undefined,
         });
         if (link.id === 'search' && handle) {
           requestSearchFocus(handle.id);
@@ -332,7 +378,7 @@ export const GoToHotkeys = () => {
         hotkey: link.hotkey,
         scopeId: link.standaloneHotkey ? 'global' : GO_TO_COMMAND_SCOPE,
         hotkeyToken: link.hotkeyToken,
-        description: `Go to ${link.label}`,
+        description: () => t('nav.goTo', { label: link.label }),
         keyDownHandler: openSidebarView,
         icon: link.icon,
         // Views can claim a letter while focused (Email's g then i). Re-running
@@ -353,7 +399,9 @@ export const GoToHotkeys = () => {
 
 const CALLS_LINK: SidebarItem = {
   id: 'calls',
-  label: 'Calls',
+  get label() {
+    return t('nav.calls');
+  },
   href: LIST_VIEW_PATHS.calls,
   icon: getIconConfig('call').icon,
   hotkey: 'l',
@@ -362,7 +410,9 @@ const CALLS_LINK: SidebarItem = {
 
 const COMPANIES_LINK: SidebarItem = {
   id: 'companies',
-  label: 'Customers',
+  get label() {
+    return t('nav.customers');
+  },
   href: LIST_VIEW_PATHS.companies,
   icon: getIconConfig('company').icon,
   hotkey: 'o',
@@ -371,7 +421,9 @@ const COMPANIES_LINK: SidebarItem = {
 
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
-  label: 'Activity',
+  get label() {
+    return t('nav.activity');
+  },
   href: '/activity',
   icon: ActivityIcon,
   hotkey: 'y',
@@ -380,7 +432,9 @@ const ACTIVITY_LINK: SidebarItem = {
 
 const RECENT_LINK: SidebarItem = {
   id: 'recent',
-  label: 'Recent',
+  get label() {
+    return t('nav.recent');
+  },
   href: LIST_VIEW_PATHS.recent,
   icon: ActivityIcon,
   // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
@@ -391,24 +445,40 @@ const RECENT_LINK: SidebarItem = {
 
 const REVIEWS_LINK: SidebarItem = {
   id: 'reviews',
-  label: 'Reviews',
+  get label() {
+    return t('nav.reviews');
+  },
   href: '/reviews',
   icon: getIconConfig('githubPullRequest').icon,
   hotkey: 'v',
   hotkeyToken: TOKENS.sidebar.goTo.reviews,
 };
 
+const EXTERNAL_LINK: SidebarItem = {
+  id: 'external',
+  get label() {
+    return t('nav.external');
+  },
+  href: EXTERNAL_VIEW_PATH,
+  icon: PlugIcon,
+  // `e` is Email; `x` is the only free letter of "external".
+  hotkey: 'x',
+  hotkeyToken: TOKENS.sidebar.goTo.external,
+};
+
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Recent, Activity, Calendar, Calls, Reviews, and CRM
- * entries in their correct positions.
- * Call from a reactive context — it reads `ENABLE_CALLS` / `isFeatureEnabled(enableCrm)`.
+ * flag-gated Recent, Activity, Calendar, Calls, Reviews, CRM, and External
+ * entries in their correct positions. Callers subscribe to the flags and pass
+ * them in, so a flag that resolves after mount still rebuilds the list.
  */
 const buildSidebarLinks = (
   showCalendar: boolean,
   showActivity: boolean,
   showRecent: boolean,
-  showReviews: boolean
+  showReviews: boolean,
+  showExternal: boolean,
+  showCustomers: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS.filter(
     (link) => showCalendar || link.id !== 'calendar'
@@ -432,7 +502,7 @@ const buildSidebarLinks = (
     links = [...links.slice(0, idx + 1), CALLS_LINK, ...links.slice(idx + 1)];
   }
 
-  if (isFeatureEnabled(enableCrm)) {
+  if (showCustomers) {
     // Customers sits just after Channels (and Calls when present).
     const anchorId = ENABLE_CALLS ? 'calls' : 'channels';
     const idx = links.findIndex((l) => l.id === anchorId);
@@ -447,6 +517,8 @@ const buildSidebarLinks = (
     // Reviews sits at the end (accessed via More menu but has a hotkey).
     links = [...links, REVIEWS_LINK];
   }
+
+  if (showExternal) links = [...links, EXTERNAL_LINK];
 
   return links;
 };
@@ -494,7 +566,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       referredFrom: 'sidebar',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
+      toast.alert(t('nav.contentAlreadyOpen'));
     }
   };
 
@@ -519,7 +591,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       referredFrom: 'sidebar',
     });
     if (result.status === 'reused' && result.owner !== result.sourceOwner) {
-      toast.alert('Content already open');
+      toast.alert(t('nav.contentAlreadyOpen'));
     }
   };
 
@@ -547,14 +619,17 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       <ContextMenu.Portal>
         <ContextMenuContent class="text-xs text-ink-muted">
           <MenuItem
-            text="Open in new split"
+            text={t('nav.openInNewSplit')}
             onClick={openInNewSplit}
             disabled={!canOpenInNewSplit()}
           />
           <Show when={canOpenFullscreen()}>
-            <MenuItem text="Open fullscreen" onClick={openFullscreen} />
+            <MenuItem text={t('nav.openFullscreen')} onClick={openFullscreen} />
           </Show>
-          <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+          <MenuItem
+            text={t('nav.openInCurrentSplit')}
+            onClick={openInCurrentSplit}
+          />
           {props.additionalActions}
         </ContextMenuContent>
       </ContextMenu.Portal>

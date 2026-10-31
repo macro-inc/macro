@@ -591,51 +591,105 @@ async fn unlisted_runs_leave_lists_that_exclude_them(pool: PgPool) -> anyhow::Re
     Ok(())
 }
 
+/// A session started from a document or call thread inherits the parent's
+/// viewers, as the session's REST read and its inline chip already do, so
+/// opening it by id works for someone who prompted it or saw it in the thread.
+/// Broad lists stay limited to grants on the session itself.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn viewable_reads_hydrate_sessions_the_listing_never_reaches(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn by_ids_inherits_the_parent_thread_access(pool: PgPool) -> anyhow::Result<()> {
     let fixture = seed(&pool).await?;
-    let stranger = MacroUserIdStr::parse_from_str(STRANGER)?;
-    let requested = [EntityType::AgentSession.with_entity_string(fixture.private.to_string())];
-    assert!(
-        by_ids(
+    let entities = [EntityType::AgentSession.with_entity_string(fixture.private.to_string())];
+
+    for kind in ["document", "call"] {
+        let root = Uuid::now_v7();
+        // A call's thread root carries the call's own id.
+        let parent = if kind == "call" { root } else { Uuid::now_v7() };
+        sqlx::query!(
+            r#"INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content)
+               VALUES ($1, $2, $3, $4, '@macro look')"#,
+            root,
+            kind,
+            parent.to_string(),
+            OWNER,
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query!(
+            "UPDATE agent_session SET thread_id = $1 WHERE id = $2",
+            root,
+            fixture.private,
+        )
+        .execute(&pool)
+        .await?;
+        let stranger_items = by_ids(
             &pool,
             AdvancedSortParams {
-                user_id: stranger.clone(),
-                entities: &requested,
+                entities: &entities,
+                user_id: MacroUserIdStr::parse_from_str(STRANGER)?,
             },
         )
-        .await?
-        .is_empty(),
-        "the listing's by-ID read keeps its access predicate"
-    );
-
-    sqlx::query!(
-        r#"
-        INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "updatedAt")
-        VALUES ($1, $2, 'agent_session', '2026-01-04')
-        "#,
-        STRANGER,
-        fixture.private.to_string(),
-    )
-    .execute(&pool)
-    .await?;
-
-    for (viewer, viewed) in [(Some(stranger), true), (None, false)] {
-        let items = viewable_by_ids(&pool, viewer, &requested).await?;
-        assert_eq!(
-            ids(&items),
-            vec![fixture.private],
-            "a receipt already authorized the read"
+        .await?;
+        assert!(
+            stranger_items.is_empty(),
+            "no access to the {kind} means no access to its session"
         );
-        let SoupItem::AgentSession(session) = &items[0] else {
-            unreachable!("ids matched an agent session");
-        };
-        assert_eq!(
-            session.viewed_at.is_some(),
-            viewed,
-            "only the viewer's own history joins"
+
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, $2, $3, 'user', 'view')
+            "#,
+            parent,
+            kind,
+            STRANGER,
+        )
+        .execute(&pool)
+        .await?;
+        let viewer_items = by_ids(
+            &pool,
+            AdvancedSortParams {
+                entities: &entities,
+                user_id: MacroUserIdStr::parse_from_str(STRANGER)?,
+            },
+        )
+        .await?;
+        assert_eq!(ids(&viewer_items), vec![fixture.private], "{kind} viewer");
+
+        // GraphQL `agentSession` loads through a cursor query naming the id.
+        let named = cursor_soup(
+            &pool,
+            request(
+                STRANGER,
+                Some(Expr::val(AgentSessionLiteral::Id(fixture.private))),
+            ),
+        )
+        .await?;
+        assert_eq!(ids(&named), vec![fixture.private], "{kind} viewer by id");
+
+        let listed = cursor_soup(
+            &pool,
+            request(STRANGER, Some(Expr::val(AgentSessionLiteral::Include))),
+        )
+        .await?;
+        assert!(listed.is_empty(), "{kind} access does not list the session");
+
+        sqlx::query!(
+            "UPDATE comms_message_threads SET deleted_at = NOW() WHERE root_id = $1",
+            root,
+        )
+        .execute(&pool)
+        .await?;
+        let after_delete = by_ids(
+            &pool,
+            AdvancedSortParams {
+                entities: &entities,
+                user_id: MacroUserIdStr::parse_from_str(STRANGER)?,
+            },
+        )
+        .await?;
+        assert!(
+            after_delete.is_empty(),
+            "a deleted {kind} thread no longer shares its session"
         );
     }
     Ok(())

@@ -47,8 +47,8 @@ export function openNativePipedreamConnectUI(
         <div class="flex flex-col gap-4 p-6 bg-panel text-ink rounded-lg">
           <Dialog.Title>Finish connecting in your browser</Dialog.Title>
           <Dialog.Description>
-            Authorize the connection, then choose Return to Macro. If you closed
-            the browser tab, cancel and try again.
+            Authorize the connection in your browser, then come back here. If
+            Macro did not pick it up, choose Done and Macro will check for it.
           </Dialog.Description>
           <Show when={openFailed()}>
             <p role="alert">
@@ -57,13 +57,13 @@ export function openNativePipedreamConnectUI(
           </Show>
           <div class="flex gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => fireAndForget(launch(), 'pipedream-connect-open')}
             >
               Open browser again
             </Button>
             <Button variant="ghost" onClick={cancel}>
-              Cancel
+              Done
             </Button>
           </div>
         </div>

@@ -14,6 +14,7 @@ import { ERROR_MESSAGES } from '../utils/errorHandling';
  *
  * This hook focuses purely on data management and returns structured results.
  * UI feedback (toasts, notifications) is handled by mutations.
+ * Refetch returns its completion promise; ignored refresh failures remain reported.
  *
  * @param entityId - The ID of the entity to fetch properties for
  * @param entityType - The type of entity (e.g., 'document', 'channel', 'project')
@@ -27,7 +28,7 @@ export function useEntityProperties(
   properties: Accessor<Property[]>;
   isLoading: Accessor<boolean>;
   error: Accessor<string | null>;
-  refetch: () => void;
+  refetch: () => Promise<unknown>;
   addProperty: (propertyDefinitionId: string) => Promise<void>;
   removeProperty: (propertyId: string) => Promise<void>;
 } {
@@ -44,7 +45,11 @@ export function useEntityProperties(
     properties: () => query.data ?? [],
     isLoading: () => query.isLoading,
     error: () => (query.error ? ERROR_MESSAGES.PROPERTY_FETCH : null),
-    refetch: () => fireAndForget(query.refetch(), 'entity-properties'),
+    refetch: () => {
+      const refresh = query.refetch();
+      fireAndForget(refresh, 'entity-properties');
+      return refresh;
+    },
     addProperty: (propertyDefinitionId: string) =>
       addMutation.mutateAsync({ entityId, entityType, propertyDefinitionId }),
     removeProperty: (propertyId: string) =>

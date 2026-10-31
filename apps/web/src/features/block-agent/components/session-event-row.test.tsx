@@ -146,6 +146,63 @@ it('announces a ready import plan with its counts and opens its review', async (
   expect(open).toHaveBeenCalledExactlyOnceWith('review-id');
 });
 
+it('words a Linear plan as tasks and projects', () => {
+  const view = render(() => (
+    <SessionEventRow
+      event={{
+        ...base,
+        kind: 'import.planned',
+        payload: {
+          source: 'linear',
+          copy: 3,
+          taskLists: 40,
+          skipped: 1,
+          byHand: 0,
+        },
+      }}
+    />
+  ));
+  expect(view.getByRole('status').textContent).toContain(
+    'Linear import plan ready · 40 tasks · 3 projects'
+  );
+});
+
+it('names the tracker a settled Jira import came from', () => {
+  const view = render(() => (
+    <SessionEventRow
+      event={{
+        ...base,
+        kind: 'review.settled',
+        payload: {
+          import: {
+            source: 'jira',
+            outcome: 'completed',
+            error: null,
+            imported: 12,
+            planned: 12,
+            documents: 0,
+            databases: 0,
+            databaseRows: 0,
+            taskLists: 10,
+            taskRows: 10,
+            skipped: 0,
+            notWritten: 0,
+            sharedWithTeam: 12,
+            alreadyInMacro: 0,
+            waitingOnTeammates: 0,
+            rootFolderId: null,
+            failures: [],
+            handItems: [],
+          },
+        },
+      }}
+    />
+  ));
+  expect(view.getByRole('status').textContent).toContain(
+    'Jira import finished · 12 of 12 imported'
+  );
+});
+
 it('reports a settled import from its counts, never its error text', () => {
   const view = render(() => (
     <SessionEventRow

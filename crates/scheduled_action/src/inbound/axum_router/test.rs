@@ -108,7 +108,7 @@ const BOT_TOKEN: &str = "team-bot-token";
 const TEAM_ID: macro_uuid::Uuid = macro_uuid::Uuid::from_u128(0x7EA4);
 
 #[derive(Clone)]
-struct FakeAuth;
+pub(crate) struct FakeAuth;
 
 impl MacroAuthorizationService for FakeAuth {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
@@ -133,6 +133,15 @@ impl MacroAuthorizationService for FakeAuth {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_bot(
         &self,
         bot_token: &str,
@@ -153,6 +162,7 @@ impl MacroAuthorizationService for FakeAuth {
                     let macro_user_id = MacroUserIdStr::try_from(user_id).expect("acting user id");
                     MacroUserAuthentication {
                         agent_id: None,
+                        origin: macro_authorization::CredentialOrigin::Bot,
                         user_context: UserContext {
                             user_id: macro_user_id.to_string(),
                             ..Default::default()
@@ -179,12 +189,12 @@ impl MacroAuthorizationService for FakeAuth {
 }
 
 #[derive(Clone)]
-struct FakeEntityAccessService {
+pub(crate) struct FakeEntityAccessService {
     levels: HashMap<String, AccessLevel>,
 }
 
 impl FakeEntityAccessService {
-    fn owner_only() -> Self {
+    pub(crate) fn owner_only() -> Self {
         Self {
             levels: HashMap::from([(USER.to_owned(), AccessLevel::Owner)]),
         }
@@ -351,7 +361,7 @@ fn router_with<S: ScheduledActionService>(
     })
 }
 
-async fn request(
+pub(crate) async fn request(
     router: &Router,
     method: &str,
     uri: &str,

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mountPipedreamBrowserConnect } from './connect-browser';
 
 afterEach(() => {
@@ -17,7 +17,8 @@ describe('browser connection handoff', () => {
       );
       const root = document.createElement('main');
       document.body.appendChild(root);
-      mountPipedreamBrowserConnect(root);
+      const returnToApp = vi.fn();
+      mountPipedreamBrowserConnect(root, returnToApp);
       expect(location.hash).toBe('');
       const iframe = document.querySelector('iframe')!;
       expect(new URL(iframe.src).searchParams.get('token')).toBe('fixture');
@@ -29,6 +30,7 @@ describe('browser connection handoff', () => {
         })
       );
       expect(root.querySelector('a')).toBeNull();
+      expect(returnToApp).not.toHaveBeenCalled();
       window.dispatchEvent(
         new MessageEvent('message', {
           origin: 'https://pipedream.com',
@@ -47,6 +49,7 @@ describe('browser connection handoff', () => {
         type === 'success' ? 'apn_test' : null
       );
       expect(callback.href).not.toContain('fixture');
+      expect(returnToApp).toHaveBeenCalledExactlyOnceWith(callback.href);
       expect(document.querySelector('iframe')).toBeNull();
     }
   );

@@ -9,7 +9,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { enableProjects } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import {
   type ChannelAttachmentsData,
   flattenAttachments,
@@ -174,6 +174,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
           <AttachmentSection label="Documents">
             <div class="grid place-items-center py-3 text-ink-muted">
               <Spinner
+                aria-hidden={false}
                 aria-label="Loading documents"
                 class="size-5 animate-spin"
               />

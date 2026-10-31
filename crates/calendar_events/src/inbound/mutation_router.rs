@@ -547,7 +547,9 @@ impl From<CalendarMutationError> for CalendarMutationApiError {
             CalendarMutationError::AlreadyOnCalendar => (
                 StatusCode::CONFLICT,
                 CalendarMutationErrorCode::AlreadyOnCalendar,
-                "this event is already on one of your calendars".to_string(),
+                "This meeting is already on one of your calendars, so it can't be added to \
+                 another one."
+                    .to_string(),
             ),
             CalendarMutationError::JoinRequestOpen => (
                 StatusCode::CONFLICT,
@@ -1014,7 +1016,7 @@ where
     Ok(Json(event))
 }
 
-/// Request body adding a channel-shared event to the requester's calendar.
+/// Request body adding a shared event to the requester's calendar.
 #[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CopyCalendarEventRequest {

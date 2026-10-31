@@ -3,9 +3,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
+import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,
@@ -134,11 +134,11 @@ export function Harness(
           backLabel={props.backLabel ?? 'Agents'}
           actions={
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               onClick={() => setPairingDialog({})}
             >
-              <PlusIcon />
+              <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               New runtime
             </Button>
           }
@@ -228,9 +228,8 @@ export function Harness(
                             />
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
-                              depth={3}
                               disabled={
                                 cursorApiKey().trim().length === 0 ||
                                 saveCursorApiKey.isPending
@@ -270,7 +269,6 @@ export function Harness(
                           type="button"
                           variant="danger"
                           size="sm"
-                          depth={3}
                           class="shrink-0"
                           disabled={disconnectCursor.isPending}
                           onClick={handleDisconnectCursor}
@@ -413,7 +411,7 @@ function HarnessRemoveDialog(props: {
           </Button>
           <Button
             type="button"
-            variant="strong"
+            variant="secondary"
             size="sm"
             disabled={props.pending}
             onClick={props.onConfirm}

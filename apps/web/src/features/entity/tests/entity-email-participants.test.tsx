@@ -17,6 +17,14 @@ vi.mock('@core/user', () => ({
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'teo@macro.com',
 }));
+vi.mock('@queries/email/link', () => ({
+  useEmailLinksQuery: () => ({
+    isPending: false,
+    data: {
+      links: [{ id: 'outlook', email_address: 'owner@tenant.example.com' }],
+    },
+  }),
+}));
 vi.mock('@core/component/HoverCard', () => ({
   HoverCard: (props: { trigger: unknown }) => <>{props.trigger}</>,
 }));
@@ -39,13 +47,15 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({
 afterEach(cleanup);
 
 const emailEntity = (
-  participants: NonNullable<EmailEntity['participants']>
+  participants: NonNullable<EmailEntity['participants']>,
+  linkId?: string
 ): EmailEntity =>
   ({
     id: 'thread-1',
     type: 'email',
     name: 'Subject',
     participants,
+    linkId,
   }) as unknown as EmailEntity;
 
 describe('EntityEmailParticipants', () => {
@@ -104,5 +114,34 @@ describe('EntityEmailParticipants', () => {
     ));
 
     expect(container.textContent).toBe('Nathan Flurry');
+  });
+
+  it("treats the row's inbox address, not the Macro login, as me", () => {
+    const { container } = render(() => (
+      <EntityEmailParticipants
+        entity={emailEntity(
+          [{ email: 'owner@tenant.example.com', name: 'Riley Park' }],
+          'outlook'
+        )}
+      />
+    ));
+
+    expect(container.textContent).toBe('me');
+  });
+
+  it("recognizes the row's inbox address whatever its case", () => {
+    const { container } = render(() => (
+      <EntityEmailParticipants
+        entity={emailEntity(
+          [
+            { email: 'Owner@Tenant.example.com', name: 'Riley Park' },
+            { email: 'wolf@macro.com' },
+          ],
+          'outlook'
+        )}
+      />
+    ));
+
+    expect(container.textContent).toBe('Wolf Ryan');
   });
 });

@@ -3,6 +3,7 @@ import {
   executeMarkEntitiesUndone,
   resolveMarkEntitiesDoneVariables,
 } from '@app/features/next-soup/utils';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableGraphqlSoup,
@@ -14,6 +15,7 @@ import type { EmailArchiveDisposition } from '@queries/email/integration';
 import { threadCanBeMarkedNotDone } from '@queries/email/thread';
 import { fetchDoneNotificationIdsByEventItemIds } from '@queries/notification/user-notifications';
 import { invalidateAllSoup, refetchSoupEntity } from '@queries/soup/cache';
+import { canMarkNotDone } from './can-mark-not-done';
 import type { EntityActionListState } from './entity-action-context';
 
 type MakeMarkNotDoneOptions = {
@@ -44,8 +46,8 @@ async function unarchiveRestTargets(
     });
     toast.success(
       targets.length > 1
-        ? `Marked ${targets.length} items as not done`
-        : 'Marked as not done',
+        ? t('entityActions.toastMarkedNotDoneCount', { count: targets.length })
+        : t('entityActions.toastMarkedNotDone'),
       { duration: 3_000, stack: true, hideOnMobile: true }
     );
     if (disposition !== 'queued') {
@@ -57,7 +59,7 @@ async function unarchiveRestTargets(
     return disposition;
   } catch (err) {
     optimistic.rollback();
-    toast.failure('Failed to mark as not done');
+    toast.failure(t('entityActions.toastMarkNotDoneFailed'));
     throw err;
   }
 }
@@ -142,14 +144,9 @@ async function restoreEmailNotifications(
  * queued writes; only a completely failed email selection rejects the action.
  */
 export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
-  const canExecute = (entity: EntityData): boolean =>
-    entity.type === 'email' && entity.done === true;
-
   const execute = async (entities: EntityData[]) => {
     const graphql = isFeatureEnabled(enableGraphqlSoup);
-    const doneEmails = entities.filter(
-      (e) => e.type === 'email' && e.done === true
-    );
+    const doneEmails = entities.filter(canMarkNotDone);
     // GraphQL owns per-thread transactions: snapshot identities before awaiting
     // and deduplicate group occurrences. Keep REST's existing input flow intact.
     const candidates = graphql
@@ -161,8 +158,9 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
       : doneEmails;
     if (candidates.length === 0) return;
 
-    // REST may rule out sent-only threads up front. GraphQL leaves eligibility
-    // to the server; the per-thread transactions below isolate those rejections.
+    // REST rows lack received-mail facts, so REST looks the thread up. GraphQL
+    // rows read true until their thread is recomputed, so the server still has
+    // the final say; the per-thread transactions below isolate its rejections.
     const eligibility = await Promise.all(
       candidates.map((entity) => threadCanBeMarkedNotDone(entity.id))
     );
@@ -171,8 +169,8 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     if (targets.length === 0) {
       toast.alert(
         candidates.length > 1
-          ? 'These threads have no received messages, so they stay done'
-          : 'This thread has no received messages, so it stays done',
+          ? t('entityActions.toastThreadsStayDone')
+          : t('entityActions.toastThreadStaysDone'),
         { duration: 4_000 }
       );
       return;
@@ -182,32 +180,46 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     if (!graphql) return unarchiveRestTargets(targets, source);
     const { accepted, disposition, error } = await unarchiveTargets(targets);
     if (accepted.length === 0) {
-      toast.failure('Failed to mark as not done');
+      toast.failure(t('entityActions.toastMarkNotDoneFailed'));
       // Single-thread wrappers still need rejection to restore their own cache.
       throw error ?? new Error('Failed to mark as not done');
     }
 
     const warnings: string[] = [];
     const failedCount = targets.length - accepted.length;
-    if (failedCount > 0) warnings.push(`${failedCount} could not be restored.`);
+    if (failedCount > 0)
+      warnings.push(
+        t('entityActions.toastCountNotRestored', { count: failedCount })
+      );
     if (!(await restoreEmailNotifications(accepted, source))) {
-      warnings.push('Some notifications could not be restored.');
+      warnings.push(t('entityActions.toastNotificationsNotRestored'));
     }
     // The GraphQL mutation/queue owns revalidation. A follow-up REST Soup read
     // can return replica-stale archive state after accepted rows have settled,
     // including when a sibling failed. Do not feed it over those accepted rows.
     const message =
       failedCount > 0
-        ? `Marked ${accepted.length} of ${targets.length} items as not done`
+        ? t('entityActions.toastMarkedNotDonePartial', {
+            accepted: accepted.length,
+            count: targets.length,
+          })
         : accepted.length > 1
-          ? `Marked ${accepted.length} items as not done`
-          : 'Marked as not done';
+          ? t('entityActions.toastMarkedNotDoneCount', {
+              count: accepted.length,
+            })
+          : t('entityActions.toastMarkedNotDone');
     const feedback = { duration: 3_000, stack: true, hideOnMobile: true };
     if (warnings.length > 0)
-      toast.alert(`${message}. ${warnings.join(' ')}`, {
-        ...feedback,
-        hideOnMobile: false,
-      });
+      toast.alert(
+        t('entityActions.toastWithWarnings', {
+          message,
+          warnings: warnings.join(' '),
+        }),
+        {
+          ...feedback,
+          hideOnMobile: false,
+        }
+      );
     else toast.success(message, feedback);
     return disposition;
   };
@@ -221,5 +233,5 @@ export const makeMarkNotDoneAction = (options: MakeMarkNotDoneOptions) => {
     await execute(entities);
   };
 
-  return { canExecute, execute, executeWithSoup };
+  return { canExecute: canMarkNotDone, execute, executeWithSoup };
 };

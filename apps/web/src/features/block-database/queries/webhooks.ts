@@ -5,10 +5,21 @@ import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { CreatedDatabaseWebhookResponse } from '@service-storage/generated/schemas/createdDatabaseWebhookResponse';
 import type { DatabaseWebhookResponse } from '@service-storage/generated/schemas/databaseWebhookResponse';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { databaseWebhookKeys } from './keys';
+
+function databaseWebhooksQueryOptions(databaseId: string) {
+  return queryOptions({
+    queryKey: databaseWebhookKeys.list(databaseId).queryKey,
+    refetchOnMount: 'always',
+    queryFn: () =>
+      throwOnErr(() =>
+        storageServiceClient.databases.listWebhooks({ id: databaseId })
+      ),
+  });
+}
 
 /** A table's webhooks; `undefined` until they are read. */
 export function useTableWebhooks(
@@ -17,20 +28,19 @@ export function useTableWebhooks(
 ): {
   webhooks: Accessor<DatabaseWebhookResponse[] | undefined>;
   failed: Accessor<boolean>;
+  ready: Accessor<boolean>;
 } {
-  const query = useQuery(() => ({
-    queryKey: databaseWebhookKeys.list(databaseId()).queryKey,
-    queryFn: () =>
-      throwOnErr(() =>
-        storageServiceClient.databases.listWebhooks({ id: databaseId() })
-      ),
-  }));
+  const query = useQuery(() => databaseWebhooksQueryOptions(databaseId()));
   return {
     webhooks: () =>
       query.isSuccess
         ? query.data.webhooks.filter((webhook) => webhook.tableId === tableId())
         : undefined,
     failed: () => query.isError,
+    ready: () =>
+      query.isFetchedAfterMount &&
+      query.isSuccess &&
+      query.fetchStatus === 'idle',
   };
 }
 

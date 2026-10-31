@@ -167,6 +167,8 @@ pub struct CreateMessage {
     pub guest_name: Option<String>,
     /// User who triggered a bot message, if applicable.
     pub triggered_by: Option<String>,
+    /// Label of the client the user triggered it through, if any.
+    pub triggered_via: Option<String>,
     /// Parsed message input.
     pub input: PostMessage,
 }
@@ -324,6 +326,34 @@ pub enum AgentTypingPhase {
     Working,
     /// Waiting on someone to answer a question or approve an action.
     Waiting,
+}
+
+impl MessageEvent {
+    /// A posted message or finalized bot reply to evaluate for agent triggers,
+    /// explicit or implicit. Streaming and ordinary edits must never wake an
+    /// agent.
+    pub fn agent_trigger(&self) -> Option<super::events::MessagePostedMetadata> {
+        let (message, mentions) = match &self.change {
+            MessageChange::Posted {
+                message, mentions, ..
+            } => (message, mentions),
+            MessageChange::Edited {
+                message,
+                mentions,
+                notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                ..
+            } if message.sender_id.as_bot().is_some()
+                && self.actor == message.sender_id.as_ref() =>
+            {
+                (message, mentions)
+            }
+            _ => return None,
+        };
+        Some(super::events::MessagePostedMetadata::from_message(
+            message,
+            mentions.clone(),
+        ))
+    }
 }
 
 /// Persisted reaction state and whether this operation changed membership.

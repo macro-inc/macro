@@ -199,6 +199,45 @@ pub enum RunError {
     /// The first step was asked for twice.
     #[error("the query has already started")]
     AlreadyStarted,
+    /// The statement names a table its catalog does not have: it was
+    /// resolved against another catalog.
+    #[error("table {table} is not in the catalog the statement was resolved against")]
+    TableNotInCatalog {
+        /// The table.
+        table: TableId,
+    },
+    /// The statement names a column its table does not have: it was
+    /// resolved against another catalog.
+    #[error(
+        "table {table} has no column {column}; the statement was resolved against another catalog"
+    )]
+    ColumnNotInTable {
+        /// The table.
+        table: TableId,
+        /// The column's definition.
+        column: Uuid,
+    },
+    /// A select item names a key nothing in the statement binds.
+    #[error("select item {key} is bound to no column of the statement")]
+    UnboundColumn {
+        /// The key.
+        key: Uuid,
+    },
+    /// A value for a column is not of the column's type.
+    #[error("a value written to \"{column}\" is not of that column's type")]
+    MismatchedValue {
+        /// The column's name.
+        column: String,
+    },
+    /// The engine broke one of its own invariants: a bug in the engine, not
+    /// a problem with the statement.
+    #[error(
+        "the query engine failed internally ({invariant}); this is a bug, not a problem with the statement"
+    )]
+    Internal {
+        /// The invariant broken.
+        invariant: &'static str,
+    },
 }
 
 /// A failure as it crosses the wasm boundary: the typed error, and the words
@@ -511,6 +550,8 @@ pub enum OutcomeKind {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    DateRange,
     /// Select option ids; the caller labels them from the catalog.
     Select,
     /// Entity ids; the caller hydrates them.
@@ -559,7 +600,10 @@ pub async fn run<Source: RowSource, Sink: OpsSink>(
 
 /// The columns a resolved `SELECT` returns, named and typed as its outcome
 /// will be.
-pub fn result_columns(catalog: &Catalog, select: &SelectQuery) -> Vec<OutcomeColumn> {
+pub fn result_columns(
+    catalog: &Catalog,
+    select: &SelectQuery,
+) -> Result<Vec<OutcomeColumn>, RunError> {
     describe(
         catalog,
         &select.items,
@@ -576,23 +620,24 @@ pub(crate) fn describe(
     labels: &[(usize, String)],
     bindings: &[Binding],
     relations: &[Relation],
-) -> Vec<OutcomeColumn> {
+) -> Result<Vec<OutcomeColumn>, RunError> {
     let column = |key: Uuid| {
         column_of(catalog, bindings, relations, key)
             .cloned()
             .or_else(|| virtual_column_of(bindings, relations, key))
-            .expect("select items are bound in the scope")
+            .ok_or(RunError::UnboundColumn { key })
     };
     let mut columns: Vec<OutcomeColumn> = items
         .iter()
         .map(|item| match item {
             SelectItem::Column(key) => {
-                let column = column(*key);
+                let column = column(*key)?;
                 let bound = binding(bindings, *key);
                 let row_table = bound
-                    .map(|bound| relations[bound.relation].table)
+                    .and_then(|bound| relations.get(bound.relation))
+                    .map(|relation| relation.table)
                     .filter(|table| *key == row_id_key(*table));
-                OutcomeColumn {
+                Ok(OutcomeColumn {
                     column: bound.and_then(|bound| bound.column),
                     table: row_table,
                     kind: match column.kind {
@@ -601,27 +646,28 @@ pub(crate) fn describe(
                         ColumnKind::Number => OutcomeKind::Number,
                         ColumnKind::Boolean => OutcomeKind::Boolean,
                         ColumnKind::Date => OutcomeKind::Date,
+                        ColumnKind::DateRange => OutcomeKind::DateRange,
                         ColumnKind::Select { .. } => OutcomeKind::Select,
                         ColumnKind::Entity { .. } => OutcomeKind::Entity,
                     },
                     name: column.name,
-                }
+                })
             }
             SelectItem::Aggregate {
                 function,
                 column: None,
-            } => OutcomeColumn {
+            } => Ok(OutcomeColumn {
                 name: format!("{}(*)", function.name()),
                 column: None,
                 kind: OutcomeKind::Number,
                 table: None,
-            },
+            }),
             SelectItem::Aggregate {
                 function,
                 column: Some(key),
             } => {
-                let column = column(*key);
-                OutcomeColumn {
+                let column = column(*key)?;
+                Ok(OutcomeColumn {
                     name: format!("{}({})", function.name(), column.name),
                     column: None,
                     kind: match (function, &column.kind) {
@@ -631,14 +677,14 @@ pub(crate) fn describe(
                         _ => OutcomeKind::Number,
                     },
                     table: None,
-                }
+                })
             }
         })
-        .collect();
+        .collect::<Result<_, RunError>>()?;
     for (index, label) in labels {
         if let Some(column) = columns.get_mut(*index) {
             column.name = label.clone();
         }
     }
-    columns
+    Ok(columns)
 }

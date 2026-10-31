@@ -232,6 +232,16 @@ pub struct ModifyLabelsRequest {
     pub remove_label_ids: Vec<String>,
 }
 
+/// Request body for `messages.batchModify`, which accepts at most
+/// [`gmail_ops::MAX_BATCH_MODIFY_MESSAGES`] ids.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchModifyLabelsRequest {
+    pub ids: Vec<String>,
+    pub add_label_ids: Vec<String>,
+    pub remove_label_ids: Vec<String>,
+}
+
 /// Response structure for Gmail user profile data
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

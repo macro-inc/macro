@@ -116,6 +116,9 @@ pub enum ClientError {
     /// `ErrRecipientADJID`.
     #[error("message recipient must be a user JID with no device part")]
     RecipientAdJid,
+    /// `ErrRecipientNotOnWhatsApp`.
+    #[error("recipient is not on WhatsApp")]
+    RecipientNotOnWhatsApp,
     /// `ErrServerReturnedError`.
     #[error("server returned error")]
     ServerReturnedError,
@@ -419,15 +422,23 @@ impl IqError {
     }
 }
 
+/// Deviation from Go: an unknown error or unexpected response names only the
+/// node's tag, since nodes carry JIDs and the message ends up in logs and
+/// spans; the nodes stay in `error_node`, `raw_node` and `Debug`.
 impl fmt::Display for IqError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.code == 0 {
             if let Some(error_node) = &self.error_node {
-                write!(formatter, "info query returned unknown error: {error_node}")
+                write!(
+                    formatter,
+                    "info query returned unknown error: <{}>",
+                    error_node.tag
+                )
             } else if let Some(raw_node) = &self.raw_node {
                 write!(
                     formatter,
-                    "info query returned unexpected response: {raw_node}"
+                    "info query returned unexpected response: <{}>",
+                    raw_node.tag
                 )
             } else {
                 formatter.write_str("unknown info query error")
@@ -495,3 +506,6 @@ pub fn element_missing(tag: &str, in_: &str) -> ClientError {
         in_: in_.to_owned(),
     }
 }
+
+#[cfg(test)]
+mod test;

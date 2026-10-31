@@ -47,7 +47,12 @@ const operationMocks = vi.hoisted(() => {
   });
   return {
     graphql: false,
-    archive: vi.fn(async (): Promise<'committed' | 'queued'> => 'committed'),
+    archive: vi.fn(
+      async (_args: {
+        id: string;
+        value: boolean;
+      }): Promise<'committed' | 'queued'> => 'committed'
+    ),
     doneOverride: vi.fn((_ids: readonly string[], _done: boolean | undefined) =>
       Object.assign(vi.fn(), { release: vi.fn() })
     ),
@@ -89,6 +94,9 @@ vi.mock('@notifications', async (importOriginal) => ({
 vi.mock('@queries/email/integration', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/email/integration')>()),
   archiveEmailThread: operationMocks.archive,
+  // Settle each thread through the per-thread mock, as the bulk request does.
+  archiveEmailThreads: (ids: string[], value: boolean) =>
+    Promise.allSettled(ids.map((id) => operationMocks.archive({ id, value }))),
 }));
 vi.mock('@core/util/url', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/url')>()),
@@ -308,6 +316,52 @@ describe('agent session search navigation', () => {
     expect(getBlockHandle).not.toHaveBeenCalled();
     expect(goToLocationFromParams).not.toHaveBeenCalled();
   });
+});
+
+describe('project rows', () => {
+  const projectId = '01a1899a-b629-7e50-8e65-079fca623856';
+  const entity: EntityData = {
+    type: 'initiative',
+    id: projectId,
+    name: 'Roadmap',
+    ownerId: 'owner',
+  };
+
+  it.each([false, true])(
+    'opens a project through its Tasks-hosted identity (new split: %s)',
+    async (openInNewSplit) => {
+      const openWithSplit = vi.fn(() => ({ status: 'opened' }));
+      setGlobalSplitManager({
+        activeSplit: () => undefined,
+        getOrchestrator: () => ({
+          getBlockHandle: vi.fn(async () => undefined),
+        }),
+        openWithSplit,
+      } as unknown as SplitManager);
+      await openEntityInSplitFromUnifiedList(entity, { openInNewSplit });
+      expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+        {
+          type: 'initiative',
+          id: projectId,
+          entryMetadata: {
+            route: paneRoute(
+              { id: 'view-tasks', params: {} },
+              {
+                id: 'tasks-project',
+                params: { projectId, section: 'overview' },
+              }
+            ),
+            search: { tasks: { tab: ['projects'] } },
+          },
+          params: undefined,
+        },
+        expect.objectContaining({
+          preferNewSplit: openInNewSplit,
+          allowDuplicate: false,
+        })
+      );
+    }
+  );
 });
 
 const sendNotification = (id: string, messageId: string): UnifiedNotification =>

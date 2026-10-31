@@ -33,6 +33,17 @@ enum StoredLayout {
         card_fields: Vec<ColumnId>,
         hide_empty_lanes: bool,
     },
+    #[serde(rename_all = "camelCase")]
+    Timeline {
+        range: ColumnId,
+        title: ColumnId,
+        #[serde(default)]
+        group_by: Option<ColumnId>,
+        #[serde(default)]
+        bar_fields: Vec<ColumnId>,
+        #[serde(default)]
+        color_by: Option<ColumnId>,
+    },
 }
 
 /// A board's lane as any build stored it.
@@ -89,6 +100,19 @@ pub(super) fn layout(
 ) -> Result<ViewLayout, PgDatabasesRepoError> {
     Ok(match serde_json::from_value(stored)? {
         StoredLayout::Table { columns } => ViewLayout::Table { columns },
+        StoredLayout::Timeline {
+            range,
+            title,
+            group_by,
+            bar_fields,
+            color_by,
+        } => ViewLayout::Timeline {
+            range,
+            title,
+            group_by,
+            bar_fields,
+            color_by,
+        },
         StoredLayout::Board {
             group_by,
             title,

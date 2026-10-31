@@ -98,7 +98,10 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
     setSelectedIndex(0);
   });
 
+  // Reading snippets builds the whole Quick Access index, so a closed menu
+  // must not: every composer mounts one.
   createEffect(() => {
+    if (!menuOpen()) return;
     const count = filteredSnippets().length;
     if (count > 0 && selectedIndex() >= count) {
       setSelectedIndex(count - 1);

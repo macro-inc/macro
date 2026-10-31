@@ -7072,108 +7072,109 @@ async fn crm_document_literals_match_attachments_and_associations(
     Ok(())
 }
 
+/// The Home unread feed sends `(unseen OR seen) AND unseen` for every entity
+/// type. The notification join it now takes must agree with the per-row fold
+/// of an equivalent tree the stripper leaves alone.
 #[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
         path = "../../../../../macro_db_client/fixtures",
-        scripts("mixed_items_expanded")
-    )
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn viewable_reads_hydrate_documents_and_chats_the_listing_never_reaches(
-    pool: Pool<Postgres>,
-) {
-    let stranger = MacroUserIdStr::parse_from_str("macro|stranger@test.com").unwrap();
-    let entities = [
-        EntityType::Document.with_entity_str("11111111-0000-0000-0000-000000000000"),
-        EntityType::Chat.with_entity_str("22222222-0000-0000-0000-000000000000"),
-    ];
-    assert!(
-        expanded_soup_by_ids(&pool, stranger.copied(), &entities)
-            .await
-            .unwrap()
-            .is_empty(),
-        "the listing's by-ID read keeps its access predicate"
-    );
-
-    for viewer in [Some(stranger), None] {
-        let items = expanded_viewable_by_ids(&pool, viewer, &entities)
-            .await
-            .unwrap();
-        assert_eq!(items.len(), 2, "a receipt already authorized the read");
-    }
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../../../macro_db_client/fixtures",
-        scripts("mixed_items_expanded")
+async fn test_unread_conjunction_matches_unoptimized_equivalent(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::NotificationState::{Seen, Unseen};
+    let unseen_doc = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let seen_doc = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    let unseen_chat = "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1";
+    let seen_project = "11111111-1111-1111-1111-111111111111";
+    // The viewer `run_notification_filter` queries as owns this document.
+    let user_id = sqlx::query_scalar!(
+        r#"SELECT owner FROM "Document" WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'"#
     )
-)]
-async fn a_viewable_project_lists_its_tasks_without_a_grant_on_each(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    use item_filters::ast::properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue};
-
-    let task = "11111111-0000-0000-0000-000000000000";
-    let project = Uuid::new_v4();
-    sqlx::query!(
-        r#"
-        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
-        VALUES (
-            $1,
-            $2,
-            'TASK',
-            $3,
-            jsonb_build_object('type', 'EntityReference', 'value', jsonb_build_array(
-                jsonb_build_object('entity_id', $4::text, 'entity_type', 'INITIATIVE')
-            ))
-        )
-        "#,
-        Uuid::new_v4(),
-        task,
-        SystemPropertyKey::PROJECT_UUID,
-        project.to_string(),
-    )
-    .execute(&pool)
+    .fetch_one(&db)
     .await?;
-    let stranger = MacroUserIdStr::parse_from_str("macro|stranger@test.com")?;
-    let list = |viewable_project: Option<Uuid>| {
-        let filter = EntityFilterAst {
-            properties_filter: Some(Arc::new(Expr::Literal(PropertiesLiteral {
-                property_definition_id: SystemPropertyKey::PROJECT_UUID,
-                entity_type: None,
-                value: PropertyMatchValue::EntityRef(
-                    EntityRefId::new(project.to_string()).unwrap(),
-                ),
-            }))),
-            viewable_project,
-            ..EntityFilterAst::default()
-        };
-        expanded_dynamic_cursor_soup(
-            &pool,
-            ExpandedDynamicCursorArgs {
-                user_id: stranger.clone(),
-                limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filter),
-                exclude_frecency: false,
-            },
+    for (notification_id, item_type, item_id, seen) in [
+        (
+            "30000000-0000-0000-0000-000000000001",
+            "document",
+            unseen_doc,
+            false,
+        ),
+        (
+            "30000000-0000-0000-0000-000000000002",
+            "document",
+            seen_doc,
+            true,
+        ),
+        (
+            "30000000-0000-0000-0000-000000000003",
+            "chat",
+            unseen_chat,
+            false,
+        ),
+        (
+            "30000000-0000-0000-0000-000000000004",
+            "project",
+            seen_project,
+            true,
+        ),
+    ] {
+        insert_notification(
+            &db,
+            notification_id,
+            &user_id,
+            item_type,
+            item_id,
+            false,
+            seen,
         )
+        .await?;
+    }
+
+    let doc = |state| Expr::val(DocumentLiteral::NotificationState(state));
+    let chat = |state| Expr::val(ChatLiteral::NotificationState(state));
+    let project = |state| Expr::val(ProjectLiteral::NotificationState(state));
+    let optimized = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::and(
+            Expr::or(doc(Unseen), doc(Seen)),
+            doc(Unseen),
+        ))),
+        chat_filter: Some(Arc::new(Expr::and(
+            Expr::or(chat(Unseen), chat(Seen)),
+            chat(Unseen),
+        ))),
+        project_filter: Some(Arc::new(Expr::and(
+            Expr::or(project(Unseen), project(Seen)),
+            project(Unseen),
+        ))),
+        ..mock_empty_ast()
+    };
+    // Equivalent, but a notification literal under OR with another predicate
+    // stays on the correlated-EXISTS path.
+    let unoptimized = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::or(
+            doc(Unseen),
+            Expr::and(doc(Unseen), Expr::val(DocumentLiteral::Importance(true))),
+        ))),
+        chat_filter: Some(Arc::new(Expr::or(
+            chat(Unseen),
+            Expr::and(chat(Unseen), Expr::val(ChatLiteral::Importance(true))),
+        ))),
+        project_filter: Some(Arc::new(Expr::or(
+            project(Unseen),
+            Expr::and(project(Unseen), Expr::val(ProjectLiteral::Importance(true))),
+        ))),
+        ..mock_empty_ast()
     };
 
-    assert!(
-        list(None).await?.is_empty(),
-        "without a grant on the task, the listing leaves it out"
-    );
-    let ids: Vec<String> = list(Some(project))
-        .await?
-        .iter()
-        .map(|item| item.id().to_string())
-        .collect();
-    assert_eq!(ids, [task], "a viewer of the project lists its task");
-    assert!(
-        list(Some(Uuid::new_v4())).await?.is_empty(),
-        "another project's scope admits none of this project's tasks"
-    );
+    let optimized_ids = run_notification_filter(&db, optimized).await?;
+    let unoptimized_ids = run_notification_filter(&db, unoptimized).await?;
+
+    assert_eq!(optimized_ids, unoptimized_ids);
+    assert!(optimized_ids.contains(&uuid(unseen_doc)));
+    assert!(optimized_ids.contains(&uuid(unseen_chat)));
+    assert!(!optimized_ids.contains(&uuid(seen_doc)));
+    assert!(!optimized_ids.contains(&uuid(seen_project)));
     Ok(())
 }

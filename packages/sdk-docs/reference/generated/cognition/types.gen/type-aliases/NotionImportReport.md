@@ -1,6 +1,6 @@
 # Type Alias: NotionImportReport
 
-> **NotionImportReport** = \{ `alreadyImportedBy?`: [`NotionImporter`](NotionImporter.md)[]; `alreadyInMacro?`: `number`; `copy`: `number`; `databaseRows`: `number`; `databases`: `number`; `dataSources`: `number`; `deciding?`: `number`; `documents`: `number`; `error?`: `string` \| `null`; `failures?`: [`NotionReportItem`](NotionReportItem.md)[]; `hand`: `number`; `handItems?`: [`NotionReportItem`](NotionReportItem.md)[]; `imported`: `number`; `onTeam?`: `boolean`; `pages`: `number`; `reviewId?`: `string` \| `null`; `scanned?`: `null` \| [`ScanCounts`](ScanCounts.md); `sharedWithTeam?`: `number`; `skip`: `number`; `status?`: `null` \| [`RunStatus`](RunStatus.md); `taskRows`: `number`; `tasks`: `number`; `waiting`: `number`; `waitingOnTeammates?`: `number`; `writing`: `number`; \}
+> **NotionImportReport** = \{ `alreadyImportedBy?`: [`NotionImporter`](NotionImporter.md)[]; `alreadyInMacro?`: `number`; `copy`: `number`; `databaseRows`: `number`; `databases`: `number`; `dataSources`: `number`; `deciding?`: `number`; `documents`: `number`; `error?`: `string` \| `null`; `failures?`: [`NotionReportItem`](NotionReportItem.md)[]; `hand`: `number`; `handItems?`: [`NotionReportItem`](NotionReportItem.md)[]; `imported`: `number`; `issues?`: `number`; `onTeam?`: `boolean`; `pages`: `number`; `projects?`: `number`; `reviewId?`: `string` \| `null`; `scanned?`: `null` \| [`ScanCounts`](ScanCounts.md); `sharedWithTeam?`: `number`; `skip`: `number`; `status?`: `null` \| [`RunStatus`](RunStatus.md); `taskRows`: `number`; `tasks`: `number`; `waiting`: `number`; `waitingOnTeammates?`: `number`; `warnings?`: `string`[]; `writing`: `number`; \}
 
 Where a Notion workspace import stands.
 
@@ -21,8 +21,10 @@ Where a Notion workspace import stands.
 | <a id="property-hand"></a> `hand` | `number` | Objects that need handling by hand. |
 | <a id="property-handitems"></a> `handItems?` | [`NotionReportItem`](NotionReportItem.md)[] | Objects that need handling by hand, with reasons. |
 | <a id="property-imported"></a> `imported` | `number` | Plan objects already imported. |
+| <a id="property-issues"></a> `issues?` | `number` | Tracker issues in the plan. |
 | <a id="property-onteam"></a> `onTeam?` | `boolean` | Whether the user is on a team. Without one, everything the import writes stays visible only to them. |
 | <a id="property-pages"></a> `pages` | `number` | Pages in the plan. |
+| <a id="property-projects"></a> `projects?` | `number` | Tracker groups written as Macro projects. |
 | <a id="property-reviewid"></a> `reviewId?` | `string` \| `null` | The review the plan is tied to, once presented. |
 | <a id="property-scanned"></a> `scanned?` | `null` \| [`ScanCounts`](ScanCounts.md) | - |
 | <a id="property-sharedwithteam"></a> `sharedWithTeam?` | `number` | Written plan objects shared with the user's team. |
@@ -32,4 +34,5 @@ Where a Notion workspace import stands.
 | <a id="property-tasks"></a> `tasks` | `number` | Data sources whose rows become tasks. |
 | <a id="property-waiting"></a> `waiting` | `number` | Plan objects still waiting to be written. |
 | <a id="property-waitingonteammates"></a> `waitingOnTeammates?` | `number` | Plan objects waiting for a teammate who is writing the same object for the team; they link to the teammate's copy once it is written. |
+| <a id="property-warnings"></a> `warnings?` | `string`[] | Provider items skipped because they were unreadable, or optional features unavailable. |
 | <a id="property-writing"></a> `writing` | `number` | Plan objects being written now. |

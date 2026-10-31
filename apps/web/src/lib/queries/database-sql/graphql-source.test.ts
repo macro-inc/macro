@@ -254,9 +254,27 @@ describe('the GraphQL row source', () => {
         id: 'macro|viewer@databases.test',
         groupSoup: {
           bins: [
-            { key: WON, totalCount: 2, nextCursor: null, items: [] },
-            { key: LEAD, totalCount: 1, nextCursor: null, items: [] },
-            { key: '', totalCount: 4, nextCursor: null, items: [] },
+            {
+              key: WON,
+              label: null,
+              totalCount: 2,
+              nextCursor: null,
+              items: [],
+            },
+            {
+              key: LEAD,
+              label: null,
+              totalCount: 1,
+              nextCursor: null,
+              items: [],
+            },
+            {
+              key: '',
+              label: null,
+              totalCount: 4,
+              nextCursor: null,
+              items: [],
+            },
           ],
         },
       },
@@ -365,7 +383,11 @@ describe('the GraphQL row source', () => {
       [],
       null,
       500,
-      { request: () => {}, headers: () => ({}) }
+      {
+        decode: (_rows, operation) => operation(),
+        request: () => {},
+        headers: () => ({}),
+      }
     );
 
     expect(page._unsafeUnwrap().rows).toEqual([

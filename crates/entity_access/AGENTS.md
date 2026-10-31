@@ -79,6 +79,8 @@ the entity-access domain service.
   `try_new_authenticated_user`, `try_new_bot`, or `try_new`; never add a
   constructor that takes an `EntityAccessAuth` without going through `try_new`.
 
+- `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
+
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/security.md`

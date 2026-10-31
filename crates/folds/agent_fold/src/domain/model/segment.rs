@@ -244,7 +244,8 @@ fn part_kind(part: &MessagePart) -> Option<SegmentKind> {
         | MessagePart::ToolApproval { .. } => Some(SegmentKind::Interaction),
         MessagePart::Thought { .. }
         | MessagePart::Attachment { .. }
-        | MessagePart::Control { .. } => None,
+        | MessagePart::Control { .. }
+        | MessagePart::TaskNotification { .. } => None,
     }
 }
 

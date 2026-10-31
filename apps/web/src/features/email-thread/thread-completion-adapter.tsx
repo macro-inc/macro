@@ -14,8 +14,8 @@ import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { compositeEntity, setDoneOverride } from '@notifications';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import {
   trackExternalThreadArchive,
   useUndoableArchiveThreadMutation,
@@ -148,12 +148,14 @@ export function createThreadCompletionAdapter(
     return thread ? !thread.inbox_visible : false;
   };
 
-  // GraphQL validates received-message history on the server. An archived
-  // received thread may have no inbox-sorting timestamp, and a paginated
-  // message snapshot cannot prove it is sent-only. Keep REST's existing gate.
+  // A thread with no received mail can never leave the archive. Older sent-only
+  // threads read as having received mail until they are recomputed, so the
+  // server still has the final say on GraphQL. An archived received thread may
+  // have no inbox-sorting timestamp there; keep REST's existing timestamp gate.
   const canMarkThreadNotDone = () => {
     const thread = threadSource();
-    if (!thread || thread.inbox_visible) return false;
+    if (!thread || thread.inbox_visible || thread.has_received_mail === false)
+      return false;
     return graphqlSoup().enabled || thread.latest_inbound_message_ts != null;
   };
 
