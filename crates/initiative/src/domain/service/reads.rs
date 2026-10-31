@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     Entity, EntityAccessAuth, EntityAccessReceipt, EntityType, ViewAccessLevel,
 };
+use futures::{StreamExt, TryStreamExt, stream};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 
@@ -174,28 +175,28 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         })
     }
 
+    /// The tasks the caller may view, in `ids` order. Checks run 16 at a
+    /// time: a caller who reaches the tasks only through their project costs
+    /// a few queries per task.
     pub(super) async fn visible_tasks(
         &self,
         auth: &EntityAccessAuth,
         ids: Vec<String>,
     ) -> Result<Vec<EntityAccessReceipt<ViewAccessLevel>>, InitiativeError> {
-        let mut visible = Vec::new();
-        for id in ids {
-            if let Some(receipt) = self
-                .resources
-                .view(
+        stream::iter(ids)
+            .map(|id| {
+                self.resources.view(
                     auth.clone(),
                     Entity {
                         entity_id: id,
                         entity_type: EntityType::Document,
                     },
                 )
-                .await?
-            {
-                visible.push(receipt);
-            }
-        }
-        Ok(visible)
+            })
+            .buffered(16)
+            .try_filter_map(|receipt| async move { Ok(receipt) })
+            .try_collect()
+            .await
     }
 
     pub(super) async fn read_page(
