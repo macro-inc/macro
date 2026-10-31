@@ -43,6 +43,14 @@ grants in Connect's own Postgres database.
 - Customer clients create sessions at `POST /v1/connect-sessions`. The browser
   follows the returned URL through vendor consent and callback; token export
   refreshes grants expiring within 60 seconds.
+- Customer clients list all connections with `GET /v1/connections` (newest first,
+  `limit` 1–500, opaque `cursor`, optional `app_id` and `status`) and read counts
+  with `GET /v1/connections/summary`. Both require the customer key and scope
+  results to that customer. Invalid listing parameters return 400.
+- Customer clients list connected users with `GET /v1/users` (ordered by first
+  connection, `limit` 1–500, opaque `cursor`, optional `app_id` and `status`).
+  Each user includes all their connections; filters select users with a matching
+  connection and do not trim the returned connection list.
 - Customer agents call `POST`, `GET`, or `DELETE`
   `/v1/users/{external_user_id}/mcp/{app_id}` with their customer key. The gateway
   forwards MCP traffic to a connected live app, refreshes once on vendor 401
