@@ -75,14 +75,33 @@ export function summarizeWork(
   );
   const agent = all.find((step) => step.kind === 'agent');
   if (chooses.length) {
+    // A pick's options each set the value it picks; those are the pick.
+    const inPicks = new Set(
+      chooses
+        .filter((step) => pickAction(step))
+        .flatMap((step) =>
+          flattenSteps(step.options.flatMap((option) => option.steps))
+        )
+        .map((step) => step.id)
+    );
+    const rest = tools.filter((step) => !inPicks.has(step.id));
     const plain = chooses.filter((step) => !pickAction(step));
-    const actions = plain.length ? tools.length : 0;
+    // Options of a plain choice run different actions: count them. After
+    // picks alone, name what follows.
+    const after = plain.length
+      ? rest.length
+        ? plural(rest.length, 'action')
+        : ''
+      : [
+          ...new Set(
+            rest.flatMap((step) =>
+              step.kind === 'tool' ? [actionLabel(step)] : []
+            )
+          ),
+        ].join(' · ');
     return {
       chip: 'AI picks',
-      text: [
-        chooses.map(chooseLabel).filter(Boolean).join(', '),
-        actions ? plural(actions, 'action') : '',
-      ]
+      text: [chooses.map(chooseLabel).filter(Boolean).join(', '), after]
         .filter(Boolean)
         .join(' · '),
     };

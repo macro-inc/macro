@@ -2,6 +2,7 @@ import type { ScheduledAction } from '@service-scheduled-action/generated/schema
 import { describe, expect, it, vi } from 'vitest';
 import type { ScheduleDraft } from '../core/draft';
 import {
+  clampDescription,
   createEmptyDraft,
   draftSteps,
   validateRoutineDraft,
@@ -11,7 +12,9 @@ import {
   draftFromSchedule,
   draftToCreateBody,
   draftToUpdateBody,
+  isUnchangedUpdate,
   onceFromCron,
+  routineTargetKind,
   scheduleToDuplicateBody,
 } from './routine-draft';
 
@@ -538,6 +541,9 @@ describe('routines with steps', () => {
     expect(validateRoutineDraft(parsed!)).toBeNull();
     // Unchanged steps write back the exact stored task.
     expect(draftToUpdateBody(parsed!, program)?.task).toBe(program.task);
+    // Analytics count a routine with steps as one.
+    expect(routineTargetKind(program)).toBe('steps');
+    expect(routineTargetKind(cron)).toBe('model');
     const edited = {
       ...parsed!,
       steps: parsed!.steps!.slice(0, 1),
@@ -555,6 +561,39 @@ describe('routines with steps', () => {
         },
       ],
     });
+  });
+
+  it('recognizes a save that writes back what is stored, so it is skipped', () => {
+    const parsed = draftFromSchedule(program)!;
+    // Blurring a field without changing it, or picking the same value again,
+    // makes a new draft with the same content.
+    const repicked = {
+      ...parsed,
+      steps: parsed.steps!.map((step) =>
+        step.kind === 'tool'
+          ? { ...step, arguments: { ...step.arguments } }
+          : { ...step }
+      ),
+    };
+    for (const draft of [parsed, repicked]) {
+      const body = draftToUpdateBody(draft, program)!;
+      expect(isUnchangedUpdate(body, program)).toBe(true);
+    }
+    const unchangedCron = draftToUpdateBody(draftFromSchedule(cron)!, cron)!;
+    expect(isUnchangedUpdate(unchangedCron, cron)).toBe(true);
+
+    const renamed = draftToUpdateBody({ ...parsed, name: 'Renamed' }, program)!;
+    expect(isUnchangedUpdate(renamed, program)).toBe(false);
+    const described = draftToUpdateBody(
+      { ...parsed, description: 'Triage mail' },
+      program
+    )!;
+    expect(isUnchangedUpdate(described, program)).toBe(false);
+    const archivedOnly = draftToUpdateBody(
+      { ...parsed, steps: parsed.steps!.slice(0, 1) },
+      program
+    )!;
+    expect(isUnchangedUpdate(archivedOnly, program)).toBe(false);
   });
 
   it('creates programs with steps and single agents as before', () => {
@@ -631,5 +670,24 @@ describe('routines with steps', () => {
         { type: 'tool' },
       ],
     });
+  });
+});
+
+describe('descriptions', () => {
+  it('keeps a description within what the scheduler stores', () => {
+    const draft = {
+      ...createEmptyDraft('m'),
+      prompt: 'Summarize',
+      triggers: [],
+    };
+    expect(
+      validateRoutineDraft({ ...draft, description: 'x'.repeat(1001) })
+    ).toMatch(/description under 1,000 characters/);
+    expect(
+      validateRoutineDraft({ ...draft, description: 'x'.repeat(1000) })
+    ).not.toMatch(/description/);
+    // A description drafted from a long request fits once clamped.
+    expect(clampDescription(`  ${'y'.repeat(1200)}  `)).toHaveLength(1000);
+    expect(clampDescription('  Label invoices.  ')).toBe('Label invoices.');
   });
 });

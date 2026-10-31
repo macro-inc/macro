@@ -1,8 +1,8 @@
 import { isSameDay, isSameYear, subDays } from 'date-fns';
 import { match } from 'ts-pattern';
 import type { HistoryRecord, HistorySkip, HistoryStep } from './history';
-import type { StepDraft } from './routine-steps';
-import { describeToolStep } from './step-catalog';
+import type { StepDraft, ToolStepDraft } from './routine-steps';
+import { describeToolStep, stepActionKey } from './step-catalog';
 
 /**
  * The step a run recorded at `path` (`1.then.0`, `2.options.1.0`), if the
@@ -64,10 +64,43 @@ function toolDone(tool: string): string {
     .otherwise(() => tool.replace(/([a-z])([A-Z])/g, '$1 $2'));
 }
 
-/** A short description of what a run did at one step. */
+/**
+ * What a tool did, by the kind of action the routine's step there takes now:
+ * its arguments may have changed since, but a Create task step still made a
+ * task.
+ */
+function actionDone(step: ToolStepDraft): string {
+  return match(stepActionKey(step))
+    .with('add_label', () => 'Added a label')
+    .with('remove_label', () => 'Removed a label')
+    .with('archive', () => 'Archived')
+    .with('mark_read', () => 'Marked as read')
+    .with('star', () => 'Starred')
+    .with('mark_important', () => 'Marked important')
+    .with('sender_policy', () => 'Set the sender’s policy')
+    .with('add_tag', () => 'Added a tag')
+    .with('set_status', () => 'Set the status')
+    .with('set_priority', () => 'Set the priority')
+    .with('assign', () => 'Assigned')
+    .with('move', () => 'Moved to a folder')
+    .with('create_task', () => 'Created a task')
+    .with('create_document', () => 'Created a document')
+    .with('comment', () => 'Commented')
+    .with('send_message', () => 'Sent a message')
+    .with('reply_in_thread', () => 'Replied in the thread')
+    .with('other', () => toolDone(step.tool))
+    .exhaustive();
+}
+
+/**
+ * A short description of what a run did at one step: by the step in the
+ * configuration the run used, else by the kind of step there now
+ * (`current`), else by its tool alone.
+ */
 export function describeHistoryStep(
   record: HistoryStep,
-  steps: StepDraft[] | undefined
+  steps: StepDraft[] | undefined,
+  current?: StepDraft[]
 ): string {
   const step = stepAtPath(steps, record.path);
   return match(record)
@@ -82,10 +115,13 @@ export function describeHistoryStep(
         : 'No option fit'
     )
     .with({ kind: 'tool' }, (record) => {
+      const now = stepAtPath(current, record.path);
       const label =
         step?.kind === 'tool' && step.tool === record.tool
           ? describeToolStep(step)
-          : toolDone(record.tool);
+          : now?.kind === 'tool' && now.tool === record.tool
+            ? actionDone(now)
+            : toolDone(record.tool);
       return record.error ? `${label} failed: ${record.error}` : label;
     })
     .with({ kind: 'agent' }, (record) =>
@@ -161,7 +197,9 @@ export function failedStep(
 /** A run in a line: why it was skipped or failed, or what it did first. */
 export function summarizeRun(
   record: HistoryRecord,
-  steps: StepDraft[] | undefined
+  steps: StepDraft[] | undefined,
+  /** The routine's steps now, for a run of an older configuration. */
+  current?: StepDraft[]
 ): string {
   if (record.skipped) {
     return record.skipped.reason === 'not_met'
@@ -173,7 +211,7 @@ export function summarizeRun(
     return reason ? `Failed: ${reason}` : 'Failed';
   }
   const [first] = record.steps ?? [];
-  return first ? describeHistoryStep(first, steps) : 'Ran';
+  return first ? describeHistoryStep(first, steps, current) : 'Ran';
 }
 
 /** Runs of one day, newest first, under the day's label. */

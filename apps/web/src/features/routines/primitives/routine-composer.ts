@@ -1,3 +1,4 @@
+import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { debounce } from '@solid-primitives/scheduled';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type {
@@ -27,17 +28,33 @@ export function createRoutineComposer(
           triggers: restored.triggers ?? [],
           enabled: restored.enabled ?? true,
         }
-      : { ...createEmptyDraft(defaultModel), triggers: [], enabled: true }
+      : // As Start fresh leaves it: no trigger and no steps yet.
+        {
+          ...createEmptyDraft(defaultModel),
+          triggers: [],
+          steps: [],
+          enabled: true,
+        }
   );
-  // Bumped when the whole draft is replaced, so uncontrolled editors remount.
-  const [version, setVersion] = createSignal(0);
   const [attempted, setAttempted] = createSignal(false);
   const [submitError, setSubmitError] = createSignal<string>();
   const formError = () =>
     validateRoutineDraft(draft(), true) ??
     validateRoutineApps(draft().apps, connectedApps());
-  const save = debounce((value: ScheduleDraft) => storage.save(value), 300);
+  // Logging out clears drafts; this one must not write itself back after.
+  let retired = false;
+  const persist = (value: ScheduleDraft) => {
+    if (!retired) storage.save(value);
+  };
+  const save = debounce(persist, 300);
   let dirty = false;
+  const retire = () => {
+    retired = true;
+    save.clear();
+    dirty = false;
+  };
+  window.addEventListener(COMPOSER_STORAGE_CLEARED, retire);
+  onCleanup(() => window.removeEventListener(COMPOSER_STORAGE_CLEARED, retire));
   function change(update: (draft: ScheduleDraft) => ScheduleDraft) {
     if (source.pending()) return;
     const next = update(draft());
@@ -47,19 +64,9 @@ export function createRoutineComposer(
     setSubmitError(undefined);
     save(next);
   }
-  /** Swap in a whole new draft, e.g. one drafted by AI from a description. */
-  function replace(next: ScheduleDraft) {
-    if (source.pending()) return;
-    setDraft(next);
-    setVersion((value) => value + 1);
-    dirty = true;
-    setAttempted(false);
-    setSubmitError(undefined);
-    save(next);
-  }
   onCleanup(() => {
     save.clear();
-    if (dirty) storage.save(draft());
+    if (dirty) persist(draft());
   });
   /** Drop the draft, e.g. on Cancel, so it isn't offered again. */
   function discard() {
@@ -86,8 +93,6 @@ export function createRoutineComposer(
   return {
     draft,
     change,
-    replace,
-    version,
     attempted,
     formError,
     submitError,

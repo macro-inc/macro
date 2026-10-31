@@ -196,3 +196,102 @@ describe('routine steps', () => {
     ).toBe('Give each new task a title.');
   });
 });
+
+describe('the scheduler’s rules on tool arguments, checked before saving', () => {
+  const tool = (
+    id: string,
+    args: Record<string, unknown>,
+    output?: string
+  ): StepDraft => ({
+    id,
+    kind: 'tool',
+    tool: 'Comment',
+    ...(output ? { output } : {}),
+    arguments: args,
+  });
+  const create = (output: string) =>
+    tool(`make-${output}`, { entityId: '{{trigger.entity_id}}' }, output);
+  const read = (output: string) =>
+    tool(`read-${output}`, {
+      entityId: `{{steps.${output}.documentId}}`,
+      content: 'Done',
+    });
+  const decide = (yes: StepDraft[], no: StepDraft[]): StepDraft => ({
+    ...ifStep('Is it urgent?'),
+    yes,
+    no,
+  });
+
+  it('lets a step read an earlier step in its list or an enclosing one', () => {
+    expect(
+      validateSteps([create('task'), read('task')], [email], valid)
+    ).toBeNull();
+    expect(
+      validateSteps(
+        [create('task'), decide([read('task')], [])],
+        [email],
+        valid
+      )
+    ).toBeNull();
+  });
+
+  it('refuses reading a step that may not have run on its path', () => {
+    const notRun = /may not have run before it/;
+    // A later step, the other branch, and anything after the decision.
+    expect(
+      validateSteps([read('task'), create('task')], [email], valid)
+    ).toMatch(notRun);
+    expect(
+      validateSteps([decide([create('task')], [read('task')])], [email], valid)
+    ).toMatch(notRun);
+    expect(
+      validateSteps(
+        [decide([create('task')], []), read('task')],
+        [email],
+        valid
+      )
+    ).toMatch(notRun);
+  });
+
+  it('refuses two steps with the same output name', () => {
+    expect(
+      validateSteps([create('task'), create('task')], [email], valid)
+    ).toMatch(/same/);
+  });
+
+  it('refuses fields the scheduler can’t read', () => {
+    expect(
+      validateSteps([tool('a', { content: 'Hi {{name}}' })], [email], valid)
+    ).toMatch(/“\{\{name\}\}” isn’t a field/);
+    expect(
+      validateSteps(
+        [tool('a', { content: 'Hi {{trigger.email.subject' })],
+        [email],
+        valid
+      )
+    ).toMatch(/Close every/);
+    expect(
+      validateSteps(
+        [tool('a', { content: 'Hi {{ trigger.email.subject }}' })],
+        [email],
+        valid
+      )
+    ).toBeNull();
+  });
+
+  it('keeps instructions and step settings within the scheduler’s limits', () => {
+    expect(
+      validateSteps([agentStep(model, 'x'.repeat(20_001))], [email], valid)
+    ).toMatch(/under 20,000 characters/);
+    expect(
+      validateSteps([agentStep(model, 'x'.repeat(20_000))], [email], valid)
+    ).toBeNull();
+    expect(
+      validateSteps(
+        [tool('a', { content: 'x'.repeat(17 * 1024) })],
+        [email],
+        valid
+      )
+    ).toMatch(/too long/);
+  });
+});

@@ -29,13 +29,17 @@ export function triggerSubject(
     )
   );
   if (kinds.size !== 1) return undefined;
-  return match([...kinds][0])
-    .returnType<StepSubject | undefined>()
-    .with('THREAD', () => 'email')
-    .with('TASK', () => 'task')
-    .with('DOCUMENT', () => 'document')
-    .with('CHANNEL', () => 'channel')
-    .otherwise(() => undefined);
+  return (
+    match([...kinds][0])
+      .returnType<StepSubject | undefined>()
+      .with('THREAD', () => 'email')
+      .with('TASK', () => 'task')
+      .with('DOCUMENT', () => 'document')
+      .with('CHANNEL', () => 'channel')
+      // Calls and GitHub deliveries have no item steps can act on.
+      .with('CALL_RECORD', 'GITHUB', undefined, () => undefined)
+      .exhaustive()
+  );
 }
 
 /** The triggering item's id placeholder. */
@@ -73,7 +77,7 @@ export function triggerScope(subject: StepSubject | undefined): StepScope {
 }
 
 /** The task or document a step creates, for later steps to act on. */
-export function createdItem(step: ToolStepDraft): StepItem | undefined {
+function createdItem(step: ToolStepDraft): StepItem | undefined {
   if (step.tool !== 'CreateDocument' || !step.output) return undefined;
   const subject = step.arguments.isTask ? 'task' : 'document';
   const title = text(step.arguments.documentName).trim();
@@ -103,7 +107,7 @@ export function scopeAfter(scope: StepScope, step: StepDraft): StepScope {
 }
 
 /** An output name no other step in the routine uses, e.g. `task_2`. */
-export function freshOutput(base: string, steps: StepDraft[]): string {
+function freshOutput(base: string, steps: StepDraft[]): string {
   const taken = new Set(
     flattenSteps(steps).flatMap((step) =>
       step.kind === 'tool' && step.output ? [step.output] : []
@@ -171,7 +175,8 @@ function propertyEntityType(subject: StepSubject): string {
   return match(subject)
     .with('email', () => 'thread')
     .with('channel', () => 'channel')
-    .otherwise(() => 'document');
+    .with('task', 'document', () => 'document')
+    .exhaustive();
 }
 
 function propertyStep(
@@ -412,7 +417,7 @@ export const stepActionGroupLabels: Record<StepActionGroup, string> = {
 };
 
 /** Items in scope an action can act on, the triggering one first. */
-export function actionTargets(
+function actionTargets(
   action: Pick<StepAction, 'subjects'>,
   scope: StepScope
 ): StepItem[] {
@@ -456,7 +461,13 @@ export function stepTarget(step: ToolStepDraft): string | undefined {
     .with('Comment', () => text(args.entityId))
     .with('MoveToProject', () => text(args.entityId))
     .with('UpdateThreadLabels', () => text(args.thread_id))
-    .otherwise(() => undefined);
+    .with(
+      'SetSenderPolicy',
+      'CreateDocument',
+      'SendChannelMessage',
+      () => undefined
+    )
+    .exhaustive();
 }
 
 /** Items in scope a tool step could act on. */
@@ -483,7 +494,14 @@ export function retarget(step: ToolStepDraft, item: StepItem): ToolStepDraft {
       entityId: item.ref,
       entityType: item.subject === 'email' ? 'email' : 'document',
     }))
-    .otherwise(() => args);
+    .with(
+      'UpdateThreadLabels',
+      'SetSenderPolicy',
+      'CreateDocument',
+      'SendChannelMessage',
+      () => args
+    )
+    .exhaustive();
   return { ...step, arguments: next };
 }
 
@@ -521,7 +539,7 @@ export function stepActionKey(step: ToolStepDraft): StepActionKey {
     .with('SendChannelMessage', () =>
       text(args.channel_id) === TRIGGER_ID ? 'reply_in_thread' : 'send_message'
     )
-    .otherwise(() => 'other');
+    .exhaustive();
 }
 
 export const statusOptions = [
@@ -799,7 +817,7 @@ export function availablePicks(scope: StepScope): AiPick[] {
 }
 
 /** One option of a pick: a value and the step that applies it. */
-export function pickOption(
+function pickOption(
   step: ToolStepDraft,
   label = '',
   description = ''
@@ -962,12 +980,4 @@ export function stepTitle(step: StepDraft): string {
     .with({ kind: 'choose' }, (step) => describeChoice(step))
     .with({ kind: 'tool' }, (step) => describeToolStep(step))
     .exhaustive();
-}
-
-/** A routine's steps in a line: its first step, and how many follow. */
-export function describeSteps(steps: StepDraft[]): string {
-  const [first] = steps;
-  if (!first) return 'No steps';
-  const more = flattenSteps(steps).length - 1;
-  return more ? `${stepTitle(first)} · ${more} more` : stepTitle(first);
 }

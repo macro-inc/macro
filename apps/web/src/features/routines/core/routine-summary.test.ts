@@ -76,6 +76,24 @@ describe('summarizeWork', () => {
     ).toEqual({ chip: 'AI picks', text: 'Labels' });
   });
 
+  it('names the actions that follow a pick', () => {
+    expect(
+      summarizeWork(
+        steps([
+          {
+            type: 'choose',
+            options: [
+              { label: 'Finance', steps: [label('Finance')] },
+              { label: 'Travel', steps: [label('Travel')] },
+            ],
+          },
+          tool('Comment', { entityId: 't', content: 'Triaged' }),
+        ]),
+        ''
+      )
+    ).toEqual({ chip: 'AI picks', text: 'Labels · Comment' });
+  });
+
   it('lists plain actions without a chip', () => {
     expect(
       summarizeWork(

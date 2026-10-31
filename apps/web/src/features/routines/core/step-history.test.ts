@@ -134,6 +134,43 @@ describe('routine step history', () => {
   });
 });
 
+describe('summaries of runs of an older configuration', () => {
+  const createTask =
+    stepsFromTask({
+      steps: [
+        {
+          type: 'tool',
+          tool: 'CreateDocument',
+          arguments: { documentName: 'Follow up', isTask: true },
+        },
+      ],
+    }) ?? [];
+  const run = {
+    id: 'run',
+    success: true,
+    revision: 1,
+    steps: [{ path: '0', kind: 'tool' as const, tool: 'CreateDocument' }],
+  };
+
+  it('names the action by the kind of step there now', () => {
+    // The routine was edited since, so the run's own steps are unknown.
+    expect(summarizeRun(run, undefined, createTask)).toBe('Created a task');
+    // Without any steps to go on, only the tool is known.
+    expect(summarizeRun(run, undefined)).toBe('Created a document');
+    // A different tool there now says nothing about this run.
+    expect(
+      summarizeRun(
+        {
+          ...run,
+          steps: [{ path: '0', kind: 'tool' as const, tool: 'Comment' }],
+        },
+        undefined,
+        createTask
+      )
+    ).toBe('Commented');
+  });
+});
+
 describe('routine run outcomes', () => {
   const ran = { id: 'run', success: true };
 

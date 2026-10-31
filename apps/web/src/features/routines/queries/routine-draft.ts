@@ -19,6 +19,7 @@ import {
 export { onceFromCron } from './routine-trigger-mapping';
 
 import { DEFAULT_MODEL } from '@core/component/AI/constant';
+import { deepEqual } from '@core/util/compareUtils';
 import { getDefaultTimezone } from '@core/util/cron';
 import type {
   CreateScheduledAction,
@@ -69,7 +70,8 @@ function getAgentTask(schedule: ScheduledAction): RoutineTask | undefined {
 /** Whether a routine runs an agent or a bare model; undefined when its task is unreadable. */
 export function routineTargetKind(
   schedule: ScheduledAction
-): RoutineTarget['kind'] | undefined {
+): RoutineTarget['kind'] | 'steps' | undefined {
+  if (stepsFromTask(schedule.task)) return 'steps';
   const task = getAgentTask(schedule);
   if (!task) return undefined;
   return task.agent ? 'agent' : 'model';
@@ -280,6 +282,28 @@ function programUpdateBody(
     run_visibility: draft.runVisibility ?? previous.run_visibility,
     ...descriptionField(draft, previous),
   };
+}
+
+/**
+ * Whether an update writes back what is already stored. Saving it would
+ * still bump the routine's revision, which cancels event runs queued under
+ * the old one, so a save that changes nothing is skipped.
+ */
+export function isUnchangedUpdate(
+  body: UpdateScheduledAction,
+  stored: ScheduledAction
+): boolean {
+  if (!('trigger' in body)) return false;
+  return (
+    body.name === stored.name &&
+    body.kind === stored.kind &&
+    (body.enabled ?? stored.enabled) === stored.enabled &&
+    (body.run_visibility ?? stored.run_visibility) === stored.run_visibility &&
+    (body.description ?? stored.description ?? '') ===
+      (stored.description ?? '') &&
+    deepEqual(body.trigger, stored.trigger) &&
+    deepEqual(body.task, stored.task)
+  );
 }
 
 export function draftToUpdateBody(

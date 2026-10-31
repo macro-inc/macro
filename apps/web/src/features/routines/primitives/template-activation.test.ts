@@ -318,6 +318,53 @@ describe('createTemplateActivation', () => {
     });
   });
 
+  it('fills mentions in a tool step’s text the way its variable says', () => {
+    createRoot((dispose) => {
+      const author =
+        '<m-user-mention>{"userId":"macro|eric@macro.com","email":"eric@macro.com"}</m-user-mention>';
+      const activate = (fill: 'activator' | 'shared') =>
+        createTemplateActivation({
+          template: () => ({
+            ...TEMPLATE,
+            trigger: {
+              type: 'events',
+              filters: [{ events: ['task.created'] }],
+            },
+            task: {
+              steps: [
+                {
+                  type: 'tool',
+                  tool: 'SendChannelMessage',
+                  arguments: {
+                    channel_id: 'channel-1',
+                    content: `New task for ${author}`,
+                  },
+                },
+              ],
+            },
+            variables: [
+              {
+                kind: 'user',
+                id: 'macro|eric@macro.com',
+                label: 'eric@macro.com',
+                fill,
+              },
+            ],
+          }),
+          activator: () => ACTIVATOR,
+          access: () => new Map([['channel-1', true]]),
+        });
+      const filled = JSON.stringify(activate('activator').request()?.task);
+      expect(filled).not.toContain('eric@macro.com');
+      expect(filled).toContain('jun@macro.com');
+      // "Same for everyone" keeps the author.
+      const kept = JSON.stringify(activate('shared').request()?.task);
+      expect(kept).toContain('eric@macro.com');
+      expect(kept).not.toContain('jun@macro.com');
+      dispose();
+    });
+  });
+
   it('fills the author in as the activator in every agent, branches included', () => {
     createRoot((dispose) => {
       const author =

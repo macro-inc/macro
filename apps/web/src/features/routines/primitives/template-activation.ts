@@ -4,15 +4,13 @@ import type {
   TemplateVariable,
 } from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
-import { match } from 'ts-pattern';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import {
   firstAgent,
   flattenSteps,
-  type StepDraft,
+  mapSteps,
   stepsFromTask,
   stepsToWire,
-  updateStep,
 } from '../core/routine-steps';
 import {
   type Activator,
@@ -21,6 +19,7 @@ import {
   fillTemplatePrompt,
   fillTemplateTrigger,
   keepsAuthor,
+  mapStepTexts,
   needsDecision,
   type ReferenceChoice,
   type ReferenceState,
@@ -81,39 +80,28 @@ function templateTagOptions(template: Pick<RoutineTemplate, 'task'>): string[] {
 }
 
 /**
- * The template's task filled in for the activator: every agent's instructions,
- * including agents in branches, and each tool step's arguments.
+ * The template's task filled in for the activator: each tool step's
+ * destinations and people, then every text that can mention someone (each
+ * agent's instructions and each tool step's text, branches included).
  */
 function filledTask(
   task: RoutineTemplate['task'],
-  fill: (instructions: string) => string,
+  fill: (text: string) => string,
   fillArguments: (args: Record<string, unknown>) => Record<string, unknown>
 ) {
   const steps = stepsFromTask(task);
-  if (!steps) return { ...task, user_prompt: fill(templatePrompt({ task })) };
-  return {
-    ...task,
-    steps: stepsToWire(
-      flattenSteps(steps).reduce(
-        (filled, current) =>
-          updateStep(filled, current.id, (step) =>
-            match(step)
-              .returnType<StepDraft>()
-              .with({ kind: 'agent' }, (agent) => ({
-                ...agent,
-                instructions: fill(agent.instructions),
-              }))
-              .with({ kind: 'tool' }, (tool) => ({
-                ...tool,
-                arguments: fillArguments(tool.arguments),
-              }))
-              .with({ kind: 'if' }, { kind: 'choose' }, (decision) => decision)
-              .exhaustive()
-          ),
-        steps
-      )
-    ),
-  };
+  if (!steps)
+    return {
+      ...task,
+      ...(typeof task.prompt === 'string' ? { prompt: fill(task.prompt) } : {}),
+      user_prompt: fill(templatePrompt({ task })),
+    };
+  const withArguments = mapSteps(steps, (step) =>
+    step.kind === 'tool'
+      ? { ...step, arguments: fillArguments(step.arguments) }
+      : step
+  );
+  return { ...task, steps: stepsToWire(mapStepTexts(withArguments, fill)) };
 }
 
 /**

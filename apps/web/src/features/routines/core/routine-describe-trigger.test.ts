@@ -25,6 +25,8 @@ describe('describeTrigger', () => {
       'Mon, Wed and Fri at 9:00 AM'
     );
     expect(describeTrigger(weekly(['7', '1']))).toBe('Weekends at 9:00 AM');
+    // Before any day is picked.
+    expect(describeTrigger(weekly([]))).toBe('Weekly at 9:00 AM');
   });
 
   it('describes plain cron schedules written through the API', () => {

@@ -73,6 +73,10 @@ export const STEP_LIMITS = {
   label: 80,
   description: 200,
   condition: 500,
+  /** Characters in an agent step's instructions. */
+  instructions: 20_000,
+  /** Serialized bytes of one tool step's arguments. */
+  argumentBytes: 16 * 1024,
 } as const;
 
 const stepIdSchema = z.string().regex(/^[a-z][a-z0-9_]{0,31}$/);
@@ -389,6 +393,34 @@ export function updateStep(
   });
 }
 
+/** The same steps with `update` applied to every step, nested ones included. */
+export function mapSteps(
+  steps: StepDraft[],
+  update: (step: StepDraft) => StepDraft
+): StepDraft[] {
+  return steps.map((step) =>
+    update(
+      match(step)
+        .returnType<StepDraft>()
+        .with({ kind: 'agent' }, { kind: 'tool' }, (step) => step)
+        .with({ kind: 'if' }, (step) => ({
+          ...step,
+          yes: mapSteps(step.yes, update),
+          no: mapSteps(step.no, update),
+        }))
+        .with({ kind: 'choose' }, (step) => ({
+          ...step,
+          options: step.options.map((option) => ({
+            ...option,
+            steps: mapSteps(option.steps, update),
+          })),
+          otherwise: mapSteps(step.otherwise, update),
+        }))
+        .exhaustive()
+    )
+  );
+}
+
 /** Every agent step, branches included, in program order. */
 export function agentSteps(steps: StepDraft[]): AgentStepDraft[] {
   return flattenSteps(steps).filter(
@@ -458,6 +490,108 @@ export function stepsNeedEvent(steps: StepDraft[]): boolean {
   );
 }
 
+/** What a `{{…}}` placeholder reads, as the scheduler parses it. */
+type Placeholder = { kind: 'trigger' } | { kind: 'step'; id: string };
+
+const PLACEHOLDER_SEGMENT = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * The placeholders in a value's strings, or why one can't be read. Mirrors
+ * the scheduler's `template::references`.
+ */
+function placeholders(value: unknown): Placeholder[] | string {
+  if (typeof value === 'string') {
+    const found: Placeholder[] = [];
+    let rest = value;
+    for (
+      let start = rest.indexOf('{{');
+      start >= 0;
+      start = rest.indexOf('{{')
+    ) {
+      const after = rest.slice(start + 2);
+      const end = after.indexOf('}}');
+      if (end < 0) return 'Close every “{{” field with “}}”.';
+      const inner = after.slice(0, end).trim();
+      const [root, id, ...path] = inner.split('.');
+      const segments = [root, id, ...path].filter(
+        (segment) => segment !== undefined
+      );
+      const readable =
+        segments.every((segment) => PLACEHOLDER_SEGMENT.test(segment)) &&
+        (root === 'trigger' ||
+          (root === 'steps' &&
+            id !== undefined &&
+            stepIdSchema.safeParse(id).success));
+      if (!readable)
+        return `“{{${inner}}}” isn’t a field. Insert fields with the { } button.`;
+      found.push(
+        root === 'trigger'
+          ? { kind: 'trigger' }
+          : { kind: 'step', id: id ?? '' }
+      );
+      rest = after.slice(end + 2);
+    }
+    return found;
+  }
+  const items = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object'
+      ? Object.values(value)
+      : [];
+  const found: Placeholder[] = [];
+  for (const item of items) {
+    const inner = placeholders(item);
+    if (typeof inner === 'string') return inner;
+    found.push(...inner);
+  }
+  return found;
+}
+
+/**
+ * `{{steps.<output>…}}` must name a tool step that runs before it on every
+ * path: earlier in the same list, or earlier in a list that encloses it. A
+ * branch's outputs stay inside that branch, since it may not have run.
+ * Mirrors the scheduler's check, as do the unique outputs and the size limit.
+ */
+function validateToolArguments(steps: StepDraft[]): string | null {
+  const outputs = new Set<string>();
+  const visible: string[] = [];
+  const walk = (list: StepDraft[]): string | null => {
+    for (const step of list) {
+      if (step.kind === 'tool') {
+        const bytes = new TextEncoder().encode(
+          JSON.stringify(step.arguments)
+        ).length;
+        if (bytes > STEP_LIMITS.argumentBytes)
+          return 'A step’s settings are too long. Shorten its text.';
+        const found = placeholders(step.arguments);
+        if (typeof found === 'string') return found;
+        if (
+          found.some(
+            (placeholder) =>
+              placeholder.kind === 'step' && !visible.includes(placeholder.id)
+          )
+        )
+          return 'A step uses a field from a step that may not have run before it. Keep it below that step, in the same branch.';
+        if (step.output) {
+          if (outputs.has(step.output))
+            return 'Two steps name their output the same. Remove one and add it again.';
+          outputs.add(step.output);
+          visible.push(step.output);
+        }
+      }
+      for (const branch of stepBranches(step)) {
+        const scope = visible.length;
+        const error = walk(branch);
+        if (error) return error;
+        visible.length = scope;
+      }
+    }
+    return null;
+  };
+  return walk(steps);
+}
+
 export function validateSteps(
   steps: StepDraft[],
   triggers: RoutineTriggerDraft[],
@@ -478,6 +612,8 @@ export function validateSteps(
       .returnType<string | null>()
       .with({ kind: 'agent' }, (step) => {
         if (!step.instructions.trim()) return 'Tell the agent what to do.';
+        if ([...step.instructions].length > STEP_LIMITS.instructions)
+          return `Keep the agent’s instructions under ${STEP_LIMITS.instructions.toLocaleString('en-US')} characters.`;
         return routineTargetSchema.safeParse(step.target).success
           ? null
           : 'Choose a valid model or agent.';
@@ -517,6 +653,8 @@ export function validateSteps(
       .exhaustive();
     if (error) return error;
   }
+  const argumentError = validateToolArguments(steps);
+  if (argumentError) return argumentError;
   if (
     stepsNeedEvent(steps) &&
     (!triggers.length || triggers.some((trigger) => trigger.kind !== 'event'))

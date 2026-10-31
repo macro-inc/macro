@@ -5,7 +5,11 @@ import type { ActionTrigger } from '@service-scheduled-action/generated/schemas'
 import { z } from 'zod';
 import type { ScheduleDraft } from '../core/draft';
 import { createEmptyDraft } from '../core/routine-draft';
-import { routineTools, stepsFromTask } from '../core/routine-steps';
+import {
+  flattenSteps,
+  routineTools,
+  stepsFromTask,
+} from '../core/routine-steps';
 import { routineEvents } from '../core/routine-triggers';
 import { parseRoutineTriggers } from './routine-trigger-mapping';
 
@@ -135,7 +139,7 @@ ${JSON.stringify({
 /** Turn the model's answer into an editable draft, or explain why it can't. */
 export function draftFromComposition(
   output: unknown,
-  context: Pick<ComposerContext, 'defaultModel'>
+  context: Pick<ComposerContext, 'defaultModel' | 'decisions'>
 ): ScheduleDraft | string {
   const parsed = compositionSchema.safeParse(output);
   if (!parsed.success) return 'The draft came back incomplete. Try rephrasing.';
@@ -190,6 +194,16 @@ export function draftFromComposition(
   const draftSteps = stepsFromTask({ steps });
   if (!draftSteps)
     return 'The draft used steps Macro can’t run. Try rephrasing.';
+  // Without AI decisions the routine couldn't save, and dropping its
+  // decisions would change what it does.
+  if (
+    !context.decisions &&
+    (filters.some((filter) => filter.condition) ||
+      flattenSteps(draftSteps).some(
+        (step) => step.kind === 'if' || step.kind === 'choose'
+      ))
+  )
+    return 'That routine needs AI to decide, which isn’t available to you yet. Describe fixed steps instead.';
   const base = {
     ...createEmptyDraft(context.defaultModel),
     name: name.trim(),

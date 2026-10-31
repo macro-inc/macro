@@ -10,7 +10,7 @@ vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: () => 'New routine',
 }));
 
-const context = { defaultModel: 'claude' };
+const context = { defaultModel: 'claude', decisions: true };
 
 describe('routine composition', () => {
   it('turns triage into an event routine with steps', () => {
@@ -178,5 +178,38 @@ describe('routine composition', () => {
     expect(instructions).toContain('macro|ada@example.com');
     expect(instructions).toContain('Decisions are unavailable');
     expect(instructions).toContain('2026-10-09T12:00:00.000Z');
+  });
+
+  it('refuses a draft that needs AI decisions when they are off', () => {
+    const withDecision = {
+      name: 'Inbox triage',
+      triggers: [{ type: 'event', events: ['email.message_received'] }],
+      steps: [
+        {
+          type: 'if',
+          condition: 'Is it a newsletter?',
+          // biome-ignore lint/suspicious/noThenProperty: the scheduler's step format names the yes branch `then`.
+          then: [],
+          else: [],
+        },
+      ],
+    };
+    const withCondition = {
+      name: 'Invoices',
+      triggers: [
+        {
+          type: 'event',
+          events: ['email.message_received'],
+          condition: 'Is it an invoice?',
+        },
+      ],
+      steps: [{ type: 'agent', instructions: 'File it', model: 'claude' }],
+    };
+    for (const output of [withDecision, withCondition]) {
+      expect(
+        draftFromComposition(output, { ...context, decisions: false })
+      ).toMatch(/needs AI to decide/);
+      expect(typeof draftFromComposition(output, context)).not.toBe('string');
+    }
   });
 });

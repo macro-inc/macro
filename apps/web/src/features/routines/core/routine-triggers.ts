@@ -564,6 +564,8 @@ const CRON_DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 /** Weekly days in words: "Weekdays", "Mondays", "Mon, Wed and Fri". */
 function describeDays(days: readonly string[]): string {
   const sorted = WEEK_ORDER.filter((day) => days.includes(day));
+  // No days chosen yet: the schedule is still being set up.
+  if (!sorted.length) return 'Weekly';
   const key = sorted.join(',');
   if (sorted.length === 7) return 'Every day';
   if (key === '2,3,4,5,6') return 'Weekdays';

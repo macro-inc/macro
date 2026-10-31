@@ -5,7 +5,9 @@ import { routineModelSchema, routineTargetSchema } from './core/routine-target';
 import { routineTriggerSchema } from './core/routine-triggers';
 
 const STORAGE_KEY = 'routine-composer-draft';
-const EXPIRY_TIME_MS = 3 * 60 * 1000;
+// A new routine is built on its own page, which someone may leave and come
+// back to; its draft lasts a day, and logging out clears it.
+const EXPIRY_TIME_MS = 24 * 60 * 60 * 1000;
 
 const draftFields = {
   id: z.string().optional(),

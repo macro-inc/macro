@@ -385,13 +385,14 @@ export type AppEvents = {
     routineId?: string;
     source: 'new' | 'duplicate';
     triggerType: string;
-    targetKind?: 'agent' | 'model';
+    /** A single agent's model or agent, or `steps` for a routine with steps. */
+    targetKind?: 'agent' | 'model' | 'steps';
   };
   /** A manual Run now the server accepted, not the run's outcome. */
   routine_run: {
     routineId: string;
     trigger: 'manual';
-    targetKind?: 'agent' | 'model';
+    targetKind?: 'agent' | 'model' | 'steps';
   };
 };
 

@@ -12,7 +12,6 @@ import { match } from 'ts-pattern';
 import { DEFAULT_RUN_VISIBILITY, type ScheduleDraft } from './draft';
 import {
   agentStep,
-  agentSteps,
   firstAgent,
   newStepId,
   type StepDraft,
@@ -27,12 +26,15 @@ import {
   validateToolStep,
 } from './step-catalog';
 
-export {
-  DEFAULT_TIME,
-  getDefaultTimezone,
-  isValidTime,
-  WEEKDAY_OPTIONS,
-} from '@core/util/cron';
+export { getDefaultTimezone } from '@core/util/cron';
+
+/** Characters in a routine's description; the scheduler rejects longer. */
+export const MAX_DESCRIPTION_CHARS = 1000;
+
+/** A description as a routine can store it: trimmed, at most the limit. */
+export function clampDescription(text: string): string {
+  return [...text.trim()].slice(0, MAX_DESCRIPTION_CHARS).join('').trim();
+}
 
 type ParsedCron = Pick<
   ScheduleDraft,
@@ -133,15 +135,6 @@ export function draftPrompt(draft: ScheduleDraft): string {
     : draft.prompt;
 }
 
-/** Every agent's instructions, for finding what they mention. */
-export function draftInstructions(draft: ScheduleDraft): string {
-  return draft.steps
-    ? agentSteps(draft.steps)
-        .map((step) => step.instructions)
-        .join('\n\n')
-    : draft.prompt;
-}
-
 /** A name for an unnamed routine, from its agent's instructions or first step. */
 export function deriveRoutineName(draft: ScheduleDraft): string {
   const prompt = draftPrompt(draft);
@@ -228,6 +221,8 @@ export function validateRoutineDraft(
   draft: ScheduleDraft,
   creating = false
 ): string | null {
+  if ([...(draft.description?.trim() ?? '')].length > MAX_DESCRIPTION_CHARS)
+    return `Keep the description under ${MAX_DESCRIPTION_CHARS.toLocaleString('en-US')} characters.`;
   if (draft.steps) return validateProgramDraft(draft.steps, draft, creating);
   if (!draft.prompt.trim()) return 'Instructions are required.';
   if (!routineTargetSchema.safeParse(draft.target).success)

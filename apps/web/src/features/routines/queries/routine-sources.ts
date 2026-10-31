@@ -16,6 +16,7 @@ import {
   draftFromSchedule,
   draftToCreateBody,
   draftToUpdateBody,
+  isUnchangedUpdate,
   scheduleToDuplicateBody,
 } from './routine-draft';
 import { useRoutineQuery } from './routines';
@@ -115,6 +116,9 @@ export function createRoutineDetailSource(
       const previous = raw();
       const body = previous && draftToUpdateBody(draft, previous);
       if (!body) throw new Error('Choose a valid execution target.');
+      // An edit that changes nothing (a blur, a value picked again) writes
+      // nothing, so queued runs keep their configuration.
+      if (isUnchangedUpdate(body, previous)) return toRoutine(previous);
       return toRoutine(await update.mutateAsync({ scheduleId: id(), body }));
     },
     run: () => run.mutate({ scheduleId: id() }),
