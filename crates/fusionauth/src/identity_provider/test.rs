@@ -134,10 +134,19 @@ async fn a_failing_fusionauth_is_not_misclassified_as_a_deleted_user() {
         .await;
     let client = client(server.uri());
     let unavailable = Some(upstream_error::UpstreamFailure::Unavailable);
-    let lookup = client.get_links("user", Some("idp".into())).await.unwrap_err();
-    assert_eq!(lookup.upstream().map(|upstream| upstream.failure), unavailable);
+    let lookup = client
+        .get_links("user", Some("idp".into()))
+        .await
+        .unwrap_err();
+    assert_eq!(
+        lookup.upstream().map(|upstream| upstream.failure),
+        unavailable
+    );
     let unlink = client.unlink_user("user", "idp", "1").await.unwrap_err();
-    assert_eq!(unlink.upstream().map(|upstream| upstream.failure), unavailable);
+    assert_eq!(
+        unlink.upstream().map(|upstream| upstream.failure),
+        unavailable
+    );
 }
 
 #[tokio::test]
