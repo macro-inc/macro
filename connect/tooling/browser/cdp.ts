@@ -84,7 +84,7 @@ const locate = (sel: string) => `(() => {
     // Prefer an exactly matching control, then the control around matching text.
     const want = s.slice(5).trim().toLowerCase();
     const visible = (e) => e.offsetParent !== null;
-    const label = (e) => e.innerText.trim().toLowerCase();
+    const label = (e) => (e.innerText ?? e.textContent ?? '').trim().toLowerCase();
     const controls = [...document.querySelectorAll('button,a,[role=button],[role=link],[role=option],input[type=submit],label')].filter(visible);
     el = controls.find((e) => label(e) === want) ?? controls.find((e) => label(e).includes(want));
     if (!el) {

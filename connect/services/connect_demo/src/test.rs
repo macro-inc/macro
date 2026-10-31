@@ -101,8 +101,8 @@ async fn catalog_escapes_vendor_text_and_tracks_cookie_identity() {
     let server = MockServer::start().await;
     Mock::given(method("GET")).and(path("/v1/catalog"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-            {"id":"linear","name":"<Linear>","description":"<script>alert(1)</script>","access":["mcp"],"mcp_url":"https://vendor.test/mcp","icon_url":"/v1/catalog/linear/icon.svg"},
-            {"id":"api-app","name":"API app","description":"API access","access":["mcp","api"],"mcp_url":"https://vendor.test/mcp","icon_url":null}
+            {"id":"linear","name":"<Linear>","description":"<script>alert(1)</script>","access":["mcp"],"mcp_url":"https://vendor.test/mcp","icon_url":"/v1/catalog/linear/icon.svg","oauth_client":"dcr"},
+            {"id":"api-app","name":"API app","description":"API access","access":["mcp","api"],"mcp_url":"https://vendor.test/mcp","icon_url":null,"oauth_client":"managed_oauth_app"}
         ]))).mount(&server).await;
     Mock::given(method("GET")).and(path("/v1/users/123e4567-e89b-42d3-a456-426614174000/connections"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!([{"appId":"linear","status":"active","scopes":[],"createdAt":"2026-10-30T09:00:00Z"}])))
@@ -131,6 +131,8 @@ async fn catalog_escapes_vendor_text_and_tracks_cookie_identity() {
     assert!(html.contains("&lt;script&gt;alert(1)&lt;&#x2F;script&gt;"));
     assert!(!html.contains("<script>alert(1)</script>"));
     assert!(html.contains("MCP + API"));
+    assert!(html.contains("<span class=\"badge\">DCR</span>"));
+    assert!(html.contains("<span class=\"badge\">Managed OAuth app</span>"));
     assert!(html.contains("/demo/icons/linear"));
     assert!(html.contains("id=\"workspace\""));
     assert!(html.contains("fetch(form.action"));

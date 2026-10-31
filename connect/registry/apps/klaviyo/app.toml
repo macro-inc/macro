@@ -6,5 +6,5 @@ mcp_url = "https://mcp.klaviyo.com/mcp"
 client_registration = "cimd"
 scopes = []
 pipedream_app_slugs = ["klaviyo"]
-status = "pending"
-probed = 2026-10-30
+status = "live"
+probed = 2026-10-31

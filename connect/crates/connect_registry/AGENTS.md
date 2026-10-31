@@ -19,7 +19,7 @@ icons live in `connect/registry/apps/<id>/`.
 
 - Depends on: third-party workspace dependencies, plus the generated
   `workspace-hack` dependency required by root hakari tooling.
-- Used by: future Connect services; Macro consumes the public client or SDK.
+- Used by: Connect services; Macro consumes the public client or SDK.
 
 ## Recipes
 
@@ -39,3 +39,5 @@ icons live in `connect/registry/apps/<id>/`.
   yet; the catalog tests fail for any other live app without an icon.
 - `own_app` entries may request explicit OAuth scopes; Slack's user scopes
   come from Macro's registered Slack app manifest.
+- The dated conformance table in `../../docs/catalog.md` records probe URLs,
+  registration outcomes, and why used entries remain pending.

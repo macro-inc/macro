@@ -1,0 +1,10 @@
+id = "mailchimp"
+name = "Mailchimp"
+description = "Plan and edit campaigns, analyze results, and edit images."
+access = ["mcp"]
+mcp_url = "https://ai-inc.mailchimp.com/claude/mcp/v2"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["mailchimp"]
+status = "live"
+probed = 2026-10-31

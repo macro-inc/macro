@@ -131,14 +131,57 @@ async fn catalog_only_exposes_live_apps_with_public_fields() {
         assert_eq!(entry["name"], app.name);
         assert_eq!(entry["description"], app.description);
         assert!(entry["access"].is_array());
+        assert_eq!(
+            entry["oauth_client"],
+            match app.client_registration {
+                ClientRegistration::OwnApp => serde_json::json!("managed_oauth_app"),
+                ClientRegistration::Cimd | ClientRegistration::Dcr => serde_json::json!("dcr"),
+                ClientRegistration::ApiKey => serde_json::Value::Null,
+            }
+        );
         assert_eq!(entry["mcp_url"], app.mcp_url);
         if app.icon_svg.is_some() {
             assert_eq!(entry["icon_url"], format!("/v1/catalog/{id}/icon.svg"));
         } else {
             assert!(entry["icon_url"].is_null());
         }
-        assert_eq!(entry.as_object().unwrap().len(), 6);
+        assert_eq!(
+            entry.as_object().unwrap().len(),
+            if app.client_registration == ClientRegistration::ApiKey {
+                6
+            } else {
+                7
+            }
+        );
     }
+}
+
+#[tokio::test]
+async fn catalog_labels_managed_oauth_and_omits_api_key_label() {
+    let apps = all_apps().unwrap();
+    let mut managed = apps
+        .iter()
+        .find(|app| app.id.as_str() == "github")
+        .unwrap()
+        .clone();
+    managed.status = Status::Live;
+    let mut api_key = managed.clone();
+    api_key.id = connect_registry::AppId::parse("api-key-example").unwrap();
+    api_key.client_registration = ClientRegistration::ApiKey;
+    let fixtures = Box::leak(vec![managed, api_key].into_boxed_slice());
+    let response = test_router(fixtures)
+        .oneshot(
+            Request::builder()
+                .uri("/v1/catalog")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let entries: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert_eq!(entries[0]["oauth_client"], "managed_oauth_app");
+    assert!(entries[1].get("oauth_client").is_none());
 }
 
 #[tokio::test]
@@ -207,6 +250,11 @@ async fn openapi_route_describes_catalog() {
             .as_array()
             .is_some_and(|types| types.contains(&serde_json::json!("null"))),
         "{icon_schema}"
+    );
+    let oauth_schema = &schema["components"]["schemas"]["OAuthClient"];
+    assert_eq!(
+        oauth_schema["enum"],
+        serde_json::json!(["managed_oauth_app", "dcr"])
     );
     assert_eq!(
         schema["components"]["securitySchemes"]["customer_key"]["scheme"],

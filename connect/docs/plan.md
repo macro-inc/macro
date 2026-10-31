@@ -110,6 +110,11 @@ connections, 2026-10-30):
 3,973 of 4,057 connections are classified; the rest are apps with one
 connection each.
 
+As of 2026-10-31, 30 self-registering OAuth catalog entries are live
+candidates, covering 1,160 Pipedream connections. Vendor sign-in and tool
+conformance are still pending; the remaining used entries are classified in
+[`catalog.md`](catalog.md#conformance-2026-10-31).
+
 Users who connected through Pipedream's own OAuth apps must reconnect;
 Pipedream does not export those grants.
 

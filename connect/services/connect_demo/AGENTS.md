@@ -9,6 +9,7 @@ A standalone customer app for exercising Connect's catalog, OAuth flow, MCP gate
 - `src/main.rs`: browser routes, cookie identity, rendering, and startup.
 - `src/mcp.rs`: MCP initialization, session handling, JSON/SSE parsing, and tool calls.
 - `src/app.js`: loads tool forms and results into the catalog page.
+- Catalog cards show the access method and, when present, the OAuth client type.
 - `src/test.rs` and `src/mcp/test.rs`: fake Connect and held-open SSE tests.
 
 ## Scope
