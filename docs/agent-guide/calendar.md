@@ -887,7 +887,10 @@ Outlook sends the invitation and the mention then opens the viewer's own copy. D
 the requester nothing, but their card then reads `Declined` and `The person who shared this event
 declined your request to join.` with no `Ask to join`, and offers `Add to calendar` again. A
 declined request stands: the server refuses another ask with 409 `request_declined`, so the
-sharer is asked only once. The notification goes when the request is answered, by whoever answers
+sharer is asked only once. An answer given anywhere else (a delegate, the API, another window)
+drops the request from an open list and updates the requester's open card, without a reload. A
+press on a row that had not caught up changes nothing and says so: `Already answered: <address> was
+invited` or `Already answered: this request was declined`. The notification goes when the request is answered, by whoever answers
 it and however they do, leaving the notifications of other requests on the event, when the
 requester's account is deleted, and when the event goes (deleted in Macro, deleted or cancelled in
 Google or Outlook, its calendar or inbox removed); deleting one occurrence of a series leaves it,

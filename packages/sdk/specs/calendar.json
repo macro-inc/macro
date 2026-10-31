@@ -2462,6 +2462,22 @@
                 "description": "True for sharing changes and any possibly affected OOO projection."
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The viewer's request to join a shared event was answered.",
+            "required": ["event_id", "event"],
+            "properties": {
+              "event": {
+                "type": "string",
+                "enum": ["join_request_answered"]
+              },
+              "event_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The shared event they asked to join."
+              }
+            }
           }
         ],
         "description": "Realtime signal that a connected inbox's calendar projection changed."
