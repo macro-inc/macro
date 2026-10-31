@@ -38,8 +38,13 @@ pub struct CalendarEventSearchInfo {
     pub organizer_email: Option<String>,
     /// Organizer display name, when the source names one.
     pub organizer_name: Option<String>,
-    /// Free-text event description, when the source carries one.
+    /// Free-text event description, as stored: it still carries a Macro call's
+    /// join line, which a reader must take out unless `holds_meeting`.
     pub description: Option<String>,
+    /// Whether the requester holds the meeting rather than reading a channel
+    /// share of it: this row is on their calendars, or a live copy of the
+    /// meeting is. A snapshot copy is not a seat, so it does not count.
+    pub holds_meeting: bool,
     /// Whether the canonical source prohibits mutation.
     pub is_read_only: bool,
     pub created_at: DateTime<Utc>,
@@ -62,6 +67,13 @@ pub struct CalendarEventSearchInfo {
 /// to and is still live and neither private nor confidential. An id the
 /// requester cannot see is simply absent from the result, which drops the hit
 /// during enrichment.
+///
+/// A row can be the sharer's copy of a meeting the requester also holds: an
+/// id named in the own scope reaches it, and the shared scope does when the
+/// copies' raw UIDs differ. `holds_meeting` therefore pairs copies the way the
+/// mention preview does, by `calendar_meeting_uid`, except that a preview
+/// resolves to the requester's own copy while a search row stays on the hit,
+/// so a snapshot, which never had the link, must not unlock the sharer's.
 ///
 /// A recurring series is indexed once, as its master, so the instance a row
 /// should display is decided here rather than baked into the index. The
@@ -95,10 +107,11 @@ pub async fn get_calendar_events_for_search(
             event.end_date,
             event.time_zone,
             (cardinality(event.recurrence_lines) > 0) AS "is_recurring!",
-            CASE WHEN viewer.on_calendar THEN event.conference_url END AS conference_url,
+            CASE WHEN meeting.holds_meeting THEN event.conference_url END AS conference_url,
             event.organizer_email,
             event.organizer_name,
             event.description,
+            meeting.holds_meeting AS "holds_meeting!",
             event.is_read_only AS "is_read_only!",
             event.created_at AS "created_at!",
             event.updated_at AS "updated_at!",
@@ -119,6 +132,28 @@ pub async fn get_calendar_events_for_search(
                 )
             ) AS on_calendar
         ) viewer
+        CROSS JOIN LATERAL (
+            SELECT (
+                viewer.on_calendar
+                OR EXISTS (
+                    SELECT 1
+                    FROM calendar_events held
+                    WHERE calendar_meeting_uid(held.ical_uid)
+                        = calendar_meeting_uid(event.ical_uid)
+                      AND held.status <> 'cancelled'
+                      AND NOT held.is_snapshot
+                      AND (
+                            held.owner_id = $1
+                            OR EXISTS (
+                                SELECT 1
+                                FROM macro_user_links link
+                                WHERE link.link_id = held.source_link_id
+                                  AND link.primary_macro_id = $1
+                            )
+                      )
+                )
+            ) AS holds_meeting
+        ) meeting
         LEFT JOIN LATERAL (
             SELECT
                 instance.occurrence_key,
@@ -189,6 +224,7 @@ pub async fn get_calendar_events_for_search(
                     organizer_email: row.organizer_email,
                     organizer_name: row.organizer_name,
                     description: row.description,
+                    holds_meeting: row.holds_meeting,
                     is_read_only: row.is_read_only,
                     created_at: row.created_at,
                     updated_at: row.updated_at,

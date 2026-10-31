@@ -32,7 +32,8 @@ per-entity-type search plus a unified search across them — mounted into
 ## Boundaries
 
 - Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
-  `entity_access`, `properties`, `crm`, `item_filters`.
+  `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
+  (domain only, no features, for its Macro call rule).
 - Used by: `document_storage_service` (mounts `search_router`); called
   through `search_service_client`.
 
@@ -61,7 +62,12 @@ per-entity-type search plus a unified search across them — mounted into
   owner and inbox link; `shared_with_you` resolves the events shared with the
   caller's channels in Postgres and searches by id, leaving out meetings the
   caller holds a copy of. Enrichment re-checks every hit against the event's
-  access rule and withholds a share's join link.
+  access rule. A caller who does not hold the meeting gets no conference link,
+  and `calendar_events`' `content_without_macro_call` takes the Macro call out
+  of the description; a provider's own join text in the body stays, as it does
+  in a mention preview. Enrichment is the only gate: an id named in the `own`
+  scope reaches a share as well. The index stores titles, never the description
+  or location, so hits and highlights cannot carry the link.
 
 ## Related
 

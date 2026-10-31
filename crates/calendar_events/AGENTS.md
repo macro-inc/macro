@@ -37,7 +37,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `notification` (feature `notify`), `model_notifications`, `aws-sdk-sqs`
   (feature `dispatch-sqs`).
 - Used by: `email`, `ai_tools`, `channel_bots`, `graphql_calendar`, `complete_graph`,
-  `calendar_scheduling`.
+  `calendar_scheduling`, `search_service`.
 
 ## Recipes
 
@@ -208,7 +208,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   description. Whoever resolves to their own copy keeps it: the card's Join
   button reads the link from the preview. Only the generated Macro call goes;
   join text a provider wrote into the body, as a Teams invitation's, stays, as
-  it does in a snapshot.
+  it does in a snapshot. Search rows apply the same rule, but a row stays on
+  the hit instead of resolving to the viewer's copy, so there a snapshot does
+  not count as holding the meeting.
 - Google names the calendar an event was made on as its organizer, so an
   event on a secondary calendar has that calendar's id
   (`…@group.calendar.google.com`) as `organizer_email`; Google's
