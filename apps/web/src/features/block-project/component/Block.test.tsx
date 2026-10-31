@@ -14,6 +14,7 @@ const upload = vi.hoisted(() => ({
 }));
 
 vi.mock('@app/features/next-soup/actions', () => ({
+  FolderDropZone: (props: ParentProps) => props.children,
   useBlockEntityCommands: () => {},
 }));
 vi.mock('@app/features/next-soup/create-soup-state', () => ({

@@ -28,7 +28,16 @@ vi.mock('@ui', () => ({
   ActionDialogShell: (props: ParentProps) => <div>{props.children}</div>,
 }));
 vi.mock('./BulkMoveToProjectView', () => ({
-  BulkMoveToProjectView: () => null,
+  BulkMoveToProjectView: (props: {
+    onMoved: (folder: { id: string; name: string }) => void;
+  }) => (
+    <button
+      type="button"
+      onClick={() => props.onMoved({ id: 'folder', name: 'Folder' })}
+    >
+      Move
+    </button>
+  ),
 }));
 vi.mock('./BulkRenameEntitiesView', () => ({
   BulkRenameEntitiesView: () => null,
@@ -63,6 +72,26 @@ vi.mock('./BulkDeleteView', () => ({
 }));
 
 afterEach(cleanup);
+
+describe('move-to-folder modal wiring', () => {
+  it('reports the destination once the dialog has closed', () => {
+    const entity = { id: 'moved', type: 'document' } as EntityData;
+    const onMoved = vi.fn(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    const onFinish = vi.fn();
+    openBulkEditModal({
+      view: 'moveToProject',
+      entities: [entity],
+      onMoved,
+      onFinish,
+    });
+    render(() => <GlobalBulkEditEntityModal />);
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    expect(onMoved).toHaveBeenCalledWith({ id: 'folder', name: 'Folder' });
+    expect(onFinish).toHaveBeenCalledOnce();
+  });
+});
 
 describe('bulk-delete modal progress wiring', () => {
   it.each(['Cancel', 'Dismiss'])(
