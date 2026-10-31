@@ -36,7 +36,11 @@ vi.mock('@queries/storage/folder-list', () => ({
 }));
 vi.mock('../utils', () => ({ restoreSoupFocus: vi.fn() }));
 
-import { createFolderDropTargets, FolderDropZone } from './folder-drop-zone';
+import {
+  createFolderDropTargets,
+  createFolderRowDropTarget,
+  FolderDropZone,
+} from './folder-drop-zone';
 
 const doc = (id: string, ownerId = 'macro|me'): EntityData => ({
   id,
@@ -120,6 +124,35 @@ function FolderRows() {
         );
       }}
     </For>
+  );
+}
+
+const folder = (id: string): EntityData => ({
+  id,
+  type: 'project',
+  name: id,
+  ownerId: 'macro|me',
+});
+
+function ListRow(props: { entity: EntityData }) {
+  const target = createFolderRowDropTarget(() => props.entity);
+  return (
+    <div
+      ref={(element) => target?.ref(element)}
+      data-testid={props.entity.id}
+      data-target={target !== undefined}
+      data-over={target?.isOver()}
+    />
+  );
+}
+
+/** A folder's list, as Drive renders one inside its drop zone. */
+function FolderList() {
+  return (
+    <FolderDropZone folderId="parent">
+      <ListRow entity={folder('folder')} />
+      <ListRow entity={doc('document-row')} />
+    </FolderDropZone>
   );
 }
 
@@ -212,6 +245,53 @@ describe('FolderDropZone', () => {
     drop();
 
     expect(mocks.moveEntities).not.toHaveBeenCalled();
+  });
+
+  it('moves a row onto a folder row in its own split', async () => {
+    mocks.moveEntities.mockResolvedValue(undefined);
+    const row = doc('row');
+    const { start, drop } = setup(
+      dragData(row, { splitId: 'folder-split' }),
+      FolderList
+    );
+
+    start();
+    expect(screen.queryByText(/to this folder/)).toBeNull();
+    drop();
+    await vi.waitFor(() => expect(mocks.toast.success).toHaveBeenCalled());
+
+    expect(mocks.moveEntities).toHaveBeenCalledTimes(1);
+    expect(mocks.moveEntities.mock.calls[0]?.[1]).toEqual({
+      id: 'folder',
+      name: 'Folder',
+    });
+  });
+
+  it('refuses a folder dropped on its own row', () => {
+    const { start, drop } = setup(
+      dragData(folder('folder'), { splitId: 'folder-split' }),
+      FolderList
+    );
+
+    start();
+    drop();
+
+    expect(mocks.moveEntities).not.toHaveBeenCalled();
+  });
+
+  it('makes only folder rows into targets', () => {
+    setup(dragData(doc('row'), {}), FolderList);
+
+    expect(screen.getByTestId('folder').dataset.target).toBe('true');
+    expect(screen.getByTestId('document-row').dataset.target).toBe('false');
+  });
+
+  it('gives rows outside a folder drop zone no target', () => {
+    setup(dragData(doc('row'), {}), () => (
+      <ListRow entity={folder('folder')} />
+    ));
+
+    expect(screen.getByTestId('folder').dataset.target).toBe('false');
   });
 
   it('moves a row into a sidebar folder from the split it sits in', async () => {

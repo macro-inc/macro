@@ -4,6 +4,7 @@ import type {
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
 import { makeAddTagAction } from '@app/features/next-soup/actions';
+import { createFolderRowDropTarget } from '@app/features/next-soup/actions/folder-drop-zone';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
   ContextMenuContent,
@@ -106,6 +107,7 @@ export const SoupEntityContextMenu: FlowComponent<
         entities: menuEntities().filter(addTagAction.canExecute),
       }),
   });
+  const folderDropTarget = createFolderRowDropTarget(() => props.entity);
 
   return (
     <Switch>
@@ -137,10 +139,13 @@ export const SoupEntityContextMenu: FlowComponent<
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenuTrigger
             as={props.as}
-            ref={(element: HTMLElement) => tagDropTarget?.ref(element)}
+            ref={(element: HTMLElement) => {
+              tagDropTarget?.ref(element);
+              folderDropTarget?.ref(element);
+            }}
             class={cn(
               'h-full w-full group/cm-trigger',
-              tagDropTarget?.isOver() &&
+              (tagDropTarget?.isOver() || folderDropTarget?.isOver()) &&
                 'rounded-xl outline-2 -outline-offset-2 outline-accent',
               props.class
             )}
