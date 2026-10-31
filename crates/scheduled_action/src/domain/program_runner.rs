@@ -430,8 +430,9 @@ fn conditions(trigger: &ActionTrigger, event: &EventReference) -> Vec<String> {
 /// The agent's first prompt: the saved routine instructions and its task, the
 /// triggering event's ids, and what earlier steps did, the last two as data
 /// rather than instructions. The routine context also travels beside the
-/// prompt, but routine sessions don't render it for the model, so nothing the
-/// agent must act on is left to it.
+/// prompt, but not every session renders it for the model, so nothing the
+/// agent must act on is left to it; where it is rendered, the instructions
+/// repeat.
 fn agent_prompt(
     instructions: &AgentInstructions,
     event: Option<&EventReference>,
