@@ -26,3 +26,29 @@ it('restores the root selection without stealing focus from embedded controls', 
     root.remove();
   }
 });
+
+it.each([
+  [undefined, 'rootStart'],
+  ['rootEnd', 'rootEnd'],
+] as const)(
+  'falls back to the configured selection (%s)',
+  (option, expected) => {
+    const editor = createEditor();
+    const root = document.createElement('div');
+    document.body.append(root);
+    editor.setRootElement(root);
+    const dispose = restoreFocusPlugin(option)(editor);
+    const focus = vi.spyOn(editor, 'focus').mockImplementation(() => {});
+    try {
+      root.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      expect(focus).toHaveBeenCalledWith(undefined, {
+        defaultSelection: expected,
+      });
+    } finally {
+      focus.mockRestore();
+      dispose();
+      editor.setRootElement(null);
+      root.remove();
+    }
+  }
+);

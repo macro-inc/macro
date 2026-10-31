@@ -130,7 +130,8 @@ export function ChatComposer(props: {
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
     .withCode()
-    .withRestoreFocus()
+    // Focusing the composer without a selection continues the draft.
+    .withRestoreFocus('rootEnd')
     .withFilePaste({
       onPasteFilesAndDirs: (files, directories) => {
         fireAndForget(

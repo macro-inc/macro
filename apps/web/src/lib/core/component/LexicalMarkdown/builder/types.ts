@@ -18,6 +18,7 @@ import type {
   SelectionData,
 } from '../plugins';
 import type { Action } from '../plugins/actions/types';
+import type { RestoreFocusDefault } from '../plugins/restore-focus';
 import type { TagMentionLifecycle } from '../plugins/tags';
 import type { MentionLinkResolver } from '../plugins/text-paste/textPastePlugin';
 import type { createMenuOperations } from '../shared/inlineMenu';
@@ -176,7 +177,8 @@ export interface EditorConfig {
   code: boolean;
   checkboxToTask: boolean;
   filePaste?: FilePasteOptions;
-  restoreFocus: boolean;
+  /** Where programmatic focus puts the caret when the editor has no selection. */
+  restoreFocus: false | RestoreFocusDefault;
   focusLeave?: FocusLeaveCallbacks;
   withIds: boolean;
   selectionData: boolean;
