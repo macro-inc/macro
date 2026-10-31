@@ -305,9 +305,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an
   Outlook copy of a Google meeting pairs with its Google copies in
-  `meeting_copies`, the mention preview, `event_export` and email invitation
-  matching (`pg/invitations.rs`), where an Outlook inbox's invitation card
-  resolves to that inbox's own copy and answers as it.
+  `meeting_copies`, the mention preview, `event_export`, the channel-shared
+  search scope and email invitation matching (`pg/invitations.rs`), where an
+  Outlook inbox's invitation card resolves to that inbox's own copy and answers
+  as it.
 - Preserve the conservative OOO refresh hint on write outcomes and sync reports;
   its contract is in [team sharing](../../docs/design/calendar-team-sharing.md).
 - The team out-of-office overlay (`src/outbound/pg_team/ooo.rs`) starts from
