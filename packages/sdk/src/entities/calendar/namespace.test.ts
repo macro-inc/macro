@@ -297,7 +297,85 @@ describe('calendar occurrences', () => {
     expect(known?.contributesToAvailability).toBe(false);
   });
 
-  test('keep the role of an event the user organizes on any calendar', async () => {
+  test('give no role when a read-only calendar names the user organizer', async () => {
+    const holidays = {
+      id: 'calendar-holidays',
+      name: 'United States holidays',
+      emailAddress: 'user@example.com',
+    };
+    const holiday = {
+      ...copy(
+        'holiday',
+        'calendar-holidays',
+        { email: 'user@example.com', isOrganizer: true },
+        false,
+      ),
+      isReadOnly: true,
+    } as CalendarEventRecord;
+
+    const [offAvailability] = await listed(
+      [holiday],
+      [{ ...holidays, contributesToAvailability: false }],
+    );
+    const [onAvailability] = await listed(
+      [holiday],
+      [{ ...holidays, contributesToAvailability: true }],
+    );
+
+    expect(offAvailability?.role).toBeUndefined();
+    expect(onAvailability?.role).toBeUndefined();
+  });
+
+  test('keep the organizer of a writable copy when a read-only calendar shows it too', async () => {
+    const organized = copy(
+      'organized',
+      'calendar-own',
+      { email: 'owner@example.com', isOrganizer: true },
+      true,
+    );
+    const invited = copy(
+      'invited',
+      'calendar-second',
+      { email: 'second@example.com', isOrganizer: false },
+      false,
+      [guest('owner@example.com', true)],
+    );
+
+    const [organizedCopy, invitedCopy] = await listed(
+      [
+        {
+          ...organized,
+          sources: [
+            { calendarId: 'calendar-own', isReadOnly: false },
+            { calendarId: 'calendar-colleague', isReadOnly: true },
+          ],
+        } as CalendarEventRecord,
+        invited,
+      ],
+      [
+        {
+          id: 'calendar-own',
+          emailAddress: 'owner@example.com',
+          contributesToAvailability: false,
+        },
+        {
+          id: 'calendar-colleague',
+          emailAddress: 'owner@example.com',
+          contributesToAvailability: false,
+        },
+        {
+          id: 'calendar-second',
+          emailAddress: 'second@example.com',
+          contributesToAvailability: true,
+        },
+      ],
+    );
+
+    expect(organizedCopy?.role).toBe('organizer');
+    expect(invitedCopy?.role).toBe('guest');
+  });
+
+  test('keep the role of an event the user organizes on any calendar they can change', async () => {
     const [item] = await listed(
       [
         copy(

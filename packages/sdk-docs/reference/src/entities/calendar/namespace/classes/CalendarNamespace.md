@@ -160,8 +160,9 @@ by `calendarName`. Automatically paginated within the viewport. Each names
 its calendar (`calendarName`), whether a calendar holding it is on the
 user's schedule (`contributesToAvailability`), the address of the
 connected inbox holding that copy of the event (`inbox`) and whether the
-user organizes it or is a guest there (`role`, absent when neither, or
-when they can only write that calendar).
+user organizes it or is a guest there (`role`, absent when neither, when
+they can only write that calendar, or when a read-only calendar names
+them organizer).
 
 `inbox` is the account syncing the calendar, so a colleague's calendar
 reports the user's own address; it never says whose calendar it is, and

@@ -1710,6 +1710,111 @@ fn role_never_claims_an_event_on_someone_elses_calendar() {
     );
 }
 
+fn holidays_calendar(id: u128, email_link_id: u128) -> VisibleCalendar {
+    VisibleCalendar {
+        is_primary: false,
+        is_writable: false,
+        contributes_to_availability: false,
+        ..visible_calendar(
+            id,
+            email_link_id,
+            "owner@example.com",
+            "United States holidays",
+        )
+    }
+}
+
+/// Microsoft Graph names the mailbox owner as organizer on every event of a
+/// read-only calendar such as Outlook's holidays, so that row proves nothing
+/// there. It is not a guest's row either, whatever availability says.
+#[test]
+fn role_ignores_an_organizer_row_on_a_read_only_calendar() {
+    let mut holiday = sample_event(Vec::new());
+    holiday.is_read_only = true;
+    assert!(holiday.attendees[0].is_self && holiday.attendees[0].is_organizer);
+
+    let off_availability = CalendarLabels::from_calendars(vec![holidays_calendar(9, 1)]);
+    assert_eq!(ToolEventRole::of(&holiday, &off_availability), None);
+
+    let on_availability = CalendarLabels::from_calendars(vec![VisibleCalendar {
+        contributes_to_availability: true,
+        ..holidays_calendar(9, 1)
+    }]);
+    assert_eq!(
+        ToolEventRole::of(&holiday, &on_availability),
+        None,
+        "counting a calendar as busy time does not make the user its organizer"
+    );
+}
+
+/// The copy rules add guests from the copy the user organizes, so that copy
+/// keeps its role off availability and when a read-only calendar shows the
+/// meeting too.
+#[test]
+fn role_keeps_the_organizer_of_a_writable_copy() {
+    let own = VisibleCalendar {
+        contributes_to_availability: false,
+        ..visible_calendar(9, 1, "owner@example.com", "Owner")
+    };
+    let labels = CalendarLabels::from_calendars(vec![own, holidays_calendar(12, 1)]);
+    let mut event = sample_event(Vec::new());
+    event.sources = vec![
+        source_copy(9, "Standup"),
+        crate::domain::models::CalendarEventSourceContent {
+            is_read_only: true,
+            ..source_copy(12, "Standup")
+        },
+    ];
+
+    assert_eq!(
+        ToolEventRole::of(&event, &labels),
+        Some(ToolEventRole::Organizer)
+    );
+}
+
+#[tokio::test]
+async fn list_gives_a_read_only_calendars_event_no_role() {
+    let organized = sample_event(Vec::new());
+    let mut holiday = sample_event(Vec::new());
+    holiday.id = Uuid::from_u128(8);
+    holiday.ical_uid = "uid-holiday".to_string();
+    holiday.calendar_id = Some(Uuid::from_u128(12));
+    holiday.attendees.truncate(1);
+    holiday.is_read_only = true;
+    let mutations = MockMutations {
+        calendars: Mutex::new(vec![
+            visible_calendar(9, 1, "owner@example.com", "Owner"),
+            holidays_calendar(12, 1),
+        ]),
+        ..Default::default()
+    };
+    let occurrences = MockOccurrences {
+        rows: Mutex::new(vec![
+            (organized.clone(), occurrence_of(&organized, "k-1", false)),
+            (holiday.clone(), occurrence_of(&holiday, "k-1", false)),
+        ]),
+        status: CalendarSyncStatus::Ready,
+        copies: Mutex::new(Vec::new()),
+    };
+    let (_, context) = context(mutations, occurrences);
+
+    let tool = ListCalendarEvents {
+        start: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
+        end: Utc.with_ymd_and_hms(2026, 8, 21, 0, 0, 0).unwrap(),
+    };
+    let response = tool.call(context, request_context()).await.unwrap();
+
+    assert_eq!(response.events[0].my_role, Some(ToolEventRole::Organizer));
+    assert_eq!(response.events[1].my_role, None);
+    assert!(
+        response
+            .summary
+            .contains("outside the user's schedule (United States holidays)"),
+        "{}",
+        response.summary
+    );
+}
+
 /// Availability counts each copy, so the canonical copy's calendar alone
 /// cannot say the event is off the user's schedule.
 #[test]

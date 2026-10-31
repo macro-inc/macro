@@ -69,7 +69,11 @@ the existing gateway prefixes.
   a colleague's calendar. Occurrences name the calendar (`calendarName`) and
   whether it is on the user's schedule (`contributesToAvailability`); provider
   access says nothing about whose calendar it is, and `role` counts `organize`
-  only on such a calendar, since writing someone's calendar grants it too.
+  only on such a calendar, since writing someone's calendar grants it too. An
+  own attendee row marked organizer counts only on a copy the user can change
+  (`isReadOnly` false): Outlook names the mailbox owner as organizer on every
+  event of a read-only calendar. `eventRole` and `ToolEventRole::of` must stay
+  in step.
 - Calendar notes accept a document handle and the occurrence returned by calendar
   reads. `CalendarNote` owns optional team sharing and unlinking; clearing its team
   sends explicit null and never changes the document's other permissions.

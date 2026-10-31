@@ -5048,8 +5048,8 @@ export interface ToolCalendarEvent {
   inbox?: string | null;
   /**
    * Whether the user organizes this event or is a guest on it, through
-   * that inbox; absent when they are neither, or can only write that
-   * calendar.
+   * that inbox; absent when they are neither, can only write that
+   * calendar, or a read-only calendar names them organizer.
    */
   myRole?: ToolEventRole | null;
 }
@@ -11555,8 +11555,8 @@ export interface CalendarEventListItem {
   inbox?: string | null;
   /**
    * Whether the user organizes this event or is a guest on it, through
-   * `inbox`; absent when they are neither, or can only write that
-   * calendar.
+   * `inbox`; absent when they are neither, can only write that calendar,
+   * or a read-only calendar names them organizer.
    */
   myRole?: ToolEventRole | null;
   /**

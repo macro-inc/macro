@@ -66,8 +66,9 @@ export interface CreateEventOptions {
 
 /** What the user is on one copy of an event, through the inbox holding it:
  * its organizer (or the owner of an event without guests), or a guest. Being
- * able to write someone else's calendar makes them neither; `viewerCan` says
- * what they may do there. */
+ * able to write someone else's calendar makes them neither, and neither does
+ * a read-only calendar naming them organizer; `viewerCan` says what they may
+ * do there. */
 export type CalendarEventRole = 'organizer' | 'guest';
 
 /**
@@ -157,8 +158,9 @@ export class CalendarNamespace {
    * its calendar (`calendarName`), whether a calendar holding it is on the
    * user's schedule (`contributesToAvailability`), the address of the
    * connected inbox holding that copy of the event (`inbox`) and whether the
-   * user organizes it or is a guest there (`role`, absent when neither, or
-   * when they can only write that calendar).
+   * user organizes it or is a guest there (`role`, absent when neither, when
+   * they can only write that calendar, or when a read-only calendar names
+   * them organizer).
    *
    * `inbox` is the account syncing the calendar, so a colleague's calendar
    * reports the user's own address; it never says whose calendar it is, and
@@ -334,16 +336,19 @@ function onSchedule(
 }
 
 /** The user's role on a copy, read the way ListCalendarEvents reads it: only
- * the copy's own inbox row is `isSelf`. `organize` says they may act as
- * organizer, which writing someone else's calendar grants too, so it counts
- * only on a calendar of their own schedule with no other organizer listed. */
+ * the copy's own inbox row is `isSelf`. That row marked organizer counts only
+ * on a copy the user can change, since Microsoft Graph names the mailbox owner
+ * as organizer on every event of a read-only calendar. `organize` says they
+ * may act as organizer, which writing someone else's calendar grants too, so
+ * it counts only on a calendar of their own schedule with no other organizer
+ * listed. */
 function eventRole(
   record: CalendarEventRecord,
   calendars: Map<string, VisibleCalendar>,
 ): CalendarEventRole | undefined {
   const own = record.attendees.find((attendee) => attendee.isSelf);
   if (own?.isOrganizer) {
-    return 'organizer';
+    return record.isReadOnly ? undefined : 'organizer';
   }
   const otherOrganizer = record.attendees.some(
     (attendee) => attendee.isOrganizer,
