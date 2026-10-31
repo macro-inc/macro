@@ -60,22 +60,6 @@ async fn link_user_answering(response: ResponseTemplate) -> FusionAuthClientErro
 }
 
 #[tokio::test]
-async fn links_for_an_unknown_user_id_are_a_missing_user() {
-    let error = links_answering(ResponseTemplate::new(400).set_body_json(json!({
-        "fieldErrors": {
-            "userId": [{
-                "code": "[invalid]userId",
-                "message": "No user exists with an Id [fusionauth-user-id]."
-            }]
-        }
-    })))
-    .await;
-
-    assert!(matches!(error, FusionAuthClientError::UserDoesNotExist));
-    assert_eq!(error.upstream(), None);
-}
-
-#[tokio::test]
 async fn a_failing_fusionauth_is_unavailable() {
     let error = links_answering(ResponseTemplate::new(502).set_body_string("Bad Gateway")).await;
 
@@ -99,18 +83,6 @@ async fn a_throttling_fusionauth_is_rate_limited() {
             retry_after: Some(Duration::from_secs(30)),
         })
     );
-}
-
-#[tokio::test]
-async fn an_unrecognised_bad_request_stays_generic() {
-    let error = links_answering(ResponseTemplate::new(400).set_body_json(json!({
-        "fieldErrors": {
-            "identityProviderId": [{ "code": "[invalid]identityProviderId" }]
-        }
-    })))
-    .await;
-
-    assert!(matches!(error, FusionAuthClientError::Generic(_)));
 }
 
 #[tokio::test]

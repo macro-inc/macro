@@ -124,4 +124,3 @@ models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-wiremock = { workspace = true }

@@ -53,7 +53,7 @@ struct StubGithubRepoState {
     /// Value returned by `count_github_links_by_github_user_id`.
     link_count: i64,
     inserted_links: Vec<GithubLink>,
-    deleted_link_ids: Vec<uuid::Uuid>,
+    delete_github_link_calls: u32,
     delete_in_progress_user_link_calls: u32,
 }
 
@@ -64,7 +64,7 @@ impl Default for StubGithubRepoState {
             link_by_github_user_id: None,
             link_count: 1,
             inserted_links: Vec::new(),
-            deleted_link_ids: Vec::new(),
+            delete_github_link_calls: 0,
             delete_in_progress_user_link_calls: 0,
         }
     }
@@ -106,11 +106,7 @@ impl StubGithubRepo {
     }
 
     fn delete_github_link_calls(&self) -> u32 {
-        self.deleted_link_ids().len() as u32
-    }
-
-    fn deleted_link_ids(&self) -> Vec<uuid::Uuid> {
-        self.state.lock().unwrap().deleted_link_ids.clone()
+        self.state.lock().unwrap().delete_github_link_calls
     }
 
     fn delete_in_progress_user_link_calls(&self) -> u32 {
@@ -198,8 +194,8 @@ impl GithubRepo for StubGithubRepo {
         Ok(())
     }
 
-    async fn delete_github_link(&self, link_id: &uuid::Uuid) -> Result<(), Self::Err> {
-        self.state.lock().unwrap().deleted_link_ids.push(*link_id);
+    async fn delete_github_link(&self, _link_id: &uuid::Uuid) -> Result<(), Self::Err> {
+        self.state.lock().unwrap().delete_github_link_calls += 1;
         Ok(())
     }
 }
@@ -407,7 +403,7 @@ impl GithubOauth for StubGithubOauth {
         let mut state = self.state.lock().unwrap();
         state.validated_tokens.push(access_token.to_string());
         if let Some(failure) = state.token_check_failure {
-            return Err(github_upstream(failure));
+            return Err(github_upstream("GitHub", failure));
         }
         Ok(state.token_is_expired)
     }
@@ -476,7 +472,7 @@ impl GithubOauth for StubGithubOauth {
         state
             .merge_outcome
             .clone()
-            .ok_or_else(|| github_upstream(UpstreamFailure::Unavailable))
+            .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("GitHub unreachable")))
     }
 
     async fn set_pull_request_draft(
@@ -494,7 +490,7 @@ impl GithubOauth for StubGithubOauth {
         state
             .draft_outcome
             .clone()
-            .ok_or_else(|| github_upstream(UpstreamFailure::Unavailable))
+            .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("GitHub unreachable")))
     }
 
     async fn set_pull_request_state(
@@ -512,7 +508,7 @@ impl GithubOauth for StubGithubOauth {
         state
             .state_outcome
             .clone()
-            .ok_or_else(|| anyhow::anyhow!("GitHub unreachable"))
+            .ok_or_else(|| GithubError::Internal(anyhow::anyhow!("GitHub unreachable")))
     }
 
     async fn get_pull_request_mergeability(
@@ -545,11 +541,16 @@ struct StubAuthState {
     link_user_calls: u32,
     delete_user_link_calls: u32,
     access_token_error: Option<String>,
+    access_token_failure: Option<UpstreamFailure>,
     missing_access_token: bool,
     missing_identity: Option<uuid::Uuid>,
     link_error: Option<String>,
     linked_identities: Vec<uuid::Uuid>,
     link_barrier: Option<(Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>)>,
+}
+
+fn github_upstream(service: &'static str, failure: UpstreamFailure) -> GithubError {
+    GithubError::Upstream(UpstreamError { service, failure })
 }
 
 impl StubAuth {
@@ -567,15 +568,6 @@ impl StubAuth {
 
     fn fail_access_token_upstream(self, failure: UpstreamFailure) -> Self {
         self.state.lock().unwrap().access_token_failure = Some(failure);
-        self
-    }
-
-    fn without_grant(self, fusionauth_user_id: uuid::Uuid) -> Self {
-        self.state
-            .lock()
-            .unwrap()
-            .missing_grants
-            .push(fusionauth_user_id);
         self
     }
 
@@ -611,7 +603,7 @@ impl Auth for StubAuth {
             return Ok(GithubGrantLinkOutcome::IdentityMissing);
         }
         if let Some(error) = &state.link_error {
-            return Err(anyhow::anyhow!(error.clone()));
+            return Err(GithubError::Internal(anyhow::anyhow!(error.clone())));
         }
         Ok(GithubGrantLinkOutcome::Linked)
     }
@@ -627,12 +619,15 @@ impl Auth for StubAuth {
 
     async fn retreive_access_token(
         &self,
-        fusionauth_user_id: &uuid::Uuid,
+        _fusionauth_user_id: &uuid::Uuid,
         _github_idp_id: &str,
         _github_user_id: &str,
     ) -> Result<Option<GithubAccessToken>, Self::Err> {
         if let Some(error) = &self.state.lock().unwrap().access_token_error {
-            return Err(anyhow::anyhow!(error.clone()));
+            return Err(GithubError::Internal(anyhow::anyhow!(error.clone())));
+        }
+        if let Some(failure) = self.state.lock().unwrap().access_token_failure {
+            return Err(github_upstream("The sign-in service", failure));
         }
         if self.state.lock().unwrap().missing_access_token {
             return Ok(None);
@@ -1658,89 +1653,4 @@ async fn delete_user_link_last_unlinks_fusionauth() {
     // Last/only row for this github account: tear down the FusionAuth grant.
     assert_eq!(auth.delete_user_link_calls(), 1);
     assert_eq!(repo.delete_github_link_calls(), 1);
-}
-
-#[tokio::test]
-async fn link_user_relinks_the_same_account_when_its_grant_is_gone() {
-    let user_id = test_user_id();
-    let stale = test_link(&user_id);
-    let arg_fusionauth_user_id = uuid::Uuid::from_u128(0xBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB);
-
-    // The user's own row is the account's only row, so it is also the owner.
-    let repo = StubGithubRepo::linked(stale.clone()).with_account_owner(stale.clone());
-    let auth = StubAuth::new("valid-token").without_grant(stale.fusionauth_user_id);
-    let service = service(repo.clone(), StubGithubOauth::new(false), auth.clone());
-
-    let link = service
-        .link_user(
-            &user_id,
-            &arg_fusionauth_user_id,
-            &uuid::Uuid::nil(),
-            "https://redirect.example",
-            "code",
-        )
-        .await
-        .expect("relinking a stale grant should succeed");
-
-    assert_eq!(auth.link_user_calls(), 1);
-    assert_eq!(repo.deleted_link_ids(), vec![stale.id]);
-    let inserted = repo.inserted_links();
-    assert_eq!(inserted.len(), 1);
-    assert_eq!(inserted[0].fusionauth_user_id, arg_fusionauth_user_id);
-    assert_eq!(link.fusionauth_user_id, arg_fusionauth_user_id);
-    assert_eq!(repo.delete_in_progress_user_link_calls(), 1);
-}
-
-#[tokio::test]
-async fn link_user_becomes_owner_when_the_owner_grant_is_gone() {
-    let user_id = test_user_id();
-    let owner_fusionauth_user_id = uuid::Uuid::from_u128(0xAAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA);
-    let arg_fusionauth_user_id = uuid::Uuid::from_u128(0xBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB);
-
-    let repo = StubGithubRepo::unlinked().with_account_owner(owner_link(owner_fusionauth_user_id));
-    let auth = StubAuth::new("valid-token").without_grant(owner_fusionauth_user_id);
-    let service = service(repo.clone(), StubGithubOauth::new(false), auth.clone());
-
-    service
-        .link_user(
-            &user_id,
-            &arg_fusionauth_user_id,
-            &uuid::Uuid::nil(),
-            "https://redirect.example",
-            "code",
-        )
-        .await
-        .expect("linking past a dead owner grant should succeed");
-
-    assert_eq!(auth.link_user_calls(), 1);
-    assert!(repo.deleted_link_ids().is_empty());
-    let inserted = repo.inserted_links();
-    assert_eq!(inserted.len(), 1);
-    assert_eq!(inserted[0].fusionauth_user_id, arg_fusionauth_user_id);
-}
-
-#[tokio::test]
-async fn merge_pull_request_surfaces_github_outages() {
-    let user_id = test_user_id();
-    let service = service(
-        StubGithubRepo::linked(test_link(&user_id)),
-        StubGithubOauth::new(false).with_merge_settings(GithubRepositoryMergeSettings {
-            allow_merge_commit: true,
-            allow_squash_merge: true,
-            allow_rebase_merge: true,
-        }),
-        StubAuth::new("valid-token"),
-    );
-
-    let result = service
-        .merge_pull_request(&user_id, merge_request(Some(GithubMergeMethod::Merge)))
-        .await;
-
-    assert!(matches!(
-        result,
-        Err(GithubError::Upstream(UpstreamError {
-            failure: UpstreamFailure::Unavailable,
-            ..
-        }))
-    ));
 }

@@ -95,11 +95,7 @@ pub(crate) async fn get_links(
         .timeout(super::LINK_REQUEST_TIMEOUT)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status = res.status();
     match status {
@@ -113,19 +109,12 @@ pub(crate) async fn get_links(
         }
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::NoIdentityProviderFound),
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
             if status == reqwest::StatusCode::BAD_REQUEST && is_missing_user(&body) {
                 return Err(FusionAuthClientError::UserDoesNotExist);
             }
-            tracing::error!(%status, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: "unknown error".to_string(),
-            }))
+            Err(FusionAuthClientError::unexpected(status, &headers, body))
         }
     }
 }

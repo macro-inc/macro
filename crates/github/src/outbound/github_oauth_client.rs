@@ -680,14 +680,22 @@ impl GithubOauth for GithubOauthImpl {
             .json(&PullRequestState { state })
             .timeout(REQUEST_TIMEOUT)
             .send()
-            .await?;
+            .await
+            .map_err(transport_error)?;
 
         let status = response.status();
         if status.is_success() {
-            let changed: PullRequestState = response.json().await?;
+            let changed: PullRequestState = response.json().await.map_err(transport_error)?;
             return Ok(GithubStateOutcome::Changed {
                 state: changed.state,
             });
+        }
+
+        // A throttled change is a 403 too; it must not read as a refusal.
+        if throttling(status, response.headers()).is_some() {
+            return Err(
+                unexpected_response(response, "failed to change pull request state").await,
+            );
         }
 
         // The statuses GitHub documents for this endpoint, each a decision
@@ -697,12 +705,8 @@ impl GithubOauth for GithubOauthImpl {
             reqwest::StatusCode::NOT_FOUND => GithubPullRequestUpdateRejection::NotFound,
             reqwest::StatusCode::UNPROCESSABLE_ENTITY => GithubPullRequestUpdateRejection::Invalid,
             _ => {
-                let error_body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "unknown error".to_string());
-                anyhow::bail!(
-                    "failed to change pull request state (status {status}): {error_body}"
+                return Err(
+                    unexpected_response(response, "failed to change pull request state").await,
                 );
             }
         };

@@ -65,8 +65,12 @@ async fn grant_requests_time_out_when_the_provider_stops_responding() {
         server.abort();
         request.abort();
         assert!(
-            matches!(result, Ok(Ok(Err(FusionAuthClientError::Generic(_))))),
-            "{method} must time out as an infrastructure error: {result:?}"
+            matches!(
+                &result,
+                Ok(Ok(Err(error))) if error.upstream().map(|upstream| upstream.failure)
+                    == Some(upstream_error::UpstreamFailure::Unavailable)
+            ),
+            "{method} must time out as an unavailable FusionAuth: {result:?}"
         );
     }
 }
@@ -107,7 +111,6 @@ async fn other_failures_are_not_misclassified_as_deleted_users() {
         (400, json!({ "fieldErrors": { "identityProviderId": [{ "code": "[invalid]identityProviderId" }] } }).to_string()),
         (400, "invalid JSON".into()),
         (401, String::new()),
-        (500, json!({ "fieldErrors": { "userId": [{ "code": "[invalid]userId" }] } }).to_string()),
     ] {
         let server = MockServer::start().await;
         Mock::given(path("/api/identity-provider/link"))
@@ -117,6 +120,24 @@ async fn other_failures_are_not_misclassified_as_deleted_users() {
         assert!(matches!(client.get_links("user", Some("idp".into())).await, Err(FusionAuthClientError::Generic(_))));
         assert!(matches!(client.unlink_user("user", "idp", "1").await, Err(FusionAuthClientError::Generic(_))));
     }
+}
+
+#[tokio::test]
+async fn a_failing_fusionauth_is_not_misclassified_as_a_deleted_user() {
+    let server = MockServer::start().await;
+    Mock::given(path("/api/identity-provider/link"))
+        .respond_with(ResponseTemplate::new(500).set_body_string(
+            json!({ "fieldErrors": { "userId": [{ "code": "[invalid]userId" }] } }).to_string(),
+        ))
+        .expect(2)
+        .mount(&server)
+        .await;
+    let client = client(server.uri());
+    let unavailable = Some(upstream_error::UpstreamFailure::Unavailable);
+    let lookup = client.get_links("user", Some("idp".into())).await.unwrap_err();
+    assert_eq!(lookup.upstream().map(|upstream| upstream.failure), unavailable);
+    let unlink = client.unlink_user("user", "idp", "1").await.unwrap_err();
+    assert_eq!(unlink.upstream().map(|upstream| upstream.failure), unavailable);
 }
 
 #[tokio::test]

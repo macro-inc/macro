@@ -20,14 +20,17 @@ pub(crate) async fn unlink(
         .await
         .map_err(FusionAuthClientError::transport)?;
 
-    match res.status() {
+    let status = res.status();
+    match status {
         reqwest::StatusCode::OK => Ok(()),
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::NoIdentityProviderFound), // no idp to unlink
-        reqwest::StatusCode::BAD_REQUEST if super::link::is_missing_user(&body) => {
-            Err(FusionAuthClientError::UserDoesNotExist)
+        _ => {
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
+            if status == reqwest::StatusCode::BAD_REQUEST && super::link::is_missing_user(&body) {
+                return Err(FusionAuthClientError::UserDoesNotExist);
+            }
+            Err(FusionAuthClientError::unexpected(status, &headers, body))
         }
-        _ => Err(FusionAuthClientError::Generic(GenericErrorResponse {
-            message: body,
-        })),
     }
 }

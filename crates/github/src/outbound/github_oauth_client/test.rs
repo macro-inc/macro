@@ -621,7 +621,7 @@ async fn set_pull_request_state_reports_the_validation_reason() {
 }
 
 #[tokio::test]
-async fn set_pull_request_state_treats_unexpected_status_as_error() {
+async fn set_pull_request_state_reports_a_failing_github_as_unavailable() {
     let server = MockServer::start(MockResponse {
         status: "502 Bad Gateway",
         body: "upstream down".to_string(),
@@ -633,8 +633,29 @@ async fn set_pull_request_state_treats_unexpected_status_as_error() {
         .await
         .unwrap_err();
 
-    assert!(error.to_string().contains("502"));
+    assert_eq!(upstream_failure(error), Some(UpstreamFailure::Unavailable));
     server.finish();
+}
+
+#[tokio::test]
+async fn set_pull_request_state_does_not_read_a_rate_limit_as_a_refusal() {
+    let server = github_answering(
+        wiremock::ResponseTemplate::new(403)
+            .insert_header("x-ratelimit-remaining", "0")
+            .set_body_string(r#"{"message":"API rate limit exceeded"}"#),
+    )
+    .await;
+    let client = GithubOauthImpl::with_api_base_url(server.uri());
+
+    let error = client
+        .set_pull_request_state("token", "macro", "app", 7, GithubPullRequestState::Closed)
+        .await
+        .unwrap_err();
+
+    assert_eq!(
+        upstream_failure(error),
+        Some(UpstreamFailure::RateLimited { retry_after: None })
+    );
 }
 
 #[tokio::test]

@@ -48,6 +48,8 @@ pub use sync::{
 pub use webhook_delivery::{
     GithubWebhookReceived, GithubWebhookRepository, GithubWebhookSender, MAX_WEBHOOK_PAYLOAD_BYTES,
 };
+use upstream_error::UpstreamError;
+
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]
 pub enum GithubError {

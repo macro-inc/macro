@@ -90,8 +90,7 @@ impl FusionAuthClientError {
     }
 
     /// Classifies a response with a status the call did not expect: FusionAuth
-    /// outages and throttling become [`Self::Upstream`], a `userId` FusionAuth
-    /// does not know becomes [`Self::UserDoesNotExist`], and anything else
+    /// outages and throttling become [`Self::Upstream`], and anything else
     /// stays [`Self::Generic`] with the body.
     pub(crate) async fn unexpected_response(response: reqwest::Response) -> Self {
         let status = response.status();
@@ -115,34 +114,9 @@ impl FusionAuthClientError {
                 failure,
             };
         }
-        if names_unknown_user(&body) {
-            tracing::warn!(status=%status, body=%body, "fusionauth does not know the user");
-            return Self::UserDoesNotExist;
-        }
         tracing::error!(status=%status, body=%body, "unexpected response from fusionauth");
         Self::Generic(GenericErrorResponse { message: body })
     }
-}
-
-/// FusionAuth answers a `userId` it has no user for with a 400 whose
-/// `fieldErrors.userId` carries `[invalid]userId`.
-/// See https://fusionauth.io/docs/apis/errors
-fn names_unknown_user(body: &str) -> bool {
-    #[derive(serde::Deserialize)]
-    struct ErrorBody {
-        #[serde(default, rename = "fieldErrors")]
-        field_errors: std::collections::HashMap<String, Vec<FieldError>>,
-    }
-    #[derive(serde::Deserialize)]
-    struct FieldError {
-        code: String,
-    }
-
-    serde_json::from_str::<ErrorBody>(body).is_ok_and(|body| {
-        body.field_errors
-            .get("userId")
-            .is_some_and(|errors| errors.iter().any(|error| error.code == "[invalid]userId"))
-    })
 }
 
 /// A generic error response containing a message.
