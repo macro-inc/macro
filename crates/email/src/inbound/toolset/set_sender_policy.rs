@@ -97,11 +97,12 @@ where
 {
     type Output = SetSenderPolicyResponse;
 
-    // The sender's address is personal data; the span keeps the policy only.
+    // The sender's address is personal data, and errors can quote addresses;
+    // the span keeps the policy only.
     #[tracing::instrument(skip_all, fields(
         user_id=?request_context.user_id,
         policy=?self.policy,
-    ), err)]
+    ))]
     async fn call(
         &self,
         service_context: ServiceContext<EmailToolContext<T, G, E>>,
