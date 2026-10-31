@@ -7,6 +7,11 @@
  * frames before the query goes out, so no row between the two is lost, and
  * appends what the subscription delivers to the cached list, so the next
  * open starts from a log as complete as the last one ended.
+ *
+ * A tab with no signed-in session, such as a public link opened signed out,
+ * reads the log from the harness instead: the GraphQL `user` root refuses a
+ * caller with no account, while the harness applies the session's link
+ * sharing.
  */
 
 import { traceCacheWrite } from '@core/agent-session/load-telemetry';
@@ -15,6 +20,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentSessionLogEntryDto,
   LogDirectionDto,
@@ -31,8 +37,10 @@ import {
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
+  graphqlSoupSessionActive,
 } from '@service-storage/graphql-soup';
 import { type OperationResult, stringifyDocument } from '@urql/core';
+import { match } from 'ts-pattern';
 import { pipe, subscribe } from 'wonka';
 
 /** What the fold needs: the agent and the raw rows. */
@@ -159,13 +167,15 @@ const CACHE_WRITE_DEBOUNCE_MS = 1_000;
  * the fetched one. `policy` `network-only` skips the cache read, for a
  * resync that wants only what the server holds. With `follow`, the watch
  * also subscribes to the session's appended frames, before the query so
- * the two overlap rather than leave a hole, and hands each run on.
+ * the two overlap rather than leave a hole, and hands each run on. A
+ * signed-out tab has neither a cache nor a subscription, so it only fetches.
  */
 export function watchAgentSessionLog(
   sessionId: string,
   policy: 'cache-and-network' | 'network-only' = 'cache-and-network',
   follow?: SessionLogFollow
 ): SessionLogWatch {
+  if (!graphqlSoupSessionActive()) return fetchSignedOutLog(sessionId);
   let resolveCached!: (snapshot: SessionLogSnapshot | undefined) => void;
   let cacheSettled = false;
   let cacheMiss: CacheMiss | undefined;
@@ -277,6 +287,43 @@ export function watchAgentSessionLog(
       appender?.flush();
       missCache('stopped');
       rejectFetched(new AgentSessionLogUnavailable(sessionId, 'failed'));
+    },
+  };
+}
+
+/**
+ * The log for a tab with no signed-in session. A refusal or an unknown
+ * session is inaccessible, as a GraphQL answer without the session is.
+ */
+async function readSignedOutLog(
+  sessionId: string
+): Promise<SessionLogSnapshot> {
+  const result = await agentHarnessServiceClient.getLog(sessionId);
+  if (result.isOk()) {
+    return { bot: result.value.bot, rows: result.value.entries };
+  }
+  const refused = result.error.some((error) =>
+    match(error.code)
+      .with('UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND', () => true)
+      .otherwise(() => false)
+  );
+  throw new AgentSessionLogUnavailable(
+    sessionId,
+    refused ? 'inaccessible' : 'failed'
+  );
+}
+
+function fetchSignedOutLog(sessionId: string): SessionLogWatch {
+  const stopped = Promise.withResolvers<never>();
+  const fetched = Promise.race([readSignedOutLog(sessionId), stopped.promise]);
+  // A rejection nobody has awaited yet must not be reported as unhandled.
+  fetched.catch(() => undefined);
+  return {
+    cached: Promise.resolve(undefined),
+    cacheMiss: () => 'no_cache',
+    fetched,
+    stop: () => {
+      stopped.reject(new AgentSessionLogUnavailable(sessionId, 'failed'));
     },
   };
 }
