@@ -9,6 +9,7 @@ use entity_access::domain::{
 use item_filters::ast::properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue};
 use std::{future::Future, pin::Pin};
 use system_properties::SystemPropertyKey;
+use tracing::Instrument;
 
 #[cfg(test)]
 mod test;
@@ -29,29 +30,42 @@ impl<S: EntityAccessService> ProjectViewer for Reader<S> {
         user: &'a MacroUserIdStr<'_>,
         project: Uuid,
     ) -> Pin<Box<dyn Future<Output = Result<bool, SoupErr>> + Send + 'a>> {
-        Box::pin(async move {
-            match self
-                .0
-                .get_entity_permission(
-                    Some(user),
-                    &project.to_string(),
-                    EntityType::Initiative,
-                    None,
-                )
-                .await
-            {
-                Ok(EntityPermission::AccessLevel { .. }) => Ok(true),
-                Ok(_)
-                | Err(
-                    AccessError::Unauthorized
-                    | AccessError::UnauthorizedWithMessage(_)
-                    | AccessError::NotFound(_),
-                ) => Ok(false),
-                Err(error) => {
-                    Err(anyhow::anyhow!("project {project} access check failed: {error}").into())
-                }
+        let span = tracing::info_span!(
+            "soup.project_scope",
+            project_id = %project,
+            viewable = tracing::field::Empty,
+        );
+        Box::pin(
+            async move {
+                let viewable = match self
+                    .0
+                    .get_entity_permission(
+                        Some(user),
+                        &project.to_string(),
+                        EntityType::Initiative,
+                        None,
+                    )
+                    .await
+                {
+                    Ok(EntityPermission::AccessLevel { .. }) => true,
+                    Ok(_)
+                    | Err(
+                        AccessError::Unauthorized
+                        | AccessError::UnauthorizedWithMessage(_)
+                        | AccessError::NotFound(_),
+                    ) => false,
+                    Err(error) => {
+                        return Err(anyhow::anyhow!(
+                            "project {project} access check failed: {error}"
+                        )
+                        .into());
+                    }
+                };
+                tracing::Span::current().record("viewable", viewable);
+                Ok(viewable)
             }
-        })
+            .instrument(span),
+        )
     }
 }
 
