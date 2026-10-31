@@ -93,8 +93,10 @@ pub enum ProgramError {
     /// Two steps with the same id.
     #[error("step id `{0}` is used twice")]
     DuplicateStepId(StepId),
-    /// A placeholder naming no earlier step.
-    #[error("`{{{{steps.{0}…}}}}` must name an earlier tool step's id")]
+    /// A placeholder naming no step that runs before it on every path.
+    #[error(
+        "`{{{{steps.{0}…}}}}` must name a tool step that always runs before it: earlier in the same list, or before the decision it sits in"
+    )]
     UnknownStep(StepId),
     /// A placeholder that cannot be read.
     #[error(transparent)]
@@ -151,13 +153,20 @@ impl RoutineProgram {
 #[derive(Default)]
 struct Check {
     count: usize,
+    /// Every step id in the program, which must be unique.
     ids: HashSet<StepId>,
+    /// Step ids whose outputs a step at the current position can read.
+    visible: Vec<StepId>,
     reads_trigger: bool,
     single_agent_task: bool,
 }
 
 impl Check {
-    /// Pre-order, so a reference may only name a step already seen.
+    /// `{{steps.<id>…}}` names a tool step that runs before it on every path
+    /// to it: earlier in the same list, or earlier in a list that encloses it.
+    /// A branch's steps are visible only inside that branch, so neither a
+    /// sibling branch (`then`/`else`, another option) nor anything after the
+    /// decision can read them; the branch may not have run.
     fn steps(&mut self, steps: &[Step], depth: usize) -> Result<(), ProgramError> {
         if depth > MAX_DEPTH {
             return Err(ProgramError::TooDeep);
@@ -166,7 +175,9 @@ impl Check {
             self.count += 1;
             self.step(step)?;
             for branch in step.branches() {
+                let scope = self.visible.len();
                 self.steps(branch, depth + 1)?;
+                self.visible.truncate(scope);
             }
         }
         Ok(())
@@ -207,17 +218,18 @@ impl Check {
                 for reference in template::references(&arguments)? {
                     match reference {
                         Reference::Trigger(_) => self.reads_trigger = true,
-                        Reference::Step { id, .. } if !self.ids.contains(&id) => {
+                        Reference::Step { id, .. } if !self.visible.contains(&id) => {
                             return Err(ProgramError::UnknownStep(id));
                         }
                         Reference::Step { .. } => {}
                     }
                 }
                 // Registered after its own arguments: a step cannot read itself.
-                if let Some(id) = &tool.id
-                    && !self.ids.insert(id.clone())
-                {
-                    return Err(ProgramError::DuplicateStepId(id.clone()));
+                if let Some(id) = &tool.id {
+                    if !self.ids.insert(id.clone()) {
+                        return Err(ProgramError::DuplicateStepId(id.clone()));
+                    }
+                    self.visible.push(id.clone());
                 }
                 Ok(())
             }

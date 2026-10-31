@@ -11,10 +11,9 @@ use agent_session::domain::coding_agents::{
     DispatchedCodingAgent,
 };
 use agent_session::domain::routines::{
-    CallRoutineTool, PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession,
-    RoutineActionStatus, RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError,
-    RoutineSessions, RoutineToolOutcome, RoutineTools, ValidateRoutineSession,
-    ValidatedRoutineSession,
+    PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
+    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
+    ValidateRoutineSession, ValidatedRoutineSession,
 };
 use agent_session::inbound::routine_sessions::{RoutineSessionsState, routine_sessions_router};
 use axum::{
@@ -71,15 +70,6 @@ impl RoutineSessions for RoutineSessionsSpy {
     }
 
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
-        self.deny(command.owner)
-    }
-}
-
-impl RoutineTools for RoutineSessionsSpy {
-    async fn call_tool(
-        &self,
-        command: CallRoutineTool,
-    ) -> Result<RoutineToolOutcome, RoutineSessionError> {
         self.deny(command.owner)
     }
 }

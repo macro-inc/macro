@@ -81,6 +81,58 @@ fn step_references_must_name_an_earlier_tool_step() {
 }
 
 #[test]
+fn step_references_only_reach_steps_that_ran_on_every_path() {
+    let create =
+        |id: &str| json!({ "type": "tool", "id": id, "tool": "CreateDocument", "arguments": {} });
+    let read = |id: &str| tool(json!({ "content": format!("{{{{steps.{id}.documentId}}}}") }));
+    let unknown =
+        |steps: serde_json::Value| matches!(validate(steps), Err(ProgramError::UnknownStep(_)));
+
+    // The `else` branch runs exactly when `then` didn't.
+    assert!(unknown(json!([{ "type": "if", "condition": "Urgent?",
+        "then": [create("task")], "else": [read("task")] }])));
+    // Another option of a choice may not have run.
+    assert!(unknown(json!([{ "type": "choose", "options": [
+        { "label": "Invoice", "steps": [create("task")] },
+        { "label": "Newsletter", "steps": [read("task")] }
+    ] }])));
+    // After the decision, its branches' steps may not have run.
+    assert!(unknown(json!([
+        { "type": "choose", "options": [
+            { "label": "Invoice", "steps": [create("task")] },
+            { "label": "Newsletter", "steps": [] }
+        ] },
+        read("task")
+    ])));
+    assert!(unknown(json!([
+        { "type": "if", "condition": "Urgent?", "then": [create("task")] },
+        read("task")
+    ])));
+
+    // Earlier in the same branch.
+    validate(json!([{ "type": "if", "condition": "Urgent?",
+        "then": [create("task"), read("task")] }]))
+    .unwrap();
+    // Earlier in an enclosing list, read inside a nested branch.
+    validate(json!([
+        create("task"),
+        { "type": "if", "condition": "Urgent?", "then": [
+            { "type": "choose", "options": [
+                { "label": "A", "steps": [read("task")] },
+                { "label": "B", "steps": [] }
+            ] }
+        ] }
+    ]))
+    .unwrap();
+    // Ids stay unique across branches even though they can't see each other.
+    assert!(matches!(
+        validate(json!([{ "type": "if", "condition": "Urgent?",
+            "then": [create("task")], "else": [create("task")] }])),
+        Err(ProgramError::DuplicateStepId(_))
+    ));
+}
+
+#[test]
 fn structural_limits_are_enforced() {
     assert_eq!(validate(json!([])), Err(ProgramError::Empty));
     assert_eq!(

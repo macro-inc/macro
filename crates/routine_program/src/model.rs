@@ -66,12 +66,16 @@ pub struct ToolStep {
 /// to confirm them are not steps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum RoutineTool {
-    /// Add or remove one Gmail label on a thread: archive (remove INBOX), mark
-    /// read (remove UNREAD), star (add STARRED), or apply a custom label.
-    /// Arguments: `thread_id`, `label_id` (from ListLabels), `add`.
+    /// Add or remove one label on a thread: archive (remove INBOX), mark read
+    /// (remove UNREAD), star (add STARRED), or apply a custom label. In Outlook
+    /// inboxes the system labels set the matching mailbox state.
+    /// Arguments: `thread_id`, `label` (by name, so it works in every inbox;
+    /// or `label_id` from ListLabels, not both), `add`.
     UpdateThreadLabels,
     /// Treat a sender's future mail as signal, noise, or blocked.
-    /// Arguments: `sender_email`, `policy` (`signal`, `noise` or `block`).
+    /// Arguments: `sender_email`, `policy` (`signal`, `noise` or `block`), and
+    /// `thread_id` (`{{trigger.entity_id}}`) so it applies to the inbox that
+    /// received the email.
     SetSenderPolicy,
     /// Set a property on a task, document, email thread, channel or company:
     /// status, priority, assignees, due date, tags or any custom property.

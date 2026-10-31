@@ -133,35 +133,6 @@ pub enum RoutineFailureReason {
     UnknownStopReason,
 }
 
-/// One catalog tool call a routine step makes as its owner, outside any
-/// agent session. The scheduler decides which tools a routine may call.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CallRoutineTool {
-    /// User whose authority the call spends.
-    pub owner: MacroUserIdStr<'static>,
-    /// Catalog name, e.g. `UpdateThreadLabels`.
-    pub tool: String,
-    /// The tool's arguments, already rendered from the routine's templates.
-    pub arguments: serde_json::Map<String, serde_json::Value>,
-}
-
-/// What a tool call did. A failure here is the tool's own answer about the
-/// owner's data (a missing label, an invalid argument), not a transport error.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "status", rename_all = "snake_case")]
-pub enum RoutineToolOutcome {
-    /// The tool ran; its output, or null when too large to return.
-    Completed {
-        /// The tool's JSON output.
-        output: serde_json::Value,
-    },
-    /// The tool refused or failed, in its own words.
-    Failed {
-        /// Why, written for the routine's owner.
-        message: String,
-    },
-}
-
 /// Safe errors shared by internal adapters and the scheduler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, thiserror::Error)]
 #[serde(rename_all = "snake_case")]

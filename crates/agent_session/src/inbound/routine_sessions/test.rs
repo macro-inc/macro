@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 const OWNER: &str = "macro|owner@example.com";
 const INTERNAL_KEY: &str = "routine-test-internal";
-const OPERATIONS: [&str; 6] = ["validate", "prepare", "prompt", "status", "cancel", "tool"];
+const OPERATIONS: [&str; 5] = ["validate", "prepare", "prompt", "status", "cancel"];
 
 #[derive(Clone)]
 struct Credentials;
@@ -151,18 +151,6 @@ impl RoutineSessions for ServiceSpy {
     }
 }
 
-impl RoutineTools for ServiceSpy {
-    async fn call_tool(
-        &self,
-        command: CallRoutineTool,
-    ) -> Result<RoutineToolOutcome, RoutineSessionError> {
-        self.record("tool", command)?;
-        Ok(RoutineToolOutcome::Failed {
-            message: "Label not found".into(),
-        })
-    }
-}
-
 fn app(service: Arc<ServiceSpy>) -> Router {
     let auth = MacroAuthorizationServiceImpl::new(
         Credentials,
@@ -193,10 +181,6 @@ fn command(operation: &str) -> Value {
             "source": "routine", "visibility": "unlisted",
         }),
         "prompt" => json!({ "action": action, "prompt": "private routine instructions" }),
-        "tool" => json!({
-            "owner": OWNER, "tool": "UpdateThreadLabels",
-            "arguments": { "thread_id": Uuid::now_v7(), "add": true },
-        }),
         _ => action,
     }
 }
@@ -267,17 +251,11 @@ async fn forwards_explicit_owner_and_complete_command_without_rewriting() {
             service.seen.lock().unwrap().last(),
             Some(&(operation, command))
         );
-        match operation {
-            "status" => assert_eq!(
+        if operation == "status" {
+            assert_eq!(
                 body(response).await,
                 json!({ "state": "pending", "reason": "permission" })
-            ),
-            // A tool's own refusal is its answer, not a transport error.
-            "tool" => assert_eq!(
-                body(response).await,
-                json!({ "status": "failed", "message": "Label not found" })
-            ),
-            _ => {}
+            );
         }
     }
 }

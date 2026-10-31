@@ -3,9 +3,7 @@
 //! All operations use POST with the domain command as JSON (including status,
 //! so explicit owner/action identity is not placed in URLs). Successful cancel
 //! returns 204; other successes return the domain result. Errors carry only a
-//! closed `code`. Prepare, prompt and tool calls must not be replayed after
-//! ambiguous errors. A tool that refuses or fails answers 200 with its reason:
-//! that is the tool's answer about the owner's data, not a transport error.
+//! closed `code`. Prepare and prompt must not be replayed after ambiguous errors.
 
 use std::{sync::Arc, time::Duration};
 
@@ -23,10 +21,9 @@ use macro_authorization::{
 use serde::Serialize;
 
 use crate::domain::routines::{
-    CallRoutineTool, PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession,
-    RoutineActionStatus, RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError,
-    RoutineSessions, RoutineToolOutcome, RoutineTools, ValidateRoutineSession,
-    ValidatedRoutineSession,
+    PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
+    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
+    ValidateRoutineSession, ValidatedRoutineSession,
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -67,10 +64,7 @@ impl<Service, Auth> FromRef<RoutineSessionsState<Service, Auth>> for MacroAuthor
 /// Internal routes, already mounted beneath `/internal/routine-sessions`.
 ///
 /// No browser OpenAPI schemas or public authentication policies are changed.
-pub fn routine_sessions_router<
-    Service: RoutineSessions + RoutineTools,
-    Auth: MacroAuthorizationService,
->(
+pub fn routine_sessions_router<Service: RoutineSessions, Auth: MacroAuthorizationService>(
     state: RoutineSessionsState<Service, Auth>,
 ) -> Router {
     Router::new().nest(
@@ -81,7 +75,6 @@ pub fn routine_sessions_router<
             .route("/prompt", post(prompt::<Service, Auth>))
             .route("/status", post(status::<Service, Auth>))
             .route("/cancel", post(cancel::<Service, Auth>))
-            .route("/tool", post(call_tool::<Service, Auth>))
             .layer(DefaultBodyLimit::max(MAX_COMMAND_BYTES))
             .layer(middleware::from_fn(bound_request))
             .with_state(state),
@@ -204,14 +197,6 @@ async fn cancel<Service: RoutineSessions, Auth: MacroAuthorizationService>(
 ) -> Result<StatusCode, ApiError> {
     state.service.cancel(command?.0).await?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-async fn call_tool<Service: RoutineTools, Auth: MacroAuthorizationService>(
-    State(state): State<RoutineSessionsState<Service, Auth>>,
-    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
-    command: Result<Json<CallRoutineTool>, JsonRejection>,
-) -> Result<Json<RoutineToolOutcome>, ApiError> {
-    Ok(Json(state.service.call_tool(command?.0).await?))
 }
 
 #[cfg(test)]

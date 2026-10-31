@@ -7,43 +7,6 @@ mod status;
 pub use models::*;
 pub use service::RoutineSessionsService;
 
-/// Catalog tools a routine step calls directly, with no agent deciding.
-///
-/// Never replay a call after an ambiguous error: tools are not idempotent.
-pub trait RoutineTools: Send + Sync + 'static {
-    /// Run one tool as the command's owner.
-    fn call_tool(
-        &self,
-        command: CallRoutineTool,
-    ) -> impl Future<Output = Result<RoutineToolOutcome, RoutineSessionError>> + Send;
-}
-
-/// Runs catalog tools as a user. Implemented by the host that holds the tools.
-pub trait RoutineToolRunner: Send + Sync + 'static {
-    /// Run `tool` with `arguments` as `owner`.
-    fn run(
-        &self,
-        owner: &macro_user_id::user_id::MacroUserIdStr<'static>,
-        tool: &str,
-        arguments: serde_json::Map<String, serde_json::Value>,
-    ) -> impl Future<Output = Result<RoutineToolOutcome, RoutineSessionError>> + Send;
-}
-
-/// For hosts without tools: every call is unavailable.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoRoutineTools;
-
-impl RoutineToolRunner for NoRoutineTools {
-    async fn run(
-        &self,
-        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
-        _: &str,
-        _: serde_json::Map<String, serde_json::Value>,
-    ) -> Result<RoutineToolOutcome, RoutineSessionError> {
-        Err(RoutineSessionError::RuntimeUnavailable)
-    }
-}
-
 /// The only session operations available to routine execution.
 ///
 /// Preparation and prompting are separate so callers can retain the session id
