@@ -309,6 +309,10 @@ the user's newest account for that app from the last fifteen minutes.
 
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
+- All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
+  an excluded preview or timestamp, including synced Macro drafts; Drafts and
+  Sent retain their own canonical membership.
+
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
@@ -853,3 +857,6 @@ The backend-free browser regression is
 Use `features/channel/channel-icon.tsx` for conversation identity in rows,
 favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
 and bot personas share one renderer; keep surface sizing in the caller.
+
+- Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
+- Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.
