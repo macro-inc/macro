@@ -3019,6 +3019,17 @@
         "tags": ["channel_labels"],
         "summary": "List the caller's shared or private labels.",
         "operationId": "list_channel_labels",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
@@ -3066,6 +3077,17 @@
         "tags": ["channel_labels"],
         "summary": "Create a label for the caller's authorized scope.",
         "operationId": "create_channel_label",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3165,6 +3187,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
           }
         ],
         "requestBody": {
@@ -3239,6 +3270,17 @@
         "tags": ["channel_labels"],
         "summary": "Preview visible channels matched by a smart tag, without creating it.",
         "operationId": "preview_smart_tag",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3318,6 +3360,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
+            }
           }
         ],
         "responses": {
@@ -3379,6 +3430,15 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "`personal` selects private labels; `team` requires team membership.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ChannelLabelScopeSelection"
             }
           }
         ],
@@ -23644,10 +23704,15 @@
         ],
         "description": "An attribute rule that automatically groups matching channels."
       },
+      "ChannelLabelScopeSelection": {
+        "type": "string",
+        "description": "Requested label namespace. Omission retains the deployed automatic selection.",
+        "enum": ["personal", "team"]
+      },
       "ChannelLabelsList": {
         "type": "object",
         "description": "The authorized scope's labels in manual order.",
-        "required": ["labels"],
+        "required": ["scope", "labels"],
         "properties": {
           "labels": {
             "type": "array",
@@ -23655,6 +23720,10 @@
               "$ref": "#/components/schemas/ChannelLabel"
             },
             "description": "Every label of the scope, whether or not the caller sees channels in it."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ChannelLabelScopeSelection",
+            "description": "Resolved label namespace."
           },
           "teamId": {
             "type": ["string", "null"],
