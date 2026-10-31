@@ -39,7 +39,8 @@ impl NotificationTitle for CalendarEventJoinRequestMetadata {
 }
 impl NotificationExtIos for CalendarEventJoinRequestMetadata {
     type NotifData = PushNotificationData;
-    // A request reopened after a decline replaces its earlier banner.
+    // A redelivered notification replaces its own banner, and each person's
+    // request keeps a banner of its own.
     fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
         NotifCollapseKey::new(Self::TYPE_NAME).append(&self.request_id.to_string())
     }
