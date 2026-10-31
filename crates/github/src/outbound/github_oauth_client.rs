@@ -43,17 +43,19 @@ fn transport_error(error: reqwest::Error) -> GithubError {
     upstream(UpstreamFailure::from_transport(&error))
 }
 
-/// GitHub throttling. A 429, or a 403 that carries `Retry-After` (secondary
-/// limit) or exhausts `x-ratelimit-remaining` (primary limit); any other 403
-/// is a real refusal.
+/// GitHub throttling. A 429, or a 403 that carries `Retry-After`, exhausts
+/// `x-ratelimit-remaining` (primary limit), or says it hit a secondary rate
+/// limit, which GitHub may send without either header; any other 403 is a
+/// real refusal.
 /// See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
-fn throttling(status: StatusCode, headers: &HeaderMap) -> Option<UpstreamFailure> {
+fn throttling(status: StatusCode, headers: &HeaderMap, body: &str) -> Option<UpstreamFailure> {
     let throttled = status == StatusCode::TOO_MANY_REQUESTS
         || (status == StatusCode::FORBIDDEN
             && (headers.contains_key(RETRY_AFTER)
                 || headers
                     .get("x-ratelimit-remaining")
-                    .is_some_and(|remaining| remaining == "0")));
+                    .is_some_and(|remaining| remaining == "0")
+                || body.to_ascii_lowercase().contains("secondary rate limit")));
     throttled.then(|| UpstreamFailure::RateLimited {
         retry_after: upstream_error::retry_after(headers).or_else(|| rate_limit_reset(headers)),
     })
@@ -75,12 +77,15 @@ fn rate_limit_reset(headers: &HeaderMap) -> Option<Duration> {
 /// upstream; anything else is ours to look into.
 async fn unexpected_response(response: reqwest::Response, context: &str) -> GithubError {
     let status = response.status();
-    let failure = throttling(status, response.headers())
-        .or_else(|| UpstreamFailure::from_status(status, response.headers()));
-    let body = response
-        .text()
-        .await
-        .unwrap_or_else(|_| "unknown error".to_string());
+    let headers = response.headers().clone();
+    let body = response_text(response).await;
+    unexpected(status, &headers, body, context)
+}
+
+/// [`unexpected_response`] for a call that already read the body.
+fn unexpected(status: StatusCode, headers: &HeaderMap, body: String, context: &str) -> GithubError {
+    let failure = throttling(status, headers, &body)
+        .or_else(|| UpstreamFailure::from_status(status, headers));
     match failure {
         Some(failure) => {
             tracing::error!(status=%status, body=%body, context, "github is failing");
@@ -88,6 +93,13 @@ async fn unexpected_response(response: reqwest::Response, context: &str) -> Gith
         }
         None => GithubError::Internal(anyhow::anyhow!("{context} (status {status}): {body}")),
     }
+}
+
+async fn response_text(response: reqwest::Response) -> String {
+    response
+        .text()
+        .await
+        .unwrap_or_else(|_| "unknown error".to_string())
 }
 
 /// Github email information from /user/emails endpoint
@@ -567,9 +579,16 @@ impl GithubOauth for GithubOauthImpl {
             }));
         }
 
+        let headers = response.headers().clone();
+        let body = response_text(response).await;
         // A throttled merge is a 403 too; it must not read as a refusal.
-        if throttling(status, response.headers()).is_some() {
-            return Err(unexpected_response(response, "failed to merge pull request").await);
+        if throttling(status, &headers, &body).is_some() {
+            return Err(unexpected(
+                status,
+                &headers,
+                body,
+                "failed to merge pull request",
+            ));
         }
 
         // The statuses GitHub documents for this endpoint, each a decision
@@ -581,12 +600,15 @@ impl GithubOauth for GithubOauthImpl {
             reqwest::StatusCode::FORBIDDEN => GithubMergeRejection::Forbidden,
             reqwest::StatusCode::UNPROCESSABLE_ENTITY => GithubMergeRejection::Invalid,
             _ => {
-                return Err(unexpected_response(response, "failed to merge pull request").await);
+                return Err(unexpected(
+                    status,
+                    &headers,
+                    body,
+                    "failed to merge pull request",
+                ));
             }
         };
-        let message = response
-            .json::<GithubErrorBody>()
-            .await
+        let message = serde_json::from_str::<GithubErrorBody>(&body)
             .map(|body| body.message)
             .unwrap_or_else(|_| "GitHub declined to merge the pull request.".to_string());
 
@@ -691,11 +713,16 @@ impl GithubOauth for GithubOauthImpl {
             });
         }
 
+        let headers = response.headers().clone();
+        let body = response_text(response).await;
         // A throttled change is a 403 too; it must not read as a refusal.
-        if throttling(status, response.headers()).is_some() {
-            return Err(
-                unexpected_response(response, "failed to change pull request state").await,
-            );
+        if throttling(status, &headers, &body).is_some() {
+            return Err(unexpected(
+                status,
+                &headers,
+                body,
+                "failed to change pull request state",
+            ));
         }
 
         // The statuses GitHub documents for this endpoint, each a decision
@@ -705,14 +732,15 @@ impl GithubOauth for GithubOauthImpl {
             reqwest::StatusCode::NOT_FOUND => GithubPullRequestUpdateRejection::NotFound,
             reqwest::StatusCode::UNPROCESSABLE_ENTITY => GithubPullRequestUpdateRejection::Invalid,
             _ => {
-                return Err(
-                    unexpected_response(response, "failed to change pull request state").await,
-                );
+                return Err(unexpected(
+                    status,
+                    &headers,
+                    body,
+                    "failed to change pull request state",
+                ));
             }
         };
-        let message = response
-            .json::<GithubErrorBody>()
-            .await
+        let message = serde_json::from_str::<GithubErrorBody>(&body)
             .map(GithubErrorBody::reason)
             .unwrap_or_else(|_| "GitHub declined to change the pull request.".to_string());
 

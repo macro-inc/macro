@@ -280,6 +280,27 @@ async fn token_check_treats_a_secondary_rate_limit_as_throttling() {
 }
 
 #[tokio::test]
+async fn a_secondary_rate_limit_without_headers_is_throttling() {
+    let secondary = || {
+        wiremock::ResponseTemplate::new(403).set_body_string(
+            r#"{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}"#,
+        )
+    };
+    let throttled = Some(UpstreamFailure::RateLimited { retry_after: None });
+
+    let server = github_answering(secondary()).await;
+    let client = GithubOauthImpl::with_api_base_url(server.uri());
+    let error = client.is_access_token_expired("token").await.unwrap_err();
+    assert_eq!(upstream_failure(error), throttled);
+
+    let error = client
+        .merge_pull_request("token", "macro", "app", 7, GithubMergeMethod::Merge)
+        .await
+        .unwrap_err();
+    assert_eq!(upstream_failure(error), throttled);
+}
+
+#[tokio::test]
 async fn token_check_treats_a_failing_github_as_unavailable() {
     let server = github_answering(wiremock::ResponseTemplate::new(503)).await;
     let client = GithubOauthImpl::with_api_base_url(server.uri());

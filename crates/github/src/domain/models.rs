@@ -45,10 +45,10 @@ pub use sync::{
     TeamTaskReference, ValidatedGithubWebhookEvent, extract_github_mentions,
     pull_request_task_reference, strip_markdown_code,
 };
+use upstream_error::UpstreamError;
 pub use webhook_delivery::{
     GithubWebhookReceived, GithubWebhookRepository, GithubWebhookSender, MAX_WEBHOOK_PAYLOAD_BYTES,
 };
-use upstream_error::UpstreamError;
 
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]
