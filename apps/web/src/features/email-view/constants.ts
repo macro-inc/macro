@@ -39,8 +39,6 @@ export const EMAIL_TAB_LABELS = {
 export type EmailTabItem = {
   id: EmailTab;
   label: string;
-  /** A short status beside the label, e.g. for an experimental tab. */
-  badge?: string;
 };
 
 export const EMAIL_TABS: readonly EmailTabItem[] = EMAIL_TAB_IDS.map((id) => ({
@@ -59,13 +57,6 @@ export const EMAIL_INBOX_TAB_IDS = [
 
 export const isEmailInboxTab = (tab: EmailTab) =>
   (EMAIL_INBOX_TAB_IDS as readonly EmailTab[]).includes(tab);
-
-/** Leads the mobile pills and the touch sidebar, above the Signal/Noise pair. */
-export const EMAIL_FOCUS_TAB: EmailTabItem = {
-  id: 'focus',
-  label: EMAIL_TAB_LABELS.focus,
-  badge: 'Experimental',
-};
 
 /** How the Focus tab orders its threads. */
 export const EMAIL_FOCUS_SORT_IDS = [
