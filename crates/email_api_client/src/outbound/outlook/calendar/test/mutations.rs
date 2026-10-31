@@ -31,6 +31,7 @@ struct NoOpenClients;
 
 impl CalendarRefreshNotifier for NoOpenClients {
     async fn calendar_changed(&self, _: &str, _: Uuid, _: bool) {}
+    async fn join_request_answered(&self, _: &str, _: Uuid) {}
 }
 
 #[derive(Clone, Default)]

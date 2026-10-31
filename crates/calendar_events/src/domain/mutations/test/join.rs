@@ -368,6 +368,78 @@ async fn answering_a_resolved_request_returns_it_unchanged() {
 }
 
 #[tokio::test]
+async fn an_answer_refreshes_the_list_and_the_requesters_card() {
+    for (accept, status) in [
+        (true, CalendarJoinRequestStatus::Accepted),
+        (false, CalendarJoinRequestStatus::Declined),
+    ] {
+        let repo = sharer_organizes();
+        let request = pending_request(&repo, CalendarJoinRequestStatus::Pending);
+        let refresh = RecordingRefreshNotifier {
+            join_requests: repo.join_requests.clone(),
+            ..RecordingRefreshNotifier::default()
+        };
+
+        service_with_refresh(
+            repo,
+            FakeProvider::new(FakeProviderBehavior::Echo),
+            FakeTokens::ok(),
+            refresh.clone(),
+        )
+        .respond_to_join_request(SHARER, request.id, accept)
+        .await
+        .unwrap();
+
+        // A decline writes nothing to the provider, so nothing else would
+        // tell the list's readers; the last nudge carries the stored answer
+        // even when an acceptance's invite nudged earlier.
+        assert_eq!(
+            refresh.notified.lock().unwrap().last(),
+            Some(&(SHARER.to_string(), SELF_LINK, false)),
+            "accept={accept}"
+        );
+        assert_eq!(
+            refresh.seen_statuses.lock().unwrap().last(),
+            Some(&status),
+            "accept={accept}"
+        );
+        assert_eq!(
+            refresh.answered_requesters.lock().unwrap().as_slice(),
+            [(MEMBER.to_string(), request.event_id)],
+            "accept={accept}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_stale_answer_changes_nothing_so_it_refreshes_nothing() {
+    for status in [
+        CalendarJoinRequestStatus::Accepted,
+        CalendarJoinRequestStatus::Declined,
+    ] {
+        for accept in [true, false] {
+            let repo = sharer_organizes();
+            let request = pending_request(&repo, status);
+            let refresh = RecordingRefreshNotifier::default();
+
+            let answered = service_with_refresh(
+                repo,
+                FakeProvider::new(FakeProviderBehavior::Echo),
+                FakeTokens::ok(),
+                refresh.clone(),
+            )
+            .respond_to_join_request(SHARER, request.id, accept)
+            .await
+            .unwrap();
+
+            assert_eq!(answered, request, "{status:?} accept={accept}");
+            assert!(refresh.notified.lock().unwrap().is_empty());
+            assert!(refresh.answered_requesters.lock().unwrap().is_empty());
+        }
+    }
+}
+
+#[tokio::test]
 async fn a_refused_invite_leaves_the_request_pending() {
     let repo = sharer_organizes();
     let request = pending_request(&repo, CalendarJoinRequestStatus::Pending);

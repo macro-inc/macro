@@ -207,6 +207,17 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   Both lock only `notification` rows, once the delete holds its row, so neither
   changes that order. The cancelled row keeps its requests, as it keeps its
   grants, and a cancelled occurrence changes neither.
+  An answer that changes the request reaches open clients through
+  `CalendarRefreshNotifier`, after it is stored (an acceptance's invite nudges
+  before that, too early to carry it): `calendar_changed` for the owner and
+  delegates of the sharer's inbox, whose `refresh_calendar` refetches open
+  request lists, and `join_request_answered` for the requester, who views the
+  event through the share, so that signal names the event and never the
+  sharer's inbox. A list reader may hold no notification, so the delete above
+  is not that signal. An answer to a request no longer pending returns it
+  unchanged and stays quiet; the client reads a status other than its decision
+  as already answered. Only an acceptance whose invitation is being written
+  overrules a decline (`resolve_join_request`), and it returns `accepted`.
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with
