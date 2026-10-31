@@ -229,6 +229,39 @@ where
     Ok(())
 }
 
+/// Gives a user a direct grant of at least `access_level`, raising a weaker
+/// direct grant and leaving an equal or stronger one, including the owner's,
+/// untouched. It does not commit the caller's transaction.
+#[tracing::instrument(skip(executor, user_id), err)]
+pub async fn raise_user_entity_access<'e, E>(
+    executor: E,
+    user_id: MacroUserIdStr<'_>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    access_level: AccessLevel,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, $2, $3, 'user', $4)
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
+        WHERE entity_access.access_level < EXCLUDED.access_level
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        user_id.as_ref(),
+        access_level as _,
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
 /// Bulk upserts entity access for users.
 ///
 /// An owner row is never rewritten: the guard sits on the `DO UPDATE`, where
