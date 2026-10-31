@@ -61,4 +61,34 @@ describe('registerSplitHotkeys', () => {
     splitCount = 2;
     expect(closeRegistration?.condition?.()).toBe(true);
   });
+
+  it('closes the split instead of returning to the list when splits remain', () => {
+    let splitCount = 2;
+    const closeSplit = vi.fn();
+    const goToList = vi.fn();
+    registerSplitHotkeys({
+      splitHotkeyScope: 'split=test',
+      insertSplit: vi.fn(),
+      closeSplit,
+      toggleSpotlight: vi.fn(),
+      canGoBack: () => false,
+      goBack: vi.fn(),
+      canGoForward: () => false,
+      goForward: vi.fn(),
+      goToList,
+      splitName: () => 'Test',
+      getSplitCount: () => splitCount,
+      isNotUnifiedList: () => true,
+    });
+
+    const closeRegistration = vi.mocked(registerHotkey).mock.calls[0]?.[0];
+    closeRegistration?.keyDownHandler?.(new KeyboardEvent('keydown'));
+    expect(closeSplit).toHaveBeenCalledTimes(1);
+    expect(goToList).not.toHaveBeenCalled();
+
+    splitCount = 1;
+    closeRegistration?.keyDownHandler?.(new KeyboardEvent('keydown'));
+    expect(closeSplit).toHaveBeenCalledTimes(1);
+    expect(goToList).toHaveBeenCalledTimes(1);
+  });
 });
