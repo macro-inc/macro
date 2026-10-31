@@ -12,6 +12,13 @@ import {
   isChannelEntity,
   isChannelThreadEntity,
 } from '@entity';
+import { useChannelsByIdsQuery } from '@queries/channel/by-ids';
+
+export {
+  channelsByIdsQueryArgs,
+  useChannelsByIdsQuery,
+} from '@queries/channel/by-ids';
+
 import { queryReadyGate } from '@queries/gate';
 import {
   type SoupAstItemsQueryArgs,
@@ -121,60 +128,6 @@ export function filterChannelsForScope(
   channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
-}
-
-/**
- * Fetch specific channels by id, for labelled channels the paginated Channels
- * source has not reached yet. Page through the requested IDs independently
- * of the main list so broad smart tags include all their matched channels.
- */
-export function channelsByIdsQueryArgs(
-  channelIds: readonly string[]
-): SoupAstItemsQueryArgs {
-  return {
-    params: {
-      ...CHANNELS_QUERY_PARAMS,
-      limit: Math.min(500, Math.max(1, channelIds.length)),
-      sort_method: 'created_at',
-    },
-    body: compileToAst(
-      queryStateFrom(
-        defineQueryFilters({
-          include: { channelId: [...channelIds] },
-        })
-      )
-    ),
-  };
-}
-
-export function useChannelsByIdsQuery(
-  channelIds: Accessor<readonly string[]>,
-  options?: Accessor<{ networkPaused?: boolean }>
-) {
-  const query = useSoupAstItemsQuery(
-    () => channelsByIdsQueryArgs(channelIds()),
-    // Rail rows need only bounded unread evidence, like the channel lists.
-    () => ({
-      enabled: channelIds().length > 0,
-      networkPaused: options?.().networkPaused,
-      staleTime: 30_000,
-      graphqlProjection: 'channel-list',
-    })
-  );
-  // Drive the external paginated query until all requested matches are loaded.
-  createEffect(() => {
-    if (
-      options?.().networkPaused ||
-      !query.isEnabled ||
-      query.isLoading ||
-      query.isFetching ||
-      query.error ||
-      !query.hasNextPage
-    )
-      return;
-    fireAndForget(query.fetchNextPage(), 'channels-view');
-  });
-  return query;
 }
 
 /**

@@ -36,16 +36,14 @@ import { enableChannelTags } from '@core/constant/featureFlags';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelEntity, WithNotification } from '@entity';
-
+import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { fetchChannelSelectionById } from '@queries/channel/selection-by-id';
 import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
-
 import { debounce } from '@solid-primitives/scheduled';
 import { useDragDropContext } from '@thisbeyond/solid-dnd';
-
 import {
   createEffect,
   createMemo,
@@ -70,7 +68,6 @@ import {
   resolveReferencedChannels,
   useChannelsByIdsQuery,
 } from '../../queries';
-import { useReferencedChannels } from '../../queries/referenced-channels';
 import type {
   ChannelSectionKey,
   ChannelsQueryScope,
@@ -408,9 +405,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const referencedChannelsQuery = useChannelsByIdsQuery(() =>
     sectionsEnabled() ? [] : missingChannelIds()
   );
-  const nextReferencedChannels = useReferencedChannels(
+  const nextReferencedChannels = useCachedChannelsByIds(
     referencedChannelIds,
-    channels,
     sectionsEnabled
   );
   const referencedChannels = createMemo<ChannelEntity[]>(

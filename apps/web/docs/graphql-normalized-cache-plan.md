@@ -885,9 +885,11 @@ Supported Soup predicates can read indexed matches before a server response,
 using an empty baseline. `useSoupAstItemsQuery.cacheStatus` reports local
 predicate readiness separately from network loading; `ready` does not prove
 complete server membership. `fetchError` retains background failures even when
-the display-oriented `error` keeps cached results quiet. Finite known-ID
-consumers compare those IDs with the returned rows and use ordinary queries
-for missing records, rather than owning cache subscriptions or revision tracking.
+the display-oriented `error` keeps cached results quiet. Explicit channel-ID
+lookups use the shared `queries/channel/by-ids` source. Its single Soup owner
+keeps the full-ID cache predicate separate from a stable missing-ID network
+request, including pagination, retries, and full-membership unread refreshes.
+Consumers receive rows and unresolved IDs without coordinating query lifetimes.
 
 Mail list pages carry same-query server membership in the existing `baseline`
 field. The Mail adapter reconciles only baseline rows outside the indexed window,

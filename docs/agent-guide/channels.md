@@ -949,8 +949,9 @@ regardless of section placement. Mobile retains the recent-conversation feed
 described below.
 
 Section membership comes from the server's complete visible channel-ID lists.
-The sidebar shows available channel rows immediately. Shared Soup predicates
-supply cached channel data, and ordinary channel queries fetch missing records.
+The sidebar shows available channel rows immediately. One shared by-ID query
+per batch supplies cached channel data and fetches only missing records; the
+sidebar does not coordinate separate cache and network queries.
 Each expanded section appends skeleton rows while its remaining channels load.
 A failed fetch keeps available rows and replaces that section's loading feedback
 with Retry. Loading sections must not briefly show an empty-state hint.

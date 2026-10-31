@@ -73,6 +73,8 @@ interface SoupItemsQueryOptions {
   staleTime?: StaleTime;
   /** Channel navigation reads bounded unread evidence, not notification history. */
   graphqlProjection?: 'channel-list';
+  /** Exact channel membership for cache-first by-ID lookups. */
+  graphqlCacheFirstChannelIds?: readonly string[];
   /** Seed mixed lists from indexed non-email members; keep the full server query. */
   graphqlLocalReconciliation?: 'without-email';
   meta?: {
@@ -404,6 +406,7 @@ export function useSoupAstItemsQuery(
       networkPaused: options?.().networkPaused,
       keepPreviousData: options?.().keepPreviousData,
       projection: options?.().graphqlProjection,
+      cacheFirstChannelIds: options?.().graphqlCacheFirstChannelIds,
       localReconciliation: options?.().graphqlLocalReconciliation,
       showSupportedForeignEntities: options?.().showSupportedForeignEntities,
     })

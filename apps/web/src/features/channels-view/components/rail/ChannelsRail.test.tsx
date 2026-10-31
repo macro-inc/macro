@@ -185,8 +185,9 @@ vi.mock('../../queries', () => ({
   // What the real helper answers for the disabled lookup above.
   resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
-vi.mock('../../queries/referenced-channels', () => ({
-  useReferencedChannels: () => ({
+vi.mock('@queries/channel/by-ids', () => ({
+  useChannelsByIdsQuery: () => ({ isEnabled: false }),
+  useCachedChannelsByIds: () => ({
     channels: () => [],
     pendingIds: () => new Set<string>(),
     failedIds: () => new Set<string>(),
