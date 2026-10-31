@@ -108,6 +108,7 @@ export * from './apiMessageProviderId';
 export * from './apiMessageProviderThreadId';
 export * from './apiMessageReplyingToId';
 export * from './apiMessageResolutionAction';
+export * from './apiMessageScheduledSendSource';
 export * from './apiMessageScheduledSendStatus';
 export * from './apiMessageScheduledSendTime';
 export * from './apiMessageSentAt';

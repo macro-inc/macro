@@ -477,6 +477,7 @@
   "storage.listDatabaseColumnCasts": "List Database Column Casts",
   "storage.convertDatabaseColumn": "Convert Database Column",
   "storage.inferDatabaseColumnType": "Infer Database Column Type",
+  "storage.queryDatabaseTableRows": "Query Database Table Rows",
   "storage.getDatabaseRowHistory": "Get Database Row History",
   "storage.getDatabaseViewPositions": "Get Database View Positions",
   "storage.listDatabaseWebhooks": "List Database Webhooks",
