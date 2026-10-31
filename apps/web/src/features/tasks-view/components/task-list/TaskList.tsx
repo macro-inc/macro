@@ -561,7 +561,7 @@ export function TaskList(props: TaskListProps) {
                               columnCount={columnCount()}
                               groupBy={state.groupBy}
                               expanded={isGroupExpanded(group().groupId)}
-                              focused={list.focus.key() === group().id}
+                              focused={list.focus.isFocused(group().id)}
                               onFocus={() =>
                                 list.focus.set(group().id, {
                                   reason: 'hover',
@@ -598,9 +598,9 @@ export function TaskList(props: TaskListProps) {
                                 showProject={showTaskProject()}
                                 rowId={entityRow().id}
                                 entity={entityRow().entity}
-                                highlighted={
-                                  list.focus.key() === entityRow().id
-                                }
+                                highlighted={list.focus.isFocused(
+                                  entityRow().id
+                                )}
                                 checked={list.selection.isSelected(
                                   entityRow().id
                                 )}

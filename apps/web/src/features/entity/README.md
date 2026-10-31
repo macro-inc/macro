@@ -10,6 +10,10 @@ existing inline metadata area. Names and icons use the shared property preview
 cache; the row does not search for related entities. Narrow rows compact these
 pills to icons, with full names available in tooltips and the overflow menu.
 
+List selection checkmarks update without animation. Selection subscriptions notify
+only changed rows; task and project focus subscriptions update the old and new
+rows without invalidating every visible row.
+
 Task list status and priority editing use `extractors-property/task-property-control.tsx`
 in the leading icon slots before the title. Status and Urgent glyphs use 18px on
 both desktop and phones; other priority glyphs use 16px on desktop and 20px on

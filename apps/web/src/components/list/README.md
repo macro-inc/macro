@@ -60,6 +60,10 @@ instead of eagerly memoizing them in its panel-owned root. This lets mounted
 rendering choose its reactive owner while off-screen navigation reads current
 query and group pages on demand.
 
+Row selection uses keyed subscriptions: changing one selected identity notifies
+only its rows. Use `focus.isFocused(rowKey)` for row highlights so keyboard
+navigation updates only the previous and next focused rows.
+
 ### Boundary pagination
 
 `useListInteractions` accepts `navigation.onBeforeMove` for paginated

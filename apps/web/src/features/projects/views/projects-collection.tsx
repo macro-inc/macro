@@ -717,7 +717,7 @@ export function ProjectsCollection(props: {
                               expanded={collection.disclosure.isExpanded(
                                 group().groupId
                               )}
-                              focused={list.focus.key() === group().id}
+                              focused={list.focus.isFocused(group().id)}
                               onFocus={() =>
                                 list.focus.set(group().id, {
                                   reason: 'hover',
@@ -740,7 +740,7 @@ export function ProjectsCollection(props: {
                               <ProjectRow
                                 rowId={item().id}
                                 row={item().entity}
-                                highlighted={list.focus.key() === item().id}
+                                highlighted={list.focus.isFocused(item().id)}
                                 checked={list.selection.isSelected(item().id)}
                                 onFocus={() =>
                                   list.focus.set(item().id, {
