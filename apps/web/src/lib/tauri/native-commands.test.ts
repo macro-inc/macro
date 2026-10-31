@@ -34,49 +34,89 @@ function walk(node: ts.Node, visit: (node: ts.Node) => void): void {
   node.forEachChild((child) => walk(child, visit));
 }
 
-/** The named functions around `node`, innermost first, with their first parameter. */
+/** The named functions around `node`, innermost first. */
 function enclosingFunctions(
   node: ts.Node
-): Array<{ name: string; parameter: string }> {
-  const functions: Array<{ name: string; parameter: string }> = [];
+): Array<{ name: string; declaration: ts.SignatureDeclaration }> {
+  const functions: Array<{
+    name: string;
+    declaration: ts.SignatureDeclaration;
+  }> = [];
   for (let at = node.parent; at; at = at.parent) {
     if (!ts.isFunctionLike(at)) continue;
-    const first = at.parameters[0]?.name;
     const declared =
       ts.isFunctionDeclaration(at) && at.name
         ? at.name
         : ts.isVariableDeclaration(at.parent)
           ? at.parent.name
           : undefined;
-    if (
-      declared &&
-      ts.isIdentifier(declared) &&
-      first &&
-      ts.isIdentifier(first)
-    )
-      functions.push({ name: declared.text, parameter: first.text });
+    if (declared && ts.isIdentifier(declared)) {
+      functions.push({ name: declared.text, declaration: at });
+    }
   }
   return functions;
 }
 
-/** String literal values of a parameter typed as a union of literals. */
-function literalParameterValues(name: ts.Identifier): string[] | undefined {
+/** String values of a parameter type that is a union of string literals. */
+function literalUnionValues(
+  type: ts.TypeNode | undefined
+): string[] | undefined {
+  const members = type && ts.isUnionTypeNode(type) ? type.types : [type];
+  const values = members.map((member) =>
+    member && ts.isLiteralTypeNode(member) && ts.isStringLiteral(member.literal)
+      ? member.literal.text
+      : undefined
+  );
+  return values.every((value) => value !== undefined) ? values : undefined;
+}
+
+/** The variable named `name` declared directly in a block or file. */
+function localDeclaration(
+  container: ts.Node,
+  name: string
+): ts.VariableDeclaration | undefined {
+  if (!ts.isSourceFile(container) && !ts.isBlock(container)) return undefined;
+  for (const statement of container.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    const declaration = statement.declarationList.declarations.find(
+      (d) => ts.isIdentifier(d.name) && d.name.text === name
+    );
+    if (declaration) return declaration;
+  }
+  return undefined;
+}
+
+/**
+ * Values of the binding an identifier refers to, found by scope: a `const`
+ * string, a parameter typed as a literal union, or the command parameter of
+ * the wrapper being read. Anything else, a `let` included, is unreadable.
+ */
+function bindingValues(
+  name: ts.Identifier,
+  wrapper?: ts.SignatureDeclaration
+): string[] | undefined {
   for (let at = name.parent; at; at = at.parent) {
-    if (!ts.isFunctionLike(at)) continue;
-    const parameter = at.parameters.find(
-      (p) => ts.isIdentifier(p.name) && p.name.text === name.text
-    );
-    if (!parameter) continue;
-    const type = parameter.type;
-    const members = type && ts.isUnionTypeNode(type) ? type.types : [type];
-    const values = members.map((member) =>
-      member &&
-      ts.isLiteralTypeNode(member) &&
-      ts.isStringLiteral(member.literal)
-        ? member.literal.text
-        : undefined
-    );
-    return values.every((value) => value !== undefined) ? values : undefined;
+    if (ts.isFunctionLike(at)) {
+      const parameter = at.parameters.find(
+        (p) => ts.isIdentifier(p.name) && p.name.text === name.text
+      );
+      if (parameter) {
+        return at === wrapper && parameter === at.parameters[0]
+          ? [PARAMETER]
+          : literalUnionValues(parameter.type);
+      }
+    }
+    const declaration = localDeclaration(at, name.text);
+    if (declaration) {
+      const constant =
+        ts.isVariableDeclarationList(declaration.parent) &&
+        (declaration.parent.flags & ts.NodeFlags.Const) !== 0;
+      return constant &&
+        declaration.initializer &&
+        ts.isStringLiteralLike(declaration.initializer)
+        ? [declaration.initializer.text]
+        : undefined;
+    }
   }
   return undefined;
 }
@@ -84,31 +124,26 @@ function literalParameterValues(name: ts.Identifier): string[] | undefined {
 /**
  * Every value a command expression can have, or undefined when it is computed
  * from something this scan cannot read. Reads string literals, conditionals,
- * same-file string constants, and parameters typed as literal unions.
+ * templates, and the bindings `bindingValues` reads.
  */
 function commandValues(
   node: ts.Expression,
-  constants: Map<string, string>,
-  parameter?: string
+  wrapper?: ts.SignatureDeclaration
 ): string[] | undefined {
   if (ts.isStringLiteralLike(node)) return [node.text];
   if (ts.isParenthesizedExpression(node)) {
-    return commandValues(node.expression, constants, parameter);
+    return commandValues(node.expression, wrapper);
   }
   if (ts.isConditionalExpression(node)) {
-    const whenTrue = commandValues(node.whenTrue, constants, parameter);
-    const whenFalse = commandValues(node.whenFalse, constants, parameter);
+    const whenTrue = commandValues(node.whenTrue, wrapper);
+    const whenFalse = commandValues(node.whenFalse, wrapper);
     return whenTrue && whenFalse ? [...whenTrue, ...whenFalse] : undefined;
   }
-  if (ts.isIdentifier(node)) {
-    if (node.text === parameter) return [PARAMETER];
-    const constant = constants.get(node.text);
-    return constant === undefined ? literalParameterValues(node) : [constant];
-  }
+  if (ts.isIdentifier(node)) return bindingValues(node, wrapper);
   if (ts.isTemplateExpression(node)) {
     let values = [node.head.text];
     for (const span of node.templateSpans) {
-      const parts = commandValues(span.expression, constants, parameter);
+      const parts = commandValues(span.expression, wrapper);
       if (!parts) return undefined;
       values = values.flatMap((value) =>
         parts.map((part) => value + part + span.literal.text)
@@ -144,7 +179,6 @@ function scanInvokedCommands(): {
       const path = relative(repositoryRoot, file);
       const invokes = new Set<string>();
       const pluginListeners = new Set<string>();
-      const constants = new Map<string, string>();
       walk(source, (node) => {
         if (
           ts.isImportDeclaration(node) &&
@@ -160,14 +194,6 @@ function scanInvokedCommands(): {
               pluginListeners.add(element.name.text);
             }
           }
-        }
-        if (
-          ts.isVariableDeclaration(node) &&
-          ts.isIdentifier(node.name) &&
-          node.initializer &&
-          ts.isStringLiteralLike(node.initializer)
-        ) {
-          constants.set(node.name.text, node.initializer.text);
         }
       });
       const calls: ts.CallExpression[] = [];
@@ -193,9 +219,9 @@ function scanInvokedCommands(): {
         const [command] = call.arguments;
         const callee = (call.expression as ts.Identifier).text;
         if (!command || !invokes.has(callee)) continue;
-        if (commandValues(command, constants)) continue;
+        if (commandValues(command)) continue;
         for (const wrapper of enclosingFunctions(call)) {
-          const shapes = commandValues(command, constants, wrapper.parameter);
+          const shapes = commandValues(command, wrapper.declaration);
           if (shapes?.every((shape) => shape.includes(PARAMETER))) {
             wrappers.set(wrapper.name, shapes);
             wrapped.add(call);
@@ -209,7 +235,7 @@ function scanInvokedCommands(): {
         if (!command || wrapped.has(call)) continue;
         const shapes = invokes.has(callee) ? [PARAMETER] : wrappers.get(callee);
         if (pluginListeners.has(callee)) {
-          const plugins = commandValues(command, constants);
+          const plugins = commandValues(command);
           if (!plugins) unread(call);
           for (const plugin of plugins ?? []) {
             record(`plugin:${plugin}|register_listener`);
@@ -217,7 +243,7 @@ function scanInvokedCommands(): {
           continue;
         }
         if (!shapes) continue;
-        const values = commandValues(command, constants);
+        const values = commandValues(command);
         if (!values) {
           unread(call);
           continue;
