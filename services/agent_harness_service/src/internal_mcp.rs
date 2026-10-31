@@ -79,6 +79,8 @@ pub(super) struct InternalTools {
     pub(super) cognition: Option<Arc<dyn Cognition>>,
     pub(super) reviews: Arc<OnceLock<ReviewService>>,
     pub(super) gate: Arc<dyn agent_inmem::domain::tool_gate::NativeToolGate>,
+    /// Macro app origin, for links back to the calling session.
+    pub(super) app_url: Arc<str>,
 }
 
 impl ServerHandler for InternalTools {
@@ -283,6 +285,11 @@ impl ServerHandler for InternalTools {
                     service: self.service.clone(),
                     tasks: self.tasks.clone(),
                     session: grant.id,
+                    session_url: format!(
+                        "{}/app/agent/{}",
+                        self.app_url.trim_end_matches('/'),
+                        grant.id
+                    ),
                 },
                 RequestContext::new(acting_user.clone()),
                 &request.name,
