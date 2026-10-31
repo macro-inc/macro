@@ -46,7 +46,9 @@ test('a keyboard still reaches every row of a sheet and wraps around it', async 
   expect(await ringed(first)).toBe(true);
 
   // Shift+Tab with the sheet itself focused must stay inside it rather than
-  // reach the page the scrim covers.
+  // reach the page the scrim covers, landing on the last row it can focus
+  // rather than the disabled one below it.
+  await expect(sheet.getByRole('button', { name: 'New form' })).toBeDisabled();
   await sheet.evaluate((element: HTMLElement) => element.focus());
   await page.keyboard.press('Shift+Tab');
   await expect(sheet.getByRole('button', { name: 'New poll' })).toBeFocused();
