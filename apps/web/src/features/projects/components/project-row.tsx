@@ -3,6 +3,7 @@ import {
   type TaskGridColumnId,
   taskGridTemplate,
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
+import { t } from '@app/lib/i18n';
 import '@app/features/tasks-view/components/task-list/task-list.css';
 import { Entity, MultiSelectCheckbox } from '@entity';
 import ProjectIcon from '@icon/system/regular/cube.svg';
@@ -89,6 +90,13 @@ export function ProjectRow(props: {
     return Number.isNaN(date.getTime())
       ? ''
       : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+  const progressLabel = () => {
+    const total = props.row.project.taskCount ?? 0;
+    const completed = props.row.project.completedTaskCount ?? 0;
+    if (total === 0) return t('common.progressNoTasks');
+    if (completed >= total) return t('common.progressAllDone');
+    return t('common.progressTasksDone', { completed, count: total });
   };
   return (
     <PropertiesProvider
@@ -178,7 +186,7 @@ export function ProjectRow(props: {
                 }
               >
                 <ProgressPill
-                  label="Task progress"
+                  label={progressLabel()}
                   value={props.row.project.completedTaskCount ?? 0}
                   max={props.row.project.taskCount ?? 0}
                 />

@@ -794,11 +794,11 @@ end loads more projects; `Load more projects` also continues the list.
 Keyboard movement changes focus; Enter opens the focused project and
 Shift-selection opens it in a new split. Folders remain separate in Files.
 
-The Projects list's Tasks column shows a progress pill: completed/total tasks with
-a neutral ring that fills clockwise in the accent color. Zero tasks show `0/0`
-with an empty ring. Counts come from the permission-aware project summary in the
-list response, not by loading every task; they describe the project rather than
-the current task-list filters.
+The Projects list's Tasks column shows a borderless progress pill: `3 of 8 done`,
+`All done`, or `No tasks`. Its 12px neutral ring fills clockwise in the accent
+color and stays empty when there are no tasks. Counts come from the
+permission-aware project summary in the list response, not by loading every
+task; they describe the project rather than the current task-list filters.
 
 On desktop, **Project layout** offers **List** and **Gantt**. Gantt shows one
 bar per visible project from Created at to Due date, using the same search,

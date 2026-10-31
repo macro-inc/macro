@@ -1,3 +1,4 @@
+import { cn } from '../utils/classname';
 import { Badge, type BadgeSize } from './Badge';
 
 const RING_RADIUS = 6;
@@ -8,6 +9,7 @@ const INDETERMINATE_ARC = 0.25;
 export type ProgressRingProps = {
   /** A completed fraction, or null when progress is indeterminate. */
   fraction: number | null;
+  size?: 'sm' | 'md';
 };
 
 /** Decorative ring; place it inside an element that names the progress. */
@@ -22,7 +24,11 @@ export function ProgressRing(props: ProgressRingProps) {
     <svg
       viewBox="0 0 16 16"
       aria-hidden="true"
-      class={`size-4 shrink-0 ${props.fraction === null ? 'motion-safe:animate-spin' : ''}`}
+      class={cn(
+        'shrink-0',
+        props.size === 'sm' ? 'size-3' : 'size-4',
+        props.fraction === null && 'motion-safe:animate-spin'
+      )}
     >
       <circle
         cx="8"
@@ -52,7 +58,7 @@ export function ProgressRing(props: ProgressRingProps) {
 export type ProgressPillProps = {
   value: number;
   max: number;
-  /** Accessible name for the progress, for example "Tasks completed". */
+  /** Visible and accessible progress text supplied by the caller. */
   label: string;
   class?: string;
   size?: BadgeSize;
@@ -72,19 +78,20 @@ export function ProgressPill(props: ProgressPillProps) {
 
   return (
     <Badge
-      variant="outline"
+      variant="ghost"
       size={props.size ?? 'xs'}
-      class={props.class}
+      class={cn('min-w-0 max-w-full border-0', props.class)}
       role="progressbar"
       aria-label={props.label}
       aria-valuemin={0}
       aria-valuemax={total()}
       aria-valuenow={completed()}
     >
-      <ProgressRing fraction={total() > 0 ? completed() / total() : 0} />
-      <span class="tabular-nums">
-        {props.value}/{props.max}
-      </span>
+      <ProgressRing
+        size="sm"
+        fraction={total() > 0 ? completed() / total() : 0}
+      />
+      <span class="min-w-0 truncate tabular-nums">{props.label}</span>
     </Badge>
   );
 }

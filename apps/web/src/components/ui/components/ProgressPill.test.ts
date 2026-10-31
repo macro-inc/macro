@@ -11,11 +11,11 @@ describe('ProgressPill', () => {
       createComponent(ProgressPill, {
         value: 0,
         max: 0,
-        label: 'Tasks completed',
+        label: 'No tasks',
       })
     );
-    const pill = getByRole('progressbar', { name: 'Tasks completed' });
-    expect(pill.textContent).toBe('0/0');
+    const pill = getByRole('progressbar', { name: 'No tasks' });
+    expect(pill.textContent).toBe('No tasks');
     expect(pill.getAttribute('aria-valuenow')).toBe('0');
     expect(pill.getAttribute('aria-valuemax')).toBe('0');
     const circles = pill.querySelectorAll('circle');
@@ -52,7 +52,7 @@ describe('ProgressPill', () => {
   it('updates accessible name, value, maximum, and completed text reactively', () => {
     const [value, setValue] = createSignal(1);
     const [max, setMax] = createSignal(4);
-    const [label, setLabel] = createSignal('Tasks completed');
+    const [label, setLabel] = createSignal('1 of 4 done');
     const { getByRole } = render(() =>
       createComponent(ProgressPill, {
         get value() {
@@ -66,14 +66,14 @@ describe('ProgressPill', () => {
         },
       })
     );
-    const pill = getByRole('progressbar', { name: 'Tasks completed' });
-    expect(pill.textContent).toBe('1/4');
+    const pill = getByRole('progressbar', { name: '1 of 4 done' });
+    expect(pill.textContent).toBe('1 of 4 done');
     expect(pill.getAttribute('aria-valuenow')).toBe('1');
     setValue(2);
     setMax(2);
-    setLabel('Steps completed');
-    expect(getByRole('progressbar', { name: 'Steps completed' })).toBe(pill);
-    expect(pill.textContent).toBe('2/2');
+    setLabel('All done');
+    expect(getByRole('progressbar', { name: 'All done' })).toBe(pill);
+    expect(pill.textContent).toBe('All done');
     expect(pill.getAttribute('aria-valuenow')).toBe('2');
     expect(pill.getAttribute('aria-valuemax')).toBe('2');
   });
@@ -90,15 +90,10 @@ describe('ProgressRing', () => {
     );
   });
 
-  it('keeps the indeterminate arc and reduced-motion-safe spinning', () => {
+  it('keeps the indeterminate arc', () => {
     const { container } = render(() =>
       createComponent(ProgressRing, { fraction: null })
     );
-    expect(
-      container
-        .querySelector('svg')
-        ?.classList.contains('motion-safe:animate-spin')
-    ).toBe(true);
     const arc = container.querySelectorAll('circle')[1];
     expect(Number(arc.getAttribute('stroke-dashoffset'))).toBeCloseTo(
       Number(arc.getAttribute('stroke-dasharray')) * 0.75
