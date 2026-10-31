@@ -25,6 +25,7 @@ use uuid::Uuid;
 use crate::domain::{
     changes::CalendarChangeOp,
     ics::{CalendarEventExport, content_without_macro_call},
+    labels::EventCopy,
     models::{
         ActorInboxes, AlignedGuestCopy, AppliedGoogleGrant, AttendeeResponseStatus,
         CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD, CalendarAttendee, CalendarBackfillClaim,
@@ -320,6 +321,7 @@ struct VisibleCalendarRow {
     unconfirmed_reply: bool,
     provider: String,
     online_meeting_providers: Vec<String>,
+    contributes_to_availability: bool,
 }
 
 fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
@@ -347,6 +349,7 @@ fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
         is_primary: row.is_primary,
         is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
         is_subscription: is_system_calendar(&row.provider_calendar_id),
+        contributes_to_availability: row.contributes_to_availability,
         sync_error: VisibleCalendar::sync_issue(
             row.last_sync_error,
             row.consecutive_sync_failures,
@@ -415,6 +418,7 @@ const MENTION_PREVIEW_DESCRIPTION_MAX_CHARS: u16 = 4000;
 struct MentionPreviewRow {
     mention_exists: bool,
     resolved_event_id: Option<Uuid>,
+    viewer_calendar_ids: Option<Vec<Uuid>>,
     is_channel_shared: Option<bool>,
     is_snapshot: Option<bool>,
     inbox_organizes: Option<bool>,
@@ -1374,6 +1378,20 @@ impl CalendarRepository for PgCalendarRepository {
             SELECT
                 (mentioned.id IS NOT NULL) AS "mention_exists!",
                 viewer_event.id AS "resolved_event_id?",
+                ARRAY(
+                    SELECT viewer_source.calendar_id
+                    FROM calendar_event_sources viewer_source
+                    JOIN calendars viewer_calendar
+                        ON viewer_calendar.id = viewer_source.calendar_id
+                    JOIN calendar_accounts viewer_account
+                        ON viewer_account.id = viewer_source.account_id
+                    WHERE viewer_source.event_id = viewer_event.id
+                      AND NOT viewer_calendar.is_deleted
+                      AND viewer_account.sync_status <> 'disabled'
+                    ORDER BY
+                        viewer_source.id = calendar_event_canonical_source_id(viewer_event.id) DESC,
+                        viewer_source.id
+                ) AS "viewer_calendar_ids?",
                 viewer_event.is_channel_shared AS "is_channel_shared?",
                 viewer_event.is_snapshot AS "is_snapshot?",
                 viewer_event.inbox_organizes AS "inbox_organizes?",
@@ -2664,10 +2682,14 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.last_sync_error,
                 EXISTS(SELECT 1 FROM calendar_outlook_declines d
                     WHERE d.mailbox_key=calendar_outlook_mailbox_key(link.id) AND d.provider_calendar_id=calendar.provider_calendar_id AND d.confirmed_at IS NULL AND d.submitted_at<now()-interval '5 minutes') AS "unconfirmed_reply!",
-                calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers
+                calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers,
+                COALESCE(preference.contributes_to_availability,
+                    account.owner_id = $1 AND calendar.is_primary) AS "contributes_to_availability!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
+            LEFT JOIN calendar_availability_preferences preference
+                ON preference.calendar_id = calendar.id AND preference.user_id = $1
             WHERE NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'
               AND (
@@ -2693,6 +2715,55 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         Ok(rows.into_iter().map(visible_calendar).collect())
+    }
+
+    #[tracing::instrument(skip(self, event_ids), fields(event_count = event_ids.len()), err)]
+    async fn event_copies(&self, event_ids: &[Uuid]) -> Result<Vec<EventCopy>, Report> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                event.id,
+                event.source_link_id,
+                event.status,
+                event.organizer_email,
+                event.is_read_only,
+                event.is_snapshot,
+                event.guests_can_modify,
+                event.guests_can_invite_others,
+                event.guests_can_see_other_guests
+            FROM calendar_events event
+            WHERE event.id = ANY($1)
+            "#,
+            event_ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        let mut attendees = fetch_attendees(&self.pool, event_ids).await?;
+        let mut source_contents = fetch_source_contents(&self.pool, event_ids).await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| EventCopy {
+                event_id: row.id,
+                link_id: row.source_link_id,
+                status: event_status(&row.status),
+                organizer_email: row.organizer_email,
+                is_read_only: row.is_read_only,
+                is_snapshot: row.is_snapshot,
+                guest_policy: GuestPolicy {
+                    can_modify: row.guests_can_modify,
+                    can_invite_others: row.guests_can_invite_others,
+                    can_see_other_guests: row.guests_can_see_other_guests,
+                },
+                attendees: attendees.remove(&row.id).unwrap_or_default(),
+                calendar_ids: source_contents
+                    .remove(&row.id)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|source| source.calendar_id)
+                    .collect(),
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
@@ -4904,6 +4975,10 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
     Ok(CalendarMentionPreview::Accessible(Box::new(
         CalendarMentionEvent {
             viewer_event_id: (!is_channel_shared).then_some(resolved_event_id),
+            viewer_calendar_ids: row
+                .viewer_calendar_ids
+                .filter(|_| !is_channel_shared)
+                .unwrap_or_default(),
             viewer_copy: (!is_channel_shared).then(|| {
                 CalendarMentionViewerCopy::classify(
                     row.is_snapshot.unwrap_or_default(),

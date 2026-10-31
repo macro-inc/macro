@@ -1458,6 +1458,7 @@ export const SearchToolResponse = z.object({
             })
           )
           .optional(),
+        summary: z.union([z.string(), z.null()]).optional(),
       })
       .and(
         z.any().superRefine((x, ctx) => {
@@ -1898,6 +1899,39 @@ export const SearchToolResponse = z.object({
                           z.object({
                             name: z.union([z.string(), z.null()]).optional(),
                             email: z.union([z.string(), z.null()]).optional(),
+                          }),
+                          z.null(),
+                        ])
+                        .optional(),
+                      calendarName: z.union([z.string(), z.null()]).optional(),
+                      contributesToAvailability: z
+                        .union([z.boolean(), z.null()])
+                        .optional(),
+                      inbox: z.union([z.string(), z.null()]).optional(),
+                      role: z
+                        .union([
+                          z.any().superRefine((x, ctx) => {
+                            const schemas = [
+                              z.literal('organizer'),
+                              z.literal('guest'),
+                            ];
+                            const errors = schemas.reduce<z.ZodError[]>(
+                              (errors, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? [...errors, result.error]
+                                    : errors)(schema.safeParse(x)),
+                              []
+                            );
+                            if (schemas.length - errors.length !== 1) {
+                              ctx.addIssue({
+                                path: ctx.path,
+                                code: 'invalid_union',
+                                unionErrors: errors,
+                                message:
+                                  'Invalid input: Should pass single schema',
+                              });
+                            }
                           }),
                           z.null(),
                         ])
@@ -10283,6 +10317,7 @@ export const ListCalendarEventsResponse = z.object({
       }),
       calendarId: z.union([z.string().uuid(), z.null()]).optional(),
       calendarName: z.union([z.string(), z.null()]).optional(),
+      contributesToAvailability: z.union([z.boolean(), z.null()]).optional(),
       inbox: z.union([z.string(), z.null()]).optional(),
       myRole: z
         .union([
@@ -10390,6 +10425,7 @@ export const ListCalendarsToolResponse = z.object({
       emailAddress: z.string(),
       isPrimary: z.boolean(),
       isWritable: z.boolean(),
+      contributesToAvailability: z.boolean(),
     })
   ),
   summary: z.string(),
@@ -12470,6 +12506,7 @@ export const ReadCalendarEventResponse = z.object({
   access: z.any().superRefine((x, ctx) => {
     const schemas = [
       z.literal('on_your_calendar'),
+      z.literal('on_visible_calendar'),
       z.literal('invited'),
       z.literal('snapshot'),
       z.literal('shared_with_you'),
@@ -12490,6 +12527,7 @@ export const ReadCalendarEventResponse = z.object({
       });
     }
   }),
+  calendarName: z.union([z.string(), z.null()]).optional(),
   eventId: z.union([z.string().uuid(), z.null()]).optional(),
   title: z.string(),
   start: z.string(),

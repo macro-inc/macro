@@ -1079,6 +1079,50 @@ async fn conditions_do_not_change_candidate_matching(pool: PgPool) {
     admit(&repo, id, &event).await;
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_keeps_its_change_source_and_writes_the_key_only_when_set(pool: PgPool) {
+    let sourced_action = action(&pool, json!([{"events":["task.status_changed"]}])).await;
+    let plain_action = action(&pool, json!([{"events":["task.status_changed"]}])).await;
+    let repo = PgEventRunRepo::new(pool.clone());
+    let sourced: EventReference = serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(),
+        "event_name": "task.status_changed",
+        "entity_id": generate_uuid_v7(),
+        "message_id": null,
+        "change_source": {
+            "type": "github_pull_request",
+            "url": "https://github.com/my-org/my-repo/pull/42",
+            "account": { "id": "444", "login": "someone-else" },
+        },
+    }))
+    .unwrap();
+    let plain: EventReference = serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(),
+        "event_name": "task.status_changed",
+        "entity_id": generate_uuid_v7(),
+        "message_id": null,
+    }))
+    .unwrap();
+
+    admit(&repo, sourced_action, &sourced).await;
+    admit(&repo, plain_action, &plain).await;
+
+    let pending = repo.pending_runs(page(100)).await.unwrap();
+    let run = pending
+        .iter()
+        .find(|run| run.action_id == sourced_action)
+        .unwrap();
+    assert_eq!(run.event, sourced);
+    let plain_context = sqlx::query_scalar!(
+        "SELECT event_context FROM scheduled_action_event_run WHERE action_id = $1",
+        plain_action,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(plain_context.get("change_source").is_none());
+}
+
 fn github_event(event: &str) -> EventReference {
     serde_json::from_value(json!({
         "event_id": generate_uuid_v7(),

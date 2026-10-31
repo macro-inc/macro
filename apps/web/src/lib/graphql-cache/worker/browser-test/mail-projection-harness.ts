@@ -545,7 +545,11 @@ await host.writeQuery({
             properties: [],
             isFavorited: false,
             mailAllPreview:
-              n === 7 ? null : preview(n + 10000, `Email ${n}`, false),
+              n === 7 ||
+              (new URLSearchParams(location.search).has('excluded-mail') &&
+                (n === 68 || n === 69))
+                ? null
+                : preview(n + 10000, `Email ${n}`, false),
             mailDraftPreview:
               n % 3 === 0 && n !== 7
                 ? preview(n + 20000, `Draft ${n}`, true)

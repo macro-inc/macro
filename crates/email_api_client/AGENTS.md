@@ -54,6 +54,9 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Gotchas
 
+- Undated provider drafts use creation time for All Mail eligibility; spam/junk
+  and trash remain excluded. Keep ingestion, recomputation, and cached projections aligned.
+
 - `#![deny(missing_docs)]`.
 - The service is generic over `<R, T, L>` (repository, token source, request
   gate) — add a new dependency as a port + generic bound, not a concrete

@@ -1,4 +1,5 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -30,13 +31,7 @@ export const makeMoveToProjectAction = (options: MakeMoveToProjectOptions) => {
     openBulkEditModal({
       view: 'moveToProject',
       entities,
-      onFinish: () => {
-        toast.success(
-          entities.length > 1
-            ? t('entityActions.toastMovedCount', { count: entities.length })
-            : t('entityActions.toastMovedToFolder')
-        );
-      },
+      onMoved: (folder) => toastMovedToFolder(entities.length, folder.id),
       onError: () => toast.failure(t('entityActions.toastMoveToFolderFailed')),
     });
   };
@@ -52,16 +47,12 @@ export const makeMoveToProjectAction = (options: MakeMoveToProjectOptions) => {
     openBulkEditModal({
       view: 'moveToProject',
       entities,
-      onFinish: () => {
+      onMoved: (folder) => {
         soup.selection.clear();
         if (nextRow) {
           soup.focus.set(nextRow.id);
         }
-        toast.success(
-          entities.length > 1
-            ? t('entityActions.toastMovedCount', { count: entities.length })
-            : t('entityActions.toastMovedToFolder')
-        );
+        toastMovedToFolder(entities.length, folder.id);
         fireAndForget(restoreSoupFocus(nextRow?.id), 'entity-actions');
       },
       onError: () => toast.failure(t('entityActions.toastMoveToFolderFailed')),

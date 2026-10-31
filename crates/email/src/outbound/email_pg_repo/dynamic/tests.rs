@@ -565,8 +565,8 @@ fn test_build_query_shared_include_uses_union_instead_of_or() {
 }
 
 #[test]
-fn test_build_query_projects_real_updated_at_for_candidate_threads() {
-    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+fn test_build_query_preserves_thread_updated_at_outside_all_mail() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
     let expr = Expr::Literal(EmailLiteral::Shared(
         item_filters::SharedEmailFilter::Include,
     ));

@@ -168,6 +168,15 @@ function applyDraftState(
     emptyAggregate()
   );
   const all = mergeAggregate(state.baseline, drafts);
+  // A provider draft in junk can remain in Drafts, but cannot supply All Mail's
+  // preview. Each draft's non-spam timestamp records that eligibility.
+  const allPreview = state.drafts.reduce(
+    (sum, entry) =>
+      entry.facts.latestNonSpamMessageTs === null
+        ? sum
+        : mergeAggregate(sum, entry.facts),
+    state.baseline
+  ).preview;
   // Read/unread mutations can update the canonical thread before the message
   // aggregate is refreshed. Preserve that newer intent across draft edits;
   // otherwise deleting the sole unread draft still recomputes the read state.
@@ -190,13 +199,13 @@ function applyDraftState(
     isRead: hasNewerReadIntent ? existing.isRead : all.isRead,
     isSignal: all.isSignal,
     isImportant: all.isSignal,
-    displayName: all.preview?.subject ?? null,
-    emailName: all.preview?.subject ?? null,
-    snippet: all.preview?.snippet ?? null,
-    senderEmail: all.preview?.senderEmail ?? null,
-    senderName: all.preview?.senderName ?? null,
-    senderPhotoUrl: all.preview?.senderPhotoUrl ?? null,
-    mailAllPreview: all.preview,
+    displayName: allPreview?.subject ?? null,
+    emailName: allPreview?.subject ?? null,
+    snippet: allPreview?.snippet ?? null,
+    senderEmail: allPreview?.senderEmail ?? null,
+    senderName: allPreview?.senderName ?? null,
+    senderPhotoUrl: allPreview?.senderPhotoUrl ?? null,
+    mailAllPreview: allPreview,
     mailDraftPreview: drafts.preview,
   };
 }
@@ -237,9 +246,11 @@ export function updateDraftThread(
           latestInboundMessageTs: previous.macroDraft
             ? fresh.facts.latestInboundMessageTs
             : previous.facts.latestInboundMessageTs,
-          latestNonSpamMessageTs: previous.macroDraft
-            ? draft.updatedAt
-            : previous.facts.latestNonSpamMessageTs,
+          latestNonSpamMessageTs:
+            previous.macroDraft &&
+            previous.facts.latestNonSpamMessageTs !== null
+              ? draft.updatedAt
+              : previous.facts.latestNonSpamMessageTs,
           preview: previous.facts.preview ? fresh.facts.preview : null,
         },
       }

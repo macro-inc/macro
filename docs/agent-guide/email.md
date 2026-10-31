@@ -391,7 +391,26 @@ headers use the selected Mail view's indexed timestamps, not a preview cached fr
 another view. Drafts and Sent display their latest eligible message snapshot, even
 when a newer normal message is the ALL preview; no message bodies are needed.
 Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
-any preview. Calendar uses the authoritative thread calendar-attachment flag.
+any preview. All Mail also excludes spam/junk, including its cached preview and
+non-draft baseline after draft edits. Mixed threads show the latest message outside
+spam and trash; excluded messages must not consume a page slot. Drafts and Sent
+keep their own canonical preview membership. Mail profiles v5/v6 require fresh
+server metadata after upgrading, so older spam-inclusive cache entries cannot
+reappear. HTTP and WebSocket clients explicitly negotiate the Mail capsule profile.
+Absent/unknown capabilities receive legacy v2 capsules, preserving old native draft
+queue admission. Browsers advertise v5; native clients do so only after verifying
+installed iOS build 193 or Android build 20 (unknown/desktop builds retain v2).
+Native discovery falls back to v2 after 1.5 seconds and retains that result for
+the session, so unavailable IPC cannot indefinitely delay GraphQL requests.
+The HTTP transport and WebSocket connection-parameter spans record the selected
+profile and whether discovery used the browser, a supported/unsupported native
+build, failed, or timed out; they do not include native error text.
+Current engines treat v2 capsules as incomplete and use the network for Mail lists.
+Deploy the backend (including its CORS capability header) before the new frontend.
+The backend can deploy before store releases; native v5 offline behavior still
+requires the corresponding native cache update.
+Verify Gmail labels and Outlook
+folder state. Calendar uses the authoritative thread calendar-attachment flag.
 
 A successful authoritative `Soup` first page also invalidates cached Mail facts
 that match its supported view/filter but are missing inside its covered sort

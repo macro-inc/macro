@@ -125,13 +125,13 @@ async fn lists(pool: &Pool<Postgres>) -> anyhow::Result<Lists> {
         .await?;
         Ok::<_, anyhow::Error>(rows.into_iter().map(|row| row.id).collect::<Vec<_>>())
     };
-    use super::super::preview_views::{all_mail, draft, important, new_inbox};
+    use super::super::preview_views::{draft, important, new_inbox};
     Ok(Lists {
         drafts: ids(draft::drafts_preview_cursor(pool, &[LINK], 50, &query()).await?),
         drafts_dynamic: dynamic(PreviewViewStandardLabel::Drafts).await?,
         inbox: ids(new_inbox::new_inbox_preview_cursor(pool, &[LINK], 50, &query()).await?),
         inbox_dynamic: dynamic(PreviewViewStandardLabel::Inbox).await?,
-        all: ids(all_mail::all_mail_preview_cursor(pool, &[LINK], 50, &query()).await?),
+        all: dynamic(PreviewViewStandardLabel::All).await?,
         important: ids(important::important_preview_cursor(pool, &[LINK], 50, &query()).await?),
         important_dynamic: dynamic(PreviewViewStandardLabel::Important).await?,
         sent_dynamic: dynamic(PreviewViewStandardLabel::Sent).await?,
@@ -265,11 +265,18 @@ async fn follow_up_step_hides_from_drafts_but_not_from_sent(
 }
 
 async fn all_mail_preview_names(pool: &Pool<Postgres>) -> anyhow::Result<Vec<Option<String>>> {
-    let rows = super::super::preview_views::all_mail::all_mail_preview_cursor(
+    let rows = dynamic::dynamic_email_thread_cursor(
         pool,
         &[LINK],
         50,
-        &Query::new(None, SimpleSortMethod::UpdatedAt, ()),
+        &PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+        Query::new(
+            None,
+            SimpleSortMethod::UpdatedAt,
+            Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(false))),
+        ),
+        actor().as_ref(),
+        None,
     )
     .await?;
     Ok(rows

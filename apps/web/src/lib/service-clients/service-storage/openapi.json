@@ -22509,6 +22509,14 @@
             "format": "date-time",
             "description": "Entity update time of the previewed copy."
           },
+          "viewerCalendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The calendars holding `viewer_event_id`, the canonical copy's first."
+          },
           "viewerCopy": {
             "oneOf": [
               {

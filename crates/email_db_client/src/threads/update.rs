@@ -231,7 +231,7 @@ pub async fn recompute_thread_metadata(
                 max(internal_date_ts) FILTER (WHERE in_inbox AND NOT is_draft AND (NOT is_sent OR sender_is_recipient)) AS received_ts,
                 max(updated_at) FILTER (WHERE macro_draft) AS draft_ts,
                 max(internal_date_ts) FILTER (WHERE is_sent AND NOT in_trash) AS outbound_ts,
-                greatest(max(internal_date_ts) FILTER (WHERE NOT in_trash AND NOT in_junk),max(updated_at) FILTER (WHERE macro_draft)) AS all_ts
+                greatest(max(COALESCE(internal_date_ts, CASE WHEN is_draft THEN created_at END)) FILTER (WHERE NOT in_trash AND NOT in_junk),max(updated_at) FILTER (WHERE macro_draft AND NOT in_trash AND NOT in_junk)) AS all_ts
             FROM facts
         ), effective AS (
             -- A Macro draft brings a thread back to the inbox only as a reply to received mail.

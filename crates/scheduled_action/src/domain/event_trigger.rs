@@ -1,9 +1,10 @@
 //! Routine-owned event eligibility and exact selector matching.
 //!
 //! Adapters strip the broker envelope into [`IncomingEvent`]. Only explicitly
-//! allowlisted human actions, inbound emails, call lifecycle events and GitHub
-//! App deliveries become [`EventReference`]s. GitHub deliveries can also be
-//! filtered on exact payload values.
+//! allowlisted human actions, inbound emails, call lifecycle events, task status
+//! changes from GitHub pull requests and GitHub App deliveries become
+//! [`EventReference`]s. GitHub deliveries can also be filtered on exact payload
+//! values.
 
 use activity::Actor;
 use call::domain::events::CallTopicEvent;
@@ -26,6 +27,7 @@ use messages::domain::{
     models::MessageParent,
 };
 use models_properties::EntityType as PropertyEntityType;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use properties::domain::events::PropertyTopicEvent;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -571,8 +573,9 @@ impl EventId {
     }
 }
 
-/// Durable context. A Macro event keeps no content, actor, owner or full
-/// envelope: dispatch reads its content again, as the routine's owner. An
+/// Durable context. A Macro event keeps no content, owner or full envelope:
+/// dispatch reads its content again, as the routine's owner. Its only actor is
+/// the GitHub account in a change source, which nothing else records. An
 /// external delivery has nothing to read again, so it keeps its payload.
 /// The entity kind and publication timestamp derive from the name and event ID.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -586,10 +589,12 @@ pub struct EventReference {
 /// What an event is about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EventSource {
-    /// A Macro entity, and the message the event concerns.
+    /// A Macro entity, the message the event concerns, and what outside Macro
+    /// changed it.
     Entity {
         entity_id: Uuid,
         message_id: Option<Uuid>,
+        change_source: Option<PropertyChangeSource>,
     },
     /// A delivery from Macro's GitHub App. Boxed: it carries its payload.
     Github(Box<GithubWebhookReceived>),
@@ -607,6 +612,8 @@ struct EventReferenceInput {
     message_id: Option<Option<Uuid>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     github: Option<Box<GithubWebhookReceived>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    change_source: Option<PropertyChangeSource>,
 }
 
 fn skip_message_id(message_id: &Option<Option<Uuid>>) -> bool {
@@ -627,9 +634,14 @@ impl TryFrom<EventReferenceInput> for EventReference {
                 EventSource::Entity {
                     entity_id,
                     message_id,
+                    change_source: input.change_source,
                 }
             }
-            (None, Some(delivery)) if name == EventName::Github => EventSource::Github(delivery),
+            (None, Some(delivery))
+                if name == EventName::Github && input.change_source.is_none() =>
+            {
+                EventSource::Github(delivery)
+            }
             _ => return Err(EventRejection::InvalidContext),
         };
         Ok(Self {
@@ -648,14 +660,17 @@ impl From<EventReference> for EventReferenceInput {
             entity_id: None,
             message_id: None,
             github: None,
+            change_source: None,
         };
         match event.source {
             EventSource::Entity {
                 entity_id,
                 message_id,
+                change_source,
             } => {
                 input.entity_id = Some(entity_id);
                 input.message_id = Some(message_id);
+                input.change_source = change_source;
             }
             EventSource::Github(delivery) => input.github = Some(delivery),
         }
@@ -686,6 +701,12 @@ impl EventReference {
     pub fn message_id(&self) -> Option<Uuid> {
         match self.source {
             EventSource::Entity { message_id, .. } => message_id,
+            EventSource::Github(_) => None,
+        }
+    }
+    pub fn change_source(&self) -> Option<&PropertyChangeSource> {
+        match &self.source {
+            EventSource::Entity { change_source, .. } => change_source.as_ref(),
             EventSource::Github(_) => None,
         }
     }
@@ -799,6 +820,7 @@ impl IncomingEvent {
             return Err(EventRejection::UnsupportedSchema);
         }
         let event_id = EventId::try_from(self.event_id)?;
+        let mut change_source = None;
         let (event_name, entity_id, message_id) = match &self.payload {
             EventPayload::Document(event) => {
                 let (name, id) = match event {
@@ -885,8 +907,9 @@ impl IncomingEvent {
                 MessageFact::Other => return Err(EventRejection::UnsupportedEvent),
             },
             EventPayload::Property(event) => {
-                let (name, id) = task_property_event(event)?;
+                let (name, id, property_source) = task_property_event(event)?;
                 let id = Uuid::parse_str(id).map_err(|_| EventRejection::InvalidEntityId)?;
+                change_source = property_source;
                 (name, id, None)
             }
             EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => {
@@ -934,13 +957,16 @@ impl IncomingEvent {
             source: EventSource::Entity {
                 entity_id,
                 message_id,
+                change_source,
             },
         })
     }
 }
 
-fn task_property_event(event: &PropertyTopicEvent) -> Result<(EventName, &str), EventRejection> {
-    let (entity_type, entity_id, property_id, actor, fallback, delegated) = match event {
+fn task_property_event(
+    event: &PropertyTopicEvent,
+) -> Result<(EventName, &str, Option<PropertyChangeSource>), EventRejection> {
+    let (entity_type, entity_id, property_id, actor, fallback, delegated, source) = match event {
         PropertyTopicEvent::EntityPropertyUpdated(data) => {
             if data.value == data.previous_value {
                 return Err(EventRejection::UnsupportedEvent);
@@ -952,6 +978,7 @@ fn task_property_event(event: &PropertyTopicEvent) -> Result<(EventName, &str), 
                 data.actor.as_ref(),
                 data.actor_user_id.as_ref(),
                 data.on_behalf_of.is_some(),
+                data.source.clone(),
             )
         }
         PropertyTopicEvent::EntityPropertyDeleted(data) => (
@@ -961,6 +988,7 @@ fn task_property_event(event: &PropertyTopicEvent) -> Result<(EventName, &str), 
             data.actor.as_ref(),
             data.actor_user_id.as_ref(),
             data.on_behalf_of.is_some(),
+            None,
         ),
         PropertyTopicEvent::EntityPropertiesCleared(data) => (
             &data.entity_type,
@@ -969,6 +997,7 @@ fn task_property_event(event: &PropertyTopicEvent) -> Result<(EventName, &str), 
             data.actor.as_ref(),
             data.actor_user_id.as_ref(),
             data.on_behalf_of.is_some(),
+            None,
         ),
         _ => return Err(EventRejection::UnsupportedEvent),
     };
@@ -976,11 +1005,18 @@ fn task_property_event(event: &PropertyTopicEvent) -> Result<(EventName, &str), 
     if *entity_type != PropertyEntityType::Task {
         return Err(EventRejection::UnsupportedEvent);
     }
-    document_actor(actor, fallback, delegated)?;
     let name = match property_id {
         Some(SystemPropertyKey::STATUS_UUID) => EventName::TaskStatusChanged,
         Some(SystemPropertyKey::PRIORITY_UUID) => EventName::TaskPriorityChanged,
         _ => EventName::TaskPropertyChanged,
     };
-    Ok((name, entity_id))
+    // GitHub reports what happened to a pull request whether or not its account
+    // has a Macro user, so its status changes need no Macro actor. An actor that
+    // is present still has to be a person.
+    let from_github =
+        name == EventName::TaskStatusChanged && source.is_some() && actor.is_none() && !delegated;
+    if !from_github {
+        document_actor(actor, fallback, delegated)?;
+    }
+    Ok((name, entity_id, source))
 }

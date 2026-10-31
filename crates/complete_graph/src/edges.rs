@@ -113,7 +113,17 @@ where
         let projection = load_email_thread_mail_projection::<ER>(ctx, thread_id).await?;
         let facts = &projection.cache_facts;
         let record_key = RecordKey::new(format!("GraphqlSoupEmailThread:{thread_id}"))?;
-        let supplement = SoupCacheProjectionSupplement::mail(
+        let build_supplement = if ctx
+            .data_opt::<crate::MailCacheProfile>()
+            .copied()
+            .unwrap_or_default()
+            .is_current()
+        {
+            SoupCacheProjectionSupplement::mail
+        } else {
+            SoupCacheProjectionSupplement::mail_legacy_v2
+        };
+        let supplement = build_supplement(
             record_key,
             MailCacheProjectionFacts::new(
                 facts.latest_non_spam_message_ts.map(utc_timestamp_micros),

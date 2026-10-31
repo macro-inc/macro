@@ -335,9 +335,17 @@
           "isReadOnly"
         ],
         "properties": {
+          "calendarName": {
+            "type": ["string", "null"],
+            "description": "Display name of the calendar holding this copy. Absent on an event\nshared with the user, which is on none of their calendars."
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct conference join URL when known."
+          },
+          "contributesToAvailability": {
+            "type": ["boolean", "null"],
+            "description": "Whether a calendar holding this copy is on the user's schedule. The\nuser can see calendars that are not theirs, such as a colleague's: a\nrow without this, and that they do not attend, says what that calendar\nshows, not where the user is."
           },
           "createdAt": {
             "type": "string",
@@ -346,6 +354,10 @@
           "description": {
             "type": ["string", "null"],
             "description": "Free-text description, when the event carries one. May contain HTML from\nthe source; clients render a plain-text preview."
+          },
+          "inbox": {
+            "type": ["string", "null"],
+            "description": "The connected inbox syncing that calendar. It stays the user's own\naddress on a colleague's calendar, so it never says whose calendar it\nis."
           },
           "isReadOnly": {
             "type": "boolean",
@@ -373,7 +385,18 @@
               },
               {
                 "$ref": "#/components/schemas/CalendarEventOrganizer",
-                "description": "The event's organizer (creator), when the source names one."
+                "description": "The organizer the provider names, when it names one."
+              }
+            ]
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEventSearchRole",
+                "description": "Whether the user organizes this copy or is a guest on it. Absent when\nthey are neither, when they can only write that calendar, or when a\nread-only calendar names them organizer."
               }
             ]
           },
@@ -393,7 +416,7 @@
       },
       "CalendarEventOrganizer": {
         "type": "object",
-        "description": "The event's organizer — its creator, in Google's model. Either field can be\nabsent when the source does not name it.",
+        "description": "The organizer the provider names on the event. Either field can be absent\nwhen the source does not name it. On a read-only Outlook calendar, such as\nits holidays, Microsoft names the mailbox owner on every event, so this\ndoes not say the user organized anything: `role` does.",
         "properties": {
           "email": {
             "type": ["string", "null"],
@@ -503,6 +526,11 @@
             "description": "The score of the result"
           }
         }
+      },
+      "CalendarEventSearchRole": {
+        "type": "string",
+        "description": "What the user is on one copy of an event, through the inbox holding it.",
+        "enum": ["organizer", "guest"]
       },
       "CalendarEventSearchScope": {
         "type": "string",

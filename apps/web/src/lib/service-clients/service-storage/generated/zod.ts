@@ -1469,6 +1469,12 @@ export const mentionPreviewsResponse = zod
                   updatedAt: zod.iso
                     .datetime({})
                     .describe('Entity update time of the previewed copy.'),
+                  viewerCalendarIds: zod
+                    .array(zod.uuid())
+                    .optional()
+                    .describe(
+                      "The calendars holding `viewer_event_id`, the canonical copy's first."
+                    ),
                   viewerCopy: zod
                     .union([
                       zod.null(),

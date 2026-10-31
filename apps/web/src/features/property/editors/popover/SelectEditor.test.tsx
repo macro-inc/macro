@@ -93,6 +93,7 @@ function setup(value = property) {
   const [editorOpen, setEditorOpen] = createSignal(true);
   const context: PropertyRootContextValue = {
     property: () => value,
+    pickedEntityName: () => undefined,
     canEdit: () => true,
     editorOpen,
     openEditor: () => setEditorOpen(true),

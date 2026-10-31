@@ -136,8 +136,10 @@ opened event is reflected in the pane-owned `sN.calendar.eventId` search paramet
 
 Opening a calendar row in Home clears its loaded reminder dots immediately;
 failed read writes restore them. Opening event details directly from the grid
-also marks the event's notifications read. Verify both on desktop and mobile,
-including a delayed read response and a failed write followed by another click.
+or by a link to the event also marks the event's notifications read, a join
+request's included: seen is not answered, so the row stays listed until the
+request is settled. Verify these on desktop and mobile, including a delayed read
+response and a failed write followed by another click.
 
 Period selection updates its label and route immediately. The active grid redraws
 on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
@@ -880,12 +882,21 @@ says `You've asked to join this event` and refreshes to `Requested` or `Invited`
 notification (Settings → Notifications → Calendar → Requests to join), which Home lists as
 `<requester> asked to join <event>` with a person-plus glyph, like a comment row. It opens the event,
 whose details list each request with `Add as guest` and `Decline` on desktop and in the phone
-drawer. Adding writes the guest through the same invite path as `Add guests`, so Google or
+drawer. A new request appears in details already open, for the owner and delegates of the sharer's
+inbox, without a reload; a repeated or refused ask changes nothing there. Adding writes the guest through the same invite path as `Add guests`, so Google or
 Outlook sends the invitation and the mention then opens the viewer's own copy. Declining sends
 the requester nothing, but their card then reads `Declined` and `The person who shared this event
 declined your request to join.` with no `Ask to join`, and offers `Add to calendar` again. A
 declined request stands: the server refuses another ask with 409 `request_declined`, so the
-sharer is asked only once. A classic `@Macro` reply that
+sharer is asked only once. An answer given anywhere else (a delegate, the API, another window)
+drops the request from an open list and updates the requester's open card, without a reload. A
+press on a row that had not caught up changes nothing and says so: `Already answered: <address> was
+invited` or `Already answered: this request was declined`. The notification goes when the request is answered, by whoever answers
+it and however they do, leaving the notifications of other requests on the event, when the
+requester's account is deleted, and when the event goes (deleted in Macro, deleted or cancelled in
+Google or Outlook, its calendar or inbox removed); deleting one occurrence of a series leaves it,
+since the sharer can still add the guest.
+A classic `@Macro` reply that
 mentions an event does not share
 it by posting the chip. It asks whether to share with the channel, and a yes in that thread
 writes the same channel grant. Private and confidential events are never shared this way.

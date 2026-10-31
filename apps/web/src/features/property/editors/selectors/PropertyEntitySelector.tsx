@@ -49,7 +49,7 @@ type EntityInputProps = {
   selectedOptions: () => Set<string>;
   setSelectedOptions: (
     options: Set<string>,
-    entityInfo?: { id: string; entity_type: EntityType }[]
+    entityInfo?: { id: string; entity_type: EntityType; name: string }[]
   ) => void;
   onClose?: () => void;
   /** Escape in the search; `onClose` when absent, as a popover saves on close. */
@@ -369,6 +369,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       {
         id: entity.id,
         entity_type: entityType,
+        name: getEntityName(entity),
       },
     ]);
 

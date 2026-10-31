@@ -473,18 +473,13 @@ pub(super) fn build_thread_address_filter(ast: &Expr<EmailLiteral>) -> SqlFragme
 /// per-message filter the address CTE doesn't model — a non-empty
 /// view-level message filter (Starred / Drafts / Important / …). Without
 /// this, the candidate `LIMIT` counts threads that the lateral later
-/// drops, so the page under-fills while still emitting a cursor.
-///
-/// All Mail without an address filter checks the same way, so a thread
-/// holding only pending sequence steps can't take a slot and end pagination.
-/// Inbox needs no check: `inbox_visible` comes from the thread projection,
-/// which already leaves those steps out.
-pub(super) fn wants_message_exists_pushdown(view: &PreviewView, ast: &Expr<EmailLiteral>) -> bool {
+/// drops, so the page under-fills while still emitting a cursor. The EXISTS
+/// uses the lateral's visible-message check, so a thread holding only pending
+/// sequence steps can't take a slot either. Inbox needs no check:
+/// `inbox_visible` comes from the thread projection, which already leaves
+/// those steps out.
+pub(super) fn wants_message_exists_pushdown(view: &PreviewView) -> bool {
     !build_view_message_filter(view).is_empty()
-        || (matches!(
-            view,
-            PreviewView::StandardLabel(PreviewViewStandardLabel::All)
-        ) && !has_message_literals(ast))
 }
 
 /// Builds the candidate-stage mirror of the lateral message match:
@@ -950,8 +945,10 @@ pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
 /// Builds message-level WHERE conditions based on the view type
 pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
     match view {
-        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox)
-        | PreviewView::StandardLabel(PreviewViewStandardLabel::All) => SqlFragment::empty(),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => SqlFragment::empty(),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => SqlFragment::raw(
+            " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND NOT mf.in_junk)",
+        ),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             SqlFragment::raw(" AND m.is_sent = TRUE")
         }

@@ -123,6 +123,12 @@ fn push_thread_candidate_select(
     source: ThreadCandidateSource,
 ) {
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
+    // All Mail displays the latest eligible message date, even when a newer
+    // junk/trash message or a read-state write updates the thread metadata.
+    let updated_at_field = match view {
+        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => sort_ts_field,
+        _ => "t.updated_at",
+    };
 
     // Owned scans fan out one ordered, LIMITed subscan per link.
     // `link_id = ANY(...)` cannot return index order, even for a single id,
@@ -166,7 +172,7 @@ fn push_thread_candidate_select(
         builder.push(format!(
             r#"
                     {field} AS created_at,
-                    t.updated_at AS updated_at,
+                    {updated_at_field} AS updated_at,
                     {field} AS effective_ts"#,
             field = sort_ts_field
         ));
@@ -174,7 +180,7 @@ fn push_thread_candidate_select(
         builder.push(format!(
             r#"
                     {} AS created_at,
-                    t.updated_at AS updated_at,
+                    {updated_at_field} AS updated_at,
                     uh.updated_at AS viewed_at,
                     CASE "#,
             sort_ts_field
@@ -335,15 +341,22 @@ fn push_thread_candidate_select(
     }
 
     // Ensure the candidate LIMIT only counts threads that will survive the
-    // CROSS JOIN LATERAL's message match. When the view needs it (see
-    // `wants_message_exists_pushdown`) mirror the full lateral predicate as a
-    // correlated EXISTS; otherwise push address-only constraints through the
-    // index-driven `matching_threads` CTE referenced via
+    // CROSS JOIN LATERAL's message match. When a view-level message filter
+    // is in play mirror the full lateral predicate as a correlated EXISTS;
+    // otherwise push address-only constraints through the index-driven
+    // `matching_threads` CTE referenced via
     // `t.id IN (SELECT thread_id FROM matching_threads)`.
-    if wants_message_exists_pushdown(view, email_filter) {
+    if wants_message_exists_pushdown(view) {
         build_thread_message_exists_filter(email_filter, view, &params.resolved)
             .push_into(builder, &params.user_id);
-    } else if has_address_literals(email_filter) {
+    }
+    if has_address_literals(email_filter)
+        && (!wants_message_exists_pushdown(view)
+            || matches!(
+                view,
+                PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+            ))
+    {
         build_thread_address_filter(email_filter).push_into(builder, &params.user_id);
     }
 
@@ -438,10 +451,14 @@ fn build_query(
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
-    // When the candidate stage pushes a full per-message EXISTS, it already
-    // enforces "thread has a message the lateral will surface", so the
-    // address-only `matching_threads` CTE is redundant.
-    let matching_threads = if wants_message_exists_pushdown(view, email_filter) {
+    // All Mail keeps its index-driven address prefilter as well as the exact
+    // message check, so large mailbox/CRM queries do not scan every thread.
+    // Other message-filtered views retain their correlated EXISTS plan.
+    let matching_threads = if wants_message_exists_pushdown(view)
+        && !matches!(
+            view,
+            PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+        ) {
         None
     } else {
         // Owned-only queries can scope the CTE's contact/message scans to

@@ -2168,6 +2168,28 @@ async fn flat_soup_emits_server_fact_supplements_for_documents_and_mail() {
             .unwrap()
     );
     assert!(mail_supplement.mail_facts().is_some());
+    assert_eq!(
+        mail_supplement.target_profile().token().as_str(),
+        "soup-mail-v2"
+    );
+    let current = harness.schema.execute(
+        harness.request("{ user { soup(input: {initial: {}}) { items { __typename cacheProjection } } } }", authenticated_parts())
+            .data(crate::MailCacheProfile::from_advertised(Some("soup-mail-v5")))
+    ).await;
+    assert!(current.errors.is_empty(), "{:?}", current.errors);
+    let current = current.data.into_json().unwrap();
+    let current = current["user"]["soup"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["__typename"] == "GraphqlSoupEmailThread")
+        .unwrap();
+    let current = soup_filter_projection::decode_cache_projection_supplement(
+        current["cacheProjection"].as_str().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(current.target_profile().token().as_str(), "soup-mail-v5");
+    assert_eq!(current.mail_facts(), mail_supplement.mail_facts());
     for (typename, id) in [
         ("GraphqlSoupProject", project_id),
         ("GraphqlSoupChat", chat_id),
