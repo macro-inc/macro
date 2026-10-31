@@ -7,6 +7,7 @@
 # typescript/no-floating-promises, so apps/web files are linted --type-aware.
 #
 #   just check        fast: rustfmt + biome + oxlint + ast-grep + PII   (~seconds)
+#                     + browser floor and native permissions (tooling/platform-compat)
 #   just check full   also runs tsc + clippy                      (~minutes)
 #
 # Override the diff base with CHECK_BASE=<ref> (useful in shallow clones,
@@ -30,7 +31,7 @@ check *ARGS:
 
     rs=$(grep -E '^(crates|services|tooling)/.*\.rs$' <<<"$changed" || true)
     # Match the SDK and collaboration Biome configs: preserve generator output verbatim.
-    js=$(grep -E '^(apps/(web|marketing)|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" | grep -Ev '^packages/(sdk/generated|collaboration/src/sync-service/generated)/' || true)
+    js=$(grep -E '^(apps/(web|marketing)|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service)|tooling/platform-compat)/.*\.(ts|tsx)$' <<<"$changed" | grep -Ev '^packages/(sdk/generated|collaboration/src/sync-service/generated)/' || true)
     sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx)$' <<<"$changed" || true)
 
     fail=0
@@ -99,6 +100,25 @@ check *ARGS:
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/development/style-guide.md)"
       bunx --yes @ast-grep/cli@0.44.1 scan --report-style=short $sg || fail=1
+    fi
+    # A changed floor or rule rechecks all of the web sources (~40 s).
+    # lint-web.ts skips files outside its configured web sources.
+    web_src=$(grep -E '^(apps/web/src|packages)/.*\.(ts|tsx)$' <<<"$changed" || true)
+    compat_changed=$(grep -E '^(apps/web/package\.json|tooling/platform-compat/)' <<<"$changed" || true)
+    native_changed=$(grep -E '^(apps/web/tauri/(src-tauri|desktop-cef)/(.*\.plist|tauri.*\.json)|tooling/platform-compat/)' <<<"$changed" || true)
+    if [ -n "$web_src$compat_changed$native_changed" ] && [ ! -d tooling/platform-compat/node_modules ]; then
+      (\cd tooling/platform-compat && bun install --frozen-lockfile) || fail=1
+    fi
+    if [ -n "$compat_changed" ]; then
+      echo "── browser floor (all web sources vs apps/web/package.json browserslist)"
+      (\cd tooling/platform-compat && ./node_modules/.bin/tsc -p . && bun test && bun src/lint-web.ts) || fail=1
+    elif [ -n "$web_src" ]; then
+      echo "── browser floor (changed web sources vs apps/web/package.json browserslist)"
+      bun tooling/platform-compat/src/lint-web.ts $web_src || fail=1
+    fi
+    if [ -n "$native_changed" ]; then
+      echo "── native media permissions (Info.plist usage strings, macOS entitlements)"
+      bun tooling/platform-compat/src/check-native-permissions.ts || fail=1
     fi
     echo "── PII scan (added lines vs merge-base)"
     python3 tooling/pii/scan.py --changed --skip-gitleaks || fail=1

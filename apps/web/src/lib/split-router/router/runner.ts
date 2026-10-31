@@ -176,7 +176,7 @@ export function createRunner(options: {
     settlers.set(navigation, {
       settle(value) {
         result = value;
-        deferred.resolve(value);
+        resolve(value);
       },
       callbacks: [],
     });

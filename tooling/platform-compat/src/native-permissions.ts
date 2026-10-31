@@ -1,4 +1,4 @@
-/** Info.plist keys without which WebKit hides `navigator.mediaDevices`. */
+/** Info.plist keys without which macOS and iOS refuse camera and microphone capture. */
 export const MEDIA_USAGE_KEYS = [
   'NSCameraUsageDescription',
   'NSMicrophoneUsageDescription',

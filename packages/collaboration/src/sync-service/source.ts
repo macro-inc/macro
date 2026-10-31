@@ -290,7 +290,12 @@ export class SyncServiceSource implements LiveSyncSource {
     timeoutMs: number,
     cancelOnDisconnect = false
   ): Promise<FromRemote> {
-    const { promise, resolve, reject } = Promise.withResolvers<FromRemote>();
+    let resolve!: (message: FromRemote) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<FromRemote>((settle, fail) => {
+      resolve = settle;
+      reject = fail;
+    });
     const waiter: MessageWaiter = {
       match,
       cancelOnDisconnect: cancelOnDisconnect
@@ -301,14 +306,19 @@ export class SyncServiceSource implements LiveSyncSource {
         : undefined,
       resolve: (message) => {
         remove();
-        reject(SyncError.timeout(timeoutMs));
-      }, timeoutMs);
-      const remove = () => {
-        clearTimeout(timer);
-        this.waiters.delete(waiter);
-      };
-      this.waiters.add(waiter);
-    });
+        resolve(message);
+      },
+    };
+    const timer = setTimeout(() => {
+      remove();
+      reject(SyncError.timeout(timeoutMs));
+    }, timeoutMs);
+    const remove = () => {
+      clearTimeout(timer);
+      this.waiters.delete(waiter);
+    };
+    this.waiters.add(waiter);
+    return promise;
   }
 
   private onMessage: WebsocketEventListener<

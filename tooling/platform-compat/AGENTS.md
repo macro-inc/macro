@@ -5,7 +5,9 @@
 Guards that keep the web app running on the oldest webviews it supports: an
 ESLint rule that checks `apps/web/src` against the `browserslist` in
 `apps/web/package.json`, and a check that the native bundles keep the camera and
-microphone permissions meetings and dictation need.
+microphone permissions meetings and dictation need: the usage strings in the
+macOS (`desktop-cef/tauri.conf.json`) and iOS Info.plists, and the macOS
+entitlements.
 
 ## How it works
 

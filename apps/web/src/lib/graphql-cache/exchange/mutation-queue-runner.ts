@@ -179,7 +179,7 @@ export function withQueueRequestTimeout(op: Operation): Operation {
         operationFetch(input, {
           ...init,
           signal: init?.signal
-            ? AbortSignal.any([init.signal, timeoutSignal])
+            ? anyAbortSignal([init.signal, timeoutSignal])
             : timeoutSignal,
         });
       const response = await (attempt?.telemetry?.run(send) ?? send());

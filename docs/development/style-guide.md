@@ -4,8 +4,9 @@ Code conventions are agent rules in [`.agents/rules/`](../../.agents/rules/). Ag
 load each file when they touch matching paths; reviewers and CodeRabbit read the
 same files. This page explains the scheme and indexes the rule files.
 
-**Check locally.** `just check` is the single gate: format, lint, code rules, and
-a PII scan of added lines, scoped to your changes against `origin/main`, with
+**Check locally.** `just check` is the single gate: format, lint, code rules, the
+web browser floor ([`tooling/platform-compat`](../../tooling/platform-compat/AGENTS.md)),
+and a PII scan of added lines, scoped to your changes against `origin/main`, with
 every finding printed as `file:line [rule-id]` and the command that fixes it.
 `just check full` adds `tsc`
 and clippy. Mechanically enforceable rules live in [`rules/ast-grep/`](../../rules/ast-grep/).

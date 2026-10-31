@@ -347,7 +347,6 @@
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql
           ../apps/web/tauri/src-tauri/tauri.macos.conf.json
-          ../apps/web/tauri/src-tauri/Entitlements.macos.plist
         ];
         inherit frontend;
 
