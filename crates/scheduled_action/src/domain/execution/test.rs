@@ -206,6 +206,23 @@ async fn a_scheduled_firing_is_consumed_before_its_program_runs() {
 }
 
 #[tokio::test]
+async fn a_firing_that_cannot_be_consumed_does_not_run_and_gives_its_claim_back() {
+    // Running anyway would leave the firing due, and a failure after the run
+    // could repeat every step.
+    let executor = executor(
+        Repo {
+            fail_reschedule: true,
+            ..Repo::default()
+        },
+        Runner::default(),
+    );
+    assert!(executor.execute_action(action()).await.is_err());
+    assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
+    assert!(executor.repo.claim.lock().unwrap().is_none());
+}
+
+#[tokio::test]
 async fn a_manual_run_leaves_the_next_firing_alone_until_it_ends() {
     let mut manual = action();
     manual.next_run_at = Some(Utc::now() + chrono::Duration::hours(1));
@@ -233,6 +250,7 @@ struct Repo {
     records: Mutex<Vec<ActionExecutionRecord>>,
     fail_persistence: bool,
     stall_persistence: bool,
+    fail_reschedule: bool,
 }
 
 impl ScheduledActionRepo for Repo {
@@ -266,6 +284,7 @@ impl ScheduledActionRepo for Repo {
         Ok(())
     }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
+        anyhow::ensure!(!self.fail_reschedule, "database unavailable");
         self.rescheduled.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }

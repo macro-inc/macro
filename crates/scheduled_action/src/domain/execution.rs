@@ -347,7 +347,21 @@ where
                 )
                 .await;
                 if !matches!(consumed, Ok(Ok(()))) {
-                    tracing::error!(action_id=?id, "failed to consume the scheduled firing");
+                    // Running anyway would leave the firing due, so a failed
+                    // run bookkeeping later could repeat every step. Give the
+                    // claim back untouched; the poller retries the firing.
+                    tracing::error!(action_id = %id, "failed to consume the scheduled firing");
+                    let release = executor.repo.release_action(&id, token);
+                    if !matches!(
+                        tokio::time::timeout(BOOKKEEPING_TIMEOUT, release).await,
+                        Ok(Ok(()))
+                    ) {
+                        tracing::error!(action_id = %id, "failed to release action claim");
+                    }
+                    let _ = ready_tx.send(Err(anyhow::anyhow!(
+                        "Couldn't start this scheduled run; it will be retried."
+                    )));
+                    return;
                 }
             }
             let mut ready_tx = Some(ready_tx);
@@ -417,7 +431,9 @@ where
             )
             .await;
             if let Err(error) = result {
-                tracing::error!(?error, action_id=?id, "scheduled action execution failed");
+                // The error can quote step content; it is kept in the
+                // owner's run history, not in logs.
+                tracing::error!(action_id = %id, "scheduled action execution failed");
                 if let Some(ready_tx) = ready_tx {
                     let _ = ready_tx.send(Err(error));
                 }
