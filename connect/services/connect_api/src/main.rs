@@ -16,8 +16,9 @@ use axum::{
 };
 use clap::{Parser, Subcommand};
 use connect_client::wire::{
-    CatalogEntry, ConnectSessionRequest, ConnectSessionResponse, Connection, ConnectionStatus,
-    DeleteResponse, ErrorResponse, McpErrorResponse, TokenResponse,
+    AppConnectionsSummary, CatalogEntry, ConnectSessionRequest, ConnectSessionResponse, Connection,
+    ConnectionStatus, ConnectionsPage, ConnectionsSummary, DeleteResponse, ErrorResponse,
+    ListedConnection, ListedUser, McpErrorResponse, TokenResponse, UsersPage,
 };
 use connect_platform::{ConfigLoader, Telemetry, http_trace_layer, load_aws_config};
 use connect_registry::{Access, App, ClientRegistration, Status, all_apps};
@@ -165,6 +166,9 @@ impl Modify for SecurityAddon {
         catalog,
         icon,
         list_connections,
+        list_customer_connections,
+        list_users,
+        connections_summary,
         delete_connection,
         export_token,
         create_connect_session,
@@ -173,7 +177,7 @@ impl Modify for SecurityAddon {
         oauth_callback,
         mcp::proxy
     ),
-    components(schemas(CatalogEntry, Connection, ConnectionStatus, TokenResponse, DeleteResponse, ErrorResponse, McpErrorResponse, ConnectSessionRequest, ConnectSessionResponse)),
+    components(schemas(CatalogEntry, Connection, ConnectionStatus, ListedConnection, ConnectionsPage, ListedUser, UsersPage, AppConnectionsSummary, ConnectionsSummary, TokenResponse, DeleteResponse, ErrorResponse, McpErrorResponse, ConnectSessionRequest, ConnectSessionResponse)),
     modifiers(&SecurityAddon)
 )]
 struct ApiDoc;
@@ -374,6 +378,128 @@ async fn list_connections(
         .map_err(api_error)
 }
 
+#[derive(Deserialize)]
+struct CustomerConnectionsQuery {
+    limit: Option<u16>,
+    cursor: Option<String>,
+    app_id: Option<String>,
+    status: Option<String>,
+}
+
+#[utoipa::path(get, path = "/v1/connections", params(("limit" = Option<u16>, Query, description = "Page size, default 100, maximum 500"), ("cursor" = Option<String>, Query, description = "Opaque next_cursor from the prior page"), ("app_id" = Option<String>, Query), ("status" = Option<String>, Query, description = "active or needs_reauth")), responses((status = 200, body = ConnectionsPage), (status = 400, body = ErrorResponse, description = "invalid_limit, invalid_cursor, invalid_app_id, or invalid_status"), (status = 401)), security(("customer_key" = [])))]
+async fn list_customer_connections(
+    State(state): State<AppState>,
+    axum::extract::Extension(customer_id): axum::extract::Extension<uuid::Uuid>,
+    Query(query): Query<CustomerConnectionsQuery>,
+) -> Result<Json<ConnectionsPage>, (StatusCode, Json<ErrorResponse>)> {
+    let page = state
+        .service
+        .list_customer_connections(
+            customer_id,
+            domain::ConnectionsFilter {
+                limit: query.limit,
+                cursor: query.cursor,
+                app_id: query.app_id,
+                status: query.status,
+            },
+        )
+        .await
+        .map_err(api_error)?;
+    Ok(Json(ConnectionsPage {
+        items: page
+            .items
+            .into_iter()
+            .map(|item| ListedConnection {
+                external_user_id: item.external_user_id,
+                app_id: item.app_id,
+                status: match item.status {
+                    DomainConnectionStatus::Active => ConnectionStatus::Active,
+                    DomainConnectionStatus::NeedsReauth => ConnectionStatus::NeedsReauth,
+                },
+                scopes: item.scopes,
+                created_at: item.created_at,
+                updated_at: item.updated_at,
+                access_token_expires_at: item.access_token_expires_at,
+            })
+            .collect(),
+        next_cursor: page.next_cursor,
+    }))
+}
+
+#[utoipa::path(get, path = "/v1/users", params(("limit" = Option<u16>, Query, description = "Users per page, default 100, maximum 500"), ("cursor" = Option<String>, Query, description = "Opaque next_cursor from the prior page"), ("app_id" = Option<String>, Query), ("status" = Option<String>, Query, description = "active or needs_reauth")), responses((status = 200, body = UsersPage), (status = 400, body = ErrorResponse, description = "invalid_limit, invalid_cursor, invalid_app_id, or invalid_status"), (status = 401)), security(("customer_key" = [])))]
+async fn list_users(
+    State(state): State<AppState>,
+    axum::extract::Extension(customer_id): axum::extract::Extension<uuid::Uuid>,
+    Query(query): Query<CustomerConnectionsQuery>,
+) -> Result<Json<UsersPage>, (StatusCode, Json<ErrorResponse>)> {
+    let page = state
+        .service
+        .list_users(
+            customer_id,
+            domain::ConnectionsFilter {
+                limit: query.limit,
+                cursor: query.cursor,
+                app_id: query.app_id,
+                status: query.status,
+            },
+        )
+        .await
+        .map_err(api_error)?;
+    Ok(Json(UsersPage {
+        items: page
+            .items
+            .into_iter()
+            .map(|user| ListedUser {
+                external_user_id: user.external_user_id,
+                first_connected_at: user.first_connected_at,
+                connections: user
+                    .connections
+                    .into_iter()
+                    .map(|item| ListedConnection {
+                        external_user_id: item.external_user_id,
+                        app_id: item.app_id,
+                        status: match item.status {
+                            DomainConnectionStatus::Active => ConnectionStatus::Active,
+                            DomainConnectionStatus::NeedsReauth => ConnectionStatus::NeedsReauth,
+                        },
+                        scopes: item.scopes,
+                        created_at: item.created_at,
+                        updated_at: item.updated_at,
+                        access_token_expires_at: item.access_token_expires_at,
+                    })
+                    .collect(),
+            })
+            .collect(),
+        next_cursor: page.next_cursor,
+    }))
+}
+
+#[utoipa::path(get, path = "/v1/connections/summary", responses((status = 200, body = ConnectionsSummary), (status = 401)), security(("customer_key" = [])))]
+async fn connections_summary(
+    State(state): State<AppState>,
+    axum::extract::Extension(customer_id): axum::extract::Extension<uuid::Uuid>,
+) -> Result<Json<ConnectionsSummary>, (StatusCode, Json<ErrorResponse>)> {
+    let summary = state
+        .service
+        .connections_summary(customer_id)
+        .await
+        .map_err(api_error)?;
+    Ok(Json(ConnectionsSummary {
+        users: summary.users,
+        connections: summary.connections,
+        needs_reauth: summary.needs_reauth,
+        apps: summary
+            .apps
+            .into_iter()
+            .map(|app| AppConnectionsSummary {
+                app_id: app.app_id,
+                active: app.active,
+                needs_reauth: app.needs_reauth,
+            })
+            .collect(),
+    }))
+}
+
 #[utoipa::path(delete, path = "/v1/users/{external_user_id}/connections/{app_id}", params(("external_user_id" = String, Path), ("app_id" = String, Path)), responses((status = 200, body = DeleteResponse, description = "Deleted locally; vendor grant is not revoked upstream"), (status = 401), (status = 404)), security(("customer_key" = [])))]
 async fn delete_connection(
     State(state): State<AppState>,
@@ -414,6 +540,9 @@ async fn export_token(
 fn router(state: AppState) -> Router {
     let protected = Router::new()
         .route("/v1/connect-sessions", post(create_connect_session))
+        .route("/v1/connections", get(list_customer_connections))
+        .route("/v1/users", get(list_users))
+        .route("/v1/connections/summary", get(connections_summary))
         .route(
             "/v1/users/{external_user_id}/connections",
             get(list_connections),

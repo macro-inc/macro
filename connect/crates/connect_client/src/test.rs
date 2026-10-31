@@ -1,7 +1,7 @@
 use super::*;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{body_json, header, method, path},
+    matchers::{body_json, header, method, path, query_param},
 };
 
 #[tokio::test]
@@ -99,6 +99,91 @@ async fn calls_every_customer_route_with_the_shared_wire_contract() {
     assert_eq!(upstream.bearer_token, "ck_test_secret");
     assert!(!format!("{client:?} {upstream:?}").contains("ck_test_secret"));
     assert_eq!(server.received_requests().await.unwrap().len(), 6);
+}
+
+#[tokio::test]
+async fn lists_customer_pages_and_summary_with_filters() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET")).and(path("/v1/connections"))
+        .and(header("authorization", "Bearer ck_test_secret"))
+        .and(query_param("limit", "1"))
+        .and(query_param("app_id", "notion"))
+        .and(query_param("status", "active"))
+        .respond_with(|request: &wiremock::Request| {
+            if request.url.query_pairs().any(|(key, value)| key == "cursor" && value == "next") {
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"items": [{"externalUserId":"second","appId":"notion","status":"active","scopes":[],"createdAt":"2026-10-29T09:00:00Z","updatedAt":"2026-10-29T10:00:00Z","accessTokenExpiresAt":null}],"nextCursor":null}))
+            } else {
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"items": [{"externalUserId":"first","appId":"notion","status":"active","scopes":["read"],"createdAt":"2026-10-30T09:00:00Z","updatedAt":"2026-10-30T10:00:00Z","accessTokenExpiresAt":"2026-10-30T11:00:00Z"}],"nextCursor":"next"}))
+            }
+        }).mount(&server).await;
+    Mock::given(method("GET")).and(path("/v1/connections/summary"))
+        .and(header("authorization", "Bearer ck_test_secret"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"users":2,"connections":2,"needsReauth":0,"apps":[{"appId":"notion","active":2,"needsReauth":0}]})))
+        .mount(&server).await;
+    let client = ConnectClient::new(&server.uri(), "ck_test_secret").unwrap();
+    let query = wire::ConnectionsQuery {
+        limit: Some(1),
+        cursor: None,
+        app_id: Some("notion".into()),
+        status: Some(wire::ConnectionStatus::Active),
+    };
+    let page = client.list_connections(query.clone()).await.unwrap();
+    assert_eq!(page.items[0].external_user_id, "first");
+    assert!(page.items[0].access_token_expires_at.is_some());
+    assert_eq!(page.next_cursor.as_deref(), Some("next"));
+    let all = client.all_connections(query).await.unwrap();
+    assert_eq!(
+        all.iter()
+            .map(|item| item.external_user_id.as_str())
+            .collect::<Vec<_>>(),
+        ["first", "second"]
+    );
+    let summary = client.connections_summary().await.unwrap();
+    assert_eq!(
+        (summary.users, summary.connections, summary.apps[0].active),
+        (2, 2, 2)
+    );
+}
+
+#[tokio::test]
+async fn lists_complete_user_pages_with_filters() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET")).and(path("/v1/users"))
+        .and(header("authorization", "Bearer ck_test_secret"))
+        .and(query_param("limit", "1"))
+        .and(query_param("app_id", "notion"))
+        .and(query_param("status", "active"))
+        .respond_with(|request: &wiremock::Request| {
+            let (user, cursor) = if request.url.query_pairs().any(|(key, value)| key == "cursor" && value == "next") {
+                ("second", serde_json::Value::Null)
+            } else {
+                ("first", serde_json::json!("next"))
+            };
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "items":[{"externalUserId":user,"firstConnectedAt":"2026-10-30T09:00:00Z","connections":[
+                    {"externalUserId":user,"appId":"linear","status":"needs_reauth","scopes":[],"createdAt":"2026-10-29T09:00:00Z","updatedAt":"2026-10-29T10:00:00Z","accessTokenExpiresAt":null},
+                    {"externalUserId":user,"appId":"notion","status":"active","scopes":[],"createdAt":"2026-10-30T09:00:00Z","updatedAt":"2026-10-30T10:00:00Z","accessTokenExpiresAt":null}
+                ]}],"nextCursor":cursor
+            }))
+        }).mount(&server).await;
+    let client = ConnectClient::new(&server.uri(), "ck_test_secret").unwrap();
+    let query = wire::UsersQuery {
+        limit: Some(1),
+        cursor: None,
+        app_id: Some("notion".into()),
+        status: Some(wire::ConnectionStatus::Active),
+    };
+    let first = client.list_users(query.clone()).await.unwrap();
+    assert_eq!(first.items.len(), 1);
+    assert_eq!(first.items[0].connections.len(), 2);
+    assert_eq!(first.next_cursor.as_deref(), Some("next"));
+    let all = client.all_users(query).await.unwrap();
+    assert_eq!(
+        all.iter()
+            .map(|user| user.external_user_id.as_str())
+            .collect::<Vec<_>>(),
+        ["first", "second"]
+    );
 }
 
 #[tokio::test]

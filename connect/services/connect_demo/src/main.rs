@@ -14,7 +14,10 @@ use axum::{
     response::{Html, IntoResponse, Redirect, Response},
     routing::{get, post},
 };
-use connect_client::{ConnectClient, wire::ConnectionStatus};
+use connect_client::{
+    ConnectClient,
+    wire::{ConnectionStatus, UsersQuery},
+};
 use connect_platform::{ConfigLoader, Telemetry, http_trace_layer};
 use serde::Deserialize;
 use serde_json::Value;
@@ -35,7 +38,7 @@ struct DemoUser(String);
 
 fn page(title: &str, content: &str) -> Html<String> {
     Html(format!(
-        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{}</title><style>{}</style></head><body><h1>Macro Connect demo</h1>{content}<script>{}</script></body></html>",
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>{}</title><style>{}</style></head><body><h1>Macro Connect demo</h1><nav><a href=\"/demo\">Catalog</a><a href=\"/demo/dashboard\">Dashboard</a></nav>{content}<script>{}</script></body></html>",
         escape(title),
         include_str!("style.css"),
         include_str!("app.js")
@@ -141,6 +144,166 @@ async fn catalog(State(state): State<AppState>, Extension(user): Extension<DemoU
     }
     content.push_str("</div><div id=\"workspace\" aria-live=\"polite\"></div>");
     page("Catalog", &content).into_response()
+}
+
+#[derive(Default, Deserialize)]
+struct DashboardQuery {
+    app_id: Option<String>,
+    status: Option<String>,
+    cursor: Option<String>,
+}
+
+fn dashboard_url(query: &DashboardQuery, cursor: Option<&str>) -> String {
+    let mut pairs = url::form_urlencoded::Serializer::new(String::new());
+    let mut has_query = false;
+    if let Some(app_id) = &query.app_id {
+        pairs.append_pair("app_id", app_id);
+        has_query = true;
+    }
+    if let Some(status) = &query.status {
+        pairs.append_pair("status", status);
+        has_query = true;
+    }
+    if let Some(cursor) = cursor {
+        pairs.append_pair("cursor", cursor);
+        has_query = true;
+    }
+    let encoded = pairs.finish();
+    if has_query {
+        format!("/demo/dashboard?{encoded}")
+    } else {
+        "/demo/dashboard".to_owned()
+    }
+}
+
+#[tracing::instrument(name = "demo.dashboard", skip_all, fields(count, outcome))]
+async fn dashboard(
+    State(state): State<AppState>,
+    Extension(user): Extension<DemoUser>,
+    Query(query): Query<DashboardQuery>,
+) -> Response {
+    let status = match query.status.as_deref() {
+        None | Some("") => None,
+        Some("active") => Some(ConnectionStatus::Active),
+        Some("needs_reauth") => Some(ConnectionStatus::NeedsReauth),
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                page("Dashboard", "<p class=\"error\">Invalid status filter.</p>"),
+            )
+                .into_response();
+        }
+    };
+    let (apps, summary, users) = match tokio::try_join!(
+        state.client.catalog(),
+        state.client.connections_summary(),
+        state.client.list_users(UsersQuery {
+            limit: Some(500),
+            cursor: query.cursor.clone(),
+            app_id: query.app_id.clone().filter(|value| !value.is_empty()),
+            status,
+        })
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            Span::current().record("outcome", "error");
+            return error_page(error);
+        }
+    };
+    Span::current().record("count", users.items.len());
+    Span::current().record("outcome", "ok");
+    let mut content = format!(
+        "<h2>Dashboard</h2><div class=\"tiles\"><section class=\"card\"><strong>{}</strong><span>Users</span></section><section class=\"card\"><strong>{}</strong><span>Connections</span></section><section class=\"card\"><strong>{}</strong><span>Needs re-auth</span></section></div>",
+        summary.users, summary.connections, summary.needs_reauth
+    );
+    content.push_str("<h2>Apps</h2><table><thead><tr><th>App</th><th>Active</th><th>Needs re-auth</th></tr></thead><tbody>");
+    for app in &apps {
+        let counts = summary.apps.iter().find(|counts| counts.app_id == app.id);
+        let active = counts.map_or(0, |counts| counts.active);
+        let needs_reauth = counts.map_or(0, |counts| counts.needs_reauth);
+        let icon = if app.icon_url.is_some() {
+            format!(
+                "<img class=\"app-icon\" alt=\"\" src=\"/demo/icons/{}\">",
+                path_id(&app.id)
+            )
+        } else {
+            String::new()
+        };
+        content.push_str(&format!("<tr><td data-label=\"App\">{icon}{}</td><td data-label=\"Active\">{active}</td><td data-label=\"Needs re-auth\">{needs_reauth}</td></tr>", escape(&app.name)));
+    }
+    content.push_str("</tbody></table><h2>Users</h2><form method=\"get\" action=\"/demo/dashboard\" class=\"filters\"><label>App<select name=\"app_id\"><option value=\"\">All apps</option>");
+    for app in &apps {
+        content.push_str(&format!(
+            "<option value=\"{}\"{}>{}</option>",
+            escape(&app.id),
+            if query.app_id.as_deref() == Some(&app.id) {
+                " selected"
+            } else {
+                ""
+            },
+            escape(&app.name)
+        ));
+    }
+    content.push_str("</select></label><label>Status<select name=\"status\"><option value=\"\">All statuses</option>");
+    for (value, label) in [("active", "Active"), ("needs_reauth", "Needs re-auth")] {
+        content.push_str(&format!(
+            "<option value=\"{value}\"{}>{label}</option>",
+            if query.status.as_deref() == Some(value) {
+                " selected"
+            } else {
+                ""
+            }
+        ));
+    }
+    content.push_str("</select></label><button>Filter</button></form>");
+    if users.items.is_empty() {
+        content.push_str("<p>No connected users match these filters.</p>");
+    } else {
+        content.push_str("<table><thead><tr><th>User</th><th>Apps</th><th>First connected</th><th>Next token expiry</th></tr></thead><tbody>");
+        let now = chrono::Utc::now();
+        for listed_user in &users.items {
+            let id = &listed_user.external_user_id;
+            let connections = &listed_user.connections;
+            let short: String = id.chars().take(12).collect();
+            let marker = if id == &user.0 {
+                " <span class=\"badge\">you</span>"
+            } else {
+                ""
+            };
+            let expiry = connections
+                .iter()
+                .filter_map(|connection| connection.access_token_expires_at)
+                .filter(|expiry| *expiry > now)
+                .min();
+            let badges = connections
+                .iter()
+                .map(|connection| {
+                    format!(
+                        "<span class=\"status-badge\">{}: {}</span>",
+                        escape(
+                            apps.iter()
+                                .find(|app| app.id == connection.app_id)
+                                .map_or(connection.app_id.as_str(), |app| app.name.as_str())
+                        ),
+                        match connection.status {
+                            ConnectionStatus::Active => "active",
+                            ConnectionStatus::NeedsReauth => "needs re-auth",
+                        }
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" ");
+            content.push_str(&format!("<tr><td data-label=\"User\"><span title=\"{}\">{}</span>{marker}</td><td data-label=\"Apps\">{badges}</td><td data-label=\"First connected\">{}</td><td data-label=\"Next token expiry\">{}</td></tr>", escape(id), escape(&short), listed_user.first_connected_at.format("%Y-%m-%d"), expiry.map_or_else(|| "—".to_owned(), |time| time.format("%Y-%m-%d %H:%M UTC").to_string())));
+        }
+        content.push_str("</tbody></table>");
+    }
+    if let Some(cursor) = users.next_cursor.as_deref() {
+        content.push_str(&format!(
+            "<p><a href=\"{}\">More users</a></p>",
+            escape(&dashboard_url(&query, Some(cursor)))
+        ));
+    }
+    page("Dashboard", &content).into_response()
 }
 
 async fn icon(State(state): State<AppState>, Path(app_id): Path<String>) -> Response {
@@ -317,6 +480,7 @@ fn expand_text_json(mut value: Value) -> Value {
 fn router(state: AppState) -> Router {
     let browser = Router::new()
         .route("/demo", get(catalog))
+        .route("/demo/dashboard", get(dashboard))
         .route("/demo/icons/{app_id}", get(icon))
         .route("/demo/connect/{app_id}", post(connect))
         .route("/demo/connected", get(connected))

@@ -2,7 +2,7 @@
 
 ## What it is
 
-A standalone customer app for exercising Connect's catalog, OAuth flow, and MCP gateway from one page.
+A standalone customer app for exercising Connect's catalog, OAuth flow, MCP gateway, and customer dashboard.
 
 ## Start here
 
@@ -20,6 +20,10 @@ A standalone customer app for exercising Connect's catalog, OAuth flow, and MCP 
 
 - Connect access goes through `connect_client`; the demo never exports vendor tokens.
 - The configured public URL ends in `/demo` and is the OAuth redirect target base.
+- `/demo/dashboard` uses the public client to show customer summary counts,
+  catalog app totals, and up to 500 complete users per page.
+  App and status filters are server-rendered query parameters; `cursor` moves
+  to the next user page.
 
 ## Checks
 

@@ -13,8 +13,9 @@ use url::Url;
 use zeroize::{Zeroize as _, Zeroizing};
 
 use wire::{
-    CatalogEntry, ConnectSessionRequest, ConnectSessionResponse, Connection, DeleteResponse,
-    ErrorResponse, TokenResponse,
+    CatalogEntry, ConnectSessionRequest, ConnectSessionResponse, Connection, ConnectionsPage,
+    ConnectionsQuery, ConnectionsSummary, DeleteResponse, ErrorResponse, ListedConnection,
+    ListedUser, TokenResponse, UsersPage, UsersQuery,
 };
 
 /// A failure a Connect customer can act on.
@@ -186,6 +187,134 @@ impl ConnectClient {
         .await
     }
 
+    /// List one page of this customer's connections, newest first.
+    #[tracing::instrument(
+        name = "connect.client.list_connections",
+        skip_all,
+        fields(count, outcome),
+        err
+    )]
+    pub async fn list_connections(
+        &self,
+        query: ConnectionsQuery,
+    ) -> Result<ConnectionsPage, Error> {
+        let mut url = self.route(&["v1", "connections"]);
+        {
+            let mut pairs = url.query_pairs_mut();
+            if let Some(limit) = query.limit {
+                pairs.append_pair("limit", &limit.to_string());
+            }
+            if let Some(cursor) = &query.cursor {
+                pairs.append_pair("cursor", cursor);
+            }
+            if let Some(app_id) = &query.app_id {
+                pairs.append_pair("app_id", app_id);
+            }
+            if let Some(status) = query.status {
+                pairs.append_pair("status", &status.to_string());
+            }
+        }
+        let page: ConnectionsPage = self.request_at(Method::GET, url, None).await?;
+        Span::current().record("count", page.items.len());
+        Ok(page)
+    }
+
+    /// Return summary counts for this customer.
+    #[tracing::instrument(
+        name = "connect.client.connections_summary",
+        skip_all,
+        fields(users, connections, outcome),
+        err
+    )]
+    pub async fn connections_summary(&self) -> Result<ConnectionsSummary, Error> {
+        let summary: ConnectionsSummary = self
+            .request(Method::GET, &["v1", "connections", "summary"], None)
+            .await?;
+        Span::current().record("users", summary.users);
+        Span::current().record("connections", summary.connections);
+        Ok(summary)
+    }
+
+    /// Collect every page matching the filters. Callers should use pages for large datasets.
+    pub async fn all_connections(
+        &self,
+        mut query: ConnectionsQuery,
+    ) -> Result<Vec<ListedConnection>, Error> {
+        let mut items = Vec::new();
+        loop {
+            let page = self.list_connections(query.clone()).await?;
+            items.extend(page.items);
+            match page.next_cursor {
+                Some(cursor) if query.cursor.as_deref() != Some(&cursor) => {
+                    query.cursor = Some(cursor)
+                }
+                Some(_) => {
+                    return Err(Error::Internal(
+                        rootcause::Report::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "repeated connections cursor",
+                        ))
+                        .into_dynamic(),
+                    ));
+                }
+                None => return Ok(items),
+            }
+        }
+    }
+
+    /// List one page of connected users with all of each user's connections.
+    #[tracing::instrument(
+        name = "connect.client.list_users",
+        skip_all,
+        fields(count, outcome),
+        err
+    )]
+    pub async fn list_users(&self, query: UsersQuery) -> Result<UsersPage, Error> {
+        let mut url = self.route(&["v1", "users"]);
+        {
+            let mut pairs = url.query_pairs_mut();
+            if let Some(limit) = query.limit {
+                pairs.append_pair("limit", &limit.to_string());
+            }
+            if let Some(cursor) = &query.cursor {
+                pairs.append_pair("cursor", cursor);
+            }
+            if let Some(app_id) = &query.app_id {
+                pairs.append_pair("app_id", app_id);
+            }
+            if let Some(status) = query.status {
+                pairs.append_pair("status", &status.to_string());
+            }
+        }
+        let page: UsersPage = self.request_at(Method::GET, url, None).await?;
+        Span::current().record("count", page.items.len());
+        Ok(page)
+    }
+
+    /// Collect all connected users matching the filters.
+    pub async fn all_users(&self, mut query: UsersQuery) -> Result<Vec<ListedUser>, Error> {
+        let mut items = Vec::new();
+        loop {
+            let page = self.list_users(query.clone()).await?;
+            items.extend(page.items);
+            match page.next_cursor {
+                Some(cursor) if query.cursor.as_deref() != Some(&cursor) => {
+                    query.cursor = Some(cursor)
+                }
+                Some(_) => {
+                    return Err(Error::Internal(
+                        rootcause::Report::new(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "repeated users cursor",
+                        ))
+                        .into_dynamic(),
+                    ));
+                }
+                None => return Ok(items),
+            }
+        }
+    }
+
     /// Delete a user's app connection locally. The vendor grant is not revoked.
     #[tracing::instrument(name = "connect.client.delete_connection", skip_all, fields(app_id = %app_id, outcome), err)]
     pub async fn delete_connection(
@@ -248,11 +377,20 @@ impl ConnectClient {
         parts: &[&str],
         body: Option<&ConnectSessionRequest>,
     ) -> Result<T, Error> {
+        self.request_at(method, self.route(parts), body).await
+    }
+
+    async fn request_at<T: serde::de::DeserializeOwned>(
+        &self,
+        method: Method,
+        url: Url,
+        body: Option<&ConnectSessionRequest>,
+    ) -> Result<T, Error> {
         let mut headers = HeaderMap::new();
         inject_trace_headers(&mut headers);
         let mut request = self
             .http
-            .request(method, self.route(parts))
+            .request(method, url)
             .headers(headers)
             .bearer_auth(self.customer_key.as_str());
         if let Some(body) = body {

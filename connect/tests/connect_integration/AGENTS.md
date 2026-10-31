@@ -7,6 +7,8 @@ An opt-in binary that checks a running Connect service through the public Rust c
 ## Start here
 
 - `src/main.rs`: scenarios and PASS/FAIL reporting.
+- `connections_listing` checks summary, connection listing, and user listing
+  parameters for a fresh user.
 - `../../tooling/integration.sh`: local Compose and dev entry points.
 
 ## Scope

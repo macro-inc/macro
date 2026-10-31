@@ -210,6 +210,96 @@ async fn main() -> ExitCode {
 
     record(
         &mut failures,
+        "connections_listing",
+        async {
+            let _summary = client
+                .connections_summary()
+                .await
+                .map_err(|e| e.to_string())?;
+            let all = client
+                .all_connections(connect_client::wire::ConnectionsQuery {
+                    limit: Some(500),
+                    cursor: None,
+                    app_id: None,
+                    status: None,
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+            if all.iter().any(|item| item.external_user_id == user_id) {
+                return Err("fresh user appeared in customer connections".into());
+            }
+            let first = client
+                .list_connections(connect_client::wire::ConnectionsQuery {
+                    limit: Some(1),
+                    cursor: None,
+                    app_id: None,
+                    status: None,
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+            let filtered = client
+                .list_connections(connect_client::wire::ConnectionsQuery {
+                    limit: Some(1),
+                    cursor: first.next_cursor,
+                    app_id: Some("notion".into()),
+                    status: Some(connect_client::wire::ConnectionStatus::Active),
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+            if filtered
+                .items
+                .iter()
+                .any(|item| item.external_user_id == user_id)
+            {
+                return Err("fresh user appeared in filtered connections".into());
+            }
+            let all_users = client
+                .all_users(connect_client::wire::UsersQuery {
+                    limit: Some(500),
+                    cursor: None,
+                    app_id: None,
+                    status: None,
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+            if all_users
+                .iter()
+                .any(|item| item.external_user_id == user_id)
+            {
+                return Err("fresh user appeared in customer users".into());
+            }
+            let first_users = client
+                .list_users(connect_client::wire::UsersQuery {
+                    limit: Some(1),
+                    cursor: None,
+                    app_id: None,
+                    status: None,
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+            let filtered_users = client
+                .list_users(connect_client::wire::UsersQuery {
+                    limit: Some(1),
+                    cursor: first_users.next_cursor,
+                    app_id: Some("notion".into()),
+                    status: Some(connect_client::wire::ConnectionStatus::Active),
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+            if filtered_users
+                .items
+                .iter()
+                .any(|item| item.external_user_id == user_id)
+            {
+                return Err("fresh user appeared in filtered users".into());
+            }
+            Ok(())
+        }
+        .await,
+    );
+
+    record(
+        &mut failures,
         "client_metadata",
         async {
             let response = http
