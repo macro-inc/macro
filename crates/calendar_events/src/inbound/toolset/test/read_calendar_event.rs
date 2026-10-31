@@ -83,7 +83,10 @@ fn mention(viewer_event_id: Option<Uuid>) -> CalendarMentionEvent {
     CalendarMentionEvent {
         viewer_event_id,
         viewer_copy: viewer_event_id.map(|_| CalendarMentionViewerCopy::Event),
-        viewer_calendar_id: viewer_event_id.map(|_| Uuid::from_u128(9)),
+        viewer_calendar_ids: viewer_event_id
+            .map(|_| Uuid::from_u128(9))
+            .into_iter()
+            .collect(),
         title: "Design review".to_string(),
         description: Some("Walk through the rollout.".to_string()),
         time: EventTime::Timed {
@@ -216,6 +219,24 @@ async fn an_event_on_a_colleagues_calendar_never_reads_as_the_users() {
         "Design review is on colleague@example.com, which the user can see but which is not \
          part of their schedule and may be someone else's."
     );
+}
+
+/// Availability counts each copy, so a copy on the user's schedule makes the
+/// event theirs even when the canonical copy's calendar does not contribute.
+#[tokio::test]
+async fn any_copy_on_the_schedule_makes_an_event_the_users() {
+    let copy = Uuid::from_u128(42);
+    let mut event = mention(Some(copy));
+    event.viewer_calendar_ids = vec![Uuid::from_u128(8), Uuid::from_u128(9)];
+
+    let (result, _) = read_with_calendar(
+        CalendarMentionPreview::Accessible(Box::new(event)),
+        serde_json::json!({ "eventId": copy, "occurrenceKey": null }),
+        visible_calendar(9, 1, "gab@example.com", "Personal"),
+    )
+    .await;
+
+    assert_eq!(result.unwrap()["access"], "on_your_calendar");
 }
 
 #[tokio::test]

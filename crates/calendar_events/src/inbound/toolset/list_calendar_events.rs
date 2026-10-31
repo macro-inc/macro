@@ -90,9 +90,10 @@ pub struct CalendarEventListItem {
     /// calendar it is: Google names a person's primary calendar after them or
     /// their address.
     pub calendar_name: Option<String>,
-    /// Whether that calendar counts toward the user's busy time, when known.
-    /// Only these and meetings they attend are the user's schedule; false
-    /// does not say whose it is, as their own other calendars are false too.
+    /// Whether a calendar holding this event counts toward the user's busy
+    /// time, when known. Only these and meetings they attend are the user's
+    /// schedule; false does not say whose calendar it is, as their own other
+    /// calendars are false too.
     pub contributes_to_availability: Option<bool>,
     /// Connected inbox address syncing this copy of the event. It stays the
     /// user's own address on a colleague's calendar, so it never says whose
@@ -100,8 +101,8 @@ pub struct CalendarEventListItem {
     /// once per inbox, each with its own `eventId`.
     pub inbox: Option<String>,
     /// Whether the user organizes this event or is a guest on it, through
-    /// `inbox`; absent when they are neither, or nothing shows the calendar
-    /// is theirs.
+    /// `inbox`; absent when they are neither, or can only write that
+    /// calendar.
     pub my_role: Option<ToolEventRole>,
     /// Every calendar carrying a copy of this event when there is more than
     /// one, primary first. Pass a copy's `calendarId` to UpdateCalendarEvent
@@ -328,8 +329,7 @@ where
                     viewer_can: event.viewer_can,
                     calendar_id: event.calendar_id,
                     calendar_name: labels.calendar_name(event.calendar_id),
-                    contributes_to_availability: labels
-                        .contributes_to_availability(event.calendar_id),
+                    contributes_to_availability: labels.event_on_schedule(&event),
                     inbox: labels.inbox(event.calendar_id, Some(link_id)),
                     my_role: ToolEventRole::of(&event, &labels),
                     copies: if event.sources.len() > 1 {

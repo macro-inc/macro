@@ -1578,10 +1578,11 @@ async fn list_events_names_the_inbox_and_role_of_each_copy() {
     );
 }
 
-#[tokio::test]
-async fn list_events_labels_each_calendar_copy_of_one_entity() {
-    let mut event = sample_event(Vec::new());
-    let copy = |calendar_id: u128, title: &str| crate::domain::models::CalendarEventSourceContent {
+fn source_copy(
+    calendar_id: u128,
+    title: &str,
+) -> crate::domain::models::CalendarEventSourceContent {
+    crate::domain::models::CalendarEventSourceContent {
         calendar_id: Uuid::from_u128(calendar_id),
         title: title.to_string(),
         description: None,
@@ -1593,8 +1594,13 @@ async fn list_events_labels_each_calendar_copy_of_one_entity() {
         reminders: EventReminders::default(),
         creator_email: None,
         creator_name: None,
-    };
-    event.sources = vec![copy(9, "Standup"), copy(12, "Team standup")];
+    }
+}
+
+#[tokio::test]
+async fn list_events_labels_each_calendar_copy_of_one_entity() {
+    let mut event = sample_event(Vec::new());
+    event.sources = vec![source_copy(9, "Standup"), source_copy(12, "Team standup")];
     let mutations = MockMutations {
         calendars: Mutex::new(vec![
             visible_calendar(9, 1, "owner@example.com", "Owner"),
@@ -1702,6 +1708,23 @@ fn role_never_claims_an_event_on_someone_elses_calendar() {
         Some(ToolEventRole::Guest),
         "invited by someone whose calendar the user can write"
     );
+}
+
+/// Availability counts each copy, so the canonical copy's calendar alone
+/// cannot say the event is off the user's schedule.
+#[test]
+fn any_copy_on_the_schedule_puts_an_event_on_it() {
+    let mut primary = visible_calendar(9, 1, "owner@example.com", "Owner");
+    primary.contributes_to_availability = false;
+    let labels = CalendarLabels::from_calendars(vec![
+        primary,
+        visible_calendar(10, 1, "owner@example.com", "Personal"),
+    ]);
+    let mut event = sample_event(Vec::new());
+    assert_eq!(labels.event_on_schedule(&event), Some(false));
+
+    event.sources = vec![source_copy(9, "Standup"), source_copy(10, "Standup")];
+    assert_eq!(labels.event_on_schedule(&event), Some(true));
 }
 
 #[tokio::test]

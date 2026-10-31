@@ -1006,9 +1006,9 @@ pub struct CalendarMentionEvent {
     /// exactly when that is.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_copy: Option<CalendarMentionViewerCopy>,
-    /// The calendar holding `viewer_event_id`, when it is still listed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub viewer_calendar_id: Option<Uuid>,
+    /// The calendars holding `viewer_event_id`, the canonical copy's first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub viewer_calendar_ids: Vec<Uuid>,
     /// Display title.
     pub title: String,
     /// Provider description, plain text or HTML, truncated for the preview.

@@ -400,8 +400,8 @@ pub struct ToolCalendarEvent {
     /// calendar it is.
     pub inbox: Option<String>,
     /// Whether the user organizes this event or is a guest on it, through
-    /// that inbox; absent when they are neither, or nothing shows the
-    /// calendar is theirs.
+    /// that inbox; absent when they are neither, or can only write that
+    /// calendar.
     pub my_role: Option<ToolEventRole>,
 }
 
@@ -431,7 +431,7 @@ impl ToolEventRole {
         let other_organizer = event.attendees.iter().any(|attendee| attendee.is_organizer);
         if event.viewer_can.organize
             && !other_organizer
-            && labels.contributes_to_availability(event.calendar_id) == Some(true)
+            && labels.event_on_schedule(event) == Some(true)
         {
             return Some(Self::Organizer);
         }
@@ -486,11 +486,21 @@ impl CalendarLabels {
             .map(|calendar| calendar.name.clone())
     }
 
-    /// Whether a calendar counts toward the user's busy time, when known.
-    fn contributes_to_availability(&self, calendar_id: Option<Uuid>) -> Option<bool> {
-        calendar_id
-            .and_then(|id| self.by_calendar.get(&id))
+    /// Whether any of these calendars counts toward the user's busy time,
+    /// when one is known. Availability counts each copy of an event, so one
+    /// copy on the user's schedule is enough.
+    fn on_schedule(&self, calendar_ids: impl IntoIterator<Item = Uuid>) -> Option<bool> {
+        calendar_ids
+            .into_iter()
+            .filter_map(|id| self.by_calendar.get(&id))
             .map(|calendar| calendar.contributes_to_availability)
+            .reduce(|left, right| left || right)
+    }
+
+    /// Whether a calendar holding this event is on the user's schedule.
+    fn event_on_schedule(&self, event: &CalendarEvent) -> Option<bool> {
+        let copies = event.sources.iter().map(|copy| copy.calendar_id);
+        self.on_schedule(event.calendar_id.into_iter().chain(copies))
     }
 
     /// The inbox holding a copy: its calendar's inbox, else the inbox whose

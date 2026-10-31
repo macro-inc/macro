@@ -1733,10 +1733,13 @@
             "format": "date-time",
             "description": "Entity update time of the previewed copy."
           },
-          "viewerCalendarId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The calendar holding `viewer_event_id`, when it is still listed."
+          "viewerCalendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The calendars holding `viewer_event_id`, the canonical copy's first."
           },
           "viewerCopy": {
             "oneOf": [

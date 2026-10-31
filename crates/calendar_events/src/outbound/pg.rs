@@ -417,7 +417,7 @@ const MENTION_PREVIEW_DESCRIPTION_MAX_CHARS: u16 = 4000;
 struct MentionPreviewRow {
     mention_exists: bool,
     resolved_event_id: Option<Uuid>,
-    viewer_calendar_id: Option<Uuid>,
+    viewer_calendar_ids: Option<Vec<Uuid>>,
     is_channel_shared: Option<bool>,
     is_snapshot: Option<bool>,
     inbox_organizes: Option<bool>,
@@ -1377,11 +1377,20 @@ impl CalendarRepository for PgCalendarRepository {
             SELECT
                 (mentioned.id IS NOT NULL) AS "mention_exists!",
                 viewer_event.id AS "resolved_event_id?",
-                (
+                ARRAY(
                     SELECT viewer_source.calendar_id
                     FROM calendar_event_sources viewer_source
-                    WHERE viewer_source.id = calendar_event_canonical_source_id(viewer_event.id)
-                ) AS "viewer_calendar_id?",
+                    JOIN calendars viewer_calendar
+                        ON viewer_calendar.id = viewer_source.calendar_id
+                    JOIN calendar_accounts viewer_account
+                        ON viewer_account.id = viewer_source.account_id
+                    WHERE viewer_source.event_id = viewer_event.id
+                      AND NOT viewer_calendar.is_deleted
+                      AND viewer_account.sync_status <> 'disabled'
+                    ORDER BY
+                        viewer_source.id = calendar_event_canonical_source_id(viewer_event.id) DESC,
+                        viewer_source.id
+                ) AS "viewer_calendar_ids?",
                 viewer_event.is_channel_shared AS "is_channel_shared?",
                 viewer_event.is_snapshot AS "is_snapshot?",
                 viewer_event.inbox_organizes AS "inbox_organizes?",
@@ -4916,7 +4925,10 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
     Ok(CalendarMentionPreview::Accessible(Box::new(
         CalendarMentionEvent {
             viewer_event_id: (!is_channel_shared).then_some(resolved_event_id),
-            viewer_calendar_id: row.viewer_calendar_id.filter(|_| !is_channel_shared),
+            viewer_calendar_ids: row
+                .viewer_calendar_ids
+                .filter(|_| !is_channel_shared)
+                .unwrap_or_default(),
             viewer_copy: (!is_channel_shared).then(|| {
                 CalendarMentionViewerCopy::classify(
                     row.is_snapshot.unwrap_or_default(),

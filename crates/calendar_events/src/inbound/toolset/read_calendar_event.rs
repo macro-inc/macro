@@ -65,8 +65,8 @@ pub struct ReadCalendarEventResponse {
     /// How the user holds the event: on their calendar, on another calendar
     /// they can see, invited, as a snapshot, or only shared with them.
     pub access: CalendarEventAccess,
-    /// Display name of the calendar holding `eventId`, when known. It often
-    /// says whose calendar it is.
+    /// Display name of the calendar holding `eventId`, the canonical copy's
+    /// when several do, when known. It often says whose calendar it is.
     pub calendar_name: Option<String>,
     /// The user's own copy of the meeting, for UpdateCalendarEvent and
     /// DeleteCalendarEvent. It can differ from the id that was read, and is
@@ -112,10 +112,10 @@ pub struct ReadCalendarEventResponse {
 
 impl ReadCalendarEventResponse {
     fn from_preview(event: CalendarMentionEvent, labels: &CalendarLabels) -> Self {
-        let on_own_schedule =
-            labels.contributes_to_availability(event.viewer_calendar_id) == Some(true);
+        let calendars = event.viewer_calendar_ids.iter().copied();
+        let on_own_schedule = labels.on_schedule(calendars) == Some(true);
         let access = CalendarEventAccess::of(&event, on_own_schedule);
-        let calendar_name = labels.calendar_name(event.viewer_calendar_id);
+        let calendar_name = labels.calendar_name(event.viewer_calendar_ids.first().copied());
         let (start, end, is_all_day, time_zone) = time_fields(&event.time);
         let summary = match access {
             CalendarEventAccess::OnYourCalendar => {

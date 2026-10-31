@@ -5048,8 +5048,8 @@ export interface ToolCalendarEvent {
   inbox?: string | null;
   /**
    * Whether the user organizes this event or is a guest on it, through
-   * that inbox; absent when they are neither, or nothing shows the
-   * calendar is theirs.
+   * that inbox; absent when they are neither, or can only write that
+   * calendar.
    */
   myRole?: ToolEventRole | null;
 }
@@ -11540,9 +11540,10 @@ export interface CalendarEventListItem {
    */
   calendarName?: string | null;
   /**
-   * Whether that calendar counts toward the user's busy time, when known.
-   * Only these and meetings they attend are the user's schedule; false
-   * does not say whose it is, as their own other calendars are false too.
+   * Whether a calendar holding this event counts toward the user's busy
+   * time, when known. Only these and meetings they attend are the user's
+   * schedule; false does not say whose calendar it is, as their own other
+   * calendars are false too.
    */
   contributesToAvailability?: boolean | null;
   /**
@@ -11554,8 +11555,8 @@ export interface CalendarEventListItem {
   inbox?: string | null;
   /**
    * Whether the user organizes this event or is a guest on it, through
-   * `inbox`; absent when they are neither, or nothing shows the calendar
-   * is theirs.
+   * `inbox`; absent when they are neither, or can only write that
+   * calendar.
    */
   myRole?: ToolEventRole | null;
   /**
@@ -13386,8 +13387,8 @@ export interface ReadCalendarEvent {
 export interface ReadCalendarEventResponse {
   access: CalendarEventAccess;
   /**
-   * Display name of the calendar holding `eventId`, when known. It often
-   * says whose calendar it is.
+   * Display name of the calendar holding `eventId`, the canonical copy's
+   * when several do, when known. It often says whose calendar it is.
    */
   calendarName?: string | null;
   /**

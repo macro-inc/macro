@@ -154,13 +154,14 @@ Find up to 30 owned markdown documents for meeting notes, plus available extra t
 
 > **occurrences**(`options`): `AsyncGenerator`\<\{ `calendarName`: `string` \| `undefined`; `contributesToAvailability`: `boolean` \| `undefined`; `event`: [`CalendarEvent`](../../event/classes/CalendarEvent.md); `inbox`: `string` \| `undefined`; `occurrence`: [`CalendarOccurrence`](../../../../../generated/storage/types.gen/type-aliases/CalendarOccurrence.md); `role`: [`CalendarEventRole`](../type-aliases/CalendarEventRole.md) \| `undefined`; \}, `any`, `any`\>
 
-Occurrences on every calendar the user can see, not only theirs: only
-`contributesToAvailability` rows are their schedule; call the rest by
-`calendarName`. Automatically paginated within the viewport. Each names
-its calendar (`calendarName`), the address of the connected inbox holding
-that copy of the event (`inbox`) and whether the user organizes it or is
-a guest there (`role`, absent when neither, or when nothing shows the
-calendar is theirs).
+Occurrences on every calendar the user can see: their schedule is only
+`contributesToAvailability` rows and meetings they attend; call the rest
+by `calendarName`. Automatically paginated within the viewport. Each names
+its calendar (`calendarName`), whether a calendar holding it is on the
+user's schedule (`contributesToAvailability`), the address of the
+connected inbox holding that copy of the event (`inbox`) and whether the
+user organizes it or is a guest there (`role`, absent when neither, or
+when they can only write that calendar).
 
 `inbox` is the account syncing the calendar, so a colleague's calendar
 reports the user's own address; it never says whose calendar it is, and

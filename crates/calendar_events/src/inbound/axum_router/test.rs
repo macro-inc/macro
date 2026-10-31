@@ -50,7 +50,7 @@ fn mention_preview_items_serialize_the_preview_contract() {
         event: Some(CalendarMentionEvent {
             viewer_event_id: Some(event_id),
             viewer_copy: Some(crate::domain::models::CalendarMentionViewerCopy::Snapshot),
-            viewer_calendar_id: None,
+            viewer_calendar_ids: Vec::new(),
             title: "Smart Macro Discussion".to_string(),
             description: Some("Agenda: <b>roadmap</b>".to_string()),
             time: crate::domain::models::EventTime::Timed {

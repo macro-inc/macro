@@ -151,13 +151,14 @@ export class CalendarNamespace {
     ).sharing;
   }
 
-  /** Occurrences on every calendar the user can see, not only theirs: only
-   * `contributesToAvailability` rows are their schedule; call the rest by
-   * `calendarName`. Automatically paginated within the viewport. Each names
-   * its calendar (`calendarName`), the address of the connected inbox holding
-   * that copy of the event (`inbox`) and whether the user organizes it or is
-   * a guest there (`role`, absent when neither, or when nothing shows the
-   * calendar is theirs).
+  /** Occurrences on every calendar the user can see: their schedule is only
+   * `contributesToAvailability` rows and meetings they attend; call the rest
+   * by `calendarName`. Automatically paginated within the viewport. Each names
+   * its calendar (`calendarName`), whether a calendar holding it is on the
+   * user's schedule (`contributesToAvailability`), the address of the
+   * connected inbox holding that copy of the event (`inbox`) and whether the
+   * user organizes it or is a guest there (`role`, absent when neither, or
+   * when they can only write that calendar).
    *
    * `inbox` is the account syncing the calendar, so a colleague's calendar
    * reports the user's own address; it never says whose calendar it is, and
@@ -201,9 +202,9 @@ export class CalendarNamespace {
             event: CalendarEvent.fromRecord(this.client, item.event),
             occurrence: item.occurrence,
             calendarName: calendar?.name,
-            contributesToAvailability: calendar?.contributesToAvailability,
+            contributesToAvailability: onSchedule(item.event, calendarById),
             inbox: calendar?.emailAddress,
-            role: eventRole(item.event, calendar),
+            role: eventRole(item.event, calendarById),
           };
         }),
         nextCursor: page.nextCursor,
@@ -310,13 +311,31 @@ async function visibleCalendars(
   return new Map(calendars.map((calendar) => [calendar.id, calendar]));
 }
 
+/** Whether a calendar holding the event is on the user's schedule, when one is
+ * known. Availability counts each copy, so one such copy is enough. */
+function onSchedule(
+  record: CalendarEventRecord,
+  calendars: Map<string, VisibleCalendar>,
+): boolean | undefined {
+  const known = [
+    record.calendarId,
+    ...(record.sources ?? []).map((copy) => copy.calendarId),
+  ].flatMap((id) => {
+    const calendar = id ? calendars.get(id) : undefined;
+    return calendar ? [calendar] : [];
+  });
+  return known.length > 0
+    ? known.some((calendar) => calendar.contributesToAvailability)
+    : undefined;
+}
+
 /** The user's role on a copy, read the way ListCalendarEvents reads it: only
  * the copy's own inbox row is `isSelf`. `organize` says they may act as
  * organizer, which writing someone else's calendar grants too, so it counts
  * only on a calendar of their own schedule with no other organizer listed. */
 function eventRole(
   record: CalendarEventRecord,
-  calendar: VisibleCalendar | undefined,
+  calendars: Map<string, VisibleCalendar>,
 ): CalendarEventRole | undefined {
   const own = record.attendees.find((attendee) => attendee.isSelf);
   if (own?.isOrganizer) {
@@ -327,7 +346,7 @@ function eventRole(
   );
   if (
     record.viewerCan.organize &&
-    calendar?.contributesToAvailability &&
+    onSchedule(record, calendars) &&
     !otherOrganizer
   ) {
     return 'organizer';

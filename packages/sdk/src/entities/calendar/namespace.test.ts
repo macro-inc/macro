@@ -245,6 +245,60 @@ describe('calendar occurrences', () => {
     ]);
   });
 
+  test('count an event on the schedule when any copy is', async () => {
+    const [item] = await listed(
+      [
+        {
+          ...copy('both', 'calendar-primary', null, true),
+          sources: [
+            { calendarId: 'calendar-primary' },
+            { calendarId: 'calendar-personal' },
+          ],
+        } as CalendarEventRecord,
+      ],
+      [
+        {
+          id: 'calendar-primary',
+          name: 'user@example.com',
+          emailAddress: 'user@example.com',
+          contributesToAvailability: false,
+        },
+        {
+          id: 'calendar-personal',
+          name: 'Personal',
+          emailAddress: 'user@example.com',
+          contributesToAvailability: true,
+        },
+      ],
+    );
+
+    expect(item?.calendarName).toBe('user@example.com');
+    expect(item?.contributesToAvailability).toBe(true);
+    expect(item?.role).toBe('organizer');
+  });
+
+  test('keep the role of an event the user organizes on any calendar', async () => {
+    const [item] = await listed(
+      [
+        copy(
+          'organized',
+          'calendar-colleague',
+          { email: 'user@example.com', isOrganizer: true },
+          false,
+        ),
+      ],
+      [
+        {
+          id: 'calendar-colleague',
+          emailAddress: 'user@example.com',
+          contributesToAvailability: false,
+        },
+      ],
+    );
+
+    expect(item?.role).toBe('organizer');
+  });
+
   test('keep the organizer role on a calendar of the user’s schedule', async () => {
     const [noGuests, invitedBySecondary] = await listed(
       [
