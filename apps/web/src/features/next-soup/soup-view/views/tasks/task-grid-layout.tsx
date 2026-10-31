@@ -171,7 +171,7 @@ export function TaskGridLayout(props: LayoutProps) {
                 streamState={props.streamState}
               />
             </div>
-            <span class="flex min-w-0 flex-1 items-center gap-2">
+            <span class="flex min-w-0 flex-1 items-center gap-1">
               <span class="min-w-0 truncate">
                 <Entity.Title entity={props.entity} />
               </span>

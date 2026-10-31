@@ -17,7 +17,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
 - Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
-- Align wide desktop group-header glyphs with row status glyphs through shared Soup geometry; give narrow/mobile headers compact independent spacing, and preserve their 44px touch target and layout-neutral border.
+- Align wide desktop group-header glyphs with row status glyphs through shared Soup geometry; use a 2px caret-to-content gap in containers up to 840px and narrow/mobile headers, preserving the 44px touch target and layout-neutral border.
 - Keep `soup-list` on list roots for shared row geometry; truncate long group labels instead of wrapping.
 - Pin the current list group header within its scroller until the next header replaces it; retain the real virtual row, mobile chrome clearance, collapse controls, and unobscured keyboard targets.
 - Keep desktop and tablet task rows on the shared column grid at every pane width with the column header mounted; use the headerless narrow row layout only on phones.
@@ -29,7 +29,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Place Project before Assignees in wide and narrow task rows, including phones; keep one assignee avatar plus the remaining count in narrow rows.
 - At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, and Updated headers; keep Project at 32px and Assignees at 40px, retaining one assignee avatar and its overflow count.
 - Size Updated from its measured, untruncated header with a 56px content minimum for single-line timestamps; share the width across rows, retain existing Created by spacing, and fade/collapse Updated over 160ms at 600px, disabling motion for reduced-motion preferences.
-- Keep Created by visible above 600px alongside Updated, with a 16px user-plus header icon aligned to creator avatars and a keyboard-focusable “Created by” tooltip; show the title's shared badge only while the creator column is hidden.
+- Keep Created by visible above 600px alongside Updated, with a 16px user-plus header icon aligned to creator avatars and a keyboard-focusable “Created by” tooltip; show the title's shared badge only while the creator column is hidden, with a 4px layout gap after the title.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
 - Pass enabled grid columns as a typed ordered array; default Project before Assignees and derive full-row spans from the same array.
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
