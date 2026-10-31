@@ -128,20 +128,13 @@ function FullScreenCallToastTrigger(props: { onHide: () => void }) {
         ),
         actions: [
           {
-            label: 'Hide',
-            onClick: () => {
-              props.onHide();
-              toast.dismiss(toastId);
-            },
-          },
-          {
             label: 'Allow',
             onClick: () =>
               fireAndForget(openFullScreenIntentSettings(), 'channel-call'),
           },
         ],
       },
-      { persistent: true }
+      { persistent: true, onUserDismiss: () => props.onHide() }
     );
     onCleanup(() => toast.dismiss(toastId));
   });

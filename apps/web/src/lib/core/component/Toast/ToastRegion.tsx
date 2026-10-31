@@ -1,17 +1,12 @@
 import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
 import { isMobile } from '@core/mobile/isMobile';
 import { Toast } from '@kobalte/core/toast';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { createMobileToastSwipe } from './create-mobile-toast-swipe';
 
 export function ToastRegion() {
-  const [mobileSwipeDirection, setMobileSwipeDirection] = createSignal<
-    'left' | 'right'
-  >('left');
-  let swipeStart: { x: number; pointerId: number } | undefined;
-  const clearSwipe = (event: PointerEvent) => {
-    if (swipeStart?.pointerId === event.pointerId) swipeStart = undefined;
-  };
+  const mobileSwipe = createMobileToastSwipe();
 
   return (
     <Portal>
@@ -66,23 +61,17 @@ export function ToastRegion() {
         class="fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5"
         on:pointerdown={{
           capture: true,
-          handleEvent: (event) => {
-            if (event.button === 0)
-              swipeStart = { x: event.clientX, pointerId: event.pointerId };
-          },
+          handleEvent: mobileSwipe.onPointerDown,
         }}
         on:pointermove={{
           capture: true,
-          handleEvent: (event) => {
-            if (!swipeStart || swipeStart.pointerId !== event.pointerId) return;
-            const deltaX = event.clientX - swipeStart.x;
-            // Choose the direction before Kobalte clamps this pointer move.
-            if (deltaX !== 0)
-              setMobileSwipeDirection(deltaX < 0 ? 'left' : 'right');
-          },
+          handleEvent: mobileSwipe.onPointerMove,
         }}
-        on:pointerup={{ capture: true, handleEvent: clearSwipe }}
-        on:pointercancel={{ capture: true, handleEvent: clearSwipe }}
+        on:pointerup={{ capture: true, handleEvent: mobileSwipe.clearSwipe }}
+        on:pointercancel={{
+          capture: true,
+          handleEvent: mobileSwipe.clearSwipe,
+        }}
         style={{
           bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
         }}
@@ -93,7 +82,7 @@ export function ToastRegion() {
           duration={Infinity}
           limit={1}
           pauseOnInteraction={false}
-          swipeDirection={mobileSwipeDirection()}
+          swipeDirection={mobileSwipe.direction()}
         >
           <Toast.List class="macro-toast-list" />
         </Toast.Region>
@@ -103,7 +92,7 @@ export function ToastRegion() {
           duration={Infinity}
           limit={1}
           pauseOnInteraction={false}
-          swipeDirection={mobileSwipeDirection()}
+          swipeDirection={mobileSwipe.direction()}
         >
           <Toast.List class="macro-toast-list" />
         </Toast.Region>
@@ -113,7 +102,7 @@ export function ToastRegion() {
           limit={1}
           duration={4500}
           pauseOnInteraction
-          swipeDirection={mobileSwipeDirection()}
+          swipeDirection={mobileSwipe.direction()}
         >
           <Toast.List class="macro-toast-list" />
         </Toast.Region>

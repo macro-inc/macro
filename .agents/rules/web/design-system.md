@@ -25,6 +25,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 | Menu, popover, floating toolbar or editor panel | `Dropdown`, `Toolbar`, or `menu-surface` on the overlay root | A hand-built fill, border, and shadow, or `bg-menu-glass` |
 | Dialog or modal card | `Dialog`, or `elevated-surface` for a custom dialog root | `bg-dialog`/`bg-surface` with its own radius and shadow |
 | Loading placeholder, view skeleton | `ListSkeleton` (`Root`, `Row`, `Bar`); `ViewSkeleton` with the view's tabs and `controls` | `animate-pulse` boxes with their own fill |
+| Transient notification or persistent notice | `toast` from `@core/component/Toast/Toast` | A second toast service or hand-built global notification overlay |
 
 - **FE-60** Pick the component for the role from the table above, and import
   tabs only from `@ui`. Enforced by ast-grep `tsx-tabs-from-ui`, CI error; the
@@ -92,6 +93,10 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   tabs, and header controls as placeholders), so change the skeleton in the
   same change as the header. Enforced for pulsing boxes by ast-grep
   `tsx-skeleton-shimmer`, CI error.
+- Toasts retain their own `--color-toast` surface, border, and light/dark shadows from the main app, not `menu-surface`. Use standalone semantic status icons without badge backgrounds. Keep descriptions, custom content, and stacked actions aligned with their title; never add surface colors in toast callers. On desktop, inset close buttons by 8px from the right and, on multiline cards, the top; reserve room so text and actions do not collide. Mobile notices omit the close icon and support swiping left or right. Simple phone notices use content-width pills and rich notices use bounded cards.
+- Toasts with actions use primary Buttons and a secondary Dismiss button, not a close icon. Actions default to a title-aligned stacked row; set `actionLayout: 'inline'` for brief notices that place actions beside the title and wrap on narrow screens. Embedded content keeps stacked actions because it owns its title. Actionless desktop toasts keep the close icon. Use `showCloseButton: false` only to hide the visible dismissal control; it does not change expiry, Escape, swipe, or user-dismiss callbacks. Move caller-owned dismissal effects to `onUserDismiss` instead of adding duplicate Hide actions. Preserve desktop queueing, mobile replacement, and separate persistent regions when changing presentation. `ToastContent` is the shared renderer for isolated gallery regions, not an alternative application service.
+- Use the shared `Spinner` for loading toasts and custom loading icons; it owns its motion and respects reduced motion. Use `decorative` when surrounding content names the operation, and retain determinate progress bars when progress is known.
+- Keep Toast gallery previews isolated from app notifications. App-position examples reuse normal desktop/mobile offsets and queue behavior; clear their synthetic records and timers when switching examples or leaving the page.
 
 Check: `just check` passes the ast-grep rules; the changed bar shows one height,
 16px icon glyphs, tabs on the left, and islands only around actions, at desktop
