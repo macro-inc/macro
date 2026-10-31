@@ -15,6 +15,13 @@
 -- Deleting the notification, rather than marking it, is what reaches open
 -- clients (trg_notify_user_notification_deletes) and takes it out of a pending
 -- digest email.
+--
+-- These notifications are queued, and a backlog can deliver one minutes after
+-- its event went, past the cleanup above, so the insert checks the event too.
+-- The lookup locks the row FOR SHARE, which also conflicts with a status
+-- update, so it waits for a delete or cancellation in flight: whichever commits
+-- first, the notification does not outlive the event. Returning NULL skips the
+-- insert, which notification ingress reads as nothing to deliver.
 
 SET LOCAL lock_timeout = '5s';
 
@@ -41,3 +48,26 @@ CREATE TRIGGER calendar_event_cancelled_join_request_notification_cleanup
     FOR EACH ROW
     WHEN (NEW.status = 'cancelled' AND OLD.status <> 'cancelled')
     EXECUTE FUNCTION delete_calendar_event_join_request_notifications();
+
+CREATE FUNCTION skip_join_request_notification_without_live_event()
+    RETURNS TRIGGER
+    LANGUAGE PLPGSQL
+    AS
+$$
+    BEGIN
+        PERFORM 1 FROM calendar_events
+        WHERE id = NEW.event_item_id::uuid
+          AND status <> 'cancelled'
+        FOR SHARE;
+        IF FOUND THEN
+            RETURN NEW;
+        END IF;
+        RETURN NULL;
+    END;
+$$;
+
+CREATE TRIGGER calendar_event_join_request_notification_guard
+    BEFORE INSERT ON notification
+    FOR EACH ROW
+    WHEN (NEW.notification_event_type = 'calendar_event_join_request')
+    EXECUTE FUNCTION skip_join_request_notification_without_live_event();

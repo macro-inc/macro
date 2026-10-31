@@ -192,8 +192,11 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   row, or when the row turns `cancelled` (Outlook can keep a cancelled
   meeting). That covers the ways a copy goes away listed for channel grants
   above, and the delete reaches open clients through
-  `trg_notify_user_notification_deletes`. The cancelled row keeps its requests,
-  as it keeps its grants, and a cancelled occurrence changes neither.
+  `trg_notify_user_notification_deletes`. The notifier only queues, so a backlog
+  can deliver a notification after that cleanup; a `notification` insert trigger
+  skips it while the event is gone or cancelled, locking the row to decide in
+  order with a change in flight. The cancelled row keeps its requests, as it
+  keeps its grants, and a cancelled occurrence changes neither.
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with

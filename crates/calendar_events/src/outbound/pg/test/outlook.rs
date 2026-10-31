@@ -1408,7 +1408,7 @@ async fn an_outlook_cancellation_or_removal_retires_join_request_notifications(p
     repo.checkpoint_outlook_calendar(
         &lease,
         OutlookCalendarProgress::Page(OutlookCalendarPage {
-            members: vec![("provider-meeting".into(), "provider-meeting".into())],
+            members: vec![("provider-removed".into(), "provider-removed".into())],
             removed: vec![],
             next: None,
             delta: Some("baseline".into()),
@@ -1417,15 +1417,19 @@ async fn an_outlook_cancellation_or_removal_retires_join_request_notifications(p
     .await
     .unwrap();
     let event = claim(&repo).await.unwrap();
-    let event_id = store(&repo, &event, "meeting").await;
+    let cancelled_id = store(&repo, &event, "cancelled").await;
+    let removed_id = store(&repo, &event, "removed").await;
     let (request, _) = repo
-        .open_join_request(event_id, member, "member@work.example.com")
+        .open_join_request(cancelled_id, member, "member@work.example.com")
         .await
         .unwrap();
-    let asked = insert_notification(&pool, JOIN_REQUEST_NOTIFICATION, event_id, &owner).await;
+    let on_cancelled =
+        insert_notification(&pool, JOIN_REQUEST_NOTIFICATION, cancelled_id, &owner).await;
+    let on_removed =
+        insert_notification(&pool, JOIN_REQUEST_NOTIFICATION, removed_id, &owner).await;
 
     // Outlook can keep a cancelled meeting: the row stays, with its request.
-    let mut cancelled = upsert(&event, "meeting");
+    let mut cancelled = upsert(&event, "cancelled");
     cancelled.event.status = EventStatus::Cancelled;
     cancelled.event.sequence = 1;
     cancelled.event.updated_at += Duration::minutes(1);
@@ -1435,24 +1439,21 @@ async fn an_outlook_cancellation_or_removal_retires_join_request_notifications(p
     })
     .await
     .unwrap();
-    assert!(!recipient_holds(&pool, asked).await);
+    assert!(!recipient_holds(&pool, on_cancelled).await);
     assert_eq!(
         repo.get_join_request(request.id).await.unwrap(),
-        Some(request.clone())
+        Some(request)
     );
+    assert!(recipient_holds(&pool, on_removed).await);
 
-    // Removing it from Outlook deletes the row.
-    let asked_while_cancelled =
-        insert_notification(&pool, JOIN_REQUEST_NOTIFICATION, event_id, &owner).await;
     repo.checkpoint_outlook_calendar(
         &event,
         OutlookCalendarProgress::Event {
-            id: "provider-meeting".into(),
+            id: "provider-removed".into(),
             exists: false,
         },
     )
     .await
     .unwrap();
-    assert!(!recipient_holds(&pool, asked_while_cancelled).await);
-    assert_eq!(repo.get_join_request(request.id).await.unwrap(), None);
+    assert!(!recipient_holds(&pool, on_removed).await);
 }

@@ -391,3 +391,86 @@ async fn removing_the_calendar_or_the_inbox_removes_join_request_notifications(p
         .unwrap();
     assert!(!recipient_holds(&pool, on_removed_inbox).await);
 }
+
+/// Notification ingress's insert, reporting whether the row was stored.
+async fn ingress_insert(
+    executor: impl sqlx::PgExecutor<'_>,
+    event_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    sqlx::query!(
+        r#"
+        INSERT INTO notification (
+            id, notification_event_type, event_item_id, event_item_type, service_sender
+        )
+        VALUES (
+            $1, 'calendar_event_join_request', $2, 'calendar_event', 'notification_service'
+        )
+        ON CONFLICT (id) DO NOTHING
+        "#,
+        Uuid::now_v7(),
+        event_id.to_string(),
+    )
+    .execute(executor)
+    .await
+    .map(|result| result.rows_affected() == 1)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_queued_join_request_notification_is_not_stored_after_its_event_went(pool: PgPool) {
+    let sharer_id = "macro|join-queued@example.com";
+    let sharer_link = insert_link(&pool, sharer_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let provider = provider_ids(&repo, sharer_link).await;
+    let event_id = repo
+        .upsert_event_fixture(timed_upsert(
+            sharer_id,
+            sharer_link,
+            provider,
+            "join-queued@example.com",
+            "Offsite",
+            1,
+        ))
+        .await
+        .unwrap();
+    assert!(ingress_insert(&pool, event_id).await.unwrap());
+
+    // A cancellation in flight holds the row, so the insert waits for its outcome.
+    let mut cancelling = pool.begin().await.unwrap();
+    sqlx::query!(
+        "UPDATE calendar_events SET status = 'cancelled' WHERE id = $1",
+        event_id,
+    )
+    .execute(&mut *cancelling)
+    .await
+    .unwrap();
+    let mut arriving = pool.begin().await.unwrap();
+    sqlx::query!("SET LOCAL lock_timeout = '100ms'")
+        .execute(&mut *arriving)
+        .await
+        .unwrap();
+    let waited = ingress_insert(&mut *arriving, event_id).await.unwrap_err();
+    assert_eq!(
+        waited
+            .as_database_error()
+            .and_then(|error| error.code())
+            .as_deref(),
+        Some("55P03")
+    );
+    arriving.rollback().await.unwrap();
+    cancelling.commit().await.unwrap();
+
+    assert!(!ingress_insert(&pool, event_id).await.unwrap());
+
+    sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(!ingress_insert(&pool, event_id).await.unwrap());
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM notification"#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        0
+    );
+}
