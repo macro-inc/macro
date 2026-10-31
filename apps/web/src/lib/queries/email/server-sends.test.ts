@@ -50,6 +50,18 @@ it('loads sends from other devices on sign-in without a local send or rollout fl
   expect(readPendingEmailSends).toHaveBeenCalledTimes(1);
 });
 
+it('loads sends on webviews without AbortSignal.any', async () => {
+  const { any } = AbortSignal;
+  Reflect.deleteProperty(AbortSignal, 'any');
+  try {
+    setServerSendSession('owner');
+    await refreshServerEmailSends();
+    expect(serverEmailSends()).toEqual(pending.pendingEmailSends.attempts);
+  } finally {
+    Object.assign(AbortSignal, { any });
+  }
+});
+
 it('waits offline and refreshes server sends on reconnect', async () => {
   vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
   setServerSendSession('owner');
