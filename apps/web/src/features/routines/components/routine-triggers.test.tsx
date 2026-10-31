@@ -80,6 +80,15 @@ function item(name: RegExp | string) {
 
 beforeEach(() => {
   phone.value = false;
+  // A phone's sheet measures itself.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
 });
 
 describe('routine triggers on the routine page', () => {
@@ -143,6 +152,50 @@ describe('routine triggers on the routine page', () => {
     ]);
   });
 
+  it('keeps a GitHub trigger’s repositories and added tests across presets', () => {
+    const merged: RoutineTriggerDraft = {
+      id: 'merged',
+      kind: 'event',
+      events: ['github'],
+      github: {
+        events: ['pull_request'],
+        actions: ['closed'],
+        repositories: ['acme/app'],
+        includeBots: true,
+      },
+      match: [
+        { path: 'pull_request.merged', op: 'equals', value: 'true' },
+        { path: 'pull_request.base.ref', op: 'equals', value: 'main' },
+      ],
+    };
+    const { triggers, onChange } = renderRows([merged]);
+    const token = () =>
+      screen.getByRole('button', {
+        name: /^Change Pull request (merged|opened) trigger$/,
+      });
+    // Choosing the event it already has changes nothing.
+    press(token(), 'Enter');
+    press(item('GitHub'), 'ArrowRight');
+    press(item(/^Pull request merged/), 'Enter');
+    expect(onChange).not.toHaveBeenCalled();
+    press(token(), 'Enter');
+    press(item('GitHub'), 'ArrowRight');
+    press(item(/^Pull request opened/), 'Enter');
+    expect(triggers()).toMatchObject([
+      {
+        events: ['github'],
+        github: {
+          events: ['pull_request'],
+          actions: ['opened'],
+          repositories: ['acme/app'],
+          includeBots: true,
+        },
+        // The merged preset's own test goes; the one added on top stays.
+        match: [{ path: 'pull_request.base.ref', op: 'equals', value: 'main' }],
+      },
+    ]);
+  });
+
   it('searches every submenu, and a typed schedule becomes the top row', () => {
     const { triggers } = renderRows([]);
     const search = openAddTrigger();
@@ -196,5 +249,17 @@ describe('routine triggers on the routine page', () => {
     ).toBeNull();
     press(item('Tasks'), 'Enter');
     expect(item('Email')).toBeTruthy();
+  });
+
+  it('edits a chosen trigger in a sheet on a phone', async () => {
+    phone.value = true;
+    renderRows([]);
+    openAddTrigger();
+    press(item('Tasks'), 'Enter');
+    press(item(/^Task created/), 'Enter');
+    const sheet = await screen.findByRole('dialog', { name: 'Add trigger' });
+    expect(
+      within(sheet).getByRole('button', { name: 'Add trigger' })
+    ).toBeTruthy();
   });
 });

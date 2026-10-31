@@ -22,11 +22,8 @@ export function RoutineSettings() {
   };
   const create = () => {
     settings.close();
-    layout.popoverSplit({
-      type: 'component',
-      id: 'routine-compose',
-      params: { onCreated: open },
-    });
+    // Starting a routine opens its page in Agents, as on desktop.
+    layout.popoverSplit({ type: 'component', id: 'routine-compose' });
   };
   return (
     <SettingsPage title="Routines" bodyClass="[--mobile-content-inset-top:0px]">

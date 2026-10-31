@@ -5,11 +5,12 @@ import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
 import FlagIcon from '@icon/system/regular/flag.svg';
 import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import { Button, Card, ComposerSurface, cn } from '@ui';
+import { Button, Card, cn } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { RoutineTemplate } from '../core/routine-templates';
+import { RoutineSurface } from './routine-editor';
 
 /** Each template's icon and tint, by what it is for. */
 function templateLook(key: RoutineTemplate['key']) {
@@ -77,7 +78,7 @@ function TemplateCardButton(props: {
  * A template as a raised card. On a page it sits on the composer surface the
  * routine page uses; in a dialog it is one surface above the dialog's.
  */
-export function RoutineTemplateCard(props: {
+export function StarterTemplateCard(props: {
   template: RoutineTemplate;
   onUse(): void;
   on: 'page' | 'dialog';
@@ -91,12 +92,9 @@ export function RoutineTemplateCard(props: {
         </Card>
       }
     >
-      <ComposerSurface
-        as="div"
-        class="min-w-0 rounded-xl touch:rounded-xl touch:border touch:border-edge-muted touch:bg-composer"
-      >
+      <RoutineSurface>
         <TemplateCardButton template={props.template} onUse={props.onUse} />
-      </ComposerSurface>
+      </RoutineSurface>
     </Show>
   );
 }
@@ -130,7 +128,7 @@ export function RoutineTemplateStrip(props: {
       <div class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-2.5 @max-[760px]/routines:-mx-3 @max-[760px]/routines:auto-cols-[15rem] @max-[760px]/routines:grid-flow-col @max-[760px]/routines:grid-cols-none @max-[760px]/routines:overflow-x-auto @max-[760px]/routines:px-3 @max-[760px]/routines:pb-1">
         <For each={props.templates}>
           {(template) => (
-            <RoutineTemplateCard
+            <StarterTemplateCard
               on="page"
               template={template}
               onUse={() => props.onUse(template)}

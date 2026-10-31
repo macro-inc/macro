@@ -1,18 +1,12 @@
 import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
-import GithubIcon from '@icon/mcp-github.svg';
-import CheckSquareIcon from '@icon/system/regular/check-square.svg';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
-import FileTextIcon from '@icon/system/regular/file-text.svg';
-import HashIcon from '@icon/system/regular/hash.svg';
-import PhoneIcon from '@icon/system/regular/phone.svg';
 import { Badge, cn, ToggleSwitch, Tooltip } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { TriggerKind } from '../core/routine-triggers';
 import type { RoutineRow } from '../core/types';
+import { triggerKindIcon } from './routine-trigger-icons';
 
 /**
  * Shared geometry keeps routine properties aligned with their column headers:
@@ -36,19 +30,9 @@ export function RoutineRowLayout(
 }
 
 function TriggerIcon(props: { kind?: TriggerKind }) {
-  const icon = () =>
-    match(props.kind)
-      .with('email', () => EnvelopeIcon)
-      .with('task', () => CheckSquareIcon)
-      .with('document', () => FileTextIcon)
-      .with('channel', () => HashIcon)
-      .with('call', () => PhoneIcon)
-      .with('github', () => GithubIcon)
-      .with('schedule', undefined, () => ClockIcon)
-      .exhaustive();
   return (
     <Dynamic
-      component={icon()}
+      component={triggerKindIcon(props.kind)}
       aria-hidden="true"
       class="size-4 shrink-0 text-ink-muted"
     />
@@ -126,7 +110,7 @@ export function RoutineListRow(props: {
         <Cell label={doesLabel()} class="@max-[760px]/routines:hidden">
           <Show when={props.row.ai}>
             {(chip) => (
-              <Badge size="xs" class="bg-accent-bg text-accent">
+              <Badge variant="accent" size="xs">
                 {chip()}
               </Badge>
             )}

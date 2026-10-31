@@ -1,5 +1,5 @@
 import { ToggleSwitch } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import type { StepDraft } from '../core/routine-steps';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import { triggerScope, triggerSubject } from '../core/step-catalog';
@@ -80,30 +80,13 @@ export function RoutineStepsSummary(props: {
 
 /**
  * A routine's steps as numbered cards, branches indented under their
- * decision. Without a host that shows `RoutineStepsSummary` (`showRun`
- * given), the summary sits above them.
+ * decision. The page puts `RoutineStepsSummary` on the Steps heading.
  */
-export function RoutineSteps(props: RoutineStepsProps & { showRun?: boolean }) {
-  const [showRun, setShowRun] = createSignal(true);
+export function RoutineSteps(props: RoutineStepsProps & { showRun: boolean }) {
   const scope = () => triggerScope(triggerSubject(props.triggers));
   return (
-    <StepsProvider {...props} showRun={props.showRun ?? showRun()}>
-      <div class="grid min-w-0 gap-2">
-        <Show when={props.showRun === undefined}>
-          <RoutineStepsSummary
-            steps={props.steps}
-            triggers={props.triggers}
-            lastRun={props.lastRun}
-            showRun={showRun()}
-            onShowRun={setShowRun}
-          />
-        </Show>
-        <StepList
-          steps={props.steps}
-          onChange={props.onChange}
-          scope={scope()}
-        />
-      </div>
+    <StepsProvider {...props}>
+      <StepList steps={props.steps} onChange={props.onChange} scope={scope()} />
     </StepsProvider>
   );
 }

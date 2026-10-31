@@ -1,4 +1,5 @@
 import { IS_MAC } from '@core/constant/isMac';
+import { isEditableInput } from '@core/util/isEditableInput';
 import ArchiveIcon from '@icon/system/regular/archive.svg';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
@@ -209,6 +210,15 @@ export function StepList(props: {
     props.onChange(steps);
   };
   const shown = () => props.steps.slice(from()).map((step) => step.id);
+  const endsInCard = () => {
+    const last = props.steps.at(-1);
+    return (
+      shown().length > 0 &&
+      last !== undefined &&
+      last.kind !== 'if' &&
+      last.kind !== 'choose'
+    );
+  };
   return (
     <div class="grid min-w-0 gap-2">
       <For each={shown()}>
@@ -255,11 +265,13 @@ export function StepList(props: {
           </div>
         }
       >
-        {/* The routine's own list adds steps from a tray under its last card. */}
+        {/* The routine's own list adds steps from a tray under its last card.
+            A decision ends in its branches, not a card, so the tray then
+            stands on its own below them. */}
         <RoutineTray
-          attached={shown().length > 0}
+          attached={endsInCard()}
           // Into the list's gap, and behind the last card's corners.
-          class={shown().length > 0 ? '-mt-5' : undefined}
+          class={endsInCard() ? '-mt-5' : undefined}
         >
           <AddStep
             variant="tray"
@@ -466,20 +478,31 @@ function StepCard(props: StepCardProps) {
     [headline().summary, onTarget() && `on the new ${onTarget()?.subject}`]
       .filter(Boolean)
       .join(' · ');
+  let header: HTMLButtonElement | undefined;
   return (
     <RoutineSurface>
-      <section
+      {/* A named group, not a landmark: a routine has many steps. */}
+      <div
+        role="group"
         aria-label={headline().title}
         class="@container/step group/step min-w-0"
         onKeyDown={(event) => {
           if (!event.altKey) return;
           if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+          // Text fields keep ⌥↑/↓, and pickers portaled out of the card
+          // aren't moving it.
+          const target = event.target as Element;
+          if (isEditableInput(target) || !event.currentTarget.contains(target))
+            return;
           event.preventDefault();
           props.onMove(event.key === 'ArrowUp' ? -1 : 1);
+          // Moving a card re-inserts it, which drops focus.
+          queueMicrotask(() => header?.focus());
         }}
       >
         <div class="flex min-w-0 items-center gap-1 pr-2.5">
           <button
+            ref={header}
             type="button"
             aria-expanded={open()}
             class="flex min-h-13 min-w-0 flex-1 items-center gap-2.5 rounded-xl py-2 pl-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-muted"
@@ -519,7 +542,7 @@ function StepCard(props: StepCardProps) {
             />
           </div>
         </Show>
-      </section>
+      </div>
     </RoutineSurface>
   );
 }

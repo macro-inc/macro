@@ -15,10 +15,18 @@ import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildAgentRoster } from '../agents-view/core/roster';
 import { getDefaultTimezone } from './core/routine-draft';
+import { newRoutineDraft, routineTemplates } from './core/routine-templates';
 import { loadRoutineComposerDraft } from './draft-storage';
 import { onceFromCron } from './queries/routine-trigger-mapping';
 import { RoutineCreator } from './routine-creator';
+import { startRoutineDraft } from './routine-draft-start';
 import { RoutineNew } from './routine-new';
+
+const findTemplateByKey = (key: string) => {
+  const template = routineTemplates.find((each) => each.key === key);
+  if (!template) throw new Error(`No template ${key}`);
+  return template;
+};
 
 const host = vi.hoisted(() => ({
   create: vi.fn<(body: CreateScheduledAction) => Promise<ScheduledAction>>(),
@@ -928,10 +936,37 @@ describe('new routine', () => {
     });
   });
 
+  it('starts over when a new routine starts while its page is open', async () => {
+    await mount();
+    const name = screen.getByRole<HTMLInputElement>('textbox', {
+      name: 'Routine name',
+    });
+    fireEvent.input(name, { target: { value: 'Old idea' } });
+    fireEvent.blur(name);
+    inputPrompt('An unsaved prompt');
+    startRoutineDraft(
+      newRoutineDraft(findTemplateByKey('brief'), {
+        decisions: true,
+        defaultModel: 'claude-sonnet-4-6',
+      })
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole<HTMLInputElement>('textbox', { name: 'Routine name' })
+          .value
+      ).toBe('Morning brief')
+    );
+    // The replaced page doesn't write its draft over the new one.
+    expect(loadRoutineComposerDraft()?.name).toBe('Morning brief');
+  });
+
   it('discards the draft on Cancel', async () => {
     await mount();
     inputPrompt();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    // A routine with anything in it asks before it is dropped.
+    expect(host.cancelled).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole('button', { name: 'Discard' }));
     expect(host.cancelled).toHaveBeenCalledOnce();
     expect(loadRoutineComposerDraft()).toBeNull();
   });

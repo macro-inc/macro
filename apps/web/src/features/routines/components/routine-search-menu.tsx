@@ -1,3 +1,4 @@
+import { isModality } from '@core/mobile/inputModality';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Popover } from '@kobalte/core/popover';
@@ -11,10 +12,12 @@ import {
   type ValidComponent,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { isComposing } from './composing';
 
 /**
- * Where a step menu mounts: on the creator's dialog when inside one, so the
- * composer's scrolling panel can't clip it; the local scope otherwise.
+ * Where a step menu mounts: inside the dialog that holds it (template
+ * activation), so it stays in the dialog's focus scope; the local scope
+ * otherwise.
  */
 export function menuMount(trigger: HTMLElement | undefined) {
   return trigger?.closest<HTMLElement>('[role="dialog"]') ?? undefined;
@@ -130,7 +133,8 @@ export function SearchMenu(props: {
           )}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            input?.focus();
+            // A phone's keyboard would cover the list; typing is on intent.
+            if (!isModality('touch')) input?.focus();
           }}
         >
           <div class="flex shrink-0 items-center gap-2 border-b border-edge-divider px-3 py-2">
@@ -146,7 +150,7 @@ export function SearchMenu(props: {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault();
                   move(-1, 1);
-                } else if (event.key === 'Enter' && !event.isComposing) {
+                } else if (event.key === 'Enter' && !isComposing(event)) {
                   // Enter that confirms an IME candidate isn't a choice yet.
                   event.preventDefault();
                   options()[0]?.click();
@@ -213,8 +217,10 @@ function SearchMenuRow(props: {
       role="option"
       aria-selected={props.item.selected ?? false}
       data-search-option
+      // Arrow keys move between options; Tab leaves the menu.
+      tabIndex={-1}
       title={props.item.description}
-      class="flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left outline-none hover:bg-ink/5 focus-visible:bg-ink/5 touch:min-h-11"
+      class="flex min-h-8 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left outline-none not-touch:hover:bg-hover focus-visible:bg-hover touch:min-h-11"
       onClick={() => props.onSelect(props.item)}
     >
       <Show
@@ -235,7 +241,15 @@ function SearchMenuRow(props: {
       >
         {props.item.swatch}
       </Show>
-      <span class="min-w-0 flex-1 truncate">{props.item.label}</span>
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="truncate">{props.item.label}</span>
+        {/* Touch has no hover title, so the description shows under it. */}
+        <Show when={props.item.description}>
+          <span class="hidden text-xs text-ink-muted touch:line-clamp-2">
+            {props.item.description}
+          </span>
+        </Show>
+      </span>
       <Show when={props.item.hint}>
         <span class="shrink-0 text-xs text-ink-muted">{props.item.hint}</span>
       </Show>

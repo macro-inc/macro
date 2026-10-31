@@ -60,7 +60,7 @@ export function RoutineTriggers(props: {
     <TriggerList
       triggers={props.triggers}
       onChange={props.onChange}
-      layout={props.layout}
+      layout={props.layout === 'add' ? 'add' : 'rows'}
       renderEventGroup={(group, options) => (
         <Show
           when={group !== 'GitHub' || github().linked !== false}

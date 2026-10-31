@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
@@ -21,7 +22,7 @@ import {
   stepActions,
   triggerScope,
 } from '../core/step-catalog';
-import { RoutineSteps } from './routine-step-editor';
+import { RoutineSteps, RoutineStepsSummary } from './routine-step-editor';
 import type { RoutineRunView, RoutineStepSlots } from './routine-steps';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
@@ -85,16 +86,28 @@ function renderSteps(options: {
   const [steps, setSteps] = createSignal<StepDraft[]>(
     options.steps ?? [agentStep({ kind: 'model', model: 'm' }, 'Summarize')]
   );
+  const [showRun, setShowRun] = createSignal(true);
+  // As on the routine's page: the summary on the heading, then the steps.
   render(() => (
-    <RoutineSteps
-      steps={steps()}
-      onChange={setSteps}
-      triggers={options.triggers}
-      defaultTarget={{ kind: 'model', model: 'm' }}
-      decisionsEnabled={options.decisions ?? true}
-      slots={slots}
-      lastRun={options.lastRun}
-    />
+    <>
+      <RoutineStepsSummary
+        steps={steps()}
+        triggers={options.triggers}
+        lastRun={options.lastRun}
+        showRun={showRun()}
+        onShowRun={setShowRun}
+      />
+      <RoutineSteps
+        steps={steps()}
+        onChange={setSteps}
+        triggers={options.triggers}
+        defaultTarget={{ kind: 'model', model: 'm' }}
+        decisionsEnabled={options.decisions ?? true}
+        slots={slots}
+        lastRun={options.lastRun}
+        showRun={showRun()}
+      />
+    </>
   ));
   return steps;
 }
@@ -170,7 +183,7 @@ describe('routine steps editor', () => {
       arguments: { label: 'Finance', add: true },
     });
     expect(
-      screen.getByRole('region', { name: 'Archive', hidden: true })
+      screen.getByRole('group', { name: 'Archive', hidden: true })
     ).toBeTruthy();
   });
 
@@ -205,7 +218,7 @@ describe('routine steps editor', () => {
     ]);
     // Numbered in reading order, through the branch.
     expect(
-      screen.getByRole('region', { name: 'Star', hidden: true }).textContent
+      screen.getByRole('group', { name: 'Star', hidden: true }).textContent
     ).toContain('2');
   });
 
@@ -237,7 +250,7 @@ describe('routine steps editor', () => {
     expect(screen.getByText('· bills')).toBeTruthy();
     expect(screen.getAllByText('Do nothing').length).toBe(2);
     expect(
-      screen.getByRole('region', { name: 'Archive', hidden: true })
+      screen.getByRole('group', { name: 'Archive', hidden: true })
     ).toBeTruthy();
   });
 
@@ -317,7 +330,7 @@ describe('routine steps editor', () => {
     });
     fireEvent.input(first!, { target: { value: 'Finance' } });
     fireEvent.input(second!, { target: { value: 'Hiring' } });
-    fireEvent.input(screen.getAllByLabelText('When it fits')[0]!, {
+    fireEvent.input(screen.getByLabelText('When option 1 fits'), {
       target: { value: 'Invoices and receipts' },
     });
     expect(steps()).toMatchObject([
@@ -335,7 +348,7 @@ describe('routine steps editor', () => {
       },
     ]);
     expect(
-      screen.getByRole('region', { name: 'Label with AI', hidden: true })
+      screen.getByRole('group', { name: 'Label with AI', hidden: true })
     ).toBeTruthy();
     // A row can also do more when its value fits.
     openAdd('Add step to “Finance”');
@@ -412,5 +425,26 @@ describe('routine steps editor', () => {
     openMenu('Step actions', 0);
     choose('Delete step');
     expect(steps().map((step) => step.kind)).toEqual(['if', 'agent']);
+  });
+
+  it('moves a step with ⌥↑, keeping focus, but leaves text fields their keys', async () => {
+    const steps = renderSteps({ triggers: [email] });
+    openAdd();
+    add('Create task');
+    const header = () =>
+      screen.getByRole('button', { name: /^2.*Create task/, hidden: true });
+    // ⌥↑ in a field of the card is the field's own navigation.
+    const title = within(
+      screen.getByRole('group', { name: 'Create task', hidden: true })
+    ).getAllByRole('textbox', { hidden: true })[0]!;
+    fireEvent.keyDown(title, { key: 'ArrowUp', altKey: true });
+    expect(steps().map((step) => step.kind)).toEqual(['agent', 'tool']);
+    const moving = header();
+    moving.focus();
+    fireEvent.keyDown(moving, { key: 'ArrowUp', altKey: true });
+    expect(steps().map((step) => step.kind)).toEqual(['tool', 'agent']);
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toMatch(/^1.*Create task/)
+    );
   });
 });

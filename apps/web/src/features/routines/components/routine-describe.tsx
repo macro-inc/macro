@@ -1,7 +1,9 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import { Button, Card, TextField } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { isComposing } from './composing';
 
 /** Describe a routine in words and let AI draft its triggers and steps. */
 export function RoutineDescribe(props: {
@@ -43,15 +45,18 @@ export function RoutineDescribe(props: {
           <TextField.TextArea
             autoResize
             rows={2}
-            autofocus
+            // Phones focus on intent: the keyboard would cover the templates.
+            autofocus={!isTouchDevice()}
             class="min-h-28 border-transparent bg-transparent px-3.5 pb-12 pt-3 text-[15px] leading-[22px] not-touch:shadow-none"
             placeholder="Describe what should happen, and when. “When an invoice arrives, label it Finance and make a task to pay it.”"
             onKeyDown={(event: KeyboardEvent) => {
-              // Enter that confirms an IME candidate isn't a request yet.
+              // Enter that confirms an IME candidate isn't a request yet, and
+              // on touch Enter is a new line: the button drafts.
               if (
                 event.key === 'Enter' &&
                 !event.shiftKey &&
-                !event.isComposing
+                !isComposing(event) &&
+                !isTouchDevice()
               ) {
                 event.preventDefault();
                 event.stopPropagation();

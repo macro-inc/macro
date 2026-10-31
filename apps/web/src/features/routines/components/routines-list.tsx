@@ -219,7 +219,7 @@ export function RoutinesList(props: {
             <div role="row">
               <div
                 role="cell"
-                aria-colspan={4}
+                aria-colspan={5}
                 class="flex min-h-48 flex-col items-center justify-center gap-3 px-4 py-10 text-center text-sm text-ink-muted"
               >
                 <ClockIcon class="size-6 text-ink-extra-muted" />

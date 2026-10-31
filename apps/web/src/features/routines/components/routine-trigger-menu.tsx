@@ -1,17 +1,11 @@
 import { isModality } from '@core/mobile/inputModality';
 import { isMobile } from '@core/mobile/isMobile';
-import GithubIcon from '@icon/mcp-github.svg';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
-import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import FileIcon from '@icon/system/regular/file-text.svg';
-import HashIcon from '@icon/system/regular/hash.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
-import PhoneIcon from '@icon/system/regular/phone.svg';
 import { type ButtonSize, type ButtonVariant, Dropdown } from '@ui';
 import {
   type Component,
@@ -31,7 +25,9 @@ import {
   routineEvents,
 } from '../core/routine-triggers';
 import { parseRecurringSchedule } from '../core/schedule-language';
+import { isComposing } from './composing';
 import { menuMount } from './routine-search-menu';
+import { TRIGGER_GROUP_ICONS } from './routine-trigger-icons';
 
 type TriggerChoice = {
   key: string;
@@ -68,7 +64,7 @@ function eventChoices(group: RoutineEventGroup): TriggerChoice[] {
 const TRIGGER_TYPES: TriggerType[] = [
   {
     label: 'Schedule',
-    icon: ClockIcon,
+    icon: TRIGGER_GROUP_ICONS.Schedule,
     choices: [
       {
         key: 'schedule',
@@ -84,12 +80,36 @@ const TRIGGER_TYPES: TriggerType[] = [
       },
     ],
   },
-  { label: 'Email', icon: EnvelopeIcon, choices: eventChoices('Email') },
-  { label: 'Tasks', icon: CheckCircleIcon, choices: eventChoices('Tasks') },
-  { label: 'Channels', icon: HashIcon, choices: eventChoices('Channels') },
-  { label: 'Documents', icon: FileIcon, choices: eventChoices('Documents') },
-  { label: 'Calls', icon: PhoneIcon, choices: eventChoices('Calls') },
-  { label: 'GitHub', icon: GithubIcon, choices: eventChoices('GitHub') },
+  {
+    label: 'Email',
+    icon: TRIGGER_GROUP_ICONS.Email,
+    choices: eventChoices('Email'),
+  },
+  {
+    label: 'Tasks',
+    icon: TRIGGER_GROUP_ICONS.Tasks,
+    choices: eventChoices('Tasks'),
+  },
+  {
+    label: 'Channels',
+    icon: TRIGGER_GROUP_ICONS.Channels,
+    choices: eventChoices('Channels'),
+  },
+  {
+    label: 'Documents',
+    icon: TRIGGER_GROUP_ICONS.Documents,
+    choices: eventChoices('Documents'),
+  },
+  {
+    label: 'Calls',
+    icon: TRIGGER_GROUP_ICONS.Calls,
+    choices: eventChoices('Calls'),
+  },
+  {
+    label: 'GitHub',
+    icon: TRIGGER_GROUP_ICONS.GitHub,
+    choices: eventChoices('GitHub'),
+  },
 ];
 
 /**
@@ -259,7 +279,7 @@ export function TriggerMenu(props: {
             onInput={(event) => setSearch(event.currentTarget.value)}
             onKeyDown={(event) => {
               // Keys that pick or confirm an IME candidate aren't the menu's.
-              if (event.isComposing) {
+              if (isComposing(event)) {
                 event.stopPropagation();
                 return;
               }

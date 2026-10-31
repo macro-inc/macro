@@ -9,6 +9,8 @@ describe('describe a routine', () => {
     const box = screen.getByRole('textbox', { name: 'Describe your routine' });
     fireEvent.input(box, { target: { value: '毎朝メールを整理' } });
     fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
+    // WebKit commits a candidate with isComposing false but keyCode 229.
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 229 });
     expect(onDescribe).not.toHaveBeenCalled();
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(onDescribe).toHaveBeenCalledWith('毎朝メールを整理');

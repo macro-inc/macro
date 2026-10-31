@@ -294,14 +294,14 @@ function ChooseBody(props: {
       <Field label={`Options · 2 to ${STEP_LIMITS.options}`}>
         <div class="grid min-w-0 gap-1.5">
           <For each={props.step.options.map((option) => option.id)}>
-            {(id) => (
+            {(id, index) => (
               <Show
                 when={props.step.options.find((option) => option.id === id)}
               >
                 {(option) => (
                   <div class="grid min-w-0 grid-cols-[minmax(0,9rem)_minmax(0,1fr)_1.75rem] items-center gap-2 @max-[30rem]/step:grid-cols-[minmax(0,1fr)_1.75rem]">
                     <Input
-                      aria-label="Option"
+                      aria-label={`Option ${index() + 1}`}
                       value={option().label}
                       maxLength={STEP_LIMITS.label}
                       placeholder="Invoice"
@@ -314,7 +314,7 @@ function ChooseBody(props: {
                       }
                     />
                     <Input
-                      aria-label="When it fits"
+                      aria-label={`When option ${index() + 1} fits`}
                       class="@max-[30rem]/step:order-last @max-[30rem]/step:col-span-2"
                       value={option().description}
                       maxLength={STEP_LIMITS.description}
@@ -417,7 +417,7 @@ function PickBody(props: {
       </Show>
       <div class="grid min-w-0 gap-1.5">
         <For each={props.step.options.map((option) => option.id)}>
-          {(id) => (
+          {(id, index) => (
             <Show when={props.step.options.find((option) => option.id === id)}>
               {(option) => {
                 const value = () => {
@@ -454,7 +454,7 @@ function PickBody(props: {
                       </Show>
                     </div>
                     <Input
-                      aria-label="When it fits"
+                      aria-label={`When option ${index() + 1} fits`}
                       class="@max-[30rem]/step:order-last @max-[30rem]/step:col-span-2"
                       value={option().description}
                       maxLength={STEP_LIMITS.description}

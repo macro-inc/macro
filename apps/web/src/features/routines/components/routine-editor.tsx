@@ -60,7 +60,9 @@ export function RoutineSettingRow(props: {
       <div class="flex min-w-0 flex-1 flex-col gap-0.5">
         <span class="text-base text-ink">{props.label}</span>
         <Show when={props.description}>
-          <span class="text-sm text-ink-muted">{props.description}</span>
+          {(description) => (
+            <span class="text-sm text-ink-muted">{description()}</span>
+          )}
         </Show>
       </div>
       <div class="shrink-0">{props.children}</div>
@@ -80,9 +82,11 @@ function RoutineSection(props: {
       <div class="flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1">
         <h2 class="text-sm font-medium text-ink-muted">{props.label}</h2>
         <Show when={props.aside}>
-          <span class="ml-auto flex min-w-0 items-center gap-2 text-xs text-ink-extra-muted">
-            {props.aside}
-          </span>
+          {(aside) => (
+            <span class="ml-auto flex min-w-0 items-center gap-2 text-xs text-ink-extra-muted">
+              {aside()}
+            </span>
+          )}
         </Show>
       </div>
       {props.children}
@@ -91,8 +95,8 @@ function RoutineSection(props: {
 }
 
 /**
- * A routine's page: When and Then in a document column, its settings in the
- * details panel beside it, and a full-width run list.
+ * A routine's page: its trigger, steps, connections, and settings in one
+ * column, with its runs on a second tab.
  */
 export function RoutineEditor(props: {
   draft: ScheduleDraft;
@@ -126,7 +130,7 @@ export function RoutineEditor(props: {
   /** The Runs tab's content; absent while the routine is being created. */
   history?: JSX.Element;
   showHistory?: boolean;
-  /** A new routine not yet saved: no tabs, details or menu; `footer` saves it. */
+  /** A new routine not yet saved: no tabs or menu; `footer` saves it. */
   creating?: boolean;
   /** Below the sections, e.g. a new routine's Cancel and Create. */
   footer?: JSX.Element;
@@ -177,7 +181,7 @@ export function RoutineEditor(props: {
               <span class="truncate">{breadcrumbName()}</span>
             </ViewBreadcrumbs.Button>
             <Show when={props.actions}>
-              <div class="shrink-0">{props.actions}</div>
+              {(actions) => <div class="shrink-0">{actions()}</div>}
             </Show>
           </div>
         )}
@@ -278,12 +282,16 @@ export function RoutineEditor(props: {
                   />
                 </Show>
                 <Show when={props.meta}>
-                  <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-muted">
-                    {props.meta}
-                    <Show when={props.metaAction}>
-                      <div class="ml-auto shrink-0">{props.metaAction}</div>
-                    </Show>
-                  </div>
+                  {(meta) => (
+                    <div class="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-ink-muted">
+                      {meta()}
+                      <Show when={props.metaAction}>
+                        {(action) => (
+                          <div class="ml-auto shrink-0">{action()}</div>
+                        )}
+                      </Show>
+                    </div>
+                  )}
                 </Show>
               </header>
               <RoutineSection
@@ -302,12 +310,16 @@ export function RoutineEditor(props: {
                     </RoutineSurface>
                   </Show>
                   <Show when={props.triggerAdd}>
-                    <RoutineTray
-                      attached={props.hasTriggers !== false}
-                      class={props.hasTriggers !== false ? '-mt-3' : undefined}
-                    >
-                      {props.triggerAdd}
-                    </RoutineTray>
+                    {(add) => (
+                      <RoutineTray
+                        attached={props.hasTriggers !== false}
+                        class={
+                          props.hasTriggers !== false ? '-mt-3' : undefined
+                        }
+                      >
+                        {add()}
+                      </RoutineTray>
+                    )}
                   </Show>
                 </fieldset>
               </RoutineSection>
@@ -349,12 +361,16 @@ export function RoutineEditor(props: {
                 )}
               </Show>
               <Show when={props.feedback}>
-                <div class="grid gap-2 empty:hidden">{props.feedback}</div>
+                {(feedback) => (
+                  <div class="grid gap-2 empty:hidden">{feedback()}</div>
+                )}
               </Show>
               <Show when={props.footer}>
-                <div class="flex items-center justify-end gap-2">
-                  {props.footer}
-                </div>
+                {(footer) => (
+                  <div class="flex items-center justify-end gap-2">
+                    {footer()}
+                  </div>
+                )}
               </Show>
             </div>
           </div>

@@ -1082,19 +1082,23 @@ my inbox**, **Triage new tasks**, **Morning brief**, **Chase stuck tasks**, and
 what it does and its trigger → first step), and **Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
 `/app/routines/new`, as do the list's template cards directly. That page is
-laid out like a saved routine's (**Routines → New routine**, no tabs or details
-panel): an editable name and description (a drafted routine starts with the
+laid out like a saved routine's (**Routines → New routine**, no tabs): an
+editable name and description (a drafted routine starts with the
 sentence it came from, a template with its description), **Enabled**, then
 **Trigger**, **Steps**, **Connections** and **Runs & notifications**, ending
-with **Cancel** (discards the draft and returns to the list) and **Create
-routine**, which saves it and opens its page in the same pane. Nothing is
-written before **Create routine**. The unsent draft is kept for three minutes
-after the last edit, so reloading `/app/routines/new` resumes it. A routine
+with **Cancel** (returns to the list, first asking **Discard this routine?**
+with **Discard** / **Keep editing** once it has a name, description, trigger or
+step) and **Create routine**, which saves it and opens its page in the same
+pane. Nothing is written before **Create routine**. The unsent draft is kept for
+three minutes after the last edit, so reloading `/app/routines/new` resumes it;
+starting another routine (the creator or a template card) while the page is
+open replaces it with the new one. A routine
 whose only step is **Ask AI** saves in the original single-agent form.
 
 **Steps.** A routine runs its steps in order and stops at the first failed step.
 **Add step** (in the tray under the last step card, like the tray under
-Home's composer; on its own before there are steps) and **+ Step** inside each
+Home's composer; on its own before there are steps or after an **If yes or no**
+or **Choose between options** step, whose branches end the list) and **+ Step** inside each
 branch (read as **Add step to “Yes”** by screen readers) open a searchable list,
 plain actions first, then AI steps:
 
@@ -1122,7 +1126,7 @@ plain actions first, then AI steps:
   triggering event and what earlier steps did. A run reaches at most one agent;
   agents in different branches are fine. A routine's required apps go to it.
 
-Steps are numbered rows that read as one line closed (**Add label  Finance**,
+Steps are numbered, labelled groups that read as one line closed (**Add label  Finance**,
 **Set priority  High · on the new task**) and open into a card of labelled rows
 (Label, Title, Details, Folder, Priority, Treat as …); click the header to open or
 close one. New steps, steps missing input and a routine's only step start open.
@@ -1140,10 +1144,12 @@ a check, **Failed**, or a decision's answer such as **Invoice 94%**. Text fields
 show inserted fields as chips (**Pay: Email subject**); their **{ }** button
 inserts one at the caret, grouped **From the email** (or message, item) and
 **From earlier steps**. Each step's ⋯ menu has **Move up** / **Move down**
-(also Alt/⌥+↑/↓ on the card), **Duplicate**, **Wrap in “If yes or no”** and
+(also Alt/⌥+↑/↓ on the card outside its text fields, keeping focus on the
+moved card), **Duplicate**, **Wrap in “If yes or no”** and
 **Delete step**. Steps that decide about or act on the
 triggering item need activity triggers only; combining them with schedules shows
-an error, and **Run now** is disabled for such routines (hover explains why).
+an error, and **Run now** is disabled for such routines (its tooltip explains
+why; on touch the reason shows under the title line).
 
 **Add trigger** opens a menu with **Search triggers** and one row per kind:
 **Schedule** (**On a schedule**, **Once**), **Email**, **Tasks**, **Channels**,
@@ -1164,9 +1170,12 @@ On a routine's page each trigger reads as a sentence of tokens: the event
 (**New email received**) or schedule (**Weekdays at 9:00 AM**), then **in** and
 what it watches (**Your inbox**, or a channel, document or task picker that
 saves as soon as you pick). The event token opens the same menu to switch to
-another event (keeping what still applies), with **Remove trigger** at the end;
-a schedule token opens its panel, where **Done** applies changes, **Cancel**
-leaves it unchanged and **Remove trigger** removes it. Filters hang below on a
+another event (keeping what still applies: a GitHub trigger keeps its
+repositories, bot setting and filters you added; choosing the current event
+changes nothing), with **Remove trigger** at the end;
+a schedule token opens its panel (a bottom sheet on phones), where **Done**
+applies changes, **Cancel** leaves it unchanged and **Remove trigger** removes
+it. Filters hang below on a
 connector: **✦ Only if | question | ×** for an AI check, or **+ Filter** to add
 one. Triggers are separated by **or**. **Add trigger** sits in the tray under
 the card (on its own before there are triggers).
@@ -1224,19 +1233,23 @@ trigger runs it.
 A routine's top bar uses the task breadcrumb layout: **Routines → routine name**
 with its three-dot menu (**Duplicate**, **Share**, **Delete**)
 right after the name, then the **Overview** / **Runs** tabs (Runs with a count),
-and at the right the save state (**Saving…** / **Saved**), **Run now** with its
-**Run options** menu.
+and at the right the save state (**Saving…** / **Saved**; **Not saved** in red
+when saving failed, or **Not saved: fix the routine** with the reason on hover
+while an edit is invalid), **Run now** with its **Run options** menu.
 Overview is the routine as a page:
 its icon, an editable title, an editable description (**Add a description…**;
 saves on blur or Enter, Escape discards, up to 1000 characters; a drafted
 routine starts with the sentence it was drafted from, a template's with the
 template's description), then a line with the **Enabled** switch (disabled
-with a hover reason while a run is going or the routine can't run), **Owned by**
+while a run is going or the routine can't run, with the reason in its tooltip
+and, on touch, under the line), **Owned by**
 and **Last run**, with **Compose with agent** at the right end of that line. Below are labelled sections, each on a raised surface:
 **Trigger** (with **Next run** at its right) holds the trigger sentences above;
 **Steps** (with **Show last run** and the AI calls per run at its right) holds
 the steps (a single **Ask AI** step for routines without other steps; it holds
-the **Who** model or agent token and the instructions); **Connections**, shown
+the **Who** model or agent token and the instructions; a single-agent routine
+written through the API with base instructions shows them above the step as
+**Saved instructions that run first**); **Connections**, shown
 when the routine has an **Ask AI** step or apps, lists its apps or **No
 connections added** with **Add connection**; and **Runs & notifications** has
 **Show runs in Home and Agents** and **Runs as** (the owner, whose access steps

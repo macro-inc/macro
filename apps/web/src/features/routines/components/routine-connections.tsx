@@ -17,32 +17,8 @@ export function ConnectionRows(props: {
   onChange(apps: RoutineApp[]): void;
   Picker: RoutineEditorSlots['Apps'];
 }) {
-  const add = () => (
-    <props.Picker
-      apps={props.apps}
-      onChange={props.onChange}
-      variant="button"
-    />
-  );
   return (
-    <Show
-      when={props.apps.length}
-      fallback={
-        <Show
-          when={props.agent}
-          fallback={
-            <RoutineSettingRow
-              label="No connections added"
-              description="Add an Ask AI step to give it apps."
-            />
-          }
-        >
-          <RoutineSettingRow label="No connections added">
-            {add()}
-          </RoutineSettingRow>
-        </Show>
-      }
-    >
+    <>
       <For each={props.apps}>
         {(app) => (
           <RoutineSettingRow
@@ -74,9 +50,29 @@ export function ConnectionRows(props: {
           </RoutineSettingRow>
         )}
       </For>
-      <div class="flex justify-end border-t border-edge-divider px-6 py-3">
-        {add()}
+      {/* One row holds the picker whether or not apps are listed, so it stays
+          mounted, and open, across picks. */}
+      <div class="flex min-h-16 items-center gap-4 border-t border-edge-divider px-6 py-3 first:border-t-0 @max-[600px]/routine:px-4">
+        <Show when={!props.apps.length}>
+          <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span class="text-base text-ink">No connections added</span>
+            <Show when={!props.agent}>
+              <span class="text-sm text-ink-muted">
+                Add an Ask AI step to give it apps.
+              </span>
+            </Show>
+          </div>
+        </Show>
+        <Show when={props.agent || props.apps.length}>
+          <div class="ml-auto shrink-0">
+            <props.Picker
+              apps={props.apps}
+              onChange={props.onChange}
+              variant="button"
+            />
+          </div>
+        </Show>
       </div>
-    </Show>
+    </>
   );
 }

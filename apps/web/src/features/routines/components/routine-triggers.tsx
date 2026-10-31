@@ -1,13 +1,8 @@
-import GithubIcon from '@icon/mcp-github.svg';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isMobile } from '@core/mobile/isMobile';
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
-import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
-import ClockIcon from '@icon/system/regular/clock.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import FileIcon from '@icon/system/regular/file-text.svg';
-import HashIcon from '@icon/system/regular/hash.svg';
-import PhoneIcon from '@icon/system/regular/phone.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import XIcon from '@icon/system/regular/x.svg';
@@ -29,6 +24,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import {
   describeTrigger,
@@ -37,12 +33,15 @@ import {
   eventTriggerDescription,
   eventTriggerLabel,
   isGlobalEvent,
+  type PayloadTestDraft,
   type RoutineEventGroup,
   type RoutineTriggerDraft,
+  routineEvents,
   validateTriggers,
 } from '../core/routine-triggers';
 import { RoutineScheduleSettings } from './routine-schedule-settings';
 import { menuMount } from './routine-search-menu';
+import { TRIGGER_GROUP_ICONS } from './routine-trigger-icons';
 import { TriggerMenu } from './routine-trigger-menu';
 
 type EventSlots = {
@@ -81,38 +80,13 @@ function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
 }
 
 function TriggerIcon(props: { trigger: RoutineTriggerDraft; class: string }) {
-  const group = () =>
-    props.trigger.kind === 'event' ? triggerGroup(props.trigger) : undefined;
-  return (
-    <Switch fallback={<ClockIcon class={props.class} />}>
-      <Match
-        when={
-          props.trigger.kind === 'schedule' &&
-          props.trigger.frequency === 'once'
-        }
-      >
-        <CalendarIcon class={props.class} />
-      </Match>
-      <Match when={group() === 'Channels'}>
-        <HashIcon class={props.class} />
-      </Match>
-      <Match when={group() === 'Tasks'}>
-        <CheckCircleIcon class={props.class} />
-      </Match>
-      <Match when={group() === 'Email'}>
-        <EnvelopeIcon class={props.class} />
-      </Match>
-      <Match when={group() === 'Calls'}>
-        <PhoneIcon class={props.class} />
-      </Match>
-      <Match when={group() === 'Documents'}>
-        <FileIcon class={props.class} />
-      </Match>
-      <Match when={group() === 'GitHub'}>
-        <GithubIcon class={props.class} />
-      </Match>
-    </Switch>
-  );
+  const icon = () =>
+    props.trigger.kind === 'event'
+      ? TRIGGER_GROUP_ICONS[triggerGroup(props.trigger)]
+      : props.trigger.frequency === 'once'
+        ? CalendarIcon
+        : TRIGGER_GROUP_ICONS.Schedule;
+  return <Dynamic component={icon()} class={props.class} />;
 }
 
 /** Whether an event trigger watches particular items, read as "in …". */
@@ -330,60 +304,97 @@ function TriggerPanel(
 ) {
   let triggerRef: HTMLButtonElement | undefined;
   const anchor = () => props.anchorRef?.() ?? triggerRef;
+  const title = () => (props.isNew ? 'Add trigger' : 'Edit trigger');
+  const body = () => (
+    <PanelBody
+      trigger={props.trigger}
+      isNew={props.isNew}
+      renderEventLabel={props.renderEventLabel}
+      renderEventScope={props.renderEventScope}
+      renderEventCondition={props.renderEventCondition}
+      renderEventSettings={props.renderEventSettings}
+      renderEventGroup={props.renderEventGroup}
+      onSave={(value) => {
+        props.onSave(value);
+        props.onOpenChange(false);
+      }}
+      onClose={() => props.onOpenChange(false)}
+      onRemove={props.onRemove}
+      onBack={props.onBack}
+    />
+  );
   return (
-    <Popover
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-      anchorRef={props.anchorRef}
-      placement="bottom-start"
-      gutter={6}
-      boundary={() => document.documentElement}
+    <Show
+      when={isMobile()}
+      fallback={
+        <Popover
+          open={props.open}
+          onOpenChange={props.onOpenChange}
+          anchorRef={props.anchorRef}
+          placement="bottom-start"
+          gutter={6}
+          boundary={() => document.documentElement}
+        >
+          <Show when={props.anchor}>
+            {(value) => (
+              <Popover.Trigger
+                ref={triggerRef}
+                aria-label={value().label}
+                title={value().title}
+                class={value().class}
+              >
+                {value().content}
+              </Popover.Trigger>
+            )}
+          </Show>
+          <Popover.Portal
+            // Inside a dialog (template activation), stay in its focus scope.
+            mount={menuMount(anchor())}
+            ref={(element) => {
+              element.style.display = 'contents';
+            }}
+          >
+            <Popover.Content
+              class="menu-surface z-modal flex max-h-[min(36rem,var(--kb-popper-content-available-height))] w-[22rem] max-w-[calc(100vw-1rem)] flex-col overflow-hidden"
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <Popover.Title class="sr-only">{title()}</Popover.Title>
+              {body()}
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover>
+      }
     >
+      {/* A phone edits the trigger in a sheet, not a panel by the token. */}
       <Show when={props.anchor}>
         {(value) => (
-          <Popover.Trigger
+          <button
             ref={triggerRef}
+            type="button"
             aria-label={value().label}
-            title={value().title}
+            aria-haspopup="dialog"
+            aria-expanded={props.open}
             class={value().class}
+            onClick={() => props.onOpenChange(true)}
           >
             {value().content}
-          </Popover.Trigger>
+          </button>
         )}
       </Show>
-      <Popover.Portal
-        // Stay inside the dialog's focus boundary, outside the clipped composer panel.
-        mount={menuMount(anchor())}
-        ref={(element) => {
-          element.style.display = 'contents';
-        }}
+      <MobileDrawer
+        side="bottom"
+        open={props.open}
+        onOpenChange={props.onOpenChange}
       >
-        <Popover.Content
-          class="menu-surface z-modal flex max-h-[min(36rem,var(--kb-popper-content-available-height))] w-[22rem] max-w-[calc(100vw-1rem)] flex-col overflow-hidden"
-          onKeyDown={(e) => e.stopPropagation()}
-        >
-          <Popover.Title class="sr-only">
-            {props.isNew ? 'Add trigger' : 'Edit trigger'}
-          </Popover.Title>
-          <PanelBody
-            trigger={props.trigger}
-            isNew={props.isNew}
-            renderEventLabel={props.renderEventLabel}
-            renderEventScope={props.renderEventScope}
-            renderEventCondition={props.renderEventCondition}
-            renderEventSettings={props.renderEventSettings}
-            renderEventGroup={props.renderEventGroup}
-            onSave={(value) => {
-              props.onSave(value);
-              props.onOpenChange(false);
-            }}
-            onClose={() => props.onOpenChange(false)}
-            onRemove={props.onRemove}
-            onBack={props.onBack}
-          />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover>
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content aria-label={title()} class="flex flex-col">
+            <MobileDrawer.Handle class="pb-1" />
+            {body()}
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+    </Show>
   );
 }
 
@@ -443,74 +454,57 @@ function AddTrigger(
   );
 }
 
-/** A saved trigger as one token that opens its panel, as in the composer. */
-function InlineToken(
-  props: EventSlots & {
-    trigger: RoutineTriggerDraft;
-    onSave: (trigger: RoutineTriggerDraft) => void;
-    onRemove: () => void;
-  }
-) {
-  const [open, setOpen] = createSignal(false);
-  const event = () =>
-    props.trigger.kind === 'event' ? props.trigger : undefined;
-  return (
-    <TriggerPanel
-      {...props}
-      open={open()}
-      onOpenChange={setOpen}
-      isNew={false}
-      anchor={{
-        label: `Edit ${describeTrigger(props.trigger)} trigger`,
-        title:
-          props.trigger.kind === 'schedule'
-            ? `${describeTrigger(props.trigger)} · ${props.trigger.timezone.replace(/_/g, ' ')}`
-            : [describeTrigger(props.trigger), event()?.condition?.trim()]
-                .filter(Boolean)
-                .join(' · if '),
-        class: badgeTriggerClasses({
-          variant: 'secondary',
-          size: 'sm',
-          class: 'min-w-0 max-w-full text-left',
-        }),
-        content: (
-          <>
-            <TriggerIcon trigger={props.trigger} class="size-3.5 shrink-0" />
-            <span class="min-w-0 truncate">
-              {describeTrigger(props.trigger)}
-              <Show when={event()}>
-                {(value) => (
-                  <span class="text-ink-muted">
-                    {' · '}
-                    {props.renderEventLabel(value)}
-                  </span>
-                )}
-              </Show>
-              <Show when={event()?.condition?.trim()}>
-                {(condition) => (
-                  <span class="text-ink-muted"> · if {condition()}</span>
-                )}
-              </Show>
-            </span>
-          </>
-        ),
-      }}
-    />
-  );
-}
-
 /** Keep what still applies when an event trigger switches to another event. */
 function switchEvent(
   current: EventTriggerDraft,
   next: EventTriggerDraft
 ): EventTriggerDraft {
+  // Choosing the event it already has changes nothing.
+  if (eventTriggerLabel(next) === eventTriggerLabel(current)) return current;
   const sameItems = eventScopeKind(current) === eventScopeKind(next);
   return {
     ...current,
     events: next.events,
     ids: sameItems ? current.ids : next.ids,
-    github: next.github,
-    match: next.match,
+    ...switchGithub(current, next),
+  };
+}
+
+const sameTest = (left: PayloadTestDraft, right: PayloadTestDraft) =>
+  left.path === right.path &&
+  left.op === right.op &&
+  left.value === right.value;
+
+/**
+ * Moving between GitHub choices takes the new choice's events, actions and
+ * payload tests, but keeps what the person narrowed it to: repositories, bots,
+ * and the tests they added on top of the old choice.
+ */
+function switchGithub(
+  current: EventTriggerDraft,
+  next: EventTriggerDraft
+): Pick<EventTriggerDraft, 'github' | 'match'> {
+  if (!current.github || !next.github)
+    return { github: next.github, match: next.match };
+  const preset = routineEvents.find(
+    (item) =>
+      item.value === 'github' && item.label === eventTriggerLabel(current)
+  )?.preset;
+  const added = (current.match ?? []).filter(
+    (test) => !preset?.match?.some((own) => sameTest(own, test))
+  );
+  const nextTests = next.match ?? [];
+  const kept = added.filter(
+    (test) => !nextTests.some((own) => own.path === test.path)
+  );
+  const match = [...nextTests, ...kept];
+  return {
+    github: {
+      ...next.github,
+      repositories: current.github.repositories,
+      includeBots: current.github.includeBots,
+    },
+    ...(match.length ? { match } : {}),
   };
 }
 
@@ -533,11 +527,14 @@ function EventToken(
         onOpenChange={setMenuOpen}
         current={eventTriggerLabel(props.trigger)}
         renderGroup={props.renderEventGroup}
-        onSelect={(value) =>
-          value.kind === 'event'
-            ? props.onSave(switchEvent(props.trigger, value))
-            : setSchedule({ ...value, id: props.trigger.id })
-        }
+        onSelect={(value) => {
+          if (value.kind !== 'event') {
+            setSchedule({ ...value, id: props.trigger.id });
+            return;
+          }
+          const next = switchEvent(props.trigger, value);
+          if (next !== props.trigger) props.onSave(next);
+        }}
         onRemove={props.onRemove}
         triggerLabel={`Change ${eventTriggerLabel(props.trigger)} trigger`}
         triggerTitle={eventTriggerLabel(props.trigger)}
@@ -739,17 +736,19 @@ function ConditionFilter(
               <ButtonGroup class="min-w-0 max-w-full">
                 <Popover.Trigger
                   as={ButtonGroup.Button}
-                  class="shrink-0 gap-1.5 text-ink-muted"
+                  class="shrink-0 gap-1.5"
                   aria-label={`Edit condition: ${question()}`}
                   title={question()}
                 >
                   <SparkleIcon class="size-3.5 shrink-0 text-accent" />
-                  Only if
+                  <span class="text-ink-muted">Only if</span>
                 </Popover.Trigger>
                 <ButtonGroup.Divider />
                 <ButtonGroup.Button
                   class="min-w-0 shrink"
                   title={question()}
+                  aria-haspopup="dialog"
+                  aria-expanded={open()}
                   onClick={() => setOpen(true)}
                 >
                   <span class="min-w-0 truncate">{question()}</span>
@@ -894,12 +893,11 @@ export function RoutineTriggers(
     triggers: RoutineTriggerDraft[];
     onChange: (triggers: RoutineTriggerDraft[]) => void;
     /**
-     * `rows`: the routine page's trigger card, each trigger a sentence of
-     * tokens with its filters below. `add`: only the page's Add trigger, for
-     * the tray under that card. `inline` (default): tokens in a row, as in
-     * the composer.
+     * `rows` (default): the routine page's trigger card, each trigger a
+     * sentence of tokens with its filters below. `add`: only the page's Add
+     * trigger, for the tray under that card.
      */
-    layout?: 'rows' | 'add' | 'inline';
+    layout?: 'rows' | 'add';
   }
 ) {
   const ids = () => props.triggers.map((trigger) => trigger.id);
@@ -932,60 +930,31 @@ export function RoutineTriggers(
         />
       </Match>
       <Match when={true}>
-        <Show
-          when={props.layout === 'rows'}
-          fallback={
-            <>
-              <For each={ids()}>
-                {(id) => (
-                  <Show when={find(id)}>
-                    {(trigger) => (
-                      <InlineToken
-                        {...slots()}
-                        trigger={trigger()}
-                        onSave={(value) => replace(id, value)}
-                        onRemove={() => remove(id)}
-                      />
-                    )}
-                  </Show>
+        <div class="flex min-w-0 flex-col gap-3.5">
+          <For each={ids()}>
+            {(id, index) => (
+              <Show when={find(id)}>
+                {(trigger) => (
+                  <>
+                    <Show when={index() > 0}>
+                      <div class="flex items-center gap-2.5 text-xs text-ink-extra-muted">
+                        <span class="h-px flex-1 bg-edge-divider" />
+                        or
+                        <span class="h-px flex-1 bg-edge-divider" />
+                      </div>
+                    </Show>
+                    <TriggerSentence
+                      {...slots()}
+                      trigger={trigger()}
+                      onSave={(value) => replace(id, value)}
+                      onRemove={() => remove(id)}
+                    />
+                  </>
                 )}
-              </For>
-              <AddTrigger
-                {...slots()}
-                label="Add trigger"
-                variant="outline"
-                size="sm"
-                onAdd={add}
-              />
-            </>
-          }
-        >
-          <div class="flex min-w-0 flex-col gap-3.5">
-            <For each={ids()}>
-              {(id, index) => (
-                <Show when={find(id)}>
-                  {(trigger) => (
-                    <>
-                      <Show when={index() > 0}>
-                        <div class="flex items-center gap-2.5 text-xs text-ink-extra-muted">
-                          <span class="h-px flex-1 bg-edge-divider" />
-                          or
-                          <span class="h-px flex-1 bg-edge-divider" />
-                        </div>
-                      </Show>
-                      <TriggerSentence
-                        {...slots()}
-                        trigger={trigger()}
-                        onSave={(value) => replace(id, value)}
-                        onRemove={() => remove(id)}
-                      />
-                    </>
-                  )}
-                </Show>
-              )}
-            </For>
-          </div>
-        </Show>
+              </Show>
+            )}
+          </For>
+        </div>
       </Match>
     </Switch>
   );

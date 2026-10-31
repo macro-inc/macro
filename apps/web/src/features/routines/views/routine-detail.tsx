@@ -8,28 +8,20 @@ import DotsIcon from '@icon/system/regular/dots-three.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import UserIcon from '@icon/system/regular/user.svg';
-import { Button, Dropdown, ToggleSwitch } from '@ui';
+import { Button, cn, Dropdown, ToggleSwitch, Tooltip } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
-import { ConnectionRows } from '../components/routine-connections';
-import { RoutineEditor, RoutineSettingRow } from '../components/routine-editor';
+import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
-import {
-  RoutineSteps,
-  RoutineStepsSummary,
-} from '../components/routine-step-editor';
 import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
-import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
 import type { HistoryRecord, HistoryResource } from '../core/history';
 import {
   createEmptyDraft,
   draftPrompt,
-  draftSteps,
   getErrorMessage,
   withDraftSteps,
 } from '../core/routine-draft';
-import { firstAgent, stepsNeedEvent } from '../core/routine-steps';
+import { stepsNeedEvent } from '../core/routine-steps';
 import {
   describeHistoryStep,
   latestStepRun,
@@ -40,6 +32,7 @@ import {
   RoutineConflictError,
 } from '../primitives/routine-detail';
 import { RoutineHistory } from './routine-history';
+import { routineSections } from './routine-sections';
 
 /** When the latest run started: its time today, else its day. */
 function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
@@ -58,19 +51,34 @@ function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
     : formatRelativeDate(latest);
 }
 
-/** Whether the routine's edits have reached the server. */
-function SaveState(props: { saving: boolean; failed: boolean }) {
+/** Whether the routine's edits have reached the server, and if not, why. */
+function SaveState(props: {
+  saving: boolean;
+  failed: boolean;
+  /** Why edits are held back from saving. */
+  invalid?: string;
+}) {
+  const label = () =>
+    props.failed
+      ? 'Not saved'
+      : props.invalid
+        ? 'Not saved: fix the routine'
+        : props.saving
+          ? 'Saving…'
+          : 'Saved';
   return (
     <span
-      role="status"
-      class="px-1.5 text-xs text-ink-extra-muted @max-[600px]/routine:hidden"
+      title={props.invalid}
+      class={cn(
+        'px-1.5 text-xs @max-[600px]/routine:hidden',
+        props.failed || props.invalid ? 'text-failure' : 'text-ink-extra-muted'
+      )}
     >
-      <Switch fallback="Saved">
-        <Match when={props.failed}>
-          <span class="text-failure">Not saved</span>
-        </Match>
-        <Match when={props.saving}>Saving…</Match>
-      </Switch>
+      <span aria-hidden="true">{label()}</span>
+      {/* Screen readers hear where saving settled, not every keystroke. */}
+      <span role="status" class="sr-only">
+        {props.saving ? '' : label()}
+      </span>
     </span>
   );
 }
@@ -93,6 +101,7 @@ export function RoutineDetailView(props: {
   onOpenTemplate?(templateId: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
 }) {
+  const connectedApps = props.slots.createConnectedApps();
   const {
     schedule,
     state,
@@ -110,10 +119,9 @@ export function RoutineDetailView(props: {
     runNow,
   } = createRoutineDetail(props.source, {
     userId: props.userId,
-    connectedApps: props.slots.createConnectedApps(),
+    connectedApps,
     onRename: (name) => props.onRename(name),
   });
-  const connectedApps = props.slots.createConnectedApps();
   const [tab, setTab] = createSignal(props.initialTab ?? 'settings');
   const [showRun, setShowRun] = createSignal(true);
   const back = () => props.onBack();
@@ -132,16 +140,15 @@ export function RoutineDetailView(props: {
       return 'Update the schedule before turning it on';
     return 'Fix the routine before turning it on';
   };
-  /** Apps go to the routine's Ask AI step. */
-  const hasAgent = () => {
-    const draft = state();
-    return !!draft && !!firstAgent(draftSteps(draft));
-  };
   /** Manual runs have no triggering item for steps to read. */
   const needsEvent = () => {
     const steps = state()?.steps;
     return steps !== undefined && stepsNeedEvent(steps);
   };
+  const runHint = () =>
+    needsEvent()
+      ? 'This routine acts on the item that triggers it, so it runs on activity'
+      : undefined;
   return (
     <Show
       when={schedule()}
@@ -158,6 +165,30 @@ export function RoutineDetailView(props: {
     >
       {(routine) => (
         <RoutineEditor
+          {...routineSections({
+            draft: state,
+            onChange: setState,
+            withSteps: withDraftSteps,
+            version: editorVersion,
+            slots: props.slots,
+            defaultModel: props.defaultModel,
+            decisionsEnabled: props.decisionsEnabled,
+            connected: connectedApps,
+            runsAs: () =>
+              routine().ownerId === props.userId()
+                ? 'You'
+                : getDisplayName(tryMacroId(routine().ownerId)) || 'Owner',
+            runsAsDescription: 'Steps and AI act with the owner’s access.',
+            lastRun: () =>
+              latestStepRun(props.source.history(), routine().revision),
+            showRun,
+            onShowRun: setShowRun,
+            unsupported: (
+              <p class="text-sm text-ink-muted">
+                This routine has an unsupported task configuration.
+              </p>
+            ),
+          })}
           draft={
             state() ?? {
               ...createEmptyDraft(props.defaultModel),
@@ -176,18 +207,21 @@ export function RoutineDetailView(props: {
               <>
                 <Show when={state()}>
                   <SaveState
-                    saving={autosave.dirty() || autosave.saving()}
+                    saving={
+                      autosave.saving() || (autosave.dirty() && !formError())
+                    }
                     failed={Boolean(autosave.error())}
+                    invalid={
+                      autosave.dirty() && !autosave.saving()
+                        ? (formError() ?? undefined)
+                        : undefined
+                    }
                   />
                 </Show>
                 <RoutineRunButton
                   enabled={isActive()}
                   runDisabled={runDisabled() || needsEvent()}
-                  runHint={
-                    needsEvent()
-                      ? 'This routine acts on the item that triggers it, so it runs on activity'
-                      : undefined
-                  }
+                  runHint={runHint()}
                   activationDisabled={activationDisabled()}
                   copyDisabled={!prompt()}
                   onRun={runNow}
@@ -256,15 +290,19 @@ export function RoutineDetailView(props: {
           }
           meta={
             <>
-              <ToggleSwitch
-                class="flex-row-reverse"
-                label="Enabled"
-                labelClass="text-sm font-medium text-ink"
-                title={activationHint()}
-                checked={isActive()}
-                disabled={activationDisabled()}
-                onChange={(enabled) => props.source.setEnabled(enabled)}
-              />
+              <Tooltip
+                label={activationHint() ?? ''}
+                disabled={!activationHint()}
+              >
+                <ToggleSwitch
+                  class="flex-row-reverse"
+                  label="Enabled"
+                  labelClass="text-sm font-medium text-ink"
+                  checked={isActive()}
+                  disabled={activationDisabled()}
+                  onChange={(enabled) => props.source.setEnabled(enabled)}
+                />
+              </Tooltip>
               <span>
                 Owned by{' '}
                 <span class="font-medium text-ink">
@@ -282,6 +320,14 @@ export function RoutineDetailView(props: {
                     </span>
                     <span>Last run {at()}</span>
                   </>
+                )}
+              </Show>
+              {/* Touch has no tooltips: say why a control is off. */}
+              <Show when={activationHint() ?? runHint()}>
+                {(hint) => (
+                  <span class="hidden basis-full text-xs text-ink-muted touch:block">
+                    {hint()}
+                  </span>
                 )}
               </Show>
               <Show when={props.onOpenTemplate && routine().templateId}>
@@ -302,133 +348,6 @@ export function RoutineDetailView(props: {
                 )}
               </Show>
             </>
-          }
-          connections={
-            state() && (
-              <ConnectionRows
-                apps={state()?.apps ?? []}
-                agent={hasAgent()}
-                connected={connectedApps}
-                onChange={(apps) =>
-                  setState((current) => ({ ...current, apps }))
-                }
-                Picker={props.slots.Apps}
-              />
-            )
-          }
-          settings={
-            <>
-              <RoutineSettingRow
-                label="Show runs in Home and Agents"
-                description="Runs stay in this routine’s history unless shown."
-              >
-                <ToggleSwitch
-                  size="md"
-                  label="Show runs in Home and Agents"
-                  labelClass="sr-only"
-                  checked={
-                    (state()?.runVisibility ?? DEFAULT_RUN_VISIBILITY) ===
-                    'listed'
-                  }
-                  disabled={!isOwned() || !state()}
-                  onChange={(listed) =>
-                    setState((draft) => ({
-                      ...draft,
-                      runVisibility: listed ? 'listed' : 'unlisted',
-                    }))
-                  }
-                />
-              </RoutineSettingRow>
-              <RoutineSettingRow
-                label="Runs as"
-                description="Steps and AI act with the owner’s access."
-              >
-                <span class="inline-flex items-center gap-1.5 text-sm text-ink">
-                  <UserIcon class="size-4 text-ink-muted" />
-                  {routine().ownerId === props.userId()
-                    ? 'You'
-                    : getDisplayName(tryMacroId(routine().ownerId)) || 'Owner'}
-                </span>
-              </RoutineSettingRow>
-            </>
-          }
-          stepsAside={
-            <Show when={state()}>
-              {(draft) => (
-                <RoutineStepsSummary
-                  steps={draftSteps(draft())}
-                  triggers={draft().triggers ?? []}
-                  lastRun={latestStepRun(
-                    props.source.history(),
-                    routine().revision
-                  )}
-                  showRun={showRun()}
-                  onShowRun={setShowRun}
-                />
-              )}
-            </Show>
-          }
-          steps={
-            <Show when={state()}>
-              {(draft) => (
-                <Show when={{ version: editorVersion() }} keyed>
-                  <RoutineSteps
-                    steps={draftSteps(draft())}
-                    onChange={(steps) =>
-                      setState((current) => withDraftSteps(current, steps))
-                    }
-                    triggers={draft().triggers ?? []}
-                    defaultTarget={
-                      firstAgent(draftSteps(draft()))?.target ?? {
-                        kind: 'model',
-                        model: props.defaultModel,
-                      }
-                    }
-                    decisionsEnabled={props.decisionsEnabled}
-                    slots={props.slots}
-                    lastRun={latestStepRun(
-                      props.source.history(),
-                      routine().revision
-                    )}
-                    showRun={showRun()}
-                  />
-                </Show>
-              )}
-            </Show>
-          }
-          triggerContent={
-            <Show
-              when={state()}
-              fallback={
-                <p class="text-sm text-ink-muted">
-                  This routine has an unsupported task configuration.
-                </p>
-              }
-            >
-              {(draft) => (
-                <props.slots.Triggers
-                  layout="rows"
-                  triggers={draft().triggers ?? []}
-                  onChange={(triggers) =>
-                    setState((current) => ({ ...current, triggers }))
-                  }
-                />
-              )}
-            </Show>
-          }
-          hasTriggers={!state() || (state()?.triggers ?? []).length > 0}
-          triggerAdd={
-            <Show when={state()}>
-              {(draft) => (
-                <props.slots.Triggers
-                  layout="add"
-                  triggers={draft().triggers ?? []}
-                  onChange={(triggers) =>
-                    setState((current) => ({ ...current, triggers }))
-                  }
-                />
-              )}
-            </Show>
           }
           feedback={
             <>
@@ -483,7 +402,13 @@ export function RoutineDetailView(props: {
               <RoutineHistory
                 records={props.source.history()}
                 describeStep={(step, record) =>
-                  describeHistoryStep(step, stepsForRun(record, routine()))
+                  describeHistoryStep(
+                    step,
+                    stepsForRun(record, routine()),
+                    // Runs recorded before step kinds were stored read
+                    // them from the routine as it is now.
+                    state()?.steps
+                  )
                 }
                 isPending={props.source.historyLoading()}
                 createChatMetadata={props.slots.createChatMetadata}

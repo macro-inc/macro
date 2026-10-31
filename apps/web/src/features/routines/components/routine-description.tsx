@@ -1,5 +1,6 @@
 import { cn } from '@ui';
 import { createSignal } from 'solid-js';
+import { isComposing } from './composing';
 
 /** Matches the server's limit, shared with templates. */
 const MAX_DESCRIPTION_CHARS = 1000;
@@ -32,7 +33,7 @@ export function RoutineDescription(props: {
       onInput={(event) => setDraft(event.currentTarget.value)}
       onBlur={commit}
       onKeyDown={(event) => {
-        if (event.isComposing) return;
+        if (isComposing(event)) return;
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
           event.currentTarget.blur();

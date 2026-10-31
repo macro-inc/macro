@@ -1,6 +1,6 @@
 import { For, type JSX, Show } from 'solid-js';
 import type { RoutineTemplate } from '../core/routine-templates';
-import { RoutineTemplateCard } from './routine-template-strip';
+import { StarterTemplateCard } from './routine-template-strip';
 
 /**
  * Where a new routine starts: describe it for AI to draft, or pick a
@@ -21,7 +21,7 @@ export function RoutineStart(props: {
           <div class="grid grid-cols-[repeat(auto-fill,minmax(17rem,1fr))] gap-2.5">
             <For each={props.templates}>
               {(template) => (
-                <RoutineTemplateCard
+                <StarterTemplateCard
                   on="dialog"
                   template={template}
                   onUse={() => props.onTemplate(template)}

@@ -4,6 +4,7 @@ import { Button, EntityComposer } from '@ui';
 import type { Accessor, JSX } from 'solid-js';
 import { RoutineStart } from '../components/routine-start';
 import type { ScheduleDraft } from '../core/draft';
+import { clampDescription } from '../core/routine-draft';
 import {
   availableTemplates,
   newRoutineDraft,
@@ -38,7 +39,9 @@ export function RoutineCreatorView(props: {
   // A drafted routine is described by what was asked for.
   const drafted = (draft: ScheduleDraft, description: string) =>
     props.onStart(
-      description.trim() ? { ...draft, description: description.trim() } : draft
+      clampDescription(description)
+        ? { ...draft, description: clampDescription(description) }
+        : draft
     );
   const startFrom = (template: RoutineTemplate) =>
     props.onStart(newRoutineDraft(template, context()));

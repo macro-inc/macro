@@ -17,9 +17,9 @@ import {
   newRoutineDraft,
   type RoutineTemplate,
 } from './core/routine-templates';
-import { saveRoutineComposerDraft } from './draft-storage';
 import { createRoutineListSource } from './queries/routine-sources';
 import { RoutineDetail } from './routine-detail';
+import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
 import { RoutineNew } from './routine-new';
 import { RoutinesListView } from './views/routines-list';
@@ -63,7 +63,7 @@ function RoutinesContent() {
   }
   /** A template card skips New routine and opens its page already started. */
   function startFrom(template: RoutineTemplate) {
-    saveRoutineComposerDraft(
+    startRoutineDraft(
       newRoutineDraft(template, {
         decisions: decisions().enabled,
         defaultModel: defaultModelForPlan(hasPaidAccess()),

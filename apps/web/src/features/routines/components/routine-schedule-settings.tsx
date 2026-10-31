@@ -1,4 +1,5 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
+import { isModality } from '@core/mobile/inputModality';
 import { WEEKDAY_OPTIONS } from '@core/util/cron';
 import { parseTime } from '@core/util/dateSearch/parseTime';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
@@ -47,7 +48,10 @@ function RunOnceSettings(props: {
   onChange: (patch: Partial<ScheduleTriggerDraft>) => void;
 }) {
   let inputRef: HTMLInputElement | undefined;
-  onMount(() => inputRef?.focus());
+  // Typing is on intent on a phone, where the keyboard covers the panel.
+  onMount(() => {
+    if (!isModality('touch')) inputRef?.focus();
+  });
   const [search, setSearch] = createSignal('');
   const [calendar, setCalendar] = createSignal(false);
   const dates = useDateSearch({
@@ -162,7 +166,10 @@ function RecurringSettings(props: {
   onChange: (patch: Partial<ScheduleTriggerDraft>) => void;
 }) {
   let inputRef: HTMLInputElement | undefined;
-  onMount(() => inputRef?.focus());
+  // Typing is on intent on a phone, where the keyboard covers the panel.
+  onMount(() => {
+    if (!isModality('touch')) inputRef?.focus();
+  });
   const [choosingZone, setChoosingZone] = createSignal(false);
   let zoneButton: HTMLButtonElement | undefined;
   const [words, setWords] = createSignal('');

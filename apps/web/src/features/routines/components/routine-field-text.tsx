@@ -3,6 +3,7 @@ import { cn, Dropdown, inputVariants } from '@ui';
 import { createEffect, createSignal, For, on, onMount, Show } from 'solid-js';
 import { type StepScope, triggerFields } from '../core/step-catalog';
 import { FIELD_PATTERN, fieldLabel, subjectNoun } from '../core/step-headline';
+import { isComposing } from './composing';
 import { menuMount } from './routine-search-menu';
 
 /** Keeps the caret after a field chip at the end of the text. */
@@ -226,7 +227,7 @@ export function FieldText(props: {
           onMouseUp={remember}
           onBlur={remember}
           onKeyDown={(event) => {
-            if (event.key !== 'Enter' || event.isComposing) return;
+            if (event.key !== 'Enter' || isComposing(event)) return;
             event.preventDefault();
             if (props.multiline && root) {
               remember();

@@ -84,18 +84,16 @@ describe('routine settings', () => {
     });
   });
 
-  it('opens the composer and the created routine from Create', () => {
+  it('opens the composer from Create', () => {
     render(() => <RoutineSettings />);
     expect(screen.getAllByRole('heading', { name: 'Routines' })).toHaveLength(
       1
     );
     fireEvent.click(screen.getByRole('button', { name: 'Create Routine' }));
     expect(mocks.close).toHaveBeenCalledOnce();
-    const content = mocks.popoverSplit.mock.calls[0][0];
-    expect(content).toMatchObject({ type: 'component', id: 'routine-compose' });
-    content.params.onCreated('created');
-    expect(mocks.openAgentsPage).toHaveBeenCalledWith(layout, 'routines', {
-      routineId: 'created',
+    expect(mocks.popoverSplit).toHaveBeenCalledWith({
+      type: 'component',
+      id: 'routine-compose',
     });
   });
 });

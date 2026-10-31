@@ -817,10 +817,15 @@ describe('routine editor triggers', () => {
       { ...events, task: { ...(events.task as object), prompt: 'Be brief.' } },
     ]);
     render(() => <Routine />);
+    // Before steps are added, the saved instructions show above the step.
+    expect(screen.getByText('Saved instructions that run first')).toBeTruthy();
+    expect(screen.getByText('Be brief.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
     fireEvent.click(await screen.findByRole('option', { name: /Create task/ }));
+    // Merged into the agent's instructions, they no longer show apart.
+    expect(screen.queryByText('Saved instructions that run first')).toBeNull();
     // The closing menu can leave the page aria-hidden for a moment.
-    const agent = screen.getByRole('region', { name: 'Ask AI', hidden: true });
+    const agent = screen.getByRole('group', { name: 'Ask AI', hidden: true });
     // Its card's header toggle comes first.
     fireEvent.click(
       within(agent).getAllByRole('button', {

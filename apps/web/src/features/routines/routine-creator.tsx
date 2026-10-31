@@ -8,8 +8,8 @@ import {
   enableRoutineConditions,
   enableRoutineStarterTemplates,
 } from '@core/constant/featureFlags';
-import { saveRoutineComposerDraft } from './draft-storage';
 import { RoutineAiComposer } from './routine-ai-composer';
+import { startRoutineDraft } from './routine-draft-start';
 import { RoutineCreatorView } from './views/routine-creator';
 
 /**
@@ -45,7 +45,7 @@ export function RoutineCreator(
       onClose={() => panel.handle.close()}
       onStart={(draft) => {
         // The page reads its first draft from the unsent-draft store.
-        saveRoutineComposerDraft(draft);
+        startRoutineDraft(draft);
         panel.handle.close();
         if (props.onStart) props.onStart();
         else openAgentsPage(layout, 'routines', { routineId: 'new' });
