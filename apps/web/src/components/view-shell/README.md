@@ -33,3 +33,10 @@ align trailing controls by their outer edges or offset an individual icon.
   row, as in Email's inbox list. Do not repeat numeric offsets in the workspace.
 
 Desktop multi-split close controls live in the outer frame corner. The inherited split controller sets `closeButtonPlacement` to `frame` to suppress duplicate header/sidebar close buttons; touch layouts retain header placement.
+
+Automatic navigation closure at the narrow breakpoint keeps the docked Resize
+panel mounted while its width closes over 140ms. Main expands alongside the
+sidebar without writing the saved wide preference. An explicit overlay opening
+or required navigation takes priority over the exit, and a quick return to wide
+reuses the docked panel.
+Reduced-motion and browsers without WAAPI switch hosts immediately.

@@ -83,6 +83,8 @@ export type ViewShellLayout = {
 type ViewShellInternal = ViewShellLayout & {
   id: string;
   atLayoutBreakpoint: Accessor<boolean>;
+  overlayHost: Accessor<boolean>;
+  dockedExitCollapsed: Accessor<boolean>;
 };
 
 const RESIZE_GUTTER = 1;
@@ -253,6 +255,11 @@ function Root(props: ViewShellRootProps) {
     return match ? match() : false;
   };
 
+  // The rendered host is independent of the logical breakpoint during an exit.
+  const [overlayHost, setOverlayHost] = createSignal(
+    untrack(atLayoutBreakpoint)
+  );
+  const [dockedExitCollapsed, setDockedExitCollapsed] = createSignal(false);
   const asideRequired = () => local.asideRequired ?? false;
   // Each narrow layout starts closed, independently of the saved wide layout,
   // unless navigation is required, which opens the overlay until dismissed.
@@ -275,14 +282,54 @@ function Root(props: ViewShellRootProps) {
 
   const setAsideOpen = (open: boolean) => {
     if (!open && asidePinned()) return;
+    // Repeated requests must not cancel an exit that still owns host cleanup.
+    if (open === (asideMode() === 'docked')) return;
     animateSidebar(() => {
-      if (atLayoutBreakpoint()) setNarrowAsideOpen(open);
-      else setWideAsideCollapsed(!open);
+      if (atLayoutBreakpoint()) {
+        // An explicit overlay replaces an unfinished docked exit.
+        if (open) setOverlayHost(true);
+        setNarrowAsideOpen(open);
+      } else setWideAsideCollapsed(!open);
     });
   };
-  // The pin flips the docked aside without a setter, so animate it here.
+  // Run before the slot's reactive host switch so motion measures the docked
+  // panel before publishing the new host state. Pin changes share this request
+  // so they cannot cancel a retained exit without releasing its host.
+  let previousNarrow = untrack(atLayoutBreakpoint);
   createComputed(
-    on(asidePinned, () => animateSidebar(() => {}), { defer: true })
+    on(
+      [atLayoutBreakpoint, () => local.asidePinned, asideRequired],
+      ([narrow]) => {
+        const changed = narrow !== previousNarrow;
+        previousNarrow = narrow;
+        if (changed && narrow) {
+          const docked = Array.from(
+            root()?.querySelectorAll<HTMLElement>(
+              ':scope > [data-resize-zone] > [data-resize-panel]'
+            ) ?? []
+          ).find((panel) => panel.querySelector('[data-view-shell-aside]'));
+          const retain =
+            !!docked &&
+            !docked.classList.contains('hidden') &&
+            !asideRequired();
+          animateSidebar(
+            () => {
+              setDockedExitCollapsed(true);
+              if (!retain) setOverlayHost(true);
+            },
+            () => setOverlayHost(true)
+          );
+        } else if (changed || (narrow && asideRequired())) {
+          animateSidebar(() => {
+            setDockedExitCollapsed(false);
+            setOverlayHost(narrow);
+          });
+        } else if (!narrow) {
+          animateSidebar(() => {});
+        }
+      },
+      { defer: true }
+    )
   );
 
   const canFitInlineDetail = () => {
@@ -313,6 +360,8 @@ function Root(props: ViewShellRootProps) {
     width,
     breakpoints,
     atLayoutBreakpoint,
+    overlayHost,
+    dockedExitCollapsed,
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -473,7 +522,7 @@ function Aside(props: ViewShellAsideProps) {
   // while its exit animation is still retaining the first one.
   return (
     <Show
-      when={ws.atLayoutBreakpoint()}
+      when={ws.overlayHost()}
       fallback={
         <Resize.Panel
           id={`${ws.id}-aside`}
@@ -482,7 +531,11 @@ function Aside(props: ViewShellAsideProps) {
           maxSize={ws.aside.layout().max}
           redistributionPreferredSize={redistributionPreferredSize()}
           target={{ kind: 'px', px: preferredWidth() }}
-          collapsed={() => ws.aside.isCollapsed()}
+          collapsed={() =>
+            ws.atLayoutBreakpoint()
+              ? ws.dockedExitCollapsed()
+              : ws.aside.isCollapsed()
+          }
           onSizeChangeEnd={onWidthChangeEnd}
         >
           <div
@@ -490,8 +543,8 @@ function Aside(props: ViewShellAsideProps) {
             ref={asideTarget}
             class={cn('size-full min-h-0 min-w-0', local.class)}
             data-view-shell-aside=""
-            inert={ws.aside.isCollapsed()}
-            aria-hidden={ws.aside.isCollapsed()}
+            inert={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
+            aria-hidden={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
           >
             {local.children}
           </div>
