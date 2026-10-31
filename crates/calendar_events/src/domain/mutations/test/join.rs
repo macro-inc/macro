@@ -450,6 +450,7 @@ async fn a_read_only_copy_cannot_answer() {
 fn preview(viewer_event_id: Option<Uuid>) -> CalendarMentionPreview {
     CalendarMentionPreview::Accessible(Box::new(CalendarMentionEvent {
         viewer_copy: viewer_event_id.map(|_| CalendarMentionViewerCopy::Event),
+        viewer_calendar_ids: Vec::new(),
         viewer_event_id,
         title: "Offsite".to_string(),
         description: None,

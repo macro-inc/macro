@@ -1,8 +1,21 @@
 # Class: CalendarNamespace
 
-The calendar surface: the caller's visible calendars, event creation, and
-handles to individual events and calendars. Backed by calendar_service (the
-SDK reaches it on the gateway's `/calendar` route).
+The calendar surface: every calendar the caller can see (not all of them
+theirs), event creation, and handles to individual events and calendars.
+Backed by calendar_service (the SDK reaches it on the gateway's `/calendar`
+route).
+
+The user can see calendars that are not theirs, such as a colleague's or a
+team's. `inbox` is the account syncing a calendar, so it stays the user's
+own address on all of them, and neither it, `isPrimary`, `isWritable` nor
+`role` says whose calendar it is. Their schedule is the calendars with
+`contributesToAvailability`, plus meetings they attend: only those are
+"your calendar", and only those are conflicts when finding free time, as in
+team availability. Anything else is what that calendar shows, not where the
+user is or what they are doing. Call it by `calendarName`, say whose it is
+when the name shows that, and otherwise say you cannot tell rather than
+guess. When it overlaps a time you suggest, mention it so the user can
+decide, since their own other calendars read the same way.
 
 A meeting on more than one of the user's inboxes is one event per inbox;
 [CalendarNamespace.occurrences](#occurrences) lists each copy with its `inbox` and
@@ -75,7 +88,7 @@ A handle to a calendar by id. Detail loads on first access.
 
 > **calendars**(): `Promise`\<[`Calendar`](../../calendar/classes/Calendar.md)[]\>
 
-The caller's visible calendars, primaries and writable first.
+The calendars the caller can see, some possibly not theirs, primaries and writable first.
 
 #### Returns
 
@@ -139,14 +152,31 @@ Find up to 30 owned markdown documents for meeting notes, plus available extra t
 
 ### occurrences()
 
-> **occurrences**(`options`): `AsyncGenerator`\<\{ `event`: [`CalendarEvent`](../../event/classes/CalendarEvent.md); `inbox`: `string` \| `undefined`; `occurrence`: [`CalendarOccurrence`](../../../../../generated/storage/types.gen/type-aliases/CalendarOccurrence.md); `role`: [`CalendarEventRole`](../type-aliases/CalendarEventRole.md) \| `undefined`; \}, `any`, `any`\>
+> **occurrences**(`options`): `AsyncGenerator`\<\{ `calendarName`: `string` \| `undefined`; `contributesToAvailability`: `boolean` \| `undefined`; `event`: [`CalendarEvent`](../../event/classes/CalendarEvent.md); `inbox`: `string` \| `undefined`; `occurrence`: [`CalendarOccurrence`](../../../../../generated/storage/types.gen/type-aliases/CalendarOccurrence.md); `role`: [`CalendarEventRole`](../type-aliases/CalendarEventRole.md) \| `undefined`; \}, `any`, `any`\>
 
-Calendar occurrences in a viewport, automatically paginated. Each names
-the address of the connected inbox holding that copy of the event
-(`inbox`) and whether the user organizes it or is a guest there (`role`,
-absent when neither). A meeting on several of the user's inboxes appears
-once per inbox, each with its own event; describe them by inbox and role,
-never by id.
+Occurrences on every calendar the user can see: their schedule is only
+`contributesToAvailability` rows and meetings they attend; call the rest
+by `calendarName`. Automatically paginated within the viewport. Each names
+its calendar (`calendarName`), whether a calendar holding it is on the
+user's schedule (`contributesToAvailability`), the address of the
+connected inbox holding that copy of the event (`inbox`) and whether the
+user organizes it or is a guest there (`role`, absent when neither, or
+when they can only write that calendar).
+
+`inbox` is the account syncing the calendar, so a colleague's calendar
+reports the user's own address; it never says whose calendar it is, and
+neither does `role`, since writing someone's calendar lets the user act
+as its organizer. Say "your calendar", and count a conflict or busy time,
+only for `contributesToAvailability` rows and meetings the user attends
+(`role`), the way team availability does. Any other row is what that
+calendar shows, not where the user is or what they are doing: "the
+Offsites calendar has...", or "alex@example.com's calendar has..." when
+the name shows whose it is. If it does not, say you cannot tell rather
+than guess. When one overlaps a time you suggest, mention it so the user
+can decide, since their own other calendars read the same way.
+
+A meeting on several of the user's inboxes appears once per inbox, each
+with its own event; describe them by inbox and role, never by id.
 
 Before changing or deleting such a meeting, ask the user which inbox's
 copy to change, unless they named it, only one copy can make the change,
@@ -165,7 +195,7 @@ longer listed has no `inbox`; take it from that refusal.
 
 #### Returns
 
-`AsyncGenerator`\<\{ `event`: [`CalendarEvent`](../../event/classes/CalendarEvent.md); `inbox`: `string` \| `undefined`; `occurrence`: [`CalendarOccurrence`](../../../../../generated/storage/types.gen/type-aliases/CalendarOccurrence.md); `role`: [`CalendarEventRole`](../type-aliases/CalendarEventRole.md) \| `undefined`; \}, `any`, `any`\>
+`AsyncGenerator`\<\{ `calendarName`: `string` \| `undefined`; `contributesToAvailability`: `boolean` \| `undefined`; `event`: [`CalendarEvent`](../../event/classes/CalendarEvent.md); `inbox`: `string` \| `undefined`; `occurrence`: [`CalendarOccurrence`](../../../../../generated/storage/types.gen/type-aliases/CalendarOccurrence.md); `role`: [`CalendarEventRole`](../type-aliases/CalendarEventRole.md) \| `undefined`; \}, `any`, `any`\>
 
 ***
 

@@ -4295,6 +4295,7 @@ export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
  */
 export type CalendarEventAccess =
   | 'on_your_calendar'
+  | 'on_visible_calendar'
   | 'invited'
   | 'snapshot'
   | 'shared_with_you';
@@ -5040,12 +5041,15 @@ export interface ToolCalendarEvent {
    */
   calendarName?: string | null;
   /**
-   * Connected inbox address the calendar belongs to, when known.
+   * Connected inbox address syncing the calendar, when known. It stays the
+   * user's own address on a colleague's calendar, so it never says whose
+   * calendar it is.
    */
   inbox?: string | null;
   /**
    * Whether the user organizes this event or is a guest on it, through
-   * that inbox; absent when they are neither.
+   * that inbox; absent when they are neither, or can only write that
+   * calendar.
    */
   myRole?: ToolEventRole | null;
 }
@@ -11403,6 +11407,8 @@ export interface ListBotsResponse {
  *
  * Use this to answer questions about the user's schedule ("what's on my calendar tomorrow?"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete.
  *
+ * The user can see calendars that are not theirs, such as a colleague's or a team's. `inbox` is the account syncing a calendar, so it stays the user's own address on all of them, and neither it, `isReadOnly` nor `myRole` says whose calendar it is. Their schedule is the calendars with `contributesToAvailability`, plus meetings they attend: only those are "your calendar", and only those count as conflicts or busy time, as in GetTeamAvailability. Anything else is what that calendar shows, not where the user is or what they are doing. Call it by `calendarName`, say whose it is when the name shows that, and otherwise say you cannot tell rather than guess. When one overlaps a time you suggest, mention it so the user can decide, since their own other calendars read the same way.
+ *
  * Each entry names the calendar (`calendarName`) and connected inbox (`inbox`) holding that copy of the event, and `myRole` says whether the user organizes it or is a guest there. A meeting on several of the user's inboxes appears once per inbox, each with its own `eventId`, and what the user may do can differ between them. When asking which one the user means, describe each by its inbox and role, never by id; when the user names an inbox, act on the entry whose `inbox` matches.
  *
  * When the user does not name an inbox, choose the copy by what the change does. Reminders belong to one copy only, so set them on one copy without asking and say which inbox you used. Answer an invitation on the copy where the user is a guest; when they are a guest through more than one inbox, ask which inbox answers, since each answers only for itself. Any other change reaches the meeting differently from each copy: the title, time, description, location, recurrence or conference, adding or removing guests, guest permissions, and deleting. UpdateCalendarEvent and DeleteCalendarEvent refuse such a change on a meeting held by several of the user's inboxes until `inbox` names the inbox of the copy being changed, and the refusal lists each copy. If only one copy allows the change (`viewerCan`, or for deleting, `isReadOnly` false), use that copy with its `inbox` and say why (for example, only the copy the user organizes can move the meeting). If more than one can, ask which inbox, saying what the change would do from each, and never choose between the user's inboxes yourself, whatever they look like. Add guests from the copy the user organizes when there is one: it invites them directly, while a guest's copy invites only as far as the organizer allows. Deleting the organizer's copy cancels the meeting for everyone, while deleting a guest's copy takes the meeting off that inbox's calendar and, on Google, also declines the invitation and tells the organizer.
@@ -11528,18 +11534,29 @@ export interface CalendarEventListItem {
    */
   calendarId?: string | null;
   /**
-   * Display name of that calendar, when known.
+   * Display name of that calendar, when known. It often says whose
+   * calendar it is: Google names a person's primary calendar after them or
+   * their address.
    */
   calendarName?: string | null;
   /**
-   * Connected inbox address holding this copy of the event. A meeting on
-   * several of the user's inboxes is listed once per inbox, each with its
-   * own `eventId`.
+   * Whether a calendar holding this event counts toward the user's busy
+   * time, when known. Only these and meetings they attend are the user's
+   * schedule; false does not say whose calendar it is, as their own other
+   * calendars are false too.
+   */
+  contributesToAvailability?: boolean | null;
+  /**
+   * Connected inbox address syncing this copy of the event. It stays the
+   * user's own address on a colleague's calendar, so it never says whose
+   * calendar it is. A meeting on several of the user's inboxes is listed
+   * once per inbox, each with its own `eventId`.
    */
   inbox?: string | null;
   /**
    * Whether the user organizes this event or is a guest on it, through
-   * `inbox`; absent when they are neither.
+   * `inbox`; absent when they are neither, or can only write that
+   * calendar.
    */
   myRole?: ToolEventRole | null;
   /**
@@ -11592,7 +11609,7 @@ export interface CalendarEventCopyItem {
    */
   calendarName?: string | null;
   /**
-   * Connected inbox address the calendar belongs to, when known.
+   * Connected inbox address syncing the calendar, when known.
    */
   inbox?: string | null;
   /**
@@ -11605,7 +11622,9 @@ export interface CalendarEventCopyItem {
   isReadOnly: boolean;
 }
 /**
- * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, provider, capabilities, and whether it is primary and writable.
+ * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, syncing inbox address, provider, capabilities, and whether it is primary, writable and part of the user's busy time.
+ *
+ * Not every calendar here is the user's. `emailAddress` is the account syncing a calendar, so a colleague's calendar reports the user's own address, and being writable or not primary proves nothing either way. `contributesToAvailability` marks the calendars that are the user's schedule. Call any other by its name, say whose it is when the name shows that, and otherwise say you cannot tell.
  *
  * Use this before CreateCalendarEvent when the user wants an event on a specific non-default calendar (e.g. "add it to my work calendar") so you can pass the exact `calendarId`. Most users have a single primary calendar, in which case CreateCalendarEvent targets it by default and you do not need this tool unless choosing conference or other provider-dependent behavior. Check `capabilities` before requesting a conference, removing one, or using custom recurrence. An empty result means no calendar is connected.
  */
@@ -11640,7 +11659,8 @@ export interface ToolCalendar {
    */
   name: string;
   /**
-   * Connected inbox address the calendar belongs to.
+   * Connected inbox address syncing the calendar. It stays the user's own
+   * address on a colleague's calendar, so it never says whose it is.
    */
   emailAddress: string;
   /**
@@ -11652,6 +11672,11 @@ export interface ToolCalendar {
    * Whether events can be created and modified on this calendar.
    */
   isWritable: boolean;
+  /**
+   * Whether this calendar counts toward the user's busy time. Only these
+   * are the user's own schedule; false does not say whose calendar it is.
+   */
+  contributesToAvailability: boolean;
 }
 /**
  * Actual provider capabilities used by calendar editors.
@@ -13344,7 +13369,7 @@ export interface EventType {
 /**
  * Read one calendar event by id: the `documentId` of a calendar event mention (`blockName` `calendar`) in a message, document, or email, or an `eventId` a calendar tool returned. Returns what the mention's preview card shows: title, time, location, description (truncated), organizer, guest count, and whether it repeats. ReadContent and ReadMetadata read documents only; use this tool for calendar events.
  *
- * `access` says how the user holds the meeting, as the card does. `on_your_calendar`: their own event (they organize it, or a delegated inbox holds it). `invited`: they are a guest. `snapshot`: a private copy they added of a shared meeting, which doesn't follow the organizer's changes and where an answer or a new guest would never reach the meeting. In these three, `eventId` is the user's copy for UpdateCalendarEvent and DeleteCalendarEvent. `shared_with_you`: someone shared their copy with a channel the user belongs to and the meeting is on none of the user's calendars. The event is then read-only for the user; AddSharedCalendarEvent adds a snapshot of it, and `canRequestToJoin` and `joinRequestStatus` say whether they can ask the person who shared it to add them as a guest, which they do from the event's card. To read one instance of a recurring event, pass the mention's `occurrenceKey` block param.
+ * `access` says how the user holds the meeting, as the card does. `on_your_calendar`: their own event, on a calendar of their schedule. `on_visible_calendar`: it is on a calendar they can see that is not part of their schedule, named by `calendarName`, which may be a colleague's: never call it theirs, say whose it is when the name shows that, and otherwise say you cannot tell. `invited`: they are a guest. `snapshot`: a private copy they added of a shared meeting, which doesn't follow the organizer's changes and where an answer or a new guest would never reach the meeting. In these four, `eventId` is the user's copy for UpdateCalendarEvent and DeleteCalendarEvent. `shared_with_you`: someone shared their copy with a channel the user belongs to and the meeting is on none of the user's calendars. The event is then read-only for the user; AddSharedCalendarEvent adds a snapshot of it, and `canRequestToJoin` and `joinRequestStatus` say whether they can ask the person who shared it to add them as a guest, which they do from the event's card. To read one instance of a recurring event, pass the mention's `occurrenceKey` block param.
  */
 export interface ReadCalendarEvent {
   /**
@@ -13361,6 +13386,11 @@ export interface ReadCalendarEvent {
  */
 export interface ReadCalendarEventResponse {
   access: CalendarEventAccess;
+  /**
+   * Display name of the calendar holding `eventId`, the canonical copy's
+   * when several do, when known. It often says whose calendar it is.
+   */
+  calendarName?: string | null;
   /**
    * The user's own copy of the meeting, for UpdateCalendarEvent and
    * DeleteCalendarEvent. It can differ from the id that was read, and is

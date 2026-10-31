@@ -1733,6 +1733,14 @@
             "format": "date-time",
             "description": "Entity update time of the previewed copy."
           },
+          "viewerCalendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The calendars holding `viewer_event_id`, the canonical copy's first."
+          },
           "viewerCopy": {
             "oneOf": [
               {
@@ -2823,6 +2831,10 @@
           "color": {
             "type": ["string", "null"],
             "description": "Provider color."
+          },
+          "contributesToAvailability": {
+            "type": "boolean",
+            "description": "Whether this calendar counts toward the requester's busy time: their\nsetting, by default only the primary calendars of inboxes they own.\nThe nearest thing to \"this is the requester's own\": a provider's\naccess role only says what they may do, on a colleague's calendar too."
           },
           "defaultReminders": {
             "type": "array",
