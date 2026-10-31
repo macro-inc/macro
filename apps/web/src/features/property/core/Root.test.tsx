@@ -1,6 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { SelectProperty } from '../types';
 import { getSelectValues } from '../utils/typeGuards';
@@ -164,6 +164,47 @@ it('returns focus to the pill after the editor took it', async () => {
   await nextTask();
 
   expect(document.activeElement).toBe(pill);
+});
+
+it('returns focus to its own root when another shows the same property', async () => {
+  const [replaced, setReplaced] = createSignal(false);
+  const Pill = () => {
+    const ctx = useProperty();
+    return (
+      <Show
+        when={replaced()}
+        fallback={
+          <button onClick={(event) => ctx.openEditor(event.currentTarget)}>
+            Set
+          </button>
+        }
+      >
+        <button>Saved</button>
+      </Show>
+    );
+  };
+  const Close = () => {
+    const ctx = useProperty();
+    return <button onClick={() => ctx.closeEditor()}>Close</button>;
+  };
+  render(() => (
+    <>
+      <Root property={priority}>
+        <button>Title row pill</button>
+      </Root>
+      <Root property={priority}>
+        <Pill />
+        <Close />
+      </Root>
+    </>
+  ));
+
+  fireEvent.click(screen.getByText('Set'));
+  setReplaced(true);
+  fireEvent.click(screen.getByText('Close'));
+  await nextTask();
+
+  expect(document.activeElement).toBe(screen.getByText('Saved'));
 });
 
 it('leaves focus in the field the editor found it in', async () => {

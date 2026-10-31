@@ -92,6 +92,7 @@ export function Root(props: PropertyRootProps) {
   // A touch editor leaves focus in the field the user was typing in (a
   // composer's title), and a picker sheet hands it back there.
   let focusAtOpen: Element | null = null;
+  let rootElement: HTMLDivElement | undefined;
 
   // Focus restoration helper - used by both closeEditor and onOpenChange
   // When a value is saved, the component may remount (due to reactive updates),
@@ -117,8 +118,11 @@ export function Root(props: PropertyRootProps) {
         return;
       }
 
-      // Fallback: find the trigger by property ID (handles remount case)
-      const root = document.querySelector(`[data-property-id="${propertyId}"]`);
+      // Fallback: find the trigger by property ID (handles remount case). The
+      // title row and side panel show the same ID, so prefer this root's own.
+      const root = rootElement?.isConnected
+        ? rootElement
+        : document.querySelector(`[data-property-id="${propertyId}"]`);
       // Row actions can precede the value editor; restore focus to its trigger.
       const trigger = root?.querySelector<HTMLButtonElement>(
         'button:not([data-property-row-action])'
@@ -174,6 +178,7 @@ export function Root(props: PropertyRootProps) {
         fitViewport
       >
         <div
+          ref={rootElement}
           class={cn('property-root', local.class)}
           data-property
           data-property-id={local.property.propertyId}

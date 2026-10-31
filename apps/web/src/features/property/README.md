@@ -16,6 +16,11 @@ property, not the prop you passed in. Save handlers keep their own caches
 current, so `Property.Root` editors never refetch properties after a save;
 side-panel collections own their refresh (below).
 
+Key property lists by `propertyDefinitionId`, not `propertyId`: a first value
+moves a row from its `pending:` placeholder through an optimistic ID to the
+saved one, and a row keyed by ID remounts each time, dropping the focus
+`Property.Root` restored to its pill.
+
 ## Side-panel collections
 
 Property rows use a 4px vertical gap, including inline Tags and the boundary

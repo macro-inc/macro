@@ -472,6 +472,30 @@ it('resolves a default Project placeholder after assignment and preserves its va
   ).toBe('Assigned project');
 });
 
+it('keeps a focused pill mounted while its placeholder gets an assignment', () => {
+  mocks.kind = 'task';
+  mocks.projectsEnabled = true;
+  setup([...taskProperties]);
+  const pill = screen.getByRole('button', { name: 'Unpin Project' });
+  pill.focus();
+
+  const project: Property = {
+    ...property,
+    propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+    displayName: 'Project',
+  };
+  mocks.setProperties?.([
+    ...taskProperties,
+    { ...project, propertyId: 'optimistic-project' },
+  ]);
+  mocks.setProperties?.([
+    ...taskProperties,
+    { ...project, propertyId: 'project-assignment' },
+  ]);
+
+  expect(document.activeElement).toBe(pill);
+});
+
 it('clears a placeholder-backed Project pin when its assignment disappears before removal finishes', async () => {
   mocks.kind = 'task';
   mocks.projectsEnabled = true;
