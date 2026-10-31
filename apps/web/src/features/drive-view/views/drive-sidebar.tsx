@@ -1,3 +1,4 @@
+import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto-scroll';
 import {
   CollapsibleSection,
   SearchBar,
@@ -6,6 +7,7 @@ import {
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { createFolderDropTargets } from '@app/features/next-soup/actions';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -14,6 +16,7 @@ import FolderIcon from '@icon/system/regular/folder.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, cn, Scroll } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { DriveNavigation } from '../components/drive-navigation';
@@ -88,6 +91,9 @@ function DriveFavorite(props: { favorite: Favorite; onNavigate?: () => void }) {
 /** Also used by the narrow-layout navigation menu. */
 export function DriveSidebarContent(props: { onNavigate?: () => void }) {
   const { state, sidebar } = useDriveView();
+
+  // Rows here live in the same split as the list, so its rows can drop on them.
+  const createDropTarget = createFolderDropTargets();
 
   const [folderSearch, setFolderSearch] = createSignal('');
 
@@ -238,6 +244,7 @@ export function DriveSidebarContent(props: { onNavigate?: () => void }) {
                     searching={!!folderSearch().trim()}
                     onToggle={state.toggleFolder}
                     onSelect={selectFolder}
+                    createDropTarget={createDropTarget}
                   />
                   <Show when={filteredTree().length === 0}>
                     <p class="px-3 py-2 text-sm text-ink-extra-muted">
@@ -283,6 +290,11 @@ function DriveImportPromotion() {
 
 export function DriveSidebar() {
   const { state } = useDriveView();
+  const [content, setContent] = createSignal<HTMLDivElement>();
+  // A long folder tree scrolls under a drag held at its edge.
+  if (useDragDropContext()) {
+    createDragAutoScroll({ getViewport: content, axis: 'both' });
+  }
   return (
     <ViewSidebar.Root aria-label="Drive navigation">
       <ViewSidebar.Header
@@ -304,7 +316,7 @@ export function DriveSidebar() {
       <ViewSidebar.Primary>
         <DriveCreateMenu />
       </ViewSidebar.Primary>
-      <ViewSidebar.Content>
+      <ViewSidebar.Content ref={setContent}>
         <DriveSidebarContent />
         <DriveImportPromotion />
       </ViewSidebar.Content>

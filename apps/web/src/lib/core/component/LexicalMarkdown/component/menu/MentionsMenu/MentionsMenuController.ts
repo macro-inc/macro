@@ -8,6 +8,7 @@ export type MentionBucketId =
   | 'users'
   | 'documents'
   | 'externalChats'
+  | 'routines'
   | 'agentSessions'
   | 'channels'
   | 'companies'

@@ -104,6 +104,10 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    packaging {
+        // JSpecify and OpenTelemetry both ship this OSGi metadata; Android does not use it.
+        resources.excludes.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+    }
 }
 
 rust {

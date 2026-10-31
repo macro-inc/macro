@@ -90,6 +90,7 @@ uuid = { workspace = true }
 
 fusionauth = { path = "../fusionauth", optional = true }
 macro_user_id = { path = "../macro_user_id" }
+models_properties = { path = "../models_properties" }
 macro_uuid = { path = "../macro_uuid" }
 redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }

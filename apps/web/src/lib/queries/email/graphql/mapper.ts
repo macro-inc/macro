@@ -168,6 +168,7 @@ export function mapGraphqlEmailThreadPage(
     created_at: thread.createdAt,
     db_id: thread.id,
     inbox_visible: thread.inboxVisible,
+    has_received_mail: thread.hasReceivedMail,
     is_read: thread.isRead,
     latest_inbound_message_ts: thread.latestInboundMessageTs,
     link_id: thread.linkId,

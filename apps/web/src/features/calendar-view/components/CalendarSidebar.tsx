@@ -26,17 +26,8 @@ import CloseIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { format } from 'date-fns';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Match,
-  on,
-  Show,
-  Switch,
-} from 'solid-js';
+import { format, getDaysInMonth } from 'date-fns';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
 import { useCalendarFocus } from '../calendar-focus-target';
 import { CALENDAR_TOUR } from '../tour';
@@ -49,48 +40,41 @@ import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
 import { ConnectCalendarsPromotion } from './ConnectCalendarsPromotion';
 
-function CalendarMiniCalendar() {
+export function CalendarMiniCalendar() {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
-  const shell = useViewShell();
   const initialDate = new Date();
-  const [focusedDay, setFocusedDay] = createSignal(initialDate);
 
   const currentDate = createMemo(
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
+  const [focusedDay, setFocusedDay] = createSignal(currentDate());
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
     if (dateInfo?.view.type !== 'timeGridWeek') return undefined;
     return { end: dateInfo.end, start: dateInfo.start };
   });
 
-  const navigateToDate = (date: Date) => {
-    setFocusedDay(date);
-    calendarPager.gotoDate(date);
-    if (shell.aside.isOverlay()) shell.aside.collapse();
-  };
-  const navigateMonth = (month: Date) => {
-    const focused = focusedDay();
-    const sameMonth =
-      focused.getFullYear() === month.getFullYear() &&
-      focused.getMonth() === month.getMonth();
-    navigateToDate(sameMonth ? focused : month);
-  };
-  createEffect(on(currentDate, setFocusedDay));
-
+  // Keep focus local and clamp month-end dates so shorter months stay tabbable.
   return (
     <MiniCalendar
       required
       fixedWeeks
       startOfWeek={calendarView.displaySettings.weekStartsOn}
       value={currentDate()}
-      month={currentDate()}
       focusedDay={focusedDay()}
       highlightedRange={highlightedRange()}
-      onMonthChange={navigateMonth}
+      onMonthChange={(month) =>
+        setFocusedDay(
+          new Date(
+            month.getFullYear(),
+            month.getMonth(),
+            Math.min(focusedDay().getDate(), getDaysInMonth(month))
+          )
+        )
+      }
       onFocusedDayChange={setFocusedDay}
-      onValueChange={(date) => date && navigateToDate(date)}
+      onValueChange={(date) => date && calendarPager.gotoDate(date)}
     />
   );
 }

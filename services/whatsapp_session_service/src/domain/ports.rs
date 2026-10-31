@@ -10,9 +10,10 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, ClaimedSend, HistoryPage, InboundEvent, MediaImport, MessageAnchor, OutboundMedia,
-    SessionScope,
+    ChatUpdate, ClaimedSend, HistoryPage, InboundEvent, LookupAnswer, MediaImport, MessageAnchor,
+    OutboundMedia, SessionScope,
 };
+use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::GroupInfo;
 
 /// Errors from taking, holding or announcing account locks.
@@ -80,6 +81,11 @@ pub enum AccountSignal {
     Send,
     /// `whatsapp_roster_requested`: refresh the group list.
     Groups,
+    /// `whatsapp_lookup_requested`: answer pending phone-number lookups.
+    Lookup,
+    /// `whatsapp_history_requested`: the owner started importing earlier
+    /// messages.
+    History,
     /// `whatsapp_account_changed`: consent or adopted groups changed.
     Changed,
     /// Notifications may have been missed; re-read everything.
@@ -337,6 +343,13 @@ pub trait WhatsAppSession: Send + Sync + 'static {
         chat_jid: &str,
         message: &MessageAnchor,
     ) -> impl Future<Output = Result<(), SessionError>> + Send;
+
+    /// Asks WhatsApp whether a phone number has an account (one usync
+    /// query; it records the number's LID pairing in the LID store).
+    fn look_up(
+        &self,
+        phone: &PhoneNumber,
+    ) -> impl Future<Output = Result<LookupAnswer, SessionError>> + Send;
 
     /// Unlinks the device at WhatsApp.
     fn logout(&self) -> impl Future<Output = ()> + Send;

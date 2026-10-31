@@ -10,6 +10,7 @@ const fixture = vi.hoisted(() => ({
   previewDisposals: 0,
   channelMounts: 0,
   projectsEnabled: undefined as (() => boolean | undefined) | undefined,
+  projectPending: undefined as (() => boolean) | undefined,
   projectMounts: 0,
   projectDisposals: 0,
   projectIdReads: 0,
@@ -40,8 +41,14 @@ vi.mock('../../projects/queries/project-identity', () => ({
     });
     return {
       isError: false,
-      isPending: false,
-      data: { id: 'entity-1', name: 'Launch' },
+      get isPending() {
+        return fixture.projectPending?.() === true;
+      },
+      get data() {
+        return fixture.projectPending?.()
+          ? undefined
+          : { id: 'entity-1', name: 'Launch' };
+      },
     };
   },
 }));
@@ -96,6 +103,7 @@ afterEach(() => {
   fixture.previewDisposals = 0;
   fixture.channelMounts = 0;
   fixture.projectsEnabled = undefined;
+  fixture.projectPending = undefined;
   fixture.projectMounts = 0;
   fixture.projectDisposals = 0;
   fixture.projectIdReads = 0;
@@ -177,6 +185,30 @@ describe('usePropertyEntityDisplay subscription ownership', () => {
     expect(fixture.projectIdReads).toBe(1);
     expect(display.name()).toBe('Launch');
   });
+
+  it.each(['INITIATIVE', 'DOCUMENT'] as const)(
+    'names a %s from the loading name until its own read answers',
+    (type) => {
+      const [pending, setPending] = createSignal(true);
+      fixture.projectsEnabled = () => true;
+      fixture.projectPending = pending;
+      fixture.preview = () =>
+        pending()
+          ? { loading: true }
+          : { loading: false, access: 'access', name: 'Launch' };
+      const display = createRoot((dispose) => {
+        disposals.push(dispose);
+        return usePropertyEntityDisplay(
+          () => 'entity-1',
+          () => type,
+          { loadingName: () => 'Picked launch' }
+        );
+      });
+      expect(display.name()).toBe('Picked launch');
+      setPending(false);
+      expect(display.name()).toBe('Launch');
+    }
+  );
 
   it('keeps the generic project label, without fetching, until the rollout enables it', () => {
     const [enabled, setEnabled] = createSignal<boolean | undefined>();

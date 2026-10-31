@@ -21,12 +21,23 @@ own shareable external chat (`POST /external-chats` with `provider:
   `primitives/open-sections.ts`, per user.
 - `components/chat-list.tsx`: one-line chat rows styled like Macro's list rows
   (`bg-list-hover`, actions on hover/focus, always on touch).
+- Starting chats: `core/chat.ts` `chatSections` puts saved contacts nobody
+  wrote to (direct, no `lastActivityAt`) in `contacts`, shown as the page's
+  Contacts section. `components/new-chat-dialog.tsx` takes a number
+  (`core/new-chat.ts` normalises it to E.164 and words each
+  `NewChatFailure`); the `startChat` capability looks it up
+  (`useLookUpWhatsappNumberMutation` polls `GET /whatsapp/lookups/{id}`),
+  then adds and opens the chat.
+- `components/history-import-prompt.tsx`: the app-wide bottom-right prompt
+  (mounted lazily in `Layout.tsx`) to import earlier messages of the owner's
+  chats waiting for their phone (`core/history-import.ts`); its **Import** is
+  the only thing that asks the phone (`POST /whatsapp/history-import`).
 - `core/chat.ts`: chat sections, search matching and row wording.
 
 ## Scope
 
-- Owns: the WhatsApp account page, pairing dialog and one-click add
-  (no dialog; DSS names the chat after WhatsApp).
+- Owns: the WhatsApp account page, pairing dialog, one-click add (no
+  dialog; DSS names the chat after WhatsApp) and the New chat dialog.
 - Chat timeline and sending: `features/external-chat`; channels only reach a
   chat through a mention, which shares it (`MentionsMenu`).
 - One account at a time: there is no replace flow; switching means

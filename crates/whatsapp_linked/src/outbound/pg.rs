@@ -19,6 +19,7 @@ mod adoptions;
 mod chats;
 mod groups;
 mod ingest;
+mod lookups;
 mod media;
 mod sends;
 mod session;
@@ -145,6 +146,10 @@ pub(crate) async fn end_consent_in(
         .await
         .map_err(failure)?;
     sqlx::query!("DELETE FROM whatsapp_roster WHERE account_id = $1", account)
+        .execute(&mut **tx)
+        .await
+        .map_err(failure)?;
+    sqlx::query!("DELETE FROM whatsapp_lookup WHERE account_id = $1", account)
         .execute(&mut **tx)
         .await
         .map_err(failure)?;

@@ -235,13 +235,24 @@ export type RoutineFiring =
       conditions?: string[];
     };
 
+/** The GitHub pull request event behind a change. */
+export type PullRequestChange = {
+  url: string;
+  /** Whoever merged it, on a merge; otherwise whoever acted on it. */
+  github_login: string;
+};
+
 /** The event a routine fired on. */
 export type RoutineEvent =
   | { event: 'document_created'; document: DocumentSnapshot }
   | { event: 'document_updated'; document: DocumentSnapshot }
   | { event: 'document_deleted'; id: string; name: string }
   | { event: 'task_created'; task: TaskSnapshot }
-  | { event: 'task_status_changed'; task: TaskSnapshot }
+  | {
+      event: 'task_status_changed';
+      task: TaskSnapshot;
+      pull_request?: PullRequestChange;
+    }
   | { event: 'task_priority_changed'; task: TaskSnapshot }
   /** The event does not record which property changed. */
   | { event: 'task_property_changed'; task: TaskSnapshot }
@@ -1330,8 +1341,17 @@ function routineEventChildren(event: RoutineEvent): FxpNode[] {
       el('document', [], { id, name }),
     ])
     .with({ event: 'task_created' }, ({ task }) => [taskNode(task)])
-    .with({ event: 'task_status_changed' }, ({ task }) => [
-      el('change', [], present({ property: 'status', to: task.status })),
+    .with({ event: 'task_status_changed' }, ({ task, pull_request }) => [
+      el(
+        'change',
+        [],
+        present({
+          property: 'status',
+          to: task.status,
+          pull_request: pull_request?.url,
+          by: pull_request?.github_login,
+        })
+      ),
       taskNode(task),
     ])
     .with({ event: 'task_priority_changed' }, ({ task }) => [

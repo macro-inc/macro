@@ -6,15 +6,15 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, type ParentProps } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal, type ParentProps, Show } from 'solid-js';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { SYSTEM_PROPERTY_IDS } from '../../constants';
 import {
   PropertyRootContext,
   type PropertyRootContextValue,
 } from '../../core/context';
 import type { EntityProperty } from '../../types';
-import { EntityEditor } from './EntityEditor';
+import { EntityEditor, EntitySheetEditor } from './EntityEditor';
 
 const agentId = 'bot|00000000-0000-0000-0000-000000000123';
 const userId = 'macro|alice@example.com';
@@ -104,6 +104,19 @@ vi.mock('../selectors/OptionCheckBox', () => ({
     <input type="checkbox" checked={props.checked} readOnly />
   ),
 }));
+vi.mock('@components/app/mobile/PickerSheet', () => ({
+  PickerSheet: {
+    Root: (props: ParentProps<{ open: boolean }>) => (
+      <Show when={props.open}>
+        <div role="dialog">{props.children}</div>
+      </Show>
+    ),
+    Header: (props: { onDone: () => void }) => (
+      <button onClick={props.onDone}>Done</button>
+    ),
+    Body: (props: ParentProps) => <>{props.children}</>,
+  },
+}));
 vi.mock('./EditorPopover', () => ({
   EditorPopover: (props: ParentProps<{ onClose: () => void }>) => (
     <div role="dialog">
@@ -128,12 +141,14 @@ const property: EntityProperty = {
 
 function setup(
   selfFilter?: { entityType: EntityType; blockId?: string },
-  value = property
+  value = property,
+  Editor = EntityEditor
 ) {
   const onSave = vi.fn(async () => undefined);
   const [editorOpen, setEditorOpen] = createSignal(true);
   const context: PropertyRootContextValue = {
     property: () => value,
+    pickedEntityName: () => undefined,
     canEdit: () => true,
     editorOpen,
     openEditor: () => setEditorOpen(true),
@@ -142,11 +157,16 @@ function setup(
   };
   render(() => (
     <PropertyRootContext.Provider value={context}>
-      <EntityEditor selfFilter={selfFilter} />
+      <Editor selfFilter={selfFilter} />
     </PropertyRootContext.Provider>
   ));
   return onSave;
 }
+
+beforeAll(() => {
+  // A key press puts the list in keyboard mode, which scrolls its row into view.
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 afterEach(cleanup);
 
@@ -181,13 +201,17 @@ describe('assigning an agent through task and project properties', () => {
       expect(onSave).not.toHaveBeenCalled();
       fireEvent.click(screen.getByText('Dismiss'));
       await waitFor(() =>
-        expect(onSave).toHaveBeenCalledExactlyOnceWith(property, {
-          valueType: 'ENTITY',
-          refs: [
-            { entity_id: userId, entity_type: 'USER' },
-            { entity_id: agentId, entity_type: 'USER' },
-          ],
-        })
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(
+          property,
+          {
+            valueType: 'ENTITY',
+            refs: [
+              { entity_id: userId, entity_type: 'USER' },
+              { entity_id: agentId, entity_type: 'USER' },
+            ],
+          },
+          new Map([[agentId, 'Research assistant']])
+        )
       );
     }
   );
@@ -207,10 +231,11 @@ describe('assigning an agent through task and project properties', () => {
       fireEvent.click(screen.getByText('Research assistant'));
       fireEvent.click(screen.getByText('Dismiss'));
       await waitFor(() =>
-        expect(onSave).toHaveBeenCalledExactlyOnceWith(assigned, {
-          valueType: 'ENTITY',
-          refs: null,
-        })
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(
+          assigned,
+          { valueType: 'ENTITY', refs: null },
+          new Map([[agentId, 'Research assistant']])
+        )
       );
     }
   );
@@ -233,24 +258,75 @@ describe('assigning an agent through task and project properties', () => {
   });
 });
 
+describe('people in a picker sheet', () => {
+  it('drops the picks on Escape and saves them on Done', async () => {
+    const dropped = setup(undefined, property, EntitySheetEditor);
+    fireEvent.click(screen.getByText('Research assistant'));
+    fireEvent.keyDown(screen.getByPlaceholderText('Add assignees...'), {
+      key: 'Escape',
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(dropped).not.toHaveBeenCalled();
+    cleanup();
+
+    const onSave = setup(undefined, property, EntitySheetEditor);
+    fireEvent.click(screen.getByText('Research assistant'));
+    fireEvent.click(screen.getByText('Done'));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        property,
+        {
+          valueType: 'ENTITY',
+          refs: [
+            { entity_id: userId, entity_type: 'USER' },
+            { entity_id: agentId, entity_type: 'USER' },
+          ],
+        },
+        new Map([[agentId, 'Research assistant']])
+      )
+    );
+  });
+});
+
 describe('the Project property', () => {
+  const project: EntityProperty = {
+    ...property,
+    propertyId: 'project-property',
+    propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+    displayName: 'Project',
+    isMultiSelect: false,
+    specificEntityType: 'INITIATIVE',
+    value: [{ entity_id: 'project-launch', entity_type: 'INITIATIVE' }],
+  };
+
+  it('saves a picked project with the name the picker showed', async () => {
+    const unassigned: EntityProperty = { ...project, value: [] };
+    const onSave = setup(
+      { entityType: 'TASK', blockId: 'task-id' },
+      unassigned
+    );
+    fireEvent.click(screen.getByText('Launch'));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        unassigned,
+        {
+          valueType: 'ENTITY',
+          refs: [{ entity_id: 'project-launch', entity_type: 'INITIATIVE' }],
+        },
+        new Map([['project-launch', 'Launch']])
+      )
+    );
+  });
+
   it('clears the project when the selected project is clicked again', async () => {
-    const project: EntityProperty = {
-      ...property,
-      propertyId: 'project-property',
-      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
-      displayName: 'Project',
-      isMultiSelect: false,
-      specificEntityType: 'INITIATIVE',
-      value: [{ entity_id: 'project-launch', entity_type: 'INITIATIVE' }],
-    };
     const onSave = setup({ entityType: 'TASK', blockId: 'task-id' }, project);
     fireEvent.click(screen.getByText('Launch'));
     await waitFor(() =>
-      expect(onSave).toHaveBeenCalledExactlyOnceWith(project, {
-        valueType: 'ENTITY',
-        refs: null,
-      })
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        project,
+        { valueType: 'ENTITY', refs: null },
+        new Map([['project-launch', 'Launch']])
+      )
     );
   });
 });

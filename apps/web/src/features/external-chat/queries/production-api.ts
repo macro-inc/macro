@@ -210,6 +210,10 @@ export const externalChatApi: ExternalChatApi = {
       ownerId: group.userId,
       unreadCount: group.unreadCount,
       canSend: group.canSend,
+      sendReason: group.sendReason ?? undefined,
+      backfill: group.backfill
+        ? { state: group.backfill.state, imported: group.backfill.imported }
+        : undefined,
       community: group.community
         ? {
             id: group.community.id,

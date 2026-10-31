@@ -136,8 +136,10 @@ opened event is reflected in the pane-owned `sN.calendar.eventId` search paramet
 
 Opening a calendar row in Home clears its loaded reminder dots immediately;
 failed read writes restore them. Opening event details directly from the grid
-also marks the event's notifications read. Verify both on desktop and mobile,
-including a delayed read response and a failed write followed by another click.
+or by a link to the event also marks the event's notifications read, a join
+request's included: seen is not answered, so the row stays listed until the
+request is settled. Verify these on desktop and mobile, including a delayed read
+response and a failed write followed by another click.
 
 Period selection updates its label and route immediately. The active grid redraws
 on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
@@ -230,13 +232,30 @@ new session from the same meeting link must start a separate chat thread.
 
 
 Calendar event creation and editing open in a bottom sheet on touch devices,
-with scrollable content above the keyboard. When the form outgrows the sheet, as
-it does with the custom repeat builder open, the sheet scrolls down to the
-footer: Cancel and `Create event` or `Save`, plus `This event`/`All events` when
-editing a recurring event. Desktop retains the centered dialog.
-Dismissing a changed event by Cancel, swipe, backdrop tap or Escape still asks
-before discarding the draft; Keep editing returns to the sheet with the edits
-intact, and the prompt stays away until the next attempt to close.
+with scrollable content above the keyboard. `Create event` or `Save` sits at
+the top right of the sheet's pinned chrome, below the handle, so it stays in
+reach while the form scrolls. The title and description come first, then
+`Event` and `Out of office` as selectable labels. A section of rows holds
+All-day (switch on the right), Starts and Ends (date and time), and Repeat; a
+second has one row each for Calendar, Guests, Call, Location, and Reminders
+(Declines and Message for out-of-office events). Location is a text field in
+its row, so the sheet scrolls it above the keyboard. Guest permissions follow, one
+per row. Guests opens its own sheet over the composer, as tall as the event
+sheet, with Cancel, the `Guests` title, and Done; its list fills the sheet.
+Picks apply only on Done, and Cancel, the backdrop, or Escape drop them; the
+guest sheet has no handle and does not drag, since a drag there also reached
+the event sheet beneath. Picking a guest keeps the keyboard up. The title
+sits directly below the pinned chrome. The sheet has no Cancel: drag, the
+backdrop, or Escape dismiss it.
+`This event`/`All events` sits at the bottom when editing a recurring event.
+Desktop retains the centered dialog with inline dates, wrapping pills, and its
+Cancel footer; both layouts compose `EventFormParts` (`MobileEventForm` and
+`EventForm`), and the range rows compose `DateTimeRange` parts.
+Dismissing a changed event by swipe, backdrop tap or Escape still asks before
+discarding the draft; Keep editing returns to the sheet with the edits intact,
+and the prompt stays away until the next attempt to close. An event created
+from Home's **+ New** → Event opens the calendar on it once it saves, with its
+details showing; events created inside the calendar stay where they were made.
 
 On phones, event details use inset round action buttons and a transparent RSVP
 footer. Answering a recurring invitation opens a rounded glass sheet: choose
@@ -451,7 +470,13 @@ icon button. Desktop `New` keeps its label.
 Touch devices keep the month selector and header controls without separate
 create or call buttons in the right island. Mobile header islands omit Search.
 The desktop sidebar's Search icon sits left of collapse and reveals event search
-above New. Its mini calendar remains navigable by date and month.
+above New. Its mini calendar browses months independently of the main grid:
+month arrows, the month picker, and keyboard focus changes do not move the main
+calendar. Selecting a day navigates the main calendar without closing the narrow
+layout's navigation overlay. Main calendar navigation updates the mini calendar's
+selected day and week highlight without resetting the month being browsed.
+When browsing from a month's last day to a shorter month, keyboard focus stays
+on the shorter month's last day so Tab and arrow-key navigation remain usable.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
@@ -857,18 +882,30 @@ says `You've asked to join this event` and refreshes to `Requested` or `Invited`
 notification (Settings → Notifications → Calendar → Requests to join), which Home lists as
 `<requester> asked to join <event>` with a person-plus glyph, like a comment row. It opens the event,
 whose details list each request with `Add as guest` and `Decline` on desktop and in the phone
-drawer. Adding writes the guest through the same invite path as `Add guests`, so Google or
+drawer. A new request appears in details already open, for the owner and delegates of the sharer's
+inbox, without a reload; a repeated or refused ask changes nothing there. Adding writes the guest through the same invite path as `Add guests`, so Google or
 Outlook sends the invitation and the mention then opens the viewer's own copy. Declining sends
 the requester nothing, but their card then reads `Declined` and `The person who shared this event
 declined your request to join.` with no `Ask to join`, and offers `Add to calendar` again. A
 declined request stands: the server refuses another ask with 409 `request_declined`, so the
-sharer is asked only once. A classic `@Macro` reply that
+sharer is asked only once. An answer given anywhere else (a delegate, the API, another window)
+drops the request from an open list and updates the requester's open card, without a reload. A
+press on a row that had not caught up changes nothing and says so: `Already answered: <address> was
+invited` or `Already answered: this request was declined`. The notification goes when the request is answered, by whoever answers
+it and however they do, leaving the notifications of other requests on the event, when the
+requester's account is deleted, and when the event goes (deleted in Macro, deleted or cancelled in
+Google or Outlook, its calendar or inbox removed); deleting one occurrence of a series leaves it,
+since the sharer can still add the guest.
+A classic `@Macro` reply that
 mentions an event does not share
 it by posting the chip. It asks whether to share with the channel, and a yes in that thread
 writes the same channel grant. Private and confidential events are never shared this way.
 Every calendar mention's hover card shows the schedule, location, organizer and attendee
 count, plus the first lines of the event description (its links open), and no last-updated
-byline. A mention of a meeting that was deleted or cancelled reads `Deleted`; clicking it (a tap
+byline. A Macro call's generated `Join Macro call` line and a location that is only its link are
+left out, as in event details, and a viewer holding the meeting gets one `Join Macro call` button
+below the schedule, which closes the phone sheet as it joins. A read-only channel share gets no
+join button, since a share never carries the join link. A mention of a meeting that was deleted or cancelled reads `Deleted`; clicking it (a tap
 on a phone, which opens a sheet) shows `This event was deleted or cancelled.`, like a shared
 event's card, instead of doing nothing. When the mention names someone else's copy of a meeting the viewer also holds (a shared
 event they added or were invited to, or a meeting someone else mentioned), the card says how:
