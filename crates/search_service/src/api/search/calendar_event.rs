@@ -20,7 +20,7 @@ use crate::api::context::SearchHandlerState;
 
 /// Enriches calendar event search results with metadata and the instance each
 /// row points at.
-#[tracing::instrument(skip(ctx, results), err)]
+#[tracing::instrument(skip(ctx, results), fields(channel_shared_count), err)]
 pub(in crate::api::search) async fn enrich_calendar_events(
     ctx: &SearchHandlerState,
     user_id: &str,
@@ -43,6 +43,10 @@ pub(in crate::api::search) async fn enrich_calendar_events(
     let events = get_calendar_events_for_search(&ctx.db, user_id, &event_ids, chrono::Utc::now())
         .await
         .map_err(SearchError::InternalError)?;
+    tracing::Span::current().record(
+        "channel_shared_count",
+        events.values().filter(|event| !event.holds_meeting).count(),
+    );
 
     // Fetch event properties (e.g. tags) so rows can render and re-check
     // them, mirroring the projects enrichment.
