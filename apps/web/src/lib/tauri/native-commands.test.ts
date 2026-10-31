@@ -154,11 +154,105 @@ function commandValues(
   return undefined;
 }
 
+type NamedCall = {
+  call: ts.CallExpression;
+  callee: string;
+  command: ts.Expression;
+};
+type TauriImports = { invokes: Set<string>; pluginListeners: Set<string> };
+
+/** Local names a file gives `invoke` and `addPluginListener`. */
+function tauriImports(source: ts.SourceFile): TauriImports {
+  const imports: TauriImports = {
+    invokes: new Set(),
+    pluginListeners: new Set(),
+  };
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== TAURI_CORE
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      const imported = (element.propertyName ?? element.name).text;
+      if (imported === 'invoke') imports.invokes.add(element.name.text);
+      if (imported === 'addPluginListener') {
+        imports.pluginListeners.add(element.name.text);
+      }
+    }
+  }
+  return imports;
+}
+
+/** Calls of a plain name with at least one argument. */
+function namedCalls(source: ts.SourceFile): NamedCall[] {
+  const calls: NamedCall[] = [];
+  walk(source, (node) => {
+    const [command] = ts.isCallExpression(node) ? node.arguments : [];
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      command
+    ) {
+      calls.push({ call: node, callee: node.expression.text, command });
+    }
+  });
+  return calls;
+}
+
+/**
+ * Functions that pass their first parameter to `invoke` (the cache host's
+ * `request`), with the commands they build from it, and those invoke calls.
+ */
+function findWrappers(calls: NamedCall[], invokes: Set<string>) {
+  const wrappers = new Map<string, string[]>();
+  const wrapped = new Set<ts.CallExpression>();
+  for (const { call, callee, command } of calls) {
+    if (!invokes.has(callee) || commandValues(command)) continue;
+    for (const wrapper of enclosingFunctions(call)) {
+      const shapes = commandValues(command, wrapper.declaration);
+      if (!shapes?.every((shape) => shape.includes(PARAMETER))) continue;
+      wrappers.set(wrapper.name, shapes);
+      wrapped.add(call);
+      break;
+    }
+  }
+  return { wrappers, wrapped };
+}
+
+/**
+ * The native commands one call names: none for a call that is not IPC, or
+ * undefined when it is IPC and its command cannot be read.
+ */
+function callCommands(
+  { callee, command }: NamedCall,
+  imports: TauriImports,
+  wrappers: Map<string, string[]>
+): string[] | undefined {
+  if (imports.pluginListeners.has(callee)) {
+    return commandValues(command)?.map(
+      (plugin) => `plugin:${plugin}|register_listener`
+    );
+  }
+  const shapes = imports.invokes.has(callee)
+    ? [PARAMETER]
+    : wrappers.get(callee);
+  if (!shapes) return [];
+  const values = commandValues(command);
+  return values?.flatMap((value) =>
+    shapes.map((shape) => shape.replace(PARAMETER, value))
+  );
+}
+
 /**
  * Every native command the shipped web code calls, by the file calling it,
  * and the calls whose command this scan cannot read. A function that passes
- * its first parameter to `invoke` (the cache host's `request`) is a wrapper,
- * and its callers name the command.
+ * its first parameter to `invoke` is a wrapper, and its callers name the
+ * command.
  */
 function scanInvokedCommands(): {
   commands: Map<string, string>;
@@ -177,80 +271,23 @@ function scanInvokedCommands(): {
         true
       );
       const path = relative(repositoryRoot, file);
-      const invokes = new Set<string>();
-      const pluginListeners = new Set<string>();
-      walk(source, (node) => {
-        if (
-          ts.isImportDeclaration(node) &&
-          ts.isStringLiteral(node.moduleSpecifier) &&
-          node.moduleSpecifier.text === TAURI_CORE &&
-          node.importClause?.namedBindings &&
-          ts.isNamedImports(node.importClause.namedBindings)
-        ) {
-          for (const element of node.importClause.namedBindings.elements) {
-            const imported = (element.propertyName ?? element.name).text;
-            if (imported === 'invoke') invokes.add(element.name.text);
-            if (imported === 'addPluginListener') {
-              pluginListeners.add(element.name.text);
-            }
-          }
-        }
-      });
-      const calls: ts.CallExpression[] = [];
-      walk(source, (node) => {
-        if (
-          ts.isCallExpression(node) &&
-          ts.isIdentifier(node.expression) &&
-          node.arguments[0]
-        ) {
-          calls.push(node);
-        }
-      });
-      const record = (command: string) => {
-        if (!commands.has(command)) commands.set(command, path);
-      };
-      const unread = (call: ts.CallExpression) => {
-        const { line } = source.getLineAndCharacterOfPosition(call.getStart());
-        unreadable.push(`${path}:${line + 1} ${call.getText().split('\n')[0]}`);
-      };
-      const wrappers = new Map<string, string[]>();
-      const wrapped = new Set<ts.CallExpression>();
-      for (const call of calls) {
-        const [command] = call.arguments;
-        const callee = (call.expression as ts.Identifier).text;
-        if (!command || !invokes.has(callee)) continue;
-        if (commandValues(command)) continue;
-        for (const wrapper of enclosingFunctions(call)) {
-          const shapes = commandValues(command, wrapper.declaration);
-          if (shapes?.every((shape) => shape.includes(PARAMETER))) {
-            wrappers.set(wrapper.name, shapes);
-            wrapped.add(call);
-            break;
-          }
-        }
-      }
-      for (const call of calls) {
-        const [command] = call.arguments;
-        const callee = (call.expression as ts.Identifier).text;
-        if (!command || wrapped.has(call)) continue;
-        const shapes = invokes.has(callee) ? [PARAMETER] : wrappers.get(callee);
-        if (pluginListeners.has(callee)) {
-          const plugins = commandValues(command);
-          if (!plugins) unread(call);
-          for (const plugin of plugins ?? []) {
-            record(`plugin:${plugin}|register_listener`);
-          }
+      const imports = tauriImports(source);
+      const calls = namedCalls(source);
+      const { wrappers, wrapped } = findWrappers(calls, imports.invokes);
+      for (const named of calls) {
+        if (wrapped.has(named.call)) continue;
+        const names = callCommands(named, imports, wrappers);
+        if (!names) {
+          const { line } = source.getLineAndCharacterOfPosition(
+            named.call.getStart()
+          );
+          unreadable.push(
+            `${path}:${line + 1} ${named.call.getText().split('\n')[0]}`
+          );
           continue;
         }
-        if (!shapes) continue;
-        const values = commandValues(command);
-        if (!values) {
-          unread(call);
-          continue;
-        }
-        for (const shape of shapes) {
-          for (const value of values) record(shape.replace(PARAMETER, value));
-        }
+        for (const name of names)
+          if (!commands.has(name)) commands.set(name, path);
       }
     }
   }
