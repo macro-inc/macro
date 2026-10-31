@@ -429,6 +429,7 @@ impl GraphqlEntityFilterAst {
                 .crm_association
                 .map(GraphqlCrmAssociation::into_ast)
                 .transpose()?,
+            viewable_project: None,
             calendar_event_filter: optional_tree(self.calendar_event_filter)?,
             document_filter: optional_tree(self.document_filter)?,
             project_filter: optional_tree(self.project_filter)?,

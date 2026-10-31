@@ -283,9 +283,11 @@ registerComponent('folder-compose', withAuth(FolderComposeView), {
 registerComponent('project-compose', withAuth(GatedCreateProjectView), {
   splitPanelLayout: 'composable',
 });
+// Only redirects to the project route, which decides what a caller with no
+// account sees, so it needs no account itself.
 registerComponent(
   'initiative-view',
-  withAuth((params) => {
+  (params) => {
     const route =
       typeof params.projectRoute === 'string'
         ? parseProjectRoute(params.projectRoute)
@@ -297,7 +299,7 @@ registerComponent(
     ) : (
       <RedirectSplit to={{ type: 'component', id: 'tasks' }} />
     );
-  }),
+  },
   { splitPanelLayout: 'composable' }
 );
 registerComponent(

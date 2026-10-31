@@ -91,6 +91,18 @@ async fn an_anonymous_respondent_on_a_public_form_gets_an_unauthenticated_view_r
 }
 
 #[tokio::test]
+async fn an_anonymous_respondent_on_a_public_edit_form_gets_a_view_receipt() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let response = router(state.clone())
+        .oneshot(request(&format!("/forms/{FORM_ID}"), None))
+        .await
+        .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response_body(response).await, "form:unauthenticated:view");
+}
+
+#[tokio::test]
 async fn an_anonymous_request_on_a_members_form_is_rejected() {
     let state = TestState::new(None);
     let response = router(state.clone())

@@ -13,6 +13,7 @@ import { refreshSoupEntities } from '@queries/soup/refresh';
 import { AgentSessionRowDocument } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupClient,
+  graphqlSoupSessionActive,
   mapGraphqlAgentSessionRow,
 } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
@@ -31,7 +32,7 @@ function readSessionRow(
     const result = await client
       .query(
         AgentSessionRowDocument,
-        { sessionId },
+        { sessionId, signedIn: graphqlSoupSessionActive() },
         { requestPolicy: 'network-only' }
       )
       .toPromise();
@@ -39,7 +40,7 @@ function readSessionRow(
       span.error(result.error);
       throw result.error;
     }
-    const session = result.data?.user.agentSession;
+    const session = result.data?.agentSession;
     span.setAttr('agent_session.turn_state', session?.turnState ?? 'absent');
     const cached = session && getSoupEntityById(session.id);
     if (!session || cached?.tag !== 'agentSession') {

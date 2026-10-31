@@ -68,6 +68,14 @@ account switches).
   authenticated request context.
 - New user-scoped root data should be added under `GraphqlUser`, not as
   new root fields.
+- Single-item reads that a link can open (`initiative`, `initiativeTasks`,
+  `agentSession`) sit on the query root instead and take an optional viewer:
+  the item's own access decides, through entity access receipts, so a public
+  link opens it for a caller with no account. Their responses carry no
+  `user.id`, which leaves the cache's identity binding untouched. Edges they
+  reach get loaders built with `Option<user>` in `document_storage_service`'s
+  request context; viewer state (favorites, notifications) is empty for a
+  caller with no account, and `viewerPermission` holds at most View.
 
 ## 3. `GraphqlSoupEntity` owns the shared entity contract
 

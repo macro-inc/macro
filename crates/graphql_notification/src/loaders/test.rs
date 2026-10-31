@@ -93,7 +93,7 @@ async fn aliases_and_entities_batch_without_mixing_full_and_limited_results() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
         .data(entity_notifications_loader(
-            test_user(),
+            Some(test_user()),
             Reader(calls.clone()),
         ))
         .finish();
@@ -144,7 +144,7 @@ async fn invalid_limits_do_not_reach_the_reader() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
         .data(entity_notifications_loader(
-            test_user(),
+            Some(test_user()),
             Reader(calls.clone()),
         ))
         .finish();

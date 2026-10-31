@@ -292,6 +292,50 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_containing_projects(&self, document_id: &str) -> Result<Vec<Uuid>, AccessError> {
+        // The definition id must stay equal to SystemPropertyKey::PROJECT_UUID.
+        // A Project value holds exactly one reference; anything else is
+        // malformed and contains nothing.
+        let projects = sqlx::query_scalar!(
+            r#"SELECT DISTINCT ep.values->'value'->0->>'entity_id' AS "project_id?"
+               FROM (
+                   SELECT $1::text AS task_id
+                   UNION ALL
+                   -- A file attached to a task's discussion, as the
+                   -- discussion-attachment grant in document access reads it.
+                   SELECT m.parent_entity_id
+                   FROM comms_attachments a
+                   JOIN comms_messages m ON m.id = a.message_id
+                   JOIN comms_message_threads mt ON mt.root_id = COALESCE(m.thread_id, m.id)
+                   WHERE a.entity_type = 'document'
+                     AND a.entity_id = $1
+                     AND m.parent_entity_type = 'document'
+                     AND m.deleted_at IS NULL
+                     AND mt.deleted_at IS NULL
+               ) tasks
+               JOIN "Document" task ON task.id = tasks.task_id AND task."deletedAt" IS NULL
+               JOIN entity_properties ep ON ep.entity_id = task.id
+               WHERE EXISTS (
+                     SELECT 1 FROM "Document" requested
+                     WHERE requested.id = $1 AND requested."deletedAt" IS NULL
+                 )
+                 AND ep.entity_type = 'TASK'
+                 AND ep.property_definition_id = '00000001-0000-0000-0000-000000000014'
+                 AND CASE WHEN jsonb_typeof(ep.values->'value') = 'array'
+                          THEN jsonb_array_length(ep.values->'value') END = 1
+                 AND ep.values->'value'->0->>'entity_type' = 'INITIATIVE'"#,
+            document_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(projects
+            .into_iter()
+            .flatten()
+            .filter_map(|project| project.parse().ok())
+            .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn agent_session_exists(&self, agent_session_id: &str) -> Result<bool, AccessError> {
         let session = agent_session_id
             .parse::<Uuid>()

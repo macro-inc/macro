@@ -19052,7 +19052,7 @@ export type CreateCollabSurfaceTokenData = {
 
 export type CreateCollabSurfaceTokenErrors = {
     /**
-     * Missing or invalid credentials
+     * Invalid credentials
      */
     401: ErrorResponse;
     403: ErrorResponse;

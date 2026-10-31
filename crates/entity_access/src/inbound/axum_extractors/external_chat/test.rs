@@ -8,6 +8,7 @@ use macro_authorization::{BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotScope, INTERNAL
 use tower::ServiceExt;
 
 use super::*;
+use crate::domain::models::EntityAccessAuth;
 use crate::{
     domain::models::{OwnerAccessLevel, ViewAccessLevel},
     inbound::axum_extractors::test_support::{

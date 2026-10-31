@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
       context: { requestPolicy: string }
     ) => Promise<{
       error?: Error;
-      data?: { user: { agentSession: { id: string; turnState: string } } };
+      data?: { agentSession: { id: string; turnState: string } };
     }>
   >(async () => ({})),
   held: vi.fn((_id: string) => false),
@@ -73,6 +73,7 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   hydrateSoupEntity: mocks.hydrate,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  graphqlSoupSessionActive: () => true,
   mapGraphqlAgentSessionRow: (session: { id: string; turnState: string }) => ({
     id: session.id,
     turnState: session.turnState,
@@ -128,12 +129,12 @@ it('reads each changed session row from the primary under GraphQL Soup', async (
   expect(mocks.row.mock.calls).toEqual([
     [
       AgentSessionRowDocument,
-      { sessionId: 'first' },
+      { sessionId: 'first', signedIn: true },
       { requestPolicy: 'network-only' },
     ],
     [
       AgentSessionRowDocument,
-      { sessionId: 'second' },
+      { sessionId: 'second', signedIn: true },
       { requestPolicy: 'network-only' },
     ],
   ]);
@@ -153,7 +154,7 @@ it('hydrates a REST row from the primary after its replica-backed lists refetch'
     data: { id: 'first', turnState: 'running' },
   });
   mocks.row.mockResolvedValueOnce({
-    data: { user: { agentSession: { id: 'first', turnState: 'idle' } } },
+    data: { agentSession: { id: 'first', turnState: 'idle' } },
   });
 
   await refreshAgentSessionLists('first');
@@ -173,8 +174,8 @@ it('retries a session whose row read failed', async () => {
   mocks.row.mockResolvedValueOnce({ error: new Error('network') });
   await refreshAgentSessionLists('first');
   expect(mocks.row.mock.calls.map(([, variables]) => variables)).toEqual([
-    { sessionId: 'first' },
-    { sessionId: 'first' },
+    { sessionId: 'first', signedIn: true },
+    { sessionId: 'first', signedIn: true },
   ]);
 });
 
@@ -205,7 +206,7 @@ it('lets every row read settle before retrying the batch', async () => {
 it('keeps the refetch and every row read in the pass trace', async () => {
   mocks.graphqlSoup.mockReturnValue(true);
   mocks.row.mockResolvedValue({
-    data: { user: { agentSession: { id: 'first', turnState: 'idle' } } },
+    data: { agentSession: { id: 'first', turnState: 'idle' } },
   });
   await Promise.all([
     refreshAgentSessionLists('first'),

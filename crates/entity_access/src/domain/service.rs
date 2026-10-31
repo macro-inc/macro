@@ -1,12 +1,12 @@
 //! Entity access service implementation.
 
-use std::{collections::HashMap, marker::PhantomData, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
-        ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+        ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessReceipt, EntityPermission,
+        EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
     },
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
@@ -49,7 +49,7 @@ where
         entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
         match entity_type {
-            EntityType::Document => self.repo.get_document_access(entity_id, user_id).await,
+            EntityType::Document => self.get_document_or_task_access(entity_id, user_id).await,
             EntityType::Chat => self.repo.get_chat_access(entity_id, user_id).await,
             EntityType::Project => self.repo.get_project_access(entity_id, user_id).await,
             EntityType::EmailThread => self.repo.get_thread_access(entity_id, user_id).await,
@@ -61,7 +61,7 @@ where
                     .await?;
                 let parent_access = match self.repo.get_agent_session_parent(entity_id).await? {
                     Some(AgentSessionParent::Document(document)) => {
-                        self.repo.get_document_access(&document, user_id).await?
+                        self.get_document_or_task_access(&document, user_id).await?
                     }
                     // Call history and chat require sign-in, including public
                     // call links. Their sessions inherit the same boundary.
@@ -94,6 +94,63 @@ where
             }
             _ => unreachable!("Only optimized types should call this method"),
         }
+    }
+
+    /// A document's own access or, when it grants the caller nothing, View
+    /// through a project that contains it that the caller can view: a project
+    /// contains its tasks, so whoever can see the project can see every task
+    /// in it, and the files attached to their discussions.
+    async fn get_document_or_task_access(
+        &self,
+        document_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        if let Some(level) = self.repo.get_document_access(document_id, user_id).await? {
+            return Ok(Some(level));
+        }
+        for project in self.repo.get_containing_projects(document_id).await? {
+            if self
+                .repo
+                .get_initiative_access(&project.to_string(), user_id)
+                .await?
+                .is_some()
+            {
+                return Ok(Some(AccessLevel::View));
+            }
+        }
+        Ok(None)
+    }
+
+    /// [`Self::get_document_or_task_access`] for a bot scoped to a team.
+    async fn get_team_document_access(
+        &self,
+        bot_id: BotId,
+        team_id: Uuid,
+        document_id: &str,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        if let Some(level) = self
+            .repo
+            .get_team_entity_access(bot_id, team_id, document_id, EntityType::Document)
+            .await?
+        {
+            return Ok(Some(level));
+        }
+        for project in self.repo.get_containing_projects(document_id).await? {
+            if self
+                .repo
+                .get_team_entity_access(
+                    bot_id,
+                    team_id,
+                    &project.to_string(),
+                    EntityType::Initiative,
+                )
+                .await?
+                .is_some()
+            {
+                return Ok(Some(AccessLevel::View));
+            }
+        }
+        Ok(None)
     }
 
     /// Get access level for a channel.
@@ -217,8 +274,13 @@ where
         entity_type: EntityType,
     ) -> Result<EntityPermission, AccessError> {
         match entity_type {
-            EntityType::Document
-            | EntityType::Chat
+            EntityType::Document => Ok(EntityPermission::AccessLevel {
+                access_level: self
+                    .get_team_document_access(bot_id, team_id, entity_id)
+                    .await?
+                    .ok_or(AccessError::Unauthorized)?,
+            }),
+            EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
@@ -237,10 +299,25 @@ where
             }
             EntityType::AgentSession => {
                 let direct = self.repo.get_team_entity_access(bot_id, team_id, entity_id, entity_type).await?;
-                let inherited = if let Some(parent) = self.repo.get_agent_session_parent(entity_id).await? {
-                    let parent: Entity = parent.into();
-                    self.repo.get_team_entity_access(bot_id, team_id, &parent.entity_id, parent.entity_type).await?.map(session_permission_from_parent)
-                } else { None };
+                let inherited = match self.repo.get_agent_session_parent(entity_id).await? {
+                    Some(AgentSessionParent::Document(document)) => self
+                        .get_team_document_access(bot_id, team_id, &document)
+                        .await?
+                        .map(session_permission_from_parent),
+                    Some(parent) => {
+                        let parent: Entity = parent.into();
+                        self.repo
+                            .get_team_entity_access(
+                                bot_id,
+                                team_id,
+                                &parent.entity_id,
+                                parent.entity_type,
+                            )
+                            .await?
+                            .map(session_permission_from_parent)
+                    }
+                    None => None,
+                };
                 Ok(EntityPermission::AccessLevel { access_level: direct.max(inherited).ok_or(AccessError::Unauthorized)? })
             }
             EntityType::Channel => {
@@ -349,19 +426,14 @@ where
             .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
             .await?;
 
-        if !entity_permission.satisfies::<T>() {
-            return Err(AccessError::Unauthorized);
-        }
-
-        Ok(EntityAccessReceipt {
-            auth: EntityAccessAuth::Authenticated(MacroUserIdStr(user_id.clone().into_owned())),
-            entity: Entity {
+        EntityAccessReceipt::try_new_authenticated_user(
+            MacroUserIdStr(user_id.clone().into_owned()),
+            Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,
             },
             entity_permission,
-            _marker: PhantomData,
-        })
+        )
     }
 
     #[tracing::instrument(skip_all, fields(row_count = row_ids.len()))]
@@ -478,19 +550,16 @@ where
             if owned_ids.contains(&id) {
                 receipts.insert(
                     thread_id.clone(),
-                    Ok(EntityAccessReceipt {
-                        auth: EntityAccessAuth::Authenticated(MacroUserIdStr(
-                            user_id.clone().into_owned(),
-                        )),
-                        entity: Entity {
+                    EntityAccessReceipt::try_new_authenticated_user(
+                        MacroUserIdStr(user_id.clone().into_owned()),
+                        Entity {
                             entity_id: thread_id,
                             entity_type: EntityType::EmailThread,
                         },
-                        entity_permission: EntityPermission::AccessLevel {
+                        EntityPermission::AccessLevel {
                             access_level: AccessLevel::Owner,
                         },
-                        _marker: PhantomData,
-                    }),
+                    ),
                 );
             } else {
                 remaining.push(thread_id);

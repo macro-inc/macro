@@ -128,16 +128,16 @@ function setupGraphql() {
     operation,
     stale: false,
     hasNext: false,
-    data: {
-      user: {
-        id: 'viewer',
-        ...(['Initiative', 'InitiativeIdentity'].includes(
-          getOperationName(operation.query) ?? ''
-        )
-          ? { initiative }
-          : { soup: { nextCursor: 'next', items: [initiative] } }),
-      },
-    },
+    data: ['Initiative', 'InitiativeIdentity'].includes(
+      getOperationName(operation.query) ?? ''
+    )
+      ? { user: { id: 'viewer' }, initiative }
+      : {
+          user: {
+            id: 'viewer',
+            soup: { nextCursor: 'next', items: [initiative] },
+          },
+        },
   }));
   const exchange: Exchange = () => (operations) =>
     pipe(
@@ -370,4 +370,32 @@ it('keeps permission denials latched across cache hits and hides disabled detail
   setId('');
   expect(query.data).toBeUndefined();
   expect(query.isSuccess).toBe(false);
+});
+
+it('reads a project a link opens for a viewer with no account', async () => {
+  setupGraphql();
+  const { user: _viewer, ...data } = (
+    await mocks.soup({
+      query: (
+        await import('@service-storage/graphql/generated/graphql')
+      ).InitiativeDocument,
+    })
+  ).data;
+  const { client, requests } = controlledClient();
+  const query = createRoot((dispose) => {
+    disposeSource = dispose;
+    return createProjectDetailQuery(
+      () => client,
+      () => undefined,
+      () => 'launch'
+    );
+  });
+
+  expect(requests[0].operation.variables).toEqual({
+    initiativeId: 'launch',
+    signedIn: false,
+  });
+  requests[0].next(data);
+  expect(query.data?.project.name).toBe('Launch');
+  expect(query.isSuccess).toBe(true);
 });
