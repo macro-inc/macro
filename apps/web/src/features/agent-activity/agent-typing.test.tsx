@@ -9,6 +9,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -17,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   issue: vi.fn(),
   failure: vi.fn(),
   canEdit: true,
-  profileLoading: false,
   liveSessions: 0,
   cards: 0,
 }));
@@ -44,14 +44,15 @@ vi.mock('@queries/agent-session/session', () => ({
   }),
 }));
 vi.mock('@queries/bots/profiles', () => ({
-  useBotProfile: () =>
-    mocks.profileLoading
-      ? { isPending: true, isError: false, data: undefined }
-      : {
-          isPending: false,
-          isError: false,
-          data: { name: 'Researcher', avatarUrl: undefined, deleted: false },
-        },
+  useBotProfile: () => ({
+    isPending: false,
+    isError: false,
+    data: { name: 'Researcher', avatarUrl: undefined, deleted: false },
+  }),
+}));
+vi.mock('@app/features/block-agent/ui', () => ({
+  TextShimmer: (props: { text: string }) => <>{props.text}</>,
+  WorkingDots: () => null,
 }));
 vi.mock('@app/features/agent-dms/components/persona-avatar', () => ({
   PersonaAvatar: () => null,
@@ -97,7 +98,19 @@ import { AgentTyping, AgentTypingProvider } from './agent-typing';
 const parent = { type: 'channel', id: 'dm' } as const;
 const BOT = 'bot|0a8f5e1c-2b3d-4e5f-8a9b-0c1d2e3f4a5b';
 
-function typing(phase: 'thinking' | 'working' | 'waiting') {
+/** Rendered where the app renders it, under a query client. */
+function show(ui: () => JSX.Element) {
+  const client = new QueryClient();
+  return render(ui, {
+    wrapper: (props) => (
+      <QueryClientProvider client={client}>
+        {props.children}
+      </QueryClientProvider>
+    ),
+  });
+}
+
+function typing(phase: 'thinking' | 'writing' | 'working' | 'waiting') {
   handleCommsTyping(
     {
       action: 'start',
@@ -147,7 +160,6 @@ function asking(requestId: string): SessionMetadata {
 beforeEach(() => {
   clearTypingIndicators();
   mocks.canEdit = true;
-  mocks.profileLoading = false;
   mocks.liveSessions = 0;
   mocks.cards = 0;
   mocks.issue.mockResolvedValue(ok({}));
@@ -168,24 +180,21 @@ it('shows an agent typing with what it is doing, and nothing for people', () => 
     { action: 'start', parent, user_id: 'macro|you@example.com' },
     'macro|me@example.com'
   );
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
   expect(view.queryByRole('status')).toBeNull();
 
   typing('thinking');
-  expect(view.getByRole('status').textContent).toContain(
-    'Researcher is thinking'
-  );
+  expect(view.getByRole('status').textContent).toBe('Thinking');
   typing('working');
-  expect(view.getByRole('status').textContent).toContain(
-    'Researcher is working'
-  );
+  expect(view.getByRole('status').textContent).toBe('Working');
 });
 
-it('streams the unfinished passage beneath and stops the turn', async () => {
-  typing('thinking');
+it('says it is writing without streaming the passage, and stops the turn', async () => {
+  typing('writing');
   setMessages([writing('Looking at the failing test')]);
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
-  expect(view.getByText('Looking at the failing test')).toBeTruthy();
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
+  expect(view.getByRole('status').textContent).toBe('Writing');
+  expect(view.queryByText('Looking at the failing test')).toBeNull();
 
   await fireEvent.click(view.getByRole('button', { name: 'Stop' }));
   await waitFor(() =>
@@ -197,7 +206,7 @@ it('allows Stop to be retried after its request rejects', async () => {
   typing('working');
   setMessages([writing('Partial')]);
   mocks.issue.mockRejectedValueOnce(new Error('Disconnected'));
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
   const stop = view.getByRole<HTMLButtonElement>('button', { name: 'Stop' });
 
   await fireEvent.click(stop);
@@ -235,7 +244,7 @@ it('puts a question for the running turn under the row', () => {
       },
     ],
   } as unknown as SessionMetadata);
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
   expect(
     view.getAllByRole('region', { name: 'Question' }).map((q) => q.textContent)
   ).toEqual(['ask-1']);
@@ -245,22 +254,46 @@ it('offers no Stop to a viewer who cannot drive the session', () => {
   mocks.canEdit = false;
   typing('working');
   setMessages([writing('Partial')]);
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
   expect(view.queryByRole('button', { name: 'Stop' })).toBeNull();
 });
 
-it('names nobody until the persona is known, rather than a placeholder', () => {
-  mocks.profileLoading = true;
-  typing('thinking');
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
-  expect(view.getByRole('status').textContent).toBe('...');
+it('names the step the open run is on, and never what it ran', () => {
+  typing('working');
+  setMessages([
+    {
+      ...writing('Checking the tests first.'),
+      segments: [
+        { index: 0, kind: 'prose', start: 0, end: 1, sealed: true, rows: [] },
+        {
+          index: 1,
+          kind: 'activity',
+          start: 1,
+          end: 2,
+          sealed: false,
+          rows: [
+            {
+              id: 't1',
+              label: 'Running',
+              detail: 'cargo test',
+              status: 'running',
+            },
+          ],
+        },
+      ],
+      phase: 'working',
+    },
+  ]);
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
+  expect(view.getByRole('status').textContent).toBe('Running');
+  expect(view.queryByText(/cargo/)).toBeNull();
 });
 
 it('keeps a card as it was left through a metadata event that resends it', () => {
   typing('waiting');
   setMessages([writing('')]);
   setMetadata(asking('ask-1'));
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
   const answer = view.getByRole<HTMLInputElement>('textbox', {
     name: 'Answer',
   });
@@ -276,7 +309,7 @@ it('moves the live turn with the newest row rather than starting it over', () =>
   setMessages([writing('')]);
   setMetadata(asking('ask-1'));
   const [newest, setNewest] = createSignal<string>('first');
-  const view = render(() => (
+  const view = show(() => (
     <AgentTypingProvider parent={parent} threadId={null}>
       <For each={['first', 'second']}>
         {(row) => (
@@ -322,15 +355,13 @@ it('keeps the row of a turn waiting on the viewer after its typing lapses', () =
   setMessages([writing('')]);
   setMetadata(asking('ask-1'));
   publishSessionTurn('session', 'blocked');
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
   const answer = view.getByRole('textbox', { name: 'Answer' });
 
   // No heartbeat for a while, as when a phone sleeps with the app open.
   vi.advanceTimersByTime(TYPING_INDICATOR_TIMEOUT_MS);
   expect(getTypingAgents(parent, null).size).toBe(0);
-  expect(view.getByRole('status').textContent).toContain(
-    'Researcher is waiting for an answer'
-  );
+  expect(view.getByRole('status').textContent).toBe('Waiting for an answer');
   expect(view.getByRole('textbox', { name: 'Answer' })).toBe(answer);
 
   // The turn ends, and the row goes with it.
@@ -341,7 +372,7 @@ it('keeps the row of a turn waiting on the viewer after its typing lapses', () =
 it('lets a lapsed typing go when the fold has no turn open', () => {
   vi.useFakeTimers();
   typing('thinking');
-  const view = render(() => <AgentTyping parent={parent} threadId={null} />);
+  const view = show(() => <AgentTyping parent={parent} threadId={null} />);
   expect(view.getByRole('status')).toBeTruthy();
   vi.advanceTimersByTime(TYPING_INDICATOR_TIMEOUT_MS);
   expect(view.queryByRole('status')).toBeNull();

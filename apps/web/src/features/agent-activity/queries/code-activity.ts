@@ -9,11 +9,14 @@ import type {
 import { useQueries } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 
-/** Share the session view's observed SDK activity while an inline run is open. */
+/**
+ * Share the session view's observed SDK activity while an inline run is open.
+ * Without a `segment` there is no run to look into, and `rows` stand as given.
+ */
 export function createCodeActivityRows(
   sessionId: Accessor<string>,
   reply: Accessor<FoldedMessage | undefined>,
-  segment: Accessor<number>,
+  segment: Accessor<number | undefined>,
   rows: Accessor<readonly (ActivityRow | AgentActivityRow)[]>
 ) {
   const calls = createMemo(() => {
