@@ -276,17 +276,8 @@ fn insert_graphql_context_data(
         state.email_focus_reader.clone(),
     ));
     data.insert(complete_graph::email_thread_focus_loader(
-        macro_user_id.clone(),
+        macro_user_id,
         state.email_focus_reader.clone(),
-    ));
-    data.insert(complete_graph::entity_favorite_loader(
-        macro_user_id.clone(),
-        state.favorites_service.clone(),
-    ));
-    data.insert(complete_graph::entity_permission_loader(
-        macro_user_id.clone(),
-        organization_id,
-        state.entity_access_service.clone(),
     ));
     data.insert(property_writer);
 }

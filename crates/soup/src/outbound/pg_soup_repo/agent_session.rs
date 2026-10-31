@@ -122,7 +122,7 @@ pub(super) async fn cursor_soup(
     // id CTE, the history join, and any `Owner` literal that binds it again.
     query.push_bind(req.user_id.as_ref().to_string());
     let named_ids = explicitly_named_ids(filter);
-    query.push(ACCESS_SQL);
+    push_listing_rows(&mut query);
     // A session the query names is also readable through its thread's parent,
     // like the session's own REST read; GraphQL `agentSession` loads this way.
     // Broad lists stay limited to session grants so every document thread's
@@ -173,7 +173,7 @@ pub(super) async fn by_ids(
 
     let mut query = QueryBuilder::<Postgres>::new(SELECT_SQL);
     query.push_bind(req.user_id.as_ref().to_string());
-    query.push(ACCESS_SQL);
+    push_listing_rows(&mut query);
     // Every session here is named, so its thread's parent grants apply too.
     query.push("(");
     query.push(SESSION_GRANT_SQL);
@@ -229,12 +229,13 @@ fn session_ids(entities: &[Entity<'_>]) -> Vec<Uuid> {
         .collect()
 }
 
-/// Pushes the listing's source ids, row, and access predicate after the
-/// `$1` user bind that [`SELECT_SQL`] ends on.
-fn push_access_rows(query: &mut QueryBuilder<'_, Postgres>) {
+/// Pushes the listing's source ids, row, and history join after the `$1`
+/// user bind that [`SELECT_SQL`] ends on, ending at `WHERE` so the caller
+/// appends its access predicate.
+fn push_listing_rows(query: &mut QueryBuilder<'_, Postgres>) {
     query.push(SOURCE_IDS_SQL);
     query.push(ROW_SQL);
-    query.push(ACCESS_SQL);
+    query.push("\n    WHERE ");
 }
 
 fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
@@ -276,19 +277,17 @@ fn parts_from_query<F>(
     }
 }
 
-/// Opens the listing's source-id CTE. Ends right before the first bind so `$1`
-/// is the user id.
+/// Selects the row shape and joins the requesting user's view history. Ends
+/// right before the first bind so `$1` is the user id.
 const SELECT_SQL: &str = r#"
     WITH user_source_ids AS (
         SELECT cp.channel_id::text AS source_id
         FROM comms_channel_participants cp
         WHERE cp.user_id = "#;
 
-/// Continues [`SELECT_SQL`] after the user id bind: the remaining source-id
-/// arms, the row projection, and the history join, ending at `WHERE` so the
-/// caller appends its access predicate. Every `$1` here refers back to that
-/// same bind.
-const ACCESS_SQL: &str = r#" AND cp.left_at IS NULL
+/// Continues [`SELECT_SQL`] after the user id bind with the remaining
+/// source-id arms. Every `$1` here refers back to that same bind.
+const SOURCE_IDS_SQL: &str = r#" AND cp.left_at IS NULL
         UNION ALL
         SELECT t.team_id::text FROM team_user t WHERE t.user_id = $1
         UNION ALL
@@ -321,10 +320,9 @@ const ROW_SQL: &str = r#"
     LEFT JOIN "UserHistory" uh
         ON uh."itemId" = s.id::text
         AND uh."itemType" = 'agent_session'
-        AND uh."userId" = $1
-    WHERE "#;
+        AND uh."userId" = $1"#;
 
-/// Continues [`ACCESS_SQL`]: the viewer holds a grant on the session itself.
+/// Continues the listing rows: the viewer holds a grant on the session itself.
 const SESSION_GRANT_SQL: &str = r#"EXISTS (
         SELECT 1 FROM entity_access ea
         WHERE ea.entity_id = s.id

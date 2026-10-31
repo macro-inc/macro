@@ -158,7 +158,7 @@ where
     // Concurrent loads coalesce into one batched Soup request per user.
     let items = futures::future::try_join_all(thread_ids.into_iter().map(|thread_id| {
         loader.load_one((
-            user_id.clone(),
+            Some(user_id.clone()),
             EntityType::EmailThread.with_entity_string(thread_id.to_string()),
         ))
     }))
@@ -177,10 +177,10 @@ where
     Ok(threads)
 }
 
-/// Fetch one agent session the viewer can see, through the same access
-/// filter the Soup list uses, so a session outside their grants reads as
-/// absent rather than as an error. Reads the primary: see
-/// [`AgentSessionEntityLoader`].
+/// Fetch one agent session the viewer may view, authorized through entity
+/// access: a public link opens it for a caller with no account, and a session
+/// they may not view reads as absent rather than as an error. Reads the
+/// primary: see [`AgentSessionEntityLoader`].
 pub async fn resolve_soup_agent_session<Edges>(
     ctx: &Context<'_>,
     viewer: Option<MacroUserIdStr<'static>>,
