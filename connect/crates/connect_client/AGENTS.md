@@ -7,6 +7,7 @@ The public Rust surface for Macro Connect customers. API changes here are breaki
 ## Start here
 
 - `src/lib.rs`: authenticated async client, error mapping, and MCP gateway address.
+- `catalog_icon` fetches public SVG icons so customer apps do not call the Connect API directly from the browser.
 - `src/wire.rs`: shared request and response types used by the client and `connect_api`.
 
 ## Scope

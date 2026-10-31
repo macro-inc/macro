@@ -4930,6 +4930,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "connect_demo"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "connect_client",
+ "connect_platform",
+ "futures",
+ "html-escape",
+ "http-body-util",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sse-stream",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "connect_integration"
 version = "0.1.0"
 dependencies = [
