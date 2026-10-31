@@ -1959,6 +1959,7 @@ pub async fn run() -> anyhow::Result<()> {
                     crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
                         (*conn_gateway_client).clone(),
                         db.clone(),
+                        event_broker_tracker.clone(),
                     ),
                 ),
             ),
