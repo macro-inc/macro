@@ -311,8 +311,9 @@ async function visibleCalendars(
   return new Map(calendars.map((calendar) => [calendar.id, calendar]));
 }
 
-/** Whether a calendar holding the event is on the user's schedule, when one is
- * known. Availability counts each copy, so one such copy is enough. */
+/** Whether a calendar holding the event is on the user's schedule, when that
+ * is known. Availability counts each copy, so one such copy is enough; `false`
+ * needs every copy to say so, as an older service omits the field. */
 function onSchedule(
   record: CalendarEventRecord,
   calendars: Map<string, VisibleCalendar>,
@@ -322,10 +323,13 @@ function onSchedule(
     ...(record.sources ?? []).map((copy) => copy.calendarId),
   ].flatMap((id) => {
     const calendar = id ? calendars.get(id) : undefined;
-    return calendar ? [calendar] : [];
+    return calendar ? [calendar.contributesToAvailability] : [];
   });
-  return known.length > 0
-    ? known.some((calendar) => calendar.contributesToAvailability)
+  if (known.some(Boolean)) {
+    return true;
+  }
+  return known.length > 0 && known.every((value) => value === false)
+    ? false
     : undefined;
 }
 

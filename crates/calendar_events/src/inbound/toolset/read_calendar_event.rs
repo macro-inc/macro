@@ -112,15 +112,18 @@ pub struct ReadCalendarEventResponse {
 
 impl ReadCalendarEventResponse {
     fn from_preview(event: CalendarMentionEvent, labels: &CalendarLabels) -> Self {
-        let calendars = event.viewer_calendar_ids.iter().copied();
-        let on_own_schedule = labels.on_schedule(calendars) == Some(true);
-        let access = CalendarEventAccess::of(&event, on_own_schedule);
+        let on_schedule = labels.on_schedule(event.viewer_calendar_ids.iter().copied());
+        let access = CalendarEventAccess::of(&event, on_schedule == Some(true));
         let calendar_name = labels.calendar_name(event.viewer_calendar_ids.first().copied());
         let (start, end, is_all_day, time_zone) = time_fields(&event.time);
         let summary = match access {
             CalendarEventAccess::OnYourCalendar => {
                 format!("{} is on the user's calendar.", event.title)
             }
+            CalendarEventAccess::OnVisibleCalendar if on_schedule.is_none() => format!(
+                "{} is on a calendar the user can see; whether it is theirs could not be checked.",
+                event.title
+            ),
             CalendarEventAccess::OnVisibleCalendar => format!(
                 "{} is on {}, which the user can see but which is not part of their schedule and \
                  may be someone else's.",

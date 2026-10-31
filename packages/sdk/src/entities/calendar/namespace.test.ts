@@ -277,6 +277,26 @@ describe('calendar occurrences', () => {
     expect(item?.role).toBe('organizer');
   });
 
+  test('leave the schedule unknown when a calendar omits it', async () => {
+    const [unknown, known] = await listed(
+      [
+        copy('unknown', 'calendar-older', null, true),
+        copy('known', 'calendar-colleague', null, true),
+      ],
+      [
+        { id: 'calendar-older', emailAddress: 'user@example.com' },
+        {
+          id: 'calendar-colleague',
+          emailAddress: 'user@example.com',
+          contributesToAvailability: false,
+        },
+      ],
+    );
+
+    expect(unknown?.contributesToAvailability).toBeUndefined();
+    expect(known?.contributesToAvailability).toBe(false);
+  });
+
   test('keep the role of an event the user organizes on any calendar', async () => {
     const [item] = await listed(
       [

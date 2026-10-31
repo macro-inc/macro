@@ -239,6 +239,28 @@ async fn any_copy_on_the_schedule_makes_an_event_the_users() {
     assert_eq!(result.unwrap()["access"], "on_your_calendar");
 }
 
+/// Without the calendars the tool cannot say either way, so it claims neither.
+#[tokio::test]
+async fn an_unknown_calendar_is_neither_the_users_nor_outside_their_schedule() {
+    let copy = Uuid::from_u128(42);
+    let mut event = mention(Some(copy));
+    event.viewer_calendar_ids = Vec::new();
+
+    let (result, _) = read(
+        CalendarMentionPreview::Accessible(Box::new(event)),
+        serde_json::json!({ "eventId": copy, "occurrenceKey": null }),
+    )
+    .await;
+
+    let read = result.unwrap();
+    assert_eq!(read["access"], "on_visible_calendar");
+    assert_eq!(
+        read["summary"],
+        "Design review is on a calendar the user can see; whether it is theirs could not be \
+         checked."
+    );
+}
+
 #[tokio::test]
 async fn a_copy_reads_the_way_the_card_names_it() {
     for (copy, access) in [
