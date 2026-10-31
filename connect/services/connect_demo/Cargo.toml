@@ -1,0 +1,28 @@
+[package]
+name = "connect_demo"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+axum = { workspace = true }
+connect_client = { path = "../../crates/connect_client" }
+connect_platform = { path = "../../crates/connect_platform" }
+futures = { workspace = true }
+html-escape = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sse-stream = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["net", "signal"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+tower = { workspace = true }
+wiremock = { workspace = true }

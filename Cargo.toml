@@ -9,6 +9,7 @@ members = [
   "connect/crates/connect_client",
   "connect/tests/connect_integration",
   "connect/services/connect_api",
+  "connect/services/connect_demo",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
