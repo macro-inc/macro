@@ -19,10 +19,7 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
 use upstream_error::UpstreamErrorResponse;
 
-use crate::api::{
-    context::{ApiContext, AuthorizationService},
-    link::github::github_error_response,
-};
+use crate::api::context::{ApiContext, AuthorizationService};
 
 #[derive(thiserror::Error, Debug)]
 pub enum EnrichGithubPullRequestsProxyError {
@@ -32,7 +29,7 @@ pub enum EnrichGithubPullRequestsProxyError {
 
 impl IntoResponse for EnrichGithubPullRequestsProxyError {
     fn into_response(self) -> Response {
-        let (status_code, message) = match self {
+        let (status_code, message) = match &self {
             Self::Github(GithubError::NoLinkFound) => {
                 (StatusCode::NOT_FOUND, "no github link found")
             }
@@ -40,8 +37,10 @@ impl IntoResponse for EnrichGithubPullRequestsProxyError {
                 StatusCode::PRECONDITION_REQUIRED,
                 "reauthentication required",
             ),
+            Self::Github(GithubError::Upstream(error)) => return error.into_response(),
             Self::Github(error) => {
-                return github_error_response(error, "failed to enrich GitHub pull requests");
+                tracing::error!(error=?error, "failed to enrich GitHub pull requests");
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal error")
             }
         };
 
@@ -76,8 +75,13 @@ impl IntoResponse for MergeGithubPullRequestError {
             Self::Github(GithubError::PullRequestMergeRejected { rejection, message }) => {
                 (github::inbound::merge_rejection_status(rejection), message)
             }
+            Self::Github(GithubError::Upstream(error)) => return error.into_response(),
             Self::Github(error) => {
-                return github_error_response(error, "failed to merge GitHub pull request");
+                tracing::error!(error=?error, "failed to merge GitHub pull request");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal error".to_string(),
+                )
             }
         };
 
@@ -115,8 +119,13 @@ impl IntoResponse for UpdateGithubPullRequestError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "too many pull requests requested".to_string(),
             ),
+            Self::Github(GithubError::Upstream(error)) => return error.into_response(),
             Self::Github(error) => {
-                return github_error_response(error, "failed to update GitHub pull request");
+                tracing::error!(error=?error, "failed to update GitHub pull request");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal error".to_string(),
+                )
             }
         };
 
@@ -261,6 +270,8 @@ pub async fn draft_handler(
         (status = 422, description = "GitHub declined the change", body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]

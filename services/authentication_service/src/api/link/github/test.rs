@@ -63,12 +63,13 @@ fn an_unusable_github_answer_on_link_status_is_bad_gateway() {
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
 }
 
-#[test]
-fn our_own_failure_on_link_status_is_still_internal() {
+#[tokio::test]
+async fn our_own_failure_on_link_status_is_still_internal() {
     let response = GithubLinkStatusError::Github(GithubError::Internal(anyhow::anyhow!("bug")))
         .into_response();
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(json_body(response).await["message"], "internal error");
 }
 
 #[tokio::test]
@@ -120,6 +121,7 @@ fn github_link_routes_document_upstream_failures() {
         ("/github_pull_requests/enrich", "post"),
         ("/github_pull_requests/merge", "post"),
         ("/github_pull_requests/draft", "post"),
+        ("/github_pull_requests/state", "post"),
         ("/github_pull_requests/mergeability", "post"),
     ];
 

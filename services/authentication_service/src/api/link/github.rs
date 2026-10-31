@@ -26,17 +26,6 @@ mod test;
 
 pub const REAUTHENTICATION_REQUIRED_MESSAGE: &str = "ReauthenticationRequired";
 
-/// Answers a [`GithubError`] a handler has no specific answer for with the
-/// github crate's own mapping, so upstream failures stay 502/503 instead of
-/// becoming a hand-written 500.
-pub(crate) fn github_error_response(error: GithubError, context: &'static str) -> Response {
-    match &error {
-        GithubError::Internal(_) => tracing::error!(error=?error, context, "github request failed"),
-        _ => tracing::warn!(error=%error, context, "github request failed"),
-    }
-    error.into_response()
-}
-
 #[derive(serde::Deserialize, serde::Serialize, Debug, utoipa::ToSchema)]
 pub struct GithubLinkStatusResponse {
     /// Whether the user must reauthenticate their GitHub link.
@@ -84,11 +73,12 @@ impl IntoResponse for InitGithubLinkError {
         let status_code: StatusCode = match self {
             InitGithubLinkError::InvalidUserId(_) => StatusCode::BAD_REQUEST,
             InitGithubLinkError::TooManyInProgressLinks => StatusCode::TOO_MANY_REQUESTS,
-            InitGithubLinkError::Upstream(error) => return error.into_response(),
-            InitGithubLinkError::GithubServiceError(error) => {
-                return github_error_response(error, "failed to start GitHub link");
+            InitGithubLinkError::Upstream(error)
+            | InitGithubLinkError::GithubServiceError(GithubError::Upstream(error)) => {
+                return error.into_response();
             }
             InitGithubLinkError::InternalError(_)
+            | InitGithubLinkError::GithubServiceError(_)
             | InitGithubLinkError::IdentityProviderNotFound => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -123,7 +113,11 @@ pub enum GithubLinkStatusError {
 impl IntoResponse for GithubLinkStatusError {
     fn into_response(self) -> Response {
         let Self::Github(error) = self;
-        github_error_response(error, "failed to check GitHub link status")
+        if let GithubError::Upstream(error) = error {
+            return error.into_response();
+        }
+        tracing::error!(error=?error, "failed to check GitHub link status");
+        error_response(StatusCode::INTERNAL_SERVER_ERROR, "internal error")
     }
 }
 
@@ -285,10 +279,11 @@ impl IntoResponse for DeleteGithubLinkError {
     fn into_response(self) -> Response {
         let message = self.to_string();
         let status_code: StatusCode = match self {
-            DeleteGithubLinkError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            DeleteGithubLinkError::GithubServiceError(error) => {
-                return github_error_response(error, "failed to delete GitHub link");
+            DeleteGithubLinkError::GithubServiceError(GithubError::Upstream(error)) => {
+                return error.into_response();
             }
+            DeleteGithubLinkError::InternalError(_)
+            | DeleteGithubLinkError::GithubServiceError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (
