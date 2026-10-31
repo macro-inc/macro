@@ -96,7 +96,7 @@ pub(crate) async fn all_mail_preview_cursor(
             WHERE m.thread_id = t.id
               AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_junk)
               AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
-              -- A pending sequence step is not mail yet (see build_lateral_trash_exclusion).
+              -- A pending sequence step is not mail yet (see build_visible_message_check).
               AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
             ORDER BY m.internal_date_ts DESC
             LIMIT 1

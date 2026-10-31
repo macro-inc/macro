@@ -11,6 +11,7 @@ use crate::domain::{
 use crm::domain::service::NoOpCrmService;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_event_broker::NoopMacroEventBroker;
+use macro_user_id::cowlike::CowLike as _;
 
 // From the `email_draft` fixture.
 const LINK: Uuid = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -22,6 +23,10 @@ const REPLY_DRAFT: Uuid = uuid::uuid!("ee000002-0000-0000-0000-000000000002");
 /// A local draft that is the only message in its thread: a first step.
 const STEP: Uuid = uuid::uuid!("ee000004-0000-0000-0000-000000000004");
 const STEP_THREAD: Uuid = uuid::uuid!("33333333-3333-3333-3333-333333333333");
+/// A thread holding one received message in the inbox.
+const RECEIVED_THREAD: Uuid = uuid::uuid!("22222222-2222-2222-2222-222222222222");
+/// The fixture's sender of `SENT` and of every local draft.
+const ALICE: Uuid = uuid::uuid!("c0000001-0000-0000-0000-000000000001");
 /// The lists a local draft shows in when its thread has no received mail.
 const DRAFT_LISTS: [&str; 5] = [
     "drafts",
@@ -309,7 +314,7 @@ fn follow_up(replying_to_id: Uuid) -> CreateDraftInput {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
-async fn follow_up_replies_only_to_a_scheduled_draft_in_its_inbox(
+async fn follow_up_replies_only_to_a_sequence_step_in_its_inbox(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let service = service(pool.clone());
@@ -323,6 +328,20 @@ async fn follow_up_replies_only_to_a_scheduled_draft_in_its_inbox(
             .await,
         Err(EmailErr::CannotReplyToDraft)
     ));
+
+    // An ordinary Send Later draft is not held for its replies.
+    service
+        .change_schedule(actor(), LINK, STEP, schedule(None), Some(false), 0)
+        .await?;
+    assert!(matches!(
+        service
+            .create_draft_impl(link, &inboxes, follow_up(STEP))
+            .await,
+        Err(EmailErr::CannotReplyToDraft)
+    ));
+    service
+        .change_schedule(actor(), LINK, STEP, ScheduleChange::Cancel, Some(false), 0)
+        .await?;
 
     service
         .change_schedule(
@@ -466,5 +485,316 @@ async fn sequence_schedules_need_a_gmail_inbox(pool: Pool<Postgres>) -> anyhow::
             .await,
         Err(EmailErr::ScheduleSourceUnsupported)
     ));
+    Ok(())
+}
+
+/// A thread holding only a pending sequence step, as an enrollment's first step
+/// leaves it: the projection gives it no message time, so it sorts first.
+async fn insert_step_thread(pool: &Pool<Postgres>) -> anyhow::Result<Uuid> {
+    let thread = Uuid::now_v7();
+    let message = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_threads (id, link_id, is_read) VALUES ($1, $2, true)",
+        thread,
+        LINK,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, subject, is_read, is_draft)
+           VALUES ($1, $2, $3, $4, 'Step one', true, true)"#,
+        message,
+        thread,
+        LINK,
+        ALICE,
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO email_scheduled_messages (link_id, message_id, send_time, source)
+           VALUES ($1, $2, NOW() + INTERVAL '1 day', 'sequence')"#,
+        LINK,
+        message,
+    )
+    .execute(pool)
+    .await?;
+    recompute(pool, thread).await?;
+    Ok(thread)
+}
+
+/// Pages through the dynamic All Mail view, stopping at a short page as the
+/// API does when it returns no next cursor.
+async fn dynamic_all_mail_pages(
+    pool: &Pool<Postgres>,
+    filter: Expr<EmailLiteral>,
+) -> anyhow::Result<Vec<Uuid>> {
+    const PAGE: u32 = 2;
+    let filter = Arc::new(filter);
+    let mut ids = Vec::new();
+    let mut cursor = None;
+    loop {
+        let page = dynamic::dynamic_email_thread_cursor(
+            pool,
+            &[LINK],
+            PAGE,
+            &PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+            Query::new(cursor, SimpleSortMethod::UpdatedAt, filter.clone()),
+            actor().as_ref(),
+            None,
+        )
+        .await?;
+        ids.extend(page.iter().map(|row| row.id));
+        let Some(last) = page.last().filter(|_| page.len() == PAGE as usize) else {
+            return Ok(ids);
+        };
+        cursor = Some(Cursor {
+            id: last.id,
+            limit: PAGE as usize,
+            val: CursorVal {
+                sort_type: SimpleSortMethod::UpdatedAt,
+                last_val: last.sort_ts,
+            },
+            filter: filter.clone(),
+        });
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn pending_step_threads_do_not_cut_dynamic_all_mail_short(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    for thread in [SENT_THREAD, RECEIVED_THREAD, STEP_THREAD] {
+        recompute(&pool, thread).await?;
+    }
+    // More step-only threads than a page holds, all sorting ahead of the mail.
+    for _ in 0..3 {
+        insert_step_thread(&pool).await?;
+    }
+
+    let alice = Email::Complete(EmailStr::parse_from_str("alice@example.com")?.into_owned());
+    for (name, filter, expected) in [
+        (
+            "all",
+            Expr::Literal(EmailLiteral::CalendarOnly(false)),
+            vec![STEP_THREAD, RECEIVED_THREAD, SENT_THREAD],
+        ),
+        (
+            "archived",
+            Expr::Literal(EmailLiteral::InboxVisible(false)),
+            vec![STEP_THREAD, SENT_THREAD],
+        ),
+        (
+            "address view",
+            Expr::Literal(EmailLiteral::Sender(alice)),
+            vec![STEP_THREAD, SENT_THREAD],
+        ),
+    ] {
+        assert_eq!(
+            dynamic_all_mail_pages(&pool, filter).await?,
+            expected,
+            "{name}"
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn thread_messages_carry_their_schedule_source(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    use entity_access::domain::models::{
+        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
+    };
+    let service = service(pool.clone());
+    let reply_draft = || async {
+        let receipt = EntityAccessReceipt::try_new(
+            EntityAccessAuth::Authenticated(actor()),
+            Entity {
+                entity_type: EntityType::EmailThread,
+                entity_id: SENT_THREAD.to_string(),
+            },
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+        )
+        .unwrap();
+        let message = service
+            .get_thread_with_messages_impl(receipt, 0, 20)
+            .await?
+            .unwrap()
+            .messages
+            .into_iter()
+            .find(|message| message.db_id == REPLY_DRAFT)
+            .unwrap();
+        Ok::<_, anyhow::Error>(serde_json::to_value(
+            crate::inbound::axum::api_types::ApiMessage::from(message),
+        )?)
+    };
+
+    service
+        .change_schedule(actor(), LINK, REPLY_DRAFT, schedule(None), Some(false), 0)
+        .await?;
+    let ordinary = reply_draft().await?;
+    assert_eq!(ordinary["scheduled_send_status"], "pending");
+    assert_eq!(ordinary.get("scheduled_send_source"), None);
+
+    service
+        .change_schedule(
+            actor(),
+            LINK,
+            REPLY_DRAFT,
+            ScheduleChange::Cancel,
+            Some(false),
+            0,
+        )
+        .await?;
+    service
+        .change_schedule(
+            actor(),
+            LINK,
+            REPLY_DRAFT,
+            schedule(Some(ScheduledSendSource::Sequence)),
+            Some(false),
+            0,
+        )
+        .await?;
+    // The thread still returns a pending step, marked as one.
+    let step = reply_draft().await?;
+    assert_eq!(step["scheduled_send_status"], "pending");
+    assert_eq!(step["scheduled_send_source"], "sequence");
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn cancelling_a_steps_send_on_trash_recomputes_its_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    repo.change_schedule(
+        LINK,
+        STEP,
+        &actor(),
+        schedule(Some(ScheduledSendSource::Sequence)),
+        None,
+        0,
+    )
+    .await?;
+    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), Vec::<&str>::new());
+
+    // Trashing a thread cancels its drafts' sends through this batch.
+    assert_eq!(
+        repo.delete_scheduled_messages_batch(&[STEP], LINK).await?,
+        vec![STEP]
+    );
+    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), DRAFT_LISTS);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn other_view_keeps_a_thread_holding_a_pending_step(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let promotions = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO email_labels (id, link_id, provider_label_id, name, type, created_at)
+           VALUES ($1, $2, 'CATEGORY_PROMOTIONS', 'CATEGORY_PROMOTIONS', 'System', NOW())"#,
+        promotions,
+        LINK,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO email_message_labels (message_id, label_id) VALUES ('ee000003-0000-0000-0000-000000000003', $1)",
+        promotions,
+    )
+    .execute(&pool)
+    .await?;
+    let step = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO email_messages (id, thread_id, link_id, from_contact_id, subject, is_read, is_draft)
+           VALUES ($1, $2, $3, $4, 'Re: Different thread', true, true)"#,
+        step,
+        RECEIVED_THREAD,
+        LINK,
+        ALICE,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO email_scheduled_messages (link_id, message_id, send_time, source)
+           VALUES ($1, $2, NOW() + INTERVAL '1 day', 'sequence')"#,
+        LINK,
+        step,
+    )
+    .execute(&pool)
+    .await?;
+    recompute(&pool, RECEIVED_THREAD).await?;
+    let other = || async {
+        let rows = super::super::preview_views::other_inbox::other_inbox_preview_cursor(
+            &pool,
+            &[LINK],
+            50,
+            &Query::new(None, SimpleSortMethod::UpdatedAt, ()),
+        )
+        .await?;
+        Ok::<_, anyhow::Error>(rows.into_iter().map(|row| row.id).collect::<Vec<_>>())
+    };
+    assert_eq!(other().await?, vec![RECEIVED_THREAD]);
+
+    // The user's own draft keeps a thread out of Other, as before.
+    sqlx::query!(
+        "UPDATE email_scheduled_messages SET source = NULL WHERE message_id = $1",
+        step
+    )
+    .execute(&pool)
+    .await?;
+    assert_eq!(other().await?, Vec::<Uuid>::new());
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn pending_step_does_not_make_its_thread_important(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let is_signal = || async {
+        Ok::<_, anyhow::Error>(
+            sqlx::query_scalar!(
+                "SELECT is_signal FROM email_threads WHERE id = $1",
+                STEP_THREAD
+            )
+            .fetch_one(&pool)
+            .await?,
+        )
+    };
+    recompute(&pool, STEP_THREAD).await?;
+    assert!(
+        is_signal().await?,
+        "the user's draft counts as primary mail"
+    );
+
+    EmailPgRepo::new(pool.clone())
+        .change_schedule(
+            LINK,
+            STEP,
+            &actor(),
+            schedule(Some(ScheduledSendSource::Sequence)),
+            None,
+            0,
+        )
+        .await?;
+    assert!(!is_signal().await?);
     Ok(())
 }

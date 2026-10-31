@@ -59,12 +59,14 @@ tools — hexagonal, heavily feature-gated.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
 - A pending sequence step (schedule `source` set, neither sent nor failed) is
-  left out of every mail list and of the thread and GraphQL projections. The
-  predicate is restated in `build_lateral_trash_exclusion`, the static
-  `preview_views`, `thread_mail_projections_by_ids` and `email_db_client`'s
-  `recompute_thread_metadata`; change them together, and recompute the thread
-  when a schedule's source or failure changes. See "Sequence sends" in
-  `docs/architecture/email.md`.
+  left out of every mail list, the thread and GraphQL projections, importance
+  and search. The predicate is restated in SQL (`build_visible_message_check`,
+  the static `preview_views`, `thread_mail_projections_by_ids`, the filter
+  signal resync, and `email_db_client`); find every copy with
+  `rg "source IS NOT NULL"` and change them together. Recompute the thread
+  whenever a message becomes or stops being a pending step. A dynamic candidate
+  must have a message the preview lateral can show, or pages end early. See
+  "Sequence sends" in `docs/architecture/email.md`.
 - Gmail thread label writes stage each thread's DB change, then enqueue one
   provider write per inbox holding only the messages whose labels changed
   (`stage_thread_labels` / `commit_thread_label_write` in

@@ -310,22 +310,24 @@ pub async fn fetch_messages_with_labels(
     Ok(processed_messages)
 }
 
-/// Where the message a scheduled reply answers stands in its own delivery.
+/// Whether a scheduled reply must wait for the message it answers. Only a
+/// sequence step holds its reply back; any other parent threads the reply under
+/// whatever headers it has, whatever its own delivery state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReplyParentDelivery {
-    /// Received, or sent.
-    Delivered,
-    /// Its schedule is neither sent nor failed, so it will be sent first.
-    Scheduled,
-    /// A draft without a live schedule, or a send that failed: it will not be
-    /// sent unless the user acts.
-    NotSent,
+    /// Received or sent, or not a sequence step: the reply goes now.
+    Unrestricted,
+    /// A sequence step whose delivery hasn't run yet; it is sent first.
+    Pending,
+    /// A sequence step whose delivery failed or is unconfirmed, or a draft with
+    /// no schedule (a cancelled step): it won't be sent unless the user acts.
+    Unsent,
 }
 
 /// The message a scheduled reply answers, as its delivery needs it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReplyParent {
-    /// Whether the parent is sent, or will be sent before the reply.
+    /// Whether the reply waits for, or fails with, the parent.
     pub delivery: ReplyParentDelivery,
     /// Provider thread; set once the parent is sent or synced.
     pub provider_thread_id: Option<String>,
@@ -351,9 +353,9 @@ pub async fn get_reply_parent(
         r#"
         SELECT
           CASE
-            WHEN s.message_id IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed' THEN 'scheduled'
-            WHEN m.is_draft OR (s.message_id IS NOT NULL AND NOT s.sent) THEN 'not_sent'
-            ELSE 'delivered'
+            WHEN s.source IS NOT NULL AND NOT s.sent AND s.delivery_status = 'ready' THEN 'pending'
+            WHEN (s.source IS NOT NULL AND NOT s.sent) OR (m.is_draft AND s.message_id IS NULL) THEN 'unsent'
+            ELSE 'unrestricted'
           END AS "delivery!",
           m.provider_thread_id,
           -- Use trim() to remove the leading/trailing angle brackets
@@ -374,9 +376,9 @@ pub async fn get_reply_parent(
         return Ok(None);
     };
     let delivery = match row.delivery.as_str() {
-        "scheduled" => ReplyParentDelivery::Scheduled,
-        "not_sent" => ReplyParentDelivery::NotSent,
-        "delivered" => ReplyParentDelivery::Delivered,
+        "pending" => ReplyParentDelivery::Pending,
+        "unsent" => ReplyParentDelivery::Unsent,
+        "unrestricted" => ReplyParentDelivery::Unrestricted,
         other => anyhow::bail!("unknown reply parent delivery state {other}"),
     };
     Ok(Some(ReplyParent {

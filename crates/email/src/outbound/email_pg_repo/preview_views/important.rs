@@ -58,7 +58,7 @@ pub(crate) async fn important_preview_cursor(
                   )
               )
               AND (
-                  -- A pending sequence step is not the user's draft (see build_lateral_trash_exclusion).
+                  -- A pending sequence step is not the user's draft (see build_visible_message_check).
                   (m.is_draft AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed'))
                   OR (
                       CASE WHEN m.mailbox_state IS NOT NULL THEN m.mailbox_state->>'attention' = 'primary'
