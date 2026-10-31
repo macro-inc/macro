@@ -196,9 +196,10 @@ function TauriProvider(props: { children: JSX.Element }) {
         open={nativeAppUpdateRequiredDialogOpen()}
         onClose={() => setNativeAppUpdateRequiredDialogOpen(false)}
         description={
-          isPlatform('desktop') && nativeUpdates.status().status !== 'Disabled'
+          nativeUpdateRequired() ??
+          (isPlatform('desktop') && nativeUpdates.status().status !== 'Disabled'
             ? nativeUpdateDescription(nativeUpdates.status())
-            : nativeUpdateRequired()
+            : undefined)
         }
         onRestart={
           nativeUpdates.status().status === 'Ready'
