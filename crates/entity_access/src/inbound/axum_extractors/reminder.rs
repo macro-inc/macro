@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use super::{ExtractorError, RequiredPermission};
 use crate::domain::{
-    models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
+    models::{Entity, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
 
@@ -103,18 +103,12 @@ where
             // which would leak whether the id exists.
             .ok_or(ExtractorError::Unauthorized)?;
 
-        let entity_permission = EntityPermission::AccessLevel { access_level };
-        if !entity_permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        }
-
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
+            entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                user_id,
                 entity,
-                auth: EntityAccessAuth::Authenticated(user_id),
-                entity_permission,
-                _marker: PhantomData,
-            },
+                EntityPermission::AccessLevel { access_level },
+            )?,
             _marker: PhantomData,
         })
     }

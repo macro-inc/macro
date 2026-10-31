@@ -417,6 +417,32 @@ async fn anonymous_project_access_returns_unauthenticated_receipt() {
 }
 
 #[tokio::test]
+async fn a_public_edit_folder_gives_a_signed_out_caller_view() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let extracted =
+        extract_project_access::<ViewAccessLevel>(project_request(None, project(false)), &state)
+            .await
+            .expect("public project access should be allowed");
+
+    assert_eq!(
+        extracted.entity_access_receipt.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_public_edit_folder_refuses_a_signed_out_caller_on_edit_routes() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let result =
+        extract_project_access::<EditAccessLevel>(project_request(None, project(false)), &state)
+            .await;
+
+    assert!(matches!(result, Err(ExtractorError::Unauthorized)));
+}
+
+#[tokio::test]
 async fn authenticated_project_owner_bypasses_access_lookup() {
     let state = TestState::new(None);
     let extracted = extract_project_access::<EditAccessLevel>(
@@ -934,7 +960,7 @@ async fn malformed_json_and_invalid_body_are_distinguished() {
     ));
 
     let invalid_body = EditExtractor::from_request(
-        json_request(r#"{"name":42,"projectId":"project-1"}"#),
+        bearer_request(r#"{"name":42,"projectId":"project-1"}"#, "valid"),
         &state,
     )
     .await;
@@ -998,6 +1024,43 @@ async fn anonymous_access_uses_public_project_access() {
         EntityAccessAuth::Unauthenticated
     ));
     assert_eq!(state.entity_access.calls()[0].user_id, None);
+}
+
+#[tokio::test]
+async fn a_public_edit_folder_in_the_body_gives_a_signed_out_caller_view() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let result = ViewExtractor::from_request(
+        json_request(r#"{"name":"document","projectId":"public-project"}"#),
+        &state,
+    )
+    .await
+    .expect("anonymous view access should be allowed");
+
+    let ProjectBodyAccessLevelExtractorV2::FoundProject {
+        entity_access_receipt,
+        ..
+    } = result
+    else {
+        panic!("project should be found")
+    };
+    assert_eq!(
+        entity_access_receipt.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_signed_out_caller_cannot_move_into_a_public_edit_folder() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let result = EditExtractor::from_request(
+        json_request(r#"{"name":"document","projectId":"public-project"}"#),
+        &state,
+    )
+    .await;
+
+    assert!(matches!(result, Err(ExtractorError::Unauthorized)));
 }
 
 #[tokio::test]
