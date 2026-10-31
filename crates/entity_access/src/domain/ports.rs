@@ -104,13 +104,14 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         agent_session_id: &str,
     ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
 
-    /// The project a task's Project property names, if the document is a
-    /// task in one. This is a persisted relationship, not a caller-supplied
-    /// grant.
-    fn get_task_project(
+    /// The projects that contain a document: the one a live task's Project
+    /// property names, and those of live tasks whose discussion has the
+    /// document attached. Persisted relationships, not caller-supplied
+    /// grants.
+    fn get_containing_projects(
         &self,
         document_id: &str,
-    ) -> impl Future<Output = Result<Option<Uuid>, AccessError>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
 
     /// Whether a session row exists at all, for anyone.
     ///

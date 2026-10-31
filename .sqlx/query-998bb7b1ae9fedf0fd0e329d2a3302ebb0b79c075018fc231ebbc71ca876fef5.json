@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ep.values->'value'->0->>'entity_id' AS \"project_id?\"\n               FROM (\n                   SELECT $1::text AS task_id\n                   UNION ALL\n                   -- A file attached to a task's discussion, as the\n                   -- discussion-attachment grant in document access reads it.\n                   SELECT m.parent_entity_id\n                   FROM comms_attachments a\n                   JOIN comms_messages m ON m.id = a.message_id\n                   JOIN comms_message_threads mt ON mt.root_id = COALESCE(m.thread_id, m.id)\n                   WHERE a.entity_type = 'document'\n                     AND a.entity_id = $1\n                     AND m.parent_entity_type = 'document'\n                     AND m.deleted_at IS NULL\n                     AND mt.deleted_at IS NULL\n               ) tasks\n               JOIN \"Document\" task ON task.id = tasks.task_id AND task.\"deletedAt\" IS NULL\n               JOIN entity_properties ep ON ep.entity_id = task.id\n               WHERE ep.entity_type = 'TASK'\n                 AND ep.property_definition_id = '00000001-0000-0000-0000-000000000014'\n                 AND CASE WHEN jsonb_typeof(ep.values->'value') = 'array'\n                          THEN jsonb_array_length(ep.values->'value') END = 1\n                 AND ep.values->'value'->0->>'entity_type' = 'INITIATIVE'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "998bb7b1ae9fedf0fd0e329d2a3302ebb0b79c075018fc231ebbc71ca876fef5"
+}

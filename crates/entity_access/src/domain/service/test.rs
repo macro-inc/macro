@@ -36,7 +36,7 @@ struct MockRepo {
     accessible_scheduled_action_ids: Arc<Mutex<Vec<Uuid>>>,
     agent_session_parent: Arc<Mutex<Option<AgentSessionParent>>>,
     agent_session_exists: Arc<Mutex<bool>>,
-    task_project: Arc<Mutex<Option<Uuid>>>,
+    containing_projects: Arc<Mutex<Vec<Uuid>>>,
     team_initiative_access: Arc<Mutex<Option<AccessLevel>>>,
     pipeline_access: Arc<Mutex<Option<AccessLevel>>>,
     pipeline_access_list: Arc<Mutex<Vec<(Uuid, AccessLevel)>>>,
@@ -96,7 +96,7 @@ impl MockRepo {
             // Existing by default: the interesting half of these tests is who
             // may see a session, not whether it is there.
             agent_session_exists: Arc::new(Mutex::new(true)),
-            task_project: Arc::default(),
+            containing_projects: Arc::default(),
             team_initiative_access: Arc::default(),
             pipeline_access: Arc::default(),
             pipeline_access_list: Arc::default(),
@@ -335,8 +335,8 @@ impl AccessRepository for MockRepo {
         Ok(*self.agent_session_exists.lock().await)
     }
 
-    async fn get_task_project(&self, _: &str) -> Result<Option<Uuid>, AccessError> {
-        Ok(*self.task_project.lock().await)
+    async fn get_containing_projects(&self, _: &str) -> Result<Vec<Uuid>, AccessError> {
+        Ok(self.containing_projects.lock().await.clone())
     }
 
     async fn get_document_access(
@@ -2744,7 +2744,7 @@ async fn test_get_users_by_entity_project_with_many_users() {
 #[tokio::test]
 async fn a_task_is_viewable_through_a_project_the_caller_can_view() {
     let repo = MockRepo::new();
-    *repo.task_project.lock().await = Some(Uuid::new_v4());
+    *repo.containing_projects.lock().await = vec![Uuid::new_v4()];
     let service = EntityAccessServiceImpl::new(repo.clone());
     // (project access, the task's own access, expected task access)
     for (project, own, expected) in [
@@ -2788,7 +2788,7 @@ async fn a_document_outside_any_project_gains_nothing_from_projects() {
 async fn a_session_on_a_task_inherits_through_the_task_project() {
     let repo = MockRepo::new();
     *repo.agent_session_parent.lock().await = Some(AgentSessionParent::Document("task".into()));
-    *repo.task_project.lock().await = Some(Uuid::new_v4());
+    *repo.containing_projects.lock().await = vec![Uuid::new_v4()];
     *repo.initiative_access.lock().await = Some(AccessLevel::View);
     let service = EntityAccessServiceImpl::new(repo);
     assert_eq!(
@@ -2804,7 +2804,7 @@ async fn a_session_on_a_task_inherits_through_the_task_project() {
 async fn team_scoped_bot_views_a_task_through_its_project() {
     let project = Uuid::new_v4();
     let repo = MockRepo::new();
-    *repo.task_project.lock().await = Some(project);
+    *repo.containing_projects.lock().await = vec![project];
     *repo.team_initiative_access.lock().await = Some(AccessLevel::Edit);
     let service = EntityAccessServiceImpl::new(repo.clone());
 
@@ -2814,6 +2814,52 @@ async fn team_scoped_bot_views_a_task_through_its_project() {
             test_bot_scope(),
             &Uuid::new_v4().to_string(),
             EntityType::Document,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        receipt.entity_permission(),
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    ));
+    assert_eq!(
+        repo.team_entity_requests.lock().await.last(),
+        Some(&(project.to_string(), EntityType::Initiative))
+    );
+}
+
+#[tokio::test]
+async fn any_containing_project_the_caller_can_view_grants_view() {
+    let repo = MockRepo::new();
+    *repo.containing_projects.lock().await = vec![Uuid::new_v4(), Uuid::new_v4()];
+    *repo.initiative_access.lock().await = Some(AccessLevel::Comment);
+    let service = EntityAccessServiceImpl::new(repo);
+    assert_eq!(
+        service
+            .get_access_level(None, "attachment", EntityType::Document)
+            .await
+            .unwrap(),
+        Some(AccessLevel::View)
+    );
+}
+
+#[tokio::test]
+async fn team_scoped_bot_views_a_session_on_a_task_through_its_project() {
+    let project = Uuid::new_v4();
+    let repo = MockRepo::new();
+    *repo.agent_session_parent.lock().await = Some(AgentSessionParent::Document("task".into()));
+    *repo.containing_projects.lock().await = vec![project];
+    *repo.team_initiative_access.lock().await = Some(AccessLevel::Edit);
+    let service = EntityAccessServiceImpl::new(repo.clone());
+
+    let receipt = service
+        .generate_bot_entity_access_receipt::<ViewAccessLevel>(
+            test_bot_id(),
+            test_bot_scope(),
+            &Uuid::new_v4().to_string(),
+            EntityType::AgentSession,
         )
         .await
         .unwrap();

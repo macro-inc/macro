@@ -292,21 +292,43 @@ impl AccessRepository for PgAccessRepository {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_task_project(&self, document_id: &str) -> Result<Option<Uuid>, AccessError> {
+    async fn get_containing_projects(&self, document_id: &str) -> Result<Vec<Uuid>, AccessError> {
         // The definition id must stay equal to SystemPropertyKey::PROJECT_UUID.
-        let project = sqlx::query_scalar!(
-            r#"SELECT values->'value'->0->>'entity_id' AS "project_id?"
-               FROM entity_properties
-               WHERE entity_id = $1
-                 AND entity_type = 'TASK'
-                 AND property_definition_id = '00000001-0000-0000-0000-000000000014'
-                 AND values->'value'->0->>'entity_type' = 'INITIATIVE'"#,
+        // A Project value holds exactly one reference; anything else is
+        // malformed and contains nothing.
+        let projects = sqlx::query_scalar!(
+            r#"SELECT DISTINCT ep.values->'value'->0->>'entity_id' AS "project_id?"
+               FROM (
+                   SELECT $1::text AS task_id
+                   UNION ALL
+                   -- A file attached to a task's discussion, as the
+                   -- discussion-attachment grant in document access reads it.
+                   SELECT m.parent_entity_id
+                   FROM comms_attachments a
+                   JOIN comms_messages m ON m.id = a.message_id
+                   JOIN comms_message_threads mt ON mt.root_id = COALESCE(m.thread_id, m.id)
+                   WHERE a.entity_type = 'document'
+                     AND a.entity_id = $1
+                     AND m.parent_entity_type = 'document'
+                     AND m.deleted_at IS NULL
+                     AND mt.deleted_at IS NULL
+               ) tasks
+               JOIN "Document" task ON task.id = tasks.task_id AND task."deletedAt" IS NULL
+               JOIN entity_properties ep ON ep.entity_id = task.id
+               WHERE ep.entity_type = 'TASK'
+                 AND ep.property_definition_id = '00000001-0000-0000-0000-000000000014'
+                 AND CASE WHEN jsonb_typeof(ep.values->'value') = 'array'
+                          THEN jsonb_array_length(ep.values->'value') END = 1
+                 AND ep.values->'value'->0->>'entity_type' = 'INITIATIVE'"#,
             document_id,
         )
-        .fetch_optional(&self.pool)
-        .await?
-        .flatten();
-        Ok(project.and_then(|project| project.parse().ok()))
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(projects
+            .into_iter()
+            .flatten()
+            .filter_map(|project| project.parse().ok())
+            .collect())
     }
 
     #[tracing::instrument(err, skip(self))]
