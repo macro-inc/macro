@@ -319,7 +319,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   occurrences, get the same answer through `CalendarEventLabelReader`, which
   labels every hit (`EventLabels::of`) from one read of the requester's
   calendars and inboxes. Search reaches it as a trait object the host injects,
-  so it needs no outbound code from this crate.
+  so it needs no outbound code from this crate. `off_schedule_summary` is the
+  plain sentence for an event that is not the user's: `ReadCalendarEvent` and
+  `NameSearch` both give it, because models follow it more reliably than the
+  fields behind it.
 - Copies of one meeting pair by `calendar_meeting_uid(ical_uid)`, not the raw
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an

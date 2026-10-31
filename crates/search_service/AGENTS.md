@@ -77,12 +77,15 @@ per-entity-type search plus a unified search across them — mounted into
   therefore labels each row with what an occurrence says (`calendarName`,
   `contributesToAvailability`, `inbox`, `role`) through `calendar_events`'
   `CalendarEventLabelReader`: one read per search, never per row, and a failed
-  read leaves the labels off rather than failing the search. `organizer` stays
-  the provider's raw value, which web rows show even where a read-only calendar
-  names the user's own mailbox: `NameSearch`'s description is what tells a model
-  that only `role` says they organize it. Measure a change to either with the
-  default model on rows that are really in the index, and a user whose memory
-  does not describe the behavior under test.
+  read leaves the labels off rather than failing the search, and missing labels
+  mean unknown, never "not theirs". `organizer` stays the provider's raw value,
+  which web rows show even where a read-only calendar names the user's own
+  mailbox: `NameSearch`'s description is what tells a model that only `role`
+  says they organize it. Fields alone did not stop models calling a colleague's
+  event "your appointment"; `ai_tools` adds `calendar_events`'
+  `off_schedule_summary` to such a result, and that sentence did. Measure a
+  change to any of these with the default model on rows that are really in the
+  index, and a user whose memory does not describe the behavior under test.
 
 ## Related
 
