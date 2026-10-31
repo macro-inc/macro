@@ -56,7 +56,9 @@ export function ToolCard(props: ToolCardProps) {
 
   const row = (expandable: boolean) => (
     <>
-      <span class="min-w-0 max-w-full shrink-0 truncate">
+      {/* The detail gives way first: it shrinks a hundredfold faster, so a
+          label truncates only once its detail is gone. */}
+      <span class="min-w-0 truncate">
         {typeof props.title === 'string' ? (
           <Tooltip
             label={props.title}
@@ -74,7 +76,7 @@ export function ToolCard(props: ToolCardProps) {
           <Tooltip
             label={subtitle()}
             as="span"
-            class="min-w-0 truncate text-ink-disabled"
+            class="min-w-0 shrink-[100] truncate text-ink-disabled"
           >
             {subtitle()}
           </Tooltip>
@@ -82,7 +84,7 @@ export function ToolCard(props: ToolCardProps) {
       </Show>
       <For each={Object.entries(props.args ?? {})}>
         {([key, value]) => (
-          <span class="min-w-0 truncate text-ink-disabled">
+          <span class="min-w-0 shrink-[100] truncate text-ink-disabled">
             {key}={value}
           </span>
         )}
