@@ -1,6 +1,7 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer, { type Size } from '@corvu/drawer';
+import { callHandler } from '@kobalte/utils';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import {
@@ -41,6 +42,41 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
 }
 
 /**
+ * Everything Corvu's focus trap counts as a tab stop. Mirrors the trap's own
+ * selector so the sheet wraps around the same elements it does.
+ */
+const FOCUSABLE_SELECTOR =
+  'a[href]:not([tabindex="-1"]), button:not([tabindex="-1"]), input:not([tabindex="-1"]), textarea:not([tabindex="-1"]), select:not([tabindex="-1"]), details:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
+
+/** A sheet's tab stops, in order. A disabled control cannot take focus. */
+function tabStops(sheet: Element) {
+  return [...sheet.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
+    (element) => !element.matches(':disabled')
+  );
+}
+
+/** What Corvu's content hands an `onKeyDown`, so the two compose. */
+type ContentKeyboardEvent = KeyboardEvent & {
+  currentTarget: EventTarget | null;
+  target: Element;
+};
+
+/**
+ * The sheet itself holds focus when it opens, so Corvu's wrap handlers — which
+ * sit on the first and last control — never see the first Shift+Tab. Without
+ * this it would leave the sheet for the page its scrim covers.
+ */
+function wrapShiftTabFromContent(event: KeyboardEvent) {
+  const content = event.currentTarget as HTMLElement;
+  if (event.key !== 'Tab' || !event.shiftKey || event.target !== content)
+    return;
+  const last = tabStops(content).at(-1);
+  if (!last) return;
+  event.preventDefault();
+  last.focus();
+}
+
+/**
  * Drop-in replacement for `Drawer.Content` that handles mobile keyboard
  * behaviour automatically:
  *
@@ -63,6 +99,7 @@ function MobileDrawerContent(
     'class',
     'maxHeight',
     'targetHeight',
+    'onKeyDown',
   ]);
 
   const maxHeight = () =>
@@ -80,6 +117,12 @@ function MobileDrawerContent(
       <Drawer.Content
         onFocusIn={(e: FocusEvent) => {
           scrollToFocusedInput(e);
+        }}
+        // Composed, not spread with the rest: a sheet with keys of its own
+        // must not silently take the Shift+Tab wrap with them.
+        onKeyDown={(event: ContentKeyboardEvent) => {
+          callHandler(event, local.onKeyDown);
+          if (!event.defaultPrevented) wrapShiftTabFromContent(event);
         }}
         style={{
           '--drawer-max-h': `${maxHeight()}dvh`,
@@ -274,6 +317,34 @@ function swallowRestOfTap() {
 }
 
 /**
+ * A sheet opens with focus on itself unless its first tab stop is something to
+ * type into. Corvu's focus trap otherwise focuses that stop, and a browser
+ * paints the focus ring for a scripted focus arriving while nothing on the
+ * page is focused — which is every tap, since a tapped button is not focused
+ * on iOS. That ringed the first row of every sheet of rows.
+ *
+ * A text field keeps the focus: a sheet that opens for a search or a name is
+ * opened to type in. So does whatever the sheet focused itself while opening,
+ * such as the heading Settings announces when it drills in. The content
+ * element carries `tabindex="-1"`, so the trap, Escape and the sheet's own
+ * announcement all still work when the sheet holds focus itself. Sheets that
+ * want another control focused name it with `initialFocusEl` or their own
+ * `onInitialFocus`, as the comment composer and the model picker do.
+ */
+function focusSheetOverItsFirstRow(event: Event) {
+  const sheet = event.target as HTMLElement | null;
+  if (!sheet) return;
+  if (sheet.contains(document.activeElement)) {
+    // Corvu would move this to the first tab stop; the sheet chose it.
+    event.preventDefault();
+    return;
+  }
+  if (isEditableInput(tabStops(sheet)[0])) return;
+  event.preventDefault();
+  sheet.focus();
+}
+
+/**
  * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
@@ -286,6 +357,7 @@ export const MobileDrawer = Object.assign(
     const [local, rest] = splitProps(props, [
       'onOutsidePointer',
       'onOpenChange',
+      'onInitialFocus',
     ]);
     let uncontrolledOpen = props.initialOpen ?? false;
     let disposed = false;
@@ -312,6 +384,11 @@ export const MobileDrawer = Object.assign(
           uncontrolledOpen = open;
           local.onOpenChange?.(open);
           if (!open && !closed()) setActiveSnapPoint(1);
+        }}
+        onInitialFocus={(event) => {
+          local.onInitialFocus?.(event);
+          if (event.defaultPrevented || props.initialFocusEl) return;
+          focusSheetOverItsFirstRow(event);
         }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();
