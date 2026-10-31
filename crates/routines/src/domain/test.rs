@@ -162,3 +162,34 @@ fn updates_keep_saved_apps_unless_told_and_a_saved_program_stays_a_program() {
     );
     assert!(configuration.task(Some(&legacy)).get("steps").is_none());
 }
+
+#[test]
+fn a_saved_single_agent_task_keeps_its_routine_instructions_apart() {
+    let trigger = serde_json::json!({
+        "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"
+    });
+    let saved = serde_json::json!({
+        "model": "m", "prompt": "Be brief.", "user_prompt": "Summarize my day"
+    });
+    let mut configuration = RoutineConfiguration::from_saved("Digest", &trigger, &saved).unwrap();
+    // Read back joined; a rename sends it back unchanged.
+    let task = configuration.task(Some(&saved));
+    assert_eq!(task["prompt"], "Be brief.");
+    assert_eq!(task["user_prompt"], "Summarize my day");
+
+    // An edit after the saved instructions keeps them apart too.
+    if let Some(Step::Agent(agent)) = configuration.steps.first_mut() {
+        agent.instructions = "Be brief.\n\nSummarize my week".into();
+    }
+    let task = configuration.task(Some(&saved));
+    assert_eq!(task["prompt"], "Be brief.");
+    assert_eq!(task["user_prompt"], "Summarize my week");
+
+    // Rewritten instructions replace both.
+    if let Some(Step::Agent(agent)) = configuration.steps.first_mut() {
+        agent.instructions = "List my meetings".into();
+    }
+    let task = configuration.task(Some(&saved));
+    assert_eq!(task["prompt"], "");
+    assert_eq!(task["user_prompt"], "List my meetings");
+}

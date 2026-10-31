@@ -323,10 +323,11 @@ impl RoutineConfiguration {
         };
         let saved_program = saved.is_some_and(|task| task.get("steps").is_some());
         if !saved_program && let [Step::Agent(agent)] = self.steps.as_slice() {
+            let (prompt, user_prompt) = split_instructions(saved, &agent.instructions);
             let mut task = serde_json::json!({
                 "mcp_servers": mcp_servers,
-                "prompt": "",
-                "user_prompt": agent.instructions,
+                "prompt": prompt,
+                "user_prompt": user_prompt,
             });
             if let Some(model) = &agent.model {
                 task["model"] = model.clone().into();
@@ -556,4 +557,23 @@ pub trait RoutineService: Send + Sync {
     async fn delete(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<()>;
     /// Start an owned routine now, outside its schedule.
     async fn run_now(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<RoutineRunStarted>;
+}
+
+/// A saved single agent task keeps its routine instructions (`prompt`) apart
+/// from the user task, and reads back as the two joined by a blank line. While
+/// the joined text still starts with the saved instructions, keep them apart,
+/// so the agent is told them the same way as before the edit.
+fn split_instructions(saved: Option<&Value>, instructions: &str) -> (String, String) {
+    let base = saved
+        .and_then(|task| task.get("prompt"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    match instructions
+        .strip_prefix(base)
+        .and_then(|rest| rest.strip_prefix("\n\n"))
+    {
+        Some(user_prompt) if !base.is_empty() => (base.to_owned(), user_prompt.to_owned()),
+        _ => (String::new(), instructions.to_owned()),
+    }
 }
