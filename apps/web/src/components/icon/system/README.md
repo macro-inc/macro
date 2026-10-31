@@ -66,7 +66,8 @@ exclamation-stem and dot cutouts. Its dedicated `priority-urgent` token maps to
 the theme's orange rather than warning or accent.
 Task status rings use a 2.25-unit stroke: `task-created` is a plain hollow ring,
 `task-in-progress` adds a counterclockwise half pie from 12 o'clock, and
-`task-in-review` adds a counterclockwise three-quarter pie. Not started keeps its
+`task-in-review` adds a counterclockwise three-quarter pie. Both pies use a 6-unit
+radius with a 1.875-unit gap to the ring's inner edge. Not started keeps its
 neutral color, with no shadow or highlight. Completed and Canceled use the
 status-specific `task-completed-fill` and `task-canceled-fill` discs with transparent
 check and cross cutouts; keep generic check-circle and x-circle icons separate.
