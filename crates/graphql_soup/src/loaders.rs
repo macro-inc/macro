@@ -460,7 +460,25 @@ impl SoupItemDataLoader {
 /// and querying second; both need every committed row, which a replica
 /// lagging by seconds does not have. Lists keep the replica-backed reader.
 #[derive(Clone)]
-pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
+pub struct AgentSessionEntityLoader(pub(crate) SoupItemDataLoader);
+
+impl AgentSessionEntityLoader {
+    /// Build the reader over a primary-backed Soup service. It always rechecks
+    /// the viewer's team: linked pull requests are stored for the team, so a
+    /// read without it reports every session's PR state as unknown.
+    pub fn new<S, E, A>(soup_service: S, email_service: Arc<E>, access: A) -> Self
+    where
+        S: SoupService,
+        E: EmailThreadPreviewService,
+        A: EntityAccessService,
+    {
+        Self(soup_item_loader_with_team_access(
+            soup_service,
+            email_service,
+            access,
+        ))
+    }
+}
 
 /// Primary-backed Soup reader for reads that must see a write committed
 /// moments earlier, before a replica has replayed it: `soupUpdates`
@@ -468,7 +486,24 @@ pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
 /// caches it as current, and `soupEntity`, which opens an entity right after
 /// it is created or edited. Lists keep the replica-backed reader.
 #[derive(Clone)]
-pub struct PrimarySoupItemLoader(pub SoupItemDataLoader);
+pub struct PrimarySoupItemLoader(pub(crate) SoupItemDataLoader);
+
+impl PrimarySoupItemLoader {
+    /// Build the reader over a primary-backed Soup service, rechecking the
+    /// viewer's team so team-stored PRs and CRM records hydrate.
+    pub fn new<S, E, A>(soup_service: S, email_service: Arc<E>, access: A) -> Self
+    where
+        S: SoupService,
+        E: EmailThreadPreviewService,
+        A: EntityAccessService,
+    {
+        Self(soup_item_loader_with_team_access(
+            soup_service,
+            email_service,
+            access,
+        ))
+    }
+}
 
 /// Build the Soup DataLoader from the Soup service and the access-checked
 /// email thread reader.
