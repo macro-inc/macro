@@ -54,7 +54,8 @@ function precedingStatements(
 /**
  * Whether the use sits behind a feature check: an optional call or access,
  * `typeof`, the test of a condition, a branch whose condition names the
- * feature, an earlier early-exit check, or a `try` block.
+ * feature, or an earlier early-exit check. A `try` block is not one: its
+ * `catch` usually reports a failure instead of falling back.
  */
 function isGuarded(
   chain: readonly ESTree.Node[],
@@ -92,9 +93,6 @@ function isGuarded(
         break;
       case 'LogicalExpression':
         if (child === ancestor.left || mentions(ancestor.left)) return true;
-        break;
-      case 'TryStatement':
-        if (child === ancestor.block) return true;
         break;
       default:
         for (const statement of precedingStatements(ancestor, child)) {

@@ -40,7 +40,6 @@ tester.run('browser-floor', browserFloorRule, {
       code: "function start() { if (typeof SharedWorker !== 'function') throw new Error('unsupported'); return new SharedWorker('w.js'); }",
       options: safari,
     },
-    { code: "try { new SharedWorker('w.js'); } catch {}", options: safari },
     { code: "'a<br/>'.replace(/(.)<br\\/>$/, '$1');", options: safari },
     {
       code: 'AbortSignal.any([signal]);',
@@ -85,6 +84,11 @@ tester.run('browser-floor', browserFloorRule, {
     },
     {
       code: "if (ready) new SharedWorker('w.js');",
+      options: safari,
+      errors: [{ messageId: 'unsupported' }],
+    },
+    {
+      code: 'try { load(AbortSignal.any([signal])); } catch { fail(); }',
       options: safari,
       errors: [{ messageId: 'unsupported' }],
     },

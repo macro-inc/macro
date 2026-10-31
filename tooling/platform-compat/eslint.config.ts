@@ -12,9 +12,11 @@ const config: Linter.Config[] = [
       // supported webviews.
       '**/*.test.{ts,tsx}',
       '**/*.spec.{ts,tsx}',
+      '**/*.e2e.{ts,tsx}',
       '**/*.d.ts',
       '**/__tests__/**',
       '**/browser-test/**',
+      '**/fuzz/**',
       '**/tests/**',
       '**/test-utils/**',
       '**/scripts/**',
