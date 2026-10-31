@@ -12,7 +12,10 @@ import {
   isChannelEntity,
   isChannelThreadEntity,
 } from '@entity';
-import { useChannelsByIdsQuery } from '@queries/channel/by-ids';
+import {
+  registerChannelListNotificationRefresh,
+  useChannelsByIdsQuery,
+} from '@queries/channel/by-ids';
 
 export {
   channelsByIdsQueryArgs,
@@ -289,6 +292,7 @@ function useChannelsDataSource(
       graphqlProjection: 'channel-list',
     })
   );
+  registerChannelListNotificationRefresh(query);
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;
 

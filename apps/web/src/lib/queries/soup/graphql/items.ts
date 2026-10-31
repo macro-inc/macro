@@ -1,6 +1,7 @@
 import type { CombinedError } from '@urql/core';
 import { type Accessor, createMemo } from 'solid-js';
 import { arrayEquals } from '../../../core/util/compareUtils';
+import type { QueryRevalidation } from '../../../graphql-cache/exchange/optimistic';
 import type { CacheRevision } from '../../../graphql-cache/protocol';
 import {
   type GraphqlSoupItem,
@@ -44,6 +45,7 @@ export type GraphqlSoupAstItemsQuery = {
   cacheStatus?: Accessor<PredicateQueryStatus>;
   localRevision?: Accessor<CacheRevision | undefined>;
   localOptimistic?: Accessor<boolean>;
+  revalidationQueries?: Accessor<readonly QueryRevalidation[]>;
   data: Accessor<SoupAstItemsData | undefined>;
   /** Latest GraphQL transport or application error. */
   error: Accessor<CombinedError | undefined>;

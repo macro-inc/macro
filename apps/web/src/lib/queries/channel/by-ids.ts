@@ -7,12 +7,15 @@ import { useUserId } from '@core/context/user';
 import { arrayEquals } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isChannelEntity } from '@entity';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { type Accessor, createEffect, createMemo, untrack } from 'solid-js';
 import { queryReadyGate } from '../gate';
 import {
+  type SoupAstItemsQuery,
   type SoupAstItemsQueryArgs,
   useSoupAstItemsQuery,
 } from '../soup/items';
+import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
 const BATCH_SIZE = 500;
 
@@ -32,6 +35,28 @@ export function channelsByIdsQueryArgs(
   };
 }
 
+/** Keep each channel list's bounded unread projection current, including cached rows. */
+export function registerChannelListNotificationRefresh(
+  query: SoupAstItemsQuery
+) {
+  return registerChannelNotificationRefresh(() => ({
+    client: getGraphqlSoupClient(),
+    queries: query.revalidationQueries ?? [],
+    reader: {
+      enabled: query.transport === 'graphql' && query.isEnabled,
+      fetching: query.isFetching,
+      filtered: true,
+      notificationIds: query.isPending
+        ? []
+        : (query.data?.entities ?? [])
+            .filter(isChannelEntity)
+            .flatMap((channel) =>
+              (channel.unreadNotifications ?? []).map(({ id }) => id)
+            ),
+    },
+  }));
+}
+
 /** One Soup owner supplies local rows, missing-record fetches, and unread updates. */
 export function useChannelsByIdsQuery(
   channelIds: Accessor<readonly string[]>,
@@ -43,11 +68,12 @@ export function useChannelsByIdsQuery(
       enabled: channelIds().length > 0,
       staleTime: 30_000,
       graphqlProjection: 'channel-list',
-      graphqlCacheFirstChannelIds: options().cacheFirst
-        ? channelIds()
+      graphqlCacheFirstEntities: options().cacheFirst
+        ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
         : undefined,
     })
   );
+  registerChannelListNotificationRefresh(query);
   createEffect(() => {
     if (
       !query.isEnabled ||

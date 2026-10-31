@@ -950,8 +950,10 @@ described below.
 
 Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately. One shared by-ID query
-per batch supplies cached channel data and fetches only missing records; the
-sidebar does not coordinate separate cache and network queries.
+per batch supplies cached channel data and fetches only missing records using
+Soup's generic explicit-entity hydration. Channel batching and unread refreshes
+stay in the channel query layer; the sidebar does not coordinate separate cache
+and network queries.
 Each expanded section appends skeleton rows while its remaining channels load.
 A failed fetch keeps available rows and replaces that section's loading feedback
 with Retry. Loading sections must not briefly show an empty-state hint.

@@ -21,6 +21,7 @@ import { createBrowserOfflineSignal } from '../../../core/util/connectivity';
 import { isResponseFreeNetworkError } from '../../../core/util/request-error';
 import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
 import { normalizedCacheResultMetadata } from '../../../graphql-cache/exchange/normalized-cache-exchange';
+import type { QueryRevalidation } from '../../../graphql-cache/exchange/optimistic';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
 import {
   type CacheRevision,
@@ -48,10 +49,13 @@ import {
 } from '../../../service-clients/service-storage/graphql-soup';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
-import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { createPredicateQuery } from './create-predicate-query';
-import { buildGraphqlEntitiesSoupInput } from './entity-input';
+import {
+  buildGraphqlEntitiesSoupInput,
+  type SoupEntityRef,
+  soupEntityRefKey,
+} from './entity-input';
 import { isCachedMailView } from './mail-view';
 import {
   usePendingGraphqlSoupDeleteIds,
@@ -76,8 +80,8 @@ export type SoupLiveQueryOptions = {
   localOnly?: boolean;
   /** Select bounded unread evidence for channel navigation. */
   projection?: 'channel-list';
-  /** A bounded, explicit channel lookup: select all IDs locally and fetch only missing records. */
-  cacheFirstChannelIds?: readonly string[];
+  /** Select known entities locally, then fetch only missing records. */
+  cacheFirstEntities?: readonly SoupEntityRef[];
   /** Include indexed non-email rows while server pages supply email. */
   localReconciliation?: 'without-email';
 };
@@ -118,18 +122,17 @@ export function createSoupLiveQuery(
     const input = request();
     return input ? { initial: { ...input, expand: true } } : undefined;
   });
-  type ChannelHydration = {
+  type EntityHydration = {
     scope: GraphqlSoupInput;
     generation: number;
-    ids: readonly string[];
+    entities: readonly SoupEntityRef[];
     input: GraphqlSoupInput | undefined;
   };
-  const [channelHydration, setChannelHydration] =
-    createSignal<ChannelHydration>();
-  const cacheFirstChannels = () => options().cacheFirstChannelIds !== undefined;
+  const [entityHydration, setEntityHydration] = createSignal<EntityHydration>();
+  const cacheFirstEntities = () => options().cacheFirstEntities !== undefined;
   const networkInput = () => {
-    if (!cacheFirstChannels()) return firstPageInput();
-    const hydration = channelHydration();
+    if (!cacheFirstEntities()) return firstPageInput();
+    const hydration = entityHydration();
     return hydration &&
       hydration.scope === firstPageInput() &&
       hydration.generation === cacheGeneration
@@ -480,28 +483,25 @@ export function createSoupLiveQuery(
   });
 
   const isEnabled = () =>
-    cacheFirstChannels()
+    cacheFirstEntities()
       ? options().enabled !== false && !options().localOnly && isSupported()
       : query.isEnabled;
 
+  const revalidationQueries = (): QueryRevalidation[] => {
+    if (!isEnabled()) return [];
+    if (cacheFirstEntities()) {
+      const input = firstPageInput();
+      return input ? [{ document: queryDocument(), variables: { input } }] : [];
+    }
+    const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
+    return [...cursors].flatMap((cursor) => {
+      const input = inputForCursor(cursor);
+      return input ? [{ document: queryDocument(), variables: { input } }] : [];
+    });
+  };
   onCleanup(
     registerGraphqlSoupRevalidations(
-      () => {
-        if (!isEnabled()) return [];
-        if (cacheFirstChannels()) {
-          const input = firstPageInput();
-          return input
-            ? [{ document: queryDocument(), variables: { input } }]
-            : [];
-        }
-        const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
-        return [...cursors].flatMap((cursor) => {
-          const input = inputForCursor(cursor);
-          return input
-            ? [{ document: queryDocument(), variables: { input } }]
-            : [];
-        });
-      },
+      revalidationQueries,
       getGraphqlSoupClient,
       () => cacheMaintained()
     )
@@ -528,7 +528,7 @@ export function createSoupLiveQuery(
       !input ||
       !('initial' in input) ||
       !input.initial ||
-      (!cacheFirstChannels() && hasUnpersistedPages(input))
+      (!cacheFirstEntities() && hasUnpersistedPages(input))
     )
       return;
     const initial = input.initial;
@@ -636,7 +636,7 @@ export function createSoupLiveQuery(
       // A baseline refresh must not hide already selected members while the
       // predicate incorporates the new server page.
       if (
-        cacheFirstChannels() &&
+        cacheFirstEntities() &&
         previous?.input === input &&
         previous?.generation === cacheGeneration
       )
@@ -662,11 +662,11 @@ export function createSoupLiveQuery(
   });
 
   createEffect(() => {
-    const ids = options().cacheFirstChannelIds;
+    const entities = options().cacheFirstEntities;
     const input = firstPageInput();
-    if (!ids || !input) return;
+    if (!entities || !input) return;
     if (options().enabled === false) return;
-    const current = channelHydration();
+    const current = entityHydration();
     const cacheStatus = live.status();
     const sameScope =
       current?.scope === input && current.generation === cacheGeneration;
@@ -679,20 +679,20 @@ export function createSoupLiveQuery(
       (cacheStatus === 'idle' || cacheStatus === 'loading')
     )
       return;
-    const known = new Set(liveRecords().map((record) => record.id));
-    const requested = sameScope ? current.ids : [];
-    const missing = ids.filter(
-      (id) => !known.has(id) && !requested.includes(id)
-    );
+    const known = new Set(liveRecords().map(soupItemKey));
+    const requested = sameScope ? current.entities : [];
+    const requestedKeys = new Set(requested.map(soupEntityRefKey));
+    const missing = entities.filter((entity) => {
+      const key = soupEntityRefKey(entity);
+      return key !== undefined && !known.has(key) && !requestedKeys.has(key);
+    });
     if (sameScope && missing.length === 0) return;
-    const nextIds = [...requested, ...missing];
-    const lookup = buildGraphqlEntitiesSoupInput(
-      nextIds.map((entityId) => ({ entityType: 'CHANNEL', entityId }))
-    );
-    setChannelHydration({
+    const nextEntities = [...requested, ...missing];
+    const lookup = buildGraphqlEntitiesSoupInput(nextEntities);
+    setEntityHydration({
       scope: input,
       generation: cacheGeneration,
-      ids: nextIds,
+      entities: nextEntities,
       input: lookup?.initial
         ? { initial: { ...input.initial, filters: lookup.initial.filters } }
         : undefined,
@@ -936,7 +936,7 @@ export function createSoupLiveQuery(
       local.withoutEmail !== (options().localReconciliation === 'without-email')
     )
       return undefined;
-    if (cacheFirstChannels()) return local;
+    if (cacheFirstEntities()) return local;
     // A partial projection with no visible rows after pending deletes cannot
     // prove that a folder is empty (it could contain only email). Keep initial
     // loading/errors until the server establishes membership.
@@ -974,7 +974,7 @@ export function createSoupLiveQuery(
     const local = displayLocalProjection();
     if (networkIsAuthoritative()) {
       const fetched = query.data?.records();
-      if (!cacheFirstChannels() || !local) return fetched;
+      if (!cacheFirstEntities() || !local) return fetched;
       return [
         ...new Map(
           [...local.records, ...(fetched ?? [])].map((record) => [
@@ -995,46 +995,6 @@ export function createSoupLiveQuery(
     );
     return additions.length ? [...local.records, ...additions] : local.records;
   });
-
-  registerChannelNotificationRefresh(() => ({
-    client: getGraphqlSoupClient(),
-    // Full membership stays registered even when every row came from cache.
-    queries:
-      options().projection !== 'channel-list'
-        ? []
-        : cacheFirstChannels()
-          ? [
-              {
-                document: queryDocument(),
-                variables: { input: firstPageInput() },
-              },
-            ]
-          : [...new Set([null, ...(query.data?.pageParams ?? [])])].flatMap(
-              (cursor) => {
-                const input = inputForCursor(cursor);
-                return input
-                  ? [{ document: queryDocument(), variables: { input } }]
-                  : [];
-              }
-            ),
-    reader: {
-      enabled: isEnabled() && !options().networkPaused,
-      fetching: query.isFetching,
-      filtered: true,
-      notificationIds: (cacheFirstChannels()
-        ? (displayData() ?? [])
-        : query.isSuccess
-          ? (query.data?.records() ?? [])
-          : []
-      ).flatMap((item) =>
-        item.__typename === 'GraphqlSoupChannel' &&
-        'unreadNotifications' in item
-          ? (item.unreadNotifications?.map((notification) => notification.id) ??
-            [])
-          : []
-      ),
-    },
-  }));
 
   // Keeps the server pages as deep as a local Mail list, so it stays as deep
   // when the network page becomes authoritative again. Load More raises the
@@ -1108,6 +1068,7 @@ export function createSoupLiveQuery(
 
   return {
     cacheMaintained,
+    revalidationQueries,
     /** Local predicate readiness is separate from network loading and membership completeness. */
     cacheStatus: () =>
       !getGraphqlSoupCacheHost()?.liveQueries || !localSource()
@@ -1278,11 +1239,11 @@ export function createSoupLiveQuery(
       const input = firstPageInput();
       if (input === undefined) return;
       // A fully cached lookup still participates in explicit refreshes.
-      if (cacheFirstChannels() && !networkInput()) {
-        setChannelHydration({
+      if (cacheFirstEntities() && !networkInput()) {
+        setEntityHydration({
           scope: input,
           generation: cacheGeneration,
-          ids: options().cacheFirstChannelIds ?? [],
+          entities: options().cacheFirstEntities ?? [],
           input,
         });
         await runWithOwner(owner, () =>

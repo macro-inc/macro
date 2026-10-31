@@ -78,6 +78,7 @@ import {
   delegateChannelNotificationRefresh,
   disposeChannelNotificationRefresh,
 } from '../../channel/notification-refresh';
+import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
 import { getActiveGraphqlSoupRevalidations } from './active-queries';
 import { createSoupLiveQuery } from './create-soup-live-query';
 import { createGraphqlSoupAstItemsQuery } from './items';
@@ -211,105 +212,116 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
-  it('resolves an all-cached channel lookup without a network request', async () => {
-    const fake = makeFakeClient();
-    getGraphqlSoupClientMock.mockReturnValue(fake.client);
-    const key = 'GraphqlSoupChannel:cached';
-    const changes = new Set<(revision: string) => void>();
-    const evaluation = deferred<LiveQueryUpdate>();
-    entityFilterMock.mockImplementation((args) =>
-      args.liveQuery?.release
-        ? Promise.resolve({ kind: 'unsupported' })
-        : evaluation.promise
-    );
-    getGraphqlSoupCacheHostMock.mockReturnValue({
-      liveQueries: true,
-      currentRevision: async () => REVISION_0,
-      entityFilter: entityFilterMock,
-      onCacheChanged: (callback: (revision: string) => void) => {
-        changes.add(callback);
-        return () => changes.delete(callback);
-      },
-      onCacheGenerationChanged: () => () => {},
-    });
-    const ready = deferred<void>();
-    const { query, dispose } = createRoot((dispose) => {
-      const query = createGraphqlSoupAstItemsQuery(
-        () => ({ params: {}, body: {} }),
-        () => ({
-          enabled: true,
-          projection: 'channel-list',
-          cacheFirstChannelIds: ['cached'],
-        })
+  it.each([
+    { entityType: 'CHANNEL', typename: 'GraphqlSoupChannel' },
+    { entityType: 'DOCUMENT', typename: 'GraphqlSoupDocument' },
+  ] as const)(
+    'resolves an all-cached $entityType lookup without a network request',
+    async ({ entityType, typename }) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      const key = `${typename}:cached`;
+      const changes = new Set<(revision: string) => void>();
+      const evaluation = deferred<LiveQueryUpdate>();
+      entityFilterMock.mockImplementation((args) =>
+        args.liveQuery?.release
+          ? Promise.resolve({ kind: 'unsupported' })
+          : evaluation.promise
       );
-      createComputed(() => {
-        if (query.cacheStatus?.() === 'ready') ready.resolve();
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        liveQueries: true,
+        currentRevision: async () => REVISION_0,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: (revision: string) => void) => {
+          changes.add(callback);
+          return () => changes.delete(callback);
+        },
+        onCacheGenerationChanged: () => () => {},
       });
-      return { query, dispose };
-    });
-    try {
-      expect(query.cacheStatus?.()).toBe('loading');
-      expect(entityFilterMock).toHaveBeenCalledWith(
-        expect.objectContaining({ baseline: [], liveQuery: expect.any(Object) })
-      );
-      expect(fake.executions).toHaveLength(0);
-      evaluation.resolve({
-        kind: 'live-query',
-        revision: parseCacheRevision(REVISION_0),
-        reset: true,
-        keys: [key],
-        upserts: [
-          {
-            recordKey: key,
-            record: {
-              __typename: 'GraphqlSoupChannel',
-              id: 'cached',
-              createdAt: '2026-01-01T00:00:00Z',
-              updatedAt: '2026-01-01T00:00:00Z',
+      const ready = deferred<void>();
+      const { query, dispose } = createRoot((dispose) => {
+        const query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({
+            enabled: true,
+            ...(entityType === 'CHANNEL'
+              ? { projection: 'channel-list' as const }
+              : {}),
+            cacheFirstEntities: [{ entityType, entityId: 'cached' }],
+          })
+        );
+        createComputed(() => {
+          if (query.cacheStatus?.() === 'ready') ready.resolve();
+        });
+        return { query, dispose };
+      });
+      try {
+        expect(query.cacheStatus?.()).toBe('loading');
+        expect(entityFilterMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            baseline: [],
+            liveQuery: expect.any(Object),
+          })
+        );
+        expect(fake.executions).toHaveLength(0);
+        evaluation.resolve({
+          kind: 'live-query',
+          revision: parseCacheRevision(REVISION_0),
+          reset: true,
+          keys: [key],
+          upserts: [
+            {
+              recordKey: key,
+              record: {
+                __typename: typename,
+                id: 'cached',
+                createdAt: '2026-01-01T00:00:00Z',
+                updatedAt: '2026-01-01T00:00:00Z',
+              },
             },
-          },
-        ],
-        patches: [],
-        removed: [],
-        retainedKeys: [],
-        optimistic: false,
-      });
-      await ready.promise;
-      expect(query.data()?.entities.map(({ id }) => id)).toEqual(['cached']);
-      expect(query.cacheStatus?.()).toBe('ready');
-      expect(query.isFetching()).toBe(false);
-      expect(query.isEnabled()).toBe(true);
-      expect(fake.executions).toHaveLength(0);
-      expect(getActiveGraphqlSoupRevalidations(fake.client)).toHaveLength(1);
-      const refresh = query.refresh();
-      await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
-      fake.executions[0].next(
-        graphqlSoupPage({
-          items: [{ __typename: 'GraphqlSoupChannel', id: 'cached' }],
-          next_cursor: null,
-        })
-      );
-      await refresh;
-      expect(fake.executions).toHaveLength(1);
-      entityFilterMock.mockResolvedValue({
-        kind: 'live-query',
-        revision: parseCacheRevision(REVISION_2),
-        reset: true,
-        keys: [],
-        upserts: [],
-        patches: [],
-        removed: [],
-        retainedKeys: [],
-        optimistic: false,
-      });
-      for (const changed of changes) changed(REVISION_2);
-      await vi.waitFor(() => expect(query.data()?.entities).toEqual([]));
-    } finally {
-      dispose();
+          ],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        });
+        await ready.promise;
+        expect(query.data()?.entities.map(({ id }) => id)).toEqual(['cached']);
+        expect(query.cacheStatus?.()).toBe('ready');
+        expect(query.isFetching()).toBe(false);
+        expect(query.isEnabled()).toBe(true);
+        expect(fake.executions).toHaveLength(0);
+        expect(getActiveGraphqlSoupRevalidations(fake.client)).toHaveLength(1);
+        const refresh = query.refresh();
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(1));
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [{ __typename: typename, id: 'cached' }],
+            next_cursor: null,
+          })
+        );
+        await refresh;
+        expect(fake.executions).toHaveLength(1);
+        entityFilterMock.mockResolvedValue({
+          kind: 'live-query',
+          revision: parseCacheRevision(REVISION_2),
+          reset: true,
+          keys: [],
+          upserts: [],
+          patches: [],
+          removed: [],
+          retainedKeys: [],
+          optimistic: false,
+        });
+        for (const changed of changes) changed(REVISION_2);
+        await vi.waitFor(() => expect(query.data()?.entities).toEqual([]));
+      } finally {
+        dispose();
+      }
     }
-  });
+  );
 
-  it('keeps cached channels and a stable missing-ID request through pagination and retry', async () => {
+  it('keeps cached entities and a stable missing-ID request through pagination and retry', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
     const cached = {
@@ -345,10 +357,14 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }));
     const { query, dispose } = createRoot((dispose) => ({
       query: createSoupLiveQuery(
-        () => ({ sortMethod: 'CREATED_AT', limit: 3 }),
+        () => ({ sortMethod: 'CREATED_AT', limit: 4 }),
         () => ({
-          projection: 'channel-list',
-          cacheFirstChannelIds: ['cached', 'first', 'second'],
+          cacheFirstEntities: [
+            { entityType: 'CHANNEL', entityId: 'cached' },
+            { entityType: 'DOCUMENT', entityId: 'cached' },
+            { entityType: 'CHANNEL', entityId: 'first' },
+            { entityType: 'CHANNEL', entityId: 'second' },
+          ],
         })
       ),
       dispose,
@@ -359,6 +375,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       expect(JSON.stringify(request)).not.toContain('"channelId":"cached"');
       expect(JSON.stringify(request)).toContain('"channelId":"first"');
       expect(JSON.stringify(request)).toContain('"channelId":"second"');
+      expect(JSON.stringify(request)).toContain('"id":"cached"');
       const persistence = deferred<string | undefined>();
       fake.executions[0].next(
         graphqlSoupPage({
@@ -392,7 +409,10 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
       fake.executions[3].next(
         graphqlSoupPage({
-          items: [{ ...cached, id: 'second' }],
+          items: [
+            { ...cached, id: 'second' },
+            { ...cached, __typename: 'GraphqlSoupDocument', id: 'cached' },
+          ],
           next_cursor: null,
         })
       );
@@ -401,9 +421,14 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       expect(
         query
           .data()
-          ?.map((row) => row.id)
+          ?.map((row) => `${row.__typename}:${row.id}`)
           .sort()
-      ).toEqual(['cached', 'first', 'second']);
+      ).toEqual([
+        'GraphqlSoupChannel:cached',
+        'GraphqlSoupChannel:first',
+        'GraphqlSoupChannel:second',
+        'GraphqlSoupDocument:cached',
+      ]);
       expect(query.hasNextPage()).toBe(false);
       expect(fake.executions).toHaveLength(4);
     } finally {
@@ -450,7 +475,10 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         () => ({ sortMethod: 'CREATED_AT', limit: 2 }),
         () => ({
           projection: 'channel-list',
-          cacheFirstChannelIds: ['cached', 'missing'],
+          cacheFirstEntities: [
+            { entityType: 'CHANNEL', entityId: 'cached' },
+            { entityType: 'CHANNEL', entityId: 'missing' },
+          ],
         })
       ),
       dispose,
@@ -491,7 +519,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         () => ({ sortMethod: 'CREATED_AT', limit: 1 }),
         () => ({
           projection: 'channel-list',
-          cacheFirstChannelIds: ['missing'],
+          cacheFirstEntities: [{ entityType: 'CHANNEL', entityId: 'missing' }],
         })
       ),
       dispose,
@@ -2051,13 +2079,23 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
       cursor ? { continuation: { cursor } } : { initial: { limit: 50 } }
     );
-    const { query, dispose } = createRoot((dispose) => ({
-      dispose,
-      query: createGraphqlSoupAstItemsQuery(
+    const { query, dispose } = createRoot((dispose) => {
+      const query = createGraphqlSoupAstItemsQuery(
         () => ({ params: {}, body: {} }),
         () => ({ enabled: true, projection: 'channel-list' })
-      ),
-    }));
+      );
+      registerChannelNotificationRefresh(() => ({
+        client: fake.client,
+        queries: query.revalidationQueries?.() ?? [],
+        reader: {
+          enabled: query.isEnabled(),
+          fetching: query.isFetching(),
+          filtered: true,
+          notificationIds: [],
+        },
+      }));
+      return { query, dispose };
+    });
     const error = new CombinedError({ networkError: new Error('offline') });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const pageData = graphqlSoupPage({ items: [], next_cursor: null });

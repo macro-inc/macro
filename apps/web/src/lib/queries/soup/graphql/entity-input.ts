@@ -9,6 +9,29 @@ const NIL_ENTITY_ID = '00000000-0000-0000-0000-000000000000';
 
 type OrExpr<T> = T | { or: { left: OrExpr<T>; right: OrExpr<T> } };
 
+/** A Soup entity with a known identity, independent of list membership. */
+export type SoupEntityRef = {
+  entityType: Exclude<EntityType, 'USER' | 'CONTACT'>;
+  entityId: string;
+};
+
+/** Match the normalized identity used by Soup records, including task documents. */
+export function soupEntityRefKey(entity: SoupEntityRef): string | undefined {
+  const typename = match(entity.entityType)
+    .with('DOCUMENT', 'TASK', () => 'GraphqlSoupDocument')
+    .with('PROJECT', () => 'GraphqlSoupProject')
+    .with('CHAT', () => 'GraphqlSoupChat')
+    .with('THREAD', () => 'GraphqlSoupEmailThread')
+    .with('CHANNEL', () => 'GraphqlSoupChannel')
+    .with('CALL_RECORD', () => 'GraphqlSoupCall')
+    .with('COMPANY', () => 'GraphqlSoupCrmCompany')
+    .with('CALENDAR_EVENT', () => 'GraphqlSoupCalendarEvent')
+    .with('INITIATIVE', () => 'GraphqlSoupInitiative')
+    .with('DATABASE_ROW', () => 'GraphqlSoupDatabaseRow')
+    .exhaustive(() => undefined);
+  return typename ? `${typename}:${entity.entityId}` : undefined;
+}
+
 // Balanced trees stay below the GraphQL filter ingress depth limit even for
 // a full preview batch. A left-folded OR tree does not.
 function or<T>(items: T[]): OrExpr<T> | undefined {
