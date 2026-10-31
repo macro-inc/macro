@@ -383,6 +383,8 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
+  // Rows with the table version they reflect, for app features that guard writes with versions.
+  'queryDatabaseTableRows',
   'removeBotFromChannelByBot',
   // Storage for the web app's saved questions, not a user-facing surface.
   'saveDatabaseQuery',
