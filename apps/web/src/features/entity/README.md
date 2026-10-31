@@ -24,6 +24,8 @@ and row selection. Other trailing property icons use 20px phone glyphs.
 Other entity rows keep their existing indicator layout.
 Narrow task rows keep Project before Assignees and show one assignee avatar plus
 the remaining count; do not replace the first assignee with a generic people icon.
+Keep the collapsed tag-overflow chip after the title in narrow task rows,
+including phones, with the existing picker and hover actions.
 
 `OwnerLabel.iconOnly` retains owner names as accessible text and hover titles for
 users, bots, teams, and unknown owners; ordinary owner labels remain unchanged.

@@ -1,3 +1,5 @@
+import { EntityRowTags } from '@property/tags';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { Entity } from '../../entity';
@@ -116,6 +118,18 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
           </Match>
         </Switch>
         {props.titleTrailing}
+        <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
+          {(task) => (
+            <EntityRowTags
+              entityId={task().id}
+              entityType={EntityType.TASK}
+              properties={task().properties}
+              maxVisible={0}
+              onFilterByTag={props.onFilterByTag}
+              class="ml-auto shrink-0"
+            />
+          )}
+        </Show>
       </Entity.Slot>
 
       <Show
@@ -137,7 +151,7 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
               <Match when={isTaskEntity(props.entity)}>
                 <Entity.Properties
                   entity={props.entity}
-                  maxUserStackUsers={0}
+                  maxUserStackUsers={1}
                   showCaret={false}
                   hidePriority
                 />

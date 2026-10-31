@@ -96,6 +96,8 @@ keep their tags visible; long titles truncate only after tag collapse. Open the
 overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 An open picker or nested tag editor stays mounted while resizing. The share
 indicator remains immediately beside the title whenever it is shown.
+Narrow and phone rows keep the collapsed tag-overflow chip after the title and
+before the trailing properties, rather than dropping tags with the column layout.
 Task rows place Project before Assignees on desktop and phones. Narrow rows keep
 one assignee avatar plus the remaining count instead of a generic people icon.
 At list-container widths up to 840px, Project, Assignees, and Updated headers

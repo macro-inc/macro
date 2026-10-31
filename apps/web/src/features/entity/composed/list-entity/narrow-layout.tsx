@@ -1,4 +1,6 @@
 import { isMobile } from '@core/mobile/isMobile';
+import { EntityRowTags } from '@property/tags';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
@@ -111,6 +113,18 @@ export function NarrowLayout(props: LayoutProps) {
           {(entity) => <ChannelMessageSingleLine entity={entity()} />}
         </Show>
         {props.titleTrailing}
+        <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
+          {(task) => (
+            <EntityRowTags
+              entityId={task().id}
+              entityType={EntityType.TASK}
+              properties={task().properties}
+              maxVisible={0}
+              onFilterByTag={props.onFilterByTag}
+              class="ml-auto shrink-0"
+            />
+          )}
+        </Show>
         <Show when={isEmailEntity(props.entity) && props.entity}>
           {(entity) => <EmailInboxChip entity={entity()} class="ml-auto" />}
         </Show>
