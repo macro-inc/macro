@@ -55,7 +55,7 @@ async fn change_schedule(
     ).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?
         .ok_or(EmailErr::MessageNotFound(message_id))?;
     let schedule = sqlx::query!(
-        "SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
+        "SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id, source FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
         message_id, link_id,
     ).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?;
     let protected = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_send_attempts WHERE message_id=$1 AND link_id=$2 AND NOT cancelled AND NOT sent) AS "protected!""#, message_id, link_id).fetch_one(&mut *tx).await.map_err(anyhow::Error::from)?;
@@ -74,6 +74,14 @@ async fn change_schedule(
     {
         return Err(EmailErr::MessageDeliveryConflict(message_id));
     }
+    // A pending sequence step is not part of its thread's mail state.
+    let pending_step_before = schedule
+        .as_ref()
+        .is_some_and(|row| row.source.is_some() && row.delivery_status != "failed");
+    let pending_step_after = match change {
+        ScheduleChange::Set { source, .. } => source.is_some() || pending_step_before,
+        ScheduleChange::Cancel => false,
+    };
     match change {
         ScheduleChange::Set { send_time, source } => {
             super::draft::require_completed_uploads(&mut tx, message_id).await?;
@@ -148,11 +156,12 @@ async fn change_schedule(
             .await
             .map_err(anyhow::Error::from)?;
     }
-    // A pending sequence step is not part of the thread's mail state; scheduling
-    // or cancelling one changes whether its thread shows in Inbox and All Mail.
-    super::thread::update_thread_metadata(&mut tx, message.thread_id, link_id)
-        .await
-        .map_err(anyhow::Error::from)?;
+    // Becoming or leaving a pending step changes the thread's mail lists.
+    if pending_step_before != pending_step_after {
+        super::thread::update_thread_metadata(&mut tx, message.thread_id, link_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+    }
     tx.commit().await.map_err(anyhow::Error::from)?;
     Ok(Some(message.thread_id))
 }

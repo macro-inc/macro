@@ -21,26 +21,27 @@ pub struct ReplyThreading {
 
 /// Resolve threading for a reply about to be delivered from `link_id`.
 ///
-/// Fails with [`ReplyOrderError`] while the parent is not sent: still scheduled
-/// (defer) or a draft or failed send that will not be sent (fail). A parent that
-/// is gone or in another inbox leaves the reply unthreaded.
+/// A sequence step's reply can't go out before it: the inner result is
+/// [`ReplyOrderError`] while the step is still to be sent (defer) or won't be
+/// sent (fail). Any other parent threads the reply under the headers it has; a
+/// parent that is gone or in another inbox leaves the reply unthreaded.
 pub async fn reply_threading(
     db: &PgPool,
     replying_to_db_id: Option<Uuid>,
     link_id: Uuid,
-) -> anyhow::Result<ReplyThreading> {
+) -> anyhow::Result<Result<ReplyThreading, ReplyOrderError>> {
     let Some(replying_to_db_id) = replying_to_db_id else {
-        return Ok(ReplyThreading::default());
+        return Ok(Ok(ReplyThreading::default()));
     };
     let Some(parent) =
         email_db_client::messages::get::get_reply_parent(db, replying_to_db_id, link_id).await?
     else {
-        return Ok(ReplyThreading::default());
+        return Ok(Ok(ReplyThreading::default()));
     };
     match parent.delivery {
-        ReplyParentDelivery::Delivered => {}
-        ReplyParentDelivery::Scheduled => return Err(ReplyOrderError::ParentPending.into()),
-        ReplyParentDelivery::NotSent => return Err(ReplyOrderError::ParentUnsent.into()),
+        ReplyParentDelivery::Unrestricted => {}
+        ReplyParentDelivery::Pending => return Ok(Err(ReplyOrderError::ParentPending)),
+        ReplyParentDelivery::Unsent => return Ok(Err(ReplyOrderError::ParentUnsent)),
     }
 
     // A parent Macro sent may not be synced yet; its delivery minted the Message-ID.
@@ -59,11 +60,11 @@ pub async fn reply_threading(
         references.push(id.clone());
     }
 
-    Ok(ReplyThreading {
+    Ok(Ok(ReplyThreading {
         parent_message_id,
         references: (!references.is_empty()).then_some(references),
         provider_thread_id: parent.provider_thread_id,
-    })
+    }))
 }
 
 /// Release upload references; the shared cleanup worker preserves every remaining draft or blob reference.

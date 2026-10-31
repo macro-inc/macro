@@ -55,10 +55,13 @@ the gateway `/email` prefix.
 
 - Draft edit routes carry `draft_generation` from the editing lifetime, including attachments, deletion, transfer, and schedules; regenerate OpenAPI clients when this contract changes.
 
-- Scheduled Gmail delivery never sends a reply before the message it answers
-  (`util/gmail/send.rs` `reply_threading`): it defers while that message is
-  scheduled and fails when it is a draft or failed send that won't be sent. Sequence steps rely
-  on this; see "Sequence sends" in `docs/architecture/email.md`.
+- Scheduled Gmail delivery never sends a reply before the sequence step it
+  answers (`util/gmail/send.rs` `reply_threading`): it defers while the step's
+  delivery is `ready` and fails when the step failed, is unconfirmed, or was
+  unscheduled. Replies to any other message are never held. A deferral is
+  expected flow: return it as the inner `ReplyOrderError` of `prepare_delivery`,
+  never as an error of its `#[instrument(err)]` span. See "Sequence sends" in
+  `docs/architecture/email.md`.
 
 - The Gmail delivery adapter freezes approved upload/provider-file IDs before
   loading bytes through the authorized reader; Outlook uses its own coordinator.

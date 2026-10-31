@@ -785,10 +785,10 @@ where
         Ok(())
     }
 
-    /// A reply may answer a draft only when that draft is already scheduled
-    /// from the same Gmail inbox, as the steps of a sequence are: scheduled
-    /// delivery then waits for the draft to be sent and threads the reply
-    /// under it. Other drafts are never sent first, so they cannot be replied to.
+    /// A reply may answer a draft only when that draft is an unsent sequence
+    /// step in the same Gmail inbox: scheduled delivery then waits for the step
+    /// to be sent and threads the reply under it. Delivery holds replies only
+    /// for sequence steps, so no other draft can be replied to.
     async fn require_reply_target(
         &self,
         link: &Link,
@@ -797,15 +797,16 @@ where
         if !parent.is_draft {
             return Ok(());
         }
-        let scheduled = link.provider == crate::domain::models::UserProvider::Gmail
+        let sequence_step = link.provider == crate::domain::models::UserProvider::Gmail
             && parent.link_id == link.id
             && self
                 .email_repo
                 .scheduled_sends_by_message_ids(&[parent.db_id])
                 .await
                 .map_err(anyhow::Error::from)?
-                .contains_key(&parent.db_id);
-        if scheduled {
+                .get(&parent.db_id)
+                .is_some_and(|schedule| schedule.source.is_some());
+        if sequence_step {
             Ok(())
         } else {
             Err(EmailErr::CannotReplyToDraft)

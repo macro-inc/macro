@@ -269,9 +269,11 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
     type Prepared = PreparedDelivery;
 
     async fn prepare(&self, claim: &ScheduledClaim) -> Result<PreparedDelivery, PreparationError> {
-        self.prepare_delivery(claim)
-            .await
-            .map_err(classify_preparation_error)
+        match self.prepare_delivery(claim).await {
+            Ok(Ok(prepared)) => Ok(prepared),
+            Ok(Err(order)) => Err(order.into()),
+            Err(error) => Err(classify_preparation_error(error)),
+        }
     }
 
     async fn send_prepared(
@@ -321,18 +323,27 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
 }
 
 impl ScheduledDeliveryAdapter {
+    /// The inner error is a reply waiting for, or failing with, its parent: an
+    /// expected outcome, kept out of this span's error log.
     #[tracing::instrument(skip_all, fields(
         link_id = %claim.link.id, message_id = %claim.delivery.schedule.message_id,
         claim_id = %claim.delivery.token.0, phase = "load_content",
     ), err)]
-    async fn prepare_delivery(&self, claim: &ScheduledClaim) -> anyhow::Result<PreparedDelivery> {
+    async fn prepare_delivery(
+        &self,
+        claim: &ScheduledClaim,
+    ) -> anyhow::Result<Result<PreparedDelivery, ReplyOrderError>> {
         let data = &claim.delivery.schedule;
         let (mut message, sender_contact) =
             content::load_delivery_content(&self.db, &claim.delivery)
                 .await
                 .context("failed to load scheduled message")?;
         // Checked before attachments load: a reply waits for its parent.
-        let threading = reply_threading(&self.db, message.replying_to_id, data.link_id).await?;
+        let threading =
+            match reply_threading(&self.db, message.replying_to_id, data.link_id).await? {
+                Ok(threading) => threading,
+                Err(order) => return Ok(Err(order)),
+            };
         if message.provider_thread_id.is_none() {
             message.provider_thread_id = threading.provider_thread_id;
         }
@@ -398,20 +409,17 @@ impl ScheduledDeliveryAdapter {
         // The opaque provider request owns MIME, so raw attachment buffers need
         // not be retained while the provider call is in flight.
         message.attachments = None;
-        Ok(PreparedDelivery {
+        Ok(Ok(PreparedDelivery {
             provider,
             delivery: SentDelivery {
                 message,
                 attachments,
             },
-        })
+        }))
     }
 }
 
 fn classify_preparation_error(error: anyhow::Error) -> PreparationError {
-    if let Some(order) = error.downcast_ref::<ReplyOrderError>() {
-        return (*order).into();
-    }
     if error.is::<AttachmentSnapshotMismatch>()
         || error.is::<PreparedSendContentUnavailable>()
         || error.downcast_ref::<email::domain::forwarded_attachments::ForwardedAttachmentError>().is_some_and(|error| matches!(error, email::domain::forwarded_attachments::ForwardedAttachmentError::DraftNotFound | email::domain::forwarded_attachments::ForwardedAttachmentError::AttachmentNotFound))
