@@ -95,8 +95,9 @@ Editable property controls use ghost-button hover styling. Empty values are
 dimmed, without adding opacity to the already-muted No priority icon. Folder
 and assigned Project hover cards put their heading above the value; empty
 Project keeps its simple one-line message.
-When the title area runs out of room, the folder path
-collapses to a clickable icon with a full-path tooltip first, then tags collapse
+Folder pills keep their link color and become circular when icon-only. When the
+title area runs out of room, the folder path collapses to a clickable icon with
+a full-path hover card first, then tags collapse
 one at a time into the existing overflow chip. Short titles keep their labels and
 tags visible; long titles truncate only after the folder and tags collapse.
 Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.

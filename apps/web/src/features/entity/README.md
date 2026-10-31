@@ -28,7 +28,8 @@ Keep the collapsed tag-overflow chip after the title in narrow task rows,
 including phones, with the existing picker and hover actions.
 
 `ProjectBreadCrumb.collapsed` keeps a keyboard-accessible, borderless ghost folder
-button. Its hover card shows the folder heading and full path on separate rows.
+button with its link color and a circular icon-only target. Its hover card shows
+the folder heading and full path on separate rows.
 Task grids use their existing measured overflow controller to collapse folder
 labels before tags or title truncation.
 

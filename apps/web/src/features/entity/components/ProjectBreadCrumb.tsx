@@ -2,7 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
-import { buttonClasses, HoverCard } from '@ui';
+import { buttonClasses, cn, HoverCard } from '@ui';
 import { Show, Suspense } from 'solid-js';
 import type { ProjectContainedEntity, ProjectEntity } from '../types/entity';
 import { truncatedPath } from '../utils/path';
@@ -43,15 +43,17 @@ export function ProjectBreadCrumb(props: {
       triggerClass={buttonClasses({
         variant: 'ghost',
         size: 'xs',
-        class:
-          'h-auto min-w-0 max-w-full gap-1 border-0 px-2 py-0.5 font-normal',
+        class: cn(
+          'min-w-0 max-w-full gap-1 border-0 font-normal text-link not-data-disabled:hover:text-link-hover not-data-disabled:active:text-link-hover popup-open:text-link-hover',
+          props.collapsed ? 'size-6 p-0 touch:size-9' : 'h-auto px-2 py-0.5'
+        ),
       })}
       contentClass="menu-surface p-1.5 px-3"
       disabled={!projectQuery.isSuccess}
       content={
         <div class="min-w-48 max-w-72">
           <div class="mb-1.5 flex items-center gap-2 border-b border-edge pb-1.5 text-ink-muted">
-            <FolderIcon class="size-3.5 shrink-0" />
+            <FolderIcon class="size-3.5 shrink-0 text-link" />
             <span class="text-xs">{t('create.folderLabel')}</span>
           </div>
           <div class="px-2 py-0.5 text-xs leading-5 text-ink-muted wrap-anywhere">
