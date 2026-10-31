@@ -27,6 +27,8 @@ export default {
   remindMe: 'Remind me',
   addTag: 'Add tag',
   addToProject: 'Add to project…',
+  openProjectNamed: 'Open project {{name}}',
+  changeProject: 'Change project',
   moveToFolder: 'Move to folder',
   removeFromFolder: 'Remove from folder',
   duplicate: 'Duplicate',
@@ -174,6 +176,7 @@ export default {
   toastCountNotRestored: { other: '{{count}} could not be restored.' },
   toastNotificationsNotRestored: 'Some notifications could not be restored.',
   toastWithWarnings: '{{message}}. {{warnings}}',
+  toastWaitingToSync: '{{message}}, waiting to sync',
   toastMarkedRead: 'Marked as read',
   toastMarkedReadCount: {
     one: 'Marked {{count}} item as read',

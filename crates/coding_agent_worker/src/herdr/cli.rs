@@ -1,18 +1,26 @@
-//! The `herdr` CLI, as the one outbound door into the herdr session that
-//! launched this daemon. Every command talks to that session's socket
-//! through the environment herdr injected into macrod's pane.
+//! The one outbound door into the herdr macrod was started in. Two herdrs
+//! exist and macrod drives either:
+//!
+//! - herdr 0.9 and earlier ([`legacy`]): the `herdr` multiplexer CLI, talking
+//!   to the session socket herdr injected into macrod's pane;
+//! - herdr-core with the herdr app ([`hc`]): the `hc` CLI, whose terminals
+//!   the app shows as tabs.
+//!
+//! Callers ask for what they need (launch an agent, open a viewer, read a
+//! screen) and never see which one answered.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-use serde::Deserialize;
 use serde_json::Value;
 
 use super::wire::AgentState;
 
-/// The agent source macrod reports under. herdr scopes reported state per
-/// source, so this must not collide with a built-in integration's name.
-const REPORT_SOURCE: &str = "macrod";
-const REPORT_AGENT: &str = "macro";
+mod hc;
+mod legacy;
+
+#[cfg(test)]
+mod test;
 
 /// A failure running a herdr command.
 #[derive(Debug, thiserror::Error)]
@@ -40,35 +48,43 @@ pub(crate) enum HerdrError {
         #[source]
         source: serde_json::Error,
     },
+    /// The agent's terminal is still there, but the agent is not.
+    #[error("the agent's herdr terminal no longer runs it")]
+    Ended,
+    /// The agent started but never reported that it is ready for input.
+    #[error("the agent did not become ready; finish any dialog in its Herdr tab")]
+    NotReady,
 }
 
 impl HerdrError {
     /// Only an explicit missing-agent response permits a native session restart.
     pub(crate) fn missing_agent(&self) -> bool {
-        self.has_code("agent_not_found")
+        matches!(self, Self::Ended)
+            || self.has_code("/error/code", "agent_not_found")
+            || self.has_code("/error/kind", "not_found")
     }
 
     /// The pane is not yet at its shell prompt, e.g. while direnv loads.
     pub(crate) fn pane_busy(&self) -> bool {
-        self.has_code("agent_pane_busy")
+        self.has_code("/error/code", "agent_pane_busy")
     }
 
-    fn has_code(&self, code: &str) -> bool {
+    fn has_code(&self, pointer: &str, code: &str) -> bool {
         let Self::Refused { stderr, .. } = self else {
             return false;
         };
         serde_json::from_str::<Value>(stderr)
             .ok()
-            .is_some_and(|value| value.pointer("/error/code").and_then(Value::as_str) == Some(code))
+            .is_some_and(|value| value.pointer(pointer).and_then(Value::as_str) == Some(code))
     }
 }
 
 /// The tab and root pane a new herdr window opened with.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Window {
-    /// The tab, e.g. `w1:t2`.
+    /// The tab, e.g. `w1:t2`, or a herdr app tab id.
     pub tab_id: String,
-    /// The tab's only pane, e.g. `w1:p2`.
+    /// The tab's only pane, e.g. `w1:p2`, or a herdr-core terminal like `t7`.
     pub pane_id: String,
 }
 
@@ -85,248 +101,181 @@ pub(crate) struct AgentInfo {
     pub state_change_seq: u64,
 }
 
+/// An agent TUI to start in its own tab.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AgentLaunch<'a> {
+    /// Unique name to address the agent by afterwards.
+    pub name: &'a str,
+    /// The agent's command, which is also herdr's `--kind` for it.
+    pub kind: &'a str,
+    /// Whether the agent reports its status itself (OSC 7501), so herdr-core
+    /// can tell when it is ready.
+    pub reports_status: bool,
+    /// Where it runs.
+    pub cwd: &'a Path,
+    /// The tab's label.
+    pub label: &'a str,
+    /// Switch to the tab.
+    pub focus: bool,
+    /// For a managed worktree at `cwd`, the repository's main checkout.
+    pub worktree_source: Option<&'a Path>,
+    /// A private environment file to source before starting the agent.
+    pub environment: Option<&'a Path>,
+    /// The agent's arguments.
+    pub args: &'a [String],
+}
+
 /// Drives the herdr session through its CLI.
 #[derive(Debug, Clone)]
 pub(crate) struct HerdrCli {
-    bin: PathBuf,
-    workspace_id: Option<String>,
+    backend: Backend,
+}
+
+#[derive(Debug, Clone)]
+enum Backend {
+    Legacy(legacy::Legacy),
+    Core(hc::Core),
 }
 
 impl HerdrCli {
-    /// Let Herdr create and register a fresh worktree from the fetched main ref.
+    /// Drive the herdr 0.9 session the given binary is attached to, opening
+    /// windows in `workspace_id` (herdr's focused workspace when absent).
+    pub(crate) fn new(bin: impl Into<PathBuf>, workspace_id: Option<String>) -> Self {
+        Self {
+            backend: Backend::Legacy(legacy::Legacy {
+                bin: bin.into(),
+                workspace_id,
+            }),
+        }
+    }
+
+    /// Drive the herdr-core that runs `terminal`, macrod's own terminal.
+    pub(crate) fn core(bin: impl Into<PathBuf>, terminal: impl Into<String>) -> Self {
+        Self {
+            backend: Backend::Core(hc::Core {
+                bin: bin.into(),
+                terminal: terminal.into(),
+                space: Arc::default(),
+            }),
+        }
+    }
+
+    /// Create a fresh worktree of `source` at `path` from the fetched main ref.
     pub(crate) async fn create_worktree(
         &self,
         source: &Path,
         path: &Path,
         branch: &str,
-    ) -> Result<(), HerdrError> {
-        self.run(&[
-            "worktree",
-            "create",
-            "--cwd",
-            &source.to_string_lossy(),
-            "--path",
-            &path.to_string_lossy(),
-            "--branch",
-            branch,
-            "--base",
-            "origin/main",
-            "--no-focus",
-        ])
-        .await
-        .map(drop)
-    }
-
-    /// Reuse Herdr's workspace and its shell pane for a managed session worktree.
-    pub(crate) async fn open_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        label: &str,
-        focus: bool,
-    ) -> Result<Window, HerdrError> {
-        let path = path.to_string_lossy();
-        let output = self
-            .run(&[
-                "worktree",
-                "open",
-                "--cwd",
-                &source.to_string_lossy(),
-                "--path",
-                &path,
-                "--label",
-                label,
-                if focus { "--focus" } else { "--no-focus" },
-            ])
-            .await?;
-        parse_window(&output)
-    }
-    /// Drive the session the given binary is attached to, opening windows in
-    /// `workspace_id` (herdr's focused workspace when absent).
-    pub(crate) fn new(bin: impl Into<PathBuf>, workspace_id: Option<String>) -> Self {
-        Self {
-            bin: bin.into(),
-            workspace_id,
+    ) -> rootcause::Result<()> {
+        match &self.backend {
+            Backend::Legacy(herdr) => Ok(herdr.create_worktree(source, path, branch).await?),
+            Backend::Core(herdr) => herdr.create_worktree(source, path, branch).await,
         }
     }
 
-    /// Open a tab in macrod's workspace, switching herdr to it when `focus`.
-    pub(crate) async fn open_window(
+    /// Open a tab for an agent TUI and start it there, returning once it is
+    /// ready for input.
+    pub(crate) async fn launch_agent(
+        &self,
+        launch: &AgentLaunch<'_>,
+    ) -> Result<Window, HerdrError> {
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.launch_agent(launch).await,
+            Backend::Core(herdr) => herdr.launch_agent(launch).await,
+        }
+    }
+
+    /// Open a background tab in `cwd` running `command`.
+    pub(crate) async fn open_viewer(
         &self,
         cwd: &Path,
-        label: &str,
-        focus: bool,
+        command: &[String],
     ) -> Result<Window, HerdrError> {
-        let mut args = vec!["tab".to_owned(), "create".to_owned()];
-        if let Some(workspace) = &self.workspace_id {
-            args.extend(["--workspace".to_owned(), workspace.clone()]);
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.open_viewer(cwd, command).await,
+            Backend::Core(herdr) => herdr.open_viewer(cwd, command).await,
         }
-        args.extend([
-            "--cwd".to_owned(),
-            cwd.to_string_lossy().into_owned(),
-            "--label".to_owned(),
-            label.to_owned(),
-            if focus { "--focus" } else { "--no-focus" }.to_owned(),
-        ]);
-        let output = self.run(&args).await?;
-        parse_window(&output)
     }
 
-    /// Type a command into a pane's shell and press Enter.
-    pub(crate) async fn run_in_pane(&self, pane_id: &str, command: &str) -> Result<(), HerdrError> {
-        self.run(&["pane", "run", pane_id, command]).await.map(drop)
+    /// Label a viewer's tab with its session's task.
+    pub(crate) async fn name_viewer(&self, window: &Window, title: &str) -> Result<(), HerdrError> {
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.name_viewer(window, title).await,
+            Backend::Core(herdr) => {
+                herdr.name_viewer(window, title).await;
+                Ok(())
+            }
+        }
     }
 
-    /// Relabel a tab.
-    pub(crate) async fn rename_tab(&self, tab_id: &str, label: &str) -> Result<(), HerdrError> {
-        self.run(&["tab", "rename", tab_id, label]).await.map(drop)
-    }
-
-    /// Report the lifecycle state of the agent a pane hosts, which is what
-    /// herdr's sidebar and notifications are driven by.
+    /// Report the lifecycle state of the session a viewer shows, which is
+    /// what herdr's sidebar and notifications are driven by. Under herdr-core
+    /// the viewer reports it itself (OSC 7501), so this does nothing.
     pub(crate) async fn report_state(
         &self,
-        pane_id: &str,
+        window: &Window,
         state: AgentState,
         message: Option<&str>,
         seq: u64,
     ) -> Result<(), HerdrError> {
-        let seq = seq.to_string();
-        let mut args = vec![
-            "pane",
-            "report-agent",
-            pane_id,
-            "--source",
-            REPORT_SOURCE,
-            "--agent",
-            REPORT_AGENT,
-            "--state",
-            state.as_herdr(),
-            "--seq",
-            &seq,
-        ];
-        if let Some(message) = message {
-            args.extend(["--message", message]);
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.report_state(window, state, message, seq).await,
+            Backend::Core(_) => Ok(()),
         }
-        self.run(&args).await.map(drop)
-    }
-
-    /// Name the agent and its task in herdr's sidebar.
-    pub(crate) async fn report_title(
-        &self,
-        pane_id: &str,
-        display_agent: &str,
-        title: Option<&str>,
-    ) -> Result<(), HerdrError> {
-        let mut args = vec![
-            "pane",
-            "report-metadata",
-            pane_id,
-            "--source",
-            REPORT_SOURCE,
-            "--agent",
-            REPORT_AGENT,
-            "--display-agent",
-            display_agent,
-        ];
-        if let Some(title) = title {
-            args.extend(["--title", title]);
-        }
-        self.run(&args).await.map(drop)
-    }
-
-    /// Start a recognized agent CLI in an idle shell pane under a unique
-    /// name, returning once herdr sees it ready for input.
-    pub(crate) async fn start_agent(
-        &self,
-        name: &str,
-        kind: &str,
-        pane_id: &str,
-        agent_args: &[String],
-    ) -> Result<(), HerdrError> {
-        let mut args: Vec<&str> = vec![
-            "agent",
-            "start",
-            name,
-            "--kind",
-            kind,
-            "--pane",
-            pane_id,
-            "--timeout",
-            "60000",
-            "--",
-        ];
-        args.extend(agent_args.iter().map(String::as_str));
-        self.run(&args).await.map(drop)
     }
 
     /// Submit a prompt to a named agent's TUI, returning once it is typed.
     pub(crate) async fn prompt_agent(&self, name: &str, text: &str) -> Result<(), HerdrError> {
-        self.run(&["agent", "prompt", name, text]).await.map(drop)
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.prompt_agent(name, text).await,
+            Backend::Core(herdr) => herdr.prompt_agent(name, text).await,
+        }
     }
 
     /// A named agent's lifecycle state and the agent's own session id.
     pub(crate) async fn agent_info(&self, name: &str) -> Result<AgentInfo, HerdrError> {
-        let output = self.run(&["agent", "get", name]).await?;
-        let answer: Value =
-            serde_json::from_str(output.trim()).map_err(|source| HerdrError::Unparsable {
-                command: "agent get".to_owned(),
-                source,
-            })?;
-        Ok(AgentInfo {
-            cwd: answer
-                .pointer("/result/agent/cwd")
-                .and_then(Value::as_str)
-                .map(PathBuf::from),
-            state_change_seq: answer
-                .pointer("/result/agent/state_change_seq")
-                .and_then(Value::as_u64)
-                .unwrap_or_default(),
-            status: answer
-                .pointer("/result/agent/agent_status")
-                .and_then(Value::as_str)
-                .unwrap_or("unknown")
-                .to_owned(),
-            session_id: answer
-                .pointer("/result/agent/agent_session/value")
-                .and_then(Value::as_str)
-                .map(str::to_owned),
-        })
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.agent_info(name).await,
+            Backend::Core(herdr) => herdr.agent_info(name).await,
+        }
     }
 
     /// The text a named agent's pane currently shows.
     pub(crate) async fn read_agent(&self, name: &str) -> Result<String, HerdrError> {
-        self.run(&["agent", "read", name, "--source", "visible"])
-            .await
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.read_agent(name).await,
+            Backend::Core(herdr) => herdr.read_agent(name).await,
+        }
     }
 
     /// Press logical keys (`enter`, `esc`, `ctrl+c`) in a named agent's TUI.
     pub(crate) async fn send_keys(&self, name: &str, keys: &[&str]) -> Result<(), HerdrError> {
-        let mut args = vec!["agent", "send-keys", name];
-        args.extend(keys);
-        self.run(&args).await.map(drop)
-    }
-
-    async fn run<Arg: AsRef<str>>(&self, args: &[Arg]) -> Result<String, HerdrError> {
-        let output = tokio::time::timeout(
-            std::time::Duration::from_secs(150),
-            tokio::process::Command::new(&self.bin)
-                .args(args.iter().map(AsRef::as_ref))
-                .stdin(std::process::Stdio::null())
-                .kill_on_drop(true)
-                .output(),
-        )
-        .await
-        .map_err(|_| HerdrError::Timeout)?
-        .map_err(HerdrError::Spawn)?;
-        if !output.status.success() {
-            return Err(HerdrError::Refused {
-                command: describe(args),
-                stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-            });
+        match &self.backend {
+            Backend::Legacy(herdr) => herdr.send_keys(name, keys).await,
+            Backend::Core(herdr) => herdr.send_keys(name, keys).await,
         }
-        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
+}
+
+async fn run<Arg: AsRef<str>>(bin: &Path, args: &[Arg]) -> Result<String, HerdrError> {
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(150),
+        tokio::process::Command::new(bin)
+            .args(args.iter().map(AsRef::as_ref))
+            .stdin(std::process::Stdio::null())
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await
+    .map_err(|_| HerdrError::Timeout)?
+    .map_err(HerdrError::Spawn)?;
+    if !output.status.success() {
+        return Err(HerdrError::Refused {
+            command: describe(args),
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 fn describe<Arg: AsRef<str>>(args: &[Arg]) -> String {
@@ -335,33 +284,4 @@ fn describe<Arg: AsRef<str>>(args: &[Arg]) -> String {
         .map(AsRef::as_ref)
         .collect::<Vec<_>>()
         .join(" ")
-}
-
-#[derive(Deserialize)]
-struct TabCreated {
-    result: TabCreatedResult,
-}
-
-#[derive(Deserialize)]
-struct TabCreatedResult {
-    root_pane: CreatedPane,
-}
-
-#[derive(Deserialize)]
-struct CreatedPane {
-    pane_id: String,
-    tab_id: String,
-}
-
-/// Read the new window out of `tab create`'s JSON answer.
-pub(crate) fn parse_window(output: &str) -> Result<Window, HerdrError> {
-    let created: TabCreated =
-        serde_json::from_str(output.trim()).map_err(|source| HerdrError::Unparsable {
-            command: "tab create".to_owned(),
-            source,
-        })?;
-    Ok(Window {
-        tab_id: created.result.root_pane.tab_id,
-        pane_id: created.result.root_pane.pane_id,
-    })
 }

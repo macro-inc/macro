@@ -1,4 +1,5 @@
 use crate::api::search::simple::SearchError;
+use calendar_events::domain::ics::content_without_macro_call;
 use indexmap::IndexMap;
 use macro_db_client::calendar_event::get_events_for_search::{
     CalendarEventSearchInfo, get_calendar_events_for_search,
@@ -19,7 +20,7 @@ use crate::api::context::SearchHandlerState;
 
 /// Enriches calendar event search results with metadata and the instance each
 /// row points at.
-#[tracing::instrument(skip(ctx, results), err)]
+#[tracing::instrument(skip(ctx, results), fields(channel_shared_count), err)]
 pub(in crate::api::search) async fn enrich_calendar_events(
     ctx: &SearchHandlerState,
     user_id: &str,
@@ -42,6 +43,10 @@ pub(in crate::api::search) async fn enrich_calendar_events(
     let events = get_calendar_events_for_search(&ctx.db, user_id, &event_ids, chrono::Utc::now())
         .await
         .map_err(SearchError::InternalError)?;
+    tracing::Span::current().record(
+        "channel_shared_count",
+        events.values().filter(|event| !event.holds_meeting).count(),
+    );
 
     // Fetch event properties (e.g. tags) so rows can render and re-check
     // them, mirroring the projects enrichment.
@@ -129,6 +134,17 @@ fn to_organizer(info: &CalendarEventSearchInfo) -> Option<CalendarEventOrganizer
     })
 }
 
+/// The description the viewer may read. Only someone holding the meeting keeps
+/// its Macro call: the rest read a channel share, which carries no join link.
+/// The location plays no part, since search rows do not return it.
+fn to_description(info: &CalendarEventSearchInfo) -> Option<String> {
+    if info.holds_meeting {
+        return info.description.clone();
+    }
+    let (description, _) = content_without_macro_call(info.description.clone(), None);
+    description
+}
+
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     events: HashMap<Uuid, CalendarEventSearchInfo>,
@@ -175,7 +191,7 @@ pub fn construct_search_result(
                     conference_url: info.conference_url.clone(),
                     is_read_only: info.is_read_only,
                     organizer: to_organizer(info),
-                    description: info.description.clone(),
+                    description: to_description(info),
                 }),
                 properties: properties_map
                     .remove(&entity_id.to_string())

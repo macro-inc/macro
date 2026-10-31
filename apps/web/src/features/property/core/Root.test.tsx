@@ -122,3 +122,58 @@ it('keeps a saving pick through ID assignment but not on another property', () =
   });
   expect(shown()).toBe('todo');
 });
+
+function EditorToggle() {
+  const ctx = useProperty();
+  return (
+    <>
+      <button onClick={(event) => ctx.openEditor(event.currentTarget)}>
+        Edit
+      </button>
+      <input aria-label="Search" />
+      <button onClick={() => ctx.closeEditor()}>Close</button>
+    </>
+  );
+}
+
+function renderEditor() {
+  render(() => (
+    <>
+      <input aria-label="Title" />
+      <Root property={priority} canEdit>
+        <EditorToggle />
+      </Root>
+    </>
+  ));
+  return {
+    title: screen.getByLabelText('Title'),
+    search: screen.getByLabelText('Search'),
+    pill: screen.getByText('Edit'),
+  };
+}
+
+const nextTask = () => new Promise((resolve) => setTimeout(resolve));
+
+it('returns focus to the pill after the editor took it', async () => {
+  const { search, pill } = renderEditor();
+
+  pill.focus();
+  fireEvent.click(pill);
+  search.focus();
+  fireEvent.click(screen.getByText('Close'));
+  await nextTask();
+
+  expect(document.activeElement).toBe(pill);
+});
+
+it('leaves focus in the field the editor found it in', async () => {
+  const { title, pill } = renderEditor();
+
+  // A touch pill opens without taking focus from the title.
+  title.focus();
+  fireEvent.click(pill);
+  fireEvent.click(screen.getByText('Close'));
+  await nextTask();
+
+  expect(document.activeElement).toBe(title);
+});

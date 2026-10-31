@@ -98,6 +98,8 @@ export interface CalendarGridSelection {
   eventId?: string;
   onDateSelect?: (selection: DateSelectArg) => void;
   onEventSelect?: (event: CalendarEvent, element: HTMLElement) => void;
+  /** The selected event's chip mounted, replacing the element it had. */
+  onSelectedEventMount?: (event: CalendarEvent, element: HTMLElement) => void;
 }
 
 export interface CalendarGridProps {
@@ -312,7 +314,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         const selectedId = props.selection.eventId;
         if (selectedId !== undefined && occurrenceIds.includes(selectedId)) {
           const selected = eventByRenderId(selectedId);
-          if (selected) props.selection.onEventSelect?.(selected, el);
+          if (selected) props.selection.onSelectedEventMount?.(selected, el);
         }
         notifyChipMount();
       }}

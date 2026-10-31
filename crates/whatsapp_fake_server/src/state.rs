@@ -715,7 +715,9 @@ impl State {
             .get_children()
             .iter()
             .filter_map(|user| {
-                let requested = attr_jid(user, "jid")?;
+                let Some(requested) = attr_jid(user, "jid") else {
+                    return self.contact_lookup(user);
+                };
                 let phone = self.phone_of(&requested)?;
                 let record = self.users.get(&phone)?;
                 let lid = requested.server == HIDDEN_USER_SERVER;
@@ -776,6 +778,40 @@ impl State {
                 children(vec![node("list", vec![], children(users))]),
             )],
         )
+    }
+
+    /// Whether a phone number (`<contact>+<digits>@c.us</contact>`, as
+    /// `IsOnWhatsApp` asks) is registered, answered LID-first like WhatsApp:
+    /// the LID as `jid` with the number as `pn_jid`. Unknown numbers are `out`.
+    fn contact_lookup(&self, user: &Node) -> Option<Node> {
+        let contact = user.get_child_by_tag(&["contact"]);
+        let query = match &contact.content {
+            Some(NodeContent::String(query)) => query.clone(),
+            Some(NodeContent::Bytes(query)) => String::from_utf8_lossy(query).into_owned(),
+            _ => return None,
+        };
+        let phone = query.strip_prefix('+')?.strip_suffix("@c.us")?;
+        let answer = |user_attrs: Vec<(&str, AttributeValue)>, registered: &str| {
+            node(
+                "user",
+                user_attrs,
+                children(vec![node(
+                    "contact",
+                    vec![("type", text(registered))],
+                    bytes(query.as_bytes()),
+                )]),
+            )
+        };
+        Some(match self.users.get(phone) {
+            Some(record) => answer(
+                vec![
+                    ("jid", jid(&device_jid(&record.lid, 0, true))),
+                    ("pn_jid", jid(&device_jid(&record.phone, 0, false))),
+                ],
+                "in",
+            ),
+            None => answer(vec![("jid", jid(&device_jid(phone, 0, false)))], "out"),
+        })
     }
 }
 

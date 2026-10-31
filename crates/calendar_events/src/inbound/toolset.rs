@@ -395,10 +395,13 @@ pub struct ToolCalendarEvent {
     pub calendar_id: Option<uuid::Uuid>,
     /// Display name of that calendar, when known.
     pub calendar_name: Option<String>,
-    /// Connected inbox address the calendar belongs to, when known.
+    /// Connected inbox address syncing the calendar, when known. It stays the
+    /// user's own address on a colleague's calendar, so it never says whose
+    /// calendar it is.
     pub inbox: Option<String>,
     /// Whether the user organizes this event or is a guest on it, through
-    /// that inbox; absent when they are neither.
+    /// that inbox; absent when they are neither, can only write that
+    /// calendar, or a read-only calendar names them organizer.
     pub my_role: Option<ToolEventRole>,
 }
 
@@ -407,22 +410,35 @@ pub struct ToolCalendarEvent {
 #[serde(rename_all = "snake_case")]
 pub enum ToolEventRole {
     /// The inbox organizes the event, or the event has no guests and is the
-    /// user's own.
+    /// user's own. Being able to write someone else's calendar is not this,
+    /// nor is a read-only calendar naming them organizer; `viewerCan` says
+    /// what the user may do there.
     Organizer,
     /// The inbox is invited to the event.
     Guest,
 }
 
 impl ToolEventRole {
-    /// The role of the copy's inbox, read the way clients read it: `organize`
-    /// marks the organizer, and only the copy's own inbox row is `is_self`.
-    fn of(event: &CalendarEvent) -> Option<Self> {
+    /// The role of the copy's inbox, read the way clients read it: only the
+    /// copy's own inbox row is `is_self`. That row marked organizer counts
+    /// only on a copy the user can change, since Microsoft Graph names the
+    /// mailbox owner as organizer on every event of a read-only calendar.
+    /// `organize` says they may act as organizer, which writing someone
+    /// else's calendar grants too, so it counts only on a calendar of their
+    /// own schedule with no other organizer listed.
+    fn of(event: &CalendarEvent, labels: &CalendarLabels) -> Option<Self> {
         let own_row = event.attendees.iter().find(|attendee| attendee.is_self);
-        if event.viewer_can.organize || own_row.is_some_and(|attendee| attendee.is_organizer) {
-            Some(Self::Organizer)
-        } else {
-            own_row.map(|_| Self::Guest)
+        if own_row.is_some_and(|attendee| attendee.is_organizer) {
+            return (!event.is_read_only).then_some(Self::Organizer);
         }
+        let other_organizer = event.attendees.iter().any(|attendee| attendee.is_organizer);
+        if event.viewer_can.organize
+            && !other_organizer
+            && labels.event_on_schedule(event) == Some(true)
+        {
+            return Some(Self::Organizer);
+        }
+        own_row.map(|_| Self::Guest)
     }
 }
 
@@ -471,6 +487,23 @@ impl CalendarLabels {
         calendar_id
             .and_then(|id| self.by_calendar.get(&id))
             .map(|calendar| calendar.name.clone())
+    }
+
+    /// Whether any of these calendars counts toward the user's busy time,
+    /// when one is known. Availability counts each copy of an event, so one
+    /// copy on the user's schedule is enough.
+    fn on_schedule(&self, calendar_ids: impl IntoIterator<Item = Uuid>) -> Option<bool> {
+        calendar_ids
+            .into_iter()
+            .filter_map(|id| self.by_calendar.get(&id))
+            .map(|calendar| calendar.contributes_to_availability)
+            .reduce(|left, right| left || right)
+    }
+
+    /// Whether a calendar holding this event is on the user's schedule.
+    fn event_on_schedule(&self, event: &CalendarEvent) -> Option<bool> {
+        let copies = event.sources.iter().map(|copy| copy.calendar_id);
+        self.on_schedule(event.calendar_id.into_iter().chain(copies))
     }
 
     /// The inbox holding a copy: its calendar's inbox, else the inbox whose
@@ -584,7 +617,7 @@ impl ToolCalendarEvent {
             calendar_id: event.calendar_id,
             calendar_name: labels.calendar_name(event.calendar_id),
             inbox: labels.inbox(event.calendar_id, None),
-            my_role: ToolEventRole::of(event),
+            my_role: ToolEventRole::of(event, labels),
         }
     }
 

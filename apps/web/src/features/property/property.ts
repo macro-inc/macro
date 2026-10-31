@@ -19,6 +19,7 @@ import {
   InlineTextEditor,
   PopoverEditor,
   PropertyEditor,
+  SheetEditor,
 } from './editors';
 import { EditorPopover } from './editors/popover/EditorPopover';
 import {
@@ -63,6 +64,8 @@ export const Property = {
   Editor: PropertyEditor,
   InlineEditor,
   PopoverEditor,
+  // PopoverEditor for pills inside a touch sheet: entity pickers in a sheet.
+  SheetEditor,
   EditorPopover,
 
   // Per-type editor leaves (rare — prefer the dispatchers above).

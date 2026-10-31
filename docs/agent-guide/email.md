@@ -73,6 +73,17 @@ draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 list and quote. Check discard from both a reply (the reply closes) and
 standalone compose (the view goes back), with focus in the body.
 
+Star and mute feedback reports what happened to the write. With GraphQL Soup
+enabled, a star queued while offline toasts that it is waiting to sync (for
+example `Added to favorites, waiting to sync`) rather than confirming it. A REST
+star and a mute fail offline with an error toast and roll back instead of
+waiting for reconnect, so pressing them again works at once.
+
+Recipient fields turn complete addresses into chips when the typed or pasted
+text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
+Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
+after picking one and check that both recipients stay and the input is empty.
+
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
 same thread, search, Signal/Noise, draft, and schedule surfaces apply to both
@@ -291,6 +302,10 @@ offline action followed by reconnect. Also wait for provider/metadata synchroniz
 before Undo, and repeat after reloading: an archived received thread can lose its
 inbox-sorting timestamp but must still be unarchivable. Sent-only threads and
 unsent drafts cannot be unarchived; sent mail addressed back to its sender can.
+Threads without received mail hide Mark Not Done in the header, row, menu, and
+hotkeys. REST Soup rows lack that fact, so their row action stays and then says
+the thread stays done. Older sent-only threads still offer it until their
+metadata is next recomputed, and the server rejects it.
 With GraphQL Soup enabled, bulk Mark Not Done settles per email: a rejected
 sent-only/draft thread stays done, while successful and durably queued siblings
 remain restored. Only accepted
@@ -308,7 +323,7 @@ write fills. Home's work-feed Done and Undo return no notification rows, so they
 still read every notification reader again. In the
 network panel one `e` in the Email view sends its two mutations and no `Soup`,
 `SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
-Mark Not Done remains available for an archived thread whose inbox timestamp is
+Mark Not Done remains available for an archived received thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification
 ordering, and existing cache reconciliation.
@@ -510,6 +525,9 @@ controls. Verify these remain
 available when returning to Drafts and reopening the draft.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
+**Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender
+commands in the command menu, appear only when the thread has a sender other
+than you. A thread you sent alone omits them.
 **Download .eml** in the title menu saves the thread's newest sent or received
 message (drafts and sends still in flight are skipped) exactly as Gmail or
 Outlook holds it, named after its subject. Anyone who can view the thread can
@@ -567,7 +585,10 @@ HTML messages with preserved sender typography retain their explicit sizes.
 Desktop reply actions sit together at the bottom right: discard, attach, schedule,
 then Send, with circular hover backgrounds inside the card's 16px padding.
 Standalone compose uses one right-aligned row inside its 16px content padding:
-delete, attach, format, schedule, and send. Touch compose uses its header toolbar.
+delete, attach, insert image, format, schedule, and send. Touch compose uses its
+header toolbar, which has no insert image button. **Insert image** opens an
+image-only picker and inlines the chosen images at the cursor, uploading and
+sized like pasted ones; a video chosen there is ignored.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
 A new email also focuses To once it mounts, unless the user already moved to
@@ -976,7 +997,10 @@ identity after settlement without replacing the editor's current text.
 
 With the persistent GraphQL Email cache enabled, a new standalone draft saved
 offline appears immediately in Drafts and the other matching Mail tabs, including
-date-grouped lists. A draft changes a conversation's preview, read state, and sort
+date-grouped lists, but never in Inbox, before or after reconnect. On Gmail and
+Outlook alike, a draft brings its conversation into Inbox only as a reply to
+received mail; draft-only and sent-only conversations stay in Archived. A draft
+changes a conversation's preview, read state, and sort
 time according to that tab; discarding it restores the remaining conversation's
 metadata. `Showing cached mail` still means only synchronized and locally created
 items are available.
@@ -1019,6 +1043,8 @@ send require reconnection for any draft with attachments. Online, clicking Send 
 a save debounce finishes must start or continue uploads; a queued save's confirmation
 must also resume pending uploads after reload. Pending or failed inline image/video
 uploads block Send and Schedule send until they have durable URLs or are removed.
+An inline image cut and pasted elsewhere in the body, or copied into another
+editor, while it uploads must unblock Send once that upload finishes.
 
 Queued sends survive query-cache recovery in independent account-scoped storage,
 retaining their original attempt IDs, frozen bodies, attachments and cancellation
@@ -1190,7 +1216,11 @@ A failed alias lookup for one inbox does not hide other inboxes' aliases. An
 invalid or unavailable selected alias is rejected on save/send, never silently
 replaced with the primary address.
 
-The sidebar and mobile inbox picker also list aliases beneath their inbox.
+The sidebar and mobile inbox picker also list aliases beneath their inbox, as
+address filters rather than accounts: an `@` glyph instead of a portrait, an
+`Alias` label, and `alias of <inbox>` in the accessible name and tooltip. Gmail
+can add a verified alias on its own (for example a Gmailify or "Check mail from
+other accounts" address), so an alias must never look like a connected inbox.
 Selecting one scopes mail to that inbox and the exact address in From/To/Cc/Bcc;
 search candidates are checked against the same GraphQL scope. Search and Reminders
 automatically advance nonmatching candidate pages until a match or exhaustion;
@@ -1200,8 +1230,11 @@ lookup shows an error without discarding already-confirmed rows. If a saved alia
 disappears from the catalog, the primary address must not look selected; use
 `All inboxes` or choose an available address to clear that scope. Scheduled mail
 matches its saved sender. `All inboxes` clears both the inbox and alias selection,
-and the selection survives reloads. With one inbox **and aliases**, the All row
-and address pickers remain available. To check without sending real mail, open
+and the selection survives reloads. Aliases never count toward multiple inboxes:
+with one inbox and aliases there is no `All inboxes` row, the inbox is the
+selected row, and choosing it clears an alias selection. Selecting an alias is a
+filter, so it adds the `from <alias>` header picker, the mobile Inbox section,
+and `All inboxes` until the user clears it. To check without sending real mail, open
 both pickers, select an alias, switch to the primary address, reopen a saved alias
 draft, and confirm the address remains unchanged. Alias discovery uses
 `MailAccounts`, draft saves use `saveEmailDraft`, and delivery uses
@@ -1221,8 +1254,8 @@ sending; the picker never displays another inbox as selected before that choice.
 With no explicit selection, an unavailable primary still falls back to
 the first linked inbox.
 The desktop account dropdown marks the selected inbox with a checkmark. With
-exactly one connected inbox and no aliases, the selector displays its address
-and omits `All inboxes`; the mobile filter drawer has no inbox section. The
+exactly one connected inbox and no alias selected, the selector displays its
+address and omits `All inboxes`; the mobile filter drawer has no inbox section. The
 touch sidebar keeps its existing account rows and shows up to four before
 scrolling independently. With many accounts, scroll to the last inbox in the
 dropdown and check that selecting it updates the selector and header filter.

@@ -273,12 +273,14 @@ export function DatabasePageActions(props: {
       </Show>
       <Show when={webhooksOpen() && props.table}>
         {(table) => (
-          <WebhooksDialog
-            databaseId={props.detail.database.id}
-            table={table()}
-            onClose={() => setWebhooksOpen(false)}
-            returnFocus={menuButton}
-          />
+          <Show keyed when={`${props.detail.database.id}:${table().table.id}`}>
+            <WebhooksDialog
+              databaseId={props.detail.database.id}
+              table={table()}
+              onClose={() => setWebhooksOpen(false)}
+              returnFocus={menuButton}
+            />
+          </Show>
         )}
       </Show>
       <DeleteDialog

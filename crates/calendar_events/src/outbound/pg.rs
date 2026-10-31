@@ -24,7 +24,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     changes::CalendarChangeOp,
-    ics::CalendarEventExport,
+    ics::{CalendarEventExport, content_without_macro_call},
     models::{
         ActorInboxes, AlignedGuestCopy, AppliedGoogleGrant, AttendeeResponseStatus,
         CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD, CalendarAttendee, CalendarBackfillClaim,
@@ -320,6 +320,7 @@ struct VisibleCalendarRow {
     unconfirmed_reply: bool,
     provider: String,
     online_meeting_providers: Vec<String>,
+    contributes_to_availability: bool,
 }
 
 fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
@@ -347,6 +348,7 @@ fn visible_calendar(row: VisibleCalendarRow) -> VisibleCalendar {
         is_primary: row.is_primary,
         is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
         is_subscription: is_system_calendar(&row.provider_calendar_id),
+        contributes_to_availability: row.contributes_to_availability,
         sync_error: VisibleCalendar::sync_issue(
             row.last_sync_error,
             row.consecutive_sync_failures,
@@ -410,11 +412,12 @@ struct OccurrenceJoinRow {
 
 /// A preview batch carries up to 100 events, so each description is capped
 /// well above what the hover card shows; clients sanitize what arrives.
-const MENTION_PREVIEW_DESCRIPTION_MAX_CHARS: i32 = 4000;
+const MENTION_PREVIEW_DESCRIPTION_MAX_CHARS: u16 = 4000;
 
 struct MentionPreviewRow {
     mention_exists: bool,
     resolved_event_id: Option<Uuid>,
+    viewer_calendar_ids: Option<Vec<Uuid>>,
     is_channel_shared: Option<bool>,
     is_snapshot: Option<bool>,
     inbox_organizes: Option<bool>,
@@ -1345,7 +1348,11 @@ impl CalendarRepository for PgCalendarRepository {
         super::pg_team::list_team_out_of_office(&self.pool, requester_id, range, limit).await
     }
 
-    #[tracing::instrument(skip(self, requester_id, items), err)]
+    #[tracing::instrument(
+        skip(self, requester_id, items),
+        fields(channel_shared_count = tracing::field::Empty),
+        err
+    )]
     async fn mention_previews(
         &self,
         requester_id: &str,
@@ -1370,15 +1377,35 @@ impl CalendarRepository for PgCalendarRepository {
             SELECT
                 (mentioned.id IS NOT NULL) AS "mention_exists!",
                 viewer_event.id AS "resolved_event_id?",
+                ARRAY(
+                    SELECT viewer_source.calendar_id
+                    FROM calendar_event_sources viewer_source
+                    JOIN calendars viewer_calendar
+                        ON viewer_calendar.id = viewer_source.calendar_id
+                    JOIN calendar_accounts viewer_account
+                        ON viewer_account.id = viewer_source.account_id
+                    WHERE viewer_source.event_id = viewer_event.id
+                      AND NOT viewer_calendar.is_deleted
+                      AND viewer_account.sync_status <> 'disabled'
+                    ORDER BY
+                        viewer_source.id = calendar_event_canonical_source_id(viewer_event.id) DESC,
+                        viewer_source.id
+                ) AS "viewer_calendar_ids?",
                 viewer_event.is_channel_shared AS "is_channel_shared?",
                 viewer_event.is_snapshot AS "is_snapshot?",
                 viewer_event.inbox_organizes AS "inbox_organizes?",
                 viewer_event.inbox_attends AS "inbox_attends?",
                 COALESCE(occurrence_override.title, viewer_event.title) AS "title?",
-                left(
-                    COALESCE(occurrence_override.description, viewer_event.description),
-                    $5
-                ) AS "description?",
+                -- A channel share is capped after its Macro call comes out,
+                -- since the join line closes the description.
+                CASE
+                    WHEN viewer_event.is_channel_shared
+                        THEN COALESCE(occurrence_override.description, viewer_event.description)
+                    ELSE left(
+                        COALESCE(occurrence_override.description, viewer_event.description),
+                        $5
+                    )
+                END AS "description?",
                 COALESCE(occurrence_override.location, viewer_event.location) AS "location?",
                 viewer_event.organizer_email AS "organizer_email?",
                 viewer_event.organizer_name AS "organizer_name?",
@@ -1555,12 +1582,18 @@ impl CalendarRepository for PgCalendarRepository {
             &event_ids,
             &occurrence_keys as &[Option<String>],
             now,
-            MENTION_PREVIEW_DESCRIPTION_MAX_CHARS,
+            i32::from(MENTION_PREVIEW_DESCRIPTION_MAX_CHARS),
         )
         .fetch_all(&self.pool)
         .await
         .map_err(report)?;
 
+        tracing::Span::current().record(
+            "channel_shared_count",
+            rows.iter()
+                .filter(|row| row.is_channel_shared == Some(true))
+                .count(),
+        );
         rows.into_iter().map(mention_preview_from_row).collect()
     }
 
@@ -2648,10 +2681,14 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.last_sync_error,
                 EXISTS(SELECT 1 FROM calendar_outlook_declines d
                     WHERE d.mailbox_key=calendar_outlook_mailbox_key(link.id) AND d.provider_calendar_id=calendar.provider_calendar_id AND d.confirmed_at IS NULL AND d.submitted_at<now()-interval '5 minutes') AS "unconfirmed_reply!",
-                calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers
+                calendar.consecutive_sync_failures,account.provider,calendar.online_meeting_providers,
+                COALESCE(preference.contributes_to_availability,
+                    account.owner_id = $1 AND calendar.is_primary) AS "contributes_to_availability!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
+            LEFT JOIN calendar_availability_preferences preference
+                ON preference.calendar_id = calendar.id AND preference.user_id = $1
             WHERE NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'
               AND (
@@ -4854,6 +4891,18 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
         return Ok(CalendarMentionPreview::NoAccess);
     };
     let is_channel_shared = row.is_channel_shared.unwrap_or_default();
+    let (description, location) = if is_channel_shared {
+        let (description, location) = content_without_macro_call(row.description, row.location);
+        let description = description.map(|description| {
+            description
+                .chars()
+                .take(usize::from(MENTION_PREVIEW_DESCRIPTION_MAX_CHARS))
+                .collect()
+        });
+        (description, location)
+    } else {
+        (row.description, row.location)
+    };
     let time = if row.occurrence_key.is_some() {
         row_time(
             row.occurrence_starts_at,
@@ -4876,6 +4925,10 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
     Ok(CalendarMentionPreview::Accessible(Box::new(
         CalendarMentionEvent {
             viewer_event_id: (!is_channel_shared).then_some(resolved_event_id),
+            viewer_calendar_ids: row
+                .viewer_calendar_ids
+                .filter(|_| !is_channel_shared)
+                .unwrap_or_default(),
             viewer_copy: (!is_channel_shared).then(|| {
                 CalendarMentionViewerCopy::classify(
                     row.is_snapshot.unwrap_or_default(),
@@ -4884,13 +4937,11 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
                 )
             }),
             title: row.title.unwrap_or_default(),
-            description: row
-                .description
-                .filter(|description| !description.trim().is_empty()),
+            description: description.filter(|description| !description.trim().is_empty()),
             time,
             occurrence_key: row.occurrence_key,
             is_recurring: !row.recurrence_lines.unwrap_or_default().is_empty(),
-            location: row.location,
+            location,
             organizer_email: row.organizer_email,
             organizer_name: row.organizer_name,
             attendee_count: usize::try_from(row.attendee_count.unwrap_or_default())

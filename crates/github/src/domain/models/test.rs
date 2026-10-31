@@ -1,4 +1,5 @@
 use super::*;
+use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 
 // ---------------------------------------------------------------------------
 // MacroTaskId::from_short_uuid
@@ -629,4 +630,193 @@ fn pull_request_task_reference_falls_back_to_the_macro_id() {
     let reference = pull_request_task_reference(&task, Some(&unreadable));
     assert_eq!(reference, format!("MACRO-{SHORT_UUID_A}"));
     assert_eq!(MacroTaskId::extract_from_text(&reference), [task]);
+}
+
+#[test]
+fn task_status_source_names_who_merged_over_the_webhook_sender() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "merged": true,
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "merged_by": { "login": "merger", "id": 333 }
+            },
+            "sender": { "login": "automation", "id": 444 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "333".to_string(),
+                login: "merger".to_string(),
+            },
+        })
+    );
+}
+
+#[test]
+fn task_status_source_falls_back_to_the_sender_on_an_open_pull_request() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "merged_by": null
+            },
+            "sender": { "login": "opener", "id": 444 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "444".to_string(),
+                login: "opener".to_string(),
+            },
+        })
+    );
+}
+
+#[test]
+fn task_status_source_reads_the_pull_request_from_a_comment_event() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "pull_request": { "url": "https://api.github.com/repos/my-org/my-repo/pulls/42" }
+            },
+            "sender": { "login": "commenter", "id": 555 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "555".to_string(),
+                login: "commenter".to_string(),
+            },
+        })
+    );
+}
+
+#[test]
+fn task_status_source_is_none_for_a_comment_on_a_plain_issue() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "html_url": "https://github.com/my-org/my-repo/issues/42",
+                "state": "open"
+            },
+            "sender": { "login": "commenter", "id": 555 }
+        }),
+    );
+
+    assert_eq!(event.task_status_for_event(), Some("In Review"));
+    assert_eq!(event.task_status_source(), None);
+}
+
+#[test]
+fn task_status_source_names_the_editor_of_an_already_merged_pull_request() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "edited",
+            "pull_request": {
+                "merged": true,
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "merged_by": { "login": "merger", "id": 333 }
+            },
+            "sender": { "login": "editor", "id": 444 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "444".to_string(),
+                login: "editor".to_string(),
+            },
+        })
+    );
+}
+
+#[test]
+fn a_delivery_keeps_its_meaning_and_drops_api_links() {
+    let body = serde_json::json!({
+        "action": "completed",
+        "installation": { "id": 77, "node_id": "x" },
+        "repository": {
+            "id": 42,
+            "full_name": "macro-inc/macro",
+            "url": "https://api.github.com/repos/macro-inc/macro",
+            "html_url": "https://github.com/macro-inc/macro",
+            "hooks_url": "https://api.github.com/repos/macro-inc/macro/hooks",
+        },
+        "sender": { "login": "dependabot[bot]", "type": "Bot", "avatar_url": "https://x" },
+        "workflow_run": { "name": "CI", "conclusion": "failure", "jobs_url": "https://x" },
+    });
+
+    let delivery = GithubWebhookReceived::from_delivery(
+        Some("d-1".to_owned()),
+        "workflow_run".to_owned(),
+        &body,
+    )
+    .unwrap();
+
+    assert_eq!(delivery.installation_id, 77);
+    assert_eq!(delivery.action.as_deref(), Some("completed"));
+    assert_eq!(delivery.repository.as_ref().unwrap().id, 42);
+    assert!(delivery.sender.as_ref().unwrap().bot);
+    assert_eq!(
+        delivery.payload,
+        Some(serde_json::json!({
+            "action": "completed",
+            "repository": {
+                "id": 42,
+                "full_name": "macro-inc/macro",
+                "html_url": "https://github.com/macro-inc/macro",
+            },
+            "sender": { "login": "dependabot[bot]", "type": "Bot" },
+            "workflow_run": { "name": "CI", "conclusion": "failure" },
+        }))
+    );
+}
+
+#[test]
+fn a_delivery_without_an_installation_is_nobodys() {
+    let body =
+        serde_json::json!({ "action": "revoked", "sender": { "login": "a", "type": "User" } });
+
+    assert!(
+        GithubWebhookReceived::from_delivery(None, "github_app_authorization".to_owned(), &body)
+            .is_none()
+    );
+}
+
+#[test]
+fn an_oversized_payload_travels_without_it() {
+    let body = serde_json::json!({
+        "installation": { "id": 1 },
+        "commits": [{ "message": "x".repeat(MAX_WEBHOOK_PAYLOAD_BYTES) }],
+    });
+
+    let delivery = GithubWebhookReceived::from_delivery(None, "push".to_owned(), &body).unwrap();
+
+    assert_eq!(delivery.payload, None);
 }

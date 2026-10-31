@@ -82,6 +82,12 @@ through the same service.
   notification. Retries preserve original IDs, recipients, and lifecycle state.
 - Access-request withdrawals suppress delayed ingress and queued push/realtime
   delivery; keep tombstone checks when changing either delivery boundary.
+- A `calendar_event_join_request` insert is skipped by a `notification` trigger
+  when its event has gone or been cancelled or its request is no longer pending,
+  since queued ingress can run after that cleanup. `create_notification` reads
+  the skipped insert as nothing to deliver, so keep that `rows_affected` check.
+  The triggers read `requestId` from the stored metadata, so renaming that field
+  needs a migration.
 - Crates on `macrod`'s dependency path (`teams`, `model_notifications`,
   `invite_email`) take this crate with `default-features = false`, which keeps
   librdkafka out of the self-hosted daemon; keep it that way.

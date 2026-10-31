@@ -19,6 +19,7 @@ import { ForeignEntityNamespace } from './entities/foreign/namespace';
 import { FormNamespace } from './entities/forms/namespace';
 import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
 import { HarnessNamespace } from './entities/harnesses/namespace';
+import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
@@ -152,6 +153,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Build forms and submit answers without granting respondents database access. */
   readonly forms: FormNamespace;
 
+  /** Generate images with AI and attach them to messages. */
+  readonly images: ImagesNamespace;
+
   readonly notifications: NotificationNamespace;
 
   readonly pins: PinsNamespace;
@@ -210,6 +214,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
+    this.images = new ImagesNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
@@ -295,6 +300,11 @@ export {
 } from './entities/github-pull-requests/pull-request';
 export { Harness } from './entities/harnesses/harness';
 export { DevicePairing, HarnessPairing } from './entities/harnesses/pairing';
+export { GeneratedImage, StaticImage } from './entities/images/image';
+export type {
+  GenerateImageAspectRatio,
+  GenerateImageOptions,
+} from './entities/images/namespace';
 export {
   Initiative,
   type InitiativeOptions,

@@ -949,6 +949,16 @@ pub trait CalendarRefreshNotifier: Send + Sync + 'static {
         email_link_id: Uuid,
         team_ooo_changed: bool,
     ) -> impl Future<Output = ()> + Send;
+
+    /// Signal that the request to join `event_id` by `requester_id` was
+    /// answered. The requester views the event through a channel share, so
+    /// [`Self::calendar_changed`], which reaches the viewers of the sharer's
+    /// inbox, never reaches them.
+    fn join_request_answered(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+    ) -> impl Future<Output = ()> + Send;
 }
 
 /// Outbound port that announces one connected inbox's Google grant has gone

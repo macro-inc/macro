@@ -158,7 +158,13 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
         Ok(())
     }
 
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -2777,7 +2783,13 @@ impl TaskPropertiesPort for RecordingTaskPropertiesPort {
         Ok(())
     }
 
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 

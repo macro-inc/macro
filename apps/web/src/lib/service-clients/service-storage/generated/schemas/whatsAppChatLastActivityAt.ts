@@ -7,6 +7,7 @@
 
 /**
  * Newest activity WhatsApp reported (message or history sync); `null`
-when unknown. The list is sorted by it, newest first, unknown last.
+when unknown, as for saved contacts never messaged. The list is
+sorted by it, newest first, unknown last.
  */
 export type WhatsAppChatLastActivityAt = string | null;

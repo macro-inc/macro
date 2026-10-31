@@ -289,6 +289,12 @@ Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.
 
+Code-mode agents (`ExecuteCode`) and SDK callers reach the same flow through
+`macro.images.generate()` (`POST /cognition/images/generate`), which checks the
+acting user's AI allowance first (402 when exhausted). Post the result with
+`channel.send(text, { images: [image] })`: it arrives as a sized `static/image`
+attachment in the attachment grid, not as message markdown.
+
 ## Ask AI entry points
 
 **Ask AI** in desktop search (including Tab) and the command menu opens
@@ -663,6 +669,10 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
+  This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
+  where session tabs open in macrod's space. Under herdr-core, Codex reports no
+  status, so its permission prompts must be answered in Herdr; see "Herdr
+  versions" in `crates/coding_agent_worker/README.md`.
   Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
   Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
   check their result and any confirmation in Herdr. For Claude, use `/fast on`
