@@ -187,16 +187,21 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   invitation under the meeting's UID, which a snapshot imported meanwhile
   would take in. A declined requester may still add a copy. Nothing in the
   domain retires the sharer's notification: opening the event marks it seen,
-  and two triggers on `calendar_events` running
+  a trigger on `calendar_event_join_requests` running
+  `delete_answered_join_request_notification` deletes it when anyone answers
+  the request, and two triggers on `calendar_events` running
   `delete_calendar_event_join_request_notifications` delete it with the event
   row, or when the row turns `cancelled` (Outlook can keep a cancelled
   meeting). That covers the ways a copy goes away listed for channel grants
-  above, and the delete reaches open clients through
-  `trg_notify_user_notification_deletes`. The notifier only queues, so a backlog
-  can deliver a notification after that cleanup; a `notification` insert trigger
-  skips it while the event is gone or cancelled, locking the row to decide in
-  order with a change in flight. The cancelled row keeps its requests, as it
-  keeps its grants, and a cancelled occurrence changes neither.
+  above, and each delete reaches open clients through
+  `trg_notify_user_notification_deletes`. An event can hold several open
+  requests, so the answer's trigger matches the `requestId` in the notification's
+  metadata, not the event alone. The notifier only queues, so a backlog can
+  deliver a notification after that cleanup; a `notification` insert trigger
+  skips it while the event is gone or cancelled or the request is no longer
+  pending, locking the event and then the request to decide in order with a
+  change in flight. The cancelled row keeps its requests, as it keeps its
+  grants, and a cancelled occurrence changes neither.
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with

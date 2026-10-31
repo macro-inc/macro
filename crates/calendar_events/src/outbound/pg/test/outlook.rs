@@ -1,4 +1,4 @@
-use super::join_requests::{JOIN_REQUEST_NOTIFICATION, insert_notification, recipient_holds};
+use super::join_requests::{insert_join_request_notification, recipient_holds};
 use super::*;
 use crate::domain::models::{
     AutomaticDeclinePolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
@@ -1423,10 +1423,12 @@ async fn an_outlook_cancellation_or_removal_retires_join_request_notifications(p
         .open_join_request(cancelled_id, member, "member@work.example.com")
         .await
         .unwrap();
-    let on_cancelled =
-        insert_notification(&pool, JOIN_REQUEST_NOTIFICATION, cancelled_id, &owner).await;
-    let on_removed =
-        insert_notification(&pool, JOIN_REQUEST_NOTIFICATION, removed_id, &owner).await;
+    let (removed_request, _) = repo
+        .open_join_request(removed_id, member, "member@work.example.com")
+        .await
+        .unwrap();
+    let on_cancelled = insert_join_request_notification(&pool, &request, &[&owner]).await;
+    let on_removed = insert_join_request_notification(&pool, &removed_request, &[&owner]).await;
 
     // Outlook can keep a cancelled meeting: the row stays, with its request.
     let mut cancelled = upsert(&event, "cancelled");
