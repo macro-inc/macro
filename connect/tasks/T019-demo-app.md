@@ -83,3 +83,60 @@ its own customer key, exactly as Macro will.
 
 Real vendor consent (the planner does it in the browser); deploying; a
 frontend build; user accounts beyond the cookie.
+
+## Result
+
+### Changed
+
+- `connect/services/connect_demo/{Cargo.toml,Dockerfile,AGENTS.md,CLAUDE.md,src/main.rs,src/mcp.rs,src/mcp/test.rs,src/test.rs,src/style.css,src/app.js}`: standalone server-rendered demo with a browser identity cookie, catalog and connection controls, JSON and SSE MCP tool flows, escaped results, tracing spans, and handler tests. The JavaScript ignores stale asynchronous responses.
+- `connect/crates/connect_client/{AGENTS.md,src/lib.rs,src/test.rs}`: expose catalog icons through the public client and cover the route.
+- `connect/infra/{index.ts,AGENTS.md}`: optional demo image, secret, task, service, security group, target group, and HTTPS listener rule, all gated on encrypted `demoCustomerKey` config.
+- `connect/{docker-compose.yml,AGENTS.md}` and `connect/docs/runbooks/bootstrap.md`: local demo service and documented local and dev bootstrap. The agent maps now include the demo.
+- `Cargo.toml`, `Cargo.lock`, and `.github/workspace-dep-closures.json`: workspace membership and generated dependency artifacts.
+- `connect/tasks/T019-demo-app.md`: this handoff result. `connect/STATUS.md` was not changed.
+
+### Checks
+
+All Rust and repository tooling ran inside `nix develop --command` with `CARGO_TARGET_DIR="$CONNECT_CARGO_TARGET_DIR"` and `DATABASE_URL="$CONNECT_DATABASE_URL"` exported. No AWS Pulumi command, deployment, production access, or vendor consent was run.
+
+| Check | Exact outcome |
+| --- | --- |
+| `just hakari` | Passed; regenerated workspace dependency closure. |
+| `cargo nextest run --all-features -p connect_demo -p connect_client -p connect_api` | Passed; 31 tests, 0 skipped. |
+| `cargo clippy -p connect_demo -p connect_client -p connect_api --all-features --all-targets -- -D warnings` | Passed, exit 0. |
+| `cargo x deps --check` | Passed, exit 0. |
+| `just check` | Passed; format, ast-grep, PII scan, and 12 PII scanner tests. |
+| `bun install --frozen-lockfile` in `connect/infra` | Passed; lockfile unchanged. |
+| `bunx tsc --noEmit` in `connect/infra` | Passed, exit 0. |
+| `bunx biome check .` in `connect/infra` | Passed; 4 files checked, no fixes. |
+| `docker compose -f connect/docker-compose.yml config --quiet` | Passed, exit 0. |
+| Compose build and run | Passed; API and demo images built and both services started. Host port 8080 was occupied, so the API used `CONNECT_PORT=18673`; demo used port 3000. |
+| Live HTTP and redirect chain | API `/health` 200; demo `/demo/health` 200; `/demo` 200 with Linear and Connect; `POST /demo/connect/linear` 303 with `Location` host `localhost`; Connect authorization 303 with `Location` host `mcp.linear.app`. |
+| Browser rendering | Passed in headless Chromium at desktop and 390 px mobile widths; catalog, icons, controls, and one-column mobile layout were visually checked. |
+| Audit skill | Passed; no remaining concrete code regression or out-of-scope change found. |
+| `git diff --check` | Passed, exit 0. |
+| Runtime trace export | Not verified; no local trace exporter was configured. Span names and attributes were reviewed in code. |
+
+### Open questions
+
+None.
+
+### Proposed commits
+
+1. `feat(connect-demo): add catalog and MCP customer app`
+
+   Why: A standalone customer app is needed to exercise the public catalog, connection flow, and MCP gateway.
+
+   What: Add the demo service, client icon method, tests, workspace membership, and generated Cargo artifacts.
+
+2. `feat(connect-infra): route optional demo service`
+
+   Why: The demo needs isolated runtime configuration and a route on the existing HTTPS listener.
+
+   What: Add optional infrastructure resources and the local Compose service.
+
+3. `docs(connect): document demo bootstrap`
+
+   Why: The setup steps and repository map must describe the new service.
+
+   What: Update the bootstrap runbook and agent guides, and record the task result.
