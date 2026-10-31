@@ -48,9 +48,41 @@ function TasksLegacyRouteView() {
   );
 }
 
-export const TasksRouteView = withAuth(() => {
-  useViewRestoration();
-  const params = useParams<{ taskId?: string; projectId?: string }>();
+/**
+ * Tasks for a caller with no account: the project or task a link opens, alone
+ * and read at its own access. The Tasks list itself offers sign-in.
+ */
+function TasksVisitorView() {
+  const params = useParams<{
+    projectId?: string;
+    section?: ProjectSection;
+    taskId?: string;
+  }>();
+  const navigate = useNavigate();
+  const openTask = (taskId: string) =>
+    fireAndForget(
+      navigate({ route: taskDetailRoute, params: { taskId } }),
+      'tasks-view'
+    );
+  const closeTask = () =>
+    fireAndForget(
+      params.projectId
+        ? navigate({
+            route: projectDetailRoute,
+            params: {
+              projectId: params.projectId,
+              section: params.section ?? 'tasks',
+            },
+          })
+        : navigate({ route: tasksSplitRoute, params: {} }),
+      'tasks-view'
+    );
+  const value = () =>
+    params.taskId
+      ? `task:${params.taskId}`
+      : params.projectId
+        ? `initiative:${params.projectId}`
+        : '';
   return (
     <ViewBreadcrumbs.Root
       value={value()}
@@ -95,6 +127,7 @@ export const TasksRouteView = withAuth(() => {
 
 export const TasksRouteView = withVisitor(
   () => {
+    useViewRestoration();
     const params = useParams<{ taskId?: string; projectId?: string }>();
     return (
       <AppView

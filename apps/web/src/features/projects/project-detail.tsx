@@ -18,6 +18,8 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { SignedOutRoute } from '@components/app/split-layout/split-router/app-route-shell';
+import { useIsAuthenticated } from '@core/auth';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';

@@ -342,8 +342,13 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Label the notification permission toast **Enable Desktop Notifications** in
   the desktop app and **Enable Notifications** in the Android app, and keep
   their Enable action on the native notification provider.
-- Keep signed-out Drive document routes on the shared detail viewer without
-  mounting private list/sidebar sources; let document access checks decide visibility.
+- Signed out, the app is a one-pane visitor shell (the pane policy's
+  `singlePane`). A list route that can show a linked item gives visitors
+  `withVisitor(View, Visitor, Pending)`, whose visitor view renders only the
+  nested detail in `VisitorDetail` and offers sign-in otherwise (Drive, Tasks);
+  never mount the route's private list or sidebar sources for a visitor, and
+  let the item's access decide visibility. Read single items at the GraphQL
+  root (`initiative`, `agentSession`), which takes an optional viewer.
 - Gate account-only queries, comment readers, and account WebSockets on confirmed
   authentication; keep public document loading independent of those services
   and distinguish unresolved identity from confirmed sign-out in UI prompts.
