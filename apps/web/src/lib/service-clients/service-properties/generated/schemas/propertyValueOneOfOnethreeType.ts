@@ -10,5 +10,5 @@ export type PropertyValueOneOfOnethreeType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const PropertyValueOneOfOnethreeType = {
-  Link: 'Link',
+  EntityReference: 'EntityReference',
 } as const;

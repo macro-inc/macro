@@ -15,6 +15,44 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
 }
 
 #[test]
+fn calendar_join_requests_name_the_requester_and_the_event() {
+    let request = CalendarEventJoinRequestMetadata {
+        request_id: Uuid::nil(),
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    };
+    let event: NotifEvent = serde_json::from_value(
+        serde_json::to_value(NotifEvent::CalendarEventJoinRequest(request.clone())).unwrap(),
+    )
+    .unwrap();
+    assert!(matches!(event, NotifEvent::CalendarEventJoinRequest(_)));
+    assert_eq!(
+        request
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo@macro.com asked to join Design review"
+    );
+    assert_eq!(request.format_body(None).unwrap(), "Design review");
+    let untitled = CalendarEventJoinRequestMetadata {
+        title: String::new(),
+        ..request
+    };
+    assert_eq!(untitled.format_body(None).unwrap(), "(No title)");
+}
+
+#[test]
+fn calendar_join_requests_store_the_key_their_retirement_reads() {
+    let request_id = Uuid::now_v7();
+    let stored = serde_json::to_value(CalendarEventJoinRequestMetadata {
+        request_id,
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    })
+    .unwrap();
+    assert_eq!(stored["requestId"], request_id.to_string());
+}
+
+#[test]
 fn view_access_notifications_preserve_permission_and_format_copy() {
     let request = EntityAccessRequestedMetadata {
         request_id: Uuid::nil(),

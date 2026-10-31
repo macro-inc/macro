@@ -5,6 +5,7 @@
    Everything is scoped to html[data-palette=cream]; the dark site is unchanged. */
 
 html[data-palette='cream'] {
+  --marketing-mention: oklch(.52 .14 250deg);
   /* Override every surface level: the frozen dark palette defines each one. */
   --color-surface-0: #f5f1e8;
   --color-surface-1: #faf8f3;
@@ -62,17 +63,14 @@ html[data-palette='cream'] .site-header {
   --nav-muted: #72706c;
   --nav-surface: rgb(250 248 243 / 85%);
   --nav-menu-surface: var(--color-surface-2);
+  --nav-mobile-surface: #f5f1e8;
   --nav-menu-shadow: 0 20px 60px #1d1c1a26, inset 0 1px 0 #ffffff80;
   --nav-edge: rgb(29 28 26 / 10%);
 }
-html[data-palette='cream'] .site-nav-demo { color: #1d1c1a; background: linear-gradient(165deg, #f3f0e9 35%, #ebe7df 100%); }
-html[data-palette='cream'] .site-nav-demo::after { background: linear-gradient(135deg, #ffffff60 0%, #ffffff1c 24%, #00000005 60%, #0000001c 100%); }
 html[data-palette='cream'] .site-menu-panel a:hover { background: #1d1c1a0a; }
 html[data-palette='cream'] .site-header :focus-visible { outline-color: #1d1c1a; }
 html[data-palette='cream'] .site-header[data-menu-open=true]::before { background: #f5f1e8; }
-/* The primary CTA stays raised; the secondary keeps a quieter cream finish. */
-html[data-palette='cream'] :is(.site-nav-start, .site-nav-demo) { box-shadow: inset 0 1px 0 #fff, inset 0 -2px 2px #0000000f, 0 0 0 1px #1d1c1a14, 0 10px 24px -14px #1d1c1a59; }
-html[data-palette='cream'] .site-nav-demo { box-shadow: inset 0 1px 0 #ffffff40, inset 0 -1px 1px #00000003, 0 0 0 1px #1d1c1a09, 0 3px 10px -6px #1d1c1a0a; }
+html[data-palette='cream'] .site-nav-start:not(.site-nav-open) { border-color: #1d1c1a26; }
 
 /* ---- Email composer -------------------------------------------------- */
 html[data-palette='cream'] .homepage-email-surface { background: var(--color-surface-1); color: #1d1c1a; box-shadow: 0 10px 40px -12px #1d1c1a26; }
@@ -85,6 +83,9 @@ html[data-palette='cream'] .homepage-email-toolbar button.homepage-email-send:di
 html[data-palette='cream'] .homepage-email-format button { background: #1d1c1a0a; }
 
 /* ---- Collaborative document ------------------------------------------ */
+/* Document object colors derive from a0. Keep them semantic even though the
+   cream website uses a neutral accent for ordinary controls. */
+html[data-palette='cream'] .mds { --a0: var(--marketing-mention); }
 html[data-palette='cream'] .homepage-collaborative-doc .mds-card { background: var(--color-surface-1); box-shadow: 0 10px 40px -12px #1d1c1a26; }
 html[data-palette='cream'] .homepage-collaborative-doc .mds-card::before { background: linear-gradient(135deg, #ffffff80, transparent 45%) border-box; border-color: #1d1c1a0d; }
 html[data-palette='cream'] .homepage-history-caption { background: #f5f1e8; }
@@ -114,8 +115,8 @@ html[data-palette='cream'] .homepage-sheet-add-rows { background: #1d1c1a08; bor
 
 /* ---- GitHub / open source -------------------------------------------- */
 html[data-palette='cream'] .homepage-github-mark { background: var(--color-surface-3); box-shadow: 0 0 0 7px #1d1c1a05; color: #1d1c1a; }
-html[data-palette='cream'] .homepage-embedded-window { background: #faf8f3; border-color: #1d1c1a1a; box-shadow: 0 32px 70px -24px #1d1c1a40; }
-html[data-palette='cream'] .homepage-embedded-stage::after { background: linear-gradient(to bottom, transparent, #f5f1e855 35%, #f5f1e8bb 65%, #f5f1e8 96%); }
+html[data-palette='cream'] .homepage-embedded-demo { --demo-page: #f5f1e8; }
+html[data-palette='cream'] .homepage-embedded-window { background: #faf8f3; }
 html[data-palette='cream'] .homepage-demo-slide-copy h2 { color: #1d1c1a; }
 
 /* ---- Sample workspace (/demo, embedded on the homepage) ----------------
@@ -142,26 +143,7 @@ html[data-palette='cream'] .dummy-route {
   color-scheme: light;
 }
 
-/* ---- Demo backdrops ---------------------------------------------------
-   The frames fade from the ink color, which is near-black here; use a faint
-   ink wash instead. The embedded workspace's purple/teal wallpaper becomes
-   the warm neutrals of the ad set. */
-html[data-palette='cream'] .homepage-crm .mdf-frame {
-  background: linear-gradient(to bottom, #1d1c1a12 0%, #1d1c1a08 45%, #1d1c1a03 78%, transparent 100%);
-}
-html[data-palette='cream'] .homepage-crm .mdf-frame::before {
-  background: linear-gradient(to bottom, #1d1c1a14 0%, #1d1c1a0a 45%, transparent 100%);
-}
-html[data-palette='cream'] .homepage-embedded-wallpaper {
-  background:
-    radial-gradient(ellipse at 8% 20%, #e7dfd2 0%, transparent 53%),
-    radial-gradient(ellipse at 72% 0%, #dde3da 0%, transparent 55%),
-    radial-gradient(ellipse at 30% 100%, #e4e1d1 0%, transparent 57%),
-    radial-gradient(ellipse at 100% 90%, #ebdfd0 0%, transparent 55%),
-    #ebe6dc;
-}
-html[data-palette='cream'] .homepage-demo-slide-dot span { background: #cfcac0; }
-html[data-palette='cream'] .homepage-demo-slide-dot[aria-pressed=true] span { background: #1d1c1a; }
+html[data-palette='cream'] .homepage-demo-slide-copy h2 { color: var(--color-ink); }
 
 /* ---- Chat bubbles ------------------------------------------------------
    Match dark mode's hierarchy with warm cream tones: sent messages have a
@@ -240,10 +222,10 @@ html[data-palette='cream'] .site-menu-trigger { color: #1d1c1a; }
    as the homepage, including the menus revealed by interaction. */
 html[data-palette='cream'] :is(
   .mail-sharing-stage .mail-app,
-  .email-tags-demo .mail-app,
+  .email-accounts-demo .mail-app,
+  .email-editing-stage .mail-app,
   .email-keyboard-stage .mail-app,
   .mail-sharing-stage .mail-share-form,
-  .mail-shared-thread,
   .mail-arrived-reply,
   .crm-pipeline-frame,
   .tasks-conversation-demo .tlc-frame
@@ -251,20 +233,13 @@ html[data-palette='cream'] :is(
   background: var(--color-surface-1) !important;
   color: var(--color-ink);
 }
-html[data-palette='cream'] .email-tags-demo .email-auto-tag-menu {
-  background: var(--color-surface-2);
-  border-color: var(--color-edge);
-  box-shadow: 0 16px 40px #1d1c1a26;
-}
 html[data-palette='cream'] :is(
-  .email-tags-demo .mail-row[aria-current='true'],
   .email-keyboard-stage .mail-row[aria-current='true']
 ) {
   background: var(--color-active);
   box-shadow: inset 2px 0 var(--color-accent);
 }
 html[data-palette='cream'] :is(
-  .mail-shared-thread > strong,
   .chat-shortcut-dock > button:hover,
   .chat-shortcut-dock > button[data-active='true'],
   .email-keyboard-stage .email-shortcut-dock > button[data-active='true'],
@@ -289,7 +264,6 @@ html[data-palette='cream'] :is(
   .homepage-email-generating,
   .homepage-email-toolbar button,
   .homepage-email-sent,
-  .email-desktop-caption,
   .homepage-demo-carousel button,
   .homepage-demo-launch
 ) { color: var(--color-ink-muted); }
@@ -299,10 +273,6 @@ html[data-palette='cream'] .homepage-history svg text { fill: var(--color-ink-mu
 html[data-palette='cream'] .homepage-history .docs-timeline-stamp { fill: #42658a; }
 html[data-palette='cream'] .homepage-embedded-loading { color: var(--color-ink-muted); }
 html[data-palette='cream'] :is(
-  .mail-shared-thread-label,
-  .mail-shared-thread-label > span,
-  .mail-shared-thread-preview,
-  .mail-shared-thread-footer,
   .mail-arrived-reply header span,
   .email-tag-count
 ) { color: var(--color-ink-muted); }
@@ -330,9 +300,8 @@ html[data-palette='cream'] .email-desktop-demo[data-hero-frame=true] .email-desk
   background: #ebe6dc;
 }
 html[data-palette='cream'] .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper::before {
-  background: radial-gradient(ellipse at 8% 20%, #e7dfd2, transparent 53%),
-    radial-gradient(ellipse at 72% 0%, #dde3da, transparent 55%), #ebe6dc;
-  filter: none;
+  background: url('../../assets/desktop/monterey-dark.jpg') center / cover;
+  filter: grayscale(1) invert(1) sepia(.18) saturate(.6) brightness(.96) contrast(.82);
 }
 html[data-palette='cream'] .sales-calc-tools button[aria-pressed=true] .sales-calc-check {
   color: var(--color-surface-0);
@@ -411,9 +380,12 @@ html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-fram
   background: #ebe6dc;
 }
 html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-frame=true] .email-desktop-wallpaper::before {
-  background: radial-gradient(ellipse at 8% 20%, #e7dfd2, transparent 53%),
-    radial-gradient(ellipse at 72% 0%, #dde3da, transparent 55%), #ebe6dc;
-  filter: none;
+  background: url('../../assets/desktop/monterey-dark.jpg') center / cover;
+  filter: grayscale(1) invert(1) sepia(.18) saturate(.6) brightness(.96) contrast(.82);
+}
+html[data-palette='cream'] body .feature-page .email-desktop-demo[data-hero-frame=true] .email-desktop-window {
+  border-color: #1d1c1a1a;
+  box-shadow: 0 24px 60px #403a302b, 0 3px 12px #403a3014;
 }
 html[data-palette='cream'] :is(.agents-connection-path p, .agents-connection-path a, .calls-page .product-prose a, .calls-scene-picker button) {
   color: var(--color-ink-muted);
@@ -435,7 +407,7 @@ html[data-palette='cream'] .homepage-sheet-toolbar .homepage-sheet-tool {
   color: var(--color-ink-muted);
 }
 
-/* Slab display copy stays pure black across every cream page, including
+/* Slab display copy uses warm near-black across every cream page, including
    secondary headline lines that otherwise inherit a muted text color. */
 html[data-palette='cream'] :is(
   h1, h2, h3,
@@ -451,7 +423,7 @@ html[data-palette='cream'] :is(
   .unification-before,
   .sales-calc-saved strong
 ) :is(span, em, strong, a) {
-  color: #000 !important;
+  color: #1d1c1a !important;
 }
 
 /* Orbit surfaces previously mixed dark ink into the page.
@@ -463,8 +435,6 @@ html[data-palette='cream'] :is(.ob-welcome-logo, .ob-orbit-tile) {
 /* One primary CTA finish across the public site. Legacy pages use inline
    skins and important flat-button rules, so override that skin here. */
 html[data-palette='cream'] :is(
-  .site-nav-start,
-  .feature-page-cta,
   .home-hero-cta:not([href^='mailto:']),
   .base-header-pill-cta,
   .pricing-cta-button,
@@ -492,8 +462,6 @@ html[data-palette='cream'] :is(
     0 0 0 1px #1d1c1a11, 0 10px 24px -14px #1d1c1a4c !important;
 }
 html[data-palette='cream'] :is(
-  .site-nav-start,
-  .feature-page-cta,
   .home-hero-cta:not([href^='mailto:']),
   .base-header-pill-cta,
   .pricing-cta-button,
@@ -597,9 +565,9 @@ html[data-palette='cream'] .feature-flow {
 }
 
 /* Add weight to the existing slab styles without changing their type scale. */
-html[data-palette='cream'] { --cream-slab-weight-increase: 15; }
-html[data-palette='cream'] [class*='font-[Roboto_Slab'] { font-weight: 330; }
-html[data-palette='cream'] .tasks-founder-card h2 { font-weight: 415; }
+html[data-palette='cream'] { --cream-slab-weight-increase: 45; }
+html[data-palette='cream'] [class*='font-[Roboto_Slab'] { font-weight: 360; }
+html[data-palette='cream'] .tasks-founder-card h2 { font-weight: 445; }
 
 /* Product walkthroughs sit above the cream canvas, like the homepage composer. */
 html[data-palette='cream'] :is(.product-page, .feature-page) :is(

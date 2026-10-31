@@ -11,6 +11,7 @@ up to the first 100 messages) loads lazily on first field access.
 
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | `...` | Access requests and direct user grants. | - | - |
 | <a id="property-accesslevel"></a> `accessLevel` | `readonly` | () => `Promise`\<[`AccessLevel`](../../../../../generated/email/types.gen/type-aliases/AccessLevel.md)\> | `...` | The viewer's access level to this thread. | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string`\> | `...` | When the thread was created. | - | - |
 | <a id="property-entitytype"></a> `entityType` | `readonly` | `"email_thread"` | `'email_thread'` | Favorites identify email threads as `email_thread`. | [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`entityType`](../../../entity/classes/PropertiedEntity.md#property-entitytype) | - |
@@ -27,6 +28,38 @@ up to the first 100 messages) loads lazily on first field access.
 | <a id="property-search"></a> `search` | `static` | (`client`, `query`, `searchOpts?`) => `AsyncGenerator`\<`EmailThread`\> | `...` | Search email threads by subject and content, most relevant first, auto-paginated. | - | - |
 
 ## Methods
+
+### addEventToCalendar()
+
+> **addEventToCalendar**(`message`, `invitation`, `options?`): `Promise`\<[`CalendarEvent`](../../../calendar/event/classes/CalendarEvent.md)\>
+
+Add a shared event one of this thread's messages carries (a published
+`.ics`, such as one sent with Forward by email) to one of the
+requester's Google calendars, and return a handle to the synced
+snapshot. The event is read from the saved message, never from the
+caller, and lands the way [CalendarEvent.addToCalendar](../../../calendar/event/classes/CalendarEvent.md#addtocalendar) adds a
+channel-shared one: the meeting's iCalendar UID and organizer, only the
+requester as a guest, no join link, nobody notified. Refused with
+`invalid_input` for an invitation, which is answered from the calendar
+instead, `already_on_calendar` when the meeting is already on one of
+their calendars, whichever calendar is named (it cannot be added to
+another of theirs either), and `copy_refused` when Google will not
+import it.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `message` | [`EmailMessage`](../../message/classes/EmailMessage.md) |
+| `invitation` | [`CalendarInvitation`](../../../../../generated/email/types.gen/type-aliases/CalendarInvitation.md) |
+| `options?` | \{ `calendar?`: [`Calendar`](../../../calendar/calendar/classes/Calendar.md); \} |
+| `options.calendar?` | [`Calendar`](../../../calendar/calendar/classes/Calendar.md) |
+
+#### Returns
+
+`Promise`\<[`CalendarEvent`](../../../calendar/event/classes/CalendarEvent.md)\>
+
+***
 
 ### addLabel()
 
@@ -76,6 +109,18 @@ The attachments across this thread's first 100 messages, pre-seeded from the thr
 
 ***
 
+### calendarInvitations()
+
+> **calendarInvitations**(): `Promise`\<\{\[`key`: `string`\]: [`InvitationResolution`](../../../../../generated/email/types.gen/type-aliases/InvitationResolution.md); \}\>
+
+Calendar invitations resolved from this thread's messages.
+
+#### Returns
+
+`Promise`\<\{\[`key`: `string`\]: [`InvitationResolution`](../../../../../generated/email/types.gen/type-aliases/InvitationResolution.md); \}\>
+
+***
+
 ### deleteProperty()
 
 > **deleteProperty**(`assignment`): `Promise`\<`void`\>
@@ -113,6 +158,18 @@ entity's own detail, so there's nothing cached to invalidate.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`favorite`](../../../entity/classes/PropertiedEntity.md#favorite)
+
+***
+
+### followup()
+
+> **followup**(): `Promise`\<[`EmailFollowupResponse`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowupResponse.md)\>
+
+Read follow-up state for this thread.
+
+#### Returns
+
+`Promise`\<[`EmailFollowupResponse`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowupResponse.md)\>
 
 ***
 
@@ -191,6 +248,22 @@ Derived from the thread's first 100 messages.
 
 ***
 
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`permission`](../../../entity/classes/PropertiedEntity.md#permission)
+
+***
+
 ### properties()
 
 > **properties**(`opts?`): `Promise`\<[`EntityPropertyWithDefinition`](../../../../../generated/properties/types.gen/type-aliases/EntityPropertyWithDefinition.md)[]\>
@@ -266,6 +339,24 @@ Send a reply within this thread. Returns a handle when the API reports the creat
 
 ***
 
+### setFollowup()
+
+> **setFollowup**(`command`): `Promise`\<[`EmailFollowup`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowup.md)\>
+
+Set or remove a follow-up using a persisted operation id and revision.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `command` | [`EmailFollowupCommand`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowupCommand.md) |
+
+#### Returns
+
+`Promise`\<[`EmailFollowup`](../../../../../generated/storage/types.gen/type-aliases/EmailFollowup.md)\>
+
+***
+
 ### setProperty()
 
 > **setProperty**(`property`, `value?`): `Promise`\<`void`\>
@@ -337,6 +428,26 @@ Remove this entity from the user's favorites. Returns this handle for chaining.
 
 ***
 
+### update()
+
+> **update**(`options`): `Promise`\<`void`\>
+
+Change project membership or share permissions for this thread.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | \{ `project?`: [`Project`](../../../projects/project/classes/Project.md) \| `null`; `sharePermission?`: [`SharePermissionOptions`](../../../sharing/permissions/type-aliases/SharePermissionOptions.md); \} |
+| `options.project?` | [`Project`](../../../projects/project/classes/Project.md) \| `null` |
+| `options.sharePermission?` | [`SharePermissionOptions`](../../../sharing/permissions/type-aliases/SharePermissionOptions.md) |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### updatePropertyOptions()
 
 > **updatePropertyOptions**(`changes`): `Promise`\<[`BulkUpdateEntityPropertyOptionsResponse`](../../../../../generated/properties/types.gen/type-aliases/BulkUpdateEntityPropertyOptionsResponse.md)\>
@@ -374,6 +485,27 @@ Update provider-neutral read, trash, spam, or star state.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### archiveMany()
+
+> `static` **archiveMany**(`client`, `threads`, `archived?`): `Promise`\<`EmailThread`[]\>
+
+Archive many threads (or unarchive with `false`), sending one request per
+100 threads. Resolves to the threads whose state could not change.
+
+#### Parameters
+
+| Parameter | Type | Default value |
+| ------ | ------ | ------ |
+| `client` | `MacroClient` | `undefined` |
+| `threads` | `EmailThread`[] | `undefined` |
+| `archived?` | `boolean` | `true` |
+
+#### Returns
+
+`Promise`\<`EmailThread`[]\>
 
 ***
 

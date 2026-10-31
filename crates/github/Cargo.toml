@@ -16,6 +16,8 @@ axum = [
 ]
 default = ["axum", "inbound", "link", "outbound", "ports", "sync"]
 inbound = ["axum", "ports"]
+# Who may see an installation's deliveries, without the rest of the sync stack.
+installation_claims = ["dep:sqlx", "ports"]
 link = ["dep:entity_access", "github_pull_requests/ports", "ports"]
 outbound = [
   "dep:connection_gateway_client",
@@ -63,6 +65,8 @@ hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
 lru = { workspace = true }
 macro_env = { path = "../macro_env" }
+macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_event_topics = { path = "../macro_event_topics" }
 macro_env_var = { path = "../macro_env_var" }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
@@ -86,6 +90,7 @@ uuid = { workspace = true }
 
 fusionauth = { path = "../fusionauth", optional = true }
 macro_user_id = { path = "../macro_user_id" }
+models_properties = { path = "../models_properties" }
 macro_uuid = { path = "../macro_uuid" }
 redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
@@ -97,6 +102,8 @@ utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+axum = { workspace = true }
+wiremock = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
 foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",

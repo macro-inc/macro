@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO agent_preview_watcher (session_id, user_id, expires_at)\n               SELECT $1, $2, $3 WHERE\n                   EXISTS (SELECT 1 FROM agent_preview_watcher WHERE session_id = $1 AND user_id = $2 AND expires_at > now())\n                   OR ((SELECT count(*) FROM agent_preview_watcher WHERE session_id = $1 AND expires_at > now()) < $4\n                       AND (EXISTS (SELECT 1 FROM agent_preview_watcher WHERE session_id = $1 AND expires_at > now())\n                           OR (SELECT count(DISTINCT session_id) FROM agent_preview_watcher WHERE expires_at > now()) < $5))\n               ON CONFLICT (session_id, user_id) DO UPDATE SET expires_at = EXCLUDED.expires_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9521c61a2075b29ea221a0faabf0fd6146da08faf59d3c19f0cf6be79ee19f18"
+}

@@ -39,11 +39,12 @@ function notificationEntityTypeToSoupTag(
         'database_row',
         'form',
         'scheduled_action',
-        'initiative'
+        'initiative',
+        'external_chat'
       ),
       () => null
     )
-    .exhaustive();
+    .exhaustive(() => null);
 }
 
 /** Keep REST-backed Home rows live even when notifications use GraphQL. */

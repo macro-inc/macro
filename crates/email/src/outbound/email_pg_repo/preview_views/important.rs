@@ -5,8 +5,9 @@ use uuid::Uuid;
 
 /// Fetches a paginated list of thread previews for the "Important" view.
 /// Includes threads that:
-/// 1. Have messages with both 'IMPORTANT' and 'INBOX' labels, or
+/// 1. Have messages the provider marks important that are in the inbox, or
 /// 2. Contain draft messages
+/// Trashed and provider-missing messages never qualify.
 /// The threads are sorted by timestamp, with preview details taken from the latest qualifying message.
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn important_preview_cursor(
@@ -19,10 +20,20 @@ pub(crate) async fn important_preview_cursor(
     let sort_method_str = query.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = query.vals();
 
+    // The is_present, in_trash, in_inbox and provider_is_important predicates
+    // restate email_message_mailbox_facts with link-wide hash lookups: the view
+    // aggregates every message's labels and pending state separately, which
+    // dominates a scan of a whole mailbox. test_static_important_matches_mailbox_facts
+    // keeps the two in step.
     sqlx::query_as!(
         ThreadPreviewCursorDbRow,
         r#"
-        WITH QualifyingMessages AS (
+        WITH LinkLabels AS (
+            SELECT l.id, l.provider_label_id
+            FROM email_labels l
+            WHERE l.link_id = ANY($1) AND l.provider_label_id IN ('INBOX', 'TRASH', 'IMPORTANT')
+        ),
+        QualifyingMessages AS (
             SELECT m.thread_id,
                    m.internal_date_ts,
                    m.created_at AS fallback_ts,
@@ -32,25 +43,39 @@ pub(crate) async fn important_preview_cursor(
                    m.from_contact_id,
                    m.from_name
             FROM email_messages m
+            LEFT JOIN email_pending_mailbox_state pending_trash
+                ON pending_trash.message_id = m.id AND pending_trash.attribute = 'in_trash'
+            LEFT JOIN email_pending_mailbox_state pending_inbox
+                ON pending_inbox.message_id = m.id AND pending_inbox.attribute = 'in_inbox'
             WHERE m.link_id = ANY($1)
-              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
-              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.provider_is_important)
-              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.in_inbox)
-
-            UNION ALL
-
-            SELECT m.thread_id,
-                   m.internal_date_ts,
-                   m.created_at AS fallback_ts,
-                   m.is_draft,
-                   m.subject,
-                   m.snippet,
-                   m.from_contact_id,
-                   m.from_name
-            FROM email_messages m
-            WHERE m.link_id = ANY($1)
-              AND m.is_draft = TRUE
-              AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)
+              AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
+              AND NOT COALESCE(
+                  (pending_trash.desired #>> '{}')::boolean,
+                  (m.mailbox_state->>'in_trash')::boolean,
+                  m.id IN (
+                      SELECT ml.message_id FROM LinkLabels l JOIN email_message_labels ml ON ml.label_id = l.id
+                      WHERE l.provider_label_id = 'TRASH'
+                  )
+              )
+              AND (
+                  m.is_draft
+                  OR (
+                      CASE WHEN m.mailbox_state IS NOT NULL THEN m.mailbox_state->>'attention' = 'primary'
+                      ELSE m.id IN (
+                          SELECT ml.message_id FROM LinkLabels l JOIN email_message_labels ml ON ml.label_id = l.id
+                          WHERE l.provider_label_id = 'IMPORTANT'
+                      )
+                      END
+                      AND COALESCE(
+                          (pending_inbox.desired #>> '{}')::boolean,
+                          (m.mailbox_state->>'in_inbox')::boolean,
+                          m.id IN (
+                              SELECT ml.message_id FROM LinkLabels l JOIN email_message_labels ml ON ml.label_id = l.id
+                              WHERE l.provider_label_id = 'INBOX'
+                          )
+                      )
+                  )
+              )
         ),
         AllImportantThreads AS (
             -- From all qualifying messages, get the single most recent one per thread.
@@ -70,13 +95,17 @@ pub(crate) async fn important_preview_cursor(
             -- Join with user_history to calculate the final effective sort key.
             SELECT
                 ait.thread_id,
-                ait.internal_date_ts,
-                ait.fallback_ts,
                 ait.is_draft,
                 ait.subject,
                 ait.snippet,
                 ait.from_contact_id,
                 ait.from_name,
+                tt.provider_id,
+                tt.inbox_visible,
+                tt.is_read,
+                tt.is_signal,
+                tt.project_id,
+                tt.link_id,
                 COALESCE(ait.internal_date_ts, ait.fallback_ts) as created_at,
                 COALESCE(ait.internal_date_ts, ait.fallback_ts) as updated_at,
                 uh.updated_at as viewed_at,
@@ -93,17 +122,25 @@ pub(crate) async fn important_preview_cursor(
             JOIN email_threads tt ON tt.id = ait.thread_id
             -- This has to be a left join to support all sort methods.
             LEFT JOIN email_user_history uh ON uh.thread_id = ait.thread_id AND uh.link_id = tt.link_id
+        ),
+        Page AS (
+            -- Cut the page before joining senders and links, which every thread has at most one of.
+            SELECT *
+            FROM ImportantWithSortKey isk
+            WHERE ($3::timestamptz IS NULL) OR (isk.effective_ts, isk.thread_id) < ($3::timestamptz, $4::uuid)
+            ORDER BY isk.effective_ts DESC, isk.thread_id DESC
+            LIMIT $2
         )
         SELECT
                isk.thread_id as "id!",
-               t.provider_id,
-               t.inbox_visible,
-               t.is_read,
-               t.is_signal,
+               isk.provider_id,
+               isk.inbox_visible as "inbox_visible!",
+               isk.is_read as "is_read!",
+               isk.is_signal as "is_signal!",
                isk.effective_ts as "sort_ts!",
                isk.created_at as "created_at!",
                isk.updated_at as "updated_at!",
-               t.project_id,
+               isk.project_id,
                isk.viewed_at as "viewed_at?",
                isk.is_draft as "is_draft!",
                -- It's the important view - all threads here are important
@@ -115,14 +152,10 @@ pub(crate) async fn important_preview_cursor(
                c.sfs_photo_url as "sender_photo_url?",
                el.macro_id AS "owner_id!",
             el.id AS "link_id!"
-        FROM ImportantWithSortKey isk
-        JOIN email_threads t ON isk.thread_id = t.id
+        FROM Page isk
         LEFT JOIN email_contacts c ON isk.from_contact_id = c.id
-        JOIN email_links el ON t.link_id = el.id
-        WHERE
-            ($3::timestamptz IS NULL) OR (isk.effective_ts, isk.thread_id) < ($3::timestamptz, $4::uuid)
+        JOIN email_links el ON isk.link_id = el.id
         ORDER BY isk.effective_ts DESC, isk.thread_id DESC
-        LIMIT $2
         "#,
         link_ids,           // $1
         query_limit,              // $2

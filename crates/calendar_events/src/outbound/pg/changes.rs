@@ -16,7 +16,7 @@ use crate::domain::{
         CalendarChange, CalendarChangeRepository, CalendarEventChange, CalendarLinkLog,
         CalendarLinkWatermark, CalendarWatermark, EventChangeLoad, EventOccurrence,
     },
-    models::VisibleCalendar,
+    models::{OwnedInbox, VisibleCalendar},
     ports::CalendarRepository,
 };
 
@@ -211,6 +211,10 @@ impl CalendarChangeRepository for PgCalendarRepository {
                 event.is_read_only,
                 event.reminders_use_default,
                 event.reminder_overrides,
+                event.guests_can_modify,
+                event.guests_can_invite_others,
+                event.guests_can_see_other_guests,
+                event.is_snapshot,
                 event.created_at,
                 event.updated_at
             FROM calendar_event_occurrences occurrence
@@ -326,10 +330,14 @@ impl CalendarChangeRepository for PgCalendarRepository {
                 ) AS "unconfirmed_reply!",
                 calendar.consecutive_sync_failures,
                 account.provider,
-                calendar.online_meeting_providers
+                calendar.online_meeting_providers,
+                COALESCE(preference.contributes_to_availability,
+                    account.owner_id = $1 AND calendar.is_primary) AS "contributes_to_availability!"
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
+            LEFT JOIN calendar_availability_preferences preference
+                ON preference.calendar_id = calendar.id AND preference.user_id = $1
             WHERE calendar.id = ANY($2::uuid[])
               AND NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'
@@ -352,7 +360,7 @@ impl CalendarChangeRepository for PgCalendarRepository {
         Ok(rows.into_iter().map(visible_calendar).collect())
     }
 
-    async fn owned_inbox_emails(&self, viewer: &str) -> Result<Vec<String>, Report> {
-        CalendarRepository::owned_inbox_emails(self, viewer).await
+    async fn owned_inboxes(&self, viewer: &str) -> Result<Vec<OwnedInbox>, Report> {
+        CalendarRepository::owned_inboxes(self, viewer).await
     }
 }

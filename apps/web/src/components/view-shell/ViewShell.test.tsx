@@ -10,7 +10,7 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX, onMount } from 'solid-js';
+import { createSignal, type JSX, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useViewShell, ViewShell, ViewSidebarToggle } from './ViewShell';
@@ -33,11 +33,9 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
-  Button: (
-    props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
-  ) => (
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
-      aria-label={props.label}
+      aria-label={props['aria-label']}
       aria-expanded={props['aria-expanded']}
       onClick={props.onClick}
       onMouseDown={props.onMouseDown}
@@ -146,7 +144,7 @@ function setup(preserveDuringResize: boolean, persistWidth = false) {
       new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 256 })
     );
     fireEvent(window, new MouseEvent('pointermove', { clientX: 296 }));
-    fireEvent(window, new MouseEvent('pointerup'));
+    fireEvent(window, new MouseEvent('pointerup', { clientX: 296 }));
   };
   return {
     ...view,
@@ -417,6 +415,33 @@ it('opens secondary splits without navigation and leaves the preference alone', 
   expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
 });
 
+it('keeps a secondary split navigation choice when the split changes view', () => {
+  const [app, setApp] = createSignal('home');
+  render(() => (
+    <SplitPanelContext.Provider
+      value={
+        {
+          handle: { isFirst: () => false },
+          isPanelActive: () => false,
+          splitHotkeyScope: 'split',
+          navigationCollapsed: createSignal(true),
+        } as unknown as SplitPanelContextType
+      }
+    >
+      <Show when={app()} keyed>
+        {(current) => <Workspace app={current} />}
+      </Show>
+    </SplitPanelContext.Provider>
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  setApp('agents');
+  expect(screen.getByRole('region', { name: 'agents' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Hide navigation' }));
+  setApp('home');
+  expect(screen.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
+});
+
 it('reopens automatic narrow collapse as a dismissible overlay', () => {
   measurement.width = () => 600;
   render(() => <Workspace app="documents" />);
@@ -520,6 +545,22 @@ describe('pinned navigation', () => {
     expect(
       screen.queryByRole('button', { name: 'Hide navigation' })
     ).toBeNull();
+  });
+
+  it('keeps an open narrow overlay open when the pin changes', () => {
+    measurement.width = () => 600;
+    const [pinned, setPinned] = createSignal(true);
+    render(() => <Workspace app="channels" asidePinned={pinned()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+
+    setPinned(false);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
+    setPinned(true);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
   });
 });
 

@@ -69,6 +69,7 @@ fn tallied(kind: ColumnKind) -> bool {
         ColumnKind::Text
         | ColumnKind::Number
         | ColumnKind::Date
+        | ColumnKind::DateRange
         | ColumnKind::Link
         | ColumnKind::Entity { .. }
         | ColumnKind::Relation { .. } => false,

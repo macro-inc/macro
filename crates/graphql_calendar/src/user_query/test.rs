@@ -114,6 +114,22 @@ impl CalendarOccurrenceService for FakeReads {
     async fn primary_time_zone(&self, _requester_id: &str) -> Result<Option<String>, Report> {
         unreachable!("calendar GraphQL reads never resolve the primary time zone")
     }
+
+    async fn meeting_copies(
+        &self,
+        _requester_id: &str,
+        _event_id: uuid::Uuid,
+    ) -> Result<Vec<calendar_events::domain::models::MeetingCopy>, Report> {
+        unreachable!("no GraphQL read lists a meeting's copies")
+    }
+
+    async fn event_ics(
+        &self,
+        _requester_id: &str,
+        _event_id: uuid::Uuid,
+    ) -> Result<Option<calendar_events::domain::ics::CalendarEventIcs>, Report> {
+        unreachable!("calendar GraphQL reads never export an event")
+    }
 }
 
 impl CalendarChangeQueryService for FakeReads {
@@ -239,6 +255,7 @@ async fn calendars_are_listed_for_the_viewer() {
             is_primary: true,
             is_writable: true,
             is_subscription: false,
+            contributes_to_availability: true,
             sync_error: None,
             provider: CalendarProvider::Google,
             capabilities: CalendarCapabilities::google(),
@@ -304,6 +321,7 @@ async fn calendar_lists_and_deltas_preserve_actual_provider_capabilities() {
             is_primary: true,
             is_writable: true,
             is_subscription: false,
+            contributes_to_availability: true,
             sync_error: None,
             provider: *provider,
             capabilities: capabilities.clone(),

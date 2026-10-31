@@ -22,8 +22,8 @@ use uuid::Uuid;
 use crate::domain::{
     meeting_links::{CreateEventWithMacroCallError, MeetingLinkError},
     models::{
-        AttendeeResponseStatus, CalendarEvent, CalendarEventDraft, CalendarEventPatch,
-        VisibleCalendar,
+        AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
+        CalendarEventPatch, VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMacroCallService, CalendarMutationError,
@@ -157,6 +157,14 @@ fn error_from_response(status: StatusCode, body: Option<String>) -> CalendarMuta
         "read_only" => CalendarMutationError::ReadOnly,
         "no_writable_calendar" => CalendarMutationError::NoWritableCalendar,
         "not_attendee" => CalendarMutationError::NotAttendee,
+        "not_organizer" => CalendarMutationError::NotOrganizer,
+        "guests_cannot_invite" => CalendarMutationError::GuestsCannotInvite,
+        "guest_list_hidden" => CalendarMutationError::GuestListHidden,
+        "guests_cannot_modify" => CalendarMutationError::GuestsCannotModify,
+        "already_on_calendar" => CalendarMutationError::AlreadyOnCalendar,
+        "join_request_open" => CalendarMutationError::JoinRequestOpen,
+        "copy_refused" => CalendarMutationError::CopyRefused(error.message),
+        "snapshot" => CalendarMutationError::Snapshot,
         "invalid_input" => CalendarMutationError::InvalidInput(error.message),
         "reauth_required" => CalendarMutationError::ReauthRequired(error.message),
         "provider_rejected" => CalendarMutationError::ProviderRejected(error.message),
@@ -220,6 +228,7 @@ fn create_body(
         "reminders": draft.reminders,
         "conference": draft.conference,
         "outOfOffice": draft.out_of_office,
+        "guestPolicy": draft.guest_policy,
         "idempotencyKey": draft.idempotency_key,
         "macroCall": macro_call,
     })
@@ -253,14 +262,13 @@ fn update_body(
         "reminders": patch.reminders,
         "conference": patch.conference,
         "outOfOffice": patch.out_of_office,
+        "guestPolicy": patch.guest_policy,
         "scope": scope_name,
         "recurrenceId": recurrence_id,
     })
 }
 
-fn attendees_body(
-    attendees: &[crate::domain::models::CalendarAttendeeInput],
-) -> Vec<serde_json::Value> {
+fn attendees_body(attendees: &[CalendarAttendeeInput]) -> Vec<serde_json::Value> {
     attendees
         .iter()
         .map(|attendee| {
@@ -292,6 +300,35 @@ fn delete_query(
         query.push(("calendarId", calendar_id.to_string()));
     }
     query
+}
+
+/// Wire body adding guests, matching `InviteCalendarEventGuestsRequest`.
+fn invite_body(
+    calendar_id: Option<Uuid>,
+    guests: &[CalendarAttendeeInput],
+    scope: &CalendarUpdateScope,
+) -> serde_json::Value {
+    let (scope_name, recurrence_id) = match scope {
+        CalendarUpdateScope::All => ("all", None),
+        CalendarUpdateScope::ThisEvent { recurrence_id } => {
+            ("this_event", Some(recurrence_id.as_str()))
+        }
+    };
+    let guests: Vec<serde_json::Value> = guests
+        .iter()
+        .map(|guest| {
+            serde_json::json!({
+                "email": guest.email,
+                "optional": guest.is_optional,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "calendarId": calendar_id,
+        "guests": guests,
+        "scope": scope_name,
+        "recurrenceId": recurrence_id,
+    })
 }
 
 /// Wire body for an RSVP, matching `RsvpCalendarEventRequest`.
@@ -442,6 +479,71 @@ impl CalendarMutationService for CalendarServiceMutations {
             )),
         )
         .await
+    }
+
+    #[tracing::instrument(skip(self, requester_id, guests), err)]
+    async fn invite_guests(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+        guests: Vec<CalendarAttendeeInput>,
+        scope: CalendarUpdateScope,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        self.event_from(
+            self.request(
+                reqwest::Method::POST,
+                &format!("/events/{event_id}/guests"),
+                requester_id,
+            )
+            .json(&invite_body(calendar_id, &guests, &scope)),
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn copy_shared_event(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
+        calendar_id: Option<Uuid>,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
+        self.event_from(
+            self.request(
+                reqwest::Method::POST,
+                &format!("/events/{event_id}/copy"),
+                requester_id,
+            )
+            .json(&serde_json::json!({ "calendarId": calendar_id })),
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn respond_to_join_request(
+        &self,
+        requester_id: &str,
+        request_id: Uuid,
+        accept: bool,
+    ) -> Result<crate::domain::join_requests::CalendarJoinRequest, CalendarMutationError> {
+        self.send(
+            self.request(
+                reqwest::Method::PUT,
+                &format!("/join-requests/{request_id}"),
+                requester_id,
+            )
+            .json(&serde_json::json!({
+                "decision": if accept { "accept" } else { "decline" },
+            })),
+        )
+        .await?
+        .json()
+        .await
+        .map_err(|error| {
+            CalendarMutationError::PersistFailed(format!(
+                "the join request was answered but its response could not be parsed: {error}"
+            ))
+        })
     }
 
     /// Not reachable over this transport. Disconnecting a calendar is part of

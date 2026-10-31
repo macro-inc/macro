@@ -52,7 +52,7 @@ export async function verifyDemo(
           })
         ).toHaveCSS(
           'color',
-          theme === 'cream' ? 'rgb(0, 0, 0)' : 'oklch(1 0 21)'
+          theme === 'cream' ? 'rgb(29, 28, 26)' : 'oklch(1 0 21)'
         );
         const rail = page.locator('[data-ui="sidebar-rail"]');
         await expect(

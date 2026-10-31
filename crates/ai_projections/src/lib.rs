@@ -21,8 +21,8 @@
 //! (prompt, optional `model` override, optional `output_schema`): re-upserting
 //! with any of those changed revises the definition and resets instances to
 //! cold on their next request. Worker writes are scoped to the message's hash
-//! so results for outdated versions are discarded. A scheduled refresh lambda
-//! (`ai_projections_refresh_handler`) deletes inactive instances and
+//! so results for outdated versions are discarded. Refresh tasks in
+//! `agent_harness_service::cognition` delete inactive instances and
 //! re-enqueues stale ones per cadence.
 //!
 //! When `output_schema` is set, generation is two-phase: the tool-enabled

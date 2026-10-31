@@ -19,6 +19,7 @@ use utoipa_swagger_ui::SwaggerUi;
 // Utilities
 pub(crate) mod context;
 mod saved_views;
+mod sync;
 pub(crate) mod util;
 
 // Middleware
@@ -49,6 +50,7 @@ mod threads;
 pub const MACRO_INTERNAL_USER_ID: &str = "macro|INTERNAL@macro.com";
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
+    let sync_sessions = state.sync_sessions.clone();
     let app = api_router(state.clone())
         .layer(
             ServiceBuilder::new()
@@ -59,7 +61,12 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     },
                     validate_api_version,
                 ))
-                .layer(macro_cors::cors_layer().expose_headers([axum::http::header::RETRY_AFTER]))
+                .layer(
+                    macro_cors::cors_layer_with_headers(vec![axum::http::HeaderName::from_static(
+                        complete_graph::MAIL_CACHE_PROFILE_HEADER,
+                    )])
+                    .expose_headers([axum::http::header::RETRY_AFTER]),
+                )
                 .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it
@@ -77,10 +84,16 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         &state.config.environment,
         &state.config.port
     );
-    axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
+    let shutdown_sessions = sync_sessions.clone();
+    let result = axum::serve(listener, app.into_make_service())
+        .with_graceful_shutdown(async move {
+            macro_entrypoint::shutdown_signal().await;
+            shutdown_sessions.cancel();
+        })
         .await
-        .context("error starting service")
+        .context("error starting service");
+    sync_sessions.shutdown().await;
+    result
 }
 
 fn items_router(state: ApiContext) -> Router<ApiContext> {
@@ -124,6 +137,7 @@ fn api_router(state: ApiContext) -> Router {
     );
 
     let internal_router = Router::new()
+        .merge(sync::router())
         .nest(
             "/dictation",
             dictation::inbound::axum_router::dictation_router(state.dictation_state.clone()),
@@ -224,6 +238,11 @@ fn api_router(state: ApiContext) -> Router {
         .merge(calendar_events::inbound::axum_router::calendar_router(
             state.calendar_state.clone(),
         ))
+        .merge(
+            calendar_events::inbound::join_request_router::calendar_join_request_router(
+                state.calendar_join_request_state.clone(),
+            ),
+        )
         .merge(calendar_events::inbound::team_router::team_calendar_router(
             calendar_events::inbound::team_router::CalendarTeamRouterState::new(
                 std::sync::Arc::new(calendar_events::domain::team::CalendarTeamServiceImpl::new(
@@ -275,6 +294,18 @@ fn api_router(state: ApiContext) -> Router {
             slack_integration::inbound::axum_router::slack_router(state.slack_state.clone()),
         )
         .nest(
+            "/external-chats",
+            external_chat::inbound::router::external_chats_router(
+                state.external_chat_state.chats.clone(),
+            ),
+        )
+        .nest(
+            "/whatsapp",
+            whatsapp_linked::inbound::router::whatsapp_router(
+                state.external_chat_state.whatsapp.clone(),
+            ),
+        )
+        .nest(
             "/reminders",
             reminders::inbound::axum_router::reminders_router(state.reminders_state.clone()),
         )
@@ -289,6 +320,9 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/databases",
             databases::inbound::axum_router::databases_router(state.databases_state.clone())
+                .merge(databases_sql::inbound::axum_router::sql_router(
+                    state.sql_state.clone(),
+                ))
                 .merge(databases::inbound::starter_router::starter_router(
                     state.database_starter_state.clone(),
                 ))

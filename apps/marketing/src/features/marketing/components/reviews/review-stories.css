@@ -66,7 +66,7 @@
 
 /* Walkthrough overlays sit over the window, measured from their targets. */
 .review-flow-frame { position: relative; }
-.review-flow-pointer { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; transition: transform 600ms cubic-bezier(.2, .8, .2, 1); }
+.review-flow-pointer { position: absolute; top: 0; left: 0; z-index: 9; pointer-events: none; }
 .review-flow-card { position: absolute; top: 0; left: 0; z-index: 10; animation: review-card-in 160ms ease-out both; }
 @keyframes review-card-in { from { opacity: 0; } }
 .review-channel-log .sample-channel-thread { margin-bottom: 12px; }

@@ -32,12 +32,12 @@ attribute.
   separate tiny traces for the same path — prefer the trace whose root is `web-app`.
 
 URL prefix → service mapping: `/dss/*` → document_storage_service,
-`/unfurl/*` → unfurl_service, `/cognition/*` → document_cognition_service,
+`/unfurl/*` → unfurl_service, `/cognition/*`, `/scheduled-action/*`, `/preview/*`, and `/mcp/*` → agent_harness_service,
 `/auth/*` → authentication_service, `/email/*` → email_service. Frontend OTel
 exports to `/i/otlp/v1/{traces,logs}`.
 
-The local Caddy proxy strips these prefixes before forwarding, so `span.url.path` is
-unprefixed locally. The deployed gateway ALB does **not** strip `/dss`, `/unfurl`, or
+The local Caddy proxy preserves cognition, scheduling, preview, and MCP prefixes.
+It strips most other service prefixes, so their `span.url.path` is unprefixed locally. The deployed gateway ALB does **not** strip `/dss`, `/unfurl`, or
 `/auth` — those services serve the same routes at both `/` and the prefix — so in
 dev and prod `span.url.path` includes the prefix. Query both forms when a search
 comes back empty.
@@ -58,7 +58,7 @@ trace context — timestamps + service are the only join for those.
   (`POST /cognition/stream/chat/message`) produce a trace containing only the browser client
   span — the cognition HTTP server layer emits no server span, so the entire agent loop
   (tools, model calls) is invisible in Tempo.
-- `document_cognition_service` emits orphaned single-span traces (`add_subtoolset`) and giant
+- The cognition surface in `agent_harness_service` emits orphaned single-span traces (`add_subtoolset`) and giant
   "root span not yet received" traces made of repeated 10-second spans (a polling loop traced
   per-iteration under a never-ending root).
 - Server traces are shallow: `http.request` spans have no child spans (no DB, S3, or
@@ -68,6 +68,14 @@ trace context — timestamps + service are the only join for those.
 - Most frontend spans stop at the fetch: websocket-delivered results such as AI edits
   applying and message fan-out remain untraced. Call joining now has a user-action
   trace; see below.
+- `email_service` wraps its routes in tower-http's default `TraceLayer`, not
+  `macro_tower_layers`. Its request span is DEBUG level, below the INFO trace
+  filter. The span also ignores `traceparent`, so browser traces of email_service
+  requests end at the `http` client span. The gap is read from the code and not
+  yet confirmed in Tempo.
+- With `ENABLE_BEARER_TOKEN_AUTH` (Playwright e2e and the native test runner),
+  `fetchWithAuth` awaits the API token before `safeFetch`. Its `http` client spans
+  then start outside the calling span and root their own traces.
 
 ## Account WebSocket sessions
 
@@ -107,14 +115,46 @@ covers an accepted button press through connection or failure:
 The root records `meeting.join.kind` (`create` or `join`), guest status,
 microphone/camera preferences, `call.id` once credentials arrive, and
 `meeting.join.outcome` (`connected`, `failed`, `cancelled`, or `already_in_call`).
-It does not measure setup-page loading or completion of background media setup.
+Its duration excludes setup-page loading and completion of background media
+setup. The `call.media.setup` child continues after the join root ends; inspect
+its per-device children for capture and publishing failures. Earlier waiting-room
+captures correlate through `meeting.setup.id`, and the join records final device
+access states. See [browser call diagnostics](calls.md#browser-call-diagnostics)
+for fields, failure interpretation, and verification.
 Never add share tokens or RTC credentials to trace attributes or errors.
 
 The HTTP requests can have separate trace IDs across asynchronous mutation
 boundaries. Capture each request's `traceparent` as described above and inspect
 the backend trace as well. For the join request, compare `create_room`,
 `prepare_meeting_call`, and `join_invitation`; `start_meeting_media` runs in the
-background and must not be added to the time spent waiting for credentials.
+background and must not be added to the time spent waiting for credentials. Channel
+calls similarly launch `start_channel_call` for recording, transcription, and
+recipient notifications; these run concurrently outside the token response path.
+A slow recorder or push provider should not hold the creator on Connecting.
+
+## Email From switch
+
+The composer's From switch moves a saved draft to an inbox on another account.
+Search Tempo for `{ name="email.draft_transfer" }`. One browser trace covers the
+move:
+
+| Span | What it measures |
+| --- | --- |
+| `email.draft_transfer.save` | The save before the move. A retry of an unanswered move skips it. |
+| `email.draft_transfer.request` | The transfer until the server commits or refuses it. `email.draft_transfer.committed_by` is `response` or `recovery`. |
+| `email.draft_transfer.recover` | The recovery request after the transfer request failed or lost its response. |
+| `email.draft_transfer.refresh` | The detached refresh of both threads' caches. It can end after the root. |
+
+The root's attributes use the `email.draft_transfer.` prefix. They are
+`draft_id`, `operation_id`, `source_inbox_id`, `destination_inbox_id`,
+`destination_provider`, `attachment_count`, `retry`, and `outcome`. The outcome
+is `moved`, `aborted`, `failed`, `rejected`, or `skipped`. Aborted and failed
+moves are errors. A rejection is not an error. It adds `rejection`, which is
+`pending_other_inbox`, `attachment_limit`, or `unconfirmed_draft`. A retry shares
+the first attempt's `operation_id`, so search by it to join attempts across
+traces. Errors carry fixed messages. Never add addresses, subjects, bodies, or
+file names. The `http POST` spans carry `traceparent`, but email_service does not
+join the trace yet (see known gaps).
 
 ## Agent sessions
 

@@ -61,3 +61,17 @@ export function useCalendarAccounts() {
     )
   );
 }
+
+/**
+ * {@link useCalendarAccounts} for callers that must not suspend: `undefined`
+ * until the email links have loaded.
+ */
+export function useLoadedCalendarAccounts() {
+  const linksQuery = useEmailLinksQuery();
+  const userId = useUserId();
+  return createMemo<CalendarAccount[] | undefined>(() =>
+    linksQuery.isPending || !linksQuery.data
+      ? undefined
+      : toCalendarAccounts(linksQuery.data.links, userId())
+  );
+}

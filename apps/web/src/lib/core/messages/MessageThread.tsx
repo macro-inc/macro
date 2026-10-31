@@ -7,7 +7,7 @@ import { ChannelThread } from '@channel/Thread/ChannelThread';
 import { createFocusRequest } from '@channel/Thread/focus-request';
 import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { useUserId } from '@core/context/user';
-import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   useDeleteMessageMutation,
@@ -23,7 +23,7 @@ import type {
   MessageParent,
   MessageThread as ThreadData,
 } from '@service-storage/messages';
-import { createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, Show } from 'solid-js';
 import type { MessageActionHandler, MessageData } from './types';
 
 export function threadListItem(thread: ThreadData): MessageListItem {
@@ -56,6 +56,11 @@ type ThreadOptions = {
   hideRail?: boolean;
   onEditingChange?: (id: string, editing: boolean) => void;
   monorail?: boolean;
+  /**
+   * Document comment bubble is the focused surface: Enter opens a reply
+   * (same as chat on a selected message) and the thread accepts keyboard focus.
+   */
+  keyboardActive?: boolean;
 };
 
 /** Document and source-channel threads compose the existing channel thread and message controls. */
@@ -68,6 +73,7 @@ export function MessageThread(
   const [draft, setDraft] = createSignal<InputSnapshot>();
   const [handle, setHandle] = createSignal<InputHandle>();
   const [attachScope, scopeId] = useHotkeyDOMScope('message-thread');
+  let scopeElement: HTMLDivElement | undefined;
   const focus = createFocusRequest();
   const remove = useDeleteMessageMutation();
   const confirm = createDeleteMessageConfirmation(remove.mutate);
@@ -79,6 +85,18 @@ export function MessageThread(
     patchMessage: patch.mutate,
     onEditEnded: (message) => props.onEditingChange?.(message.id, false),
   });
+  const startReply = () => {
+    if (props.onReply) {
+      fireAndForget(
+        Promise.resolve(props.onReply({ message: props.data })),
+        'message-thread'
+      );
+      return;
+    }
+    setExpanded(true);
+    setReplying(true);
+    focus.request();
+  };
   const actions = createChannelMessageActions({
     parent: () => props.data.parent,
     userId,
@@ -102,12 +120,42 @@ export function MessageThread(
       focus.request();
     },
   });
+  // Comment bubbles are not channel-selected messages; take Enter here instead.
+  registerHotkey({
+    scopeId,
+    hotkey: 'enter',
+    description: 'Reply to comment',
+    condition: () =>
+      !!props.keyboardActive &&
+      props.canWrite &&
+      !props.hideReplyInput &&
+      !replying() &&
+      !editor.state(),
+    keyDownHandler: (event) => {
+      if (event?.repeat) return true;
+      startReply();
+      return true;
+    },
+  });
+  // Keep the bubble in the hotkey DOM scope while it is the active comment.
+  createEffect(() => {
+    if (!props.keyboardActive) return;
+    if (replying() || editor.state()) return;
+    const el = scopeElement;
+    if (!el) return;
+    if (el.contains(document.activeElement)) return;
+    el.focus({ preventScroll: true });
+  });
   return (
     <MaybeMessageActionDrawerManager>
       <div
-        ref={attachScope}
+        ref={(el) => {
+          scopeElement = el;
+          attachScope(el);
+        }}
         data-message-thread={props.data.id}
-        class="relative isolate"
+        tabindex={props.keyboardActive ? -1 : undefined}
+        class="relative isolate outline-none"
       >
         <confirm.ConfirmationDialog />
         <ChannelThread

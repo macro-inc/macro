@@ -115,6 +115,10 @@ impl DocumentCreationService for RecordingService {
         })
     }
 
+    async fn initialize_canvas(&self, _document_id: &str) -> Result<(), DocumentError> {
+        panic!("unexpected Canvas initialization")
+    }
+
     async fn handle_task_properties(
         &self,
         _: &CreationPrincipal,

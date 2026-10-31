@@ -42,6 +42,25 @@ impl ConnectionStore for FixedConnections {
     }
 }
 
+/// `sentry` is the only overlaid app.
+impl ConnectorOverlays for FixedConnections {
+    async fn overlays(
+        &self,
+    ) -> anyhow::Result<Vec<pipedream_mcp::domain::models::ConnectorOverlay>> {
+        Ok(vec![pipedream_mcp::domain::models::ConnectorOverlay {
+            app_slug: "sentry".to_owned(),
+            server_url: "https://mcp.sentry.dev/mcp".to_owned(),
+        }])
+    }
+
+    async fn overlay(
+        &self,
+        _app_slug: &str,
+    ) -> anyhow::Result<Option<pipedream_mcp::domain::models::ConnectorOverlay>> {
+        unreachable!("provisioning lists overlays once")
+    }
+}
+
 struct FixedServers(Vec<McpServerRecord>);
 
 impl McpServerStore for FixedServers {
@@ -496,14 +515,24 @@ fn external_runtime_uses_host_reachable_urls_with_the_existing_session_credentia
         "http://agent-harness-service:8102",
     )
     .with_external_base_url(Some("http://localhost:28102/".into()));
-    let sandbox = egress(&[]);
+    let mut sandbox = egress(&["datadog"]);
+    let custom = listing("https://wiki.example.com/mcp", "Wiki");
+    let custom_path = format!("/mcp-custom/{}", custom.key);
+    sandbox.custom_servers.push(custom);
     let servers = provisioner.external_mcp_servers(&sandbox);
-    assert_eq!(servers.len(), 2);
-    for (server, path) in servers.iter().zip(["/mcp/internal", "/mcp-preview"]) {
+    assert_eq!(servers.len(), 5);
+    for (server, (name, path)) in servers.iter().zip([
+        ("macro", "/mcp-macro"),
+        ("macro_internal", "/mcp/internal"),
+        ("macro-preview", "/mcp-preview"),
+        ("datadog", "/mcp/datadog"),
+        ("Wiki", custom_path.as_str()),
+    ]) {
         let McpServer::Http(server) = server else {
             panic!("expected HTTP MCP");
         };
         assert_eq!(server.url, format!("http://localhost:28102{path}"));
+        assert_eq!(server.name, name);
         assert_eq!(server.headers[0].value, sandbox.authorization_header());
     }
     assert_eq!(sandbox.base_url, "https://egress.macro.com");
@@ -545,4 +574,55 @@ async fn native_provider_wins_without_hiding_other_hosted_apps() {
     );
     assert_eq!(provisioned.sandbox.custom_servers.len(), 1);
     assert_eq!(provisioned.sandbox.custom_servers[0].name, "Linear");
+}
+
+/// A selected overlaid app the owner authorized natively is advertised as
+/// that server, not its Pipedream slug; unauthorized, the slug stays so a
+/// call answers with a connect prompt.
+#[tokio::test]
+async fn a_selected_overlaid_app_is_advertised_as_its_native_server_once_connected() {
+    let mut authorized = custom_server("https://mcp.sentry.dev/mcp", "Sentry", true);
+    authorized.credentials = Some(
+        serde_json::from_value(serde_json::json!({"client_id":"test", "token_response":null}))
+            .expect("credentials"),
+    );
+    let owner = MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id");
+
+    for (servers, expected_slugs, expected_custom) in [
+        (vec![authorized.clone()], vec!["notion"], vec!["Sentry"]),
+        (
+            vec![custom_server("https://mcp.sentry.dev/mcp", "Sentry", true)],
+            vec!["sentry", "notion"],
+            vec![],
+        ),
+    ] {
+        let provisioner = EgressProvisioner::new(
+            Arc::new(FixedConnections(vec![connection("sentry", true)])),
+            Arc::new(FixedServers(servers)),
+            "https://egress.macro.com",
+        );
+        let provisioned = provisioner
+            .provision(
+                AgentSessionId::new(),
+                &owner,
+                &selected(&["sentry", "notion"]),
+            )
+            .await
+            .expect("provisioned");
+
+        let slugs: Vec<String> = provisioned
+            .sandbox
+            .mcp_servers
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(slugs, expected_slugs);
+        let custom: Vec<&str> = provisioned
+            .sandbox
+            .custom_servers
+            .iter()
+            .map(|server| server.name.as_str())
+            .collect();
+        assert_eq!(custom, expected_custom);
+    }
 }

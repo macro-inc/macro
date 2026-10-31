@@ -19,7 +19,7 @@ export function CalendarGridSkeleton(props: {
       role="status"
       aria-label="Loading calendar"
       aria-busy="true"
-      class="flex size-full min-w-0 min-h-0 animate-pulse flex-col overflow-hidden bg-surface"
+      class="flex size-full min-w-0 min-h-0 flex-col overflow-hidden bg-surface"
     >
       <span class="sr-only">Loading calendar</span>
 
@@ -33,8 +33,8 @@ export function CalendarGridSkeleton(props: {
             {() => (
               <div class="flex h-14 items-center justify-center border-l border-edge-muted">
                 <div class="flex flex-col items-center gap-2">
-                  <div class="h-2 w-10 rounded-full bg-skeleton" />
-                  <div class="size-6 rounded-full bg-skeleton" />
+                  <div class="skeleton-shimmer h-2 w-10 rounded-full bg-skeleton" />
+                  <div class="skeleton-shimmer size-6 rounded-full bg-skeleton" />
                 </div>
               </div>
             )}
@@ -48,12 +48,12 @@ export function CalendarGridSkeleton(props: {
           style={{ 'grid-template-columns': dayColumns() }}
         >
           <div class="flex h-12 items-center justify-end pr-2">
-            <div class="h-2 w-7 rounded-full bg-skeleton" />
+            <div class="skeleton-shimmer h-2 w-7 rounded-full bg-skeleton" />
           </div>
           <For each={days()}>
             {() => (
               <div class="h-12 border-l border-edge-muted px-1 py-2">
-                <div class="h-5 w-1/3 rounded bg-skeleton" />
+                <div class="skeleton-shimmer h-5 w-1/3 rounded bg-skeleton" />
               </div>
             )}
           </For>
@@ -66,7 +66,7 @@ export function CalendarGridSkeleton(props: {
             {(_, index) => (
               <div class="relative min-h-8 flex-1 border-t border-edge-muted first:border-t-0">
                 <div
-                  class="absolute top-0 right-2 h-1.5 rounded-full bg-skeleton"
+                  class="skeleton-shimmer absolute top-0 right-2 h-1.5 rounded-full bg-skeleton"
                   classList={{
                     'w-5': index() % 2 === 0,
                     'w-7': index() % 2 !== 0,
@@ -93,11 +93,11 @@ export function CalendarGridSkeleton(props: {
                 </For>
 
                 <div
-                  class="absolute inset-x-1 top-[18%] h-[14%] rounded-md bg-skeleton"
+                  class="skeleton-shimmer absolute inset-x-1 top-[18%] h-[14%] rounded-md bg-skeleton"
                   classList={{ hidden: dayIndex() % 2 !== 0 }}
                 />
                 <div
-                  class="absolute inset-x-1 top-[54%] h-[9%] rounded-md bg-skeleton"
+                  class="skeleton-shimmer absolute inset-x-1 top-[54%] h-[9%] rounded-md bg-skeleton"
                   classList={{ hidden: days().length > 1 || dayIndex() !== 0 }}
                 />
               </div>

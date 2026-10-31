@@ -201,7 +201,9 @@ export function createGraphqlRowSource({
         .with({ type: 'groupSoup' }, () =>
           errAsync(fetchFailure('a grouped query is read as bins, not pages'))
         )
-        .exhaustive(),
+        .exhaustive(() =>
+          errAsync(fetchFailure('an unknown query has no pages'))
+        ),
     bins: (query, step) =>
       match(query)
         .returnType<ResultAsync<Bin[], DatabaseSqlFetchFailure>>()
@@ -211,7 +213,9 @@ export function createGraphqlRowSource({
         .with({ type: P.union('soup', 'people') }, () =>
           errAsync(fetchFailure('only a grouped query has bins'))
         )
-        .exhaustive(),
+        .exhaustive(() =>
+          errAsync(fetchFailure('only a grouped query has bins'))
+        ),
   };
 }
 
@@ -288,10 +292,15 @@ function propertiesExpression(propf: Propf): GraphqlFilterPropertiesExpr {
         value: match(v)
           .with({ so: P.string }, ({ so }) => ({ selectOption: so }))
           .with({ er: P.string }, ({ er }) => ({ entityRef: er }))
-          .exhaustive(),
+          .exhaustive(() => ({ entityRef: NIL_UUID })),
       },
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      literal: {
+        propertyDefinitionId: NIL_UUID,
+        value: { entityRef: NIL_UUID },
+      },
+    }));
 }
 
 /** A balanced OR keeps a long list inside the filter depth limit. */
@@ -367,7 +376,7 @@ function soupPage(
   const evidence = input.initial ? JSON.stringify(input) : undefined;
   const local: ResultAsync<Page | undefined, DatabaseSqlFetchFailure> =
     evidence && membership?.reconcile
-      ? reconciledPage(input, evidence, membership)
+      ? reconciledPage(input, evidence, membership, step)
       : okAsync(undefined);
   return local.andThen((page) =>
     page
@@ -388,7 +397,10 @@ function soupPage(
               complete: nextCursor === null,
             });
           }
-          return tableRows(items).map((rows) => ({ rows, next: nextCursor }));
+          return tableRows(items, step).map((rows) => ({
+            rows,
+            next: nextCursor,
+          }));
         })
   );
 }
@@ -407,7 +419,8 @@ function isNetworkRead(requestPolicy: RequestPolicy): boolean {
 function reconciledPage(
   input: SoupInput,
   evidence: string,
-  { host, baselines }: LocalMembership
+  { host, baselines }: LocalMembership,
+  step: DatabaseSqlStepTrace
 ): ResultAsync<Page | undefined, DatabaseSqlFetchFailure> {
   const initial = input.initial;
   const baseline = baselines.get(evidence);
@@ -439,7 +452,8 @@ function reconciledPage(
         thrownFetchFailure
       ).andThen(({ records }) =>
         tableRows(
-          materializeReconciledSoup(result.keys, records, baseline.items)
+          materializeReconciledSoup(result.keys, records, baseline.items),
+          step
         ).map((rows) => ({ rows, next: null }))
       );
     }
@@ -447,13 +461,16 @@ function reconciledPage(
 }
 
 function tableRows(
-  items: readonly DatabaseRowFieldsFragment[]
+  items: readonly DatabaseRowFieldsFragment[],
+  step: DatabaseSqlStepTrace
 ): Result<Row[], DatabaseSqlFetchFailure> {
-  return Result.combine(
-    items.map((item) =>
-      item.__typename === 'GraphqlSoupDatabaseRow'
-        ? ok({ id: item.id, position: item.position, cells: rowCells(item) })
-        : err(fetchFailure(`a table query returned a ${item.__typename}`))
+  return step.decode(items.length, () =>
+    Result.combine(
+      items.map((item) =>
+        item.__typename === 'GraphqlSoupDatabaseRow'
+          ? ok({ id: item.id, position: item.position, cells: rowCells(item) })
+          : err(fetchFailure(`a table query returned a ${item.__typename}`))
+      )
     )
   );
 }
@@ -474,7 +491,7 @@ function cell(
 ): Cell | undefined {
   if (!value) return undefined;
   return match(value)
-    .returnType<Cell>()
+    .returnType<Cell | undefined>()
     .with({ __typename: 'GraphqlBooleanPropertyValue' }, ({ boolValue }) => ({
       type: 'bool',
       value: boolValue,
@@ -491,6 +508,13 @@ function cell(
       type: 'date',
       value: dateValue,
     }))
+    .with(
+      { __typename: 'GraphqlDateRangePropertyValue' },
+      ({ rangeStart, rangeEnd }) => ({
+        type: 'dateRange',
+        value: { start: rangeStart, end: rangeEnd },
+      })
+    )
     .with(
       { __typename: 'GraphqlSelectOptionPropertyValue' },
       ({ optionIds }) => ({
@@ -509,7 +533,7 @@ function cell(
       type: 'text',
       value: urls.join(' '),
     }))
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function groupBins(

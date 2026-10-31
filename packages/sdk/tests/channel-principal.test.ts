@@ -1,5 +1,8 @@
-import { describe, expect, test } from 'bun:test';
-import { userFromPrincipal } from '../src/events/hydrate/channel';
+import { describe, expect, spyOn, test } from 'bun:test';
+import {
+  hydrateChannelEvent,
+  userFromPrincipal,
+} from '../src/events/hydrate/channel';
 import type { MacroClient } from '../src/utils/client';
 
 const client = {} as MacroClient;
@@ -25,5 +28,18 @@ describe('userFromPrincipal', () => {
     ]) {
       expect(userFromPrincipal(client, id)).toBeUndefined();
     }
+  });
+});
+
+describe('hydrateChannelEvent', () => {
+  test('an event type from a newer server is skipped instead of throwing', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const fromNewerServer = JSON.parse(
+      '{"event_type":"channel.archived","metadata":{}}',
+    );
+
+    expect(hydrateChannelEvent(client, fromNewerServer)).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

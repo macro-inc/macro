@@ -47,27 +47,40 @@ export function MessageOperationRecovery(props: {
       setPending(false);
     }
   };
+  const reloadReady = (operation: MessageOperation) =>
+    !!props.source.needsReload?.() && operation.state === 'SYNCHRONIZED';
+  const visibleOperation = () => {
+    const operation = props.source.operation();
+    if (!operation) return undefined;
+    const visible =
+      !!operationDescription(operation) ||
+      reloadReady(operation) ||
+      !!decision() ||
+      !!error();
+    return visible ? operation : undefined;
+  };
   return (
-    <Show when={props.source.operation()}>
+    <Show when={visibleOperation()}>
       {(operation) => (
         <div
           class="border-b border-edge-muted p-3 text-sm"
           role="status"
           aria-live="polite"
         >
-          <p>{operationDescription(operation())}</p>
-          <Show
-            when={
-              props.source.needsReload?.() &&
-              operation().state === 'SYNCHRONIZED'
-            }
-          >
+          <Show when={operationDescription(operation())}>
+            {(description) => <p>{description()}</p>}
+          </Show>
+          <Show when={reloadReady(operation())}>
             <p>
               The mailbox version is ready. Reload the draft to continue
               editing.
             </p>
             <Show when={props.onReloadDraft}>
-              <Button size="sm" variant="outline" onClick={props.onReloadDraft}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={props.onReloadDraft}
+              >
                 Reload draft
               </Button>
             </Show>
@@ -114,7 +127,7 @@ export function MessageOperationRecovery(props: {
                 <div class="flex gap-2">
                   <Button
                     size="sm"
-                    variant="strong"
+                    variant="secondary"
                     disabled={
                       pending() ||
                       ((decision()?.action === 'retry_send' ||
@@ -150,7 +163,7 @@ export function MessageOperationRecovery(props: {
                 {(action) => (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={pending()}
                     onClick={() => {
                       if (

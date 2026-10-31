@@ -335,9 +335,17 @@
           "isReadOnly"
         ],
         "properties": {
+          "calendarName": {
+            "type": ["string", "null"],
+            "description": "Display name of the calendar holding this copy. Absent on an event\nshared with the user, which is on none of their calendars."
+          },
           "conferenceUrl": {
             "type": ["string", "null"],
             "description": "Direct conference join URL when known."
+          },
+          "contributesToAvailability": {
+            "type": ["boolean", "null"],
+            "description": "Whether a calendar holding this copy is on the user's schedule. The\nuser can see calendars that are not theirs, such as a colleague's: a\nrow without this, and that they do not attend, says what that calendar\nshows, not where the user is."
           },
           "createdAt": {
             "type": "string",
@@ -346,6 +354,10 @@
           "description": {
             "type": ["string", "null"],
             "description": "Free-text description, when the event carries one. May contain HTML from\nthe source; clients render a plain-text preview."
+          },
+          "inbox": {
+            "type": ["string", "null"],
+            "description": "The connected inbox syncing that calendar. It stays the user's own\naddress on a colleague's calendar, so it never says whose calendar it\nis."
           },
           "isReadOnly": {
             "type": "boolean",
@@ -373,7 +385,18 @@
               },
               {
                 "$ref": "#/components/schemas/CalendarEventOrganizer",
-                "description": "The event's organizer (creator), when the source names one."
+                "description": "The organizer the provider names, when it names one."
+              }
+            ]
+          },
+          "role": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CalendarEventSearchRole",
+                "description": "Whether the user organizes this copy or is a guest on it. Absent when\nthey are neither, when they can only write that calendar, or when a\nread-only calendar names them organizer."
               }
             ]
           },
@@ -393,7 +416,7 @@
       },
       "CalendarEventOrganizer": {
         "type": "object",
-        "description": "The event's organizer — its creator, in Google's model. Either field can be\nabsent when the source does not name it.",
+        "description": "The organizer the provider names on the event. Either field can be absent\nwhen the source does not name it. On a read-only Outlook calendar, such as\nits holidays, Microsoft names the mailbox owner on every event, so this\ndoes not say the user organized anything: `role` does.",
         "properties": {
           "email": {
             "type": ["string", "null"],
@@ -503,6 +526,16 @@
             "description": "The score of the result"
           }
         }
+      },
+      "CalendarEventSearchRole": {
+        "type": "string",
+        "description": "What the user is on one copy of an event, through the inbox holding it.",
+        "enum": ["organizer", "guest"]
+      },
+      "CalendarEventSearchScope": {
+        "type": "string",
+        "description": "Which calendar events a unified search covers.\n\nSharing an event with a channel lets its members see the sharer's copy,\nwhich is on none of their own calendars, so the default scope never finds\nit. Shared events are a separate scope rather than part of the default, so\na caller can list them after the caller's own events without reordering\nthose.",
+        "enum": ["own", "shared_with_you"]
       },
       "CalendarEventSearchTime": {
         "oneOf": [
@@ -1495,6 +1528,7 @@
         "enum": [
           "BOOLEAN",
           "DATE",
+          "DATE_RANGE",
           "NUMBER",
           "STRING",
           "SELECT_NUMBER",
@@ -1503,6 +1537,21 @@
           "ENTITY",
           "LINK"
         ]
+      },
+      "DateRange": {
+        "type": "object",
+        "description": "A span of time from `start` to `end`, both included. The end is never\nbefore the start: a range that would end earlier does not deserialize.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "DocumentFilters": {
         "type": "object",
@@ -2749,7 +2798,7 @@
           },
           "include": {
             "type": "boolean",
-            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids`, `owners` or `notification_filters`\nalso opts in."
           },
           "initiative_ids": {
             "type": "array",
@@ -2762,12 +2811,16 @@
             "type": ["string", "null"],
             "description": "Case-insensitive name substring."
           },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by initiative notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "description": "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           }
         }
       },
@@ -3221,6 +3274,21 @@
                 "type": "string",
                 "format": "date-time",
                 "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["DateRange"]
+              },
+              "value": {
+                "$ref": "#/components/schemas/DateRange",
+                "description": "Date range value\nSerializes as: {\"type\": \"DateRange\", \"value\": {\"start\": \"2025-01-01T00:00:00Z\", \"end\": \"2025-01-31T00:00:00Z\"}}"
               }
             }
           },
@@ -4674,6 +4742,10 @@
         "type": "object",
         "required": ["query", "match_type"],
         "properties": {
+          "calendar_event_scope": {
+            "$ref": "#/components/schemas/CalendarEventSearchScope",
+            "description": "Which calendar events to search. Defaults to `own`: events on the\ncaller's own and delegated calendars. `shared_with_you` searches only\nevents shared with a channel the caller belongs to that are on none of\ntheir calendars."
+          },
           "collapse": {
             "type": ["boolean", "null"]
           },

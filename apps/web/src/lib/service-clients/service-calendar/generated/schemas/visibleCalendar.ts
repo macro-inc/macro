@@ -18,6 +18,11 @@ export interface VisibleCalendar {
   capabilities: CalendarCapabilities;
   /** Provider color. */
   color?: VisibleCalendarColor;
+  /** Whether this calendar counts toward the requester's busy time: their
+setting, by default only the primary calendars of inboxes they own.
+The nearest thing to "this is the requester's own": a provider's
+access role only says what they may do, on a colleague's calendar too. */
+  contributesToAvailability?: boolean;
   /** Default reminders applied to events that keep `useDefault`. */
   defaultReminders: EventReminderOverride[];
   /** Connected inbox address, for grouping in multi-inbox pickers. */

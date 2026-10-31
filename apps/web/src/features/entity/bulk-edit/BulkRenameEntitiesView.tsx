@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowRight from '@phosphor/arrow-right.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import { ActionDialogShell, Button, Tabs, TextField, Tooltip } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -83,16 +83,8 @@ export const BulkRenameEntitiesView = (props: {
             aria-label="Rename mode"
             value={mode()}
             fullWidth
-            onChange={(next) => {
-              if (
-                next === 'prepend' ||
-                next === 'append' ||
-                next === 'replace' ||
-                next === 'total'
-              )
-                setMode(next);
-            }}
-            list={[
+            onChange={setMode}
+            options={[
               { value: 'prepend', label: 'Prepend' },
               { value: 'append', label: 'Append' },
               { value: 'replace', label: 'Replace' },
@@ -164,7 +156,7 @@ export const BulkRenameEntitiesView = (props: {
         <Button type="button" variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
-        <Button type="submit" variant="strong">
+        <Button type="submit" variant="secondary">
           {multi()
             ? `Rename ${props.entities.length} ${props.entities.length === 1 ? 'item' : 'items'}`
             : 'Save name'}

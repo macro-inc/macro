@@ -414,6 +414,8 @@ impl DocumentService for FakeDocumentService {
     async fn update_task_status(
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
+        _credited_user: Option<MacroUserIdStr<'static>>,
+        _source: Option<models_properties::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")
@@ -537,6 +539,10 @@ impl DocumentCreationService for FakeDocumentService {
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         DocumentService::create_document(self, principal, document, job_id).await
+    }
+
+    async fn initialize_canvas(&self, _document_id: &str) -> Result<(), DocumentError> {
+        panic!("unexpected Canvas initialization")
     }
 
     async fn handle_task_properties(
@@ -859,6 +865,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         Ok(user_context(JWT_USER_ID))
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -897,6 +912,8 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
+                    agent_id: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),
@@ -1517,6 +1534,7 @@ async fn create_routes_reject_callers_that_cannot_create_before_reading_the_body
     for path in [
         "/",
         "/create_markdown",
+        "/create_canvas",
         "/create_task",
         "/create_snippet",
         "/create_skill",
@@ -1547,6 +1565,7 @@ async fn internal_create_routes_reach_body_extraction() {
     for path in [
         "/",
         "/create_markdown",
+        "/create_canvas",
         "/create_task",
         "/create_snippet",
         "/create_skill",
@@ -1725,5 +1744,26 @@ async fn document_text_content_route_coexists_with_legacy_extracted_text_route()
     assert_eq!(
         send(&merged, current_request).await,
         (StatusCode::OK, json!({"text":"Extracted PDF text"}))
+    );
+}
+
+#[tokio::test]
+async fn canvas_creation_requires_project_edit_access_before_metadata_creation() {
+    let (router, documents, access, _) = test_router();
+    access.deny_document_access();
+    let request = with_jwt(
+        Request::post("/create_canvas").header("content-type", "application/json"),
+    )
+    .body(Body::from(
+        json!({ "documentName": "Board", "projectId": "00000000-0000-0000-0000-000000000123" })
+            .to_string(),
+    ))
+    .unwrap();
+    let status = send_status(&router, request).await;
+    assert!(status.is_client_error());
+    assert!(documents.create_calls().is_empty());
+    assert_eq!(
+        access.document_access_calls()[0].entity_type,
+        EntityType::Project
     );
 }

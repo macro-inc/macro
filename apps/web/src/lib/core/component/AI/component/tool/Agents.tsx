@@ -1,5 +1,5 @@
-import HeadCircuit from '@phosphor-icons/core/regular/head-circuit.svg';
-import UserGear from '@phosphor-icons/core/regular/user-gear.svg';
+import HeadCircuit from '@icon/system/regular/head-circuit.svg';
+import UserGear from '@icon/system/regular/user-gear.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { AgentSummary } from '@service-cognition/generated/tools/types';
 import { createSignal, For, Show } from 'solid-js';
@@ -11,7 +11,6 @@ import { createToolRenderer } from './ToolRenderer';
 const HARNESS_NAMES: Record<string, string> = {
   'in-memory': 'Macro',
   cursor: 'Cursor',
-  'claude-cloud': 'Claude Cloud',
   macrod: 'Self-hosted harness',
 };
 

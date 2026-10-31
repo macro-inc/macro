@@ -123,7 +123,8 @@ describe('createTauriCacheHost', () => {
   });
 
   it('reports asynchronous native initialization failures', async () => {
-    const onInitializationError = vi.fn();
+    const failed = Promise.withResolvers<Error>();
+    const onInitializationError = vi.fn(failed.resolve);
     invokeMock.mockImplementation((command: string) =>
       command === 'graphql_cache_init_with_schema'
         ? Promise.reject(new Error('init failed'))
@@ -135,9 +136,8 @@ describe('createTauriCacheHost', () => {
       onInitializationError,
     });
 
-    await vi.waitFor(() =>
-      expect(onInitializationError).toHaveBeenCalledOnce()
-    );
+    await failed.promise;
+    expect(onInitializationError).toHaveBeenCalledOnce();
     expect(onInitializationError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'init failed' })
     );
@@ -1060,6 +1060,30 @@ describe('createTauriCacheHost', () => {
     host.dispose();
     await Promise.resolve();
     expect(unlisten).toHaveBeenCalled();
+  });
+
+  it('absorbs unlisten rejections on dispose', async () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', record);
+    try {
+      const rejectingUnlisten = vi.fn(() =>
+        Promise.reject(new Error('listener already gone'))
+      );
+      listenMock.mockResolvedValue(rejectingUnlisten);
+      const host = createTauriCacheHost({ scope: 'scope-1' });
+      host.dispose();
+
+      await vi.waitFor(() =>
+        expect(rejectingUnlisten).toHaveBeenCalledTimes(
+          listenMock.mock.calls.length
+        )
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', record);
+    }
   });
 
   describe('calendar ranges', () => {

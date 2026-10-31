@@ -1,6 +1,6 @@
 //! Postgres implementation of [`OnboardingRepo`].
 
-use crate::domain::models::{OnboardingRow, OnboardingStatus};
+use crate::domain::models::{OnboardingRow, OnboardingStatus, PromptId};
 use crate::domain::ports::{OnboardingRepo, Result};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -111,12 +111,59 @@ impl OnboardingRepo for PgOnboardingRepo {
 
     #[tracing::instrument(skip(self), err)]
     async fn delete_row(&self, user: &MacroUserIdStr<'static>) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
         sqlx::query!(
             r#"
             DELETE FROM user_onboarding
             WHERE user_id = $1
             "#,
             user.as_ref(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query!(
+            r#"
+            DELETE FROM user_dismissed_prompt
+            WHERE user_id = $1
+            "#,
+            user.as_ref(),
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn dismissed_prompts(&self, user: &MacroUserIdStr<'static>) -> Result<Vec<String>> {
+        let rows = sqlx::query_scalar!(
+            r#"
+            SELECT prompt_id
+            FROM user_dismissed_prompt
+            WHERE user_id = $1
+            ORDER BY dismissed_at, prompt_id
+            "#,
+            user.as_ref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn dismiss_prompt(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        prompt: &PromptId,
+    ) -> Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT INTO user_dismissed_prompt (user_id, prompt_id)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id, prompt_id) DO NOTHING
+            "#,
+            user.as_ref(),
+            prompt.as_ref(),
         )
         .execute(&self.pool)
         .await?;

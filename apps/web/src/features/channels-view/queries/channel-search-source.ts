@@ -18,16 +18,20 @@ export function createChannelSearchSource(options: {
 }): ChannelsDataSource {
   const enabled = () => options.enabled?.() ?? true;
   const searching = () => options.text().trim().length > 0;
-  const localChannels = createMemo(
-    () =>
-      new Map(
-        [
-          ...(options.additionalLocalChannels?.() ?? []),
-          ...options.source().items(),
-        ].map((channel) => [channel.id, channel])
-      )
-  );
+  // Loaded rows carry the unread and preview metadata the rail renders, so a
+  // loaded row replaces the additional entity for the same channel.
+  const localChannels = createMemo(() => {
+    const byId = new Map<string, ChannelEntity>();
+    for (const channel of options.additionalLocalChannels?.() ?? []) {
+      byId.set(channel.id, channel);
+    }
+    for (const channel of options.source().items()) {
+      byId.set(channel.id, channel);
+    }
+    return byId;
+  });
   const search = createSearchState({
+    surface: () => 'channels',
     enabled,
     text: options.text,
     localPool: () => [...localChannels().values()].map((data) => ({ data })),
@@ -43,9 +47,10 @@ export function createChannelSearchSource(options: {
             is_participant: true,
             channel_types: match(options.scope())
               .with('direct_messages', () => ['direct_message'])
-              .with('channels', () => ['public', 'private', 'team'])
+              .with('team_channels', () => ['team'])
+              .with('channels', () => ['public', 'private'])
               .with('recents', 'search', 'threads', () => undefined)
-              .exhaustive(),
+              .exhaustive(() => undefined),
           },
         },
       },

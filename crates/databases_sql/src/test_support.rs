@@ -83,6 +83,9 @@ pub(crate) struct World {
     /// Every question the databases service stored.
     pub(crate) saved: Vec<(Option<DatabaseId>, QueryDefinition)>,
     pub(crate) created: Vec<CreateDatabase>,
+    /// Versions observed atomically at apply time, which can advance after catalog reads.
+    pub(crate) current_write_versions:
+        std::collections::HashMap<TableId, databases::domain::models::TableVersion>,
     pub(crate) guarded:
         Vec<std::collections::HashMap<TableId, databases::domain::models::TableVersion>>,
     /// The filter of every Soup read, in order.
@@ -200,7 +203,16 @@ impl DatabasesService for FakeDatabases {
         };
         let database = receipt.entity().entity_id.parse().expect("a database id");
         let mut world = self.0.lock().unwrap();
+        let conflict = batch.base_versions.iter().any(|(table, expected)| {
+            world
+                .current_write_versions
+                .get(table)
+                .is_some_and(|current| current != expected)
+        });
         world.guarded.push(batch.base_versions);
+        if conflict {
+            return Err(DatabaseError::VersionConflict);
+        }
         world.applied.push(AppliedOps {
             database,
             level: *access_level,
@@ -483,6 +495,7 @@ fn row_matches(expr: &Expr<DatabaseRowLiteral>, row: &StoredRow) -> bool {
         Expr::And(a, b) => row_matches(a, row) && row_matches(b, row),
         Expr::Or(a, b) => row_matches(a, row) || row_matches(b, row),
         Expr::Not(a) => !row_matches(a, row),
+        Expr::Literal(DatabaseRowLiteral::Include) => true,
         Expr::Literal(DatabaseRowLiteral::TableId(table)) => {
             row.table_id == TableId::from_uuid(*table)
         }
@@ -661,6 +674,15 @@ impl SoupService for FakeSoup {
     {
         unimplemented!("SQL never reads frecency")
     }
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _: MacroUserIdStr<'a>,

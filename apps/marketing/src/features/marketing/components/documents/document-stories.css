@@ -191,7 +191,7 @@
 .doc-click-tags { display: flex; gap: 8px; padding-left: 6px; }
 .doc-click-tags button { padding: 3px 6px; border-radius: 5px; color: var(--color-ink-muted); font-size: 12px; }
 .doc-click-tags button:hover { background: var(--color-hover); }
-.doc-organize-pointer { position: absolute; inset: 0 auto auto 0; z-index: 10; pointer-events: none; transition: transform 700ms ease; }
+.doc-organize-pointer { position: absolute; inset: 0 auto auto 0; z-index: 10; pointer-events: none; }
 @media (max-width: 699px) {
   .docs-page .doc-story-page { padding-top: 24px; }
   .docs-page .doc-story-title { font-size: 23px; line-height: 30px; }
@@ -235,6 +235,11 @@
 .docs-wide-demo .doc-story-title { font-size: 24px; }
 .docs-wide-demo .doc-story-scroll { padding-inline: 24px; }
 .doc-edit-measure::before { content: attr(data-content); }
+
+/* The Docs hero keeps both human edits in its first visible paragraph. */
+.doc-team-edit .doc-caret[data-caret='jacob'] { --doc-caret: var(--color-accent); }
+.doc-team-format[data-selecting=true] { background: color-mix(in oklch, var(--color-accent) 25%, transparent); }
+.doc-team-format[data-bold=true] { font-weight: 600; }
 .doc-agent-tools { transition: min-height 380ms ease; }
 .doc-agent-tools[data-open=false] { min-height: 32px; }
 @media (prefers-reduced-motion: reduce) { .doc-agent-tools { transition: none; } }
@@ -244,3 +249,12 @@
 @media(max-width:699px) {
   .docs-page .email-page-hero > .email-page-hero-description { font-size:clamp(10px, 2.9vw, 14px); }
 }
+
+/* ForwardToChannel recipient selection, using the existing share form surface. */
+.doc-share-to { position:relative; }
+.doc-share-recipient-chip { display:inline-flex; align-items:center; gap:6px; margin-right:auto; padding:4px 8px; border-radius:6px; background:var(--color-surface-2); font-size:14px; }
+.doc-share-recipient-chip button { display:inline-flex; }
+.doc-share-suggestions { position:absolute; left:8px; right:8px; top:100%; z-index:2; padding:4px; border:1px solid var(--color-edge-muted); border-radius:8px; background:var(--color-panel); box-shadow:0 8px 24px #0004; }
+.doc-share-suggestions button { display:flex; align-items:center; gap:8px; width:100%; padding:8px; border-radius:4px; background:var(--color-hover); text-align:left; font-size:14px; }
+.doc-share-channel-link { display:flex; align-items:center; gap:8px; min-width:0; text-align:left; }
+.doc-share-channel-link > span:last-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }

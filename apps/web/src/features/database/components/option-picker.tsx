@@ -1,6 +1,6 @@
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import {
   createMemo,

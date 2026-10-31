@@ -18,6 +18,14 @@ export const EFFECT_WORKER_RESPONSE_TAG = 1 as const;
 /** Effect's parent-to-runner close frame. */
 export const EFFECT_WORKER_CLOSE_FRAME = [EFFECT_WORKER_RESPONSE_TAG] as const;
 
+/** The browser replaced the runner global without replacing the page's port. */
+export class WorkerRestartedError extends Error {
+  constructor() {
+    super('Effect worker transport restarted');
+    this.name = 'WorkerRestartedError';
+  }
+}
+
 export interface EffectWorkerTransportOptions<Inbound> {
   /** Existing browser endpoint. Its lifetime remains owned by the caller. */
   endpoint: BrowserWorkerEndpoint;
@@ -61,6 +69,7 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
   );
 
   let readySettled = false;
+  let receivedReady = false;
   let closed = false;
   let resolveReady!: () => void;
   let rejectReady!: (error: Error) => void;
@@ -85,7 +94,14 @@ export function createEffectWorkerTransport<Inbound, Outbound>(
         }),
       {
         onSpawn: Effect.sync(() => {
-          if (readySettled) return;
+          if (closed) return;
+          // Safari can reconnect this same port to an empty SharedWorker
+          // global. Its old registrations and engine route no longer exist.
+          if (receivedReady) {
+            reportFailure(new WorkerRestartedError());
+            return;
+          }
+          receivedReady = true;
           // Effect invokes `onSpawn` before opening its private ready latch.
           // Resolving synchronously here lets awaiters run before buffered sends
           // flush (covered by the transport ordering test), so defer one task.

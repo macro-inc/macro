@@ -13,6 +13,8 @@ pub enum GraphqlPropertyDataType {
     Boolean,
     /// Date and time values.
     Date,
+    /// A span from a start date-time to an end one.
+    DateRange,
     /// Numeric values.
     Number,
     /// String or text values.
@@ -35,6 +37,7 @@ impl GraphqlPropertyDataType {
         match data_type {
             models_properties::DataType::Boolean => Self::Boolean,
             models_properties::DataType::Date => Self::Date,
+            models_properties::DataType::DateRange => Self::DateRange,
             models_properties::DataType::Number => Self::Number,
             models_properties::DataType::String => Self::String,
             models_properties::DataType::SelectNumber => Self::SelectNumber,
@@ -136,6 +139,8 @@ pub enum GraphqlPropertyValue {
     String(GraphqlStringPropertyValue),
     /// An RFC 3339 date-time value.
     Date(GraphqlDatePropertyValue),
+    /// A span from an RFC 3339 start to an RFC 3339 end.
+    DateRange(GraphqlDateRangePropertyValue),
     /// One or more selected option identifiers.
     SelectOption(GraphqlSelectOptionPropertyValue),
     /// One or more entity references.
@@ -172,6 +177,15 @@ pub struct GraphqlDatePropertyValue {
     value: String,
 }
 
+/// A date-range property value.
+#[derive(SimpleObject)]
+pub struct GraphqlDateRangePropertyValue {
+    /// Where the range starts, formatted as RFC 3339.
+    start: String,
+    /// Where the range ends, formatted as RFC 3339; never before the start.
+    end: String,
+}
+
 /// A select-option property value.
 #[derive(SimpleObject)]
 pub struct GraphqlSelectOptionPropertyValue {
@@ -206,6 +220,10 @@ impl GraphqlPropertyValue {
             }),
             PropertyValue::Date(value) => Self::Date(GraphqlDatePropertyValue {
                 value: value.to_rfc3339(),
+            }),
+            PropertyValue::DateRange(range) => Self::DateRange(GraphqlDateRangePropertyValue {
+                start: range.start().to_rfc3339(),
+                end: range.end().to_rfc3339(),
             }),
             PropertyValue::SelectOption(values) => {
                 Self::SelectOption(GraphqlSelectOptionPropertyValue {

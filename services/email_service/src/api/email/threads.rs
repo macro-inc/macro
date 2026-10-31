@@ -22,7 +22,8 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         )
         .route("/{id}/messages", get(get::get_thread_messages_handler))
         .route("/{id}/seen", post(seen::seen_handler))
-        .route("/{id}/archived", patch(archived::archived_handler));
+        .route("/{id}/archived", patch(archived::archived_handler))
+        .route("/archived", patch(archived::archived_batch_handler));
 
     let hex_thread_routes =
         email::inbound::axum::get_thread_router::thread_router(state.email_thread_state.clone());

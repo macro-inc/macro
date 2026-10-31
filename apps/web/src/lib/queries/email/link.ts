@@ -85,6 +85,34 @@ export function usePrimaryEmailLinkId() {
   });
 }
 
+async function fetchMessageLinkId(messageId: string) {
+  const message = await throwOnErr(() =>
+    emailClient.getMessage({ message_id: messageId })
+  );
+  return message.link_id;
+}
+
+function messageInboxQueryOptions(messageId: string | undefined) {
+  return {
+    queryKey: emailKeys.messageInbox(messageId).queryKey,
+    queryFn: () => (messageId ? fetchMessageLinkId(messageId) : null),
+    enabled: messageId !== undefined,
+    staleTime: LINK_STALE_TIME,
+    retry: false,
+  };
+}
+
+/**
+ * The inbox a message belongs to. For a surface that holds a message id but
+ * not the account that received it — an AI-drafted reply, whose tool
+ * arguments name the message it answers — this is how it can show the sender
+ * the reply will actually go out as. Exposes loading, failure and retry so
+ * composers can require a known sender before sending.
+ */
+export function useMessageInboxQuery(messageId: Accessor<string | undefined>) {
+  return useQuery(() => messageInboxQueryOptions(messageId()));
+}
+
 /** The `X-Email-Link-Id` value for a target inbox; see useNonPrimaryEmailLinkIdHeader. */
 export function nonPrimaryEmailLinkIdHeader(
   linkId: string | undefined | null,

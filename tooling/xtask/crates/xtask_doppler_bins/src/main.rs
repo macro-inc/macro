@@ -8,7 +8,7 @@
 //! Doppler for both the dev and prod environments. It is a config-contract
 //! check: if the code expects a field Doppler doesn't have, the binary fails.
 //! CI only needs to run it for a service when that service's config could have
-//! changed, i.e. when its `src/config.rs`, `src/doppler_config.rs`, or
+//! changed, i.e. when any feature `config.rs`, `src/doppler_config.rs`, or
 //! `Cargo.toml` changed.
 //! Services explicitly awaiting bootstrap in `.github/services-config.json`
 //! defer this live check. Changing the inventory revalidates every ready service,
@@ -135,7 +135,14 @@ fn config_bins(
             dir.join(DOPPLER_CONFIG_SRC).into_std_path_buf(),
             dir.join("Cargo.toml").into_std_path_buf(),
         ];
-        if inventory_changed || triggers.iter().any(|trigger| changed.contains(trigger)) {
+        let feature_config_changed = changed.iter().any(|path| {
+            path.starts_with(dir.join("src").as_std_path())
+                && path.file_name().is_some_and(|name| name == "config.rs")
+        });
+        if inventory_changed
+            || feature_config_changed
+            || triggers.iter().any(|trigger| changed.contains(trigger))
+        {
             bins.insert(bin_name.to_owned());
         }
     }

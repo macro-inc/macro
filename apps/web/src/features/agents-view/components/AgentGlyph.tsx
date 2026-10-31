@@ -2,9 +2,9 @@ import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import MacroLogo from '@icon/macro-logo.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
-import CodeIcon from '@phosphor/code.svg';
-import RobotIcon from '@phosphor/robot.svg';
 import { type JSX, Show } from 'solid-js';
 import { MACRO_PERSONA_ID } from '../core/roster';
 

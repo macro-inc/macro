@@ -76,12 +76,15 @@ function liveApplier(apply: (value: number, group?: string) => unknown) {
   let drags = 0;
   const run = async () => {
     running = true;
-    while (pending !== undefined) {
-      const value = pending;
-      pending = undefined;
-      await apply(value, group);
+    try {
+      while (pending !== undefined) {
+        const value = pending;
+        pending = undefined;
+        await apply(value, group);
+      }
+    } finally {
+      running = false;
     }
-    running = false;
   };
   return {
     start: () => {
@@ -92,7 +95,7 @@ function liveApplier(apply: (value: number, group?: string) => unknown) {
     },
     set: (value: number) => {
       pending = value;
-      if (!running) fireAndForget(run(), 'block-pptx');
+      if (!running) fireAndForget(run(), 'pptx-editor');
     },
   };
 }
@@ -192,7 +195,7 @@ function ColorButton(props: {
         <span class="text-ink-muted">▾</span>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-action-menu rounded-xl border border-edge bg-menu p-2 shadow-xl outline-none">
+        <Popover.Content class="menu-surface z-action-menu p-2 outline-none">
           <ColorPicker
             themeGrid={props.colors.themeGrid}
             standard={props.colors.standard}
@@ -231,7 +234,7 @@ function PresetsButton(props: {
         <span class="text-ink-muted">▾</span>
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content class="z-action-menu rounded-xl border border-edge bg-menu p-2 text-ink text-xs shadow-xl outline-none">
+        <Popover.Content class="menu-surface z-action-menu p-2 text-xs outline-none">
           {props.children(() => setOpen(false))}
         </Popover.Content>
       </Popover.Portal>
@@ -597,13 +600,13 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
           <div class="flex justify-end">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               data-testid="pptx-pane-corrections-reset"
               onClick={() =>
                 fireAndForget(
                   c.formatPicture({ brightness: 0, contrast: 0 }),
-                  'block-pptx'
+                  'pptx-editor'
                 )
               }
             >
@@ -624,7 +627,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
                   c.formatPicture({
                     recolor: e.currentTarget.value as PictureRecolor,
                   }),
-                  'block-pptx'
+                  'pptx-editor'
                 )
               }
             >
@@ -683,7 +686,7 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
                   onCommit={(v) =>
                     fireAndForget(
                       c.cropPictures(() => ({ [edge]: v / 100 })),
-                      'block-pptx'
+                      'pptx-editor'
                     )
                   }
                 />
@@ -693,17 +696,19 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
           <div class="flex justify-end gap-1.5">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
-              onClick={() => fireAndForget(c.fitPictures('fill'), 'block-pptx')}
+              onClick={() =>
+                fireAndForget(c.fitPictures('fill'), 'pptx-editor')
+              }
             >
               Fill
             </Button>
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
-              onClick={() => fireAndForget(c.fitPictures('fit'), 'block-pptx')}
+              onClick={() => fireAndForget(c.fitPictures('fit'), 'pptx-editor')}
             >
               Fit
             </Button>
@@ -712,10 +717,10 @@ export function PicturePaneSections(props: { env: RibbonEnv }) {
         <div class="flex justify-end p-3">
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             disabled={ro()}
             data-testid="pptx-pane-picture-reset"
-            onClick={() => fireAndForget(c.resetPictures(true), 'block-pptx')}
+            onClick={() => fireAndForget(c.resetPictures(true), 'pptx-editor')}
           >
             Reset Picture & Size
           </Button>

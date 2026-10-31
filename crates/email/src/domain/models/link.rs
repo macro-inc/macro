@@ -204,3 +204,25 @@ pub struct Link {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+/// What a composed email knows about where it should be sent from.
+///
+/// Both fields come from the caller and name an inbox by value, so neither is
+/// trusted: resolution only ever settles on an inbox the caller can reach.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SendingInboxRequest<'a> {
+    /// The inbox address the caller chose, when they chose one.
+    pub requested_address: Option<&'a str>,
+    /// The message this email replies to, when it is a reply.
+    pub replying_to_id: Option<Uuid>,
+}
+
+/// The inbox a composed email is sent from, with the set it came out of.
+#[derive(Clone)]
+pub struct ResolvedSendingInbox {
+    /// The sending inbox.
+    pub link: Link,
+    /// Every inbox the caller can reach. A reply target may live in any of
+    /// them, so a send has to be given the whole set rather than just `link`.
+    pub accessible_inboxes: Vec<Link>,
+}

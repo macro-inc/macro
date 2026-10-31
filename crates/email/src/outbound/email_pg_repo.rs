@@ -4,14 +4,13 @@ use crate::domain::{
         EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMailProjection, EmailThreadMetadata,
         EmailThreadPreview, Label, Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow,
         MessageTimestamps, ParsedAddresses, PreviewCursorQuery, ResolvedDraftInput,
-        SettledDraftIds, SimpleMessage, SimpleMessageInfo, ThreadRow, UpsertEmailFilterInput,
-        UpsertedContacts, UserProvider,
+        SettledDraftIds, SimpleMessage, SimpleMessageInfo, StagedLabelChange, ThreadRow,
+        UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
     ports::{
         DraftAttachmentRepo, EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId,
     },
 };
-use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -35,10 +34,13 @@ mod label;
 mod link;
 mod mailbox_action;
 mod message;
+#[cfg(feature = "mailbox")]
+mod message_source;
 mod preview;
 mod preview_views;
 mod project;
 mod scheduled;
+mod send_attempt;
 pub(super) mod sender_policy;
 mod settings;
 mod thread;
@@ -104,6 +106,14 @@ impl EmailUserRepo for EmailPgRepo {
 }
 
 impl EmailRepo for EmailPgRepo {
+    async fn redirected_thread_id(
+        &self,
+        thread_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, Self::Err> {
+        client_id_mapping::redirected_thread_id(&self.pool, thread_id, link_ids).await
+    }
+
     async fn commit_sender_policy(
         &self,
         actor: &MacroUserIdStr<'_>,
@@ -193,13 +203,6 @@ impl EmailRepo for EmailPgRepo {
     ) -> Result<Option<Link>, Self::Err> {
         link::link_by_fusionauth_and_macro_id(&self.pool, fusionauth_user_id, macro_id, provider)
             .await
-    }
-
-    async fn link_by_macro_id(
-        &self,
-        macro_id: MacroUserIdStr<'_>,
-    ) -> Result<Option<Link>, Self::Err> {
-        link::link_by_macro_id(&self.pool, macro_id).await
     }
 
     async fn owned_link_for_thread(
@@ -322,11 +325,11 @@ impl EmailRepo for EmailPgRepo {
         message::forwarded_attachments_by_message_ids(&self.pool, message_ids).await
     }
 
-    async fn scheduled_send_times_by_message_ids(
+    async fn scheduled_sends_by_message_ids(
         &self,
         message_ids: &[Uuid],
-    ) -> Result<HashMap<Uuid, DateTime<Utc>>, Self::Err> {
-        message::scheduled_send_times_by_message_ids(&self.pool, message_ids).await
+    ) -> Result<HashMap<Uuid, crate::domain::models::ScheduledSend>, Self::Err> {
+        message::scheduled_sends_by_message_ids(&self.pool, message_ids).await
     }
 
     async fn get_simple_message(
@@ -367,8 +370,18 @@ impl EmailRepo for EmailPgRepo {
         thread_db_id: Uuid,
         link_ids: &[Uuid],
         actor: Option<&str>,
+
+        expected_generation: i32,
     ) -> Result<Option<DraftDeletion>, Self::Err> {
-        message::delete_draft_message(&self.pool, message_id, thread_db_id, link_ids, actor).await
+        message::delete_draft_message(
+            &self.pool,
+            message_id,
+            thread_db_id,
+            link_ids,
+            actor,
+            expected_generation,
+        )
+        .await
     }
 
     async fn upsert_contacts(
@@ -426,31 +439,44 @@ impl EmailRepo for EmailPgRepo {
             .await
     }
 
-    async fn set_thread_read_state(
+    async fn stage_thread_label_change(
         &self,
         thread_id: Uuid,
         link_id: Uuid,
-        message_ids: &[Uuid],
-        is_read: bool,
-    ) -> Result<(), Self::Err> {
-        label::set_thread_read_state(&self.pool, thread_id, link_id, message_ids, is_read).await
-    }
-
-    async fn set_thread_inbox_state(
-        &self,
-        thread_id: Uuid,
-        link_id: Uuid,
-        message_ids: &[Uuid],
+        provider_label_id: &str,
         add: bool,
-        inbox_visible: bool,
-    ) -> Result<(), Self::Err> {
-        label::set_thread_inbox_state(
+        write_id: Uuid,
+    ) -> Result<Option<StagedLabelChange>, Self::Err> {
+        label::stage_thread_label_change(
             &self.pool,
             thread_id,
             link_id,
-            message_ids,
+            provider_label_id,
             add,
-            inbox_visible,
+            write_id,
+        )
+        .await
+    }
+
+    async fn revert_staged_label_change(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        provider_label_id: &str,
+        add: bool,
+        write_id: Uuid,
+        provider_message_ids: &[Uuid],
+        local_message_ids: &[Uuid],
+    ) -> Result<(), Self::Err> {
+        label::revert_staged_label_change(
+            &self.pool,
+            thread_id,
+            link_id,
+            provider_label_id,
+            add,
+            write_id,
+            provider_message_ids,
+            local_message_ids,
         )
         .await
     }

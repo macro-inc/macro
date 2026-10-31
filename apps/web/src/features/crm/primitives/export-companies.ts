@@ -97,6 +97,8 @@ export function createCrmExport(
             : ref.entity_id
         )
         .join('; ');
+    if (value.type === 'DateRange')
+      return `${value.value.start}/${value.value.end}`;
     return Array.isArray(value.value) ? value.value.join('; ') : value.value;
   };
   const metadataLoading = () =>

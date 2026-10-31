@@ -22,6 +22,7 @@ import {
   createEffect,
   createSignal,
   For,
+  type JSX,
   Match,
   on,
   onCleanup,
@@ -145,7 +146,7 @@ function CalendarPageContent() {
   );
 }
 
-function WorkspaceContent() {
+function WorkspaceContent(props: { headerLeading?: JSX.Element }) {
   const panel = useSplitPanelOrThrow();
 
   // An inline preview keeps its host's name.
@@ -154,10 +155,12 @@ function WorkspaceContent() {
   return (
     <Switch>
       <Match when={panel.isInlinePreview}>
-        <Header presentation="preview" />
-        <main class="flex size-full min-h-0">
-          <CalendarPageContent />
-        </main>
+        <div class="flex size-full min-h-0 min-w-0 flex-col">
+          <Header presentation="preview" leading={props.headerLeading} />
+          <main class="flex min-h-0 flex-1">
+            <CalendarPageContent />
+          </main>
+        </div>
       </Match>
       <Match when={!panel.isInlinePreview}>
         <SplitPanel.Root>
@@ -188,17 +191,17 @@ function WorkspaceContent() {
   );
 }
 
-function CalendarPagerWorkspace() {
+function CalendarPagerWorkspace(props: { headerLeading?: JSX.Element }) {
   const calendarPager = useCalendarPager();
 
   return (
     <Pager.Root controller={calendarPager.pager}>
-      <WorkspaceContent />
+      <WorkspaceContent headerLeading={props.headerLeading} />
     </Pager.Root>
   );
 }
 
-export function Workspace() {
+export function Workspace(props: { headerLeading?: JSX.Element }) {
   const calendarView = useCalendarView();
 
   return (
@@ -209,7 +212,7 @@ export function Workspace() {
       onNavigate={calendarView.closeEventDetails}
       onViewChange={calendarView.setPeriodView}
     >
-      <CalendarPagerWorkspace />
+      <CalendarPagerWorkspace headerLeading={props.headerLeading} />
     </CalendarPagerContextProvider>
   );
 }

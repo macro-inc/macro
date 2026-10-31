@@ -8,6 +8,7 @@ import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalize
 import { TagSetsProvider } from '@property/tags/tag-sets-context';
 import { useDocTags, useSoupDocTags } from '@property/tags/useDocTags';
 import { queryClient } from '@queries/client';
+import { buildEntityPropertiesInput } from '@queries/properties/graphql/entity';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { propertiesKeys } from '@queries/properties/keys';
 import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
@@ -114,7 +115,7 @@ function Readers() {
   const raw = createUrqlQuery(() => ({
     client: getGraphqlSoupClient(),
     query: EntityPropertiesDocument,
-    variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', DOCUMENT_ID)! },
+    variables: { input: buildEntityPropertiesInput('DOCUMENT', DOCUMENT_ID)! },
     requestPolicy: 'cache-and-network',
   }));
   const overlay = useInFlightEntityPropertyOptions(DOCUMENT_ID);
@@ -129,7 +130,7 @@ function Readers() {
       ?.entities.find(({ id }) => id === OTHER_DOCUMENT_ID)?.name;
     if (name) unrelatedReads++;
   });
-  const assignments = () => raw.data?.user.soup.items[0]?.properties ?? [];
+  const assignments = () => raw.data?.user.soupEntity?.properties ?? [];
   read = () => ({
     detail: tags
       .appliedTags()

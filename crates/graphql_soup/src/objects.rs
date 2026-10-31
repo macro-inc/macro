@@ -31,7 +31,8 @@ use models_soup::{
 use predicate_index::RecordKey;
 use serde_json::Value;
 use soup::domain::models::{
-    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField, grouping::NestedSoupGroups,
+    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField,
+    grouping::{GroupLabels, NestedSoupGroups},
 };
 use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use uuid::Uuid;
@@ -218,12 +219,14 @@ pub struct GroupedSoup<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> GroupedSoup<E> {
-    /// Construct grouped GraphQL Soup bins from the domain grouping model.
-    pub fn new(groups: NestedSoupGroups<SoupPropertiesField>) -> Self {
+    /// Construct grouped GraphQL Soup bins from the domain grouping model,
+    /// labeling the bins whose key the client cannot label on its own.
+    pub fn new(groups: NestedSoupGroups<SoupPropertiesField>, labels: &GroupLabels) -> Self {
         Self {
             bins: groups
                 .into_bins()
                 .map(|(key, bin)| GraphqlSoupBin {
+                    label: labels.get(&key).map(str::to_owned),
                     key,
                     total_count: bin.group_total_size(),
                     next_cursor: bin.next_cursor().map(ToOwned::to_owned),
@@ -242,6 +245,10 @@ impl<E: SoupEntityEdges> GroupedSoup<E> {
 pub struct GraphqlSoupBin<E: SoupEntityEdges> {
     /// The grouping key.
     key: String,
+    /// Display text for a group whose key alone does not identify it client
+    /// side, limited to what the viewer can read. Null when the client labels
+    /// the key itself or the viewer cannot read the entity behind it.
+    label: Option<String>,
     /// Total number of items in this group across all pages.
     total_count: usize,
     /// Opaque cursor for the next page in this bin, if one exists.
@@ -294,6 +301,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::CalendarEvent(_) => {}
             Self::AgentSession(entity) => entity.2 = score,
             Self::DatabaseRow(entity) => entity.2 = score,
+            Self::Reminder(entity) => match entity.0 {},
         }
         self
     }
@@ -315,6 +323,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::ForeignEntity(_)
             | Self::AgentSession(_)
             | Self::DatabaseRow(_) => {}
+            Self::Reminder(entity) => match entity.0 {},
         }
         self
     }
@@ -446,6 +455,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     AgentSession(GraphqlSoupAgentSession<E>),
     /// Database row entity.
     DatabaseRow(GraphqlSoupDatabaseRow<E>),
+    /// Removed reminder entity, never constructed.
+    Reminder(GraphqlSoupReminder<E>),
 }
 
 impl<E> GraphqlSoupEntity<E>
@@ -1029,6 +1040,15 @@ impl<E: SoupEntityEdges> GraphqlSoupInitiative<E> {
         }
     }
 
+    /// Always null: project descriptions are collaborative surfaces (#7193),
+    /// keyed by the initiative id.
+    #[graphql(
+        deprecation = "Use ensureInitiativeDescriptionSurface; the description surface id is the initiative id. Remove after 2026-11-30."
+    )]
+    async fn description_document_id(&self) -> Option<ID> {
+        None
+    }
+
     /// Common entity edges, including properties and viewer permissions.
     #[graphql(flatten)]
     async fn edges(&self) -> E {
@@ -1279,6 +1299,16 @@ where
     /// The channel thread the session was opened from, when any.
     async fn thread_id(&self) -> Option<ID> {
         self.0.thread_id.map(|id| ID(id.to_string()))
+    }
+
+    /// Who started the session.
+    async fn source(&self) -> graphql_soup_filter_input::GraphqlAgentSessionSource {
+        self.0.source.into()
+    }
+
+    /// Where the session is shown.
+    async fn visibility(&self) -> graphql_soup_filter_input::GraphqlAgentSessionVisibility {
+        self.0.visibility.into()
     }
 
     /// The session's last known status: `no_messages`, `disconnected`, or the
@@ -2319,6 +2349,10 @@ where
 
 pub use crm_contact::GraphqlSoupCrmContact;
 mod crm_contact;
+pub use reminder::{
+    GraphqlReminderScheduleType, GraphqlSoupReminder, GraphqlSoupReminderReference,
+};
+mod reminder;
 
 /// GraphQL CRM company entity.
 pub struct GraphqlSoupCrmCompany<E: SoupEntityEdges>(SoupCrmCompany<()>, E, Option<f64>);
@@ -2592,6 +2626,7 @@ impl_common_interface_edges!(
     GraphqlSoupForeignEntity,
     GraphqlSoupAgentSession,
     GraphqlSoupDatabaseRow,
+    GraphqlSoupReminder,
 );
 
 /// Realtime Soup patch represented as exactly one update or cache deletion.

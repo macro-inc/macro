@@ -679,7 +679,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
           this.dispatchEvent(type, event);
         }
       )
-      .exhaustive();
+      .exhaustive(() => undefined);
   }
 
   /**

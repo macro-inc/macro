@@ -79,3 +79,31 @@ fn sorts_messages_and_derives_thread_state() {
             .all(|message| message.thread_db_id == thread.db_id)
     );
 }
+
+#[test]
+fn undated_provider_drafts_keep_all_mail_timestamp_but_spam_drafts_do_not() {
+    let mut draft = message("draft", 0, vec!["DRAFT".into()]);
+    draft.internal_date = String::new();
+    let resource = ThreadResource {
+        id: "thread".into(),
+        messages: vec![draft.clone(), message("older", 1000, vec![])],
+    };
+    let thread = map_thread_resource_to_service(resource, Uuid::now_v7()).unwrap();
+    let created_at = thread
+        .messages
+        .iter()
+        .find(|m| m.is_draft)
+        .unwrap()
+        .created_at;
+    assert_eq!(thread.latest_non_spam_message_ts, Some(created_at));
+    draft.label_ids.push("SPAM".into());
+    let thread = map_thread_resource_to_service(
+        ThreadResource {
+            id: "thread".into(),
+            messages: vec![draft],
+        },
+        Uuid::now_v7(),
+    )
+    .unwrap();
+    assert_eq!(thread.latest_non_spam_message_ts, None);
+}

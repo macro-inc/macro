@@ -48,7 +48,18 @@ export function CallTeamMemoryDemo() {
   const playback = createProductWalkthrough({
     root: () => root,
     steps: 9,
-    reset: () => {},
+    loop: { hold: 9000 },
+    reset: () => {
+      player.pause();
+      player.seek(0);
+      session.setJoined(true);
+      setPhase(0);
+      setShared(true);
+      setQuery('');
+      setAim(undefined);
+      setClicking(false);
+      setAutomatic(true);
+    },
     delay: (step) =>
       [0, 1800, 600, 200, 1600, 600, 200, 3800, 600, 200][step] ?? 2000,
     reduced: () => {

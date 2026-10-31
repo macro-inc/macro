@@ -68,10 +68,19 @@ export function createTauriNotificationInterface(
       }
 
       if (isMacOS) {
+        const { sender, conversation } = data;
         try {
+          // macOS shows the sender as the title and the conversation beneath
+          // it; without a sender the title already names both.
           await invoke<void>('send_macos_notification', {
-            title: data.title,
+            title: sender?.name ?? data.title,
             body: data.options?.body,
+            notificationId: data.notificationId,
+            subtitle: sender ? conversation?.name : undefined,
+            threadId: conversation?.id,
+            sender,
+            // Older native builds ignore this and keep the system sound.
+            silent: data.options?.silent,
           });
         } catch (error) {
           // OTA frontend updates can reach an older native app. Its legacy
@@ -81,7 +90,13 @@ export function createTauriNotificationInterface(
           }
           throw error;
         }
-        return createTauriNotification();
+        // Native activation carries the ID through the startup-safe navigation
+        // bridge. It also works after this webview (and its callbacks) is gone.
+        return {
+          onClick: () => {},
+          onDismiss: () => {},
+          close: () => {},
+        };
       }
 
       if (platform === 'linux') {

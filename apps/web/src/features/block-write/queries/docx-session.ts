@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
 import { createSyncEngine } from '@macro-inc/collaboration/collab/engine';
@@ -313,7 +314,12 @@ export function createDocxSession(options: DocxSessionOptions): DocxSession {
   hydrate().catch((cause: unknown) => {
     console.error('DOCX session failed to open', cause);
     if (!disposed)
-      setState({ t: 'error', message: 'Unable to open this document.' });
+      setState({
+        t: 'error',
+        message: thrownResultErrorHasCode(cause, 'CONFLICT')
+          ? 'This document is still processing. Try opening it again shortly.'
+          : 'Unable to open this document.',
+      });
   });
 
   onCleanup(() => {

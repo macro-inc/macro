@@ -259,6 +259,7 @@ fn query() -> WorkFeedQuery {
             types: Vec::new(),
             include_snippets: false,
         },
+        state: None,
         limit: 50,
         after: None,
     }
@@ -386,6 +387,103 @@ async fn page_forwards_scope_and_cursor_to_the_source() {
     );
     assert_eq!(requests[0].after.as_ref().unwrap().sort_at, at(30));
     assert!(requests[0].only.is_none());
+}
+
+#[tokio::test]
+async fn state_filter_reads_on_until_the_page_is_full() {
+    const UNSEEN_1: u128 = 0xA1;
+    const UNSEEN_2: u128 = 0xA2;
+    const UNSEEN_3: u128 = 0xA3;
+    const SEEN_1: u128 = 0xB1;
+    const SEEN_2: u128 = 0xB2;
+    let service = service(
+        vec![
+            candidate(
+                "unseen 1",
+                entity(EntityType::Document, UNSEEN_1),
+                Some(9),
+                None,
+            ),
+            candidate(
+                "seen 1",
+                entity(EntityType::Document, SEEN_1),
+                None,
+                Some(8),
+            ),
+            candidate(
+                "unseen 2",
+                entity(EntityType::Document, UNSEEN_2),
+                Some(7),
+                None,
+            ),
+            candidate(
+                "unseen 3",
+                entity(EntityType::Document, UNSEEN_3),
+                Some(6),
+                None,
+            ),
+            candidate(
+                "seen 2",
+                entity(EntityType::Document, SEEN_2),
+                None,
+                Some(5),
+            ),
+        ],
+        vec![
+            doc_comment(1, UNSEEN_1, 1, 1, 9),
+            doc_comment(2, UNSEEN_2, 2, 2, 7),
+            doc_comment(3, UNSEEN_3, 3, 3, 6),
+        ],
+    );
+    let labels = |page: &WorkFeedPage<&'static str>| {
+        page.entries
+            .iter()
+            .map(|entry| entry.item.entity)
+            .collect::<Vec<_>>()
+    };
+    let mut unseen = query();
+    unseen.state = Some(WorkFeedItemState::Unseen);
+    unseen.limit = 2;
+
+    // The first source page keeps one item; the second fills the page with
+    // one of its two, so the next page starts right after it.
+    let first = service.page(viewer(), unseen.clone()).await.unwrap();
+    assert_eq!(labels(&first), vec!["unseen 1", "unseen 2"]);
+    assert_eq!(first.next.as_ref().unwrap().sort_at, at(7));
+
+    unseen.after = first.next;
+    let second = service.page(viewer(), unseen).await.unwrap();
+    assert_eq!(labels(&second), vec!["unseen 3"]);
+    assert!(second.next.is_none());
+
+    let mut seen = query();
+    seen.state = Some(WorkFeedItemState::Seen);
+    let page = service.page(viewer(), seen).await.unwrap();
+    assert_eq!(labels(&page), vec!["seen 1", "seen 2"]);
+}
+
+#[tokio::test]
+async fn state_filter_stops_after_its_read_limit_with_a_cursor() {
+    let items = (0..10)
+        .map(|n| {
+            candidate(
+                "own work",
+                entity(EntityType::Document, 0x100 + n),
+                None,
+                Some(50 - u32::try_from(n).unwrap()),
+            )
+        })
+        .collect();
+    let service = service(items, Vec::new());
+    let mut query = query();
+    query.state = Some(WorkFeedItemState::Unseen);
+    query.limit = 2;
+
+    let page = service.page(viewer(), query).await.unwrap();
+
+    assert!(page.entries.is_empty());
+    assert_eq!(service.source.requests.lock().unwrap().len(), 4);
+    assert_eq!(page.next.unwrap().sort_at, at(43));
 }
 
 #[tokio::test]

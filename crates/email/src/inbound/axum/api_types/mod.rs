@@ -3,6 +3,7 @@ mod send;
 
 pub use draft::{
     ApiDraftContactInfo, ApiDraftInput, ApiDraftOutput, CreateDraftRequest, CreateDraftResponse,
+    DraftEditPrecondition,
 };
 pub use send::{SendMessageRequest, SendMessageResponse};
 mod label;

@@ -16,7 +16,10 @@ export function createThreadReadAdapter(
   toHeaderLinkId: (linkId: string | null | undefined) => string | undefined
 ): Pick<
   EmailThreadCommands,
-  'markThreadUnread' | 'markThreadRead' | 'isThreadMarkedUnread'
+  | 'markThreadUnread'
+  | 'markThreadRead'
+  | 'isThreadMarkedUnread'
+  | 'isThreadMarkedRead'
 > {
   const markSeenMutation = useMarkThreadAsSeenMutation();
   const markUnreadMutation = useMarkThreadAsUnreadMutation();
@@ -24,9 +27,11 @@ export function createThreadReadAdapter(
   // Viewing a thread marks it read (EmailDebouncedReadMarker), so each thread
   // starts with the toggle offering Mark Unread.
   const [threadMarkedUnread, setThreadMarkedUnread] = createSignal(false);
+  const [threadMarkedRead, setThreadMarkedRead] = createSignal(false);
   createEffect(() => {
     void threadId();
     setThreadMarkedUnread(false);
+    setThreadMarkedRead(false);
   });
 
   const markThreadUnread = () => {
@@ -40,6 +45,7 @@ export function createThreadReadAdapter(
 
     const threadId = thread.db_id;
     setThreadMarkedUnread(true);
+    setThreadMarkedRead(false);
     markUnreadMutation.mutate(
       { threadId, linkId: thread.link_id },
       {
@@ -74,6 +80,7 @@ export function createThreadReadAdapter(
 
     const threadId = thread.db_id;
     setThreadMarkedUnread(false);
+    setThreadMarkedRead(true);
     markSeenMutation.mutate(
       { threadId, linkId: toHeaderLinkId(thread.link_id) },
       {
@@ -86,6 +93,7 @@ export function createThreadReadAdapter(
         },
         onError: () => {
           setThreadMarkedUnread(true);
+          setThreadMarkedRead(false);
           toast.failure('Failed to mark as read');
           fireAndForget(
             refetchSoupEntity(threadId, 'emailThread'),
@@ -101,5 +109,6 @@ export function createThreadReadAdapter(
     markThreadUnread,
     markThreadRead,
     isThreadMarkedUnread: threadMarkedUnread,
+    isThreadMarkedRead: threadMarkedRead,
   };
 }

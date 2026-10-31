@@ -3,14 +3,28 @@ use crate::domain::models::{
     ActorInboxes, AppliedGoogleGrant, CalendarAttendee, CalendarAttendeeInput,
     CalendarBackfillJobKey, CalendarCreationTarget, CalendarEventOverride, CalendarEventSource,
     CalendarLinkTokenIdentity, CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease,
-    ConferenceChange, DisconnectedCalendar, EventStart, EventStatus, EventTransparency, EventType,
-    EventVisibility, GoogleCalendarSyncSnapshot, GoogleWatchChannel, OutOfOfficeAutoDeclineMode,
-    OutOfOfficeProperties, ProviderCalendar, ProviderCalendarTarget, ProviderEventSource,
-    StoredGoogleCalendar, VisibleCalendar,
+    ConferenceChange, DisconnectedCalendar, EventDetails, EventStart, EventStatus,
+    EventTransparency, EventType, EventVisibility, GoogleCalendarSyncSnapshot, GoogleWatchChannel,
+    GuestPolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, OwnedInbox, ProviderCalendar,
+    ProviderCalendarTarget, ProviderEventSource, StoredGoogleCalendar, ViewerCapabilities,
+    VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
 use std::sync::{Arc, Mutex};
+
+/// The inbox the fixture targets sync through: the link
+/// [`ActorInboxes::sole`] gives its inbox.
+const SELF_LINK: Uuid = Uuid::nil();
+
+fn owned(link_id: Uuid, email: &str) -> OwnedInbox {
+    OwnedInbox {
+        link_id,
+        email: email.to_string(),
+        provider: super::super::models::CalendarProvider::Google,
+        writable_calendar_ids: Vec::new(),
+    }
+}
 
 fn token_identity() -> CalendarLinkTokenIdentity {
     CalendarLinkTokenIdentity {
@@ -29,12 +43,16 @@ fn mutation_target(is_read_only: bool) -> CalendarEventMutationTarget {
         provider_event_id: "instance-id".to_string(),
         provider_recurring_event_id: Some("master-id".to_string()),
         owner_id: "macro|self@example.com".to_string(),
-        email_link_id: Uuid::now_v7(),
+        email_link_id: SELF_LINK,
         account_id: Uuid::now_v7(),
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
         token_identity: token_identity(),
         actor: Some(ActorInboxes::sole("self@example.com")),
+        organizer_email: Some("self@example.com".to_string()),
+        guest_policy: GuestPolicy::default(),
+        is_snapshot: false,
+        organizer_copy_calendar_id: None,
     }
 }
 
@@ -54,7 +72,7 @@ fn creation_target(is_read_only: bool) -> CalendarCreationTarget {
     CalendarCreationTarget {
         observed_access_role: Some(if is_read_only { "reader" } else { "owner" }.to_owned()),
         owner_id: "macro|self@example.com".to_string(),
-        email_link_id: Uuid::now_v7(),
+        email_link_id: SELF_LINK,
         account_id: Uuid::now_v7(),
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
@@ -102,6 +120,9 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
             is_read_only: false,
             attendees: Vec::new(),
             reminders: EventReminders::default(),
+            guest_policy: GuestPolicy::default(),
+            is_snapshot: false,
+            viewer_can: ViewerCapabilities::NONE,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         },
@@ -140,6 +161,7 @@ fn draft() -> CalendarEventDraft {
         reminders: None,
         conference: None,
         out_of_office: None,
+        guest_policy: None,
     }
 }
 
@@ -166,6 +188,24 @@ struct FakeRepo {
     visible_calendars: Vec<VisibleCalendar>,
     fail_list_visible: bool,
     fail_owned_inboxes: bool,
+    /// Guest policies recorded after the provider refused an invite.
+    recorded_guest_policies: Arc<Mutex<Vec<(Uuid, GuestPolicy)>>>,
+    /// Stored details a guest's update is compared against.
+    event_details: Option<EventDetails>,
+    /// The occurrence key of every stored-details read.
+    details_requests: Arc<Mutex<Vec<Option<String>>>>,
+    /// What `event_export` resolves for the requester.
+    export: Option<crate::domain::ics::CalendarEventExport>,
+    /// Inboxes a sync was scheduled for.
+    scheduled_syncs: Arc<Mutex<Vec<Uuid>>>,
+    /// Join requests, keyed by event and requester like the table.
+    join_requests: Arc<Mutex<Vec<crate::domain::join_requests::CalendarJoinRequest>>>,
+    /// The requester's copies of the addressed meeting.
+    meeting_copies: Vec<crate::domain::models::MeetingCopy>,
+    /// Guest copies a write reports aligning with its organizer's policy.
+    aligned_copies: Vec<crate::domain::models::AlignedGuestCopy>,
+    /// Copies on other calendars, addressed by their calendar id.
+    copy_targets: Vec<CalendarEventMutationTarget>,
 }
 
 impl Default for FakeRepo {
@@ -186,6 +226,15 @@ impl Default for FakeRepo {
             visible_calendars: Vec::new(),
             fail_list_visible: false,
             fail_owned_inboxes: false,
+            recorded_guest_policies: Default::default(),
+            event_details: None,
+            details_requests: Default::default(),
+            export: None,
+            scheduled_syncs: Default::default(),
+            join_requests: Default::default(),
+            meeting_copies: Vec::new(),
+            aligned_copies: Vec::new(),
+            copy_targets: Vec::new(),
         }
     }
 }
@@ -227,6 +276,7 @@ impl CalendarRepository for FakeRepo {
             owner_id,
             change: self.write_change,
             team_ooo_changed,
+            aligned_copies: self.aligned_copies.clone(),
         })
     }
 
@@ -254,6 +304,120 @@ impl CalendarRepository for FakeRepo {
         _now: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, rootcause::Report> {
         unreachable!()
+    }
+
+    async fn meeting_copies(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Vec<crate::domain::models::MeetingCopy>, rootcause::Report> {
+        Ok(self.meeting_copies.clone())
+    }
+
+    async fn event_export(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<crate::domain::ics::CalendarEventExport>, rootcause::Report> {
+        Ok(self.export.clone())
+    }
+
+    async fn forwarded_copy(
+        &self,
+        _requester_id: &str,
+        _event_id: Uuid,
+    ) -> Result<Option<crate::domain::ics::ForwardedCopy>, rootcause::Report> {
+        Ok(None)
+    }
+
+    async fn open_join_request(
+        &self,
+        event_id: Uuid,
+        requester_id: &str,
+        requester_email: &str,
+    ) -> Result<(crate::domain::join_requests::CalendarJoinRequest, bool), rootcause::Report> {
+        use crate::domain::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
+        let mut requests = self.join_requests.lock().unwrap();
+        if let Some(existing) = requests
+            .iter()
+            .find(|request| request.event_id == event_id && request.requester_id == requester_id)
+        {
+            return Ok((existing.clone(), false));
+        }
+        let request = CalendarJoinRequest {
+            id: Uuid::now_v7(),
+            event_id,
+            requester_id: requester_id.to_string(),
+            requester_email: requester_email.to_string(),
+            status: CalendarJoinRequestStatus::Pending,
+            created_at: Utc::now(),
+        };
+        requests.push(request.clone());
+        Ok((request, true))
+    }
+
+    async fn find_join_request(
+        &self,
+        event_id: Uuid,
+        requester_id: &str,
+    ) -> Result<Option<crate::domain::join_requests::CalendarJoinRequest>, rootcause::Report> {
+        Ok(self
+            .join_requests
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|request| request.event_id == event_id && request.requester_id == requester_id)
+            .cloned())
+    }
+
+    async fn list_pending_join_requests(
+        &self,
+        event_id: Uuid,
+    ) -> Result<Vec<crate::domain::join_requests::CalendarJoinRequest>, rootcause::Report> {
+        Ok(self
+            .join_requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|request| {
+                request.event_id == event_id
+                    && request.status
+                        == crate::domain::join_requests::CalendarJoinRequestStatus::Pending
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn get_join_request(
+        &self,
+        request_id: Uuid,
+    ) -> Result<Option<crate::domain::join_requests::CalendarJoinRequest>, rootcause::Report> {
+        Ok(self
+            .join_requests
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|request| request.id == request_id)
+            .cloned())
+    }
+
+    async fn resolve_join_request(
+        &self,
+        request_id: Uuid,
+        status: crate::domain::join_requests::CalendarJoinRequestStatus,
+    ) -> Result<Option<crate::domain::join_requests::CalendarJoinRequest>, rootcause::Report> {
+        use crate::domain::join_requests::CalendarJoinRequestStatus;
+        let mut requests = self.join_requests.lock().unwrap();
+        let Some(request) = requests.iter_mut().find(|request| {
+            request.id == request_id
+                && (request.status == CalendarJoinRequestStatus::Pending
+                    || (status == CalendarJoinRequestStatus::Accepted
+                        && request.status == CalendarJoinRequestStatus::Declined))
+        }) else {
+            return Ok(None);
+        };
+        request.status = status;
+        Ok(Some(request.clone()))
     }
 
     async fn list_team_out_of_office(
@@ -328,8 +492,9 @@ impl CalendarRepository for FakeRepo {
 
     async fn schedule_google_sync_for_link(
         &self,
-        _email_link_id: Uuid,
+        email_link_id: Uuid,
     ) -> Result<bool, rootcause::Report> {
+        self.scheduled_syncs.lock().unwrap().push(email_link_id);
         Ok(true)
     }
 
@@ -347,10 +512,17 @@ impl CalendarRepository for FakeRepo {
         &self,
         _requester_id: &str,
         _event_id: Uuid,
-        _calendar_id: Option<Uuid>,
+        calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarEventMutationTarget>, rootcause::Report> {
         if self.fail_owned_inboxes {
             return Err(rootcause::report!("owned inboxes unavailable"));
+        }
+        if let Some(copy) = self
+            .copy_targets
+            .iter()
+            .find(|copy| Some(copy.calendar_id) == calendar_id)
+        {
+            return Ok(Some(copy.clone()));
         }
         Ok(self.mutation_target.clone())
     }
@@ -368,6 +540,30 @@ impl CalendarRepository for FakeRepo {
         _recurrence_id: &str,
     ) -> Result<Option<Vec<CalendarAttendee>>, rootcause::Report> {
         Ok(self.occurrence_override_attendees.clone())
+    }
+
+    async fn get_event_details(
+        &self,
+        _event_id: Uuid,
+        occurrence_key: Option<&str>,
+    ) -> Result<Option<EventDetails>, rootcause::Report> {
+        self.details_requests
+            .lock()
+            .unwrap()
+            .push(occurrence_key.map(str::to_string));
+        Ok(self.event_details.clone())
+    }
+
+    async fn record_guest_policy(
+        &self,
+        event_id: Uuid,
+        policy: GuestPolicy,
+    ) -> Result<(), rootcause::Report> {
+        self.recorded_guest_policies
+            .lock()
+            .unwrap()
+            .push((event_id, policy));
+        Ok(())
     }
 
     async fn get_creation_target(
@@ -399,10 +595,17 @@ impl CalendarRepository for FakeRepo {
         Ok(None)
     }
 
-    async fn owned_inbox_emails(
+    async fn event_copies(
+        &self,
+        _event_ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::labels::EventCopy>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+
+    async fn owned_inboxes(
         &self,
         _requester_id: &str,
-    ) -> Result<Vec<String>, rootcause::Report> {
+    ) -> Result<Vec<OwnedInbox>, rootcause::Report> {
         if self.fail_owned_inboxes {
             return Err(rootcause::report!("owned inboxes unavailable"));
         }
@@ -430,6 +633,8 @@ enum FakeProviderBehavior {
     Gone,
     OccurrenceGone,
     NotAttendee,
+    Forbidden(GuestPolicy),
+    GuestListHidden(GuestPolicy),
     Fail(CalendarProviderErrorKind),
 }
 
@@ -443,6 +648,14 @@ struct FakeProvider {
     echo_time: Option<EventTime>,
     created_drafts: Arc<Mutex<Vec<CalendarEventDraft>>>,
     updated_patches: Arc<Mutex<Vec<CalendarEventPatch>>>,
+    invited_guests: Arc<Mutex<Vec<Vec<CalendarAttendeeInput>>>>,
+    imported: Arc<Mutex<Vec<(String, crate::domain::ics::EventSnapshot)>>>,
+    invited_as: Arc<Mutex<Vec<Vec<String>>>>,
+    /// Whether reading a copy back finds it gone.
+    refresh_gone: bool,
+    /// The title a copy read back still has because Google has yet to carry
+    /// the write to it, with a provider stamp older than the write's.
+    refresh_stale: Option<&'static str>,
 }
 
 impl FakeProvider {
@@ -456,11 +669,18 @@ impl FakeProvider {
             echo_time: None,
             created_drafts: Arc::new(Mutex::new(Vec::new())),
             updated_patches: Arc::new(Mutex::new(Vec::new())),
+            invited_guests: Arc::new(Mutex::new(Vec::new())),
+            imported: Arc::new(Mutex::new(Vec::new())),
+            invited_as: Arc::new(Mutex::new(Vec::new())),
+            refresh_gone: false,
+            refresh_stale: None,
         }
     }
 
-    fn echo(&self, owner_id: &str) -> CalendarEventUpsert {
-        let mut upsert = echo_upsert(owner_id);
+    fn echo(&self, target: &ProviderCalendarTarget) -> CalendarEventUpsert {
+        let mut upsert = echo_upsert(&target.owner_id);
+        upsert.source.details_mut().email_link_id = target.email_link_id;
+        upsert.source.details_mut().calendar_id = target.calendar_id;
         upsert.event.attendees = self.echo_attendees.clone();
         upsert.overrides = self.echo_overrides.clone();
         if let Some(time) = &self.echo_time {
@@ -494,7 +714,7 @@ impl CalendarMutationProvider for FakeProvider {
         if let Some(error) = self.fail() {
             return Err(error);
         }
-        Ok(self.echo(&target.owner_id))
+        Ok(self.echo(target))
     }
 
     async fn update_event(
@@ -515,7 +735,7 @@ impl CalendarMutationProvider for FakeProvider {
         if matches!(self.behavior, FakeProviderBehavior::Gone) {
             return Ok(None);
         }
-        Ok(Some(self.echo(&target.owner_id)))
+        Ok(Some(self.echo(target)))
     }
 
     async fn update_event_instance(
@@ -536,10 +756,32 @@ impl CalendarMutationProvider for FakeProvider {
         Ok(match self.behavior {
             FakeProviderBehavior::Gone => ProviderInstanceUpdateOutcome::SeriesGone,
             FakeProviderBehavior::OccurrenceGone => {
-                ProviderInstanceUpdateOutcome::OccurrenceGone(Box::new(self.echo(&target.owner_id)))
+                ProviderInstanceUpdateOutcome::OccurrenceGone(Box::new(self.echo(target)))
             }
-            _ => ProviderInstanceUpdateOutcome::Applied(Box::new(self.echo(&target.owner_id))),
+            _ => ProviderInstanceUpdateOutcome::Applied(Box::new(self.echo(target))),
         })
+    }
+
+    async fn refresh_event(
+        &self,
+        _access_token: &str,
+        target: &ProviderCalendarTarget,
+        master_provider_event_id: &str,
+    ) -> Result<Option<CalendarEventUpsert>, CalendarProviderError> {
+        self.calls.lock().unwrap().push(format!(
+            "refresh:{}:{master_provider_event_id}",
+            target.provider_calendar_id
+        ));
+        if self.refresh_gone {
+            return Ok(None);
+        }
+        let mut copy = self.echo(target);
+        if let Some(title) = self.refresh_stale {
+            copy.event.title = title.to_string();
+            copy.event.attendees = Vec::new();
+            copy.event.updated_at -= Duration::hours(1);
+        }
+        Ok(Some(copy))
     }
 
     async fn delete_event(
@@ -556,6 +798,74 @@ impl CalendarMutationProvider for FakeProvider {
             return Err(error);
         }
         Ok(())
+    }
+
+    async fn add_attendees(
+        &self,
+        _access_token: &str,
+        target: &ProviderCalendarTarget,
+        master_provider_event_id: &str,
+        actor: &ActorInboxes,
+        guests: &[CalendarAttendeeInput],
+        scope: &CalendarUpdateScope,
+    ) -> Result<ProviderInviteOutcome, CalendarProviderError> {
+        self.invited_as
+            .lock()
+            .unwrap()
+            .push(actor.iter().map(str::to_string).collect());
+        let scope = match scope {
+            CalendarUpdateScope::All => "all".to_string(),
+            CalendarUpdateScope::ThisEvent { recurrence_id } => format!("this:{recurrence_id}"),
+        };
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("invite:{master_provider_event_id}:{scope}"));
+        self.invited_guests.lock().unwrap().push(guests.to_vec());
+        if let Some(error) = self.fail() {
+            return Err(error);
+        }
+        Ok(match self.behavior {
+            FakeProviderBehavior::Gone => ProviderInviteOutcome::Gone,
+            FakeProviderBehavior::OccurrenceGone => {
+                ProviderInviteOutcome::OccurrenceGone(Box::new(self.echo(target)))
+            }
+            FakeProviderBehavior::NotAttendee => ProviderInviteOutcome::NotAttendee,
+            FakeProviderBehavior::Forbidden(policy) => ProviderInviteOutcome::Forbidden(policy),
+            FakeProviderBehavior::GuestListHidden(policy) => {
+                ProviderInviteOutcome::GuestListHidden(policy)
+            }
+            _ => ProviderInviteOutcome::Applied(Box::new(self.echo(target))),
+        })
+    }
+
+    async fn import_event(
+        &self,
+        _access_token: &str,
+        target: &ProviderCalendarTarget,
+        source: &crate::domain::ics::EventSnapshot,
+    ) -> Result<ProviderImportOutcome, CalendarProviderError> {
+        self.calls.lock().unwrap().push("import".to_string());
+        self.imported
+            .lock()
+            .unwrap()
+            .push((target.provider_calendar_id.clone(), source.clone()));
+        if let Some(error) = self.fail() {
+            return Err(error);
+        }
+        // `Gone` stands for Google already holding the meeting's UID, and
+        // `Forbidden` for Google refusing the import.
+        Ok(match self.behavior {
+            FakeProviderBehavior::Gone => ProviderImportOutcome::AlreadyHeld,
+            FakeProviderBehavior::Forbidden(_) => {
+                ProviderImportOutcome::Refused(CalendarProviderError::new(
+                    CalendarProviderErrorKind::Permanent,
+                    "The owner of the calendar must either be the organizer or an attendee of \
+                     an event that is imported. (reasons: participantIsNeitherOrganizerNorAttendee)",
+                ))
+            }
+            _ => ProviderImportOutcome::Imported(Box::new(self.echo(target))),
+        })
     }
 
     async fn stop_watch_channel(
@@ -590,7 +900,7 @@ impl CalendarMutationProvider for FakeProvider {
         }
         Ok(match self.behavior {
             FakeProviderBehavior::Gone => ProviderSeriesMutationOutcome::Gone,
-            _ => ProviderSeriesMutationOutcome::Applied(Box::new(self.echo(&target.owner_id))),
+            _ => ProviderSeriesMutationOutcome::Applied(Box::new(self.echo(target))),
         })
     }
 
@@ -609,7 +919,7 @@ impl CalendarMutationProvider for FakeProvider {
         }
         Ok(match self.behavior {
             FakeProviderBehavior::Gone => ProviderSeriesMutationOutcome::SeriesDeleted,
-            _ => ProviderSeriesMutationOutcome::Applied(Box::new(self.echo(&target.owner_id))),
+            _ => ProviderSeriesMutationOutcome::Applied(Box::new(self.echo(target))),
         })
     }
 
@@ -640,7 +950,7 @@ impl CalendarMutationProvider for FakeProvider {
         Ok(match self.behavior {
             FakeProviderBehavior::Gone => ProviderRsvpOutcome::Gone,
             FakeProviderBehavior::NotAttendee => ProviderRsvpOutcome::NotAttendee,
-            _ => ProviderRsvpOutcome::Applied(Box::new(self.echo(&target.owner_id))),
+            _ => ProviderRsvpOutcome::Applied(Box::new(self.echo(target))),
         })
     }
 }
@@ -731,6 +1041,12 @@ impl macro_event_broker::MacroEventBroker for RecordingEventBroker {
 #[derive(Clone, Default)]
 struct RecordingRefreshNotifier {
     notified: Arc<Mutex<Vec<(String, Uuid, bool)>>>,
+    /// `(requester, event)` of every requester told of an answer.
+    answered_requesters: Arc<Mutex<Vec<(String, Uuid)>>>,
+    /// Join requests whose stored status each nudge records in `seen_statuses`.
+    join_requests: Arc<Mutex<Vec<crate::domain::join_requests::CalendarJoinRequest>>>,
+    /// Status of each of `join_requests` as every nudge went out.
+    seen_statuses: Arc<Mutex<Vec<crate::domain::join_requests::CalendarJoinRequestStatus>>>,
 }
 
 impl CalendarRefreshNotifier for RecordingRefreshNotifier {
@@ -740,6 +1056,18 @@ impl CalendarRefreshNotifier for RecordingRefreshNotifier {
             email_link_id,
             team_ooo_changed,
         ));
+        let statuses = self.join_requests.lock().unwrap();
+        self.seen_statuses
+            .lock()
+            .unwrap()
+            .extend(statuses.iter().map(|request| request.status));
+    }
+
+    async fn join_request_answered(&self, requester_id: &str, event_id: Uuid) {
+        self.answered_requesters
+            .lock()
+            .expect("notifier lock")
+            .push((requester_id.to_string(), event_id));
     }
 }
 
@@ -859,7 +1187,7 @@ async fn create_does_not_write_when_inbox_lookup_fails() {
 }
 
 #[tokio::test]
-async fn create_returned_echo_marks_requester_inboxes_as_self() {
+async fn create_returned_echo_marks_the_copys_inbox_as_self() {
     let mut provider = FakeProvider::new(FakeProviderBehavior::Echo);
     provider.echo_attendees = vec![
         echo_attendee("jacob@example.com", true),
@@ -868,7 +1196,7 @@ async fn create_returned_echo_marks_requester_inboxes_as_self() {
     let created = service(
         FakeRepo {
             creation_target: Some(CalendarCreationTarget {
-                actor: ActorInboxes::from_owned(vec!["jackson@example.com".to_string()]),
+                actor: ActorInboxes::from_owned(vec![owned(SELF_LINK, "jackson@example.com")]),
                 ..creation_target(false)
             }),
             ..FakeRepo::default()
@@ -1003,6 +1331,37 @@ async fn a_persisted_mutation_nudges_the_links_calendar_viewers() {
     assert!(
         !notified[0].2,
         "ordinary event edits preserve cached OOO rows"
+    );
+}
+
+#[tokio::test]
+async fn a_policy_reaching_guest_copies_nudges_their_viewers() {
+    let guest_link = Uuid::now_v7();
+    let repo = FakeRepo {
+        creation_target: Some(creation_target(false)),
+        write_change: CalendarEventChange::Updated,
+        aligned_copies: vec![crate::domain::models::AlignedGuestCopy {
+            event_id: Uuid::now_v7(),
+            owner_id: "macro|guest@example.com".into(),
+            email_link_id: guest_link,
+        }],
+        ..FakeRepo::default()
+    };
+    let refresh = RecordingRefreshNotifier::default();
+    service_with_refresh(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        refresh.clone(),
+    )
+    .create_event("macro|user", None, None, draft())
+    .await
+    .unwrap();
+
+    let notified = refresh.notified.lock().expect("notifier lock").clone();
+    assert!(
+        notified.contains(&("macro|guest@example.com".to_string(), guest_link, false)),
+        "{notified:?}"
     );
 }
 
@@ -2135,7 +2494,7 @@ async fn rsvp_addresses_the_requester_inbox_not_the_source_calendar() {
     let provider = FakeProvider::new(FakeProviderBehavior::Echo);
     let emails = provider.rsvp_self_emails.clone();
     let mut target = mutation_target(false);
-    target.actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()]);
+    target.actor = ActorInboxes::from_owned(vec![owned(Uuid::now_v7(), "jackson@example.com")]);
     service(
         FakeRepo {
             mutation_target: Some(target),
@@ -2162,6 +2521,41 @@ async fn rsvp_addresses_the_requester_inbox_not_the_source_calendar() {
 }
 
 #[tokio::test]
+async fn rsvp_without_an_address_answers_as_the_copys_inbox() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let emails = provider.rsvp_self_emails.clone();
+    let mut target = mutation_target(false);
+    // Another connected inbox of the requester is also on the event.
+    target.actor = ActorInboxes::from_owned(vec![
+        owned(Uuid::now_v7(), "another@example.com"),
+        owned(SELF_LINK, "self@example.com"),
+    ]);
+    service(
+        FakeRepo {
+            mutation_target: Some(target),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .respond_to_event(
+        "macro|user",
+        Uuid::now_v7(),
+        None,
+        AttendeeResponseStatus::Accepted,
+        CalendarRsvpScope::All,
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        emails.lock().unwrap().as_slice(),
+        [vec!["self@example.com".to_string()]]
+    );
+}
+
+#[tokio::test]
 async fn rsvp_through_a_delegated_inbox_never_hands_the_subject_email_to_the_provider() {
     let provider = FakeProvider::new(FakeProviderBehavior::Echo);
     let emails = provider.rsvp_self_emails.clone();
@@ -2172,7 +2566,7 @@ async fn rsvp_through_a_delegated_inbox_never_hands_the_subject_email_to_the_pro
         email_address: "jacob@example.com".to_string(),
         provider: super::super::models::CalendarProvider::Google,
     };
-    target.actor = ActorInboxes::from_owned(vec!["jackson@example.com".to_string()]);
+    target.actor = ActorInboxes::from_owned(vec![owned(Uuid::now_v7(), "jackson@example.com")]);
     service(
         FakeRepo {
             mutation_target: Some(target),
@@ -2636,8 +3030,8 @@ async fn rsvp_uses_only_the_selected_owned_address_for_both_scopes() {
         let emails = provider.rsvp_self_emails.clone();
         let mut target = mutation_target(false);
         target.actor = ActorInboxes::from_owned(vec![
-            "first@example.com".into(),
-            "chosen@example.com".into(),
+            owned(SELF_LINK, "first@example.com"),
+            owned(Uuid::now_v7(), "chosen@example.com"),
         ]);
         service(
             FakeRepo {
@@ -2752,4 +3146,11 @@ async fn outlook_write_pause_rejects_provider_operations_before_fetching_tokens(
         .unwrap();
 }
 
+mod copies;
+mod copy;
+mod details;
+mod guest_policy;
+mod invite;
+mod join;
+mod organizer_copy;
 mod replacement;

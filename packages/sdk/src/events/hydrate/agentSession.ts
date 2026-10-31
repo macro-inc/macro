@@ -163,5 +163,8 @@ export function hydrateAgentSessionEvent(
       metadata,
       ...sessionHandles(client, metadata.identity),
     }))
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('macro sdk: unknown agent session event', unknown);
+      return undefined;
+    });
 }

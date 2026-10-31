@@ -10,6 +10,7 @@ apollo-parser = { workspace = true }
 chrono = { workspace = true }
 lru = { workspace = true }
 maybe_send = { path = "../../maybe_send" }
+miniz_oxide = { workspace = true }
 postcard = { workspace = true }
 predicate-index = { path = "../../predicate_index" }
 serde = { workspace = true }

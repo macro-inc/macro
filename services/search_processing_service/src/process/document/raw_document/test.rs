@@ -211,6 +211,185 @@ fn raw_document_key_is_under_the_stored_owner() {
     );
 }
 
+/// The document in `basic_versioned_document`: a PDF uploaded as version 1
+/// and saved again as version 2, so it is served from version 1.
+const SAVED_PDF: &str = "document-one";
+const BUCKET: &str = "document-storage";
+
+fn saved_pdf_message(file_type: FileType, version: &str) -> SearchExtractorMessage {
+    SearchExtractorMessage {
+        user_id: "macro|user@user.com".to_string(),
+        document_id: SAVED_PDF.to_string(),
+        file_type,
+        document_version_id: Some(version.to_string()),
+        index_override: None,
+    }
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(
+        path = "../../../../../../crates/macro_db_client/fixtures",
+        scripts("basic_versioned_document")
+    )
+)]
+async fn a_pdf_is_indexed_from_the_version_it_is_served_from(pool: sqlx::PgPool) {
+    let owner: Owner = "macro|user@user.com".to_string().try_into().unwrap();
+    let served = build_cloud_storage_bucket_document_key(&owner, SAVED_PDF, 1);
+    let latest = build_cloud_storage_bucket_document_key(&owner, SAVED_PDF, 2);
+    let converted = build_docx_to_pdf_converted_document_key(&owner, SAVED_PDF);
+
+    for (file_type, version, expected) in [
+        (FileType::Pdf, "1", Some(&served)),
+        (FileType::Pdf, "2", None),
+        (
+            FileType::Pdf,
+            CONVERTED_DOCUMENT_FILE_NAME,
+            Some(&converted),
+        ),
+        (
+            FileType::Docx,
+            CONVERTED_DOCUMENT_FILE_NAME,
+            Some(&converted),
+        ),
+        (FileType::Md, "1", None),
+        (FileType::Md, "2", Some(&latest)),
+    ] {
+        let message = saved_pdf_message(file_type, version);
+        let indexed = indexed_version_id(&pool, &message, 2).await.unwrap();
+        assert_eq!(
+            raw_document_key(&owner, &message, &indexed).as_ref(),
+            expected,
+            "{file_type} at version {version}"
+        );
+    }
+}
+
+type Requests = std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>;
+
+/// Stands in for both S3 and OpenSearch: every object read returns `object`,
+/// and each request is recorded as `METHOD path` with its body.
+async fn fake_storage(object: &'static [u8]) -> (String, Requests) {
+    use axum::{
+        Json,
+        body::Bytes,
+        http::{Method, StatusCode, Uri},
+        response::IntoResponse,
+    };
+
+    let requests = Requests::default();
+    let recorded = requests.clone();
+    let app = axum::Router::new().fallback(move |method: Method, uri: Uri, body: Bytes| {
+        let recorded = recorded.clone();
+        async move {
+            let path = uri.path().to_string();
+            recorded.lock().unwrap().push((
+                format!("{method} {path}"),
+                String::from_utf8_lossy(&body).into_owned(),
+            ));
+            if method == Method::GET {
+                object.into_response()
+            } else if path.ends_with("/_delete_by_query") {
+                Json(serde_json::json!({ "deleted": 1 })).into_response()
+            } else if path.ends_with("/_bulk") {
+                Json(serde_json::json!({
+                    "errors": false,
+                    "items": [{ "index": { "status": 201 } }],
+                }))
+                .into_response()
+            } else {
+                StatusCode::NOT_FOUND.into_response()
+            }
+        }
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    (endpoint, requests)
+}
+
+fn fake_s3(endpoint: &str) -> s3_client::S3 {
+    use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region, retry::RetryConfig};
+
+    s3_client::S3::new(aws_sdk_s3::Client::from_conf(
+        aws_sdk_s3::Config::builder()
+            .behavior_version(BehaviorVersion::latest())
+            .region(Region::new("us-east-1"))
+            .credentials_provider(Credentials::new("test", "test", None, None, "test"))
+            .endpoint_url(endpoint)
+            .force_path_style(true)
+            .retry_config(RetryConfig::disabled())
+            .build(),
+    ))
+}
+
+fn fake_opensearch(endpoint: &str) -> OpensearchClient {
+    OpensearchClient::new(endpoint.to_string(), String::new(), String::new()).unwrap()
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(
+        path = "../../../../../../crates/macro_db_client/fixtures",
+        scripts("basic_versioned_document")
+    )
+)]
+async fn a_message_for_a_version_the_pdf_is_not_served_from_changes_nothing(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(b"not a pdf").await;
+
+    update_search_with_raw_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &saved_pdf_message(FileType::Pdf, "2"),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(*requests.lock().unwrap(), Vec::new());
+}
+
+#[cfg(feature = "pdf")]
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(
+        path = "../../../../../../crates/macro_db_client/fixtures",
+        scripts("basic_versioned_document")
+    )
+)]
+async fn an_unreadable_pdf_is_indexed_by_name_only(pool: sqlx::PgPool) {
+    let (endpoint, requests) = fake_storage(b"not a pdf").await;
+
+    update_search_with_raw_document(
+        &fake_opensearch(&endpoint),
+        &pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &saved_pdf_message(FileType::Pdf, "1"),
+    )
+    .await
+    .expect("an unreadable pdf is not an error to retry");
+
+    let requests = requests.lock().unwrap().clone();
+    let lines: Vec<&str> = requests.iter().map(|(line, _)| line.as_str()).collect();
+    assert_eq!(lines.len(), 3, "{lines:?}");
+    assert!(
+        lines[0].starts_with(&format!("GET /{BUCKET}/")) && lines[0].ends_with("/document-one/1"),
+        "{lines:?}"
+    );
+    assert_eq!(lines[1], "POST /documents/_delete_by_query");
+    assert_eq!(lines[2], "POST /documents/_bulk");
+    let bulk: Vec<serde_json::Value> = requests[2]
+        .1
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(bulk.len(), 2, "only the parent doc is written: {bulk:?}");
+    assert_eq!(bulk[1]["document_name"], "test_document_name");
+    assert_eq!(bulk[1]["document_relation"], "document");
+}
+
 #[tokio::test]
 async fn test_unreadable_designs_are_read_errors() {
     for file_type in [FileType::Psd, FileType::Psb, FileType::Ai, FileType::Md] {

@@ -24,7 +24,7 @@ import {
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { registerInlineMenuTrigger } from '../../shared/registerInlineMenuTrigger';
 
-const TYPE_SKILL_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
+export const TYPE_SKILL_SYMBOL_COMMAND: LexicalCommand<void> = createCommand(
   'SKILL_SYMBOL_COMMAND'
 );
 

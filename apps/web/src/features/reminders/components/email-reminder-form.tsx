@@ -7,7 +7,7 @@ import {
   createCommandListController,
   Dialog,
   type ManagedDialogProps,
-  SegmentedControl,
+  Tabs,
 } from '@ui';
 import { createUniqueId, Show } from 'solid-js';
 import type {
@@ -164,7 +164,8 @@ export function EmailReminderForm(
               Saving…
             </Show>
           </span>
-          <SegmentedControl<EmailReminderCondition>
+          <Tabs<EmailReminderCondition>
+            touch="segmented"
             aria-label="Reminder condition"
             class="justify-self-end whitespace-nowrap touch:ml-auto"
             value={props.condition}

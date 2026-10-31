@@ -186,7 +186,7 @@ impl CalendarReplacementProvider for FakeProvider {
         target: &ProviderCalendarTarget,
         _: &str,
     ) -> Result<Option<CalendarEventUpsert>, CalendarProviderError> {
-        Ok(Some(self.echo(&target.owner_id)))
+        Ok(Some(self.echo(target)))
     }
 }
 fn fixture(behavior: FakeProviderBehavior) -> (TestMutationService, FakeRepo, FakeProvider, Uuid) {

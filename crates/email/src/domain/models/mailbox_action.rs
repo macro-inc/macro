@@ -49,6 +49,7 @@ pub struct MailboxActionMessage {
     pub provider_id: Option<String>,
     pub is_draft: bool,
     pub is_sent: bool,
+    pub is_read: bool,
     pub in_inbox: bool,
     pub in_trash: bool,
     pub in_junk: bool,
@@ -87,7 +88,8 @@ impl MailboxAction {
             .filter_map(|m| {
                 let mut pending = PendingMailboxState::default();
                 match self {
-                    Self::Read(value) => pending.is_read = Some(*value),
+                    Self::Read(value) if m.is_read != *value => pending.is_read = Some(*value),
+                    Self::Read(_) => return None,
                     Self::Flagged(value) => pending.is_flagged = Some(*value),
                     Self::Archived(true) if m.in_inbox => pending.in_inbox = Some(false),
                     Self::Archived(false) if !m.is_draft && !m.in_trash && !m.in_junk => {
@@ -128,6 +130,7 @@ mod test {
             provider_id: Some("inbox".into()),
             is_draft: false,
             is_sent: false,
+            is_read: false,
             in_inbox: true,
             in_trash: false,
             in_junk: false,
@@ -159,6 +162,7 @@ mod test {
             provider_id: Some("opaque".into()),
             is_draft: false,
             is_sent: false,
+            is_read: false,
             in_inbox: true,
             in_trash: false,
             in_junk: false,
@@ -172,6 +176,50 @@ mod test {
         assert_eq!(targets[0].pending.in_trash, None);
         assert_eq!(targets[0].pending.in_inbox, None);
     }
+
+    #[test]
+    fn read_state_targets_only_messages_that_change() {
+        let unread = MailboxActionMessage {
+            id: Uuid::now_v7(),
+            provider_id: Some("unread".into()),
+            is_draft: false,
+            is_sent: false,
+            is_read: false,
+            in_inbox: true,
+            in_trash: false,
+            in_junk: false,
+            is_present: true,
+        };
+        let read = MailboxActionMessage {
+            id: Uuid::now_v7(),
+            provider_id: Some("read".into()),
+            is_read: true,
+            ..unread.clone()
+        };
+        let draft = MailboxActionMessage {
+            id: Uuid::now_v7(),
+            provider_id: None,
+            is_draft: true,
+            ..read.clone()
+        };
+        let messages = [unread.clone(), read.clone(), draft];
+        let targets = MailboxAction::Read(true).targets(&messages);
+        assert_eq!(
+            targets.iter().map(|t| t.message_id).collect::<Vec<_>>(),
+            vec![unread.id]
+        );
+        assert_eq!(targets[0].pending.is_read, Some(true));
+        assert!(
+            MailboxAction::Read(true)
+                .targets(&[read.clone()])
+                .is_empty(),
+            "opening an already-read thread queues no provider work"
+        );
+        assert_eq!(
+            MailboxAction::Read(false).targets(&[unread, read.clone()])[0].message_id,
+            read.id
+        );
+    }
 }
 
 #[cfg(test)]
@@ -184,6 +232,7 @@ mod restore_test {
             provider_id: Some("sent-to-self".into()),
             is_sent: true,
             is_draft: false,
+            is_read: true,
             in_inbox: false,
             in_trash: true,
             in_junk: false,

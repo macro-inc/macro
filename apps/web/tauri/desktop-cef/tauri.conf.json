@@ -1,0 +1,116 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Macro",
+  "version": "../../package.json",
+  "identifier": "com.macro.app.prod",
+  "build": {
+    "frontendDist": "../../dist",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": {
+      "script": "just dev-tauri",
+      "cwd": "../.."
+    },
+    "beforeBuildCommand": {
+      "script": "just build-tauri",
+      "cwd": "../.."
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Macro",
+        "width": 800,
+        "height": 600,
+        "resizable": true,
+        "dragDropEnabled": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 20
+        },
+        "hiddenTitle": true,
+        "fullscreen": false,
+        "backgroundThrottling": "disabled"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": [
+            "$APPCACHE/ios-share-staging/**",
+            "$APPCACHE/ios-pasteboard-staging/**",
+            "$APPCACHE/ios-photo-library-staging/**"
+          ],
+          "deny": []
+        }
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "icon": [
+      "../src-tauri/icons/32x32.png",
+      "../src-tauri/icons/128x128.png",
+      "../src-tauri/icons/128x128@2x.png",
+      "../src-tauri/icons/macos/Macro.icns"
+    ],
+    "macOS": {
+      "entitlements": "entitlements.plist",
+      "files": {
+        "Resources/Assets.car": "../src-tauri/icons/macos/Assets.car"
+      },
+      "infoPlist": "../src-tauri/icons/macos/Info.plist"
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        {
+          "scheme": [
+            "macro"
+          ],
+          "appLink": false
+        },
+        {
+          "host": "macro.com",
+          "path": [
+            "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
+          ]
+        },
+        {
+          "host": "dev.macro.com",
+          "path": [
+            "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
+          ]
+        },
+        {
+          "host": "staging.macro.com",
+          "path": [
+            "/app"
+          ],
+          "pathPrefix": [
+            "/app/"
+          ]
+        }
+      ],
+      "desktop": {
+        "schemes": [
+          "macro"
+        ]
+      }
+    }
+  }
+}

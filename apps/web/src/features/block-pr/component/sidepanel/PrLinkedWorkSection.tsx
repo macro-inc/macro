@@ -3,8 +3,8 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useChannelName } from '@core/context/channels';
 import { fireAndForget } from '@core/util/fireAndForget';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import HashIcon from '@phosphor/hash.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
 import { Button, cn } from '@ui';
 import { type Component, For, type JSX, Match, Show, Switch } from 'solid-js';
 import {

@@ -5,10 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CalendarMentionEventDescription } from './calendarMentionEventDescription';
+import type { CalendarMentionEventJoinRequestStatus } from './calendarMentionEventJoinRequestStatus';
 import type { CalendarMentionEventLocation } from './calendarMentionEventLocation';
 import type { CalendarMentionEventOccurrenceKey } from './calendarMentionEventOccurrenceKey';
 import type { CalendarMentionEventOrganizerEmail } from './calendarMentionEventOrganizerEmail';
 import type { CalendarMentionEventOrganizerName } from './calendarMentionEventOrganizerName';
+import type { CalendarMentionEventViewerCopy } from './calendarMentionEventViewerCopy';
 import type { CalendarMentionEventViewerEventId } from './calendarMentionEventViewerEventId';
 import type { EventTime } from './eventTime';
 
@@ -23,11 +25,16 @@ export interface CalendarMentionEvent {
    * @minimum 0
    */
   attendeeCount: number;
+  /** For a channel-shared preview, whether the person who shared it can
+add the requester as a guest. Always false for the requester's own
+copy. */
+  canRequestToJoin?: boolean;
   /** Provider description, plain text or HTML, truncated for the preview.
 Clients must sanitize it before rendering. */
   description?: CalendarMentionEventDescription;
   /** Whether the event repeats. */
   isRecurring: boolean;
+  joinRequestStatus?: CalendarMentionEventJoinRequestStatus;
   /** Location label, when set. */
   location?: CalendarMentionEventLocation;
   /** Key of the previewed instance, absent when no occurrence is
@@ -45,6 +52,9 @@ series start. */
   title: string;
   /** Entity update time of the previewed copy. */
   updatedAt: string;
+  /** The calendars holding `viewer_event_id`, the canonical copy's first. */
+  viewerCalendarIds?: string[];
+  viewerCopy?: CalendarMentionEventViewerCopy;
   /** The requester's own event entity for the mentioned meeting. Differs
 from the mentioned id when the mention came from another attendee.
 Absent when the meeting is on none of the requester's calendars and

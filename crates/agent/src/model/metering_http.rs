@@ -1,7 +1,8 @@
 //! Rig 0.41's public HTTP extension point. Its completion stream's inner stream
 //! is private, and accepted-turn hooks miss invalid-tool recovery. Intercepting
 //! each send here also accounts for `GenericEventSource` reconnect executions.
-//! No GenAI spans or aggregate analytics are emitted by this adapter.
+//! No GenAI spans or aggregate analytics are emitted by this adapter; it only
+//! adds the provider's stop reason to Rig's streaming span, which Rig drops.
 
 use std::time::Duration;
 
@@ -11,6 +12,7 @@ use ai_usage::financial::{
 };
 use bytes::Bytes;
 use futures::StreamExt;
+use genai_telemetry::{GenAiSpanExt as _, attr};
 use rig_core::http_client::{
     self, HttpClientExt, LazyBody, MultipartForm, Request, Response, StreamingResponse,
 };
@@ -240,6 +242,9 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
     where
         T: Into<Bytes> + Send,
     {
+        // Rig sends from inside its `chat_streaming` span, so this is the
+        // model call the stop reason belongs to.
+        let call_span = tracing::Span::current();
         let (request, attempt) = self.prepare(request.map(Into::into)).await?;
         let Some(attempt) = attempt else {
             return self.inner.send_streaming(request).await;
@@ -284,6 +289,12 @@ impl<H: HttpClientExt + Clone + 'static> HttpClientExt for MeteredHttpClient<H> 
                                 if facts.terminal
                                     && let Some(attempt) = attempt.take()
                                 {
+                                    if let Some(reason) = &facts.stop_reason {
+                                        call_span.set_str_array(
+                                            attr::RESPONSE_FINISH_REASONS,
+                                            [reason.as_str()],
+                                        );
+                                    }
                                     let pricing = attempt
                                         .record_cost(facts.evidence(), facts.delivered_speed());
                                     let finalized = attempt
@@ -384,6 +395,9 @@ struct Facts {
     request_id: Option<ProviderRequestId>,
     usage: Option<Value>,
     service_tier: Option<String>,
+    /// Why the provider stopped generating, in its own words (`end_turn`,
+    /// `refusal`, `max_output_tokens`, `STOP`, ...).
+    stop_reason: Option<String>,
     terminal: bool,
     invalid: bool,
     outcome: ProviderOutcome,
@@ -401,6 +415,7 @@ impl Facts {
             request_id,
             usage: None,
             service_tier: None,
+            stop_reason: None,
             terminal: false,
             invalid: false,
             outcome: ProviderOutcome::Succeeded,
@@ -469,6 +484,7 @@ impl Facts {
                     }
                 }
                 Some("message_delta") => {
+                    self.note_stop_reason(value.pointer("/delta/stop_reason"));
                     // Cumulative counters, not deltas. Some endpoints include
                     // zero input/cache placeholders here: preserve start counts.
                     if let Some(update) = value.get("usage").and_then(Value::as_object)
@@ -504,6 +520,11 @@ impl Facts {
                         .and_then(Value::as_str)
                         .map(str::to_owned);
                     self.usage = value.pointer("/response/usage").cloned();
+                    self.note_stop_reason(
+                        value
+                            .pointer("/response/incomplete_details/reason")
+                            .or_else(|| value.pointer("/response/status")),
+                    );
                     self.terminal = true;
                     if value["type"] == "response.failed" {
                         self.outcome = ProviderOutcome::Failed;
@@ -512,6 +533,7 @@ impl Facts {
             }
             WireProtocol::ChatCompletions => {
                 self.identify(&value);
+                self.note_stop_reason(value.pointer("/choices/0/finish_reason"));
                 // The include_usage event is a cumulative, final snapshot. A
                 // repeated snapshot is never added a second time.
                 if value.get("usage").is_some_and(Value::is_object) {
@@ -527,12 +549,19 @@ impl Facts {
                 if let Some(usage) = value.get("usageMetadata") {
                     self.usage = Some(usage.clone());
                 }
-                if value.pointer("/candidates/0/finishReason").is_some() {
+                if let Some(reason) = value.pointer("/candidates/0/finishReason") {
+                    self.note_stop_reason(Some(reason));
                     // Earlier chunks are cumulative but not necessarily complete.
                     self.usage = value.get("usageMetadata").cloned();
                     self.terminal = true;
                 }
             }
+        }
+    }
+
+    fn note_stop_reason(&mut self, reason: Option<&Value>) {
+        if let Some(reason) = reason.and_then(Value::as_str) {
+            self.stop_reason = Some(reason.to_owned());
         }
     }
 

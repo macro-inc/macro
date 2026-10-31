@@ -7,6 +7,7 @@ import { match } from 'ts-pattern';
 import type {
   Conjunction,
   DateOperator,
+  DateRangeOperator,
   FilterCondition,
   FilterGroup,
   FilterNode,
@@ -32,6 +33,7 @@ type FilterOperator =
   | { kind: 'text'; operator: TextOperator }
   | { kind: 'number'; operator: NumberOperator }
   | { kind: 'date'; operator: DateOperator }
+  | { kind: 'dateRange'; operator: DateRangeOperator }
   | { kind: 'checkbox'; checked: boolean }
   | { kind: 'options'; operator: SetOperator };
 
@@ -50,10 +52,11 @@ function columnValueKind(column: DatabaseViewColumn): ValueKind {
     .with('STRING', 'LINK', () => 'text')
     .with('NUMBER', () => 'number')
     .with('DATE', () => 'date')
+    .with('DATE_RANGE', () => 'dateRange')
     .with('BOOLEAN', () => 'checkbox')
     .with('SELECT_STRING', 'SELECT_NUMBER', 'TAG', () => 'options')
     .with('ENTITY', () => 'entities')
-    .exhaustive();
+    .exhaustive(() => 'text');
 }
 
 function operatorId(test: FilterOperator | FilterTest): string {
@@ -103,6 +106,24 @@ export function filterOperators(
       choice('is after', { kind: 'date', operator: 'after' }),
       choice('is on or before', { kind: 'date', operator: 'onOrBefore' }),
       choice('is on or after', { kind: 'date', operator: 'onOrAfter' }),
+      ...PRESENCE,
+    ])
+    .with('dateRange', () => [
+      choice('contains', { kind: 'dateRange', operator: 'contains' }),
+      choice('does not contain', {
+        kind: 'dateRange',
+        operator: 'doesNotContain',
+      }),
+      choice('starts after', { kind: 'dateRange', operator: 'startsAfter' }),
+      choice('starts on or before', {
+        kind: 'dateRange',
+        operator: 'startsOnOrBefore',
+      }),
+      choice('ends before', { kind: 'dateRange', operator: 'endsBefore' }),
+      choice('ends on or after', {
+        kind: 'dateRange',
+        operator: 'endsOnOrAfter',
+      }),
       ...PRESENCE,
     ])
     .with('checkbox', () => [
@@ -156,9 +177,12 @@ export function withOperator(
       ...next,
       value: previous.kind === 'number' ? previous.value : Number.NaN,
     }))
-    .with({ kind: 'date' }, (next) => ({
+    .with({ kind: 'date' }, { kind: 'dateRange' }, (next) => ({
       ...next,
-      value: previous.kind === 'date' ? previous.value : '',
+      value:
+        previous.kind === 'date' || previous.kind === 'dateRange'
+          ? previous.value
+          : '',
     }))
     .with({ kind: 'options' }, (next) => ({
       ...next,
@@ -186,7 +210,7 @@ function isComplete(test: FilterTest): boolean {
     .with({ kind: 'presence' }, { kind: 'checkbox' }, () => true)
     .with({ kind: 'text' }, ({ value }) => value.trim() !== '')
     .with({ kind: 'number' }, ({ value }) => Number.isFinite(value))
-    .with({ kind: 'date' }, ({ value }) => value !== '')
+    .with({ kind: 'date' }, { kind: 'dateRange' }, ({ value }) => value !== '')
     .with({ kind: 'options' }, ({ options }) => options.length > 0)
     .with({ kind: 'entities' }, ({ entities }) => entities.length > 0)
     .exhaustive();
@@ -347,7 +371,7 @@ export function searchFilter(
             ]
           : [];
       })
-      .with('number', 'date', 'checkbox', 'entities', () => [])
+      .with('number', 'date', 'dateRange', 'checkbox', 'entities', () => [])
       .exhaustive()
   );
   return conditions.length

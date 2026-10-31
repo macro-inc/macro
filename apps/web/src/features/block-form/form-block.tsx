@@ -1,3 +1,4 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 /**
  * App-facing entry for the `form` block. It reads the legacy block state once
  * (id, params, split) and hands identity, capabilities and host actions to
@@ -8,13 +9,18 @@
 
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { ResponsivePermissionsBadge } from '@components/app/ResponsiveBlockToolbar';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
-import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import {
+  BlockItemSplitLabel,
+  SplitTitleFileMenu,
+} from '@components/app/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   returnSplitToRecentListView,
@@ -23,19 +29,20 @@ import {
 import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
+import { getPermissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { getWebOrigin } from '@core/util/webOrigin';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import Eye from '@phosphor/eye.svg';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import Eye from '@icon/system/regular/eye.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
 import { useFormSharePermissionsQuery } from '@queries/storage/forms';
-import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import type { FormTab } from './components/form-tabs';
 import { FormProvider } from './context/form-context';
@@ -136,15 +143,18 @@ function FormBlockContent(props: {
       fallback={
         <HeaderActionButton
           label="Publish"
-          icon={<PaperPlaneTilt />}
+          icon={
+            <PaperPlaneTilt class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+          }
           onClick={openShare}
         />
       }
     >
-      <Button variant="outline" size="sm" onClick={openRespond}>
-        <ArrowSquareOut class="size-3.5" />
-        Open form
-      </Button>
+      <HeaderActionButton
+        label="Open form"
+        icon={<ArrowSquareOut class="size-3.5" />}
+        onClick={openRespond}
+      />
     </Show>
   );
   let respondScroll: HTMLDivElement | undefined;
@@ -153,6 +163,28 @@ function FormBlockContent(props: {
       <SplitHeaderLeft>
         <BlockItemSplitLabel name={name} />
       </SplitHeaderLeft>
+      <Show when={source.detail()}>
+        {(detail) => (
+          <SplitTitleFileMenu>
+            <SplitFileMenu
+              id={formId}
+              itemType="form"
+              entityKind="form"
+              name={detail().form.name}
+              entity={{
+                type: 'form',
+                id: formId,
+                name: detail().form.name,
+                ownerId: detail().form.ownerId,
+                access: detail().access,
+              }}
+              permissions={getPermissions(detail().access)}
+              ops={[]}
+              buttonClass={isTouchDevice() ? 'order-last' : 'order-first'}
+            />
+          </SplitTitleFileMenu>
+        )}
+      </Show>
       <SplitHeaderRight>
         <Show
           when={
@@ -164,7 +196,7 @@ function FormBlockContent(props: {
           <BlockLiveIndicators />
         </Show>
         <HeaderIsland>
-          <div class="order-[1000] flex items-center gap-1.5">
+          <div class="order-[1000] flex items-center gap-2 touch:gap-1.5">
             <Show
               when={
                 !props.respondOnly &&
@@ -172,16 +204,16 @@ function FormBlockContent(props: {
                 source.detail()?.access !== 'view'
               }
             >
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={preview.opening()}
-                onClick={() => fireAndForget(preview.open(), 'form-preview')}
-              >
-                <Eye class="size-3.5" />
-                Preview
-              </Button>
-              {primary()}
+              <HeaderActionGroup label="Form actions">
+                <HeaderActionButton
+                  grouped
+                  label="Preview"
+                  icon={<Eye class="size-3.5" />}
+                  disabled={preview.opening()}
+                  onClick={() => fireAndForget(preview.open(), 'form-preview')}
+                />
+                {primary()}
+              </HeaderActionGroup>
             </Show>
             <ShareTrigger
               id={formId}
@@ -197,7 +229,8 @@ function FormBlockContent(props: {
         when={props.respondOnly}
         fallback={
           <FormPageView
-            header={FormHeader}
+            // The touch header has no room for tabs beside the actions.
+            header={isTouchDevice() ? undefined : FormHeader}
             source={source}
             tab={tab()}
             respondLink={link()}
@@ -258,7 +291,7 @@ function FormCardContent() {
         fallback={
           <Show
             when={source.failure()}
-            fallback={<div class="h-24 animate-pulse rounded-lg bg-hover" />}
+            fallback={<ListSkeleton.Bar class="h-24 w-full rounded-xl" />}
           >
             <p class="p-3 text-sm text-ink-muted">This form isn’t available.</p>
           </Show>

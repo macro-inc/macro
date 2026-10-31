@@ -34,6 +34,8 @@ export interface ApiDraftOutput {
   cc?: ApiDraftOutputCc;
   /** Message DB ID. */
   db_id?: ApiDraftOutputDbId;
+  /** Generation required for subsequent edits. */
+  draft_generation: number;
   headers_json?: ApiDraftOutputHeadersJson;
   /** Link ID. */
   link_id: string;

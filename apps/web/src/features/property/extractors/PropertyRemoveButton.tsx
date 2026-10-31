@@ -1,4 +1,4 @@
-import DeleteIcon from '@phosphor/x.svg';
+import DeleteIcon from '@icon/system/regular/x.svg';
 import { cn } from '@ui';
 import { createSignal } from 'solid-js';
 import { useProperty } from '../core/context';
@@ -38,7 +38,6 @@ export function PropertyRemoveButton(props: Props) {
     try {
       const next = nextValue(property, props.valueToRemove);
       if (next) await save(property, next);
-      ctx.onRefresh?.();
     } finally {
       setIsSaving(false);
     }

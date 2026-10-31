@@ -23,7 +23,7 @@ use serde_yaml::value::{Tag, TaggedValue};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
-use super::inventory::services_for_mode;
+use super::inventory::{RustService, services_for_mode};
 use super::{Mode, repo_root};
 
 #[cfg(test)]
@@ -90,33 +90,7 @@ pub fn generate(
             environment: kv(&[("PORT", "8080")]),
             ..Default::default()
         };
-        // Named instances need their own host ports (replacing the base ports —
-        // emitted as `!override` in apply_tags). Only the self-contained local
-        // stacks remap; dev inherits the base-compose ports.
-        let mut ports = Vec::new();
-        if mode.spec().runs_local_infra
-            && !instance.is_default()
-            && let Some(port) = svc.host_port
-        {
-            ports.push(format!("{}:8080", instance.port(port)));
-        }
-        // The agent egress proxy is the harness's second listener, and the one
-        // service port a party outside the compose network has to reach: the
-        // egress tunnel forwards Cursor's cloud to this host port. Published on
-        // every local instance, default included - the base compose publishes
-        // nothing for the harness.
-        if mode.spec().runs_local_infra && svc.compose_name == EGRESS_SERVICE {
-            ports.push(format!(
-                "{}:{EGRESS_CONTAINER_PORT}",
-                instance.port(Port::AgentHarnessEgress)
-            ));
-        }
-        if mode.spec().runs_local_infra && svc.compose_name == "preview_gateway" {
-            if instance.is_default() {
-                ports.push(format!("{}:8080", instance.port(Port::PreviewControl)));
-            }
-            ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
-        }
+        let ports = published_ports(mode, instance, svc);
         if !ports.is_empty() {
             s.ports = dct::Ports::Short(ports);
         }
@@ -201,6 +175,28 @@ pub fn generate(
     )
     .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
+}
+
+fn published_ports(mode: Mode, instance: &Instance, service: &RustService) -> Vec<String> {
+    let mut ports = Vec::new();
+    if !mode.spec().runs_local_infra {
+        return ports;
+    }
+    // Named instances replace inherited bindings. The harness has no base
+    // binding, so the default instance must publish its API port too.
+    if (!instance.is_default() || service.compose_name == EGRESS_SERVICE)
+        && let Some(port) = service.host_port
+    {
+        ports.push(format!("{}:8080", instance.port(port)));
+    }
+    if service.compose_name == EGRESS_SERVICE {
+        ports.push(format!(
+            "{}:{EGRESS_CONTAINER_PORT}",
+            instance.port(Port::AgentHarnessEgress)
+        ));
+        ports.push(format!("{}:2222", instance.port(Port::PreviewSsh)));
+    }
+    ports
 }
 
 fn add_sdk_webhook_relay(

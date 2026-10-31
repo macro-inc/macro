@@ -59,7 +59,10 @@ export {
   getCompanyOwnerId,
   getCompanyStageOptionId,
 } from './utils/company-properties';
-export { createEntityDraggable } from './utils/draggable';
+export {
+  createEntityDraggable,
+  EntityDragSelectionContext,
+} from './utils/draggable';
 export { unreadFilterFn } from './utils/filter';
 export {
   filterNotDoneNotifications,

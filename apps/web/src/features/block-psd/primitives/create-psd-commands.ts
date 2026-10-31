@@ -13,6 +13,7 @@ import type {
   Op,
 } from '@core/psd-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
 import {
   defaultAdjustment,
@@ -131,7 +132,14 @@ export function createPsdCommands(options: PsdCommandsOptions) {
       options.notifyInfo('There is no image to paste.');
       return;
     }
-    const bytes = await blob.arrayBuffer();
+    let bytes: ArrayBuffer;
+    try {
+      bytes = await blob.arrayBuffer();
+    } catch (error) {
+      Telemetry.error(error, { surface: 'psd-editor' });
+      options.notifyError('The image could not be pasted.');
+      return;
+    }
     const camera = view.camera();
     const v = view.viewport();
     const center = {

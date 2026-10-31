@@ -1,7 +1,8 @@
 /** Shared accessible menu surface for the editor's tool and view menus. */
+
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
 import { For, type JSX, Show } from 'solid-js';
 
 export interface EditorMenuItem {
@@ -68,7 +69,7 @@ export function EditorMenu(props: {
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
         <DropdownMenu.Content
-          class="fig-editor-theme z-modal min-w-52 rounded-xl border border-edge-muted bg-menu p-1 text-ink text-xs shadow-lg outline-none"
+          class="menu-surface fig-editor-theme z-modal min-w-52 p-1 text-xs outline-none"
           classList={{
             // A submenu trigger must not live in a scroll container: Kobalte's
             // trigger focus helper loops on that ancestor with overflow-hidden pages.
@@ -94,7 +95,7 @@ export function EditorMenu(props: {
                   </DropdownMenu.SubTrigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.SubContent
-                      class="fig-editor-theme z-modal max-h-[min(70vh,32rem)] min-w-52 overflow-y-auto rounded-xl border border-edge-muted bg-menu p-1 text-ink text-xs shadow-lg outline-none"
+                      class="menu-surface fig-editor-theme z-modal max-h-[min(70vh,32rem)] min-w-52 overflow-y-auto p-1 text-xs outline-none"
                       onKeyDown={(e) => e.stopPropagation()}
                       onPointerDown={(e) => e.stopPropagation()}
                       onPointerUp={(e) => e.stopPropagation()}

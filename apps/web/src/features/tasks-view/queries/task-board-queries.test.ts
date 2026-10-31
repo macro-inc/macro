@@ -28,7 +28,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({}),
 }));
 vi.mock('@app/features/projects/queries/project-identity', () => ({
-  createProjectDetailQuery: (
+  createProjectIdentityQuery: (
     _client: unknown,
     _user: unknown,
     id: () => string
@@ -140,7 +140,7 @@ it('attempts project moves without destination edit access and preserves column 
   fixture.projectQueries = [
     {
       isSuccess: true,
-      data: { project: { id: 'launch', name: 'Launch', access: 'view' } },
+      data: { id: 'launch', name: 'Launch', access: 'view' },
     },
   ];
   const source = setup({
@@ -187,4 +187,31 @@ it('releases the property lock after a server rejects a project write', async ()
 
   await source.saveProperty('one', property, values);
   expect(fixture.save).toHaveBeenCalledTimes(2);
+});
+
+it('orders project columns by name with No Project last, even from search results', () => {
+  fixture.projectQueries = [
+    { isSuccess: true, data: { id: 'zeta', name: 'Zeta', access: 'view' } },
+    { isSuccess: true, data: { id: 'alpha', name: 'Alpha', access: 'view' } },
+  ];
+  const reference = (id: string) =>
+    boardProperty(SYSTEM_PROPERTY_IDS.PROJECT, {
+      type: 'EntityReference',
+      value: [{ entity_id: id, entity_type: 'INITIATIVE' }],
+    });
+  const source = setup({
+    grouping: () => 'project',
+    searching: () => true,
+    rows: () => [
+      createSoupEntityRow(boardEntity('one', [reference('zeta')])),
+      createSoupEntityRow(boardEntity('two')),
+      createSoupEntityRow(boardEntity('three', [reference('alpha')])),
+    ],
+  });
+
+  expect(source.columns().map((column) => column.label)).toEqual([
+    'Alpha',
+    'Zeta',
+    'No Project',
+  ]);
 });

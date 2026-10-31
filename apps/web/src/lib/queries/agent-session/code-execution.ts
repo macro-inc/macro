@@ -14,7 +14,7 @@ export function useAgentCodeExecutionQuery(
   );
 }
 
-function agentCodeExecutionQueryOptions(
+export function agentCodeExecutionQueryOptions(
   session: string,
   execution: string | undefined
 ) {

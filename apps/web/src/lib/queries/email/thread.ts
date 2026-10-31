@@ -7,8 +7,8 @@ import {
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { catchToResult, throwOnErr } from '@core/util/result';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   ApiDraftInput,
@@ -20,7 +20,10 @@ import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
 } from '@service-storage/graphql-email-read-state';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  graphqlCacheEnabled,
+} from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -31,7 +34,7 @@ import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
 import {
-  getActiveGraphqlSoupRevalidations,
+  getUnmaintainedGraphqlSoupRevalidations,
   refreshActiveGraphqlSoupQueries,
 } from '../soup/graphql/active-queries';
 import { invalidateAllSoup } from '../soup/normalized-cache';
@@ -176,7 +179,11 @@ export async function threadCanBeMarkedNotDone(
   if (isFeatureEnabled(enableGraphqlSoup)) return true;
   const result = await fetchAndCacheThread(threadId);
   if (result.isErr()) return true;
-  return result.value.thread.latest_inbound_message_ts != null;
+  const { thread } = result.value;
+  return (
+    thread.has_received_mail !== false &&
+    thread.latest_inbound_message_ts != null
+  );
 }
 
 export type ThreadQueryData = {
@@ -204,6 +211,14 @@ export type ThreadQueryResult<TData> = {
 };
 
 type ThreadQuerySelector<TData> = (data: InfiniteData<Thread, number>) => TData;
+
+/** Preserve the server's canonical identity independently of consumer selection. */
+function selectThreadWithIdentity<TData>(select: ThreadQuerySelector<TData>) {
+  return (data: InfiniteData<Thread, number>) => ({
+    canonicalThreadId: data.pages[0]?.db_id,
+    value: select(data),
+  });
+}
 
 type UseThreadQueryOptions<TData> = {
   enabled?: boolean;
@@ -253,18 +268,21 @@ export function useThreadQuery<TData = ThreadQueryData>(
   const restQuery = useInfiniteQuery(() => ({
     ...threadQueryOptions(threadId()),
     ...options?.(),
-    select: select(),
+    select: selectThreadWithIdentity(select()),
     enabled: queryEnabled() && !usesGraphql() && threadId().length > 0,
   }));
 
   return {
     get resolvedThreadId() {
-      return usesGraphql() ? resolvedThreadId() : threadId();
+      if (usesGraphql()) return resolvedThreadId();
+      return restQuery.isSuccess
+        ? (restQuery.data?.canonicalThreadId ?? threadId())
+        : threadId();
     },
     get data() {
       return usesGraphql()
         ? graphqlQuery.data
-        : (restQuery.data as TData | undefined);
+        : (restQuery.data?.value as TData | undefined);
     },
     get error() {
       if (!usesGraphql()) return (restQuery.error as Error | null) ?? null;
@@ -345,12 +363,14 @@ export function useMarkThreadAsSeenMutation(
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsSeenParams) => {
       if (isFeatureEnabled(enableGraphqlSoup)) {
+        // The optimistic and committed `isRead` reach every list the cache
+        // maintains; the rest are read again when the write commits.
         const disposition = await markGraphqlEmailThreadSeen(
           getGraphqlSoupClient(),
           params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          getUnmaintainedGraphqlSoupRevalidations()
         );
-        if (disposition === 'committed')
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }
@@ -402,12 +422,14 @@ export function useMarkThreadAsUnreadMutation(
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsUnreadParams) => {
       if (isFeatureEnabled(enableGraphqlSoup)) {
+        // The optimistic and committed `isRead` reach every list the cache
+        // maintains; the rest are read again when the write commits.
         const disposition = await markGraphqlEmailThreadUnread(
           getGraphqlSoupClient(),
           params.threadId,
-          getActiveGraphqlSoupRevalidations()
+          getUnmaintainedGraphqlSoupRevalidations()
         );
-        if (disposition === 'committed')
+        if (disposition === 'committed' && !graphqlCacheEnabled())
           await refreshActiveGraphqlSoupQueries();
         return;
       }
@@ -432,7 +454,7 @@ type ArchiveThreadParams = {
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
   /** Suppress the success toast, e.g. for a send-triggered archive where the
-   *  "Email sent" toast (with its undo-send action) is already up and this
+   *  send toast (with its undo-send action) is already up and this
    *  toast's own Undo would reverse only the archive, not the send. */
   silent?: boolean;
   /** Receives the undo handle once the archive is pushed onto the undo
@@ -668,6 +690,7 @@ export function useSendMessageMutation(
 }
 
 type ScheduleMessageParams = {
+  draftGeneration?: number;
   draftID: string;
   sendTime: Date;
   threadID?: string;
@@ -689,6 +712,7 @@ function _useScheduleMessageMutation(
         async () =>
           await emailClient.scheduleMessage({
             draftID: vars.draftID,
+            draftGeneration: vars.draftGeneration,
             send_time: vars.sendTime.toISOString(),
           })
       ),
@@ -714,6 +738,7 @@ function _useScheduleMessageMutation(
 }
 
 type UnscheduleMessageParams = {
+  draftGeneration?: number;
   draftID: string;
   /** Target inbox for a non-primary inbox; sent as the X-Email-Link-Id header. */
   linkId?: string;
@@ -732,6 +757,7 @@ export function useUnscheduleMessageMutation(
           await emailClient.unscheduleMessage(
             {
               draftID: vars.draftID,
+              draftGeneration: vars.draftGeneration,
             },
             vars.linkId
           )

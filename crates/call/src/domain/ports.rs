@@ -34,7 +34,8 @@ use super::models::{
     CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     CallWebhookEvent, EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
     GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
-    RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken, VoipPushPayloadRequest,
+    RingStatusResponse, RtcRoom, TranscriptSegmentRequest, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -691,8 +692,11 @@ pub trait CallRtcClient: Send + Sync + 'static {
     /// Reserve an empty room for setup, expiring automatically without participants.
     fn prepare_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Delete an RTC room.
+    /// Delete an RTC room. Deleting a room that no longer exists succeeds.
     fn delete_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Every RTC room that currently exists.
+    fn list_rooms(&self) -> impl Future<Output = anyhow::Result<Vec<RtcRoom>>> + Send;
 
     /// Read connected identities and names without joining the room.
     fn list_meeting_participants(
@@ -885,6 +889,7 @@ pub trait CallService: Send + Sync + 'static {
     /// Backstop for missed `participant_left` webhooks: marks participants
     /// and guests no longer connected to their RTC room as left, and archives
     /// calls that leaves empty. One call's failure does not stop the rest.
+    /// Then deletes RTC rooms that stale tokens recreated for archived calls.
     fn reconcile_stale_calls(&self) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// List all active calls in channels the user is an active member of,

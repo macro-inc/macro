@@ -1,5 +1,5 @@
+import Trash from '@icon/system/regular/x.svg';
 import type { HorizontalRuleDecoratorProps } from '@macro-inc/lexical-core';
-import Trash from '@phosphor/x.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button } from '@ui';
 import { $createNodeSelection, $setSelection } from 'lexical';
@@ -67,6 +67,7 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
         <div class="absolute h-full top-0 right-2 flex flex-row gap-1 items-center">
           {editor()?.isEditable() && (
             <Button
+              variant="ghost"
               class="size-8 p-0 border-0 bg-transparent hover:bg-hover"
               tooltip="Remove"
               on:mousedown={(e: MouseEvent) => {

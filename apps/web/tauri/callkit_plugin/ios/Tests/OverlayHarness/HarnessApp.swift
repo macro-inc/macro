@@ -25,6 +25,7 @@ final class HarnessApp: UIResponder, UIApplicationDelegate {
         self.window = window
         window.makeKeyAndVisible()
         overlay.attach(to: webview)
+        overlay.isCallActive = { true }
         overlay.setMode(.expanded)
         overlay.onSelectRemoteParticipant = { [weak self] id in
             guard let self else { return }

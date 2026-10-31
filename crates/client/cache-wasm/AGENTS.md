@@ -46,6 +46,15 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 ## Gotchas
 
+- Pass the existing entity-filter `baseline` to Mail pagination too; `retainedKeys`
+  tells the frontend which server rows still lack canonical local metadata.
+
+- Mail profiles v5/v6 require the corresponding native engine for offline behavior.
+  The server emits v5 only after explicit HTTP/WS capability negotiation; unadvertised
+  clients receive v2 so old engines retain durable offline draft admission.
+
+- Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
+
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.
 - Compiles to an empty shell off-wasm specifically so plain `cargo test` across

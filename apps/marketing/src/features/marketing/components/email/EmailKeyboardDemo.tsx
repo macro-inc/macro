@@ -2,7 +2,7 @@ import ArrowLeft from '@phosphor/arrow-left.svg';
 import Check from '@phosphor/check.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { demoEmails } from '../../core/demo-email';
+import { emailPageInbox } from '../../core/email-demo-story';
 import { createEmailWalkthrough } from '../../primitives/createEmailWalkthrough';
 import { EmailRows } from './frozen/EmailRows';
 import { EmailShell } from './frozen/EmailShell';
@@ -10,7 +10,7 @@ import { EmailThread } from './frozen/EmailThread';
 import './email-feature-demos.css';
 import './email-keyboard-stage.css';
 
-const inbox = demoEmails.slice(0, 4);
+const inbox = emailPageInbox.filter((email) => !email.noise).slice(0, 14);
 type Shortcut = 'j' | 'k' | 'e' | 'Enter' | 'Escape';
 
 export function EmailKeyboardDemo() {
@@ -32,22 +32,40 @@ export function EmailKeyboardDemo() {
       setArchived([...archived(), selected().id]);
       setIndex(Math.max(0, Math.min(index(), emails().length - 1)));
     }
+    queueMicrotask(() => {
+      const row = root?.querySelector<HTMLElement>(
+        '.mail-row[aria-current=true]'
+      );
+      const list = root?.querySelector<HTMLElement>('.email-keyboard-content');
+      if (!row || !list) return;
+      const rowBounds = row.getBoundingClientRect();
+      const bounds = list.getBoundingClientRect();
+      if (rowBounds.bottom > bounds.bottom)
+        list.scrollTop += rowBounds.bottom - bounds.bottom;
+      else if (rowBounds.top < bounds.top)
+        list.scrollTop -= bounds.top - rowBounds.top;
+    });
   };
   const playback = createEmailWalkthrough({
     root: () => root,
     steps: 6,
+    visibilityThreshold: 0.45,
+    loop: { hold: 5500 },
+    delay: (step) => [1300, 900, 1000, 2600, 900, 1000][step - 1],
     reset: () => {
       setArchived([]);
       setIndex(0);
       setOpened(false);
       setLastKey(undefined);
+      const list = root.querySelector<HTMLElement>('.email-keyboard-content');
+      if (list) list.scrollTop = 0;
     },
     reduced: () => {
       setOpened(false);
       setLastKey(undefined);
     },
     advance: (step) =>
-      act((['Enter', 'j', 'j', 'k', 'e', 'Escape'] as const)[step - 1]),
+      act((['j', 'k', 'Enter', 'Escape', 'e', 'j'] as const)[step - 1]),
   });
   const manual = (key: Shortcut) => {
     playback.pause();
@@ -99,7 +117,7 @@ export function EmailKeyboardDemo() {
       onKeyDown={onKeyDown}
     >
       <div class="email-keyboard-stage">
-        <EmailShell label="Keyboard email demo" class="glass-input">
+        <EmailShell label="Keyboard email demo" showRail={false}>
           <header class="email-feature-toolbar">
             <Show when={opened()} fallback={<span>Signal</span>}>
               <Button
@@ -128,7 +146,6 @@ export function EmailKeyboardDemo() {
                 <div class="email-inbox-clear">
                   <Check />
                   <h3>All caught up.</h3>
-                  <p>You’ve archived every email in this demo.</p>
                 </div>
               }
             >

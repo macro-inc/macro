@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE mcp_oauth_clients\n                SET expires_at = $2\n                WHERE client_id = $1 AND expires_at > now()\n                RETURNING client_id, client_name, redirect_uris\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "client_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "redirect_uris",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "661b9107b84525ea70b913bea13f69346c2b3ed93b188b3ace5f0cbdcf3c35e4"
+}

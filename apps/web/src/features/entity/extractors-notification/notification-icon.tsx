@@ -1,21 +1,22 @@
+import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import type { NotificationType } from '@core/types';
 import GithubIcon from '@icon/mcp-github.svg';
+import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg';
+import AtIcon from '@icon/system/regular/at.svg';
+import BellIcon from '@icon/system/regular/bell-simple.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import ChatIcon from '@icon/system/regular/chat.svg';
+import ChatTeardropIcon from '@icon/system/regular/chat-teardrop.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FilesIcon from '@icon/system/regular/files.svg';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import QuestionIcon from '@icon/system/regular/question.svg';
+import SmileyIcon from '@icon/system/regular/smiley.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
+import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import type { NotificationStack } from '@notifications';
 import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
-import ArrowBendUpLeftIcon from '@phosphor/arrow-bend-up-left.svg';
-import AtIcon from '@phosphor/at.svg';
-import BellIcon from '@phosphor/bell-simple.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import ChatIcon from '@phosphor/chat.svg';
-import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
-import CheckIcon from '@phosphor/check.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FilesIcon from '@phosphor/files.svg';
-import PhoneIcon from '@phosphor/phone-call.svg';
-import QuestionIcon from '@phosphor/question.svg';
-import SmileyIcon from '@phosphor/smiley.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import UserPlusIcon from '@phosphor/user-plus.svg';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -31,7 +32,7 @@ interface NotificationIconProps {
 /**
  * Gets the appropriate icon for a notification type
  */
-function getNotificationIcon(
+export function getNotificationIcon(
   type: NotificationType
 ): (props: { class?: string }) => JSX.Element {
   return match(type)
@@ -49,6 +50,7 @@ function getNotificationIcon(
     .with('initiative_discussion', () => ChatIcon)
     .with('channel_message_reply', () => ArrowBendUpLeftIcon)
     .with('channel_message_send', () => ChatIcon)
+    .with('external_chat_message', () => ChatIcon)
     .with('channel_message_reaction', () => SmileyIcon)
     .with('new_email', () => EnvelopeIcon)
     .with('entity_access_requested', () => UserPlusIcon)
@@ -71,11 +73,12 @@ function getNotificationIcon(
     .with('call_started', () => PhoneIcon)
     .with('reminder', () => BellIcon)
     .with('calendar_event_reminder', () => CalendarBlankIcon)
+    .with('calendar_event_join_request', () => UserPlusIcon)
     .with('inbox_reauth_required', () => EnvelopeIcon)
     .with('agent_session_settled', () => AgentIcon)
     .with('agent_session_waiting_for_input', () => QuestionIcon)
     .with('agent_session_mentioned', () => AtIcon)
-    .exhaustive();
+    .exhaustive(() => BellIcon);
 }
 
 /**
@@ -91,6 +94,9 @@ export function NotificationIcon(props: NotificationIconProps) {
   const icon = () => {
     const metadata = (props.notification ?? props.stack?.notifications[0])
       ?.notification_metadata;
+    // An external chat's own provider logo, when the metadata names it.
+    if (metadata?.tag === 'external_chat_message')
+      return providerIdentity(metadata.content.provider).icon;
     if (isEntityDiscussionEvent(metadata)) {
       if (metadata.content.reason === 'mention') return AtIcon;
       if (metadata.content.reason === 'reply') return ArrowBendUpLeftIcon;

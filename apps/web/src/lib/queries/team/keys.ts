@@ -8,4 +8,6 @@ export const teamKeys = createQueryKeys('team', {
   rejectInvite: null,
   detail: (teamId: string) => [teamId],
   invites: (teamId: string) => [teamId],
+  inviteLink: (teamId: string) => [teamId],
+  inviteLinkTeam: (token: string) => [token],
 });

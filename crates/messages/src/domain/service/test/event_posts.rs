@@ -137,9 +137,11 @@ async fn trusted_event_posts_still_validate_ids_content_and_references() {
     let mut empty = post_input();
     empty.content.clear();
     let mut inaccessible = post_input();
-    inaccessible.mentions = vec![SimpleMention {
+    inaccessible.attachments = vec![NewAttachment {
         entity_type: "document".to_owned(),
         entity_id: "private-document".to_owned(),
+        width: None,
+        height: None,
     }];
     for (id, input) in [
         (Uuid::new_v4(), post_input()),

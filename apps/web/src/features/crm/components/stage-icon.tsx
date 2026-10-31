@@ -27,10 +27,6 @@ const STAGE_TINT_PALETTE = [
   'text-failure-ink',
 ] as const;
 
-export function CrmStageDot() {
-  return <span class="size-2 shrink-0 rounded-full bg-accent/70" />;
-}
-
 export function CrmStageIcon(props: {
   optionId: string;
   index?: number;

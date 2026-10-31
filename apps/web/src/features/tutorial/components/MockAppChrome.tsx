@@ -3,8 +3,8 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@icon/macro-logo.svg';
-import GearIcon from '@phosphor/gear.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import GearIcon from '@icon/system/regular/gear.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { cn, HoverCard } from '@ui';
 import {
   createSignal,

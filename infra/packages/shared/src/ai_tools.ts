@@ -134,31 +134,12 @@ export function getAiToolsInfra(): AiToolsInfra {
  * group — adding a new tool-hosting service only requires updating this list.
  */
 export function getAiToolsServiceRoleArns(): pulumi.Output<string>[] {
-  const mcpServerStack = new pulumi.StackReference(
-    'ai-tools-mcp-server-stack',
-    { name: `macro-inc/mcp-server/${stack}` }
-  );
-  const documentCognitionStack = new pulumi.StackReference(
-    'ai-tools-document-cognition-stack',
-    { name: `macro-inc/document-cognition/${stack}` }
-  );
-  const agentScheduleServiceStack = new pulumi.StackReference(
-    'ai-tools-agent-schedule-service-stack',
-    { name: `macro-inc/agent-schedule-service/${stack}` }
-  );
   const agentHarnessServiceStack = new pulumi.StackReference(
     'ai-tools-agent-harness-service-stack',
     { name: `macro-inc/agent-harness-service/${stack}` }
   );
 
   return [
-    mcpServerStack.getOutput('mcpServerRoleArn').apply((v) => v as string),
-    documentCognitionStack
-      .getOutput('documentCognitionServiceRoleArn')
-      .apply((v) => v as string),
-    agentScheduleServiceStack
-      .getOutput('agentScheduleServiceRoleArn')
-      .apply((v) => v as string),
     agentHarnessServiceStack
       .getOutput('agentHarnessServiceRoleArn')
       .apply((v) => v as string),

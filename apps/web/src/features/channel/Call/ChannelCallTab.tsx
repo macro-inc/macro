@@ -1,7 +1,8 @@
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import { UserGroup } from '@core/component/UserGroup';
 import { getDisplayName, tryMacroId } from '@core/user';
-import PhoneIcon from '@phosphor/phone-call.svg';
+import PhoneIcon from '@icon/system/regular/phone-call.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { useActiveCallQuery, useCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { type Accessor, createMemo, Match, Show, Switch } from 'solid-js';
@@ -76,7 +77,7 @@ function JoinCallEmptyState(props: {
       </div>
 
       <Button
-        variant="cta"
+        variant="primary"
         size="lg"
         class="px-5"
         onClick={props.onJoin}
@@ -100,6 +101,7 @@ export function ChannelCallTab(props: {
   pendingJoin?: Accessor<boolean>;
 }) {
   const { setActiveTab } = useChannelTab();
+  let leaving = false;
 
   // Match ChannelCallButton / ChannelCallAutoJoin so leaving from the
   // overlay (or disconnect) switches back to Messages — not only when
@@ -114,6 +116,23 @@ export function ChannelCallTab(props: {
       await call.joinCall();
     } catch (error) {
       console.error('Failed to join call', error);
+    }
+  }
+
+  // Leaving keeps the user in this channel (onLeave switches to Messages),
+  // even when their hangup ends the call.
+  async function handleLeave() {
+    if (leaving) return;
+    leaving = true;
+    const callId = call.callCtx.activeCallId();
+    try {
+      await Telemetry.span('call.leave', async (span) => {
+        if (callId) span.setAttr('call.id', callId);
+        const result = await call.leaveCall();
+        span.setAttr('call.leave.ended', result?.callEnded ?? false);
+      });
+    } finally {
+      leaving = false;
     }
   }
 
@@ -133,7 +152,7 @@ export function ChannelCallTab(props: {
             <ActiveCallLink />
           </div>
           <div class="min-h-0 flex-1">
-            <CallOverlay onLeave={call.leaveCall} />
+            <CallOverlay onLeave={handleLeave} />
           </div>
         </div>
       </Match>

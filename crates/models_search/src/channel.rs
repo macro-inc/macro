@@ -86,9 +86,10 @@ pub struct ChannelSearchResponseItemWithMetadata {
 /// Request for viewer-aware channel name search.
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct ChannelNameSearchRequest {
-    /// Channel name prefix or exact token to search for.
+    /// Channel name text to search for; every whitespace- or comma-separated
+    /// term must match the name the viewer sees.
     pub query: String,
-    /// Whether to use prefix or exact-token matching.
+    /// Whether terms match as substrings or as whole tokens.
     pub match_type: MatchType,
 }
 

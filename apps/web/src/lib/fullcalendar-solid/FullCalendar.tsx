@@ -151,7 +151,10 @@ const FullCalendarContext = createContext<FullCalendarController>();
  */
 export function FullCalendarRoot(props: FullCalendarRootProps) {
   const [local, options] = splitProps(props, ['children']);
-  const controller = createFullCalendarController(() => ({ ...options }));
+  const controller = createFullCalendarController(
+    () => ({ ...options }),
+    () => options.datesSet
+  );
 
   onCleanup(() => controller.destroy());
 
@@ -260,7 +263,8 @@ function useFullCalendarController(): FullCalendarController {
 }
 
 function createFullCalendarController(
-  getOptions: Accessor<FullCalendarOptions>
+  getOptions: Accessor<FullCalendarOptions>,
+  getDatesSet: Accessor<FullCalendarOptions['datesSet']>
 ): FullCalendarController {
   const [calendar, setCalendar] = createSignal<Calendar>();
   const [dateInfo, setDateInfo] = createSignal<DatesSetArg>();
@@ -274,9 +278,11 @@ function createFullCalendarController(
   const [listenForContentRegistrationChange, notifyContentRegistrationChange] =
     createSignal<void>(undefined, { equals: false });
   let appliedOptions: CalendarOptions | undefined;
+  // FullCalendar calls this outside any Solid owner. Reading every option
+  // here would evaluate prop getters into memos that are never disposed.
   const handleDatesSet = (info: DatesSetArg) => {
     setDateInfo(info);
-    untrack(getOptions).datesSet?.(info);
+    untrack(getDatesSet)?.(info);
   };
   // Metadata identities must stay stable across event-only updates. Rebuilding
   // them causes FullCalendar to remount unrelated headers and content slots.

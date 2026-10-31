@@ -19,15 +19,11 @@ import { useSoupFilterPersistence } from '../next-soup/use-soup-filter-persisten
 import { openEntityInSplitFromUnifiedList } from '../next-soup/utils';
 import type { CrmContext } from './context/crm-context';
 import type { DealStages } from './context/crm-sources';
-import type {
-  CrmPipelineRequest,
-  CrmRouteSearch,
-  CrmWorkspace,
-} from './context/workspace-context';
-import { pipelineIdOfTab } from './core/navigation';
+import type { CrmRoute, CrmWorkspace } from './context/workspace-context';
 import type { CrmViewConfig } from './core/saved-view';
 import { createCrmCollectionFilters } from './filter-adapter';
 import { COMPANY_GROUP_OPTIONS } from './group-options';
+import { createSettingsPage } from './primitives/settings-page';
 
 // The filter context lands in cached soup query meta, so its stage resolvers
 // close over the deal stages only, never this workspace's scope (see "Query
@@ -75,9 +71,8 @@ function applySharedSubFilters(
 
 export function createCrmWorkspace(
   crm: CrmContext,
-  sharedView?: CrmViewConfig,
-  pipelineRequest?: CrmPipelineRequest,
-  routeSearch?: CrmRouteSearch
+  route: CrmRoute,
+  sharedView?: CrmViewConfig
 ) {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
@@ -120,9 +115,11 @@ export function createCrmWorkspace(
   const soupView = { ...state.context, ...filters.state };
   const preset = getViewPreset('companies');
   const initialUrlTab = untrack(() => {
-    const tab = routeSearch?.tab();
-    return tab && tab !== VIEW_TAB_PRESETS.companies.default ? tab : undefined;
+    const tab = route.tab();
+    return tab !== VIEW_TAB_PRESETS.companies.default ? tab : undefined;
   });
+  // A record link names its list; nothing may move it off the record.
+  const initialRecordOpen = untrack(() => route.records().length > 0);
   const initialTabPreset =
     initialUrlTab && initialUrlTab in VIEW_TAB_PRESETS.companies.tabs
       ? getViewPreset('companies', initialUrlTab)
@@ -155,23 +152,21 @@ export function createCrmWorkspace(
   const initialCrmView = sharedView;
 
   // A default saved view only applies to a fresh Customers entry. Restored
-  // entries, share links, and an explicit URL tab keep their own state.
+  // entries, share links, record links, and an explicit URL tab keep their own state.
   const applyDefaultCrmView =
     initialCrmView === undefined &&
     initialUrlTab === undefined &&
+    !initialRecordOpen &&
     persistedFilters === undefined &&
     persistedPredicates === undefined;
 
   const fallbackPreset = initialTabPreset ?? preset;
-  const defaultTab = VIEW_TAB_PRESETS.companies.default;
-  const rememberedTab = routeSearch
-    ? defaultTab
-    : (soupView.getPersistedActiveTab('companies') ?? defaultTab);
-  const initialActiveTab =
-    initialCrmView?.activeTab ??
-    initialUrlTab ??
-    persistedActiveTab ??
-    rememberedTab;
+  const initialActiveTab = initialRecordOpen
+    ? untrack(route.tab)
+    : (initialCrmView?.activeTab ??
+      initialUrlTab ??
+      persistedActiveTab ??
+      VIEW_TAB_PRESETS.companies.default);
   const initialGroupBy = resolveInitialGroupBy(
     initialCrmView,
     persistedGroupBy,
@@ -208,8 +203,8 @@ export function createCrmWorkspace(
       );
 
       soupView.setActiveTab(initialActiveTab);
-      if (routeSearch && initialActiveTab !== untrack(routeSearch.tab)) {
-        routeSearch.setTab(initialActiveTab, { replace: true });
+      if (initialActiveTab !== untrack(route.tab)) {
+        route.setTab(initialActiveTab, { replace: true });
       }
 
       if (initialCrmView) {
@@ -218,48 +213,33 @@ export function createCrmWorkspace(
     });
   });
 
-  if (routeSearch) {
-    createEffect(
-      on(
-        routeSearch.tab,
-        (urlTab) => {
-          const target = urlTab || VIEW_TAB_PRESETS.companies.default;
-          const current =
-            untrack(soupView.activeTab) ?? VIEW_TAB_PRESETS.companies.default;
-          if (target === current) return;
-          batch(() => {
-            soupView.setActiveTab(target);
-            if (target in VIEW_TAB_PRESETS.companies.tabs) {
-              const tabPreset = getViewPreset('companies', target);
-              if (tabPreset) {
-                soupView.queryFilters.replace(tabPreset.filters);
-                soup.predicates.set(tabPreset.clientFilters);
-                soup.grouping.setActiveGroupId(tabPreset.groupBy);
-              }
-            }
-          });
-        },
-        { defer: true }
-      )
-    );
-  }
-
-  createEffect(() => {
-    panel.handle.setDisplayName('Customers');
-  });
-
-  // Only a tab change releases: a new request arrives before its tab does.
   createEffect(
     on(
-      soupView.activeTab,
-      (tab) => {
-        const request = untrack(() => pipelineRequest?.current());
-        if (request && pipelineIdOfTab(tab) !== request.pipelineId)
-          pipelineRequest?.release();
+      route.tab,
+      (urlTab) => {
+        const target = urlTab || VIEW_TAB_PRESETS.companies.default;
+        const current =
+          untrack(soupView.activeTab) ?? VIEW_TAB_PRESETS.companies.default;
+        if (target === current) return;
+        batch(() => {
+          soupView.setActiveTab(target);
+          if (target in VIEW_TAB_PRESETS.companies.tabs) {
+            const tabPreset = getViewPreset('companies', target);
+            if (tabPreset) {
+              soupView.queryFilters.replace(tabPreset.filters);
+              soup.predicates.set(tabPreset.clientFilters);
+              soup.grouping.setActiveGroupId(tabPreset.groupBy);
+            }
+          }
+        });
       },
       { defer: true }
     )
   );
+
+  createEffect(() => {
+    panel.handle.setDisplayName('Customers');
+  });
 
   // Bridge live soup sort state back to preferences. `defer: true` skips the
   // initial run on mount, so we only write when the user actually changes it.
@@ -289,14 +269,8 @@ export function createCrmWorkspace(
     const target =
       (typeof next === 'function' ? resolved : next) ??
       VIEW_TAB_PRESETS.companies.default;
-    if (routeSearch && target !== untrack(routeSearch.tab)) {
-      const request = untrack(() => pipelineRequest?.current());
-      routeSearch.setTab(target, {
-        replace: replaceNextTab || target === previous,
-        clearPipelineRequest:
-          request !== undefined &&
-          pipelineIdOfTab(target) !== request.pipelineId,
-      });
+    if (target !== untrack(route.tab)) {
+      route.setTab(target, { replace: replaceNextTab || target === previous });
     }
     return resolved;
   };
@@ -305,6 +279,14 @@ export function createCrmWorkspace(
   state.context.setActiveTab = wrappedSetActiveTab;
 
   const { openSettings } = useSettingsState();
+  const settings = createSettingsPage(() =>
+    [
+      route.tab(),
+      ...route.records().map((record) => `${record.type}:${record.id}`),
+      route.section() ?? '',
+      route.commentTarget()?.seek ?? '',
+    ].join(' ')
+  );
   const context: CrmWorkspace = {
     ...soupView,
     setActiveTab: wrappedSetActiveTab,
@@ -323,9 +305,16 @@ export function createCrmWorkspace(
           'open-entity-in-split'
         );
       },
-      openSettings: () => openSettings('CRM'),
+      settings: {
+        ...settings,
+        open: () => {
+          // The list unmounts; its entry keeps the scroll position for the return.
+          panel.handle.captureEntryState();
+          settings.open();
+        },
+      },
       openTeamSettings: () => openSettings('Team'),
-      pipelineRequest: () => pipelineRequest?.current(),
+      record: route,
     },
   };
   return { state, context, applyDefaultCrmView, withReplaceHistory };

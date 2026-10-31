@@ -41,10 +41,12 @@ pub async fn backfill_attachment(
     upload_attachment(ctx_upload, &attachment_args)
         .await
         .map_err(|e| match e {
-            UploadAttachmentError::RateLimited => ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::GmailApiRateLimited,
-                source: anyhow::Error::new(e).context("Failed to upload attachment"),
-            }),
+            UploadAttachmentError::RateLimited(error) => {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::GmailApiRateLimited,
+                    source: anyhow::Error::new(error).context("Failed to upload attachment"),
+                })
+            }
             _ => ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
                 source: anyhow::Error::new(e).context("Failed to upload attachment"),

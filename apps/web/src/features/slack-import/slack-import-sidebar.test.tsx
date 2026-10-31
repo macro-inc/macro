@@ -1,81 +1,79 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { cleanup, render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hideSlackImportPromotion } from './primitives/promotion';
 import { SlackImportSidebar } from './slack-import-sidebar';
 
-const [userId, setUserId] = createSignal('');
-const [teamId, setTeamId] = createSignal('');
-let scope = 0;
-const host = vi.hoisted(() => ({ enabled: true, admin: true }));
+const host = vi.hoisted(() => ({
+  enabled: true,
+  admin: true,
+  openHistory: vi.fn(),
+  openNewChannel: vi.fn(),
+  promotion: undefined as
+    | undefined
+    | {
+        category: string;
+        applies: boolean | undefined;
+        alternatives: { label: string; onSelect(opener?: unknown): void }[];
+        actionLabel?: string;
+        secondaryAction?: { label: string; onClick(trigger: unknown): void };
+      },
+  slackImport: undefined as undefined | { historyOnly?: boolean },
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: host.enabled }),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => userId }));
 vi.mock('@queries/team/teams', () => ({
   useIsTeamAdmin: () => () => host.admin,
-  useCurrentTeamQuery: () => ({
-    isSuccess: true,
-    get data() {
-      return { team: { id: teamId() } };
-    },
-  }),
+  useCurrentTeamQuery: () => ({ isSuccess: true, data: { team: { id: 't' } } }),
 }));
-vi.mock('@ui', () => ({
-  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props} />
-  ),
+vi.mock('@channel/CreateChannelModal', () => ({
+  openNewChannelModal: host.openNewChannel,
 }));
 vi.mock('./slack-import', () => ({
-  SlackImport: (props: { trigger: (open: () => void) => JSX.Element }) => (
-    <>
-      {props.trigger(() => {})}
-      <p>Import dialog host</p>
-    </>
-  ),
+  SlackImport: (props: {
+    historyOnly?: boolean;
+    trigger: (open: (opener: unknown) => void) => JSX.Element;
+  }) => {
+    host.slackImport = props;
+    return <>{props.trigger(host.openHistory)}</>;
+  },
+}));
+vi.mock('@app/features/connector-import/connector-import', () => ({
+  ConnectorImportPromotion: (props: NonNullable<typeof host.promotion>) => {
+    host.promotion = props;
+    return props.applies ? <p>Shared import card</p> : null;
+  },
 }));
 
 beforeEach(() => {
-  scope += 1;
-  setUserId(`sidebar-user-${scope}`);
-  setTeamId(`sidebar-team-${scope}`);
   host.enabled = true;
   host.admin = true;
+  host.promotion = undefined;
+  host.slackImport = undefined;
+  host.openHistory.mockReset();
+  host.openNewChannel.mockReset();
 });
-afterEach(() => {
-  cleanup();
-  localStorage.clear();
-});
+afterEach(cleanup);
 
 describe('Slack import sidebar', () => {
-  it('dismisses, stays dismissed after remount, and retains the import host', () => {
-    const view = render(() => <SlackImportSidebar />);
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Dismiss Slack import' })
-    );
-    expect(
-      screen.queryByRole('button', { name: 'Import from Slack' })
-    ).toBeNull();
-    expect(screen.getByText('Import dialog host')).toBeTruthy();
-    view.unmount();
+  it('renders the shared channels card with history import as its alternative', async () => {
     render(() => <SlackImportSidebar />);
-    expect(screen.queryByText('Bring Slack to Macro')).toBeNull();
-    setTeamId('another-team');
-    expect(
-      screen.getByRole('button', { name: 'Import from Slack' })
-    ).toBeTruthy();
-    setTeamId(`sidebar-team-${scope}`);
-    setUserId('another-user');
-    expect(
-      screen.getByRole('button', { name: 'Import from Slack' })
-    ).toBeTruthy();
+    expect(screen.getByText('Shared import card')).toBeTruthy();
+    expect(host.promotion?.category).toBe('channels');
+    // The archive dialog loads behind the card.
+    await vi.waitFor(() => expect(host.slackImport?.historyOnly).toBe(true));
+    expect(host.promotion?.alternatives[0]?.label).toBe('Import with history');
+    const opener = document.createElement('button');
+    host.promotion?.alternatives[0]?.onSelect(opener);
+    expect(host.openHistory).toHaveBeenCalledWith(opener);
   });
 
-  it('hides immediately after completion without unmounting import progress', () => {
+  it('offers creating a channel beside the import', () => {
     render(() => <SlackImportSidebar />);
-    hideSlackImportPromotion(userId(), teamId());
-    expect(screen.queryByText('Bring Slack to Macro')).toBeNull();
-    expect(screen.getByText('Import dialog host')).toBeTruthy();
+    expect(host.promotion?.actionLabel).toBe('Import Slack');
+    expect(host.promotion?.secondaryAction?.label).toBe('New channel');
+    host.promotion?.secondaryAction?.onClick(document.createElement('button'));
+    expect(host.openNewChannel).toHaveBeenCalledOnce();
   });
 
   it.each([
@@ -84,6 +82,6 @@ describe('Slack import sidebar', () => {
   ])('preserves the feature and admin gates: %o', (gate) => {
     Object.assign(host, gate);
     render(() => <SlackImportSidebar />);
-    expect(screen.queryByText('Bring Slack to Macro')).toBeNull();
+    expect(screen.queryByText('Shared import card')).toBeNull();
   });
 });
