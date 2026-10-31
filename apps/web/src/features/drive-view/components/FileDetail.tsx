@@ -126,15 +126,21 @@ export function FileDetailLoadGate<
   let unmounted = false;
   let latestLoad = 0;
   let current: T | undefined;
-  const load = async (documentId: string) => {
+  const load = async (documentId: string): Promise<T | undefined> => {
     const request = ++latestLoad;
     const data = await props.load(documentId);
-    // The resource ignores a superseded result, so nothing will show it.
-    if (unmounted || request !== latestLoad) release(data);
-    else current = data;
+    // The resource ignores a superseded result; one unloaded while pending
+    // (access revoked) must not become current either, so a later grant finds
+    // nothing loaded and reloads. Nothing will show it, so release it now.
+    if (unmounted || request !== latestLoad) {
+      release(data);
+      return undefined;
+    }
+    current = data;
     return data;
   };
   const unload = () => {
+    latestLoad++;
     const previous = current;
     current = undefined;
     mutate(undefined);
