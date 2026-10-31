@@ -11,3 +11,5 @@ config:
   macro-connect:privateSubnetIds:
     - subnet-03c3753c5342f434e
     - subnet-0e2530cd19536fe10
+  macro-connect:demoCustomerKey:
+    secure: AAABALBK6BiFbzTtjRY9L4Hjy1tjFfTmYGgezhb/AJAknj4vqt58xC5RBktaok8LUnybmskygZw4FpLcVK653aBucho5Kj5YT1uod0HeZ5xmnitPqgkcV6mQ5yF6LENxlt94i6uLaf87BV62afKJS/Xomw==
