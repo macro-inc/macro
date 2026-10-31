@@ -175,15 +175,18 @@ pub struct EventLabels {
 impl EventLabels {
     /// Label a copy for the requester `viewer` describes, the way
     /// [`ActorInboxes::mark_event`] and [`CalendarLabels::role`] read a loaded
-    /// event.
+    /// event. Stored `is_self` flags belong to the inbox that synced the copy,
+    /// so a requester with no inbox of their own has no role on any of them.
     pub fn of(
         mut copy: EventCopy,
         viewer: Option<&ActorInboxes>,
         calendars: &CalendarLabels,
     ) -> Self {
-        let viewer_can = viewer.map_or(ViewerCapabilities::NONE, |viewer| {
+        let calendar_id = copy.calendar_ids.first().copied();
+        let on_schedule = calendars.on_schedule(copy.calendar_ids.iter().copied());
+        let role = viewer.and_then(|viewer| {
             viewer.mark_attendees(&mut copy.attendees, copy.link_id);
-            ViewerCapabilities::for_copy(
+            let viewer_can = ViewerCapabilities::for_copy(
                 copy.status,
                 EventAccess {
                     is_read_only: copy.is_read_only,
@@ -193,15 +196,14 @@ impl EventLabels {
                     is_snapshot: copy.is_snapshot,
                 },
                 viewer.inbox(copy.link_id),
-            )
+            );
+            EventRole::of(&copy.attendees, copy.is_read_only, viewer_can, on_schedule)
         });
-        let calendar_id = copy.calendar_ids.first().copied();
-        let on_schedule = calendars.on_schedule(copy.calendar_ids.iter().copied());
         Self {
             calendar_name: calendars.calendar_name(calendar_id),
             contributes_to_availability: on_schedule,
             inbox: calendars.inbox(calendar_id, None),
-            role: EventRole::of(&copy.attendees, copy.is_read_only, viewer_can, on_schedule),
+            role,
         }
     }
 }

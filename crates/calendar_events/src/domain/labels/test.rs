@@ -48,6 +48,8 @@ fn viewer() -> ActorInboxes {
     .expect("one inbox")
 }
 
+/// A guest row with the `is_self` Google sync stores for the inbox it synced
+/// through, which says nothing about whoever reads the row later.
 fn attendee(email: &str, is_organizer: bool) -> CalendarAttendee {
     CalendarAttendee {
         email: email.to_string(),
@@ -55,7 +57,7 @@ fn attendee(email: &str, is_organizer: bool) -> CalendarAttendee {
         response_status: AttendeeResponseStatus::Accepted,
         is_organizer,
         is_optional: false,
-        is_self: false,
+        is_self: true,
         comment: None,
     }
 }
@@ -180,11 +182,20 @@ fn one_copy_on_the_schedule_is_enough() {
 fn a_copy_on_none_of_their_calendars_says_nothing() {
     let shared = EventCopy {
         link_id: Uuid::from_u128(2),
-        ..copy(Uuid::from_u128(99), COLLEAGUE, Vec::new())
+        ..copy(
+            Uuid::from_u128(99),
+            COLLEAGUE,
+            vec![attendee(COLLEAGUE, true)],
+        )
     };
     assert_eq!(
-        EventLabels::of(shared, Some(&viewer()), &calendars()),
+        EventLabels::of(shared.clone(), Some(&viewer()), &calendars()),
         EventLabels::default()
+    );
+    assert_eq!(
+        EventLabels::of(shared, None, &calendars()),
+        EventLabels::default(),
+        "the sharer's stored row is not the reader's, with or without an inbox"
     );
 }
 

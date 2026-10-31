@@ -22,6 +22,8 @@ fn calendar(provider_calendar_id: &str, name: &str, access_role: &str) -> Provid
     }
 }
 
+/// A guest row with the `is_self` Google sync stores for the inbox it synced
+/// through.
 fn own_row(email: &str, is_organizer: bool) -> CalendarAttendee {
     CalendarAttendee {
         email: email.to_string(),
@@ -29,7 +31,7 @@ fn own_row(email: &str, is_organizer: bool) -> CalendarAttendee {
         response_status: AttendeeResponseStatus::Accepted,
         is_organizer,
         is_optional: false,
-        is_self: false,
+        is_self: true,
         comment: None,
     }
 }
@@ -227,4 +229,18 @@ async fn another_users_copy_says_nothing_about_the_requester(pool: PgPool) {
 
     assert_eq!(labels.len(), 1, "an id with no event is absent");
     assert_eq!(labels[&id], EventLabels::default());
+
+    let stored_is_self = sqlx::query_scalar!(
+        r#"SELECT is_self AS "is_self!" FROM calendar_event_attendees WHERE event_id = $1"#,
+        id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(stored_is_self, "the row the requester must not inherit");
+    let no_inbox = CalendarService::new(PgCalendarRepository::new(pool.clone()))
+        .event_labels("macro|event-labels-no-inbox@example.com", &[id])
+        .await
+        .unwrap();
+    assert_eq!(no_inbox[&id], EventLabels::default());
 }
