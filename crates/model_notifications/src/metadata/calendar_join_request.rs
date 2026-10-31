@@ -8,6 +8,8 @@ use super::*;
 #[serde(rename_all = "camelCase")]
 pub struct CalendarEventJoinRequestMetadata {
     /// Stable request identity, answered from the event's details.
+    // Database triggers read this from the stored metadata as `requestId`, to
+    // retire the notification when the request is answered.
     pub request_id: Uuid,
     /// The shared calendar event entity the request is for.
     pub event_id: Uuid,
