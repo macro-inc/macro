@@ -175,6 +175,7 @@ where
             db_id: None,
             provider_id: None,
             replying_to_id: self.replying_to_id,
+            reuse_reply_draft: true,
             provider_thread_id: None,
             thread_db_id: None,
             subject: self.subject.clone(),

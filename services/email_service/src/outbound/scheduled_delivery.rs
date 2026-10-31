@@ -1,8 +1,7 @@
 //! PostgreSQL and provider adapters for scheduled email delivery.
 use crate::outbound::email_api::GmailApi;
 use crate::util::gmail::send::{
-    attachment_snapshot::prepare_delivery_attachments, cleanup_draft_attachments,
-    generate_email_threading_headers,
+    attachment_snapshot::prepare_delivery_attachments, cleanup_draft_attachments, reply_threading,
 };
 use anyhow::Context;
 use chrono::Utc;
@@ -11,7 +10,7 @@ use email::domain::events::{
 };
 use email::domain::scheduled_delivery::{
     ClaimedDelivery, DELIVERY_LEASE_SECONDS, DeliveryMode, DeliveryPause,
-    PREPARATION_RETRY_SECONDS, PreparationError, RECONCILIATION_DELAY_SECONDS,
+    PREPARATION_RETRY_SECONDS, PreparationError, RECONCILIATION_DELAY_SECONDS, ReplyOrderError,
     ScheduledDeliveryRepo, ScheduledMessageSender, SubmissionError,
     attachments::{ApprovedAttachments, AttachmentSnapshotMismatch},
 };
@@ -270,9 +269,11 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
     type Prepared = PreparedDelivery;
 
     async fn prepare(&self, claim: &ScheduledClaim) -> Result<PreparedDelivery, PreparationError> {
-        self.prepare_delivery(claim)
-            .await
-            .map_err(classify_preparation_error)
+        match self.prepare_delivery(claim).await {
+            Ok(Ok(prepared)) => Ok(prepared),
+            Ok(Err(order)) => Err(order.into()),
+            Err(error) => Err(classify_preparation_error(error)),
+        }
     }
 
     async fn send_prepared(
@@ -322,18 +323,30 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
 }
 
 impl ScheduledDeliveryAdapter {
+    /// The inner error is a reply waiting for, or failing with, its parent: an
+    /// expected outcome, kept out of this span's error log.
     #[tracing::instrument(skip_all, fields(
         link_id = %claim.link.id, message_id = %claim.delivery.schedule.message_id,
         claim_id = %claim.delivery.token.0, phase = "load_content",
     ), err)]
-    async fn prepare_delivery(&self, claim: &ScheduledClaim) -> anyhow::Result<PreparedDelivery> {
+    async fn prepare_delivery(
+        &self,
+        claim: &ScheduledClaim,
+    ) -> anyhow::Result<Result<PreparedDelivery, ReplyOrderError>> {
         let data = &claim.delivery.schedule;
         let (mut message, sender_contact) =
             content::load_delivery_content(&self.db, &claim.delivery)
                 .await
                 .context("failed to load scheduled message")?;
-        let (parent_message_id, references) =
-            generate_email_threading_headers(&self.db, message.replying_to_id, data.link_id).await;
+        // Checked before attachments load: a reply waits for its parent.
+        let threading =
+            match reply_threading(&self.db, message.replying_to_id, data.link_id).await? {
+                Ok(threading) => threading,
+                Err(order) => return Ok(Err(order)),
+            };
+        if message.provider_thread_id.is_none() {
+            message.provider_thread_id = threading.provider_thread_id;
+        }
         let approved = claim
             .delivery
             .approved_snapshot
@@ -376,8 +389,8 @@ impl ScheduledDeliveryAdapter {
         let request = SendRequest {
             message: message.clone(),
             from: sender_contact,
-            parent_message_id,
-            references,
+            parent_message_id: threading.parent_message_id,
+            references: threading.references,
             message_id: claim.delivery.message_id_header.clone(),
         };
         let provider = self
@@ -396,13 +409,13 @@ impl ScheduledDeliveryAdapter {
         // The opaque provider request owns MIME, so raw attachment buffers need
         // not be retained while the provider call is in flight.
         message.attachments = None;
-        Ok(PreparedDelivery {
+        Ok(Ok(PreparedDelivery {
             provider,
             delivery: SentDelivery {
                 message,
                 attachments,
             },
-        })
+        }))
     }
 }
 

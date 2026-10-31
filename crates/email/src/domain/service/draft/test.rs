@@ -9,6 +9,7 @@ fn input_with_body_html(html: &str) -> CreateDraftInput {
         db_id: None,
         provider_id: None,
         replying_to_id: None,
+        reuse_reply_draft: true,
         provider_thread_id: None,
         thread_db_id: None,
         subject: String::new(),

@@ -555,6 +555,7 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
             || !attachments_forwarded.is_empty(),
         scheduled_send_time: draft.send_time,
         scheduled_send_status: None,
+        scheduled_send_source: None,
         from: Some(sender),
         to: draft.to,
         cc: draft.cc,
@@ -1023,6 +1024,7 @@ pub(crate) fn draft_input_from_graphql(
             .replying_to_id
             .map(|id| parse_id(id, "replyingToId"))
             .transpose()?,
+        reuse_reply_draft: true,
         provider_thread_id: input.provider_thread_id,
         thread_db_id: input
             .thread_db_id

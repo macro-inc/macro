@@ -1,5 +1,6 @@
 //! The router's collaborators, just enough to drive a request: a `valid`
-//! bearer token, one fixed grant, and a service recording applied batches.
+//! bearer token, one fixed grant or none, and a service recording what
+//! reached it.
 
 use std::sync::{Arc, Mutex};
 
@@ -26,13 +27,15 @@ use uuid::Uuid;
 use crate::domain::models::{
     Awareness, ColumnCast, ColumnConversion, ColumnId, CreateDatabase, Database, DatabaseDetail,
     DatabaseError, DatabaseId, InferColumnType, InferColumnTypeOutcome, ListedDatabase, OpBatch,
-    QueryDefinition, QueryId, SavedQuery, SavedQueryError, Table, TableId, Viewer,
+    QueryDefinition, QueryId, RowId, SavedQuery, SavedQueryError, Table, TableId, Viewer,
 };
-use crate::domain::ports::DatabasesService;
+use crate::domain::ports::{DatabaseRowPages, DatabasesService};
 use crate::domain::sharing::DatabaseSharingService;
+use crate::domain::storage::{StorageRows, StorageRowsQuery};
 use crate::domain::transfer::{DatabaseTransferService, ImportTable};
 use crate::inbound::axum_router::casts::column_conversion_handler;
 use crate::inbound::axum_router::ops::apply_ops_handler;
+use crate::inbound::axum_router::rows::table_rows_handler;
 use crate::inbound::axum_router::{DatabasesRouterState, databases_router};
 
 const USER: &str = "macro|ops-router@macro.com";
@@ -82,7 +85,7 @@ pub(super) fn ops_router(level: AccessLevel) -> (Router, Arc<RecordingService>) 
     let service = Arc::new(RecordingService::default());
     let state = DatabasesRouterState::new(
         service.clone(),
-        Arc::new(GrantingAccess(level)),
+        Arc::new(GrantingAccess(Some(level))),
         authorization_state(),
     );
     let router = Router::new()
@@ -100,7 +103,7 @@ pub(super) fn conversion_router(level: AccessLevel) -> (Router, Arc<RecordingSer
     let service = Arc::new(RecordingService::default());
     let state = DatabasesRouterState::new(
         service.clone(),
-        Arc::new(GrantingAccess(level)),
+        Arc::new(GrantingAccess(Some(level))),
         authorization_state(),
     );
     let router = Router::new()
@@ -112,20 +115,39 @@ pub(super) fn conversion_router(level: AccessLevel) -> (Router, Arc<RecordingSer
     (router, service)
 }
 
+/// The table rows route alone, for a caller holding `level` on every
+/// database, or no grant, and the service behind it.
+pub(super) fn rows_router(level: Option<AccessLevel>) -> (Router, Arc<RecordingService>) {
+    let service = Arc::new(RecordingService::default());
+    let state = DatabasesRouterState::new(
+        service.clone(),
+        Arc::new(GrantingAccess(level)),
+        authorization_state(),
+    );
+    let router = Router::new()
+        .route(
+            "/{id}/tables/{table_id}/rows",
+            post(table_rows_handler::<RecordingService, GrantingAccess, Authorization>),
+        )
+        .with_state(state);
+    (router, service)
+}
+
 /// Every databases route, for a caller holding `level` on every database.
 pub(super) fn full_router(level: AccessLevel) -> Router {
     databases_router::<RecordingService, GrantingAccess, Authorization, ()>(
         DatabasesRouterState::new(
             Arc::new(RecordingService::default()),
-            Arc::new(GrantingAccess(level)),
+            Arc::new(GrantingAccess(Some(level))),
             authorization_state(),
         ),
     )
 }
 
-/// Grants every caller the one level it holds.
+/// Grants every caller the one level it holds; with none, refuses them as
+/// `entity_access` refuses a caller without a grant.
 #[derive(Clone)]
-struct GrantingAccess(AccessLevel);
+struct GrantingAccess(Option<AccessLevel>);
 
 impl EntityAccessService for GrantingAccess {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
@@ -154,7 +176,7 @@ impl EntityAccessService for GrantingAccess {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(Some(self.0))
+        Ok(self.0)
     }
 
     async fn check_access(
@@ -164,7 +186,7 @@ impl EntityAccessService for GrantingAccess {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Ok(self.0)
+        self.0.ok_or(AccessError::Unauthorized)
     }
 
     async fn check_public_access(
@@ -183,9 +205,8 @@ impl EntityAccessService for GrantingAccess {
         _entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        Ok(EntityPermission::AccessLevel {
-            access_level: self.0,
-        })
+        let access_level = self.0.ok_or(AccessError::Unauthorized)?;
+        Ok(EntityPermission::AccessLevel { access_level })
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -229,16 +250,20 @@ impl EntityAccessService for GrantingAccess {
 
 /// Records the batches that reached it, and answers each with no results,
 /// or with `refusal` when one is set; records the conversions asked for and
-/// answers each with `conversion`. The routes under test call nothing else.
+/// answers each with `conversion`; records the row pages asked for (table and
+/// `after`) and answers each with `row_page`. The routes under
+/// test call nothing else.
 #[derive(Default)]
 pub(super) struct RecordingService {
     pub(super) applied: Mutex<Vec<OpBatch>>,
     pub(super) refusal: Mutex<Option<DatabaseError>>,
     pub(super) conversions: Mutex<Vec<(TableId, ColumnId, ColumnKind)>>,
     pub(super) conversion: Mutex<Option<ColumnConversion>>,
+    pub(super) row_pages: Mutex<Vec<(TableId, Option<RowId>)>>,
+    pub(super) row_page: Mutex<Option<Result<StorageRows, DatabaseError>>>,
 }
 
-const ONLY_OPS: &str = "the routes under test call only apply_ops and column_conversion";
+const ONLY_OPS: &str = "the routes under test call only apply_ops, column_conversion and row_page";
 
 impl DatabasesService for RecordingService {
     async fn apply_ops(
@@ -393,6 +418,22 @@ impl DatabasesService for RecordingService {
     }
     async fn get_query(&self, _: Viewer, _: QueryId) -> Result<SavedQuery, SavedQueryError> {
         unimplemented!("{ONLY_OPS}")
+    }
+}
+
+impl DatabaseRowPages for RecordingService {
+    async fn row_page(
+        &self,
+        _: EntityAccessReceipt<ViewAccessLevel>,
+        table_id: TableId,
+        query: StorageRowsQuery,
+    ) -> Result<StorageRows, DatabaseError> {
+        self.row_pages.lock().unwrap().push((table_id, query.after));
+        self.row_page
+            .lock()
+            .unwrap()
+            .take()
+            .expect("the test sets the page it answers")
     }
 }
 

@@ -70,7 +70,10 @@ async fn cancelled_send_fences_old_saves_deletes_attachments_and_schedules(
             link(),
             message(),
             &actor(),
-            ScheduleChange::Set(Utc::now() + chrono::Duration::hours(1)),
+            ScheduleChange::Set {
+                send_time: Utc::now() + chrono::Duration::hours(1),
+                source: None
+            },
             None,
             0
         )

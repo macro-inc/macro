@@ -474,7 +474,7 @@ where
             .await?;
 
         let source_message_id = input.db_id;
-        self.validate_replying_to(link_id, &accessible_link_ids, &mut input)
+        self.validate_replying_to(link, &accessible_link_ids, &mut input)
             .await?;
         if source_inbox.is_some() && input.db_id != source_message_id {
             return Err(EmailErr::InvalidSendSnapshot(
@@ -693,10 +693,11 @@ where
 
     async fn validate_replying_to(
         &self,
-        link_id: Uuid,
+        link: &Link,
         accessible_link_ids: &[Uuid],
         input: &mut CreateDraftInput,
     ) -> Result<(), EmailErr> {
+        let link_id = link.id;
         let Some(replying_to_id) = input.replying_to_id else {
             return Ok(());
         };
@@ -710,21 +711,25 @@ where
                 .await
                 .map_err(anyhow::Error::from)?
                 .ok_or(EmailErr::MessageNotFound(replying_to_id))?;
-            if parent.is_draft {
-                return Err(EmailErr::CannotReplyToDraft);
-            }
+            self.require_reply_target(link, &parent).await?;
             return Ok(());
         }
         // The draft replying to this message lives in the inbox being sent from.
-        if let Some(existing_draft) = self
-            .email_repo
-            .get_draft_replying_to(link_id, replying_to_id)
-            .await
-            .map_err(anyhow::Error::from)?
-        {
+        // A scheduled draft's reply is never continued: each sequence step is
+        // its own draft (the repository skips those parents), and a caller that
+        // opts out always gets a new draft.
+        let existing_draft = if input.reuse_reply_draft {
+            self.email_repo
+                .get_draft_replying_to(link_id, replying_to_id)
+                .await
+                .map_err(anyhow::Error::from)?
+        } else {
+            None
+        };
+        if let Some(existing_draft) = existing_draft {
             self.apply_existing_draft(input, existing_draft);
         } else {
-            self.apply_reply_target(link_id, accessible_link_ids, input, replying_to_id)
+            self.apply_reply_target(link, accessible_link_ids, input, replying_to_id)
                 .await?;
         }
 
@@ -745,7 +750,7 @@ where
 
     async fn apply_reply_target(
         &self,
-        link_id: Uuid,
+        link: &Link,
         accessible_link_ids: &[Uuid],
         input: &mut CreateDraftInput,
         replying_to_id: Uuid,
@@ -757,11 +762,9 @@ where
             .map_err(anyhow::Error::from)?
             .ok_or(EmailErr::MessageNotFound(replying_to_id))?;
 
-        if reply_target.is_draft {
-            return Err(EmailErr::CannotReplyToDraft);
-        }
+        self.require_reply_target(link, &reply_target).await?;
 
-        if reply_target.link_id == link_id {
+        if reply_target.link_id == link.id {
             // Same inbox: thread into the target's existing thread.
             input.thread_db_id = Some(reply_target.thread_db_id);
             input.provider_thread_id = reply_target.provider_thread_id;
@@ -780,6 +783,34 @@ where
         }]));
 
         Ok(())
+    }
+
+    /// A reply may answer a draft only when that draft is an unsent sequence
+    /// step in the same Gmail inbox: scheduled delivery then waits for the step
+    /// to be sent and threads the reply under it. Delivery holds replies only
+    /// for sequence steps, so no other draft can be replied to.
+    async fn require_reply_target(
+        &self,
+        link: &Link,
+        parent: &SimpleMessageInfo,
+    ) -> Result<(), EmailErr> {
+        if !parent.is_draft {
+            return Ok(());
+        }
+        let sequence_step = link.provider == crate::domain::models::UserProvider::Gmail
+            && parent.link_id == link.id
+            && self
+                .email_repo
+                .scheduled_sends_by_message_ids(&[parent.db_id])
+                .await
+                .map_err(anyhow::Error::from)?
+                .get(&parent.db_id)
+                .is_some_and(|schedule| schedule.source.is_some());
+        if sequence_step {
+            Ok(())
+        } else {
+            Err(EmailErr::CannotReplyToDraft)
+        }
     }
 
     /// Validate a client-supplied thread hint on the no-reply-target path.

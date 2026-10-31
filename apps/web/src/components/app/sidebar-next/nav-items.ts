@@ -23,10 +23,12 @@ import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import PulseIcon from '@icon/system/regular/pulse.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
+import PaperPlaneTiltFillIcon from '@phosphor-fill/paper-plane-tilt-fill.svg';
 import PulseFillIcon from '@phosphor-fill/pulse-fill.svg';
 import type { NavIcon } from './nav-glyph';
 import type { SidebarPrefs } from './use-sidebar-prefs';
@@ -104,6 +106,17 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: ChatsCircleFillIcon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
+  },
+  {
+    id: 'email-marketing',
+    get label() {
+      return t('nav.emailMarketing');
+    },
+    href: '/email-marketing',
+    icon: PaperPlaneTiltIcon,
+    iconActive: PaperPlaneTiltFillIcon,
+    hotkey: 'k',
+    hotkeyToken: TOKENS.sidebar.goTo.emailMarketing,
   },
   {
     id: 'tasks',
@@ -211,6 +224,7 @@ export type NavItemGates = {
   showReviews: boolean;
   showActivity: boolean;
   showExternal: boolean;
+  showEmailMarketing: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -227,6 +241,7 @@ export const isNavItemAvailable = (
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
   if (item.id === 'external') return gates.showExternal;
+  if (item.id === 'email-marketing') return gates.showEmailMarketing;
   return true;
 };
 

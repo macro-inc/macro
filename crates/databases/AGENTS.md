@@ -54,6 +54,8 @@ service with Axum, agent-tool and Postgres adapters.
 - `databases` (core storage) and `database_entities` (app identity: name,
   owner, trash) are separate tables by design; a host can use one without the
   other (see README "Storage and app entities").
+- Soup rows lag the primary; a reader that writes with `baseVersions` reads rows
+  and their version together from `POST /databases/{id}/tables/{table_id}/rows`.
 - Column type changes must convert every value or refuse with the misfit count;
   never silently drop data outside an explicit delete.
 - Sharing (`src/domain/sharing.rs`): channel grants and a team share; no share

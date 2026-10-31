@@ -142,8 +142,9 @@ pub async fn sync_thread_signal_flag(
 }
 
 /// Recomputes importance from normalized provider evidence and sender overrides.
-/// Exact address policy overrides domain policy; trash and Macro notification
-/// senders remain excluded for both providers.
+/// Exact address policy overrides domain policy; trash, pending sequence steps
+/// and Macro notification senders remain excluded for both providers. The
+/// email crate's filter resync restates this rule.
 pub async fn recompute_signal(
     tx: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -162,6 +163,8 @@ pub async fn recompute_signal(
                 FROM email_filters f WHERE f.link_id = m.link_id
             ) rules
             WHERE m.thread_id = $1 AND facts.is_present AND NOT facts.in_trash
+                AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id
+                    AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
                 AND lower(split_part(c.email_address,'@',2)) IS DISTINCT FROM $2
                 AND (rules.address_true OR (rules.domain_true AND NOT rules.address_false)
                     OR (NOT (rules.address_false OR (rules.domain_false AND NOT rules.address_true)) AND facts.provider_is_primary))
@@ -195,6 +198,11 @@ pub async fn sync_thread_received_mail(
 }
 
 /// Shared thread projection for Gmail labels, Outlook folders, and Macro drafts.
+///
+/// A pending sequence step (a draft whose schedule has a source and is neither
+/// sent nor failed) is not part of the thread's mail state, so a thread holding
+/// only such steps stays out of Inbox and All Mail. Callers that change a
+/// schedule's source or failure state recompute this projection.
 pub async fn recompute_thread_metadata(
     tx: &mut sqlx::PgConnection,
     thread_id: Uuid,
@@ -213,6 +221,8 @@ pub async fn recompute_thread_metadata(
                 EXISTS (SELECT 1 FROM email_message_recipients r WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id) AS sender_is_recipient
             FROM email_messages m JOIN email_message_mailbox_facts f ON f.id = m.id
             WHERE m.thread_id = $1 AND m.link_id = $2 AND f.is_present
+                AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id
+                    AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
         ), aggregate AS (
             SELECT COALESCE(bool_or(in_inbox AND NOT in_sent),false) AS mailbox_visible,
                 COALESCE(bool_or(macro_draft),false) AS has_macro_draft,

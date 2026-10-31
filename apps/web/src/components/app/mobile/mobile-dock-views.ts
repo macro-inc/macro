@@ -5,6 +5,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import {
   enableCalendarScheduling,
   enableCrm,
+  enableEmailMarketing,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -26,7 +27,9 @@ import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
+import PaperPlaneTiltFillIcon from '@phosphor-fill/paper-plane-tilt-fill.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';
@@ -139,6 +142,14 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     icon: PlugIcon,
     iconActive: PlugFillIcon,
   },
+  {
+    id: 'email-marketing',
+    get label() {
+      return t('nav.emailMarketing');
+    },
+    icon: PaperPlaneTiltIcon,
+    iconActive: PaperPlaneTiltFillIcon,
+  },
 ];
 
 export function useMobileDockViews() {
@@ -147,6 +158,7 @@ export function useMobileDockViews() {
   const reviews = useFeatureFlag(enableTasksReviews);
   const scheduling = useFeatureFlag(enableCalendarScheduling);
   const external = useFeatureFlag(enableWhatsappLinked);
+  const emailMarketing = useFeatureFlag(enableEmailMarketing);
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
       (view) => view.id !== 'calendar' || calendarEnabled()
@@ -155,5 +167,8 @@ export function useMobileDockViews() {
       .filter((view) => view.id !== 'reviews' || reviews().enabled)
       .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
       .filter((view) => view.id !== 'external' || external().enabled)
+      .filter(
+        (view) => view.id !== 'email-marketing' || emailMarketing().enabled
+      )
   );
 }

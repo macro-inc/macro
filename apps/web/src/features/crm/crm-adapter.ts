@@ -12,6 +12,7 @@ import {
   enableCrmLists,
   enableCrmPipelines,
   enableDatabases,
+  enableEmailMarketing,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
@@ -108,6 +109,10 @@ import { crmTaskComposerContext } from './task-composer';
 // Loaded on demand: the Tasks list imports soup, which imports CRM entry points.
 const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
+}));
+const MarketingEnrollments = lazy(async () => ({
+  default: (await import('../email-marketing/contact-card'))
+    .MarketingContactCard,
 }));
 
 const CrmActivityTasks = lazy(async () => ({
@@ -251,6 +256,10 @@ export function createAppCrmContext(): CrmContext {
       const flag = useFeatureFlag(enableCrmPipelines);
       return () => flag().enabled;
     },
+    emailMarketingEnabled() {
+      const flag = useFeatureFlag(enableEmailMarketing);
+      return () => flag().enabled;
+    },
     createCompanyEmails: (...args) =>
       withRowNotifications(
         useCompanyEmailsQuery(useSoupAstItemsQuery, ...args)
@@ -321,6 +330,7 @@ export function createAppCrmContext(): CrmContext {
         useRecordReferencesQuery(useSoupAstItemsQuery, scope)
       ),
     RecordTasks: CrmRecordTasks,
+    MarketingEnrollments,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({

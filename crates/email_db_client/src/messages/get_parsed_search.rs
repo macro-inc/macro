@@ -8,6 +8,9 @@ use models_email::service::message::{MessageWithBodyReplyless, ParsedSearchMessa
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// retreive a parsed search message by its id.
 /// returns None if no message was found.
 #[tracing::instrument(skip(pool), err)]
@@ -32,6 +35,9 @@ pub async fn get_parsed_search_message_by_id(
         FROM email_messages m
         JOIN email_links l ON m.link_id = l.id
         WHERE m.id = $1
+        -- A pending sequence step is not the user's mail until it is sent or fails.
+        AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id
+            AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
         "#,
         message_id,
     )
@@ -111,6 +117,9 @@ pub async fn get_parsed_search_messages_by_thread_ids(
             NULL::TEXT as body_macro
         FROM email_messages
         WHERE thread_id = ANY($1)
+          -- A pending sequence step is not the user's mail until it is sent or fails.
+          AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = email_messages.id
+              AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
         ORDER BY internal_date_ts DESC NULLS LAST
         "#,
         thread_ids
@@ -201,6 +210,9 @@ pub async fn get_paginated_parsed_search_messages_by_thread_id(
             NULL::TEXT as body_macro
         FROM email_messages
         WHERE thread_id = $1
+          -- A pending sequence step is not the user's mail until it is sent or fails.
+          AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = email_messages.id
+              AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
         ORDER BY internal_date_ts DESC NULLS LAST
         LIMIT $2 OFFSET $3
         "#,

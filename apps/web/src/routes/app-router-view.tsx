@@ -52,6 +52,7 @@ import {
   DriveDetailView,
   DriveRouteView,
   EmailDetailRouteView,
+  EmailMarketingRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
   HomeEntityDetailRouteView,
@@ -112,6 +113,7 @@ import {
   driveSplitRoute,
   driveTabDocumentRoute,
   driveTabRoute,
+  emailMarketingRoute,
   emailSignupCallbackRoute,
   emailSplitRoute,
   emailThreadRoute,
@@ -432,6 +434,10 @@ export function AppRouterView() {
           </Route>
           <Route definition={crmRecordRoute} />
         </Route>
+        <Route
+          definition={emailMarketingRoute}
+          component={EmailMarketingRouteView}
+        />
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />
         <Route definition={prDetailRoute} component={PrDetailRouteView} />

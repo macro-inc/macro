@@ -815,6 +815,22 @@
               "format": "int32",
               "minimum": 0
             }
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "description": "List only the sends this source created, in every delivery state.\nWithout it, the user's own scheduled sends are listed: pending sequence\nsteps are hidden, like in Drafts, and failed ones are included.",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/components/schemas/ScheduledSendSource"
+                }
+              ]
+            }
           }
         ],
         "responses": {
@@ -4219,6 +4235,11 @@
             "format": "uuid",
             "description": "ID of the message this draft is replying to."
           },
+          "reuse_reply_draft": {
+            "type": "boolean",
+            "description": "Without `db_id`, continue an existing unsent draft replying to\n`replying_to_id` in this inbox. `false` always creates a new draft, as\na sequence step does, leaving the user's own reply draft untouched.",
+            "default": true
+          },
           "subject": {
             "type": "string",
             "description": "Subject line."
@@ -4554,6 +4575,17 @@
           "replying_to_id": {
             "type": ["string", "null"],
             "format": "uuid"
+          },
+          "scheduled_send_source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScheduledSendSource",
+                "description": "What created the unsent schedule; `sequence` marks a sequence step,\nwhich is not the user's own draft while it is pending."
+              }
+            ]
           },
           "scheduled_send_status": {
             "oneOf": [
@@ -7240,6 +7272,11 @@
           }
         }
       },
+      "ScheduledSendSource": {
+        "type": "string",
+        "description": "What created a scheduled send, when it was not the user's own composer.\n\nA pending send from a source stays out of the user's mail lists (Drafts,\nScheduled, Inbox) until it is sent or its delivery fails.",
+        "enum": ["sequence"]
+      },
       "ScheduledSendStatus": {
         "type": "string",
         "description": "The user-visible delivery state of an unsent scheduled message.",
@@ -7728,6 +7765,17 @@
             "type": "string",
             "format": "date-time",
             "description": "The time to send the message (ISO 8601 format)."
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScheduledSendSource",
+                "description": "What created this send. `sequence` keeps the pending step out of the\nuser's Drafts and Scheduled lists (Gmail inboxes only). Absent keeps the\ndraft's existing source; only unscheduling clears it."
+              }
+            ]
           }
         }
       },

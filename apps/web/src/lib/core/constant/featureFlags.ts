@@ -541,6 +541,15 @@ export const enableEmailFocus = defineFlag({
   default: onInDev,
 });
 
+// Email Marketing: multi-step campaigns scheduled from the user's own Gmail,
+// plus the enrollment card on CRM contacts. It sends real email, so PostHog
+// controls production rollout; on in dev, override with VITE_ENABLE_EMAIL_MARKETING.
+export const enableEmailMarketing = defineFlag({
+  key: 'enable-email-marketing',
+  env: 'ENABLE_EMAIL_MARKETING',
+  default: onInDev,
+});
+
 export const enableHistoryComponent = defineFlag({
   key: 'enable-history-component',
   env: 'ENABLE_HISTORY_COMPONENT',

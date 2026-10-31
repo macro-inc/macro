@@ -687,6 +687,12 @@ export const crmPipelineRoute = defineRoute({
   toReference: ({ pipelineId }) => crmPipelineReference(pipelineId),
 });
 
+export const emailMarketingRoute = defineRoute({
+  id: 'view-email-marketing',
+  path: 'email-marketing',
+  claim: () => ({ namespace: 'component', id: 'email-marketing' }),
+});
+
 export const foldersRoute = defineRoute({
   id: 'view-folders',
   path: 'folders',

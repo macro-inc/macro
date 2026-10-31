@@ -335,12 +335,12 @@ fn push_thread_candidate_select(
     }
 
     // Ensure the candidate LIMIT only counts threads that will survive the
-    // CROSS JOIN LATERAL's message match. When a view-level message filter
-    // is in play mirror the full lateral predicate as a correlated EXISTS;
-    // otherwise push address-only constraints through the index-driven
-    // `matching_threads` CTE referenced via
+    // CROSS JOIN LATERAL's message match. When the view needs it (see
+    // `wants_message_exists_pushdown`) mirror the full lateral predicate as a
+    // correlated EXISTS; otherwise push address-only constraints through the
+    // index-driven `matching_threads` CTE referenced via
     // `t.id IN (SELECT thread_id FROM matching_threads)`.
-    if wants_message_exists_pushdown(view) {
+    if wants_message_exists_pushdown(view, email_filter) {
         build_thread_message_exists_filter(email_filter, view, &params.resolved)
             .push_into(builder, &params.user_id);
     } else if has_address_literals(email_filter) {
@@ -438,10 +438,10 @@ fn build_query(
     let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
-    // When the candidate stage pushes a full per-message EXISTS (view-level
-    // message filter), it already enforces "thread has a message the lateral
-    // will surface", so the address-only `matching_threads` CTE is redundant.
-    let matching_threads = if wants_message_exists_pushdown(view) {
+    // When the candidate stage pushes a full per-message EXISTS, it already
+    // enforces "thread has a message the lateral will surface", so the
+    // address-only `matching_threads` CTE is redundant.
+    let matching_threads = if wants_message_exists_pushdown(view, email_filter) {
         None
     } else {
         // Owned-only queries can scope the CTE's contact/message scans to
@@ -667,7 +667,7 @@ fn build_query(
             WHERE m.thread_id = t.id
               AND "#,
     );
-    build_lateral_trash_exclusion(&params.resolved).push_into(&mut builder, &params.user_id);
+    build_visible_message_check(&params.resolved).push_into(&mut builder, &params.user_id);
 
     // Add view-specific message filters
     if !view_message_filter.is_empty() {

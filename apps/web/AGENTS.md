@@ -48,6 +48,11 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Email Marketing sequences (create, thread follow-ups, enroll, pause, resume,
+stop, delete, unsubscribe, failed and untracked sends, stale tabs, phone) have
+a backend-free browser regression over a simulated scheduler:
+`bunx playwright test --config src/features/email-marketing/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 

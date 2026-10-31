@@ -30,6 +30,7 @@ fn snapshot() -> SendSnapshot {
             db_id: Some(message()),
             thread_db_id: Some(Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap()),
             provider_id: None,
+            reuse_reply_draft: true,
             provider_thread_id: None,
             replying_to_id: None,
             subject: "Approved snapshot".into(),

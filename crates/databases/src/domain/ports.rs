@@ -23,6 +23,7 @@ use crate::domain::models::{
     QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError, Table, TableId,
     TableVersion, ViewId, Viewer, Writes, WritesOutcome,
 };
+use crate::domain::storage::{StorageRows, StorageRowsQuery};
 use models_databases::{ColumnKind, OpResult};
 
 /// Persistence for databases, tables, column placements and row identities.
@@ -545,6 +546,22 @@ pub trait DatabaseRowReads: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         table_id: TableId,
     ) -> impl Future<Output = Result<u64, DatabaseError>> + Send;
+}
+
+/// Query pages of a table's rows for a viewer of its database. A port of its
+/// own, like [`DatabaseRowReads`], so the many `DatabasesService` stand-ins
+/// need not grow it.
+pub trait DatabaseRowPages: Send + Sync + 'static {
+    /// A page of one of the receipt's live database's tables, in the query's
+    /// order, with the table version every row of it was read at. A table
+    /// that changes during the read, or no longer holds `after`, is a
+    /// [`DatabaseError::VersionConflict`].
+    fn row_page(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        table_id: TableId,
+        query: StorageRowsQuery,
+    ) -> impl Future<Output = Result<StorageRows, DatabaseError>> + Send;
 }
 
 /// A database's own facts, for a domain that decides access itself and

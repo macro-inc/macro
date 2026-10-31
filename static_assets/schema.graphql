@@ -6979,6 +6979,16 @@ The way a routine starts.
 union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger
 
 """
+What created a scheduled delivery, when it was not the user's own composer.
+"""
+enum GraphqlScheduledSendSource {
+	"""
+	A step of an email sequence; not the user's own draft while pending.
+	"""
+	SEQUENCE
+}
+
+"""
 The persisted state of a scheduled delivery.
 """
 enum GraphqlScheduledSendStatus {
@@ -8582,6 +8592,10 @@ type GraphqlSoupEmailMessage {
 	Whether the scheduled delivery is pending, sending, failed, or unconfirmed.
 	"""
 	scheduledSendStatus: GraphqlScheduledSendStatus
+	"""
+	What created the unsent schedule, such as a sequence step.
+	"""
+	scheduledSendSource: GraphqlScheduledSendSource
 	"""
 	The sender of the message.
 	"""

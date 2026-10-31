@@ -20250,6 +20250,51 @@ export type InferDatabaseColumnTypeResponses = {
 
 export type InferDatabaseColumnTypeResponse = InferDatabaseColumnTypeResponses[keyof InferDatabaseColumnTypeResponses];
 
+export type QueryDatabaseTableRowsData = {
+    body: StorageRowsQuery;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/rows';
+};
+
+export type QueryDatabaseTableRowsErrors = {
+    /**
+     * The query does not apply to the table
+     */
+    400: OpRefusalResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    /**
+     * The table changed during the read, or no longer holds `after`
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type QueryDatabaseTableRowsError = QueryDatabaseTableRowsErrors[keyof QueryDatabaseTableRowsErrors];
+
+export type QueryDatabaseTableRowsResponses = {
+    200: StorageRows;
+};
+
+export type QueryDatabaseTableRowsResponse = QueryDatabaseTableRowsResponses[keyof QueryDatabaseTableRowsResponses];
+
 export type GetDatabaseRowHistoryData = {
     body?: never;
     path: {

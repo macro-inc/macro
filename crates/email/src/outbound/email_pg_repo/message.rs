@@ -277,13 +277,14 @@ pub(super) async fn scheduled_sends_by_message_ids(
         processing: bool,
         delivery_claim_id: Option<Uuid>,
         delivery_started_at: Option<DateTime<Utc>>,
+        source: Option<String>,
     }
 
     let rows = sqlx::query_as!(
         DbScheduledRow,
         r#"
         SELECT message_id, send_time, delivery_status, processing,
-               delivery_claim_id, delivery_started_at
+               delivery_claim_id, delivery_started_at, source
         FROM email_scheduled_messages
         WHERE message_id = ANY($1) AND sent = false
         "#,
@@ -292,10 +293,15 @@ pub(super) async fn scheduled_sends_by_message_ids(
     .fetch_all(pool)
     .await?;
 
-    Ok(rows
-        .into_iter()
+    rows.into_iter()
         .map(|row| {
-            use crate::domain::models::{ScheduledSend, ScheduledSendStatus};
+            use crate::domain::models::{ScheduledSend, ScheduledSendSource, ScheduledSendStatus};
+            let source = row
+                .source
+                .as_deref()
+                .map(str::parse::<ScheduledSendSource>)
+                .transpose()
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
             let status = match row.delivery_status.as_str() {
                 "failed" => ScheduledSendStatus::Failed,
                 "unconfirmed" => ScheduledSendStatus::Unconfirmed,
@@ -306,15 +312,16 @@ pub(super) async fn scheduled_sends_by_message_ids(
                 }
                 _ => ScheduledSendStatus::Pending,
             };
-            (
+            Ok((
                 row.message_id,
                 ScheduledSend {
                     send_time: row.send_time,
                     status,
+                    source,
                 },
-            )
+            ))
         })
-        .collect())
+        .collect()
 }
 
 /// Fetch a simplified message by DB ID, scoped to a set of accessible inboxes,
@@ -351,7 +358,9 @@ pub(crate) async fn get_simple_message(
 }
 
 /// Find an existing draft that replies to the given message, identified by
-/// the "Macro-In-Reply-To" header value.
+/// the "Macro-In-Reply-To" header value. A draft parent (a scheduled sequence
+/// step) never has its reply continued, so each step stays its own draft, and
+/// an unsent sequence step is never taken for the user's own reply draft.
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn get_draft_replying_to(
     pool: &PgPool,
@@ -377,6 +386,8 @@ pub(crate) async fn get_draft_replying_to(
           AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean,false)
           AND NOT EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=m.id AND d.delete_requested)
           AND NOT EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')
+          AND NOT EXISTS(SELECT 1 FROM email_messages parent WHERE parent.id=$2::uuid AND parent.is_draft)
+          AND NOT EXISTS(SELECT 1 FROM email_scheduled_messages s WHERE s.message_id=m.id AND s.source IS NOT NULL AND NOT s.sent)
           AND (m.replying_to_id=$2::uuid OR jsonb_path_exists(
               m.headers_jsonb,
               '$[*] ? (@."Macro-In-Reply-To" == $macro_uuid)'::jsonpath,
