@@ -169,8 +169,9 @@ const currentBuild = `${import.meta.env.__APP_VERSION__ ?? 'dev'}@${
  * A lazy chunk or its CSS failed to load, usually because a deploy removed this
  * build's files. Reloads into the deployed build right away when the reload
  * loses nothing: the device is online, nothing holds the tab, and no text is
- * being written. It does so once per build per tab session, so a stale cache
- * serving this build again cannot loop. Otherwise it offers the reload.
+ * being written. Otherwise it offers the reload, which reloads a hidden tab by
+ * itself. Either automatic reload happens once per build per tab session, so a
+ * stale cache serving this build again cannot loop.
  */
 export function recoverFromFailedLoad(
   page: ReloadPage = browserPage,
@@ -186,7 +187,14 @@ export function recoverFromFailedLoad(
     page.reload('failed_load_recovery');
     return;
   }
-  promptReloadForFailedLoad(page);
+  promptReloadForFailedLoad({
+    ...page,
+    reload(reason) {
+      if (reason !== 'cache_replaced_automatic' || reloadOnce.claim(build)) {
+        page.reload(reason);
+      }
+    },
+  });
 }
 
 /** Test seam: forget the scheduled reload and every hold. */

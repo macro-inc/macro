@@ -220,6 +220,37 @@ describe('recoverFromFailedLoad', () => {
     expect(once.claimed.size).toBe(0);
   });
 
+  it('reloads a hidden tab by itself at most once per build', () => {
+    const once = reloadOnce();
+    const first = fakePage({ hidden: true, offline: false });
+    recoverFromFailedLoad(first.page, once, 'build-a');
+    expect(first.page.reload).toHaveBeenCalledExactlyOnceWith(
+      'failed_load_recovery'
+    );
+
+    // The reload landed on the same build, still hidden: offer the reload
+    // without reloading again, now or when the tab is hidden later.
+    resetReloadForNewerBuildForTests();
+    const again = fakePage({ hidden: true, offline: false });
+    recoverFromFailedLoad(again.page, once, 'build-a');
+    again.hide();
+    expect(again.page.reload).not.toHaveBeenCalled();
+    expect(again.prompts).toHaveLength(1);
+  });
+
+  it('spends the allowance when an offered reload runs by itself later', () => {
+    const once = reloadOnce();
+    const offline = fakePage({ hidden: true, offline: true });
+    recoverFromFailedLoad(offline.page, once, 'build-a');
+    expect(offline.page.reload).not.toHaveBeenCalled();
+
+    offline.goOnline();
+    expect(offline.page.reload).toHaveBeenCalledExactlyOnceWith(
+      'cache_replaced_automatic'
+    );
+    expect(once.claimed).toEqual(new Set(['build-a']));
+  });
+
   it('remembers the reload in session storage and never reloads without it', () => {
     const first = fakePage({ hidden: false, offline: false });
     recoverFromFailedLoad(first.page, undefined, 'build-a');
