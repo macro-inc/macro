@@ -764,7 +764,6 @@ export default {
     goForward: '下一頁',
     createNewSplit: '建立新分割畫面',
     close: '關閉',
-    returnToList: '返回清單',
     previousItem: '上一個項目',
     nextItem: '下一個項目',
     itemNavigation: '項目導覽',

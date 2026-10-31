@@ -3,6 +3,7 @@ import { AccessRequestVisitProvider } from '@app/features/access-requests/contex
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { t } from '@app/lib/i18n';
 import { type PaneId, SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
@@ -383,9 +384,9 @@ export function SplitPanel(props: SplitPanelProps) {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Close split"
+                  aria-label={t('splitMenu.closeSplit')}
                   tooltip={{
-                    content: 'Close split',
+                    content: t('splitMenu.closeSplit'),
                     hotkey: TOKENS.split.close,
                   }}
                   class={cn(

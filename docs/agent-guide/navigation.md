@@ -612,10 +612,10 @@ when the sidebar is an overlay in a narrow split. Verify with three splits:
 open **Show navigation**, then use the sidebar's **Close** button without first
 hiding navigation; only its owning split closes. The last logical split has no
 sidebar close button; mobile chrome is unchanged.
-A lone non-list content split still shows a header X labeled **Return to list**,
-which returns that split to the most recent list in its history, preserving
-that list’s state. If there is no prior list, it replaces the current entry with
-Home. Excluded background panels do not count toward close eligibility.
+A lone desktop split shows no X, in its header or its frame corner. On a
+non-list content split, `Cmd+Esc` (or `Opt+Esc`) returns it to the most recent
+list in its history, preserving that list’s state; if there is no prior list, it
+opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner

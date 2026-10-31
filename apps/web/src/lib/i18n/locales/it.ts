@@ -837,7 +837,6 @@ export default {
     goForward: 'Avanti',
     createNewSplit: 'Crea nuovo riquadro',
     close: 'Chiudi',
-    returnToList: 'Torna all’elenco',
     previousItem: 'Elemento precedente',
     nextItem: 'Elemento successivo',
     itemNavigation: 'Navigazione tra elementi',
