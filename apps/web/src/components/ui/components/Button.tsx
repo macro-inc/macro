@@ -6,8 +6,11 @@ import {
 import type { PolymorphicProps } from '@kobalte/core/polymorphic';
 import {
   type ComponentProps,
+  createRoot,
   For,
+  getOwner,
   type JSX,
+  onCleanup,
   Show,
   splitProps,
   type ValidComponent,
@@ -211,6 +214,7 @@ export function Button<T extends ValidComponent = 'button'>(
     'fullWidth',
     'tooltip',
     'tabIndex',
+    'ref',
     'onClick',
     'onAuxClick',
     'onKeyDown',
@@ -235,10 +239,31 @@ export function Button<T extends ValidComponent = 'button'>(
     return value ? (Array.isArray(value) ? value : [value]) : [];
   };
 
+  // Solid applies a spread element's ref inside an effect, and through the
+  // tooltip trigger that effect also reads the tooltip's open state. Kobalte
+  // would call the caller's ref again, after its cleanup, every time the
+  // tooltip opens or closes, so a file picker's input could be replaced while
+  // the picker is open. The caller's ref runs once per element, owned here.
+  const owner = getOwner();
+  let refElement: HTMLElement | undefined;
+  let disposeRef: (() => void) | undefined;
+  onCleanup(() => disposeRef?.());
+  const applyRef = (element: HTMLButtonElement) => {
+    const callerRef = local.ref;
+    if (element === refElement || typeof callerRef !== 'function') return;
+    refElement = element;
+    disposeRef?.();
+    createRoot((dispose) => {
+      disposeRef = dispose;
+      callerRef(element);
+    }, owner);
+  };
+
   const Control = (buttonProps: ComponentProps<typeof KobalteButton>) => {
     return (
       <KobalteButton
         {...buttonProps}
+        ref={applyRef}
         as={buttonProps.as ?? 'button'}
         data-button=""
         data-slot="button"
