@@ -11,10 +11,7 @@ import {
   type TaskEntityWithProperties,
   UnreadIndicator,
 } from '@entity';
-import {
-  CreatedByBadgeSmall,
-  SharedBadgeSmall,
-} from '@entity/components/Badges';
+import { SharedBadgeSmall } from '@entity/components/Badges';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
@@ -178,11 +175,8 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
                 <Entity.Title entity={props.entity} />
               </span>
               <Show when={props.isShared}>
-                <span class="shrink-0 @min-[841px]/u-list:hidden">
+                <span class="task-shared-badge hidden shrink-0">
                   <SharedBadgeSmall ownerId={props.entity.ownerId} />
-                </span>
-                <span class="hidden shrink-0 @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
-                  <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
                 </span>
               </Show>
             </span>
@@ -263,7 +257,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
 
         <Entity.Slot
           placement="createdBy"
-          class="hidden ms-2 @min-[1221px]/u-list:flex items-center justify-end min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
+          class="task-creator-cell ms-2 flex items-center justify-end min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
         >
           <OwnerLabel
             ownerId={props.entity.ownerId}

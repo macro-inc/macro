@@ -45,7 +45,7 @@ export const TASK_PROJECT_COLUMN = {
   width: 'var(--task-col-initiative, 8rem)',
 } as const;
 
-/** Width for the "Created By" column - only shown on wide containers */
+/** Default creator width; each grid host controls its responsive visibility. */
 const CREATED_BY_COLUMN_WIDTH = 'var(--task-col-created-by, 7rem)';
 
 export type TaskGridColumn =
@@ -53,7 +53,7 @@ export type TaskGridColumn =
   | typeof TASK_PROJECT_COLUMN;
 
 /**
- * Wide-container grid (includes Created By). The project column exists only
+ * Shared column grid (includes Created By). The project column exists only
  * while Projects is enabled, so disabled lists keep their exact layout.
  */
 export function taskGridTemplate(options: {

@@ -10,7 +10,7 @@
 /* Include spacing inside visible tracks so hidden columns leave no grid gaps. */
 .task-grid-row.task-grid-icon-creator {
   --task-col-assignees: 9.5rem;
-  --task-col-created-by: 0rem;
+  --task-col-created-by: 2rem;
   --task-col-timestamp: 5.5rem;
   --task-col-initiative: 8.5rem;
   column-gap: 0;
@@ -26,13 +26,7 @@
     visibility 160ms;
 }
 
-@container u-list (min-width: 1221px) {
-  .task-grid-row.task-grid-icon-creator {
-    --task-col-created-by: 2rem;
-  }
-}
-
-/* Medium containers: hide Created By column */
+/* Other grid hosts hide Created By in medium containers. */
 @container u-list (max-width: 1220px) {
   .task-grid-row {
     --task-col-created-by: 0rem;
@@ -57,10 +51,19 @@
   }
 }
 
-/* Fade Updated before the remaining columns crowd the task title. */
+/* Collapse metadata before the remaining columns crowd the task title. */
 @container u-list (max-width: 600px) {
   .task-grid-row.task-grid-icon-creator {
     --task-col-timestamp: 0rem;
+    --task-col-created-by: 0rem;
+  }
+
+  .task-grid-icon-creator .task-creator-cell {
+    display: none;
+  }
+
+  .task-grid-icon-creator .task-shared-badge {
+    display: inline-flex;
   }
 
   .task-grid-icon-creator .task-updated-cell {

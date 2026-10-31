@@ -132,7 +132,7 @@ export function TaskListHeader() {
       <span
         role="columnheader"
         aria-label="Created by"
-        class="hidden ms-2 @min-[1221px]/u-list:flex items-center justify-end"
+        class="task-creator-cell ms-2 flex items-center justify-end"
         style={{ 'grid-area': 'createdBy' }}
       >
         <Tooltip label="Created by" as="span" tabIndex={0}>

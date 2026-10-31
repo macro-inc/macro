@@ -28,7 +28,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Place Project before Assignees in wide and narrow task rows, including phones; keep one assignee avatar plus the remaining count in narrow rows.
 - At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, and Updated headers; keep Project at 32px, Assignees at 40px, and Updated at 64px above 600px, retaining one assignee avatar and its overflow count.
 - Above 840px, keep Updated at 80px with an untruncated header; retain single-line timestamps and existing Created by spacing, and fade/collapse Updated over 160ms at 600px to preserve title space, disabling motion for reduced-motion preferences.
-- Show a 16px user-plus icon in the Created by header, right-aligned with creator avatars, with an accessible name and a keyboard-focusable “Created by” tooltip.
+- Keep Created by visible above 600px alongside Updated, with a 16px user-plus header icon aligned to creator avatars and a keyboard-focusable “Created by” tooltip; show the title's shared badge only while the creator column is hidden.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, and a corner-dashed project cube; use the regular cube for set projects.
