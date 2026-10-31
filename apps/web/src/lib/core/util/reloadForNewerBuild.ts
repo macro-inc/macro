@@ -75,6 +75,7 @@ const browserPage: ReloadPage = {
 
 const holds = new Set<symbol>();
 let scheduled = false;
+let nativeHoldSyncing = false;
 
 /** Checks active calls/uploads/imports without executing unload side effects. */
 export function hasAutomaticReloadHolds(): boolean {
@@ -87,8 +88,19 @@ export function hasAutomaticReloadHolds(): boolean {
  * document calls this on mount, because one that died holding never released.
  */
 export async function syncNativeReloadHold(): Promise<void> {
-  if (!getNativeMobilePlatform()) return;
-  await invoke('set_bundle_reload_hold', { held: holds.size > 0 });
+  if (nativeHoldSyncing || !getNativeMobilePlatform()) return;
+  nativeHoldSyncing = true;
+  try {
+    // Native commands run as separate tasks, so overlapping writes could land
+    // out of order. Send one at a time and finish on the latest state.
+    let sent: boolean;
+    do {
+      sent = holds.size > 0;
+      await invoke('set_bundle_reload_hold', { held: sent });
+    } while (sent !== holds.size > 0);
+  } finally {
+    nativeHoldSyncing = false;
+  }
 }
 
 /**
@@ -155,5 +167,6 @@ export function promptReloadForFailedLoad(): void {
 /** Test seam: forget the scheduled reload and every hold. */
 export function resetReloadForNewerBuildForTests(): void {
   scheduled = false;
+  nativeHoldSyncing = false;
   holds.clear();
 }

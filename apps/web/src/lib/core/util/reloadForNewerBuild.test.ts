@@ -62,6 +62,8 @@ function fakePage(state: {
   };
 }
 
+const settled = () => new Promise((resolve) => setTimeout(resolve));
+
 describe('holdAutomaticReload', () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -75,15 +77,51 @@ describe('holdAutomaticReload', () => {
     const first = holdAutomaticReload();
     const second = holdAutomaticReload();
     first();
-    second();
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledOnce());
+    await settled();
+    expect(native.invoke).toHaveBeenCalledOnce();
 
-    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(4));
+    second();
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(2));
     expect(native.invoke.mock.calls).toEqual([
-      ['set_bundle_reload_hold', { held: true }],
-      ['set_bundle_reload_hold', { held: true }],
       ['set_bundle_reload_hold', { held: true }],
       ['set_bundle_reload_hold', { held: false }],
     ]);
+  });
+
+  it('sends one write at a time and finishes on the latest state', async () => {
+    native.mobilePlatform.mockReturnValue('ios');
+    let finishWrite = () => {};
+    native.invoke.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishWrite = resolve;
+        })
+    );
+    native.invoke.mockResolvedValue(undefined);
+
+    const release = holdAutomaticReload();
+    release();
+    await settled();
+    expect(native.invoke).toHaveBeenCalledOnce();
+
+    finishWrite();
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(2));
+    expect(native.invoke.mock.calls).toEqual([
+      ['set_bundle_reload_hold', { held: true }],
+      ['set_bundle_reload_hold', { held: false }],
+    ]);
+  });
+
+  it('can write again after a failed write', async () => {
+    native.mobilePlatform.mockReturnValue('ios');
+    native.invoke.mockRejectedValueOnce(new Error('bridge unavailable'));
+    native.invoke.mockResolvedValue(undefined);
+
+    await expect(syncNativeReloadHold()).rejects.toThrow('bridge unavailable');
+    await expect(syncNativeReloadHold()).resolves.toBeUndefined();
+
+    expect(native.invoke).toHaveBeenCalledTimes(2);
   });
 
   it('clears a hold left behind when a new document has none', async () => {
@@ -101,6 +139,7 @@ describe('holdAutomaticReload', () => {
     native.mobilePlatform.mockReturnValue('ios');
     native.invoke.mockResolvedValue(undefined);
     holdAutomaticReload();
+    await settled();
     native.invoke.mockClear();
 
     await syncNativeReloadHold();
