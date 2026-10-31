@@ -10,6 +10,7 @@ A scheduled or event-triggered agent task.
 
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-appearance"></a> `appearance` | `readonly` | () => `Promise`\<[`EntityAppearance`](../../../../../generated/scheduled-action/types.gen/type-aliases/EntityAppearance.md) \| `undefined`\> | Shared icon and color overrides. | - |
 | <a id="property-enabled"></a> `enabled` | `readonly` | () => `Promise`\<`boolean`\> | Whether the routine is enabled. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | Routine name. | - |
@@ -74,6 +75,24 @@ Completed executions, with their routine scoped identity.
 #### Returns
 
 `Promise`\<[`RoutineExecution`](RoutineExecution.md)[]\>
+
+***
+
+### setAppearance()
+
+> **setAppearance**(`appearance`): `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
+
+Replace shared appearance without rescheduling. Pass {} to reset both overrides.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `appearance` | [`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) |
+
+#### Returns
+
+`Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
 
 ***
 

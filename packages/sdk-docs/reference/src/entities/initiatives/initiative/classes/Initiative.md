@@ -12,6 +12,7 @@ A group of tasks and members working toward an outcome.
 | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | Access requests and direct user grants. | - |
 | <a id="property-accesslevel"></a> `accessLevel` | `readonly` | () => `Promise`\<[`AccessLevel`](../../../../../generated/storage/types.gen/type-aliases/AccessLevel.md)\> | Current user's access. | - |
+| <a id="property-appearance"></a> `appearance` | `readonly` | () => `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) \| `undefined`\> | Shared icon and color overrides. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-members"></a> `members` | `readonly` | () => `Promise`\<[`User`](../../../users/user/classes/User.md)[]\> | Assigned members. | - |
 | <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | Display name. | - |
@@ -30,6 +31,24 @@ Delete this initiative.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### setAppearance()
+
+> **setAppearance**(`appearance`): `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
+
+Replace shared appearance. Pass {} to reset both overrides.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `appearance` | [`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) |
+
+#### Returns
+
+`Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
 
 ***
 

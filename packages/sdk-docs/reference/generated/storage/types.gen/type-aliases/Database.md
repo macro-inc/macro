@@ -1,6 +1,6 @@
 # Type Alias: Database
 
-> **Database** = \{ `created_at`: `string`; `id`: `string`; `name`: `string`; `owner_id`: `string`; `trashed_at`: `string` \| `null`; \}
+> **Database** = \{ `appearance?`: `null` \| [`EntityAppearance`](EntityAppearance.md); `created_at`: `string`; `id`: `string`; `name`: `string`; `owner_id`: `string`; `trashed_at`: `string` \| `null`; \}
 
 A database: a named collection of tables, owned and shared as one entity.
 
@@ -8,6 +8,7 @@ A database: a named collection of tables, owned and shared as one entity.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-appearance"></a> `appearance?` | `null` \| [`EntityAppearance`](EntityAppearance.md) | - |
 | <a id="property-created_at"></a> `created_at` | `string` | Creation time. |
 | <a id="property-id"></a> `id` | `string` | Identifier. |
 | <a id="property-name"></a> `name` | `string` | Display name. |

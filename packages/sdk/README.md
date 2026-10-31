@@ -147,6 +147,25 @@ await doc.setTeamShare(true);
 await doc.delete(); // soft delete; doc.restore() brings it back
 ```
 
+### Entity appearance
+
+Markdown documents, snippets, initiatives (task projects), forms, databases,
+and routines expose `appearance()` and `setAppearance()`. Appearance is shared
+with other viewers and requires edit access to change.
+
+```ts
+await doc.setAppearance({
+  icon: { kind: 'emoji', value: '🌱' },
+  color: 'green',
+});
+const appearance = await doc.appearance();
+await doc.setAppearance({}); // restore the default icon and color
+```
+
+Writes replace both overrides without changing content timestamps. Omit an
+override to restore its default. Colors use the fixed theme-aware palette and
+only tint Macro icons; native emoji keep their own colors.
+
 ### Listing and searching
 
 List/search methods that can page return a genreator that auto-paginates:

@@ -1,5 +1,6 @@
 import type {
   CreateInitiativeRequest,
+  EntityAppearance,
   InitiativeDetail,
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
@@ -52,6 +53,19 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
 
   /** Display name. */
   readonly name = this.field('name');
+
+  /** Shared icon and color overrides. */
+  readonly appearance = this.field('appearance');
+
+  /** Replace shared appearance. Pass {} to reset both overrides. */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setInitiativeAppearance({
+        path: { initiative_id: this.id },
+        body: appearance,
+      }),
+    );
+  }
 
   /** Owner. */
   readonly owner = this.mappedField('ownerId', (id) =>

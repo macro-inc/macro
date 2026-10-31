@@ -1,11 +1,12 @@
 # Type Alias: DocumentPreviewData
 
-> **DocumentPreviewData** = \{ `document_id`: `string`; `document_name`: `string`; `file_type?`: `string` \| `null`; `owner`: `string`; `sub_type?`: `null` \| [`DocumentPreviewDataSubType`](DocumentPreviewDataSubType.md); `updated_at?`: `string` \| `null`; \}
+> **DocumentPreviewData** = \{ `appearance?`: `null` \| [`EntityAppearance`](EntityAppearance.md); `document_id`: `string`; `document_name`: `string`; `file_type?`: `string` \| `null`; `owner`: `string`; `sub_type?`: `null` \| [`DocumentPreviewDataSubType`](DocumentPreviewDataSubType.md); `updated_at?`: `string` \| `null`; \}
 
 ## Properties
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-appearance"></a> `appearance?` | `null` \| [`EntityAppearance`](EntityAppearance.md) | - |
 | <a id="property-document_id"></a> `document_id` | `string` | The document id |
 | <a id="property-document_name"></a> `document_name` | `string` | The name of the document |
 | <a id="property-file_type"></a> `file_type?` | `string` \| `null` | The file type of the document (e.g. pdf, docx) |

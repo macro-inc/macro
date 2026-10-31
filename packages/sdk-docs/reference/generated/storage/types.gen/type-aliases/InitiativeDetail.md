@@ -1,6 +1,6 @@
 # Type Alias: InitiativeDetail
 
-> **InitiativeDetail** = \{ `createdAt`: `string`; `id`: [`InitiativeId`](InitiativeId.md); `memberIds`: [`MacroUserIdStr`](MacroUserIdStr.md)[]; `name`: `string`; `ownerId`: [`MacroUserIdStr`](MacroUserIdStr.md); `sharePermission`: [`SharePermissionV2`](SharePermissionV2.md); `taskIds`: `string`[]; `updatedAt`: `string`; `userAccessLevel`: [`AccessLevel`](AccessLevel.md); \}
+> **InitiativeDetail** = \{ `appearance?`: `null` \| [`EntityAppearance`](EntityAppearance.md); `createdAt`: `string`; `id`: [`InitiativeId`](InitiativeId.md); `memberIds`: [`MacroUserIdStr`](MacroUserIdStr.md)[]; `name`: `string`; `ownerId`: [`MacroUserIdStr`](MacroUserIdStr.md); `sharePermission`: [`SharePermissionV2`](SharePermissionV2.md); `taskIds`: `string`[]; `updatedAt`: `string`; `userAccessLevel`: [`AccessLevel`](AccessLevel.md); \}
 
 Full initiative returned to a caller, including members, tasks, and share state.
 
@@ -8,6 +8,7 @@ Full initiative returned to a caller, including members, tasks, and share state.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-appearance"></a> `appearance?` | `null` \| [`EntityAppearance`](EntityAppearance.md) | - |
 | <a id="property-createdat"></a> `createdAt` | `string` | When the initiative was created. |
 | <a id="property-id"></a> `id` | [`InitiativeId`](InitiativeId.md) | Opaque identifier. |
 | <a id="property-memberids"></a> `memberIds` | [`MacroUserIdStr`](MacroUserIdStr.md)[] | Member user ids. The owner is never stored here. |

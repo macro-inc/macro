@@ -40,6 +40,18 @@ Re-exports [AgentOptions](../entities/agents/agent/type-aliases/AgentOptions.md)
 
 ***
 
+### AppearanceColor
+
+Re-exports [AppearanceColor](../../generated/storage/types.gen/type-aliases/AppearanceColor.md)
+
+***
+
+### AppearanceIcon
+
+Re-exports [AppearanceIcon](../../generated/storage/types.gen/type-aliases/AppearanceIcon.md)
+
+***
+
 ### ApplyOpsOptions
 
 Re-exports [ApplyOpsOptions](../entities/databases/database/type-aliases/ApplyOpsOptions.md)
@@ -205,6 +217,12 @@ Re-exports [EmailFilterOptions](../entities/email/filter/interfaces/EmailFilterO
 ### EntityAccess
 
 Re-exports [EntityAccess](../entities/sharing/access/classes/EntityAccess.md)
+
+***
+
+### EntityAppearance
+
+Re-exports [EntityAppearance](../../generated/storage/types.gen/type-aliases/EntityAppearance.md)
 
 ***
 

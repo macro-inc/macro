@@ -1,6 +1,6 @@
 # Type Alias: SoupDocumentSoupPropertiesField
 
-> **SoupDocumentSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `branchedFromId?`: `string` \| `null`; `branchedFromVersionId?`: `number` \| `null`; `createdAt`: `string`; `deletedAt?`: `string` \| `null`; `documentFamilyId?`: `number` \| `null`; `documentVersionId`: `number`; `fileType?`: `string` \| `null`; `id`: `string`; `name`: `string`; `ownerId`: `string`; `projectId?`: `string` \| `null`; `sha?`: `string` \| `null`; `subType?`: `null` \| [`SoupDocumentSubType`](SoupDocumentSubType.md); `updatedAt`: `string`; `viewedAt?`: `string` \| `null`; \}
+> **SoupDocumentSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `appearance?`: `null` \| [`EntityAppearance`](EntityAppearance.md); `branchedFromId?`: `string` \| `null`; `branchedFromVersionId?`: `number` \| `null`; `createdAt`: `string`; `deletedAt?`: `string` \| `null`; `documentFamilyId?`: `number` \| `null`; `documentVersionId`: `number`; `fileType?`: `string` \| `null`; `id`: `string`; `name`: `string`; `ownerId`: `string`; `projectId?`: `string` \| `null`; `sha?`: `string` \| `null`; `subType?`: `null` \| [`SoupDocumentSubType`](SoupDocumentSubType.md); `updatedAt`: `string`; `viewedAt?`: `string` \| `null`; \}
 
 A document as displayed in Soup.
 
@@ -12,6 +12,7 @@ A document as displayed in Soup.
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
+| `appearance?` | `null` \| [`EntityAppearance`](EntityAppearance.md) | - |
 | `branchedFromId?` | `string` \| `null` | The id of the document this document branched from |
 | `branchedFromVersionId?` | `number` \| `null` | The id of the version this document branched from This could be either DocumentInstance or DocumentBom id depending on the file type |
 | `createdAt` | `string` | The time the document was created |

@@ -12,6 +12,7 @@ editors can build it and read responses; owners control its audience.
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-access"></a> `access` | `readonly` | () => `Promise`\<[`FormAccess`](../../../../../generated/storage/types.gen/type-aliases/FormAccess.md)\> | The caller's access level. | - |
+| <a id="property-appearance"></a> `appearance` | `readonly` | () => `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) \| `null` \| `undefined`\> | Shared icon and color overrides. | - |
 | <a id="property-audience"></a> `audience` | `readonly` | () => `Promise`\<[`Audience`](../../../../../generated/storage/types.gen/type-aliases/Audience.md)\> | Who may respond. | - |
 | <a id="property-closesat"></a> `closesAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | Scheduled closing time, when set. | - |
 | <a id="property-database"></a> `database` | `readonly` | () => `Promise`\<[`Database`](../../../databases/database/classes/Database.md)\> | The response database. Reading its contents requires separate access. | - |
@@ -132,6 +133,24 @@ Sections in display order.
 #### Returns
 
 `Promise`\<[`FormSection`](../../section/classes/FormSection.md)[]\>
+
+***
+
+### setAppearance()
+
+> **setAppearance**(`appearance`): `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
+
+Replace shared appearance. Pass {} to reset both overrides.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `appearance` | [`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) |
+
+#### Returns
+
+`Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
 
 ***
 

@@ -1050,6 +1050,28 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
 export type ApiPropertyEntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
+ * Semantic tint keys; themes own the rendered colors.
+ */
+export type AppearanceColor = 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'purple' | 'pink';
+
+/**
+ * The source of an entity's custom icon.
+ */
+export type AppearanceIcon = {
+    kind: 'macro';
+    /**
+     * Catalog name without the SVG extension.
+     */
+    name: string;
+} | {
+    kind: 'emoji';
+    /**
+     * Unicode emoji text, not markup or a URL.
+     */
+    value: string;
+};
+
+/**
  * What a committed batch answers: a result per op, and the journal's change
  * for each table version it produced.
  */
@@ -5032,6 +5054,7 @@ export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' |
  * A database: a named collection of tables, owned and shared as one entity.
  */
 export type Database = {
+    appearance?: null | EntityAppearance;
     /**
      * Creation time.
      */
@@ -5558,6 +5581,7 @@ export type DocumentInteractionMetadata = {
 };
 
 export type DocumentMetadata = {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -5692,6 +5716,7 @@ export type DocumentPreview = (DocumentPreviewData & {
 });
 
 export type DocumentPreviewData = {
+    appearance?: null | EntityAppearance;
     /**
      * The document id
      */
@@ -5759,6 +5784,7 @@ export type DocumentResponse = {
 };
 
 export type DocumentResponseMetadata = {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -5978,6 +6004,10 @@ export type DocumentUpdatedMetadata = {
      */
     actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
+    /**
+     * Previous and new presentation overrides, in that order; no content edit occurred.
+     */
+    appearance_change?: Array<EntityAppearance> | null;
     /**
      * The id of the updated document.
      */
@@ -6326,6 +6356,14 @@ export type EnsureCollabSurfaceRequest = {
      * Type of the parent entity access derives from.
      */
     parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+};
+
+/**
+ * An entity's optional icon and tint overrides; absent values retain type defaults.
+ */
+export type EntityAppearance = {
+    color?: null | AppearanceColor;
+    icon?: null | AppearanceIcon;
 };
 
 /**
@@ -7720,6 +7758,7 @@ export type ForeignEntityFilters = {
  * A form: a view of one database table whose rows are its responses.
  */
 export type Form = {
+    appearance?: null | EntityAppearance;
     /**
      * Who may respond.
      */
@@ -7837,7 +7876,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'invalidAppearance' | 'tallyHidden' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -9469,6 +9508,7 @@ export type InitialPropertyValue = {
  * Full initiative returned to a caller, including members, tasks, and share state.
  */
 export type InitiativeDetail = {
+    appearance?: null | EntityAppearance;
     /**
      * When the initiative was created.
      */
@@ -9560,6 +9600,7 @@ export type InitiativeList = {
  * List-row view of an initiative.
  */
 export type InitiativeSummary = {
+    appearance?: null | EntityAppearance;
     /**
      * Opaque identifier.
      */
@@ -13669,6 +13710,7 @@ export type SoupDocumentSoupPropertiesField = {
      */
     properties: Array<SoupProperty>;
 } & {
+    appearance?: null | EntityAppearance;
     /**
      * The id of the document this document branched from
      */
@@ -13883,6 +13925,7 @@ export type SoupInitiativeSoupPropertiesField = {
      */
     properties: Array<SoupProperty>;
 } & {
+    appearance?: null | EntityAppearance;
     /**
      * Creation timestamp.
      */
@@ -19854,6 +19897,33 @@ export type GetDatabaseResponses = {
 
 export type GetDatabaseResponse = GetDatabaseResponses[keyof GetDatabaseResponses];
 
+export type SetDatabaseAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/appearance';
+};
+
+export type SetDatabaseAppearanceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type SetDatabaseAppearanceError = SetDatabaseAppearanceErrors[keyof SetDatabaseAppearanceErrors];
+
+export type SetDatabaseAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetDatabaseAppearanceResponse = SetDatabaseAppearanceResponses[keyof SetDatabaseAppearanceResponses];
+
 export type ShareDatabaseAwarenessData = {
     body: Awareness;
     path: {
@@ -21048,6 +21118,30 @@ export type SaveDocumentHandlerResponses = {
 };
 
 export type SaveDocumentHandlerResponse = SaveDocumentHandlerResponses[keyof SaveDocumentHandlerResponses];
+
+export type SetDocumentAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Document ID
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/appearance';
+};
+
+export type SetDocumentAppearanceErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type SetDocumentAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetDocumentAppearanceResponse = SetDocumentAppearanceResponses[keyof SetDocumentAppearanceResponses];
 
 export type GetDocumentBranchNameData = {
     body?: never;
@@ -22275,6 +22369,33 @@ export type UpdateFormResponses = {
 
 export type UpdateFormResponse = UpdateFormResponses[keyof UpdateFormResponses];
 
+export type SetFormAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Form id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/forms/{id}/appearance';
+};
+
+export type SetFormAppearanceErrors = {
+    400: FormErrorResponse;
+    401: FormErrorResponse;
+    403: FormErrorResponse;
+    404: FormErrorResponse;
+};
+
+export type SetFormAppearanceError = SetFormAppearanceErrors[keyof SetFormAppearanceErrors];
+
+export type SetFormAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetFormAppearanceResponse = SetFormAppearanceResponses[keyof SetFormAppearanceResponses];
+
 export type CollaborateFormData = {
     body?: never;
     path: {
@@ -23123,6 +23244,30 @@ export type UpdateInitiativeResponses = {
 };
 
 export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type SetInitiativeAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/appearance';
+};
+
+export type SetInitiativeAppearanceErrors = {
+    400: unknown;
+    401: unknown;
+    404: unknown;
+};
+
+export type SetInitiativeAppearanceResponses = {
+    200: EntityAppearance;
+};
+
+export type SetInitiativeAppearanceResponse = SetInitiativeAppearanceResponses[keyof SetInitiativeAppearanceResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;

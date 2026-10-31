@@ -1,6 +1,7 @@
 import type { PropertyTargetEntityType as PropertyEntityType } from '../../../generated/properties/types.gen';
 import type {
   DocumentTeamShareResponse,
+  EntityAppearance,
   GetDocumentResponses,
   GetUserDocumentsHandlerData,
   GithubPullRequest,
@@ -289,6 +290,19 @@ export class Document
 
   /** The document's display name. */
   readonly name = this.field('documentName');
+
+  /** Shared icon and color overrides. */
+  readonly appearance = this.field('appearance');
+
+  /** Replace Markdown or snippet appearance. Pass {} to reset both overrides. */
+  setAppearance(appearance: EntityAppearance): Promise<EntityAppearance> {
+    return this.mutate((client) =>
+      client.storage.setDocumentAppearance({
+        path: { document_id: this.id },
+        body: appearance,
+      }),
+    );
+  }
 
   /** The document's file type (e.g. `md`, `pdf`, `docx`). */
   readonly fileType = this.field('fileType');

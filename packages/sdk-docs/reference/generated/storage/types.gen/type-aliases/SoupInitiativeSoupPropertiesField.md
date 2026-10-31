@@ -1,6 +1,6 @@
 # Type Alias: SoupInitiativeSoupPropertiesField
 
-> **SoupInitiativeSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `createdAt`: `string`; `id`: `string`; `name`: `string`; `ownerId`: `string`; `updatedAt`: `string`; `viewedAt?`: `string` \| `null`; \}
+> **SoupInitiativeSoupPropertiesField** = \{ `properties`: [`SoupProperty`](SoupProperty.md)[]; \} & \{ `appearance?`: `null` \| [`EntityAppearance`](EntityAppearance.md); `createdAt`: `string`; `id`: `string`; `name`: `string`; `ownerId`: `string`; `updatedAt`: `string`; `viewedAt?`: `string` \| `null`; \}
 
 An initiative (called a project in the frontend) in the Soup feed.
 
@@ -12,6 +12,7 @@ An initiative (called a project in the frontend) in the Soup feed.
 
 | Name | Type | Description |
 | ------ | ------ | ------ |
+| `appearance?` | `null` \| [`EntityAppearance`](EntityAppearance.md) | - |
 | `createdAt` | `string` | Creation timestamp. |
 | `id` | `string` | Initiative identifier. |
 | `name` | `string` | Initiative display name. |

@@ -20,6 +20,7 @@ inline link to the document.
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | `...` | Access requests and direct user grants. | - | - |
+| <a id="property-appearance"></a> `appearance` | `readonly` | () => `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) \| `undefined`\> | `...` | Shared icon and color overrides. | - | - |
 | <a id="property-branchedfrom"></a> `branchedFrom` | `readonly` | () => `Promise`\<`Document` \| `undefined`\> | `...` | The document this one was branched from, if any. | - | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the document was created. | - | - |
 | <a id="property-deletedat"></a> `deletedAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the document was deleted, if it has been. | - | - |
@@ -395,6 +396,24 @@ Commit uploaded content. Does not retry uncertain writes.
 #### Returns
 
 `Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+***
+
+### setAppearance()
+
+> **setAppearance**(`appearance`): `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
+
+Replace Markdown or snippet appearance. Pass {} to reset both overrides.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `appearance` | [`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) |
+
+#### Returns
+
+`Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
 
 ***
 

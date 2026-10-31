@@ -1,11 +1,12 @@
 # Type Alias: DocumentResponseMetadata
 
-> **DocumentResponseMetadata** = \{ `branchedFromId?`: `string` \| `null`; `branchedFromVersionId?`: `number` \| `null`; `createdAt?`: `string` \| `null`; `documentBom?`: [`BomPart`](BomPart.md)[] \| `null`; `documentFamilyId?`: `number` \| `null`; `documentId`: `string`; `documentName`: `string`; `documentVersionId`: `number`; `fileType?`: `string` \| `null`; `modificationData?`: `unknown`; `owner`: `string`; `sha?`: `string` \| `null`; `subType?`: `null` \| [`DocumentSubType`](DocumentSubType.md); `updatedAt?`: `string` \| `null`; \}
+> **DocumentResponseMetadata** = \{ `appearance?`: `null` \| [`EntityAppearance`](EntityAppearance.md); `branchedFromId?`: `string` \| `null`; `branchedFromVersionId?`: `number` \| `null`; `createdAt?`: `string` \| `null`; `documentBom?`: [`BomPart`](BomPart.md)[] \| `null`; `documentFamilyId?`: `number` \| `null`; `documentId`: `string`; `documentName`: `string`; `documentVersionId`: `number`; `fileType?`: `string` \| `null`; `modificationData?`: `unknown`; `owner`: `string`; `sha?`: `string` \| `null`; `subType?`: `null` \| [`DocumentSubType`](DocumentSubType.md); `updatedAt?`: `string` \| `null`; \}
 
 ## Properties
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-appearance"></a> `appearance?` | `null` \| [`EntityAppearance`](EntityAppearance.md) | - |
 | <a id="property-branchedfromid"></a> `branchedFromId?` | `string` \| `null` | The id of the document this document branched from |
 | <a id="property-branchedfromversionid"></a> `branchedFromVersionId?` | `number` \| `null` | The id of the version this document branched from This could be either DocumentInstance or DocumentBom id depending on the file type |
 | <a id="property-createdat"></a> `createdAt?` | `string` \| `null` | The time the document was created |

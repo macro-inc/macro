@@ -13,6 +13,7 @@ and adds task-specific state.
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | `...` | Access requests and direct user grants. | - | [`Document`](../../../documents/document/classes/Document.md).[`access`](../../../documents/document/classes/Document.md#property-access) |
+| <a id="property-appearance"></a> `appearance` | `readonly` | () => `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) \| `undefined`\> | `...` | Shared icon and color overrides. | - | [`Document`](../../../documents/document/classes/Document.md).[`appearance`](../../../documents/document/classes/Document.md#property-appearance) |
 | <a id="property-branchedfrom"></a> `branchedFrom` | `readonly` | () => `Promise`\<[`Document`](../../../documents/document/classes/Document.md) \| `undefined`\> | `...` | The document this one was branched from, if any. | - | [`Document`](../../../documents/document/classes/Document.md).[`branchedFrom`](../../../documents/document/classes/Document.md#property-branchedfrom) |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the document was created. | - | [`Document`](../../../documents/document/classes/Document.md).[`createdAt`](../../../documents/document/classes/Document.md#property-createdat) |
 | <a id="property-deletedat"></a> `deletedAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the document was deleted, if it has been. | - | [`Document`](../../../documents/document/classes/Document.md).[`deletedAt`](../../../documents/document/classes/Document.md#property-deletedat) |
@@ -469,6 +470,28 @@ Commit uploaded content. Does not retry uncertain writes.
 #### Inherited from
 
 [`Document`](../../../documents/document/classes/Document.md).[`save`](../../../documents/document/classes/Document.md#save)
+
+***
+
+### setAppearance()
+
+> **setAppearance**(`appearance`): `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
+
+Replace Markdown or snippet appearance. Pass {} to reset both overrides.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `appearance` | [`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) |
+
+#### Returns
+
+`Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`setAppearance`](../../../documents/document/classes/Document.md#setappearance)
 
 ***
 

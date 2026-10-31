@@ -1,6 +1,6 @@
 # Type Alias: RoutineTemplate
 
-> **RoutineTemplate** = \{ `active_count`: `number`; `author`: `string`; `created_at`: `string`; `description`: `string`; `id`: `string`; `name`: `string`; `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; `variables`: [`TemplateVariable`](TemplateVariable.md)[]; \}
+> **RoutineTemplate** = \{ `active_count`: `number`; `appearance`: [`EntityAppearance`](EntityAppearance.md); `author`: `string`; `created_at`: `string`; `description`: `string`; `id`: `string`; `name`: `string`; `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; `variables`: [`TemplateVariable`](TemplateVariable.md)[]; \}
 
 A shared routine's snapshot, readable by signed-in users with sharing enabled.
 
@@ -9,6 +9,7 @@ A shared routine's snapshot, readable by signed-in users with sharing enabled.
 | Property | Type | Description |
 | ------ | ------ | ------ |
 | <a id="property-active_count"></a> `active_count` | `number` | Routines activated from this template, including stopped ones. |
+| <a id="property-appearance"></a> `appearance` | [`EntityAppearance`](EntityAppearance.md) | - |
 | <a id="property-author"></a> `author` | `string` | Who shared it: the source routine's owner. |
 | <a id="property-created_at"></a> `created_at` | `string` | - |
 | <a id="property-description"></a> `description` | `string` | - |

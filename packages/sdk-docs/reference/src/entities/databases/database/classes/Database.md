@@ -15,6 +15,7 @@ loads lazily on first field access and is dropped after any mutation.
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
 | <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | Access requests and direct user grants. | - |
+| <a id="property-appearance"></a> `appearance` | `readonly` | () => `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) \| `null` \| `undefined`\> | Shared icon and color overrides. | - |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string`\> | When the database was created. | - |
 | <a id="property-grant"></a> `grant` | `readonly` | () => `Promise`\<[`AccessLevel`](../../../../../generated/storage/types.gen/type-aliases/AccessLevel.md)\> | The caller's access on the database. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
@@ -440,6 +441,24 @@ table with its columns and views. Cached until the next write.
 #### Returns
 
 `Promise`\<[`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md)\>
+
+***
+
+### setAppearance()
+
+> **setAppearance**(`appearance`): `Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
+
+Replace shared appearance. Pass {} to reset both overrides.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `appearance` | [`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md) |
+
+#### Returns
+
+`Promise`\<[`EntityAppearance`](../../../../../generated/storage/types.gen/type-aliases/EntityAppearance.md)\>
 
 ***
 

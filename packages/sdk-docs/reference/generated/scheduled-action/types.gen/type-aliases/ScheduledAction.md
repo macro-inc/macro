@@ -1,11 +1,12 @@
 # Type Alias: ScheduledAction
 
-> **ScheduledAction** = \{ `claimed?`: `string` \| `null`; `configuration_revision`: `number`; `created_at`: `string`; `enabled`: `boolean`; `event_activated_at?`: `string` \| `null`; `id?`: `string` \| `null`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `next_run_at?`: `string` \| `null`; `owner`: `string`; `run_visibility`: [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `template_id?`: `string` \| `null`; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; \}
+> **ScheduledAction** = \{ `appearance?`: [`EntityAppearance`](EntityAppearance.md); `claimed?`: `string` \| `null`; `configuration_revision`: `number`; `created_at`: `string`; `enabled`: `boolean`; `event_activated_at?`: `string` \| `null`; `id?`: `string` \| `null`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `next_run_at?`: `string` \| `null`; `owner`: `string`; `run_visibility`: [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `template_id?`: `string` \| `null`; `trigger`: [`ActionTrigger`](ActionTrigger.md); `updated_at`: `string`; \}
 
 ## Properties
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-appearance"></a> `appearance?` | [`EntityAppearance`](EntityAppearance.md) | Optional presentation overrides; absent values use routine defaults. |
 | <a id="property-claimed"></a> `claimed?` | `string` \| `null` | - |
 | <a id="property-configuration_revision"></a> `configuration_revision` | `number` | Independent of execution bookkeeping in `updated_at`. |
 | <a id="property-created_at"></a> `created_at` | `string` | - |
