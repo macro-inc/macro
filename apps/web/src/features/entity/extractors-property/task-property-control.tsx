@@ -72,14 +72,14 @@ export function TaskPropertyControl(props: {
         return (
           <>
             <Property.Tooltip property={shown()}>
-              <Property.EditTrigger
+              <Property.Pill
                 aria-label={
                   props.property === 'status'
                     ? t('common.changeStatus')
                     : t('common.changePriority')
                 }
                 data-blocks-navigation
-                class="flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-hover touch:size-9"
+                class="flex size-6 shrink-0 items-center justify-center rounded-full border-0 touch:size-9"
               >
                 <Show
                   when={props.property === 'status'}
@@ -111,7 +111,7 @@ export function TaskPropertyControl(props: {
                     class="size-4.5"
                   />
                 </Show>
-              </Property.EditTrigger>
+              </Property.Pill>
             </Property.Tooltip>
             <Property.PopoverEditor />
           </>

@@ -21,6 +21,8 @@ board cards, group and column headers, and pickers: the wide ascending priority
 bars at 30% opacity for no priority, a corner-dashed cube for no project, and a
 filled person in a dashed circular frame for no assignees. No priority uses the
 same color and display box as Low/Medium/High, without additional icon dimming.
+In task and project lists, empty icons other than No priority use 50%
+opacity; empty labels stay at 50% opacity. Populated values stay at full opacity.
 Other empty properties retain the dashed circle. Populated project properties
 use the regular cube icon through `Property.Icon`. Keep these state indicators
 static and readable in compact rows. When composing a project icon separately,
@@ -28,6 +30,9 @@ pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
 Status and Urgent option icons default to 18px in desktop and mobile editors.
 Title property pills and side-panel Status/Priority values use 16px icons;
 other compact displays can override the size explicitly.
+Editable list cells use the shared ghost `Property.Pill` styling. Project hover
+cards use a cube header with the assigned value below it; empty Project hover
+cards retain the one-line empty message.
 
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Measure actual title, tag, and control widths; collapse trailing tag chips only

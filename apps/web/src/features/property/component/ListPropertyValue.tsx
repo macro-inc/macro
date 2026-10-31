@@ -32,7 +32,7 @@ export function ListPropertyValue(props: {
             <Layer depth={2}>
               <div
                 role="presentation"
-                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full text-left hover:bg-surface/50 @max-[840px]/u-list:hidden"
+                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full text-left hover:bg-button-tertiary-hover hover:text-ink @max-[840px]/u-list:hidden"
                 onClick={(event) => event.stopPropagation()}
               >
                 <Property.InlineEditor />
@@ -76,7 +76,7 @@ function ListPropertyCell(props: {
     <>
       <Property.Tooltip property={props.property()}>
         <Layer depth={2}>
-          <Property.EditTrigger class="list-property-cell inline-flex w-full max-w-full min-w-0 items-center gap-1 overflow-hidden rounded-full px-2 py-1.5 text-left leading-tight hover:bg-surface/50 @max-[840px]/u-list:px-1">
+          <Property.Pill class="list-property-cell inline-flex h-auto w-full max-w-full min-w-0 shrink items-center gap-1 overflow-hidden rounded-full border-0 px-2 py-1.5 text-left font-normal leading-tight touch:min-h-0 touch:min-w-0 @max-[840px]/u-list:px-1">
             <Show
               when={!isEmpty()}
               fallback={
@@ -87,7 +87,7 @@ function ListPropertyCell(props: {
                       props.property().propertyDefinitionId ===
                       SYSTEM_PROPERTY_IDS.PRIORITY
                         ? 'text-ink-extra-muted @max-[840px]/u-list:size-4'
-                        : 'size-3.5 text-ink-extra-muted @max-[840px]/u-list:size-4'
+                        : 'size-3.5 text-ink-extra-muted opacity-50 @max-[840px]/u-list:size-4'
                     }
                   />
                   <span class="min-w-0 flex-1 truncate opacity-50 @max-[840px]/u-list:hidden">
@@ -136,7 +136,7 @@ function ListPropertyCell(props: {
               />
             </Show>
             <Property.Caret class="@max-[840px]/u-list:hidden" />
-          </Property.EditTrigger>
+          </Property.Pill>
         </Layer>
       </Property.Tooltip>
       <Property.PopoverEditor

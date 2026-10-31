@@ -2,6 +2,7 @@ import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
+import { useRegisterPriorityCollapseItem } from '@components/app/split-layout/layoutUtils';
 import {
   Entity,
   isProjectContainedEntity,
@@ -181,14 +182,21 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
               </Show>
             </span>
             <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-              {(entity) => (
-                <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5">
-                  <ProjectBreadCrumb
-                    entity={entity()}
-                    onClick={props.onProjectClick}
-                  />
-                </span>
-              )}
+              {(entity) => {
+                const collapsed = useRegisterPriorityCollapseItem(
+                  collapseController.collapser,
+                  { id: 'folder', priority: Number.MIN_SAFE_INTEGER }
+                );
+                return (
+                  <span class="ph-no-capture text-ink text-xs shrink-0">
+                    <ProjectBreadCrumb
+                      entity={entity()}
+                      onClick={props.onProjectClick}
+                      collapsed={collapsed()}
+                    />
+                  </span>
+                );
+              }}
             </Show>
 
             <Show when={props.referencePropertyIds}>

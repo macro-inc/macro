@@ -90,10 +90,16 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 The Project column shows the linked project's name when one project is assigned,
 and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
-to read the full value. Tags collapse one at a time into the existing overflow
-chip only when the actual title, controls, and tags no longer fit. Short titles
-keep their tags visible; long titles truncate only after tag collapse. Open the
-overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
+to read the full value.
+Editable property controls use ghost-button hover styling. Empty values are
+dimmed, without adding opacity to the already-muted No priority icon. Folder
+and assigned Project hover cards put their heading above the value; empty
+Project keeps its simple one-line message.
+When the title area runs out of room, the folder path
+collapses to a clickable icon with a full-path tooltip first, then tags collapse
+one at a time into the existing overflow chip. Short titles keep their labels and
+tags visible; long titles truncate only after the folder and tags collapse.
+Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 An open picker or nested tag editor stays mounted while resizing. The share
 indicator remains immediately beside the title whenever it is shown.
 Compact desktop rows keep tags after the title and before the trailing properties;

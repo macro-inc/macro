@@ -27,5 +27,10 @@ the remaining count; do not replace the first assignee with a generic people ico
 Keep the collapsed tag-overflow chip after the title in narrow task rows,
 including phones, with the existing picker and hover actions.
 
+`ProjectBreadCrumb.collapsed` keeps a keyboard-accessible, borderless ghost folder
+button. Its hover card shows the folder heading and full path on separate rows.
+Task grids use their existing measured overflow controller to collapse folder
+labels before tags or title truncation.
+
 `OwnerLabel.iconOnly` retains owner names as accessible text and hover titles for
 users, bots, teams, and unknown owners; ordinary owner labels remain unchanged.

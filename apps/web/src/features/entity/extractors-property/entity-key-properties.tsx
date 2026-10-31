@@ -209,17 +209,11 @@ function KeyPropertiesRow(props: {
                 <>
                   <Property.Tooltip property={shown()}>
                     <Layer depth={2}>
-                      <Property.EditTrigger
+                      <Property.Pill
                         class={cn(
-                          /* border, not ring: Tailwind rings are box-shadows and
-                             would fight the glass shadow */
-                          'flex items-center gap-1 min-w-0 border border-edge-muted/50 glass',
+                          'flex h-auto items-center gap-1 min-w-0 border-0 font-normal touch:min-h-0 touch:min-w-0',
                           'px-1.5 py-1 leading-tight text-left rounded-full',
-                          '@max-2xl/u-list:border-0 @max-2xl/u-list:glass-none @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
-                          {
-                            'hover:bg-hover': ctx.canEdit,
-                            'text-ink-extra-muted': isEmpty(),
-                          }
+                          '@max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center'
                         )}
                       >
                         <div class="h-4" />
@@ -241,14 +235,16 @@ function KeyPropertiesRow(props: {
                               propertyDefinitionId={
                                 shown().propertyDefinitionId
                               }
-                              class={
+                              class={cn(
                                 hasStatusOrUrgentIcon()
                                   ? 'size-4.5'
                                   : shown().propertyDefinitionId ===
                                       SYSTEM_PROPERTY_IDS.PRIORITY
                                     ? '@max-2xl/u-list:size-4 mobile:size-5'
-                                    : 'size-3.5 @max-2xl/u-list:size-4 mobile:size-5'
-                              }
+                                    : 'size-3.5 @max-2xl/u-list:size-4 mobile:size-5',
+                                shown().propertyDefinitionId !==
+                                  SYSTEM_PROPERTY_IDS.PRIORITY && 'opacity-50'
+                              )}
                             />
                           </Match>
                           <Match when={isMultiUserEntity()}>
@@ -287,7 +283,7 @@ function KeyPropertiesRow(props: {
                         <Show when={props.showCaret ?? true}>
                           <Property.Caret class="@max-2xl/u-list:hidden" />
                         </Show>
-                      </Property.EditTrigger>
+                      </Property.Pill>
                     </Layer>
                   </Property.Tooltip>
                   <Property.PopoverEditor
