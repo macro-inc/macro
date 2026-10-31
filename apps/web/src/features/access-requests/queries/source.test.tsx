@@ -199,6 +199,16 @@ it('drops a grants failure from before the viewer lost access', async () => {
   expect(source.error()).toBeUndefined();
 });
 
+it('refreshes grants from the refetched state, not the cached one', async () => {
+  const { source } = mount({ accessLevel: null });
+  expect(mocks.grants).not.toHaveBeenCalled();
+  snapshot.refetch = async () => ({
+    data: { ...snapshot.data, accessLevel: 'comment' },
+  });
+  await source.refresh();
+  expect(mocks.grants).toHaveBeenCalledOnce();
+});
+
 it('keeps loading while a new mount refetches a cached state', () => {
   const { source } = mount({ accessLevel: 'view' });
   Object.assign(snapshot, { isFetching: true, isFetchedAfterMount: false });
