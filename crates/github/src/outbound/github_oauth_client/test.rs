@@ -281,10 +281,20 @@ async fn token_check_treats_a_secondary_rate_limit_as_throttling() {
 
 #[tokio::test]
 async fn a_secondary_rate_limit_without_headers_is_throttling() {
+    // Primary quota left; its reset is an hour away and says nothing about
+    // when the secondary limit lifts.
+    let reset = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 3600;
     let secondary = || {
-        wiremock::ResponseTemplate::new(403).set_body_string(
-            r#"{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}"#,
-        )
+        wiremock::ResponseTemplate::new(403)
+            .insert_header("x-ratelimit-remaining", "4999")
+            .insert_header("x-ratelimit-reset", reset.to_string().as_str())
+            .set_body_string(
+                r#"{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}"#,
+            )
     };
     let throttled = Some(UpstreamFailure::RateLimited { retry_after: None });
 

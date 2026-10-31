@@ -49,15 +49,19 @@ fn transport_error(error: reqwest::Error) -> GithubError {
 /// real refusal.
 /// See https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
 fn throttling(status: StatusCode, headers: &HeaderMap, body: &str) -> Option<UpstreamFailure> {
+    let quota_exhausted = headers
+        .get("x-ratelimit-remaining")
+        .is_some_and(|remaining| remaining == "0");
     let throttled = status == StatusCode::TOO_MANY_REQUESTS
         || (status == StatusCode::FORBIDDEN
             && (headers.contains_key(RETRY_AFTER)
-                || headers
-                    .get("x-ratelimit-remaining")
-                    .is_some_and(|remaining| remaining == "0")
+                || quota_exhausted
                 || body.to_ascii_lowercase().contains("secondary rate limit")));
+    // `x-ratelimit-reset` is when the primary quota refills, so it only says
+    // when to retry once that quota is spent.
     throttled.then(|| UpstreamFailure::RateLimited {
-        retry_after: upstream_error::retry_after(headers).or_else(|| rate_limit_reset(headers)),
+        retry_after: upstream_error::retry_after(headers)
+            .or_else(|| quota_exhausted.then(|| rate_limit_reset(headers)).flatten()),
     })
 }
 
