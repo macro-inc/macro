@@ -77,3 +77,104 @@ scoped to the calling customer; no customer ever sees another's users.
 
 Cross-customer operator views; user names or emails (Connect only knows
 opaque ids); deploying; real vendor consent.
+
+## Result
+
+### Changed
+
+- API: `connect/services/connect_api/src/{domain.rs,main.rs,outbound.rs,test.rs}`,
+  `migrations/20261031170401_list_customer_connections.sql`, and `AGENTS.md`.
+  Added customer-scoped connection, summary, and user routes. The user route
+  pages by `MIN(created_at), external_user_id`, then returns every connection
+  for each selected user in one SQL query. Filters select users with a matching
+  connection without trimming their returned connections. Added OpenAPI,
+  spans, a concurrent connection index, and template0 database tests.
+- Client: `connect/crates/connect_client/src/{lib.rs,wire.rs,test.rs}` and
+  `AGENTS.md`. Added shared wire types, `list_connections`,
+  `connections_summary`, `list_users`, and all-pages helpers with HTTP tests.
+- Demo: `connect/services/connect_demo/{Cargo.toml,AGENTS.md}` and
+  `src/{main.rs,style.css,test.rs}`. Added the dashboard, complete user rows
+  from `/v1/users`, filters, pagination, responsive styles, and handler tests.
+- Integration: `connect/tests/connect_integration/src/main.rs` and `AGENTS.md`.
+  Extended `connections_listing` to exercise both customer listing routes.
+- Docs and generated artifacts: `connect/docs/plan.md`, this Result, and
+  `Cargo.lock`. No other files outside `connect/` changed.
+
+### Checks
+
+| Check | Exact outcome |
+| --- | --- |
+| `cargo nextest run --all-features -p connect_api -p connect_client -p connect_demo` | Passed: 36 tests, 0 skipped. |
+| `cargo clippy -p connect_api -p connect_client -p connect_demo -p connect_integration --all-features --all-targets -- -D warnings` | Passed with no warnings. |
+| `cargo x deps --check` | Passed. |
+| `just hakari` | Passed; generated dependency artifacts remained in sync. |
+| `just check` | Passed, including format, ast-grep, PII scan, and scanner tests. |
+| Local integration runner in a fresh Compose project | Passed: health, catalog, auth, empty connections, `connections_listing` including `/v1/users`, client metadata, session rules, four authorize checks, and unconnected gateway. `integration.sh local` first hit occupied port 8080, then an old migration checksum in its existing volume; the fresh project ran the same runner successfully. |
+| Isolated Compose dashboard smoke test | Passed. One user with two directly seeded connections appeared in one row with both app badges. Tiles: `users=1`, `connections=2`, `needs_reauth=1`. Containers were stopped without removing the volume. |
+| `git diff --check` | Passed. |
+| SQLx query review | Passed: both listings have customer predicates, stable keyset orders, limits, bound filters, and select only expiry metadata from grants. The user route uses one SQL query per page. Summary queries are customer-scoped. `just prepare_db` was skipped because Connect uses runtime-checked queries by its settled decision in `connect/docs/decisions.md`. |
+| Browser and Tempo trace checks | Not run: no browser tool or binary was available, and the isolated Compose stack did not configure an OTLP exporter. The HTTP dashboard response and integration routes were exercised locally. |
+| Repository audit | Passed: the auditor found no remaining code or documentation issue. |
+
+The smoke test created a local customer using `create-customer` and selected its
+ID through its temporary key ID. The direct seed SQL was:
+
+```sql
+INSERT INTO connections (id, customer_id, external_user_id, app_id, status, scopes, created_at)
+SELECT '019a0000-0000-7000-8000-000000000001'::uuid, customer_id, 'dashboard-user', 'notion',
+       'active', ARRAY[]::text[], '2026-10-20T09:00:00Z'::timestamptz
+FROM customer_api_keys WHERE id = :'key_id'::uuid
+ON CONFLICT (id) DO NOTHING;
+INSERT INTO connections (id, customer_id, external_user_id, app_id, status, scopes, created_at)
+SELECT '019a0000-0000-7000-8000-000000000002'::uuid, customer_id, 'dashboard-user', 'linear',
+       'needs_reauth', ARRAY[]::text[], '2026-10-30T09:00:00Z'::timestamptz
+FROM customer_api_keys WHERE id = :'key_id'::uuid
+ON CONFLICT (id) DO NOTHING;
+```
+
+### Open questions
+
+None.
+
+### Proposed commits
+
+1. `feat(connect): list customer connections and summary counts`
+
+   Why: Customers need to discover connections without knowing user IDs.
+
+   What: Add scoped paginated connection and complete user routes, summary,
+   client contracts, index, integration scenario, tests, and API documentation.
+
+2. `feat(connect-demo): add customer dashboard`
+
+   Why: The demo needs a view of customer connection activity.
+
+   What: Render summary tiles, per-app counts, complete paginated user rows,
+   filters, responsive styles, and handler tests.
+
+## Review (planner)
+
+Good work; the pagination question was the right catch. Decision: add a
+user-keyed listing and build the dashboard on it. Keep `/v1/connections` and
+the summary as they are.
+
+1. **`GET /v1/users?limit=&cursor=&app_id=&status=`**: the customer's users,
+   one item per `external_user_id`: `external_user_id`, `first_connected_at`
+   (min `created_at`), and `connections` (every connection of that user, same
+   fields as `/v1/connections` items, ordered by `app_id`). Ordered by
+   `first_connected_at DESC, external_user_id DESC`, keyset-paginated with an
+   opaque cursor; `limit` counts users (default 100, max 500). `app_id` and
+   `status` select users having at least one matching connection, and those
+   users still return all their connections. Same layering, OpenAPI, spans,
+   and errors as the other routes; one query per page (aggregate in SQL,
+   e.g. `json_agg` or two bounded queries), not N+1.
+2. **Client**: `list_users(UsersQuery) -> UsersPage` plus an all-pages helper.
+3. **Dashboard**: user rows come from `/v1/users`, so each row is complete;
+   "more" follows its cursor. Remove the grouping-of-connection-pages logic.
+4. **Tests**: users never split across pages (a user with connections created
+   far apart in time stays whole), ordering, filters keep all of a matching
+   user's connections, customer isolation, bad cursor. Extend
+   `connections_listing` (or add `users_listing`) in the integration runner.
+
+Then finish and replace the Result with final outcomes, including the Compose
+smoke with a user who has two connections.
