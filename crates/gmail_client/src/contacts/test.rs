@@ -14,7 +14,7 @@ fn client(server: &MockServer) -> GmailClient {
 }
 
 #[tokio::test]
-async fn connections_paginate_and_return_the_final_sync_token() {
+async fn each_connections_page_is_one_request_that_returns_the_next_page_token() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/people/me/connections"))
@@ -39,16 +39,22 @@ async fn connections_paginate_and_return_the_final_sync_token() {
         .mount(&server)
         .await;
 
-    let (people, sync_token) = list_connections(&client(&server), "token", None)
+    let first = get_connections_page(&client(&server), "token", None, None)
         .await
-        .expect("connections should decode");
+        .expect("first page should decode");
+    assert_eq!(first.connections.len(), 1);
+    assert_eq!(first.next_page_token.as_deref(), Some("page-2"));
+    assert_eq!(first.next_sync_token, None);
 
-    assert_eq!(people.len(), 2);
-    assert_eq!(sync_token, "sync-final");
+    let last = get_connections_page(&client(&server), "token", None, Some("page-2"))
+        .await
+        .expect("last page should decode");
+    assert_eq!(last.next_page_token, None);
+    assert_eq!(last.next_sync_token.as_deref(), Some("sync-final"));
 }
 
 #[tokio::test]
-async fn other_contacts_incremental_sync_paginates() {
+async fn other_contacts_pages_send_the_sync_token_with_every_page() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/otherContacts"))
@@ -74,48 +80,16 @@ async fn other_contacts_incremental_sync_paginates() {
         .mount(&server)
         .await;
 
-    let (people, sync_token) = list_other_contacts(&client(&server), "token", Some("old-sync"))
+    let first = get_other_contacts_page(&client(&server), "token", Some("old-sync"), None)
         .await
-        .expect("other contacts should decode");
+        .expect("first page should decode");
+    assert_eq!(first.next_page_token.as_deref(), Some("page-2"));
 
-    assert_eq!(people.len(), 2);
-    assert_eq!(sync_token, "new-sync");
-}
-
-#[tokio::test]
-async fn missing_connections_sync_token_is_an_invalid_response() {
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/people/me/connections"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "connections": []
-        })))
-        .mount(&server)
-        .await;
-
-    let error = list_connections(&client(&server), "token", None)
+    let last = get_other_contacts_page(&client(&server), "token", Some("old-sync"), Some("page-2"))
         .await
-        .expect_err("missing sync token should fail");
-
-    assert!(matches!(error, GmailApiHttpError::InvalidResponse(_)));
-}
-
-#[tokio::test]
-async fn missing_other_contacts_sync_token_is_an_invalid_response() {
-    let server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/otherContacts"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "otherContacts": []
-        })))
-        .mount(&server)
-        .await;
-
-    let error = list_other_contacts(&client(&server), "token", None)
-        .await
-        .expect_err("missing sync token should fail");
-
-    assert!(matches!(error, GmailApiHttpError::InvalidResponse(_)));
+        .expect("last page should decode");
+    assert_eq!(last.other_contacts.len(), 1);
+    assert_eq!(last.next_sync_token.as_deref(), Some("new-sync"));
 }
 
 #[tokio::test]
