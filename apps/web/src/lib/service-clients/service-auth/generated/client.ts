@@ -1835,6 +1835,16 @@ export type setGithubPullRequestStateResponse500 = {
   status: 500;
 };
 
+export type setGithubPullRequestStateResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type setGithubPullRequestStateResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type setGithubPullRequestStateResponseSuccess =
   setGithubPullRequestStateResponse200 & {
     headers: Headers;
@@ -1846,6 +1856,8 @@ export type setGithubPullRequestStateResponseError = (
   | setGithubPullRequestStateResponse422
   | setGithubPullRequestStateResponse428
   | setGithubPullRequestStateResponse500
+  | setGithubPullRequestStateResponse502
+  | setGithubPullRequestStateResponse503
 ) & {
   headers: Headers;
 };

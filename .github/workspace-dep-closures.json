@@ -899,6 +899,7 @@
       "crates/trigger_context",
       "crates/unfurl",
       "crates/universal_input",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/agent_harness_service",
@@ -2424,6 +2425,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_language",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -4198,6 +4200,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/work_feed",
       "crates/workspace-hack"
@@ -8654,6 +8657,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -12004,6 +12008,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],

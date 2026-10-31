@@ -2771,6 +2771,8 @@ export type SetGithubPullRequestStateErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type SetGithubPullRequestStateError = SetGithubPullRequestStateErrors[keyof SetGithubPullRequestStateErrors];
