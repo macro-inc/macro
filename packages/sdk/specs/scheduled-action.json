@@ -886,6 +886,10 @@
         "description": "Canonical client configuration. Ownership and execution state are server-owned.",
         "required": ["name", "trigger", "kind", "task", "enabled"],
         "properties": {
+          "description": {
+            "type": "string",
+            "description": "What the routine is for, in the owner's words; empty when unset."
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -910,9 +914,13 @@
       },
       "ActionConfigurationUpdate": {
         "type": "object",
-        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` keeps\nit too, so clients that predate the setting do not reset it.",
+        "description": "Canonical configuration replacement. Activation has its own endpoint, so\nomitting `enabled` keeps the stored value; omitting `run_visibility` or\n`description` keeps them too, so clients that predate them do not reset them.",
         "required": ["name", "trigger", "kind", "task"],
         "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "An empty string clears it."
+          },
           "enabled": {
             "type": ["boolean", "null"],
             "description": "Still sent by clients deployed before the activation endpoint.",
@@ -1054,6 +1062,7 @@
       },
       "AgentTask": {
         "type": "object",
+        "description": "The single agent task: how routines were stored before they had steps,\nand still how a routine that is only an agent is saved.",
         "required": ["prompt", "user_prompt"],
         "properties": {
           "agent": {
@@ -1086,10 +1095,12 @@
             ]
           },
           "prompt": {
-            "type": "string"
+            "type": "string",
+            "description": "Instructions placed before the user's."
           },
           "user_prompt": {
-            "type": "string"
+            "type": "string",
+            "description": "What the agent should do."
           }
         }
       },
@@ -1100,9 +1111,11 @@
         "properties": {
           "bot_id": {
             "type": "string",
-            "format": "uuid"
+            "format": "uuid",
+            "description": "The agent's bot id."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "AiAdmissionErrorBody": {
         "type": "object",
@@ -1271,6 +1284,11 @@
               }
             ]
           },
+          "configuration_revision": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The routine configuration the run used. Step paths only name the same\nsteps in that configuration; a later edit can put another step there."
+          },
           "error": {
             "type": ["string", "null"]
           },
@@ -1283,6 +1301,13 @@
                 "$ref": "#/components/schemas/ExecutionResource"
               }
             ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "What each step that ran did, in order: decisions, tool calls, the agent."
           },
           "version": {
             "type": "integer",
@@ -1580,6 +1605,10 @@
             "type": "string",
             "format": "date-time"
           },
+          "description": {
+            "type": "string",
+            "description": "What the routine is for, in the owner's words; empty when unset."
+          },
           "enabled": {
             "type": "boolean",
             "description": "When false, automatic dispatch skips this action. `run_now` remains\navailable regardless."
@@ -1637,6 +1666,17 @@
           {
             "type": "object",
             "properties": {
+              "last_run": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ActionExecutionRecord",
+                    "description": "The routine's latest run. Listing includes it for routines the caller\nowns; other responses omit it."
+                  }
+                ]
+              },
               "schedule": {
                 "type": ["string", "null"],
                 "description": "Deprecated: use `trigger.schedule`. Present only for cron actions.",

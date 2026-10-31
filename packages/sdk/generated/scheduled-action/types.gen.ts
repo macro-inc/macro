@@ -8,6 +8,10 @@ export type ClientOptions = {
  * Canonical client configuration. Ownership and execution state are server-owned.
  */
 export type ActionConfiguration = {
+    /**
+     * What the routine is for, in the owner's words; empty when unset.
+     */
+    description?: string;
     enabled: boolean;
     kind: ActionKind;
     name: string;
@@ -23,10 +27,14 @@ export type ActionConfiguration = {
 
 /**
  * Canonical configuration replacement. Activation has its own endpoint, so
- * omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
- * it too, so clients that predate the setting do not reset it.
+ * omitting `enabled` keeps the stored value; omitting `run_visibility` or
+ * `description` keeps them too, so clients that predate them do not reset them.
  */
 export type ActionConfigurationUpdate = {
+    /**
+     * An empty string clears it.
+     */
+    description?: string | null;
     /**
      * Still sent by clients deployed before the activation endpoint.
      *
@@ -93,6 +101,10 @@ export type AgentMcpServer = {
     server_name: string;
 };
 
+/**
+ * The single agent task: how routines were stored before they had steps,
+ * and still how a routine that is only an agent is saved.
+ */
 export type AgentTask = {
     agent?: null | AgentTaskAgent;
     /**
@@ -101,7 +113,13 @@ export type AgentTask = {
      */
     mcp_servers?: Array<AgentMcpServer>;
     model?: null | RoutineModelId;
+    /**
+     * Instructions placed before the user's.
+     */
     prompt: string;
+    /**
+     * What the agent should do.
+     */
     user_prompt: string;
 };
 
@@ -109,6 +127,9 @@ export type AgentTask = {
  * A persona selection, independent of its runtime and current default model.
  */
 export type AgentTaskAgent = {
+    /**
+     * The agent's bot id.
+     */
     bot_id: string;
 };
 
@@ -206,8 +227,19 @@ export type ExecutionResourceType = 'chat' | 'agent';
  */
 export type ExecutionResult = {
     condition?: null | ConditionResult;
+    /**
+     * The routine configuration the run used. Step paths only name the same
+     * steps in that configuration; a later edit can put another step there.
+     */
+    configuration_revision?: number | null;
     error?: string | null;
     resource?: null | ExecutionResource;
+    /**
+     * What each step that ran did, in order: decisions, tool calls, the agent.
+     */
+    steps?: Array<{
+        [key: string]: unknown;
+    }>;
     version: number;
 };
 
@@ -356,6 +388,10 @@ export type ScheduledAction = {
     configuration_revision: number;
     created_at: string;
     /**
+     * What the routine is for, in the owner's words; empty when unset.
+     */
+    description?: string;
+    /**
      * When false, automatic dispatch skips this action. `run_now` remains
      * available regardless.
      */
@@ -398,6 +434,7 @@ export type ScheduledAction = {
  * responses omit legacy fields rather than inventing a schedule or timezone.
  */
 export type ScheduledActionResponse = ScheduledAction & {
+    last_run?: null | ActionExecutionRecord;
     /**
      * Deprecated: use `trigger.schedule`. Present only for cron actions.
      *

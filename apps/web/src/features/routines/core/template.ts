@@ -7,6 +7,7 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import type { ScheduleDraft } from './draft';
+import { mapSteps, type StepDraft } from './routine-steps';
 
 const MENTION_PATTERN =
   /<m-(user|document)-mention>([\s\S]*?)<\/m-\1-mention>/g;
@@ -55,6 +56,164 @@ function isSameUser(mention: { id: string; email?: string }, userId: string) {
   );
 }
 
+/** A JSON value with every string in it passed through `fill`. */
+function mapStrings(value: unknown, fill: (text: string) => string): unknown {
+  if (typeof value === 'string') return fill(value);
+  if (Array.isArray(value)) return value.map((item) => mapStrings(item, fill));
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, mapStrings(item, fill)])
+    );
+  return value;
+}
+
+/**
+ * The steps with every text that can mention people or items passed through
+ * `fill`: each agent's instructions and each tool step's text arguments,
+ * branches included. Sharing reads references from the same texts that
+ * activation fills in.
+ */
+export function mapStepTexts(
+  steps: StepDraft[],
+  fill: (text: string) => string
+): StepDraft[] {
+  return mapSteps(steps, (step) =>
+    match(step)
+      .returnType<StepDraft>()
+      .with({ kind: 'agent' }, (agent) => ({
+        ...agent,
+        instructions: fill(agent.instructions),
+      }))
+      .with({ kind: 'tool' }, (tool) => ({
+        ...tool,
+        arguments: mapStrings(tool.arguments, fill) as Record<string, unknown>,
+      }))
+      .with({ kind: 'if' }, { kind: 'choose' }, (decision) => decision)
+      .exhaustive()
+  );
+}
+
+/** Every text in a routine that can mention people or items. */
+export function routineTexts(draft: ScheduleDraft): string[] {
+  if (!draft.steps) return [draft.basePrompt ?? '', draft.prompt];
+  const texts: string[] = [];
+  mapStepTexts(draft.steps, (text) => {
+    texts.push(text);
+    return text;
+  });
+  return texts;
+}
+
+/** An item a tool step acts on by its fixed ID, not the trigger's. */
+export type StepDestination = { id: string; blockName: string };
+
+const PLACEHOLDER = /^\{\{.*\}\}$/;
+
+function fixedId(value: unknown): string | undefined {
+  return typeof value === 'string' && value && !PLACEHOLDER.test(value)
+    ? value
+    : undefined;
+}
+
+/** The fixed channel, folder or document a tool step's arguments name. */
+export function argumentDestinations(
+  args: Record<string, unknown>
+): StepDestination[] {
+  const item = (id: unknown, type: unknown): StepDestination[] => {
+    const fixed = fixedId(id);
+    if (!fixed) return [];
+    return type === 'channel'
+      ? [{ id: fixed, blockName: 'channel' }]
+      : type === 'document'
+        ? [{ id: fixed, blockName: 'md' }]
+        : [];
+  };
+  return [
+    ...item(args.channel_id, 'channel'),
+    ...(fixedId(args.projectId)
+      ? [{ id: args.projectId as string, blockName: 'project' }]
+      : []),
+    ...item(args.entity_id, args.entity_type),
+    ...item(args.entityId, args.entityType),
+    ...item(args.documentId, 'document'),
+  ];
+}
+
+/**
+ * A step's arguments as the activator's routine runs them. People the author
+ * assigned as themselves become the activator (unless the author shared
+ * themselves as "same for everyone"), and fixed destinations the activator
+ * can't open are cleared, so the step asks for one instead of failing.
+ */
+export function fillStepArguments(
+  args: Record<string, unknown>,
+  context: {
+    authorId: string;
+    activator: Activator;
+    keepAuthor: boolean;
+    inaccessible: ReadonlySet<string>;
+    /** Tag options the activator can apply; undefined if unknown. */
+    tags?: ReadonlySet<string>;
+  }
+): { args: Record<string, unknown>; cleared: boolean } {
+  const filled: Record<string, unknown> = { ...args };
+  if (Array.isArray(args.entity_refs) && !context.keepAuthor) {
+    filled.entity_refs = args.entity_refs.map((ref: unknown) =>
+      ref &&
+      typeof ref === 'object' &&
+      'entityType' in ref &&
+      ref.entityType === 'user' &&
+      'entityId' in ref &&
+      typeof ref.entityId === 'string' &&
+      isSameUser({ id: ref.entityId }, context.authorId)
+        ? { ...ref, entityId: context.activator.userId }
+        : ref
+    );
+  }
+  let cleared = false;
+  const clear = (key: string) => {
+    const id = fixedId(args[key]);
+    if (id && context.inaccessible.has(id)) {
+      cleared = true;
+      if (key === 'projectId') delete filled[key];
+      else filled[key] = '';
+    }
+  };
+  for (const key of [
+    'channel_id',
+    'projectId',
+    'entity_id',
+    'entityId',
+    'documentId',
+  ])
+    clear(key);
+  // Another person's personal tags can't be applied; the step asks for one.
+  const tags = context.tags;
+  if (tags && Array.isArray(args.add_option_ids)) {
+    const kept = args.add_option_ids.filter(
+      (id: unknown) => typeof id === 'string' && tags.has(id)
+    );
+    if (kept.length < args.add_option_ids.length) {
+      cleared = true;
+      filled.add_option_ids = kept;
+    }
+  }
+  return { args: filled, cleared };
+}
+
+/** Whether the author shared themselves as "same for everyone". */
+export function keepsAuthor(
+  variables: readonly TemplateVariable[],
+  authorId: string
+): boolean {
+  return variables.some(
+    (variable) =>
+      variable.kind === 'user' &&
+      variable.fill === 'shared' &&
+      isSameUser({ id: variable.id }, authorId)
+  );
+}
+
 /** The ID a variable is keyed by within one template. */
 export function variableKey(variable: TemplateVariable): string {
   return match(variable)
@@ -69,13 +228,17 @@ export function variableKey(variable: TemplateVariable): string {
  * in as whoever activates it, and every other reference stays the same.
  */
 export function extractTemplateVariables(args: {
-  prompt: string;
+  /** Every text that can mention people or items (`routineTexts`). */
+  texts: readonly string[];
   /** The time zone its schedules run in; absent for event-only routines. */
   timezone: string | undefined;
   authorId: string;
 }): TemplateVariable[] {
   const variables = new Map<string, TemplateVariable>();
-  for (const [, kind, json] of args.prompt.matchAll(MENTION_PATTERN)) {
+  const mentions = args.texts.flatMap((text) => [
+    ...text.matchAll(MENTION_PATTERN),
+  ]);
+  for (const [, kind, json] of mentions) {
     const mention = parseMention(kind, json);
     if (!mention || variables.has(mention.id)) continue;
     variables.set(
@@ -133,7 +296,7 @@ export function templateShareBody(args: {
   return {
     description: args.shared?.description ?? '',
     variables: extractTemplateVariables({
-      prompt: args.draft?.prompt ?? '',
+      texts: args.draft ? routineTexts(args.draft) : [],
       timezone: routineTimezone(args.draft),
       authorId: args.authorId,
     }).map((variable) => ({

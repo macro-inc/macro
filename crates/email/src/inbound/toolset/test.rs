@@ -270,3 +270,193 @@ fn leading_whitespace_before_the_tag_still_counts_as_html() {
 
     assert!(decode_composer_html(&encoded).is_some());
 }
+
+#[test]
+fn outlook_system_labels_become_mailbox_states() {
+    use crate::domain::models::mailbox_action::MailboxAction;
+    use crate::inbound::toolset::update_thread_labels::outlook_mailbox_state;
+
+    let state = |label: &str, add: bool| outlook_mailbox_state(label, add).map(|r| r.ok());
+    assert!(matches!(
+        state("INBOX", false),
+        Some(Some(MailboxAction::Archived(true)))
+    ));
+    assert!(matches!(
+        state("unread", false),
+        Some(Some(MailboxAction::Read(true)))
+    ));
+    assert!(matches!(
+        state("STARRED", true),
+        Some(Some(MailboxAction::Flagged(true)))
+    ));
+    assert!(matches!(
+        state("SPAM", true),
+        Some(Some(MailboxAction::Junk(true)))
+    ));
+    // No Outlook equivalent: a clear failure, not "no label named".
+    assert!(matches!(
+        outlook_mailbox_state("IMPORTANT", true),
+        Some(Err(_))
+    ));
+    // Anything else is an Outlook category, labelled as before.
+    assert!(outlook_mailbox_state("Finance", true).is_none());
+}
+
+/// An access service that is never reached, for calls rejected before any
+/// access check.
+mod unreachable_access {
+    use entity_access::domain::models::{
+        AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EntityAccessReceipt,
+        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+    };
+    use entity_access::domain::ports::EntityAccessService;
+    use macro_user_id::lowercased::Lowercase;
+    use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
+    use uuid::Uuid;
+
+    #[derive(Clone)]
+    pub(super) struct UnreachableAccessService;
+
+    impl EntityAccessService for UnreachableAccessService {
+        async fn generate_entity_access_receipt<T: RequiredPermission>(
+            &self,
+            _user_id: &MacroUserId<Lowercase<'_>>,
+            _user_org_id: Option<i64>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> std::result::Result<EntityAccessReceipt<T>, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
+            &self,
+            _bot_id: BotId,
+            _scope: BotAccessScope,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> std::result::Result<EntityAccessReceipt<T>, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn get_access_level(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> std::result::Result<Option<AccessLevel>, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn check_access(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+            _required_level: AccessLevel,
+        ) -> std::result::Result<AccessLevel, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn check_public_access(
+            &self,
+            _entity_id: &str,
+            _entity_type: EntityType,
+            _required_level: AccessLevel,
+        ) -> std::result::Result<AccessLevel, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn get_entity_permission(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+            _user_org_id: Option<i64>,
+        ) -> std::result::Result<EntityPermission, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn get_crm_entity_permission_with_team(
+            &self,
+            _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> std::result::Result<(EntityPermission, Uuid, TeamRole), AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn get_users_by_entity(
+            &self,
+            _entity_id: &str,
+            _entity_type: EntityType,
+        ) -> std::result::Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn get_call_channel(
+            &self,
+            _call_id: &sqlx::types::Uuid,
+        ) -> std::result::Result<Option<CallChannelInfo>, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn get_call_channel_by_channel_id(
+            &self,
+            _channel_id: &sqlx::types::Uuid,
+        ) -> std::result::Result<Option<CallChannelInfo>, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+
+        async fn get_user_team(
+            &self,
+            _user_id: &MacroUserId<Lowercase<'_>>,
+        ) -> std::result::Result<Option<UserTeamInfo>, AccessError> {
+            unreachable!("the selector check returns before any access check")
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_label_named_both_ways_or_not_at_all_fails_before_any_provider_acts() {
+    use super::update_thread_labels::UpdateThreadLabels;
+    use crate::domain::ports::{NoOpEmailService, NoOpGmailTokenProvider};
+    use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
+    use std::sync::Arc;
+
+    // Any service call would fail differently: this service resolves no
+    // thread, so reaching it would report a missing inbox instead.
+    let context = EmailToolContext::new(
+        Arc::new(NoOpEmailService),
+        Arc::new(NoOpGmailTokenProvider),
+        Arc::new(unreachable_access::UnreachableAccessService),
+        Arc::new(lexical_client::LexicalClient::new(
+            String::new(),
+            String::new(),
+        )),
+    );
+    let call = |label_id: Option<uuid::Uuid>, label: Option<&str>| {
+        let tool = UpdateThreadLabels {
+            thread_id: uuid::Uuid::nil(),
+            label_id,
+            label: label.map(str::to_owned),
+            add: false,
+        };
+        let context = context.clone();
+        async move {
+            tool.call(
+                ServiceContext(context),
+                RequestContext::new(
+                    MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap(),
+                ),
+            )
+            .await
+        }
+    };
+    for (label_id, label) in [(Some(uuid::Uuid::nil()), Some("INBOX")), (None, None)] {
+        let error = call(label_id, label).await.unwrap_err();
+        assert_eq!(
+            error.description,
+            "Pass exactly one of `label` or `label_id`."
+        );
+    }
+}

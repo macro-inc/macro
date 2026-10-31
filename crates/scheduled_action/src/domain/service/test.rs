@@ -10,7 +10,7 @@ use crate::domain::models::{
 };
 use crate::domain::{
     execution::ExecutionHandle,
-    ports::{ScheduledActionReadService, ScheduledAgentRunner},
+    ports::{RoutineAgents, ScheduledActionReadService},
     read_service::ScheduledActionReadServiceImpl,
     target_runner::TargetRunner,
     target_validation::{
@@ -38,6 +38,7 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 #[derive(Default)]
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
+    records: Mutex<Vec<ActionExecutionRecord>>,
 }
 
 impl ScheduledActionRepo for FakeRepo {
@@ -93,6 +94,23 @@ impl ScheduledActionRepo for FakeRepo {
 
     async fn get_execution_records(&self, _id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         Ok(vec![])
+    }
+
+    async fn get_latest_execution_records(
+        &self,
+        action_ids: &[Uuid],
+    ) -> Result<Vec<ActionExecutionRecord>> {
+        let records = self.records.lock().unwrap();
+        Ok(action_ids
+            .iter()
+            .filter_map(|id| {
+                records
+                    .iter()
+                    .filter(|record| record.action_id == *id)
+                    .max_by_key(|record| record.start_time)
+                    .cloned()
+            })
+            .collect())
     }
 
     async fn get_next_unclaimed_actions(&self, _limit: i64) -> Result<Vec<ScheduledAction>> {
@@ -304,6 +322,7 @@ pub(crate) fn configuration(events: bool) -> ActionConfiguration {
         task: json!({"model": "model", "prompt": "summarize", "user_prompt": "task"}),
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
+        description: String::new(),
     }
 }
 
@@ -316,6 +335,7 @@ fn update(config: ActionConfiguration) -> UpdateScheduledAction {
         task: config.task,
         enabled: Some(config.enabled),
         run_visibility: Some(config.run_visibility),
+        description: Some(config.description),
     })
 }
 
@@ -525,25 +545,21 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
             .unwrap();
         assert!(sessions.preparations.lock().unwrap().is_empty());
         *sessions.error.lock().unwrap() = Some(denial);
-        let runner = TargetRunner::new(sessions.clone(), Arc::new(UnreadEvents));
+        let runner = TargetRunner::new(sessions.clone());
         let mut handle = ExecutionHandle::default();
-        let error = runner.prepare(&created, &mut handle).await.unwrap_err();
+        let program = routine_program::RoutineProgram::from_task(&created.task).unwrap();
+        let error = runner
+            .prepare(
+                &created,
+                program.agent_steps()[0],
+                &program.mcp_servers,
+                &mut handle,
+            )
+            .await
+            .unwrap_err();
         assert_eq!(error.downcast_ref(), Some(&denial));
         assert!(handle.resource.is_none());
         assert_eq!(sessions.preparations.lock().unwrap().len(), 1);
-    }
-}
-
-/// Preparation never reads the triggering event.
-struct UnreadEvents;
-
-impl crate::domain::ports::RoutineEventReader for UnreadEvents {
-    async fn read_event(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &crate::domain::event_runs::AuthorizedEventRun,
-    ) -> std::result::Result<trigger_context::RoutineEvent, rootcause::Report> {
-        panic!("preparation must not read the triggering event")
     }
 }
 
@@ -697,6 +713,53 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
         .await
         .unwrap();
     assert_eq!(svc.get_actions(user(), true).await.unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn lists_each_routine_with_its_latest_run() {
+    let svc = service(true);
+    let ran = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(configuration(true)),
+        )
+        .await
+        .unwrap();
+    let never_ran = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(configuration(true)),
+        )
+        .await
+        .unwrap();
+    let record = |minutes: i64, is_success: bool| ActionExecutionRecord {
+        id: Some(generate_uuid_v7()),
+        action_id: ran.id.unwrap(),
+        resource_id: None,
+        start_time: Utc::now() - chrono::Duration::minutes(minutes),
+        end_time: Utc::now(),
+        is_success,
+        result: json!({}),
+        created_at: Utc::now(),
+    };
+    svc.repo
+        .records
+        .lock()
+        .unwrap()
+        .extend([record(30, true), record(5, false)]);
+
+    let listed = svc.get_actions_with_last_run(user(), true).await.unwrap();
+    let last_run = |id: Option<Uuid>| {
+        listed
+            .iter()
+            .find(|(action, _)| action.id == id)
+            .unwrap()
+            .1
+            .as_ref()
+            .map(|record| record.is_success)
+    };
+    assert_eq!(last_run(ran.id), Some(false));
+    assert_eq!(last_run(never_ran.id), None);
 }
 
 #[tokio::test]
@@ -936,6 +999,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        description: String::new(),
     };
     let expires_at = action
         .claim_expires_at()
@@ -1006,6 +1070,7 @@ fn seeded(
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        description: String::new(),
     }
 }
 
@@ -1400,6 +1465,17 @@ fn conditions_are_trimmed_bounded_and_round_trip() {
     );
 }
 
+fn program_configuration(
+    trigger: serde_json::Value,
+    steps: serde_json::Value,
+) -> ActionConfiguration {
+    ActionConfiguration {
+        trigger: serde_json::from_value(trigger).unwrap(),
+        task: json!({ "steps": steps }),
+        ..configuration(true)
+    }
+}
+
 /// Whether the owner has linked GitHub.
 struct Linked(bool);
 impl github::domain::ports::GithubInstallationClaims for Linked {
@@ -1429,6 +1505,114 @@ fn github_configuration(enabled: bool) -> ActionConfiguration {
         enabled,
         ..configuration(true)
     }
+}
+
+#[tokio::test]
+async fn programs_that_read_their_trigger_need_activity_triggers_and_decisions_need_a_classifier() {
+    let cron = json!({"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"});
+    let email = json!({"type": "events", "filters": [{"events": ["email.message_received"]}]});
+    let mixed = json!({"type": "multiple", "triggers": [cron.clone(), email.clone()]});
+    let archive = json!([{ "type": "tool", "tool": "UpdateThreadLabels", "arguments": {
+        "thread_id": "{{trigger.entity_id}}", "label_id": "inbox", "add": false
+    } }]);
+    let triage = json!([{ "type": "if", "condition": "Is this a newsletter?", "then": archive }]);
+    let digest = json!([{ "type": "tool", "tool": "SendChannelMessage", "arguments": {
+        "channel_id": "c", "content": "Daily reminder"
+    } }]);
+
+    let without = service(true);
+    for trigger in [cron.clone(), mixed] {
+        assert_policy(
+            without
+                .create_action(
+                    &user_principal(),
+                    CreateScheduledAction::Canonical(program_configuration(
+                        trigger,
+                        archive.clone(),
+                    )),
+                )
+                .await,
+            ActionPolicyError::ProgramNeedsEvent,
+        );
+    }
+    assert_policy(
+        without
+            .create_action(
+                &user_principal(),
+                CreateScheduledAction::Canonical(program_configuration(
+                    email.clone(),
+                    triage.clone(),
+                )),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+    // Steps that don't read a trigger run on any schedule.
+    without
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(cron.clone(), digest)),
+        )
+        .await
+        .unwrap();
+    let archived = without
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(email.clone(), archive)),
+        )
+        .await
+        .unwrap();
+    // Updates are held to the same rule.
+    assert_policy(
+        without
+            .update_action(
+                edit_receipt(archived.id.unwrap()),
+                update(program_configuration(
+                    cron,
+                    json!([{ "type": "if", "condition": "Urgent?" }]),
+                )),
+            )
+            .await,
+        ActionPolicyError::ConditionsDisabled,
+    );
+
+    let with = TestService::new(
+        without.repo.clone(),
+        without.executor.clone(),
+        without.dispatcher_tx.clone(),
+        grants(&without.repo),
+    )
+    .with_event_management_enabled(true)
+    .with_conditions_enabled(true);
+    let created = with
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(email, triage.clone())),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.task, json!({ "steps": triage }));
+}
+
+#[tokio::test]
+async fn structurally_invalid_programs_are_rejected_with_the_broken_rule() {
+    let svc = service(true);
+    let error = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(program_configuration(
+                json!({"type": "events", "filters": [{"events": ["email.message_received"]}]}),
+                json!([{ "type": "choose", "options": [{ "label": "Only one" }] }]),
+            )),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error
+            .downcast_ref::<TargetValidationError>()
+            .map(ToString::to_string),
+        Some("a choice needs between 2 and 8 options".to_owned())
+    );
 }
 
 #[tokio::test]
@@ -1479,4 +1663,80 @@ async fn a_github_trigger_runs_only_once_github_is_linked() {
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn a_description_is_trimmed_kept_when_omitted_cleared_when_empty_and_bounded() {
+    let svc = service(false);
+    let created = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(ActionConfiguration {
+                description: "  Label invoices.  ".into(),
+                ..configuration(false)
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.description, "Label invoices.");
+    let id = created.id.unwrap();
+
+    // Clients that predate the field omit it, which keeps it.
+    let mut input = update(configuration(false));
+    if let UpdateScheduledAction::Canonical(input) = &mut input {
+        input.description = None;
+    }
+    let kept = svc.update_action(edit_receipt(id), input).await.unwrap();
+    assert_eq!(kept.description, "Label invoices.");
+
+    let cleared = svc
+        .update_action(edit_receipt(id), update(configuration(false)))
+        .await
+        .unwrap();
+    assert_eq!(cleared.description, "");
+
+    assert_policy(
+        svc.update_action(
+            edit_receipt(id),
+            update(ActionConfiguration {
+                description: "a".repeat(MAX_DESCRIPTION_CHARS + 1),
+                ..configuration(false)
+            }),
+        )
+        .await,
+        ActionPolicyError::DescriptionTooLong,
+    );
+}
+
+#[tokio::test]
+async fn an_update_that_changes_nothing_keeps_the_revision() {
+    let svc = service(false);
+    let created = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(configuration(false)),
+        )
+        .await
+        .unwrap();
+    let id = created.id.unwrap();
+    let same = svc
+        .update_action(edit_receipt(id), update(configuration(false)))
+        .await
+        .unwrap();
+    // A new revision would supersede event runs queued under the old one.
+    assert_eq!(same.configuration_revision, created.configuration_revision);
+    let renamed = svc
+        .update_action(
+            edit_receipt(id),
+            update(ActionConfiguration {
+                name: "renamed".into(),
+                ..configuration(false)
+            }),
+        )
+        .await
+        .unwrap();
+    assert_ne!(
+        renamed.configuration_revision,
+        created.configuration_revision
+    );
 }

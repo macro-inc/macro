@@ -1031,27 +1031,9 @@ export type ToolFieldType =
   | 'relation'
   | 'formula';
 /**
- * Who executes the routine. Agent IDs refer to personas, never conversation IDs.
+ * When a routine runs. Combine any schedules with any activity triggers.
  */
-export type RoutineTarget =
-  | {
-      /**
-       * Runtime model ID.
-       */
-      model: string;
-      type: 'model';
-    }
-  | {
-      /**
-       * Persona/bot UUID (`bot.botId`) from ListAgents. Use your own persona ID to schedule yourself.
-       */
-      agentId: string;
-      type: 'agent';
-    };
-/**
- * A recurring or one-off schedule.
- */
-export type RoutineSchedule =
+export type RoutineTrigger =
   | {
       /**
        * RFC3339 timestamp including UTC offset.
@@ -1069,7 +1051,43 @@ export type RoutineSchedule =
        */
       timezone: string;
       type: 'cron';
+    }
+  | {
+      /**
+       * Any of these events starts a run.
+       */
+      events: RoutineEvent[];
+      /**
+       * Limit to these items: channel ids for channel events, task or
+       * document ids for task and document events. Omit to match every
+       * item; `*_created`, `channel.mentioned` and `email.message_received`
+       * usually omit it.
+       */
+      ids?: string[] | null;
+      /**
+       * Optional yes/no question the triggering content must answer with
+       * yes, e.g. "Is this email from a customer?". Runs where the answer
+       * is no are skipped before any step runs.
+       */
+      condition?: string | null;
+      type: 'event';
     };
+/**
+ * Activity that can trigger a routine.
+ */
+export type RoutineEvent =
+  | 'email.message_received'
+  | 'task.created'
+  | 'task.status_changed'
+  | 'task.priority_changed'
+  | 'task.property_changed'
+  | 'document.created'
+  | 'document.deleted'
+  | 'channel.created'
+  | 'channel.message_posted'
+  | 'channel.mentioned'
+  | 'call.started'
+  | 'call.ended';
 /**
  * A tag color from the fixed palette.
  */
@@ -8271,7 +8289,23 @@ export interface CreateProjectResponse {
   projectName: string;
 }
 /**
- * Schedule recurring or one-off work for a model or agent. To schedule yourself, use your persona/bot ID as the agent target; to delegate, select an accessible agent from ListAgents using its bot.botId. Routines run as the authenticated user after this session ends, using the selected agent’s tools and configuration. Use Once with a future RFC3339 timestamp for a single run; use Cron for repetition. Returns the saved routine ID and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute. Do not automatically create a new routine on every run of an existing routine.
+ * Create a routine: work that runs as the authenticated user on a schedule or when activity happens in Macro, after this session ends. Returns the saved routine's id and next firing. In Macro app replies, mention the created routine as `<m-document-mention>{"documentId":"ID","documentName":"NAME","blockName":"routine"}</m-document-mention>`, replacing ID with the returned ID and NAME with the saved routine name. In external MCP replies, follow the MCP item-linking instructions. Do not use reminders for work that should execute, and do not create a new routine on every run of an existing one.
+ *
+ * A routine is triggers plus steps. Pass `steps` as a JSON array encoded in a string.
+ *
+ * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`). Only people's actions trigger routines.
+ *
+ * Steps run in order and a failed step stops the run:
+ * - `tool`: one Macro tool with fixed `arguments`, exactly as that tool documents them. Allowed tools: UpdateThreadLabels (pass `label` by name so it works in every inbox: archive = remove INBOX, mark read = remove UNREAD, star = add STARRED, or a custom label's name), SetSenderPolicy (pass `thread_id` `{{trigger.entity_id}}` so it applies to the inbox that received the email), SetEntityProperty (status, priority, assignees, due date, tags, CRM stage or any property), CreateDocument (set isTask for tasks; outputs documentId), Comment (`entityType` `document` for a task or document), SendChannelMessage (to reply to the triggering message, pass `channel_id` `{{trigger.entity_id}}` and `thread_id` `{{trigger.message.thread_id}}`), MoveToProject. Look up other ids first with ListTags, GetEntityProperties, ListTeamMembers or channel search; never pass names where an id is required.
+ * - `if`: a yes/no `condition` about the triggering item, with `then` and `else` steps.
+ * - `choose`: an optional `question` and 2-8 `options` (label, optional description, steps); the best fitting option runs, else `otherwise`. With `"multiple": true`, every option that fits runs instead, in order. Use it to classify, e.g. email triage, or to let the classifier pick values: one option per label, tag, priority or person, each with the single step that applies it (`multiple` for labels and tags).
+ * - `agent`: hand off to a model (`model`) or an agent from ListAgents (`agent.bot_id`, optional `model` override) with `instructions`, for open-ended work such as drafting, research or filling CRM fields. It sees the triggering event and what earlier steps did. A run reaches at most one agent; agents in different branches are fine. To schedule yourself, use your own persona id as `agent.bot_id`. Apps the agent needs beyond its own go in `requiredApps`.
+ *
+ * Decisions (`if`, `choose`) are answered by a fast classifier in one call, so prefer them over agents for routing. Tool arguments may embed placeholders: `{{trigger.entity_id}}` (the email thread, task, document or channel that triggered the run), `{{trigger.message_id}}`, `{{trigger.message.thread_id}}` (the thread a reply to the triggering message joins), the item's content such as `{{trigger.email.subject}}`, `{{trigger.email.from.email}}`, `{{trigger.message.text}}` or `{{trigger.item.name}}`, and a tool step's output by its `id`, e.g. `{{steps.task.documentId}}`, when that step always runs first: earlier in the same list or in a list that encloses this one, never in a sibling branch or inside a decision that comes before this step. A value that is exactly one placeholder keeps its JSON type. Decisions and `{{trigger…}}` placeholders need event triggers only.
+ *
+ * Example, file invoices and archive newsletters. Its `steps` string holds:
+ * [{"type":"choose","question":"What kind of email is this?","options":[{"label":"Invoice","description":"bills, receipts, payment requests","steps":[{"type":"tool","tool":"UpdateThreadLabels","arguments":{"thread_id":"{{trigger.entity_id}}","label":"Finance","add":true}},{"type":"tool","id":"task","tool":"CreateDocument","arguments":{"documentName":"Pay: {{trigger.email.subject}}","fileContent":"","fileExtension":"md","isTask":true}}]},{"label":"Newsletter","steps":[{"type":"tool","tool":"UpdateThreadLabels","arguments":{"thread_id":"{{trigger.entity_id}}","label":"INBOX","add":false}}]}]}]
+ *
  */
 export interface CreateRoutine {
   configuration: RoutineConfiguration;
@@ -8285,17 +8319,23 @@ export interface RoutineConfiguration {
    */
   name: string;
   /**
-   * Instructions passed to the model or agent on every run.
+   * When it runs: one or more schedules and activity triggers.
    */
-  instructions: string;
-  target: RoutineTarget;
-  schedule: RoutineSchedule;
+  triggers: RoutineTrigger[];
   /**
-   * Apps every run needs, on top of the target's own. The user must already
-   * have each one connected (offer a connect link via DiscoverConnectors if
-   * not). Updates replace the list: restate it to keep the apps.
+   * What it does each run, in order: a JSON array of steps, encoded as a
+   * string (see the tool description for the step format). Steps that
+   * decide about or read the triggering item (`if`, `choose`,
+   * `{{trigger.…}}`) need activity triggers only.
    */
-  requiredApps?: RoutineApp[];
+  steps: string;
+  /**
+   * Apps its agent step needs, on top of the agent's own. The user must
+   * already have each one connected (offer a connect link via
+   * DiscoverConnectors if not). On update, omit it to keep the routine's
+   * current apps; a list replaces them, and an empty list removes them.
+   */
+  requiredApps?: RoutineApp[] | null;
 }
 /**
  * A Pipedream app a routine requires.
@@ -8327,17 +8367,15 @@ export interface RoutineInfo {
    */
   enabled: boolean;
   /**
-   * Cron expression or event trigger, as stored by the scheduler.
+   * The saved configuration in the shape CreateRoutine and UpdateRoutine
+   * take. To change it, send it back with only the intended change.
    */
-  trigger: {
-    [k: string]: unknown;
-  };
+  configuration?: RoutineConfiguration | null;
   /**
-   * Execution target and instructions.
+   * Why `configuration` is absent: part of this routine can only be
+   * edited on its page in Macro, so UpdateRoutine refuses to replace it.
    */
-  task: {
-    [k: string]: unknown;
-  };
+  notEditableHere?: string | null;
   /**
    * Next scheduled firing, absent after a one-off completes.
    */
@@ -14645,7 +14683,7 @@ export interface ProjectItem {
   updatedAt?: string | null;
 }
 /**
- * Read a routine owned by the authenticated user, including its saved configuration and recent run history. Reading a run transcript still requires its own access.
+ * Read a routine owned by the authenticated user: its saved configuration in the shape CreateRoutine and UpdateRoutine take (name, triggers, steps, requiredApps), and its recent run history. When part of a routine can only be edited on its page in Macro (GitHub or payload filters), `notEditableHere` says why instead. Reading a run transcript still requires its own access.
  */
 export interface ReadRoutine {
   /**
@@ -15951,7 +15989,7 @@ export interface ToolFieldChange {
   };
 }
 /**
- * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first before replacing configuration. Select an agent to delegate the routine or a model to run as Macro. Does not change ownership. A running routine can be paused but cannot be reconfigured until it finishes.
+ * Pause/resume or replace the configuration of a routine owned by the authenticated user. ReadRoutine first, then send its `configuration` back with only your change (name, triggers and steps, as CreateRoutine describes them): it replaces the saved one. Omit requiredApps to keep the routine's apps. Routines ReadRoutine marks `notEditableHere` can only be paused or resumed here. Does not change ownership or the description. A running routine can be paused but cannot be reconfigured until it finishes.
  */
 export interface UpdateRoutine {
   /**
@@ -16013,9 +16051,9 @@ export interface UpdateSharingResponse {
 /**
  * Add or remove a single label from every message in a Gmail thread. In Gmail, nearly all inbox operations are just label add/remove operations, so this tool is the primitive for archiving, marking read/unread, starring, trashing, marking important/spam, and applying or removing custom labels.
  *
- * Workflow: call ListLabels first to discover the UUID `id` for the label name you need, then call this tool with that `label_id` plus the thread's `thread_id` and `add=true` (apply) or `add=false` (remove). Each call modifies one label — to do multiple changes on the same thread (e.g. archive AND mark read), call this tool once per label.
+ * Name the label with exactly one of `label` or `label_id`. `label` is a system label (INBOX, UNREAD, STARRED, IMPORTANT, TRASH, SPAM) or a custom label's display name, matched in the thread's own inbox, so it works across inboxes without a lookup. `label_id` is a UUID from ListLabels. Pass `add=true` to apply or `add=false` to remove. Each call modifies one label — to do multiple changes on the same thread (e.g. archive AND mark read), call this tool once per label.
  *
- * Common operations (look up each system label's id via ListLabels first):
+ * Common operations:
  * - Archive: remove `INBOX` (add=false)
  * - Move back to inbox: add `INBOX` (add=true)
  * - Mark as read: remove `UNREAD` (add=false)
@@ -16026,7 +16064,9 @@ export interface UpdateSharingResponse {
  * - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)
  * - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)
  *
- * `thread_id` is the email thread UUID (the same id returned by ListEntities, search results, or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name.
+ * In an Outlook inbox the same system label names set the matching mailbox state (archive, read, flag, trash, junk); IMPORTANT has no Outlook equivalent, and other names are Outlook categories.
+ *
+ * `thread_id` is the email thread UUID (the same id returned by ListEntities, search results, or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name; pass a name in `label` instead.
  */
 export interface UpdateThreadLabels {
   /**
@@ -16034,9 +16074,13 @@ export interface UpdateThreadLabels {
    */
   thread_id: string;
   /**
-   * The UUID of the label to add or remove. Obtain this by calling ListLabels and looking up the label by name — do not pass the label name here.
+   * The UUID of the label to add or remove, from ListLabels. Omit when passing `label`.
    */
-  label_id: string;
+  label_id?: string | null;
+  /**
+   * The label's name instead of its id: a system label (INBOX, UNREAD, STARRED, IMPORTANT, TRASH, SPAM) or a custom label's display name, matched in the thread's inbox. Omit when passing `label_id`.
+   */
+  label?: string | null;
   /**
    * Whether to add (true) or remove (false) the label from every message in the thread.
    */

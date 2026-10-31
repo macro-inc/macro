@@ -24,6 +24,7 @@ mod permission_policy;
 mod preview;
 mod public_mcp;
 mod routine_sessions;
+mod routine_tools;
 mod runtime_commands;
 mod scheduling;
 mod trigger;
@@ -592,6 +593,8 @@ async fn run() -> anyhow::Result<()> {
         scheduling::config::Config::from_env()?,
         pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
+        // Routine tool steps run the same catalog as the owner, outside any session.
+        routine_tools::CatalogRoutineTools::new(tool_context.clone()),
         http_ready,
     )
     .await?;

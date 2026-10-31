@@ -39,21 +39,3 @@ export function parseRecurringSchedule(
   if (day >= 0)
     return { frequency: 'week', time, daysOfWeek: [String(day + 1)] };
 }
-
-export function scheduleTriggerLabel(trigger: ScheduleTriggerDraft): string {
-  if (trigger.frequency === 'hour') return 'Every hour';
-  if (trigger.frequency === 'once') return 'Run once';
-  if (trigger.frequency === 'custom') return 'Custom schedule';
-  if (trigger.frequency === 'day') return 'Every day';
-  if (trigger.frequency === 'month')
-    return `Monthly on day ${trigger.dayOfMonth}`;
-  if (trigger.daysOfWeek.toSorted().join(',') === '2,3,4,5,6')
-    return 'Every weekday';
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return `Every ${
-    trigger.daysOfWeek
-      .toSorted()
-      .map((day) => days[Number(day) - 1])
-      .join(', ') || 'week'
-  }`;
-}

@@ -50,6 +50,10 @@ pub struct ScheduledActionResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub timezone: Option<Tz>,
+    /// The routine's latest run. Listing includes it for routines the caller
+    /// owns; other responses omit it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_run: Option<ActionExecutionRecord>,
 }
 
 impl From<ScheduledAction> for ScheduledActionResponse {
@@ -63,6 +67,7 @@ impl From<ScheduledAction> for ScheduledActionResponse {
             action,
             schedule,
             timezone,
+            last_run: None,
         }
     }
 }
@@ -275,7 +280,7 @@ where
 {
     let actions = state
         .service
-        .get_actions(
+        .get_actions_with_last_run(
             user.authorization.user.macro_user_id.clone(),
             query.include_events.unwrap_or(false),
         )
@@ -283,7 +288,11 @@ where
     Ok(Json(
         actions
             .into_iter()
-            .map(ScheduledActionResponse::from)
+            .map(|(action, last_run)| {
+                let mut response = ScheduledActionResponse::from(action);
+                response.last_run = last_run;
+                response
+            })
             .collect::<Vec<_>>(),
     ))
 }
@@ -520,7 +529,9 @@ impl IntoResponse for ScheduledActionApiError {
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled
-                | ActionPolicyError::GithubNotLinked => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::ProgramNeedsEvent
+                | ActionPolicyError::GithubNotLinked
+                | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }
@@ -529,11 +540,12 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(validation) = error.downcast_ref::<TargetValidationError>() {
             let status = match validation {
-                TargetValidationError::InvalidTask | TargetValidationError::AgentsDisabled => {
-                    StatusCode::BAD_REQUEST
-                }
+                TargetValidationError::InvalidTask
+                | TargetValidationError::InvalidProgram(_)
+                | TargetValidationError::AgentsDisabled => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
-                | TargetValidationError::ExplicitAppsRequired => StatusCode::CONFLICT,
+                | TargetValidationError::ExplicitAppsRequired
+                | TargetValidationError::ExplicitStepsRequired => StatusCode::CONFLICT,
             };
             return (status, validation.to_string()).into_response();
         }

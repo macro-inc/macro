@@ -7,6 +7,7 @@ use super::models::{
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
+use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
@@ -17,7 +18,7 @@ use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use rootcause::Report;
 use tokio::sync::mpsc::{Receiver, Sender};
-use trigger_context::RoutineEvent;
+use trigger_context::{RoutineEvent, TriggerContext};
 
 /// Validate configuration syntax and authorize its target before persistence.
 pub trait TaskTargetValidator: Send + Sync + 'static {
@@ -100,6 +101,12 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         action_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
+    /// The latest execution record of each of `action_ids` that has run.
+    fn get_latest_execution_records(
+        &self,
+        action_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+
     /// Advance the cron firing time; event actions are left unchanged.
     fn update_next_run_at(&self, id: &Uuid) -> impl Future<Output = Result<()>> + Send;
 
@@ -166,6 +173,14 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
         include_events: bool,
     ) -> impl Future<Output = Result<Vec<ScheduledAction>>> + Send;
+
+    /// [`Self::get_actions`], each with its latest run when `user_id` owns
+    /// it: run history stays owner-scoped.
+    fn get_actions_with_last_run(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        include_events: bool,
+    ) -> impl Future<Output = Result<Vec<(ScheduledAction, Option<ActionExecutionRecord>)>>> + Send;
 
     fn update_action(
         &self,
@@ -292,6 +307,7 @@ pub trait RoutineEventReader: Send + Sync + 'static {
 pub trait ScheduledAgentRunner: Send + Sync + 'static {
     /// Prepare without starting the task. Remote runners must use the handle's
     /// preallocated IDs and retain established resources before any further await.
+    /// A run that does not start with an agent may establish no resource here.
     /// The handle survives errors and cancellation of this future.
     fn prepare(
         &self,
@@ -301,10 +317,13 @@ pub trait ScheduledAgentRunner: Send + Sync + 'static {
 
     /// Run to terminal completion, not merely submission. Dropping this future
     /// must signal local session/tool guards; remote cleanup uses `cancel`.
+    /// Record each step's result and any resource on the handle as it happens:
+    /// the handle survives errors and cancellation. `firing` says what started
+    /// the run; an event firing carries the owner's access to the event.
     fn run(
         &self,
         action: &ScheduledAction,
-        handle: &ExecutionHandle,
+        handle: &mut ExecutionHandle,
         firing: RoutineRun<'_>,
     ) -> impl Future<Output = Result<()>> + Send;
 
@@ -316,6 +335,71 @@ pub trait ScheduledAgentRunner: Send + Sync + 'static {
         action: &ScheduledAction,
         handle: &ExecutionHandle,
     ) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// Runs a routine's agent step: at most one per run, under the run handle's
+/// preallocated session and action ids.
+pub trait RoutineAgents: Send + Sync + 'static {
+    /// Open an idle session for `step` as `action`'s owner, listed the way the
+    /// routine says and handed the routine's required `apps`. Record the
+    /// persona on the handle before awaiting, and the transcript as soon as it
+    /// exists, so cleanup and history survive a failed or cancelled preparation.
+    fn prepare(
+        &self,
+        action: &ScheduledAction,
+        step: &routine_program::AgentStep,
+        apps: &[AgentMcpServer],
+        handle: &mut ExecutionHandle,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Deliver `prompt` once to the prepared session, with the structured
+    /// account of what fired the routine when there is one, and wait for its
+    /// outcome. Never replay the prompt after an ambiguous failure.
+    fn run(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        handle: &ExecutionHandle,
+        prompt: String,
+        context: Option<TriggerContext>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Best-effort stop of a session this run opened or tried to open. Safe
+    /// when no agent was involved.
+    fn cancel(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        handle: &ExecutionHandle,
+    ) -> impl Future<Output = Result<()>> + Send;
+}
+
+/// Runs a routine's tool steps: one allowlisted catalog tool at a time, as
+/// the routine's owner, outside any agent session. Implemented in the process
+/// that holds the tool catalog; never replay a call after an ambiguous
+/// failure, since tools are not idempotent.
+pub trait RoutineTools: Send + Sync + 'static {
+    /// Call `tool` with `arguments` as `owner`. A tool that refuses or fails
+    /// answers [`RoutineToolOutcome::Failed`] with its reason for the owner.
+    fn call(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        tool: routine_program::RoutineTool,
+        arguments: serde_json::Map<String, serde_json::Value>,
+    ) -> impl Future<Output = RoutineToolOutcome> + Send;
+}
+
+/// What a routine's tool call did.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RoutineToolOutcome {
+    /// The tool ran; its output, or null when too large to keep.
+    Completed {
+        /// The tool's JSON output, available to later steps' templates.
+        output: serde_json::Value,
+    },
+    /// The tool refused or failed, in words written for the routine's owner.
+    Failed {
+        /// Why, kept in the run's history.
+        message: String,
+    },
 }
 
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {
@@ -333,13 +417,15 @@ pub enum RunTrigger {
     Event(EventName),
 }
 
-/// Who did a routine run's work.
+/// Who did a routine run's work: a program's agent step, when it has one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunTarget {
     /// A model, prompted directly.
     Model,
     /// One of the owner's agents.
     Agent,
+    /// Only actions and decisions: no step reaches a model or agent.
+    Steps,
     /// The task could not be read.
     Unknown,
 }

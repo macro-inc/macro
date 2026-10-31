@@ -3,6 +3,7 @@ pub mod event_trigger;
 pub mod execution;
 pub mod models;
 pub mod ports;
+pub mod program_runner;
 pub mod read_service;
 pub mod service;
 pub mod target_runner;

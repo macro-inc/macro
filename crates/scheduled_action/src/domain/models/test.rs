@@ -3,10 +3,11 @@ use macro_uuid::{Uuid, generate_uuid_v7};
 use model_owner::{Owner, OwnerType};
 use serde_json::json;
 
+use routine_program::{AgentStep, RoutineProgram};
+
 use super::{
-    ActionConfiguration, ActionKind, AgentTask, CreateScheduledAction, MAX_ACTION_TIME,
-    ResolvedTaskTarget, RoutineModelId, RunVisibility, Schedule, ScheduledAction, TaskTargetError,
-    UpdateScheduledAction,
+    ActionConfiguration, ActionKind, CreateScheduledAction, MAX_ACTION_TIME, ResolvedTaskTarget,
+    RunVisibility, Schedule, ScheduledAction, TaskTargetError, UpdateScheduledAction,
 };
 use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
@@ -92,70 +93,67 @@ fn mixed_representations_are_rejected_even_when_the_values_agree() {
     assert!(serde_json::from_value::<UpdateScheduledAction>(input).is_err());
 }
 
+/// The single agent step a stored task resolves to.
+fn agent_step(payload: serde_json::Value) -> AgentStep {
+    RoutineProgram::from_task(&payload).unwrap().agent_steps()[0].clone()
+}
+
 #[test]
-fn legacy_task_round_trips_without_changing_instructions() {
-    let payload = json!({
+fn legacy_tasks_keep_their_model_target_and_instructions() {
+    let step = agent_step(json!({
         "model": "claude-sonnet-4-5",
-        "prompt": "stored system instructions",
+        "prompt": "",
         "user_prompt": "stored user instructions",
-    });
-    let task: AgentTask = serde_json::from_value(payload.clone()).unwrap();
-    let ResolvedTaskTarget::Model { model } = task.resolve_target().unwrap() else {
+    }));
+    let ResolvedTaskTarget::Model { model } = ResolvedTaskTarget::of(&step).unwrap() else {
         panic!("expected a model target");
     };
-    assert_eq!(model.as_str(), "claude-sonnet-4-5");
-    assert_eq!(task.prompt, "stored system instructions");
-    assert_eq!(task.user_prompt, "stored user instructions");
-    assert_eq!(serde_json::to_value(task).unwrap(), payload);
+    assert_eq!(model, "claude-sonnet-4-5");
+    assert_eq!(step.instructions, "stored user instructions");
     assert_eq!(serde_json::to_value(ActionKind::Agent).unwrap(), "Agent");
 }
 
 #[test]
-fn agent_task_resolves_persona_default_or_explicit_model_override() {
+fn agent_steps_resolve_persona_default_or_explicit_model_override() {
     let bot_id = generate_uuid_v7();
     for model in [None, Some("runtime-specific/unlisted-model")] {
         let mut payload = json!({
-            "agent": { "bot_id": bot_id },
-            "prompt": "stored system instructions",
-            "user_prompt": "stored user instructions",
+            "steps": [{ "type": "agent", "agent": { "bot_id": bot_id }, "instructions": "go" }],
         });
         if let Some(model) = model {
-            payload["model"] = json!(model);
+            payload["steps"][0]["model"] = json!(model);
         }
-        let task: AgentTask = serde_json::from_value(payload.clone()).unwrap();
+        let step = agent_step(payload);
         let ResolvedTaskTarget::Agent {
             bot_id: resolved_bot,
             model: resolved_model,
-        } = task.resolve_target().unwrap()
+        } = ResolvedTaskTarget::of(&step).unwrap()
         else {
             panic!("expected an agent target");
         };
         assert_eq!(resolved_bot.as_uuid(), bot_id);
-        assert_eq!(resolved_model.map(RoutineModelId::as_str), model);
-        assert_eq!(serde_json::to_value(task).unwrap(), payload);
+        assert_eq!(resolved_model, model);
     }
 }
 
 #[test]
 fn null_model_uses_agent_default_and_null_agent_uses_model() {
-    let task: AgentTask = serde_json::from_value(json!({
+    let step = agent_step(json!({
         "agent": { "bot_id": generate_uuid_v7() }, "model": null,
         "prompt": "system", "user_prompt": "user",
-    }))
-    .unwrap();
+    }));
     assert!(matches!(
-        task.resolve_target().unwrap(),
+        ResolvedTaskTarget::of(&step).unwrap(),
         ResolvedTaskTarget::Agent { model: None, .. }
     ));
 
-    let task: AgentTask = serde_json::from_value(json!({
+    let step = agent_step(json!({
         "agent": null, "model": "custom-model",
         "prompt": "system", "user_prompt": "user",
-    }))
-    .unwrap();
+    }));
     assert!(matches!(
-        task.resolve_target().unwrap(),
-        ResolvedTaskTarget::Model { model } if model.as_str() == "custom-model"
+        ResolvedTaskTarget::of(&step).unwrap(),
+        ResolvedTaskTarget::Model { model } if model == "custom-model"
     ));
 }
 
@@ -169,7 +167,7 @@ fn malformed_bot_ids_are_rejected_even_with_a_model() {
         json!({}),
     ] {
         assert!(
-            serde_json::from_value::<AgentTask>(json!({
+            RoutineProgram::from_task(&json!({
                 "agent": agent, "model": "valid-model",
                 "prompt": "system", "user_prompt": "user",
             }))
@@ -181,22 +179,33 @@ fn malformed_bot_ids_are_rejected_even_with_a_model() {
 #[test]
 fn supplied_model_must_be_nonblank_for_both_target_forms() {
     for model in ["", " ", "\t\n", "\u{2003}"] {
-        assert_eq!(
-            RoutineModelId::try_from(model.to_string()),
-            Err(TaskTargetError::BlankModel)
-        );
         for agent in [json!(null), json!({ "bot_id": generate_uuid_v7() })] {
-            assert!(
-                serde_json::from_value::<AgentTask>(json!({
-                    "agent": agent, "model": model,
-                    "prompt": "system", "user_prompt": "user",
-                }))
-                .is_err()
+            // A single-agent task with a blank model doesn't parse.
+            let task = json!({
+                "agent": agent, "model": model,
+                "prompt": "system", "user_prompt": "user",
+            });
+            assert!(RoutineProgram::from_task(&task).is_err());
+            // An agent step with one parses, then has no target.
+            let step = AgentStep {
+                model: Some(model.to_owned()),
+                agent: serde_json::from_value(agent).unwrap(),
+                instructions: "user".to_owned(),
+            };
+            assert_eq!(
+                ResolvedTaskTarget::of(&step),
+                Err(TaskTargetError::BlankModel)
             );
         }
     }
-    let model = RoutineModelId::try_from(" custom/model ".to_string()).unwrap();
-    assert_eq!(model.as_str(), " custom/model ", "do not rewrite model IDs");
+    let step = agent_step(json!({ "model": " custom/model ", "prompt": "", "user_prompt": "u" }));
+    assert_eq!(
+        ResolvedTaskTarget::of(&step),
+        Ok(ResolvedTaskTarget::Model {
+            model: " custom/model "
+        }),
+        "do not rewrite model IDs"
+    );
 }
 
 #[test]
@@ -205,8 +214,10 @@ fn missing_target_never_uses_stored_instructions_as_a_model() {
         let mut payload = fields;
         payload["prompt"] = json!("claude-sonnet-4-5");
         payload["user_prompt"] = json!("instructions");
-        let task: AgentTask = serde_json::from_value(payload).unwrap();
-        assert_eq!(task.resolve_target(), Err(TaskTargetError::MissingTarget));
+        assert_eq!(
+            ResolvedTaskTarget::of(&agent_step(payload)),
+            Err(TaskTargetError::MissingTarget)
+        );
     }
 }
 
@@ -236,6 +247,7 @@ fn action_owned_by(owner: Owner) -> ScheduledAction {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        description: String::new(),
     }
 }
 

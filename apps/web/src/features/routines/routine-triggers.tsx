@@ -9,7 +9,6 @@ import { RoutineTriggers as TriggerList } from './components/routine-triggers';
 import {
   type EventTriggerDraft,
   eventScopeKind,
-  isGlobalEvent,
   type RoutineTriggerDraft,
 } from './core/routine-triggers';
 import { createGithubConnection } from './queries/github-link';
@@ -38,6 +37,7 @@ function RepositoryScopeLabel(props: { trigger: EventTriggerDraft }) {
 export function RoutineTriggers(props: {
   triggers: RoutineTriggerDraft[];
   onChange: (triggers: RoutineTriggerDraft[]) => void;
+  layout?: 'rows' | 'add' | 'inline';
 }) {
   const conditions = useFeatureFlag(enableRoutineConditions);
   const github = createGithubConnection();
@@ -60,6 +60,7 @@ export function RoutineTriggers(props: {
     <TriggerList
       triggers={props.triggers}
       onChange={props.onChange}
+      layout={props.layout === 'add' ? 'add' : 'rows'}
       renderEventGroup={(group, options) => (
         <Show
           when={group !== 'GitHub' || github().linked !== false}
@@ -118,17 +119,11 @@ export function RoutineTriggers(props: {
       renderEventScope={(trigger, onChange) => (
         <Show when={entityKind(trigger())}>
           {(kind) => (
-            <Show
-              when={
-                !isGlobalEvent(trigger().events) || trigger().ids !== undefined
-              }
-            >
-              <RoutineEventScope
-                kind={kind()}
-                ids={trigger().ids}
-                onChange={onChange}
-              />
-            </Show>
+            <RoutineEventScope
+              kind={kind()}
+              ids={trigger().ids}
+              onChange={onChange}
+            />
           )}
         </Show>
       )}

@@ -1,49 +1,54 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import {
-  clearRoutineComposerDraft,
-  loadRoutineComposerDraft,
-  saveRoutineComposerDraft,
-} from './draft-storage';
-import { createRoutineCreatorSource } from './queries/routine-sources';
-import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
-import { RoutineExecutionPicker } from './routine-execution-picker';
-import { RoutinePromptEditor } from './routine-prompt-editor';
-import { RoutineTriggers } from './routine-triggers';
+  enableRoutineConditions,
+  enableRoutineStarterTemplates,
+} from '@core/constant/featureFlags';
+import { RoutineAiComposer } from './routine-ai-composer';
+import { startRoutineDraft } from './routine-draft-start';
 import { RoutineCreatorView } from './views/routine-creator';
 
-/** Production composition for the shared task/project creation popover. */
+/**
+ * Production composition for New routine in the shared creation popover. A
+ * choice closes it and opens the new routine's page with that draft.
+ */
 export function RoutineCreator(
-  props: { onCreated?: (id: string) => void } = {}
+  props: {
+    /** Opens the new routine's page; by default in the Agents workspace. */
+    onStart?: () => void;
+  } = {}
 ) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
-  const source = createRoutineCreatorSource();
   const hasPaidAccess = useHasPaidAccess();
+  const decisions = useFeatureFlag(enableRoutineConditions);
+  const templates = useFeatureFlag(enableRoutineStarterTemplates);
+  const defaultModel = () => defaultModelForPlan(hasPaidAccess());
   return (
     <RoutineCreatorView
-      source={source}
-      defaultModel={defaultModelForPlan(hasPaidAccess())}
-      storage={{
-        load: loadRoutineComposerDraft,
-        save: saveRoutineComposerDraft,
-        clear: clearRoutineComposerDraft,
-      }}
-      slots={{
-        PromptEditor: RoutinePromptEditor,
-        ExecutionPicker: RoutineExecutionPicker,
-        Triggers: RoutineTriggers,
-        Apps: RoutineApps,
-        createConnectedApps: createRoutineConnectedApps,
-      }}
+      defaultModel={defaultModel()}
+      decisionsEnabled={decisions().enabled}
+      templatesEnabled={templates().enabled}
+      renderComposer={(apply, current, initialDescription) => (
+        <RoutineAiComposer
+          apply={apply}
+          current={current}
+          initialDescription={initialDescription}
+          defaultModel={defaultModel()}
+          decisionsEnabled={decisions().enabled}
+        />
+      )}
       onClose={() => panel.handle.close()}
-      onCreated={(id) => {
+      onStart={(draft) => {
+        // The page reads its first draft from the unsent-draft store.
+        startRoutineDraft(draft);
         panel.handle.close();
-        if (props.onCreated) props.onCreated(id);
-        else openAgentsPage(layout, 'routines', { routineId: id });
+        if (props.onStart) props.onStart();
+        else openAgentsPage(layout, 'routines', { routineId: 'new' });
       }}
     />
   );

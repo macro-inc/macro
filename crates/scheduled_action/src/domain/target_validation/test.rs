@@ -81,10 +81,10 @@ async fn local_validation_precedes_gate_and_remote_authorization() {
             json!({"agent":{"bot_id":BOT}, "model":"", "prompt":"instructions", "user_prompt":"task"}),
         ] {
             let error = validator.validate_task(&task, &owner).await.unwrap_err();
-            assert_eq!(
+            assert!(matches!(
                 error.downcast_ref(),
-                Some(&TargetValidationError::InvalidTask)
-            );
+                Some(TargetValidationError::InvalidTask | TargetValidationError::InvalidProgram(_))
+            ));
         }
     }
     assert!(sessions.validations.lock().unwrap().is_empty());
@@ -256,4 +256,109 @@ fn an_update_must_restate_the_routine_apps_to_keep_or_clear_them() {
     );
     require_explicit_selection(&previous, &json!({"model":"model","mcp_servers":[]})).unwrap();
     require_explicit_selection(&json!({"model":"old"}), &json!({"model":"new"})).unwrap();
+}
+
+#[tokio::test]
+async fn every_agent_step_is_authorized_and_structural_errors_name_the_rule() {
+    let sessions = Arc::new(Sessions::default());
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let program = json!({ "steps": [
+        { "type": "tool", "tool": "UpdateThreadLabels", "arguments": {} },
+        { "type": "if", "condition": "Is it urgent?",
+          "then": [{ "type": "agent", "agent": { "bot_id": BOT }, "instructions": "Escalate" }],
+          "else": [{ "type": "agent", "model": "runtime/model", "instructions": "Summarize" }] }
+    ] });
+    TargetValidation::new(sessions.clone(), true)
+        .validate_task(&program, &owner)
+        .await
+        .unwrap();
+    {
+        let validations = sessions.validations.lock().unwrap();
+        assert_eq!(validations.len(), 2);
+        assert_eq!(validations[0].bot_id.to_string(), BOT);
+        assert_eq!(validations[1].bot_id, bot_id::MACRO_NEW_BOT_ID);
+    }
+
+    let error = ModelOnlyTargets
+        .validate_task(&program, &owner)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::AgentsDisabled)
+    );
+
+    let sequential = json!({ "steps": [
+        { "type": "agent", "model": "m", "instructions": "One" },
+        { "type": "agent", "model": "m", "instructions": "Two" }
+    ] });
+    let error = TargetValidation::new(sessions.clone(), true)
+        .validate_task(&sequential, &owner)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "a run can hand off to at most one agent; put agents in different branches"
+    );
+    assert_eq!(sessions.validations.lock().unwrap().len(), 2);
+}
+
+#[test]
+fn programs_never_trip_the_old_client_agent_guard() {
+    let previous = agent_task();
+    let program =
+        json!({ "steps": [{ "type": "agent", "agent": { "bot_id": BOT }, "instructions": "x" }] });
+    require_explicit_selection(&previous, &program).unwrap();
+    assert!(
+        require_explicit_selection(
+            &previous,
+            &json!({ "model": "m", "prompt": "", "user_prompt": "x" })
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn an_update_from_before_steps_cannot_replace_them() {
+    let program = json!({ "steps": [{ "type": "tool", "tool": "Comment", "arguments": {} }] });
+    let error = require_explicit_selection(
+        &program,
+        &json!({ "model": "m", "prompt": "", "user_prompt": "x" }),
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.downcast_ref::<TargetValidationError>(),
+        Some(&TargetValidationError::ExplicitStepsRequired)
+    );
+    // A program may still be replaced by another program.
+    require_explicit_selection(&program, &json!({ "steps": [] })).unwrap();
+}
+
+#[tokio::test]
+async fn a_program_hands_its_apps_to_its_agent_and_an_update_must_restate_them() {
+    let sessions = Arc::new(Sessions::default());
+    let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let program = json!({
+        "steps": [{ "type": "agent", "agent": { "bot_id": BOT }, "instructions": "File it" }],
+        "mcp_servers": [{ "app_slug": "linear", "server_name": "Linear" }],
+    });
+    TargetValidation::new(sessions.clone(), true)
+        .validate_task(&program, &owner)
+        .await
+        .unwrap();
+    assert_eq!(
+        sessions.validations.lock().unwrap()[0].mcp_servers,
+        vec![bots::domain::models::AgentMcpServer {
+            app_slug: "linear".into(),
+            server_name: "Linear".into(),
+        }]
+    );
+
+    let without_apps =
+        json!({ "steps": [{ "type": "agent", "agent": { "bot_id": BOT }, "instructions": "x" }] });
+    let error = require_explicit_selection(&program, &without_apps).unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::ExplicitAppsRequired)
+    );
 }

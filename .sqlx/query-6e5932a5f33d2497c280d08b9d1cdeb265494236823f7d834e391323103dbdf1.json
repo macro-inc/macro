@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id\n            FROM scheduled_action\n            WHERE id = $1\n            ",
+  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters, trigger_config,\n                   configuration_revision, event_activated_at, run_visibility, template_id,\n                   description\n            FROM scheduled_action\n            WHERE id = ANY($1)\n            ",
   "describe": {
     "columns": [
       {
@@ -75,18 +75,18 @@
       },
       {
         "ordinal": 14,
+        "name": "trigger_config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 15,
         "name": "configuration_revision",
         "type_info": "Int8"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "event_activated_at",
         "type_info": "Timestamptz"
-      },
-      {
-        "ordinal": 16,
-        "name": "trigger_config",
-        "type_info": "Jsonb"
       },
       {
         "ordinal": 17,
@@ -97,11 +97,16 @@
         "ordinal": 18,
         "name": "template_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 19,
+        "name": "description",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "UuidArray"
       ]
     },
     "nullable": [
@@ -119,12 +124,13 @@
       false,
       false,
       true,
-      false,
-      true,
       true,
       false,
-      true
+      true,
+      false,
+      true,
+      false
     ]
   },
-  "hash": "524c351334625b88bdcce2cabd2fc3bb250614590fb4e6b9d29750f0cadfbed0"
+  "hash": "6e5932a5f33d2497c280d08b9d1cdeb265494236823f7d834e391323103dbdf1"
 }

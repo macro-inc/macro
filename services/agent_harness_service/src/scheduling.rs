@@ -23,6 +23,7 @@ use scheduled_action::domain::event_runs::{
     dispatch::EventDispatchService,
 };
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
+use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
@@ -88,6 +89,7 @@ pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
+    tools: crate::routine_tools::CatalogRoutineTools,
     ready: tokio::sync::watch::Receiver<bool>,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
@@ -124,15 +126,45 @@ pub async fn build(
         &format!("http://{harness_address}"),
         &config.internal_api_key,
     )?);
+    // Conditions and decisions share one classifier, the only model work this
+    // process meters (agent targets are funded by the harness); both are off
+    // without a TypeSafe key. Counted usage asks the authentication service to
+    // settle the payer, as every other host does.
+    let typesafe = config
+        .typesafe_api_key
+        .value()
+        .map(SystemOneJev::typesafe)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?;
+    let conditions_enabled = typesafe.is_some();
+    let classifier = typesafe
+        .map(|provider| -> Result<_> {
+            Ok(Arc::new(JevClassifier::new(
+                provider,
+                ai_billing::composition::pg_settling_recorder(
+                    db.clone(),
+                    config.enable_ai_usage_enforcement,
+                    config.ai_pricing(),
+                    config.settlement_route()?,
+                ),
+            )))
+        })
+        .transpose()?;
+    // Trigger content is read for templates and the agent's account of the
+    // event whether or not there is a classifier.
     let event_content = Arc::new(event_content(
         &db,
         &registrar,
         Arc::clone(&access),
         &config,
     )?);
-    let runner = Arc::new(TargetRunner::new(
-        Arc::clone(&sessions),
+    // Tool steps run the harness's own catalog in this process; agent steps
+    // still go through the routine-session operations.
+    let runner = Arc::new(ProgramRunner::new(
+        Arc::new(TargetRunner::new(Arc::clone(&sessions))),
+        Arc::new(tools),
         Arc::clone(&event_content),
+        classifier.clone(),
     ));
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
@@ -182,31 +214,7 @@ pub async fn build(
     // eventually block cron dispatch or its shutdown.
     drop(execution_rx);
 
-    let typesafe = config
-        .typesafe_api_key
-        .value()
-        .map(SystemOneJev::typesafe)
-        .transpose()
-        .context("invalid TYPESAFE_API_KEY")?;
-    let conditions_enabled = typesafe.is_some();
-    let conditions = match typesafe {
-        Some(provider) => Some(ConditionGate::new(
-            event_content,
-            // Condition evaluation is the only model work this process meters
-            // (agent targets are funded by the harness). Counted usage asks the
-            // authentication service to settle the payer, as every other host does.
-            Arc::new(JevClassifier::new(
-                provider,
-                ai_billing::composition::pg_settling_recorder(
-                    db.clone(),
-                    config.enable_ai_usage_enforcement,
-                    config.ai_pricing(),
-                    config.settlement_route()?,
-                ),
-            )),
-        )),
-        None => None,
-    };
+    let conditions = classifier.map(|classifier| ConditionGate::new(event_content, classifier));
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
@@ -319,8 +327,9 @@ fn mount_router(routes: Router) -> Router {
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for
-/// condition checks and the agent's account of the event. None of these reads
-/// notify, publish or enqueue.
+/// conditions, decisions, templates and the agent's account of the event.
+/// None of these reads notify, publish or enqueue; routine writes go through
+/// the harness's tools instead.
 fn event_content(
     db: &sqlx::PgPool,
     registrar: &OwnedEntityRegistrar<PgBotsRepo>,

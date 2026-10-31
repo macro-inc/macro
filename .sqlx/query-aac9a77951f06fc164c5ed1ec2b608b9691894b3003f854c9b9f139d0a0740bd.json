@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE scheduled_action\n            SET name = $1,\n                schedule = $2,\n                kind = $3,\n                timezone = $4,\n                task = $5,\n                next_run_at = $6,\n                enabled = $7,\n                trigger_type = $8,\n                event_filters = $9,\n                configuration_revision = $10,\n                event_activated_at = $11,\n                trigger_config = $14,\n                run_visibility = $15,\n                updated_at = now()\n            WHERE id = $12\n              AND configuration_revision = $10::bigint - 1\n              AND (\n                  claimed IS NULL OR claimed < $13\n                  OR (\n                      NOT $7 AND name = $1 AND kind = $3 AND task = $5\n                      AND trigger_type = $8\n                      AND schedule IS NOT DISTINCT FROM $2\n                      AND timezone IS NOT DISTINCT FROM $4\n                      AND event_filters IS NOT DISTINCT FROM $9\n                      AND trigger_config IS NOT DISTINCT FROM $14\n                      AND run_visibility = $15\n                  )\n              )\n            RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                      updated_at, next_run_at, enabled, trigger_type, event_filters,\n                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id\n            ",
+  "query": "\n            SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,\n                   updated_at, next_run_at, enabled, trigger_type, event_filters,\n                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,\n                   description\n            FROM scheduled_action\n            WHERE enabled AND trigger_type IN ('cron', 'multiple') AND next_run_at IS NOT NULL\n              AND (claimed IS NULL OR claimed < $1)\n            ORDER BY next_run_at ASC, id ASC\n            LIMIT $2\n            ",
   "describe": {
     "columns": [
       {
@@ -97,25 +97,17 @@
         "ordinal": 18,
         "name": "template_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 19,
+        "name": "description",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Jsonb",
         "Timestamptz",
-        "Bool",
-        "Text",
-        "Jsonb",
-        "Int8",
-        "Timestamptz",
-        "Uuid",
-        "Timestamptz",
-        "Jsonb",
-        "Text"
+        "Int8"
       ]
     },
     "nullable": [
@@ -137,8 +129,9 @@
       true,
       true,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "65781aa8f98a5054cb60b8c4d02c3f79da606d877d9a2dde2ea79fa2035eb748"
+  "hash": "aac9a77951f06fc164c5ed1ec2b608b9691894b3003f854c9b9f139d0a0740bd"
 }

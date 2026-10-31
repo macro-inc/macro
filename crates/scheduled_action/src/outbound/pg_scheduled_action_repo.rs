@@ -80,6 +80,7 @@ struct ActionRow {
     event_activated_at: Option<DateTime<Utc>>,
     run_visibility: String,
     template_id: Option<Uuid>,
+    description: String,
 }
 
 impl TryFrom<ActionRow> for ScheduledAction {
@@ -122,6 +123,7 @@ impl TryFrom<ActionRow> for ScheduledAction {
             configuration_revision: ConfigurationRevision::try_from(row.configuration_revision)?,
             event_activated_at: row.event_activated_at,
             template_id: row.template_id,
+            description: row.description,
         })
     }
 }
@@ -181,11 +183,12 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             INSERT INTO scheduled_action
                 (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
-                 run_visibility, template_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                 run_visibility, template_id, description)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
+                   description
             "#,
             id,
             owner,
@@ -203,6 +206,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             trigger.trigger_config,
             <&str>::from(action.run_visibility),
             action.template_id,
+            action.description,
         )
         .fetch_one(&mut *tx)
         .await?;
@@ -238,7 +242,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
+                   description
             FROM scheduled_action
             WHERE owner = $1
             "#,
@@ -255,7 +260,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters, trigger_config,
-                   configuration_revision, event_activated_at, run_visibility, template_id
+                   configuration_revision, event_activated_at, run_visibility, template_id,
+                   description
             FROM scheduled_action
             WHERE id = ANY($1)
             "#,
@@ -272,7 +278,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
+                   description
             FROM scheduled_action
             WHERE id = $1
             "#,
@@ -291,7 +298,8 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
+                   description
             FROM scheduled_action
             WHERE enabled AND trigger_type IN ('cron', 'multiple') AND next_run_at IS NOT NULL
               AND (claimed IS NULL OR claimed < $1)
@@ -329,6 +337,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 event_activated_at = $11,
                 trigger_config = $14,
                 run_visibility = $15,
+                description = $16,
                 updated_at = now()
             WHERE id = $12
               AND configuration_revision = $10::bigint - 1
@@ -342,11 +351,13 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                       AND event_filters IS NOT DISTINCT FROM $9
                       AND trigger_config IS NOT DISTINCT FROM $14
                       AND run_visibility = $15
+                      AND description = $16
                   )
               )
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
+                   description
             "#,
             action.name,
             trigger.schedule,
@@ -363,6 +374,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             Utc::now() - MAX_ACTION_TIME,
             trigger.trigger_config,
             <&str>::from(action.run_visibility),
+            action.description,
         )
         .fetch_optional(&self.pool)
         .await?
@@ -474,6 +486,47 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             ORDER BY start_time DESC
             "#,
             *action_id,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|row| ActionExecutionRecord {
+                id: Some(row.id),
+                action_id: row.action_id,
+                resource_id: row.resource_id,
+                start_time: row.start_time,
+                end_time: row.end_time,
+                is_success: row.is_success,
+                result: row.result,
+                created_at: row.created_at,
+            })
+            .collect())
+    }
+
+    async fn get_latest_execution_records(
+        &self,
+        action_ids: &[Uuid],
+    ) -> Result<Vec<ActionExecutionRecord>> {
+        // One index probe per action on (action_id, start_time DESC).
+        let rows = sqlx::query!(
+            r#"
+            SELECT r.id AS "id!", r.action_id AS "action_id!", r.resource_id,
+                   r.start_time AS "start_time!", r.end_time AS "end_time!",
+                   r.is_success AS "is_success!", r.result AS "result!",
+                   r.created_at AS "created_at!"
+            FROM UNNEST($1::uuid[]) AS ids(action_id)
+            CROSS JOIN LATERAL (
+                SELECT id, action_id, resource_id, start_time, end_time, is_success,
+                       result, created_at
+                FROM action_execution_record
+                WHERE action_execution_record.action_id = ids.action_id
+                ORDER BY start_time DESC
+                LIMIT 1
+            ) AS r
+            "#,
+            action_ids,
         )
         .fetch_all(&self.pool)
         .await?;

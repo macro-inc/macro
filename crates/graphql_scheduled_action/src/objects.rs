@@ -2,7 +2,7 @@ use async_graphql::{Enum, ID, SimpleObject, Union};
 use rootcause::Report;
 use scheduled_action::domain::{
     event_trigger::{ActionTrigger, EventName, RoutineTrigger},
-    models::{ActionKind, AgentTask, ScheduledAction},
+    models::{ActionKind, ResolvedTaskTarget, ScheduledAction},
 };
 use serde_json::Value;
 
@@ -17,7 +17,8 @@ pub struct GraphqlScheduledAction {
     enabled: bool,
     /// What starts a run of this routine.
     trigger: GraphqlScheduledActionTrigger,
-    /// Agent task for this routine. Null when the stored task is not an agent task.
+    /// The agent step this routine hands off to: its only one, or the first of
+    /// several in different branches. Null when no step runs an agent.
     agent_task: Option<GraphqlScheduledActionAgentTask>,
     /// When the current execution claim stops blocking configuration changes.
     /// The timestamp stays present after that instant so clients can compare it themselves.
@@ -243,15 +244,16 @@ fn trigger(action: &ScheduledAction) -> GraphqlScheduledActionTrigger {
 fn agent_task(kind: &ActionKind, task: &Value) -> Option<GraphqlScheduledActionAgentTask> {
     match kind {
         ActionKind::Agent => {
-            let task = serde_json::from_value::<AgentTask>(task.clone()).ok()?;
-            task.resolve_target().ok()?;
+            let program = routine_program::RoutineProgram::from_task(task).ok()?;
+            let step = program.agent_steps().into_iter().next()?;
+            ResolvedTaskTarget::of(step).ok()?;
             Some(GraphqlScheduledActionAgentTask {
-                model: task.model.map(|model| model.as_str().to_owned()),
-                agent: task.agent.map(|agent| GraphqlScheduledActionAgent {
+                model: step.model.clone(),
+                agent: step.agent.map(|agent| GraphqlScheduledActionAgent {
                     bot_id: ID(agent.bot_id.to_string()),
                 }),
-                prompt: task.prompt,
-                user_prompt: task.user_prompt,
+                prompt: String::new(),
+                user_prompt: step.instructions.clone(),
             })
         }
     }

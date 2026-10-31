@@ -32,14 +32,19 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { match } from 'ts-pattern';
+import { StepsOutline } from './components/routine-steps-outline';
 import { TemplateCard } from './components/template-card';
+import { stepsFromTask } from './core/routine-steps';
 import { describeTrigger } from './core/routine-triggers';
 import type { Activator } from './core/template';
 import {
   createTemplateActivation,
+  templateDestinations,
   templatePrompt,
 } from './primitives/template-activation';
 import { parseRoutineTriggers } from './queries/routine-trigger-mapping';
+import { useRoutineTags } from './queries/step-sources';
 import {
   publishRoutineTemplate,
   useActivateTemplateMutation,
@@ -54,6 +59,22 @@ import { ShareRoutineDialog } from './views/share-template-dialog';
 
 function triggerLines(trigger: ActionTrigger): string[] {
   return (parseRoutineTriggers(trigger) ?? []).map(describeTrigger);
+}
+
+/**
+ * What a template's routine does: its steps for a routine with steps, else
+ * its instructions, read-only.
+ */
+function TemplateWork(props: { task: unknown; prompt: string }) {
+  const steps = () => stepsFromTask(props.task);
+  return (
+    <Show
+      when={steps()?.some((step) => step.kind !== 'agent') && steps()}
+      fallback={<ReadOnlyInstructions prompt={props.prompt} />}
+    >
+      {(program) => <StepsOutline steps={program()} />}
+    </Show>
+  );
 }
 
 function ReadOnlyInstructions(props: { prompt: string }) {
@@ -102,13 +123,26 @@ function ActivateTemplate(
   }
 ) {
   const activator = useActivator();
-  const access = useReferenceAccess(() =>
-    itemReferences(props.template.variables)
-  );
+  // Steps' fixed channels, folders and documents are checked like mentions.
+  const access = useReferenceAccess(() => [
+    ...itemReferences(props.template.variables),
+    ...templateDestinations(props.template),
+  ]);
+  const tags = useRoutineTags();
   const activation = createTemplateActivation({
     template: () => props.template,
     activator,
     access,
+    // Cached tags still say what the activator can apply after a failed
+    // refresh; with none, activation waits for a retry.
+    tags: () =>
+      match(tags.status())
+        .with('pending', () => undefined)
+        .with('error', () =>
+          tags().length ? new Set(tags().map((tag) => tag.optionId)) : undefined
+        )
+        .with('ready', () => new Set(tags().map((tag) => tag.optionId)))
+        .exhaustive(),
   });
   const mutation = useActivateTemplateMutation();
   const [error, setError] = createSignal<string>();
@@ -152,11 +186,26 @@ function ActivateTemplate(
         getDisplayName(tryMacroId(props.template.author)) || 'its author'
       }
       triggers={triggerLines(props.template.trigger)}
-      instructions={<ReadOnlyInstructions prompt={activation.prompt()} />}
+      instructions={
+        <TemplateWork
+          task={activation.request()?.task ?? props.template.task}
+          prompt={activation.prompt()}
+        />
+      }
       references={activation.references()}
       choices={activation.choices()}
       onChoose={activation.choose}
       undecided={activation.undecided().length}
+      checking={activation.checking()}
+      onRetry={
+        activation.checking() && tags.status() === 'error'
+          ? () => tags.retry()
+          : undefined
+      }
+      unreachable={
+        activation.unreachable().length + activation.missingTags().length
+      }
+      blocked={activation.blocked().length}
       pending={mutation.isPending}
       error={error()}
       onActivate={() => fireAndForget(activate(), 'routines')}
@@ -273,7 +322,10 @@ function EnabledRoutineTemplatePage(props: {
               triggers={triggerLines(current().trigger)}
               references={activation.references()}
               instructions={
-                <ReadOnlyInstructions prompt={templatePrompt(current())} />
+                <TemplateWork
+                  task={current().task}
+                  prompt={templatePrompt(current())}
+                />
               }
               onActivate={() => openActivation(current())}
               onBack={props.onBack}

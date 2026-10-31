@@ -14,6 +14,11 @@ each run.
   and the ports its adapters implement.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
+- `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`):
+  one classifier call for its decisions, tool steps through the `RoutineTools`
+  port (the harness's catalog, in process, limited to `RoutineTool`), and
+  at most one agent step through `target_runner.rs`. An old single-agent task
+  runs as one agent step.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
@@ -72,10 +77,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
 
 ## Gotchas
 
-- A task's `mcp_servers` are apps the routine requires. The owner must have
-  each connected: `TargetValidation` checks on save and
-  `RoutineSessions::prepare` checks again on every run, then adds them to an
-  agent limited to selected apps. An update that omits the key is rejected
+- A task's `mcp_servers` (beside a program's `steps`, or on an old
+  single-agent task) are apps the routine requires, handed to its agent step;
+  a program with apps needs one. The owner must have each connected:
+  `TargetValidation` checks on save and `RoutineSessions::prepare` checks
+  again on every run, then adds them to an agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
 - Macro events store only ids and are read again, as the owner, at dispatch.
   GitHub deliveries can't be read again, so their event runs keep the bounded

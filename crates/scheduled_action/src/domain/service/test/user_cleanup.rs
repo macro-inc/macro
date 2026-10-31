@@ -76,6 +76,9 @@ impl ScheduledActionRepo for FakeRepo {
     async fn get_execution_records(&self, _: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         unreachable!()
     }
+    async fn get_latest_execution_records(&self, _: &[Uuid]) -> Result<Vec<ActionExecutionRecord>> {
+        unreachable!()
+    }
     async fn update_next_run_at(&self, _: &Uuid) -> Result<()> {
         unreachable!()
     }
@@ -110,6 +113,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         enabled: true,
         run_visibility: config.run_visibility,
         template_id: None,
+        description: String::new(),
     }
 }
 

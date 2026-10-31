@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
@@ -20,12 +21,14 @@ use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionExecutionRecord, ActionPolicyError, CreateScheduledAction,
-    DispatchEvent, InProgressExecution, OwnerNotUserError, ScheduledAction, UpdateScheduledAction,
+    DispatchEvent, InProgressExecution, MAX_DESCRIPTION_CHARS, OwnerNotUserError, ScheduledAction,
+    UpdateScheduledAction,
 };
 use super::ports::{
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
 };
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
+use routine_program::RoutineProgram;
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -168,6 +171,23 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         Ok(())
     }
 
+    /// A program's decisions and trigger reads need an event to be about, and
+    /// its decisions need the classifier behind trigger conditions. Call after
+    /// target validation, which reports malformed programs.
+    fn check_program(&self, trigger: &ActionTrigger, task: &serde_json::Value) -> Result<()> {
+        let Ok(Ok(summary)) = RoutineProgram::from_task(task).map(|program| program.validate())
+        else {
+            return Ok(());
+        };
+        if summary.questions > 0 && !self.conditions_enabled {
+            return Err(ActionPolicyError::ConditionsDisabled.into());
+        }
+        if summary.needs_event() && (trigger.has_schedule() || trigger.event_filters().is_none()) {
+            return Err(ActionPolicyError::ProgramNeedsEvent.into());
+        }
+        Ok(())
+    }
+
     async fn create(
         &self,
         principal: &CreationPrincipal,
@@ -183,9 +203,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             owner_type: owner.owner_type(),
         })?;
         let input = ActionConfiguration::from(input);
+        let description = description(&input.description)?;
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
+        self.check_program(&input.trigger, &input.task)?;
         if input.enabled {
             self.check_github(&input.trigger, owner_user).await?;
         }
@@ -210,6 +232,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                 next_run_at,
                 claimed: None,
                 template_id,
+                description,
             })
             .await?;
         self.dispatcher_tx
@@ -249,7 +272,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             || action.name != input.name
             || action.kind != input.kind
             || action.task != input.task
-            || action.run_visibility != input.run_visibility;
+            || action.run_visibility != input.run_visibility
+            || action.description != input.description.trim();
         let disable_only = !input.enabled && !configuration_changed;
         // A rollout gate must not prevent an owner from stopping an existing
         // event action. Deletion, history and explicit manual runs also remain available.
@@ -266,6 +290,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
+            self.check_program(&input.trigger, &input.task)?;
             if input.enabled {
                 self.check_github(&input.trigger, action.owner_user()?)
                     .await?;
@@ -283,6 +308,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         } else {
             None
         };
+        // Checked like any update, but with nothing to replace: a new revision
+        // would only supersede event runs queued under the current one.
+        if !configuration_changed && action.enabled == input.enabled {
+            return Ok(action);
+        }
         action.configuration_revision = action.configuration_revision.next()?;
         action.name = input.name;
         action.trigger = input.trigger;
@@ -290,6 +320,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         action.task = input.task;
         action.enabled = input.enabled;
         action.run_visibility = input.run_visibility;
+        action.description = description(&input.description)?;
         action.updated_at = now;
 
         let updated = self.repo.update_action(action).await?;
@@ -322,6 +353,15 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
         }
         _ => Err(ActionPolicyError::NotFound.into()),
     }
+}
+
+/// A description as stored: trimmed, and within the limit.
+fn description(text: &str) -> Result<String> {
+    let text = text.trim();
+    if text.chars().count() > MAX_DESCRIPTION_CHARS {
+        return Err(ActionPolicyError::DescriptionTooLong.into());
+    }
+    Ok(text.to_owned())
 }
 
 fn next_run(trigger: &ActionTrigger) -> Result<Option<DateTime<Utc>>> {
@@ -452,6 +492,33 @@ where
         )
     }
 
+    async fn get_actions_with_last_run(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        include_events: bool,
+    ) -> Result<Vec<(ScheduledAction, Option<ActionExecutionRecord>)>> {
+        let actions = self.get_actions(user_id.clone(), include_events).await?;
+        let owned: Vec<Uuid> = actions
+            .iter()
+            .filter(|action| action.owner.as_user() == Some(&user_id))
+            .filter_map(|action| action.id)
+            .collect();
+        let mut latest: HashMap<Uuid, ActionExecutionRecord> = self
+            .repo
+            .get_latest_execution_records(&owned)
+            .await?
+            .into_iter()
+            .map(|record| (record.action_id, record))
+            .collect();
+        Ok(actions
+            .into_iter()
+            .map(|action| {
+                let last_run = action.id.and_then(|id| latest.remove(&id));
+                (action, last_run)
+            })
+            .collect())
+    }
+
     async fn update_action(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -478,6 +545,7 @@ where
             task: action.task.clone(),
             enabled,
             run_visibility: action.run_visibility,
+            description: action.description.clone(),
         };
         self.replace_configuration(action, input).await
     }

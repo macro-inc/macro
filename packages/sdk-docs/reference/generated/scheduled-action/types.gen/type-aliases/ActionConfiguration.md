@@ -1,6 +1,6 @@
 # Type Alias: ActionConfiguration
 
-> **ActionConfiguration** = \{ `enabled`: `boolean`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `run_visibility?`: [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); \}
+> **ActionConfiguration** = \{ `description?`: `string`; `enabled`: `boolean`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `run_visibility?`: [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); \}
 
 Canonical client configuration. Ownership and execution state are server-owned.
 
@@ -8,6 +8,7 @@ Canonical client configuration. Ownership and execution state are server-owned.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
+| <a id="property-description"></a> `description?` | `string` | What the routine is for, in the owner's words; empty when unset. |
 | <a id="property-enabled"></a> `enabled` | `boolean` | - |
 | <a id="property-kind"></a> `kind` | [`ActionKind`](ActionKind.md) | - |
 | <a id="property-name"></a> `name` | `string` | - |

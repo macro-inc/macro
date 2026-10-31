@@ -1,7 +1,6 @@
 //! Authenticated, bounded HTTP calls to the scheduled-action service.
 use crate::domain::{
     RoutineConfiguration, RoutineDetails, RoutineInfo, RoutineRunStarted, RoutineService,
-    RoutineTarget,
 };
 use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
@@ -73,7 +72,8 @@ impl RoutineClient {
             request = request.json(&body);
         }
         let mut response = request.send().await.context("Routine request failed. Check ListRoutines before retrying a creation; the write may have succeeded.")?;
-        match response.status().as_u16() {
+        let status = response.status().as_u16();
+        match status {
             200..=299 => {
                 const MAX_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
                 ensure!(
@@ -92,12 +92,18 @@ impl RoutineClient {
                 }
                 Ok(body)
             }
-            400 => bail!(
-                "Invalid routine configuration or unavailable model/agent. Check the schedule and select an accessible agent from ListAgents using its bot.botId."
-            ),
-            422 => bail!(
-                "Invalid routine configuration, or a required app is not connected or unusable by the selected agent. Ask the user to connect each app in requiredApps (DiscoverConnectors gives a link) or remove it."
-            ),
+            400 | 422 => {
+                // The scheduler's own validation message names the broken rule.
+                let reason = bounded_text(response).await;
+                if status == 422 {
+                    bail!(
+                        "Invalid routine: {reason}. A required app is not connected or unusable by the selected agent: ask the user to connect each app in requiredApps (DiscoverConnectors gives a link) or remove it."
+                    )
+                }
+                bail!(
+                    "Invalid routine: {reason}. Check the triggers and steps; select agents from ListAgents using their bot.botId."
+                )
+            }
             401 | 403 | 404 => bail!("Routine or target is unavailable to this user."),
             402 => bail!("The user's AI allowance is exhausted, so the routine cannot run now."),
             409 => bail!("Routine is running or changed. Read it again before editing."),
@@ -118,12 +124,13 @@ struct WireRoutine {
 }
 impl From<WireRoutine> for RoutineInfo {
     fn from(r: WireRoutine) -> Self {
+        let configuration = RoutineConfiguration::from_saved(&r.name, &r.trigger, &r.task);
         Self {
             id: r.id,
             name: r.name,
             enabled: r.enabled,
-            trigger: r.trigger,
-            task: r.task,
+            not_editable_here: configuration.as_ref().err().map(ToString::to_string),
+            configuration: configuration.ok(),
             next_run_at: r.next_run_at,
         }
     }
@@ -135,7 +142,7 @@ impl RoutineService for RoutineClient {
         user: &MacroUserIdStr<'static>,
         config: &RoutineConfiguration,
     ) -> Result<RoutineInfo> {
-        let mut body = configuration_body(config, Utc::now())?;
+        let mut body = configuration_body(config, Utc::now(), None)?;
         body["enabled"] = true.into();
         Ok(self
             .request::<WireRoutine>(user, Method::POST, "scheduled-actions", Some(body))
@@ -180,12 +187,18 @@ impl RoutineService for RoutineClient {
         id: Uuid,
         config: &RoutineConfiguration,
     ) -> Result<RoutineInfo> {
+        // A replacement is built against what is saved: it must not drop what
+        // these tools can't state, and it keeps the saved apps unless told.
+        let saved = self
+            .request::<WireRoutine>(user, Method::GET, &format!("scheduled-actions/{id}"), None)
+            .await?;
+        RoutineConfiguration::from_saved(&saved.name, &saved.trigger, &saved.task)?;
         Ok(self
             .request::<WireRoutine>(
                 user,
                 Method::PUT,
                 &format!("scheduled-actions/{id}"),
-                Some(configuration_body(config, Utc::now())?),
+                Some(configuration_body(config, Utc::now(), Some(&saved.task))?),
             )
             .await?
             .into())
@@ -238,28 +251,30 @@ struct WireExecution {
     #[serde(default)]
     resource: Option<Value>,
 }
-fn configuration_body(config: &RoutineConfiguration, now: DateTime<Utc>) -> Result<Value> {
+fn configuration_body(
+    config: &RoutineConfiguration,
+    now: DateTime<Utc>,
+    saved_task: Option<&Value>,
+) -> Result<Value> {
     config.validate(now)?;
-    let (schedule, timezone) = config.schedule.cron(now)?;
-    let mcp_servers: Vec<Value> = config
-        .required_apps
-        .iter()
-        .map(|app| serde_json::json!({ "app_slug": app.app_slug, "server_name": app.name }))
-        .collect();
-    let mut task = serde_json::json!({
-        "prompt": "",
-        "user_prompt": config.instructions,
-        "mcp_servers": mcp_servers,
-    });
-    match &config.target {
-        RoutineTarget::Model { model } => task["model"] = model.clone().into(),
-        RoutineTarget::Agent { agent_id } => {
-            task["agent"] = serde_json::json!({ "bot_id": agent_id })
-        }
+    Ok(serde_json::json!({
+        "name": config.name,
+        "kind": "Agent",
+        "trigger": config.trigger(now)?,
+        "task": config.task(saved_task),
+    }))
+}
+
+/// A short, single-line excerpt of an error body.
+async fn bounded_text(response: reqwest::Response) -> String {
+    const MAX_CHARS: usize = 300;
+    let text = response.text().await.unwrap_or_default();
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    match text.char_indices().nth(MAX_CHARS) {
+        Some((end, _)) => format!("{}…", &text[..end]),
+        None if text.is_empty() => "the configuration was rejected".to_owned(),
+        None => text,
     }
-    Ok(
-        serde_json::json!({ "name": config.name, "kind": "Agent", "trigger": { "type": "cron", "schedule": schedule, "timezone": timezone }, "task": task }),
-    )
 }
 #[cfg(test)]
 mod test;

@@ -1,5 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import type {
+  ScheduledAction,
+  ScheduledActionResponse,
+} from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, onMount } from 'solid-js';
 import type {
@@ -13,6 +16,7 @@ import {
   draftFromSchedule,
   draftToCreateBody,
   draftToUpdateBody,
+  isUnchangedUpdate,
   scheduleToDuplicateBody,
 } from './routine-draft';
 import { useRoutineQuery } from './routines';
@@ -27,7 +31,9 @@ import {
   useUpdateScheduleMutation,
 } from './schedules';
 
-function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
+function toRoutine(
+  schedule: ScheduledAction & Pick<ScheduledActionResponse, 'last_run'>
+): RoutineSnapshot {
   if (!schedule.id) throw new Error('Routine has no ID');
   return {
     id: schedule.id,
@@ -44,9 +50,11 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
       schedule.trigger,
       schedule.task,
       schedule.run_visibility,
+      schedule.description,
     ]),
     draft: draftFromSchedule(schedule),
     templateId: schedule.template_id ?? undefined,
+    lastRun: schedule.last_run ? toHistoryRecord(schedule.last_run) : undefined,
   };
 }
 
@@ -108,6 +116,9 @@ export function createRoutineDetailSource(
       const previous = raw();
       const body = previous && draftToUpdateBody(draft, previous);
       if (!body) throw new Error('Choose a valid execution target.');
+      // An edit that changes nothing (a blur, a value picked again) writes
+      // nothing, so queued runs keep their configuration.
+      if (isUnchangedUpdate(body, previous)) return toRoutine(previous);
       return toRoutine(await update.mutateAsync({ scheduleId: id(), body }));
     },
     run: () => run.mutate({ scheduleId: id() }),

@@ -1,8 +1,4 @@
-import {
-  describeCron,
-  formatTimeLabel,
-  getDefaultTimezone,
-} from '@core/util/cron';
+import { formatTimeLabel, getDefaultTimezone } from '@core/util/cron';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
@@ -552,23 +548,150 @@ export function validateTriggers(
   }
   return null;
 }
-/** One trigger as a sentence, such as "Every Monday at 9:00 AM", without its time zone. */
+/** Cron day numbers (1 is Sunday) in the order a week reads, Monday first. */
+const WEEK_ORDER = ['2', '3', '4', '5', '6', '7', '1'];
+const DAY_NAMES: Record<string, { short: string; plural: string }> = {
+  '1': { short: 'Sun', plural: 'Sundays' },
+  '2': { short: 'Mon', plural: 'Mondays' },
+  '3': { short: 'Tue', plural: 'Tuesdays' },
+  '4': { short: 'Wed', plural: 'Wednesdays' },
+  '5': { short: 'Thu', plural: 'Thursdays' },
+  '6': { short: 'Fri', plural: 'Fridays' },
+  '7': { short: 'Sat', plural: 'Saturdays' },
+};
+const CRON_DAY_NAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+/** Weekly days in words: "Weekdays", "Mondays", "Mon, Wed and Fri". */
+function describeDays(days: readonly string[]): string {
+  const sorted = WEEK_ORDER.filter((day) => days.includes(day));
+  // No days chosen yet: the schedule is still being set up.
+  if (!sorted.length) return 'Weekly';
+  const key = sorted.join(',');
+  if (sorted.length === 7) return 'Every day';
+  if (key === '2,3,4,5,6') return 'Weekdays';
+  if (key === '7,1') return 'Weekends';
+  const [only] = sorted;
+  if (sorted.length === 1 && only) return DAY_NAMES[only]?.plural ?? '';
+  const names = sorted.map((day) => DAY_NAMES[day]?.short ?? day);
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
+
+function ordinal(day: number): string {
+  const tens = day % 100;
+  if (tens >= 11 && tens <= 13) return `${day}th`;
+  return `${day}${match(day % 10)
+    .with(1, () => 'st')
+    .with(2, () => 'nd')
+    .with(3, () => 'rd')
+    .otherwise(() => 'th')}`;
+}
+
+/** A cron day-of-week field as day numbers, or undefined if it isn't one. */
+function cronDays(field: string): string[] | undefined {
+  if (field === '*' || field === '?') return [...WEEK_ORDER];
+  const value = (part: string) => {
+    const index = CRON_DAY_NAMES.indexOf(part.toUpperCase());
+    const day = index >= 0 ? index + 1 : Number(part);
+    return Number.isInteger(day) && day >= 1 && day <= 7 ? day : undefined;
+  };
+  const days = new Set<string>();
+  for (const part of field.split(',')) {
+    const [from, to = from] = part.split('-');
+    const start = value(from ?? '');
+    const end = value(to ?? '');
+    if (start === undefined || end === undefined || start > end) return;
+    for (let day = start; day <= end; day++) days.add(String(day));
+  }
+  return [...days];
+}
+
+const pad = (value: string) => value.padStart(2, '0');
+
+/**
+ * A cron expression in words when it is a plain daily, weekly or monthly
+ * schedule, such as one written with a day range ("2-6") through the API.
+ */
+function describeCronExpression(cron: string): string | undefined {
+  const [second, minute, hour, day, month, weekday, year] = cron
+    .trim()
+    .split(/\s+/);
+  if (second !== '0' || month !== '*' || (year && year !== '*')) return;
+  if (!minute || !/^\d+$/.test(minute) || weekday === undefined) return;
+  if (hour === '*' && day === '*' && (weekday === '*' || weekday === '?'))
+    return minute === '0' ? 'Every hour' : `Every hour at :${pad(minute)}`;
+  if (!hour || !/^\d+$/.test(hour)) return;
+  const time = formatTimeLabel(`${pad(hour)}:${pad(minute)}`);
+  if (day && /^\d+$/.test(day) && (weekday === '*' || weekday === '?'))
+    return `Monthly on the ${ordinal(Number(day))} at ${time}`;
+  if (day !== '*' && day !== '?') return;
+  const days = cronDays(weekday);
+  return days?.length ? `${describeDays(days)} at ${time}` : undefined;
+}
+
+/** A one-off time in the viewer's words, such as "Oct 31 at 9:00 AM". */
+function describeOnce(onceAt: string): string {
+  const at = new Date(onceAt);
+  if (!onceAt || Number.isNaN(at.getTime())) return 'Once';
+  const sameYear = at.getFullYear() === new Date().getFullYear();
+  const date = at.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
+  const time = at.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  return `${date} at ${time}`;
+}
+
+/**
+ * One trigger as it reads in a list, such as "Weekdays at 9:00 AM" or "New
+ * email received", without its time zone.
+ */
 export function describeTrigger(trigger: RoutineTriggerDraft): string {
-  if (trigger.kind === 'event') return `When: ${eventTriggerLabel(trigger)}`;
+  if (trigger.kind === 'event') return eventTriggerLabel(trigger);
+  const time = formatTimeLabel(trigger.time);
   return match(trigger.frequency)
-    .with('week', 'month', (frequency) => {
-      const text = describeCron({
-        frequency,
-        time: trigger.time,
-        daysOfWeek: trigger.daysOfWeek,
-        dayOfMonth: trigger.dayOfMonth,
-      });
-      return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+    .with('week', () => `${describeDays(trigger.daysOfWeek)} at ${time}`)
+    .with('month', () => {
+      const day = Number(trigger.dayOfMonth);
+      return Number.isInteger(day) && day >= 1 && day <= 31
+        ? `Monthly on the ${ordinal(day)} at ${time}`
+        : `Monthly at ${time}`;
     })
-    .with('day', () => `Every day at ${formatTimeLabel(trigger.time)}`)
+    .with('day', () => `Every day at ${time}`)
     .with('hour', () => 'Every hour')
-    .with('once', () => 'Once')
-    .with('custom', () => `Custom schedule (${trigger.cron})`)
+    .with('once', () => describeOnce(trigger.onceAt))
+    .with(
+      'custom',
+      () =>
+        describeCronExpression(trigger.cron) ??
+        `Custom schedule (${trigger.cron.trim()})`
+    )
+    .exhaustive();
+}
+
+/** What kind of thing starts a trigger, for the icon beside it. */
+export type TriggerKind =
+  | 'schedule'
+  | 'email'
+  | 'task'
+  | 'document'
+  | 'channel'
+  | 'call'
+  | 'github';
+
+export function triggerKind(trigger: RoutineTriggerDraft): TriggerKind {
+  if (trigger.kind === 'schedule') return 'schedule';
+  return match(eventScopeKind(trigger))
+    .returnType<TriggerKind>()
+    .with('THREAD', () => 'email')
+    .with('TASK', () => 'task')
+    .with('DOCUMENT', () => 'document')
+    .with('CALL_RECORD', () => 'call')
+    .with('CHANNEL', () => 'channel')
+    .with('GITHUB', () => 'github')
     .exhaustive();
 }
 

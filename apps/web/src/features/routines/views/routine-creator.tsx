@@ -1,46 +1,69 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import XIcon from '@icon/system/regular/x.svg';
-import { Button, EntityComposer, ToggleSwitch } from '@ui';
-import { Show } from 'solid-js';
-import { RoutineRunVisibility } from '../components/routine-run-visibility';
-import type { RoutineEditorSlots } from '../context/routine-slots';
-import type {
-  RoutineCreatorSource,
-  RoutineDraftStorage,
-} from '../context/routine-sources';
-import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
-import { createRoutineComposer } from '../primitives/routine-composer';
+import { Button, EntityComposer } from '@ui';
+import type { Accessor, JSX } from 'solid-js';
+import { RoutineStart } from '../components/routine-start';
+import type { ScheduleDraft } from '../core/draft';
+import { clampDescription } from '../core/routine-draft';
+import {
+  availableTemplates,
+  newRoutineDraft,
+  type RoutineTemplate,
+} from '../core/routine-templates';
 
+/**
+ * New routine: describe it for AI to draft, pick a template, or start fresh.
+ * It never edits a routine itself; each choice hands its first draft to the
+ * new routine's page, which saves it.
+ */
 export function RoutineCreatorView(props: {
-  source: RoutineCreatorSource;
-  storage: RoutineDraftStorage;
-  slots: RoutineEditorSlots;
   defaultModel: string;
-  onCreated(id: string): void;
+  /** Decisions are answered by the classifier behind trigger conditions. */
+  decisionsEnabled: boolean;
+  /** Macro's built-in templates are offered (`enable-routine-starter-templates`). */
+  templatesEnabled: boolean;
+  /** Drafts the routine from a description; absent where that is unavailable. */
+  renderComposer?: (
+    apply: (draft: ScheduleDraft, description: string) => void,
+    current: Accessor<ScheduleDraft>,
+    initialDescription: string | undefined
+  ) => JSX.Element;
+  onStart(draft: ScheduleDraft): void;
   onClose(): void;
 }) {
-  const { draft, change, attempted, formError, submitError, create } =
-    createRoutineComposer(
-      props.source,
-      props.storage,
-      props.defaultModel,
-      props.onCreated,
-      props.slots.createConnectedApps()
+  const context = () => ({
+    decisions: props.decisionsEnabled,
+    defaultModel: props.defaultModel,
+  });
+  const blank = () => newRoutineDraft(undefined, context());
+  // A drafted routine is described by what was asked for.
+  const drafted = (draft: ScheduleDraft, description: string) =>
+    props.onStart(
+      clampDescription(description)
+        ? { ...draft, description: clampDescription(description) }
+        : draft
     );
+  const startFrom = (template: RoutineTemplate) =>
+    props.onStart(newRoutineDraft(template, context()));
   return (
-    <EntityComposer.Root
-      class="w-full h-auto max-h-[75vh]"
-      onKeyDown={(event) => {
-        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-          event.preventDefault();
-          fireAndForget(create(), 'routines');
-        }
-      }}
-    >
-      <EntityComposer.Header>
-        <ClockIcon class="ml-2 size-4 text-ink-muted" />
-        <span class="flex-1 px-1 text-sm text-ink-muted">New routine</span>
+    <EntityComposer.Root class="w-full h-auto max-h-[80vh]">
+      <EntityComposer.Header class="items-start">
+        <ClockIcon class="ml-2 mt-1 size-4 shrink-0 text-ink-muted" />
+        <div class="flex min-w-0 flex-1 flex-col gap-0.5 px-1">
+          <h2 class="text-base font-semibold tracking-[-0.01em] text-ink">
+            New routine
+          </h2>
+          <p class="text-sm text-ink-muted">
+            Automate work you repeat and keep things moving.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => props.onStart(blank())}
+        >
+          Start fresh
+        </Button>
         <Button
           size="icon-md"
           variant="ghost"
@@ -50,87 +73,17 @@ export function RoutineCreatorView(props: {
           <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </EntityComposer.Header>
-      <div class="min-h-0 overflow-y-auto px-2">
-        <input
-          aria-label="Routine name"
-          placeholder="Routine name"
-          value={draft().name}
-          disabled={props.source.pending()}
-          onInput={(e) =>
-            change((draft) => ({ ...draft, name: e.currentTarget.value }))
+      <div class="min-h-0 flex-1 overflow-y-auto px-2 pt-2">
+        <RoutineStart
+          describe={props.renderComposer?.(drafted, blank, undefined)}
+          templates={
+            props.templatesEnabled
+              ? availableTemplates(props.decisionsEnabled)
+              : []
           }
-          class="mb-4 w-full bg-transparent text-xl font-medium leading-7 text-ink outline-none placeholder:text-ink-placeholder"
+          onTemplate={startFrom}
         />
-        <fieldset
-          disabled={props.source.pending()}
-          inert={props.source.pending()}
-          class="grid min-w-0 gap-4"
-        >
-          <section class="min-h-32" aria-label="Instructions">
-            <props.slots.PromptEditor
-              initialValue={draft().prompt}
-              onChange={(prompt) =>
-                change((draft) =>
-                  draft.prompt === prompt ? draft : { ...draft, prompt }
-                )
-              }
-            />
-          </section>
-          <EntityComposer.Properties aria-label="Routine properties">
-            <props.slots.ExecutionPicker
-              target={draft().target}
-              onChange={(target) => change((draft) => ({ ...draft, target }))}
-            />
-            <props.slots.Triggers
-              triggers={draft().triggers ?? []}
-              onChange={(triggers) =>
-                change((draft) => ({ ...draft, triggers }))
-              }
-            />
-            <RoutineRunVisibility
-              value={draft().runVisibility ?? DEFAULT_RUN_VISIBILITY}
-              onChange={(runVisibility) =>
-                change((draft) => ({ ...draft, runVisibility }))
-              }
-            />
-            <props.slots.Apps
-              apps={draft().apps}
-              onChange={(apps) => change((draft) => ({ ...draft, apps }))}
-            />
-          </EntityComposer.Properties>
-        </fieldset>
-        <Show when={attempted() && formError()}>
-          {(message) => (
-            <p role="alert" class="mt-3 text-xs text-failure">
-              {message()}
-            </p>
-          )}
-        </Show>
-        <Show when={submitError()}>
-          {(message) => (
-            <p role="alert" class="mt-3 text-xs text-failure">
-              {message()}
-            </p>
-          )}
-        </Show>
       </div>
-      <EntityComposer.Footer class="border-t border-edge-muted px-2 pt-4 items-center">
-        <ToggleSwitch
-          label="Start enabled"
-          labelClass="text-xs text-ink-muted"
-          checked={draft().enabled ?? true}
-          disabled={props.source.pending()}
-          onChange={(enabled) => change((draft) => ({ ...draft, enabled }))}
-        />
-        <EntityComposer.Submit
-          aria-label={props.source.pending() ? 'Creating…' : 'Create routine'}
-          hasContent={Boolean(draft().prompt.trim())}
-          disabled={props.source.pending()}
-          onClick={() => fireAndForget(create(), 'routines')}
-        >
-          {props.source.pending() ? 'Creating…' : 'Create routine'}
-        </EntityComposer.Submit>
-      </EntityComposer.Footer>
     </EntityComposer.Root>
   );
 }

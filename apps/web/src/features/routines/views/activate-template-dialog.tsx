@@ -85,6 +85,14 @@ export function ActivateTemplateDialog(props: {
   choices: ReadonlyMap<string, ReferenceChoice>;
   onChoose(key: string, choice: ReferenceChoice): void;
   undecided: number;
+  /** Still checking access to the steps' channels, folders and documents. */
+  checking: boolean;
+  /** Retry what checking needs after it failed to load. */
+  onRetry?(): void;
+  /** Steps whose destination the activator can't open; they start empty. */
+  unreachable: number;
+  /** Documents steps act on that the activator can't open; can't activate. */
+  blocked: number;
   pending: boolean;
   error?: string;
   onActivate(): void;
@@ -192,13 +200,28 @@ export function ActivateTemplateDialog(props: {
                 fallback={
                   props.undecided > 0
                     ? `Decide on ${props.undecided} ${props.undecided === 1 ? 'reference' : 'references'} to activate.`
-                    : 'Your routine runs as you, on its own schedule.'
+                    : props.checking
+                      ? props.onRetry
+                        ? 'Couldn’t check which tags you can use.'
+                        : 'Checking what you can open…'
+                      : props.blocked > 0
+                        ? `${props.blocked === 1 ? 'A step acts on a document' : `Steps act on ${props.blocked} documents`} you can’t open. Ask its author to share ${props.blocked === 1 ? 'it' : 'them'} with you.`
+                        : props.unreachable > 0
+                          ? `${props.unreachable} ${props.unreachable === 1 ? 'step uses' : 'steps use'} something you can’t open or apply. Choose your own in the editor; the routine starts off until then.`
+                          : 'Your routine runs as you, on its own schedule.'
                 }
               >
                 {(error) => <span class="text-failure">{error()}</span>}
               </Show>
             </p>
             <div class="flex gap-2">
+              <Show when={props.onRetry}>
+                {(retry) => (
+                  <Button variant="secondary" onClick={() => retry()()}>
+                    Try again
+                  </Button>
+                )}
+              </Show>
               <Button
                 variant="secondary"
                 onClick={() => props.onOpenChange(false)}
@@ -207,7 +230,12 @@ export function ActivateTemplateDialog(props: {
               </Button>
               <Button
                 variant="primary"
-                disabled={props.undecided > 0 || props.pending}
+                disabled={
+                  props.undecided > 0 ||
+                  props.checking ||
+                  props.blocked > 0 ||
+                  props.pending
+                }
                 onClick={() => props.onActivate()}
               >
                 {props.pending ? 'Activating…' : 'Activate'}

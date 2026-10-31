@@ -409,7 +409,11 @@ async fn legacy_and_canonical_cron_create_update_return_compatibility_fields() {
         let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
         let (status, updated) = request(&app, "PUT", &url, "owner", input).await;
         assert_eq!(status, StatusCode::OK);
-        assert_eq!(updated["configuration_revision"], 2);
+        // The same configuration again replaces nothing.
+        assert_eq!(
+            updated["configuration_revision"],
+            created["configuration_revision"]
+        );
         assert_eq!(updated["created_at"], created["created_at"]);
     }
 }
