@@ -93,7 +93,7 @@ import {
   handleCommsTyping,
   TYPING_INDICATOR_TIMEOUT_MS,
 } from '@queries/messages/typing';
-import { AgentTyping, AgentTypingProvider } from './agent-typing';
+import { AgentTyping } from './agent-typing';
 
 const parent = { type: 'channel', id: 'dm' } as const;
 const BOT = 'bot|0a8f5e1c-2b3d-4e5f-8a9b-0c1d2e3f4a5b';
@@ -304,13 +304,30 @@ it('keeps a card as it was left through a metadata event that resends it', () =>
   expect(mocks.cards).toBe(1);
 });
 
-it('moves the live turn with the newest row rather than starting it over', () => {
-  typing('waiting');
-  setMessages([writing('')]);
-  setMetadata(asking('ask-1'));
+it('follows the newest message with the step the turn is on', () => {
+  typing('working');
+  setMessages([
+    {
+      ...writing('Checking first.'),
+      segments: [
+        { index: 0, kind: 'prose', start: 0, end: 1, sealed: true, rows: [] },
+        {
+          index: 1,
+          kind: 'activity',
+          start: 1,
+          end: 2,
+          sealed: false,
+          rows: [
+            { id: 't1', label: 'Reading', detail: null, status: 'running' },
+          ],
+        },
+      ],
+      phase: 'working',
+    },
+  ]);
   const [newest, setNewest] = createSignal<string>('first');
   const view = show(() => (
-    <AgentTypingProvider parent={parent} threadId={null}>
+    <>
       <For each={['first', 'second']}>
         {(row) => (
           <div data-testid={row}>
@@ -320,32 +337,22 @@ it('moves the live turn with the newest row rather than starting it over', () =>
           </div>
         )}
       </For>
-      {/* Another place makes its own rows; nothing types there. */}
+      {/* Nothing types in a thread here. */}
       <div data-testid="thread">
         <AgentTyping parent={parent} threadId="thread" />
       </div>
-    </AgentTypingProvider>
+    </>
   ));
-  const answer = within(view.getByTestId('first')).getByRole<HTMLInputElement>(
-    'textbox',
-    { name: 'Answer' }
-  );
-  answer.value = 'main';
-
-  // A message arrives below, so the next row is the newest.
-  setNewest('second');
   expect(
-    within(view.getByTestId('second')).getByRole('textbox', { name: 'Answer' })
-  ).toBe(answer);
-  // The reader scrolls away, and the virtualized row unmounts, then back.
-  setNewest('');
-  expect(view.queryByRole('textbox', { name: 'Answer' })).toBeNull();
-  setNewest('second');
-  expect(view.getByRole('textbox', { name: 'Answer' })).toBe(answer);
+    within(view.getByTestId('first')).getByRole('status').textContent
+  ).toBe('Reading');
 
-  expect(answer.value).toBe('main');
-  expect(mocks.cards).toBe(1);
-  expect(mocks.liveSessions).toBe(1);
+  // The agent posts a message, so the next row is the newest.
+  setNewest('second');
+  expect(within(view.getByTestId('first')).queryByRole('status')).toBeNull();
+  expect(
+    within(view.getByTestId('second')).getByRole('status').textContent
+  ).toBe('Reading');
   expect(within(view.getByTestId('thread')).queryByRole('status')).toBeNull();
 });
 

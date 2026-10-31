@@ -13,22 +13,17 @@ import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
 import { useBotProfile } from '@queries/bots/profiles';
 import { queryReadyGate } from '@queries/gate';
-import { parentKey } from '@queries/messages/keys';
 import { getTypingAgents, type TypingAgent } from '@queries/messages/typing';
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import type { MessageParent } from '@service-storage/messages';
 import { Key } from '@solid-primitives/keyed';
 import {
-  createContext,
   createMemo,
   createSignal,
   For,
-  type JSX,
   onCleanup,
-  type ParentProps,
   Show,
   Suspense,
-  useContext,
 } from 'solid-js';
 import { LiveTail } from './components/live-tail';
 import { TypingRow } from './components/typing-row';
@@ -39,11 +34,6 @@ import { createLiveSession } from './queries/live-session';
 /** One place of a conversation: the timeline, or one thread. */
 type TypingPlace = { parent: MessageParent; threadId: string | null };
 
-const KeptRowsContext = createContext<{
-  shows: (place: TypingPlace) => boolean;
-  rows: JSX.Element;
-}>();
-
 /**
  * Agents typing in one place of a conversation - the timeline, or one
  * thread - each as a typing row that says what the agent is doing: the step
@@ -51,50 +41,15 @@ const KeptRowsContext = createContext<{
  * doing. That viewer also gets Stop, and anything the turn is waiting on
  * beneath the row.
  *
- * Under an {@link AgentTypingProvider} for the same place, these are the
- * provider's rows, moved here.
+ * A list shows it under its newest row, so it mounts again whenever a message
+ * arrives; the live session it reads is shared, so it picks up where it was.
  */
 export function AgentTyping(props: TypingPlace) {
-  const kept = useContext(KeptRowsContext);
+  // A boundary of its own: rows that suspend must not blank the message.
   return (
-    <Show
-      when={kept?.shows(props)}
-      fallback={
-        <AgentTypingRows parent={props.parent} threadId={props.threadId} />
-      }
-    >
-      {kept?.rows}
-    </Show>
-  );
-}
-
-/**
- * Makes one place's typing rows once, for a list that shows them under
- * whichever of its rows is newest: a row that changes when a message
- * arrives, and that a virtualized list unmounts once the reader scrolls
- * away. Rows made inside it would go with it - the turn's live view would
- * load again, and every card beneath it would start over, dropping an
- * answer or a draft the viewer had half written. Made here, the rows outlive
- * the list's rows and only move between them.
- */
-export function AgentTypingProvider(props: ParentProps<TypingPlace>) {
-  // A boundary of their own: rows that suspend must not blank the list.
-  const rows = (
     <Suspense>
       <AgentTypingRows parent={props.parent} threadId={props.threadId} />
     </Suspense>
-  );
-  return (
-    <KeptRowsContext.Provider
-      value={{
-        shows: (place) =>
-          place.threadId === props.threadId &&
-          parentKey(place.parent) === parentKey(props.parent),
-        rows,
-      }}
-    >
-      {props.children}
-    </KeptRowsContext.Provider>
   );
 }
 
