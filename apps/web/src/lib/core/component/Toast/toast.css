@@ -55,13 +55,8 @@
   color: var(--color-ink);
 }
 
-/* Keep the main app's raised dark surface without changing toast layout. */
+/* Keep the dark border and inset shadow over the solid toast fill. */
 [data-theme-light='false'] .macro-toast-surface {
-  background: linear-gradient(
-    to bottom,
-    color-mix(in oklch, var(--color-toast), var(--color-ink) 3%),
-    var(--color-toast)
-  );
   border-color: color-mix(in oklch, var(--color-ink) 8%, transparent);
   box-shadow: inset 0 -1px 0 rgb(0 0 0 / 20%);
 }
