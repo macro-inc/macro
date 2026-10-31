@@ -147,12 +147,16 @@ export function channelsByIdsQueryArgs(
   };
 }
 
-export function useChannelsByIdsQuery(channelIds: Accessor<readonly string[]>) {
+export function useChannelsByIdsQuery(
+  channelIds: Accessor<readonly string[]>,
+  options?: Accessor<{ networkPaused?: boolean }>
+) {
   const query = useSoupAstItemsQuery(
     () => channelsByIdsQueryArgs(channelIds()),
     // Rail rows need only bounded unread evidence, like the channel lists.
     () => ({
       enabled: channelIds().length > 0,
+      networkPaused: options?.().networkPaused,
       staleTime: 30_000,
       graphqlProjection: 'channel-list',
     })
@@ -160,6 +164,7 @@ export function useChannelsByIdsQuery(channelIds: Accessor<readonly string[]>) {
   // Drive the external paginated query until all requested matches are loaded.
   createEffect(() => {
     if (
+      options?.().networkPaused ||
       !query.isEnabled ||
       query.isLoading ||
       query.isFetching ||
