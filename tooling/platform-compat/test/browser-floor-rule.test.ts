@@ -29,6 +29,10 @@ tester.run('browser-floor', browserFloorRule, {
     },
     { code: 'navigator.vibrate?.(10);', options: safari },
     {
+      code: 'const signal = AbortSignal.any && AbortSignal.any([a, b]);',
+      options: safari,
+    },
+    {
       code: 'const status = navigator.permissions?.query({ name: "camera" });',
       options: safari,
     },
@@ -84,6 +88,16 @@ tester.run('browser-floor', browserFloorRule, {
     },
     {
       code: "if (ready) new SharedWorker('w.js');",
+      options: safari,
+      errors: [{ messageId: 'unsupported' }],
+    },
+    {
+      code: 'if (AbortSignal.any([signal]).aborted) cancel();',
+      options: safari,
+      errors: [{ messageId: 'unsupported' }],
+    },
+    {
+      code: 'const deferred = Promise.withResolvers() || fallback();',
       options: safari,
       errors: [{ messageId: 'unsupported' }],
     },

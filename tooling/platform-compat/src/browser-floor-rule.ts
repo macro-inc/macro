@@ -53,9 +53,10 @@ function precedingStatements(
 
 /**
  * Whether the use sits behind a feature check: an optional call or access,
- * `typeof`, the test of a condition, a branch whose condition names the
- * feature, or an earlier early-exit check. A `try` block is not one: its
- * `catch` usually reports a failure instead of falling back.
+ * `typeof`, an existence check in a condition, a branch whose condition names
+ * the feature, or an earlier early-exit check. Calling the feature inside a
+ * condition is not a check, and neither is a `try` block: its `catch` usually
+ * reports a failure instead of falling back.
  */
 function isGuarded(
   chain: readonly ESTree.Node[],
@@ -75,6 +76,13 @@ function isGuarded(
   ) {
     return true;
   }
+  // An existence check reads the feature without calling, constructing or
+  // dereferencing it.
+  const checksExistence =
+    !(
+      (parent?.type === 'CallExpression' || parent?.type === 'NewExpression') &&
+      parent.callee === node
+    ) && !(parent?.type === 'MemberExpression' && parent.object === node);
   const namePattern = new RegExp(
     `\\b${featureName.replace(/[$]/g, '\\$&')}\\b`
   );
@@ -89,10 +97,12 @@ function isGuarded(
         break;
       case 'IfStatement':
       case 'ConditionalExpression':
-        if (child === ancestor.test || mentions(ancestor.test)) return true;
+        if (child === ancestor.test ? checksExistence : mentions(ancestor.test))
+          return true;
         break;
       case 'LogicalExpression':
-        if (child === ancestor.left || mentions(ancestor.left)) return true;
+        if (child === ancestor.left ? checksExistence : mentions(ancestor.left))
+          return true;
         break;
       default:
         for (const statement of precedingStatements(ancestor, child)) {
