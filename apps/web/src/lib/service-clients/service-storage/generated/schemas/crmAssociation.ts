@@ -10,4 +10,7 @@ import type { CrmAssociationOneOfTwo } from './crmAssociationOneOfTwo';
 /**
  * The CRM record an association filter names.
  */
-export type CrmAssociation = CrmAssociationOneOf | CrmAssociationOneOfTwo;
+export type CrmAssociation =
+  | CrmAssociationOneOf
+  | CrmAssociationOneOfTwo
+  | 'activity';

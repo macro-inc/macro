@@ -38,6 +38,20 @@ function driveDocumentContent(
   };
 }
 
+/** A split showing a folder on Drive's own route. */
+export function driveFolderContent(folderId: string): SplitContent {
+  return {
+    type: 'component',
+    id: 'documents',
+    entryMetadata: {
+      route: paneRoute(
+        { id: 'drive', params: {} },
+        { id: 'drive-folder', params: { view: 'folder', folderId } }
+      ),
+    },
+  };
+}
+
 /** Construct Drive-owned split content before the layout mounts a block. */
 export function driveHostedContent(
   content: { type: string; id: string },

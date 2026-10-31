@@ -1,6 +1,6 @@
+import PlusIcon from '@icon/system/regular/plus.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Combobox } from '@kobalte/core/combobox';
-import PlusIcon from '@phosphor/plus.svg';
 import { Layer } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { PropertyIcon } from '../../database/components/property-icon';

@@ -435,36 +435,51 @@ async fn bot_typed_body_failure_is_rejected_before_acl_lookup() {
 }
 
 #[tokio::test]
-async fn channels_and_static_files_keep_get_access_level_semantics() {
+async fn channels_use_get_entity_permission_for_org_aware_access() {
     let state = TestState::new(Some(AccessLevel::View));
+    let response = router(state.clone())
+        .oneshot(
+            request("/view")
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .body(body("channel", "channel-1"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-    for (entity_type, entity_id) in [("channel", "channel-1"), ("static_file", "static-1")] {
-        let response = router(state.clone())
-            .oneshot(
-                request("/view")
-                    .header(header::AUTHORIZATION, "Bearer valid")
-                    .body(body(entity_type, entity_id))
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-    }
-
+    assert_eq!(response.status(), StatusCode::OK);
+    // Channels use get_entity_permission (which delegates to get_access_level
+    // in the fake) to support organization-aware access for public/org channels.
     assert_eq!(
         state.entity_access.calls(),
-        [
-            AccessCall {
-                user_id: Some(USER_ID.to_string()),
-                entity_id: "channel-1".to_string(),
-                entity_type: EntityType::Channel,
-            },
-            AccessCall {
-                user_id: Some(USER_ID.to_string()),
-                entity_id: "static-1".to_string(),
-                entity_type: EntityType::StaticFile,
-            },
-        ]
+        [AccessCall {
+            user_id: Some(USER_ID.to_string()),
+            entity_id: "channel-1".to_string(),
+            entity_type: EntityType::Channel,
+        },]
+    );
+}
+
+#[tokio::test]
+async fn static_files_use_get_access_level() {
+    let state = TestState::new(Some(AccessLevel::View));
+    let response = router(state.clone())
+        .oneshot(
+            request("/view")
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .body(body("static_file", "static-1"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        state.entity_access.calls(),
+        [AccessCall {
+            user_id: Some(USER_ID.to_string()),
+            entity_id: "static-1".to_string(),
+            entity_type: EntityType::StaticFile,
+        },]
     );
 }

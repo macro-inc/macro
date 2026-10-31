@@ -106,8 +106,8 @@ where
     }
 
     async fn run(&self, candidate: MessagePostedMetadata) {
-        // Guarded upstream, but double-check: only user messages trigger bots.
-        let Some(requesting_user) = candidate.sender.as_user().cloned() else {
+        // Attribution names the user whose access and billing apply.
+        let Some(requesting_user) = candidate.invoking_user() else {
             return;
         };
         let reply_thread_id = candidate.root_id();

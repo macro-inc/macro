@@ -62,6 +62,7 @@ export function createComposeContext(): EmailComposeContext & {
       readDroppedFiles: vi.fn(),
       makePublic: vi.fn(),
       uploadEditorFiles: vi.fn(),
+      uploadDocuments: vi.fn(async () => []),
     },
     notices: {
       feedback: {
@@ -71,6 +72,7 @@ export function createComposeContext(): EmailComposeContext & {
         dismiss: vi.fn(),
       },
       blockingNotice: vi.fn(async () => {}),
+      confirm: vi.fn(async () => false),
       reportError: vi.fn(),
     },
     drafts: {

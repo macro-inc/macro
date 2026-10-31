@@ -20,22 +20,36 @@ if [ -z "$app" ]; then
 fi
 codesign --verify --deep --strict --verbose=2 "$app"
 
-# WebKit hides navigator.mediaDevices without the usage strings, and the
-# hardened runtime blocks capture without the entitlements.
-for key in NSCameraUsageDescription NSMicrophoneUsageDescription; do
-  value=$(/usr/libexec/PlistBuddy -c "Print :$key" "$app/Contents/Info.plist" 2>/dev/null || true)
-  if [ -z "${value//[[:space:]]/}" ]; then
-    echo "Info.plist is missing a $key string" >&2
-    exit 1
-  fi
-done
-entitlements=$(mktemp)
-codesign -d --entitlements - --xml "$app" > "$entitlements"
-for key in com.apple.security.device.camera com.apple.security.device.audio-input; do
-  if [ "$(/usr/libexec/PlistBuddy -c "Print :$key" "$entitlements" 2>/dev/null || true)" != true ]; then
-    echo "App signature does not grant the $key entitlement" >&2
-    exit 1
-  fi
+framework="$app/Contents/Frameworks/Chromium Embedded Framework.framework"
+if [ ! -s "$framework/Chromium Embedded Framework" ]; then
+  echo "Signed DMG is missing the Chromium framework" >&2
+  exit 1
+fi
+helpers=("$app"/Contents/Frameworks/*.app)
+if [ "${#helpers[@]}" -lt 5 ]; then
+  echo "Signed DMG is missing Chromium helper apps" >&2
+  exit 1
+fi
+
+check_cef_entitlements() {
+  local bundle="$1"
+  local entitlements
+  entitlements=$(mktemp)
+  codesign -d --entitlements :- "$bundle" > "$entitlements" 2>/dev/null
+  for key in \
+    com.apple.security.cs.allow-jit \
+    com.apple.security.cs.allow-unsigned-executable-memory \
+    com.apple.security.cs.disable-library-validation; do
+    if [ "$(/usr/libexec/PlistBuddy -c "Print :$key" "$entitlements")" != true ]; then
+      echo "$bundle is missing the $key entitlement" >&2
+      exit 1
+    fi
+  done
+  rm "$entitlements"
+}
+check_cef_entitlements "$app"
+for helper in "${helpers[@]}"; do
+  check_cef_entitlements "$helper"
 done
 
 dylib_refs=$(mktemp)

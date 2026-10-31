@@ -93,7 +93,11 @@ async fn stock_openssh_forwards_http_and_websockets_and_stop_closes_them() {
     assert!(status.success(), "generated script failed");
     tokio::time::timeout(Duration::from_secs(15), async {
         loop {
-            let preview = service.get(receipt(AccessLevel::View)).unwrap().unwrap();
+            let preview = service
+                .get(receipt(AccessLevel::View))
+                .await
+                .unwrap()
+                .unwrap();
             if preview.status == PreviewStatus::Ready {
                 break;
             }
@@ -102,7 +106,7 @@ async fn stock_openssh_forwards_http_and_websockets_and_stop_closes_them() {
     })
     .await
     .unwrap();
-    let ticket = service.launch(receipt(AccessLevel::View)).unwrap();
+    let ticket = service.launch(receipt(AccessLevel::View)).await.unwrap();
     let cookie = service.redeem(&preview, &ticket.ticket).await.unwrap();
     let lease = service.viewer(&preview, &cookie, true).await.unwrap();
     let mut stream = lease.tunnel().unwrap().open().await.unwrap();
@@ -287,4 +291,69 @@ async fn gateway_refuses_outbound_relay_and_shell() {
 
     shutdown.cancel();
     let _ = server.await;
+}
+
+#[tokio::test]
+async fn stop_closes_authenticated_ssh_before_a_forward_is_registered() {
+    struct Client {
+        key: russh::keys::PublicKey,
+        closed: Arc<tokio::sync::Notify>,
+    }
+    impl russh::client::Handler for Client {
+        type Error = russh::Error;
+        async fn check_server_key(
+            &mut self,
+            key: &russh::keys::PublicKeyOrCertificate,
+        ) -> Result<bool, Self::Error> {
+            // SSH transmits key material without the fixture's OpenSSH comment.
+            Ok(key.public_key().key_data() == self.key.key_data())
+        }
+        async fn disconnected(
+            &mut self,
+            reason: russh::client::DisconnectReason<Self::Error>,
+        ) -> Result<(), Self::Error> {
+            self.closed.notify_one();
+            match reason {
+                russh::client::DisconnectReason::ReceivedDisconnect(_) => Ok(()),
+                russh::client::DisconnectReason::Error(error) => Err(error),
+            }
+        }
+    }
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (service, _, key) = fixture(address.port());
+    let pinned = key.public_key().clone();
+    let shutdown = CancellationToken::new();
+    let server = tokio::spawn(serve(
+        listener,
+        key,
+        service.clone(),
+        Arc::new(|h| Arc::new(SshTunnel::new(h))),
+        shutdown.clone(),
+    ));
+    let share = service.share(identity(), 3000).await.unwrap();
+    let closed = Arc::new(tokio::sync::Notify::new());
+    let mut client = russh::client::connect(
+        Arc::new(russh::client::Config::default()),
+        address,
+        Client {
+            key: pinned,
+            closed: closed.clone(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        client
+            .authenticate_none(share.token)
+            .await
+            .unwrap()
+            .success()
+    );
+    service.stop(receipt(AccessLevel::Edit)).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(3), closed.notified())
+        .await
+        .unwrap();
+    shutdown.cancel();
+    server.await.unwrap().unwrap();
 }

@@ -1,5 +1,6 @@
+import { match } from 'ts-pattern';
 import { describe, expect, it } from 'vitest';
-import { INITIAL_CACHE_REVISION } from '../protocol';
+import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
 import { type CoordinatorAction, CoordinatorCore } from './coordinator-core';
 import type { DatabaseActionProof } from './coordinator-protocol';
 
@@ -231,11 +232,49 @@ describe('CoordinatorCore', () => {
     ]);
   });
 
-  it('hands over only while no engine is changing the files', () => {
+  it('completes the handover once no engine is changing the files', () => {
     const activating = new CoordinatorCore('scope');
     activating.registerTab('tab-a');
     grantStorage(activating, 'tab-a', 1);
     expect(activating.supersede()).toEqual([]);
+    expect(activating.handingOver).toBe(true);
+    // The handover completes once the opening engine is ready.
+    expect(
+      activating.engineReady({
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+        ownerLockName: OWNER_LOCK,
+        expectedOwnerLockName: OWNER_LOCK,
+        ownerLockHeld: true,
+        databaseActionProof: 'opened-existing',
+        openOutcome: 'opened-existing',
+      })
+    ).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(activating.superseded).toBe(true);
+
+    // A draining engine closes its files first, and nothing is elected after
+    // it even though a visible tab remains.
+    const draining = new CoordinatorCore('scope');
+    draining.registerTab('tab-a');
+    draining.registerTab('tab-b');
+    ready(draining, 'tab-a', 1, 'opened-existing');
+    expect(
+      action(draining.setTabVisibility('tab-a', false), 'drain-owner')
+    ).toMatchObject({ tabId: 'tab-a', handoff: true });
+    expect(draining.supersede()).toEqual([]);
+    expect(draining.handingOver).toBe(true);
+    const drained = draining.engineDrained('tab-a', 1);
+    expect(drained).toContainEqual({
+      kind: 'broadcast-cache-superseded',
+      reason: expect.stringContaining('newer version of the app'),
+    });
+    expect(drained.some((item) => item.kind === 'elect-owner')).toBe(false);
+    expect(draining.state.kind).toBe('waiting-for-tab');
 
     // An idle coordinator's tabs, already uncached, move on too.
     const idle = new CoordinatorCore('scope');
@@ -245,6 +284,33 @@ describe('CoordinatorCore', () => {
     expect(idle.supersede()).toEqual([
       {
         kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+  });
+
+  it('hands over instead of wiping after losing an engine promised to a newer build', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    grantStorage(core, 'tab-a', 1);
+    expect(core.supersede()).toEqual([]);
+
+    core.tabLost('tab-a');
+    expect(core.state.kind).toBe('resetting-after-loss');
+
+    expect(core.resumeAfterLoss()).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(core.superseded).toBe(true);
+    expect(core.state.kind).toBe('waiting-for-tab');
+    expect(core.registerTab('tab-c')).toEqual([
+      {
+        kind: 'notify-cache-unavailable',
+        tabId: 'tab-c',
         reason: expect.stringContaining('newer version of the app'),
       },
     ]);
@@ -610,6 +676,130 @@ describe('CoordinatorCore', () => {
     });
   });
 
+  it.each(['navigation', 'graceful', 'abrupt'] as const)(
+    'keeps routed enqueues uncertain and unrouted enqueues queued after %s departure',
+    (departureKind) => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      const enqueue = {
+        id: 9,
+        kind: 'enqueue-optimistic-mutation',
+        uuid: '00000000-0000-4000-8000-000000000001',
+        query: 'mutation Enqueue { enqueue }',
+        data: { enqueue: true },
+        createdAtMs: 1,
+        owner: 'tab-b',
+        nowMs: 1,
+        leaseExpiresAtMs: 300_001,
+      } satisfies CacheRequest;
+      const routed = action(core.request('tab-b', enqueue), 'route-request');
+      core.beginGracefulDeparture('tab-a', 1);
+      const queued = {
+        ...enqueue,
+        id: 10,
+        uuid: '00000000-0000-4000-8000-000000000002',
+      };
+      expect(core.request('tab-b', queued)).toEqual([]);
+
+      const departure = match(departureKind)
+        .with('navigation', () =>
+          core.departForNavigation('tab-a', 1, 'pagehide')
+        )
+        .with('graceful', () => core.engineDrained('tab-a', 1))
+        .with('abrupt', () => [
+          ...core.ownerLost('tab-a', 1, 'worker stopped'),
+          ...core.resumeAfterLoss(),
+        ])
+        .exhaustive();
+      expect(departure.filter(({ kind }) => kind === 'reject-request')).toEqual(
+        [
+          {
+            kind: 'reject-request',
+            tabId: 'tab-b',
+            requestId: 9,
+            error: expect.any(String),
+            errorCode: 'admitted-enqueue-uncertain',
+          },
+        ]
+      );
+      expect(action(departure, 'elect-owner')).toMatchObject({
+        tabId: 'tab-b',
+        ownerEpoch: 2,
+        databaseAction:
+          departureKind === 'abrupt' ? 'wipe-before-open' : 'open-existing',
+      });
+      const replacement = ready(
+        core,
+        'tab-b',
+        2,
+        departureKind === 'abrupt' ? 'wiped-before-open' : 'opened-existing'
+      );
+      expect(
+        replacement.filter(({ kind }) => kind === 'route-request')
+      ).toEqual([
+        expect.objectContaining({
+          ownerEpoch: 2,
+          request: { ...queued, id: expect.any(Number) },
+        }),
+      ]);
+      expect(
+        core.engineResponse(1, routed.routeId, {
+          id: routed.routeId,
+          ok: true,
+          result: null,
+        })
+      ).toEqual([
+        expect.objectContaining({ kind: 'drop-stale-engine-message' }),
+      ]);
+    }
+  );
+
+  it.each([false, true])(
+    'announces a reset before draining a hidden recovery owner (visible survivor: %s)',
+    (visibleSurvivor) => {
+      const core = new CoordinatorCore('scope');
+      core.registerTab('tab-a');
+      core.registerTab('tab-b');
+      ready(core, 'tab-a', 1, 'opened-existing');
+      core.ownerLost('tab-a', 1, 'engine failed');
+      core.resumeAfterLoss();
+      core.setTabVisibility('tab-a', visibleSurvivor);
+      core.setTabVisibility('tab-b', false);
+      expect(
+        core.request('tab-a', { id: 9, kind: 'current-revision' })
+      ).toEqual([]);
+
+      expect(ready(core, 'tab-b', 2, 'wiped-before-open')).toEqual([
+        {
+          kind: 'broadcast-engine-replaced',
+          ownerEpoch: 2,
+          openOutcome: 'reset-storage-uncertain',
+        },
+        { kind: 'drain-owner', tabId: 'tab-b', ownerEpoch: 2, handoff: true },
+      ]);
+      expect(core.state.kind).toBe('draining');
+      expect(core.snapshot().inFlightRequestCount).toBe(0);
+      expect(core.snapshot().queuedRequestCount).toBe(1);
+      core.engineDrained('tab-b', 2);
+      if (!visibleSurvivor) {
+        expect(core.state.kind).toBe('parked');
+        core.setTabVisibility('tab-a', true);
+      }
+      const reopened = ready(core, 'tab-a', 3, 'opened-existing');
+      expect(action(reopened, 'broadcast-engine-replaced')).toMatchObject({
+        ownerEpoch: 3,
+        openOutcome: 'opened-existing',
+      });
+      expect(action(reopened, 'route-request')).toMatchObject({
+        ownerEpoch: 3,
+        requesterTabId: 'tab-a',
+        request: { kind: 'current-revision' },
+      });
+    }
+  );
+
   it('does not downgrade an interrupted recovery activation to open-existing', () => {
     const core = new CoordinatorCore('scope');
     core.registerTab('tab-a');
@@ -736,6 +926,35 @@ describe('CoordinatorCore', () => {
         databaseAction: 'wipe-before-open',
       },
     ]);
+  });
+
+  it('retries exhausted asset bootstrap from a new host without resetting persisted writes', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('failed-host');
+    core.ownerLost('failed-host', 1, 'Failed to fetch');
+    expect(core.terminalFailure('bootstrap exhausted')).toEqual([
+      {
+        kind: 'terminal-failure',
+        error: 'bootstrap exhausted',
+        storageUntouched: true,
+      },
+    ]);
+    expect(core.registerTab('replacement')).toEqual([
+      {
+        kind: 'elect-owner',
+        tabId: 'replacement',
+        ownerEpoch: 2,
+        databaseAction: 'open-existing',
+      },
+    ]);
+    ready(core, 'replacement', 2, 'opened-existing');
+    expect(core.request('failed-host', { id: 7, kind: 'clear' })).toEqual([
+      expect.objectContaining({
+        kind: 'reject-request',
+        errorCode: 'owner-lock-unavailable',
+      }),
+    ]);
+    expect(core.snapshot().activeOwnerCount).toBe(1);
   });
 
   it('makes retry exhaustion terminal for current and future tabs', () => {

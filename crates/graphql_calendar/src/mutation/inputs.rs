@@ -3,7 +3,7 @@ use calendar_events::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEventDraft, CalendarEventPatch,
         ConferenceChange, EventReminderOverride, EventReminders, EventTime, EventTransparency,
-        EventVisibility, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
+        EventVisibility, GuestPolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
     },
     ports::{CalendarDeletionScope, CalendarRsvpScope, CalendarUpdateScope},
 };
@@ -181,6 +181,27 @@ pub struct CalendarOutOfOfficeInput {
     pub decline_message: Option<String>,
 }
 
+/// What guests may do with an event; Google calendars only.
+#[derive(InputObject, Clone, Copy, Debug)]
+pub struct CalendarGuestPolicyInput {
+    /// Whether guests may change the event; implies inviting others.
+    pub can_modify: bool,
+    /// Whether guests may invite others.
+    pub can_invite_others: bool,
+    /// Whether guests may see the guest list.
+    pub can_see_other_guests: bool,
+}
+
+impl From<CalendarGuestPolicyInput> for GuestPolicy {
+    fn from(input: CalendarGuestPolicyInput) -> Self {
+        Self {
+            can_modify: input.can_modify,
+            can_invite_others: input.can_invite_others,
+            can_see_other_guests: input.can_see_other_guests,
+        }
+    }
+}
+
 impl From<CalendarOutOfOfficeInput> for OutOfOfficeProperties {
     fn from(input: CalendarOutOfOfficeInput) -> Self {
         Self {
@@ -262,6 +283,8 @@ pub struct CreateCalendarEventInput {
     /// Present to create an out-of-office status event (primary calendar
     /// only, timed, no attendees).
     pub out_of_office: Option<CalendarOutOfOfficeInput>,
+    /// What guests may do; omit for Google's defaults.
+    pub guest_policy: Option<CalendarGuestPolicyInput>,
 }
 
 pub(crate) struct CreateRequest {
@@ -293,6 +316,7 @@ impl CreateCalendarEventInput {
                     .transpose()?,
                 conference: self.conference.map(Into::into),
                 out_of_office: self.out_of_office.map(Into::into),
+                guest_policy: self.guest_policy.map(Into::into),
             },
         })
     }
@@ -338,6 +362,9 @@ pub struct UpdateCalendarEventInput {
     /// Replacement out-of-office properties, applied only to an event that is
     /// already out-of-office.
     pub out_of_office: Option<CalendarOutOfOfficeInput>,
+    /// Replacement guest policy; only the organizer of a Google event may
+    /// change it, for the whole event or series.
+    pub guest_policy: Option<CalendarGuestPolicyInput>,
     /// How much of a recurring series the update covers. Omit to let
     /// `recurrenceId` decide: the identified occurrence alone when one is
     /// supplied, otherwise the whole event or series.
@@ -393,6 +420,7 @@ impl UpdateCalendarEventInput {
                     .transpose()?,
                 conference: self.conference.map(Into::into),
                 out_of_office: self.out_of_office.map(Into::into),
+                guest_policy: self.guest_policy.map(Into::into),
             },
             scope,
         })
@@ -482,7 +510,8 @@ pub struct RespondToCalendarEventInput {
     pub scope: Option<GraphqlCalendarRsvpScope>,
     /// Original-start key of the occurrence the response targets.
     pub recurrence_id: Option<String>,
-    /// The owned connected address whose attendance is changed.
+    /// The owned connected address whose attendance is changed. Omit to
+    /// answer as the inbox the addressed copy syncs through.
     pub responding_email: Option<String>,
 }
 
@@ -510,6 +539,69 @@ impl RespondToCalendarEventInput {
             response: self.response.into(),
             scope,
             responding_email: self.responding_email,
+        })
+    }
+}
+
+/// A guest to add to an event.
+#[derive(InputObject, Clone, Debug)]
+pub struct CalendarGuestInput {
+    /// Guest email address.
+    pub email: String,
+    /// Whether attendance is optional.
+    #[graphql(default)]
+    pub optional: bool,
+}
+
+impl From<CalendarGuestInput> for CalendarAttendeeInput {
+    fn from(input: CalendarGuestInput) -> Self {
+        Self {
+            email: input.email,
+            is_optional: input.optional,
+            response_status: None,
+        }
+    }
+}
+
+/// Add guests to an event without touching anyone already invited.
+#[derive(InputObject, Clone, Debug)]
+pub struct InviteCalendarEventGuestsInput {
+    /// Event to add guests to.
+    pub event_id: ID,
+    /// Calendar whose copy of the event is written, for an event synced from
+    /// more than one calendar. Omit to write the canonical copy.
+    pub calendar_id: Option<ID>,
+    /// Guests to add; anyone already on the event is skipped.
+    pub guests: Vec<CalendarGuestInput>,
+    /// How much of a recurring series gains the guests.
+    pub scope: GraphqlCalendarUpdateScope,
+    /// Original-start key of the occurrence; required with `THIS_EVENT`.
+    pub recurrence_id: Option<String>,
+}
+
+pub(crate) struct InviteRequest {
+    pub(crate) event_id: Uuid,
+    pub(crate) calendar_id: Option<Uuid>,
+    pub(crate) guests: Vec<CalendarAttendeeInput>,
+    pub(crate) scope: CalendarUpdateScope,
+}
+
+impl InviteCalendarEventGuestsInput {
+    pub(crate) fn into_request(self) -> async_graphql::Result<InviteRequest> {
+        let scope = match (self.scope, self.recurrence_id) {
+            (GraphqlCalendarUpdateScope::All, _) => CalendarUpdateScope::All,
+            (GraphqlCalendarUpdateScope::ThisEvent, Some(recurrence_id)) => {
+                CalendarUpdateScope::ThisEvent { recurrence_id }
+            }
+            (GraphqlCalendarUpdateScope::ThisEvent, None) => {
+                return Err(bad_input("a this-event invite requires recurrenceId"));
+            }
+        };
+        Ok(InviteRequest {
+            event_id: parse_id(self.event_id, "eventId")?,
+            calendar_id: optional_id(self.calendar_id, "calendarId")?,
+            guests: self.guests.into_iter().map(Into::into).collect(),
+            scope,
         })
     }
 }

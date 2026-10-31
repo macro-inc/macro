@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::sharing::DatabaseSharingRepo;
+use crate::domain::sharing::{DatabaseSharingRepo, SharingWrite};
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
@@ -13,17 +13,19 @@ async fn database_channel_grants_can_be_changed_and_revoked_without_touching_own
         (UpdateOperation::Replace, Some(AccessLevel::Edit)),
         (UpdateOperation::Remove, None),
     ] {
-        assert!(
-            repo.update_channel_grants(
+        assert_eq!(
+            repo.update_sharing(
                 table.database_id,
                 &[UpdateChannelSharePermission {
                     channel_id: channel_id.clone(),
                     operation,
                     access_level: level,
-                }]
+                }],
+                None,
             )
             .await
-            .unwrap()
+            .unwrap(),
+            SharingWrite::Written
         );
         let grants = repo.channel_grants(table.database_id).await.unwrap();
         assert_eq!(grants.first().map(|grant| grant.access_level), level);
@@ -33,18 +35,19 @@ async fn database_channel_grants_can_be_changed_and_revoked_without_touching_own
     repo.trash_database(table.database_id, chrono::Utc::now())
         .await
         .unwrap();
-    assert!(
-        !repo
-            .update_channel_grants(
-                table.database_id,
-                &[UpdateChannelSharePermission {
-                    channel_id,
-                    operation: UpdateOperation::Add,
-                    access_level: Some(AccessLevel::View),
-                }]
-            )
-            .await
-            .unwrap()
+    assert_eq!(
+        repo.update_sharing(
+            table.database_id,
+            &[UpdateChannelSharePermission {
+                channel_id,
+                operation: UpdateOperation::Add,
+                access_level: Some(AccessLevel::View),
+            }],
+            None,
+        )
+        .await
+        .unwrap(),
+        SharingWrite::Gone
     );
     assert!(
         repo.channel_grants(table.database_id)
@@ -58,13 +61,14 @@ async fn database_channel_grants_can_be_changed_and_revoked_without_touching_own
 async fn sharing_a_reference_does_not_downgrade_existing_channel_access(pool: PgPool) {
     let (repo, table, _) = fixture(&pool).await;
     let channel_id = macro_uuid::generate_uuid_v7();
-    repo.update_channel_grants(
+    repo.update_sharing(
         table.database_id,
         &[UpdateChannelSharePermission {
             channel_id: channel_id.to_string(),
             operation: UpdateOperation::Add,
             access_level: Some(AccessLevel::Edit),
         }],
+        None,
     )
     .await
     .unwrap();

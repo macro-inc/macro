@@ -4,7 +4,7 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client::GmailApiClientRepository;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
-    EmailServiceTokenSource, GmailApi, RateBudget, RedisProviderRateLimiter,
+    EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
@@ -30,15 +30,15 @@ fn compose_email_api(
     db: PgPool,
     subscription_topic: String,
     auth_service_client: authentication_service_client::AuthServiceClient,
-    redis_client: RedisClient,
     redis_conn: redis::aio::MultiplexedConnection,
+    gate_conn: redis::aio::ConnectionManager,
     sqs_client: sqs_client::SQS,
     rate_budget: RateBudget,
 ) -> GmailApi {
     GmailApi::new(
         GmailApiClientRepository::from_subscription_topic(subscription_topic),
         EmailServiceTokenSource::new(db, redis_conn, auth_service_client, sqs_client),
-        RedisProviderRateLimiter::new(redis_client, rate_budget),
+        RedisGmailRequestGate::new(gate_conn, rate_budget),
     )
 }
 
@@ -140,10 +140,13 @@ async fn main() -> anyhow::Result<()> {
         ),
     });
 
+    // One message per receive: messages are processed one at a time and only the one in
+    // progress renews its visibility, so the rest of a batch would time out behind a long
+    // mailbox purge and be processed again by another worker.
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
         link_manager_queue.to_string(),
-        config.queue_max_messages,
+        1,
         config.queue_wait_time_seconds,
     );
 
@@ -268,12 +271,7 @@ async fn main() -> anyhow::Result<()> {
         queue: ingress_queue,
     });
 
-    let redis_client = RedisClient::new(
-        redis_inner_client,
-        config.redis_rate_limit_reqs,
-        config.redis_rate_limit_reqs_backfill,
-        config.redis_rate_limit_window_secs,
-    );
+    let redis_client = RedisClient::new(redis_inner_client, config.redis_rate_limit_window_secs);
 
     // One long-lived multiplexed connection shared by both token sources;
     // cloning it is an Arc bump, not a new TCP dial per provider call.
@@ -282,13 +280,18 @@ async fn main() -> anyhow::Result<()> {
         .get_multiplexed_async_connection()
         .await
         .context("failed to get multiplexed redis connection for token sources")?;
+    let gate_conn = redis_client
+        .inner
+        .get_connection_manager()
+        .await
+        .context("failed to get reconnecting redis connection for the gmail request gates")?;
 
     let email_api_live = compose_email_api(
         db.clone(),
         config.gmail_gcp_queue.to_string(),
         auth_service_client.clone(),
-        redis_client.clone(),
         redis_conn.clone(),
+        gate_conn.clone(),
         sqs_client.clone(),
         RateBudget::Live,
     );
@@ -321,8 +324,8 @@ async fn main() -> anyhow::Result<()> {
         db_backfill.clone(),
         config.gmail_gcp_queue.to_string(),
         auth_service_client.clone(),
-        redis_client.clone(),
         redis_conn,
+        gate_conn,
         sqs_client.clone(),
         RateBudget::Backfill,
     );
@@ -371,7 +374,8 @@ async fn main() -> anyhow::Result<()> {
     ));
 
     // The CRM crate's company-metadata resolver is consulted by
-    // `crm_service.populate_contact` only on `crm_domain_directory` misses.
+    // `crm_service.populate_contact` on `crm_domain_directory` misses and by
+    // the enrichment worker for pending entries other binaries leave behind.
     // `USE_APOLLO_CRM_ENRICHMENT` selects Apollo.io vs. the unfurl-backed
     // resolver; we also fall back to unfurl when the Apollo key can't be
     // loaded. The resolver is cheap to clone.
@@ -409,6 +413,10 @@ async fn main() -> anyhow::Result<()> {
         crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
         metadata_resolver.clone(),
     );
+    worker_tracker.spawn(email_service::crm_enrichment_worker::run(
+        crm_service.clone(),
+        worker_cancellation_token.clone(),
+    ));
 
     // Backfill workers run against a dedicated pool to keep their writes
     // off the primary worker pool. CRM writes are part of the backfill
@@ -478,17 +486,16 @@ async fn main() -> anyhow::Result<()> {
             ),
         },
     );
-    if config.outlook_writes_enabled {
-        worker_tracker.spawn(email_service::mailbox_sync_worker::run_transfers(
-            email::domain::draft_transfer::DraftRetirementService {
-                repository: email::outbound::EmailPgRepo::new(db.clone()),
-                gateway: email_service::outbound::email_api::ProviderMailboxGateway(
-                    outlook_api.clone(),
-                ),
-            },
-            worker_cancellation_token.clone(),
-        ));
-    }
+    worker_tracker.spawn(email_service::mailbox_sync_worker::run_transfers(
+        email::domain::draft_transfer::DraftRetirementService {
+            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            gateway: email_service::outbound::email_api::ProviderMailboxGateway(
+                outlook_api.clone(),
+            ),
+            writes_enabled: config.outlook_writes_enabled,
+        },
+        worker_cancellation_token.clone(),
+    ));
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_drafts(
         email::domain::mailbox::drafts::MailboxDraftService::new(
             mailbox_repository.clone(),
@@ -724,6 +731,7 @@ async fn main() -> anyhow::Result<()> {
     let connection_gateway_client_link_manager = connection_gateway_client.clone();
     let notification_ingress_service_link_manager = notification_ingress_service.clone();
     let macro_event_broker_link_manager = macro_event_broker.clone();
+    let contacts_ingress_link_manager = contacts_ingress.clone();
     let cancellation_token = worker_cancellation_token.clone();
     // daily link_manager operations for user contacts and inbox subscriptions
     worker_tracker.spawn(async move {
@@ -738,6 +746,7 @@ async fn main() -> anyhow::Result<()> {
             connection_gateway_client_link_manager,
             notification_ingress_service_link_manager,
             macro_event_broker_link_manager,
+            contacts_ingress_link_manager,
             cancellation_token,
         )
         .await;

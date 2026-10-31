@@ -30,6 +30,7 @@ struct StoredMessage {
     guest_name: Option<String>,
     imported_author: Option<String>,
     triggered_by_user_id: Option<String>,
+    triggered_via: Option<String>,
     content: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -260,6 +261,7 @@ impl PgMessageRepository {
                     imported_author: r.imported_author.map(|name| ImportedAuthor { name }),
                     guest_name: r.guest_name,
                     triggered_by: r.triggered_by_user_id,
+                    triggered_via: r.triggered_via,
                     content: if deleted { String::new() } else { r.content },
                     created_at: r.created_at,
                     updated_at: r.updated_at,
@@ -579,7 +581,7 @@ impl MessageRepository for PgMessageRepository {
                 .fetch_one(&self.pool).await,
             MessageParent::Channel(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
-            MessageParent::Call(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1 UNION ALL SELECT 1 FROM call_records WHERE id = $1) AS "exists!""#, id)
+            MessageParent::Call(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
         };
         exists.map_err(database_error)
@@ -692,7 +694,7 @@ impl MessageRepository for PgMessageRepository {
             .await
             .map_err(database_error)?;
             let parent_exists = sqlx::query_scalar!(
-                r#"SELECT EXISTS(SELECT 1 FROM calls WHERE id = $1 UNION ALL SELECT 1 FROM call_records WHERE id = $1) AS "exists!""#,
+                r#"SELECT EXISTS(SELECT 1 FROM call_entities WHERE id = $1) AS "exists!""#,
                 root_id,
             )
             .fetch_one(&mut *tx)
@@ -741,14 +743,16 @@ impl MessageRepository for PgMessageRepository {
         }
         sqlx::query!(
             r#"INSERT INTO comms_messages(id, parent_entity_type, parent_entity_id, thread_id,
-                    sender_id, triggered_by_user_id, content, client_message_id, guest_name)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
+                    sender_id, triggered_by_user_id, triggered_via, content, client_message_id,
+                    guest_name)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
             id,
             command.parent.entity_type(),
             command.parent.entity_id(),
             command.input.thread_id,
             command.actor.as_ref(),
             command.triggered_by,
+            command.triggered_via,
             command.input.content,
             command.canonical_root_id.and(command.input.id),
             command.guest_name,

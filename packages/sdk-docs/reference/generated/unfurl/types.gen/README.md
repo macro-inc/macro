@@ -19,4 +19,5 @@
 - [GetUnfurlResponses](type-aliases/GetUnfurlResponses.md)
 - [ProxyParams](type-aliases/ProxyParams.md)
 - [ProxyRequestHandlerData](type-aliases/ProxyRequestHandlerData.md)
+- [UnfurlEmbedType](type-aliases/UnfurlEmbedType.md)
 - [Vec](type-aliases/Vec.md)

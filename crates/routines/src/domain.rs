@@ -96,6 +96,20 @@ pub struct RoutineConfiguration {
     pub target: RoutineTarget,
     /// Time and repetition.
     pub schedule: RoutineSchedule,
+    /// Apps every run needs, on top of the target's own. The user must already
+    /// have each one connected (offer a connect link via DiscoverConnectors if
+    /// not). Updates replace the list: restate it to keep the apps.
+    #[serde(default)]
+    pub required_apps: Vec<RoutineApp>,
+}
+/// A Pipedream app a routine requires.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineApp {
+    /// Pipedream app slug, e.g. `linear`.
+    pub app_slug: String,
+    /// Display name, e.g. `Linear`.
+    pub name: String,
 }
 impl RoutineConfiguration {
     /// Validate the user's intent independently of its transport representation.

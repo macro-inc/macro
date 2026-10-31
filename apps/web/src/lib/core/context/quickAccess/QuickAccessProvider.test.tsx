@@ -21,10 +21,12 @@ vi.mock('@channel/DebugSuspense', () => ({
 vi.mock('./QuickAccessSource', () => ({
   createQuickAccessValue: () => {
     const id = userId();
+    const error = new Error(`Unavailable for ${id}`);
     mountSource(id);
     onCleanup(() => disposeSource(id));
     return {
       useList: () => ({
+        error: () => error,
         items: () => [{ kind: 'user', id }],
         totalCount: () => 1,
         hasMore: () => true,
@@ -52,12 +54,14 @@ it('keeps consumers mounted while creating and disposing account sources across 
   let mounted = 0;
   let refreshCurrent: () => void = () => {};
   let loadCurrent: () => Promise<void> = async () => {};
+  let currentError: () => unknown = () => undefined;
   function Consumer() {
     mounted++;
     const access = useQuickAccess();
     const list = access.useList('person');
     refreshCurrent = access.refresh;
     loadCurrent = list.loadMore;
+    currentError = list.error;
     return (
       <div>
         {list
@@ -74,6 +78,7 @@ it('keeps consumers mounted while creating and disposing account sources across 
   ));
   expect(screen.getByText('No account data')).toBeTruthy();
   expect(mountSource).not.toHaveBeenCalled();
+  expect(currentError()).toBeUndefined();
   refreshCurrent();
   await loadCurrent();
   expect(refresh).not.toHaveBeenCalled();
@@ -84,6 +89,7 @@ it('keeps consumers mounted while creating and disposing account sources across 
   expect(mountSource).not.toHaveBeenCalled();
   setAuthenticated(true);
   expect(screen.getByText('alice')).toBeTruthy();
+  expect(currentError()).toMatchObject({ message: 'Unavailable for alice' });
   refreshCurrent();
   await loadCurrent();
   expect(refresh).toHaveBeenCalledOnce();
@@ -92,9 +98,11 @@ it('keeps consumers mounted while creating and disposing account sources across 
   setUserId('bob');
   expect(disposeSource).toHaveBeenCalledWith('alice');
   expect(screen.getByText('bob')).toBeTruthy();
+  expect(currentError()).toMatchObject({ message: 'Unavailable for bob' });
   setAuthenticated(false);
   expect(disposeSource).toHaveBeenCalledWith('bob');
   expect(screen.getByText('No account data')).toBeTruthy();
+  expect(currentError()).toBeUndefined();
   expect(mountSource).toHaveBeenCalledTimes(2);
   expect(mounted).toBe(1);
 });

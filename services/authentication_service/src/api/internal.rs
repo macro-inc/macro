@@ -17,6 +17,9 @@ mod relocate_inbox_grant;
 mod remove_link;
 mod revoke_microsoft_grant;
 
+#[cfg(test)]
+mod fusionauth_fixture;
+
 pub fn router() -> Router<ApiContext> {
     Router::new()
         .route("/google_access_token", get(google_access_token::handler))

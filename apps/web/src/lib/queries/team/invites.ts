@@ -54,6 +54,29 @@ export function useInviteToTeamMutation(callbacks?: InviteToTeamCallbacks) {
   }));
 }
 
+type ResendTeamInviteArgs = { teamId: string; email: string };
+
+/** Emails a pending invite again; re-inviting its address resends it. */
+export function useResendTeamInviteMutation() {
+  return useMutation(() => ({
+    mutationFn: async ({ email }: ResendTeamInviteArgs) => {
+      await throwOnErr(() =>
+        authServiceClient.inviteToTeam({ invites: [{ email }] })
+      );
+    },
+
+    onSuccess: (_data: void, { teamId }: ResendTeamInviteArgs) => {
+      fireAndForget(invalidateTeamInvites(teamId), 'team-invitations');
+      toast.success('Invitation resent');
+    },
+
+    onError: (error: Error) => {
+      console.error('Failed to resend team invite', error);
+      toast.failure('Failed to resend invitation');
+    },
+  }));
+}
+
 type DeleteTeamInviteArgs = { teamId: string; teamInviteId: string };
 type DeleteTeamInviteContext = {
   previousInvites: TeamInvitesResponse | undefined;

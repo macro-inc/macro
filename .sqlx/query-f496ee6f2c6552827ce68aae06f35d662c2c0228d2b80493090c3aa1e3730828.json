@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO calendar_event_notes (event_id, occurrence_key, document_id, team_id, user_id)\n            VALUES ($1, calendar_note_link_key($1, $2), $3, $4, $5)\n            ON CONFLICT (event_id, occurrence_key, document_id) DO UPDATE SET team_id = EXCLUDED.team_id, user_id = EXCLUDED.user_id\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f496ee6f2c6552827ce68aae06f35d662c2c0228d2b80493090c3aa1e3730828"
+}

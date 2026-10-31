@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_messages local SET\n             global_id = provider.global_id,\n             provider_history_id = provider.provider_history_id,\n             internal_date_ts = COALESCE(provider.internal_date_ts, local.internal_date_ts),\n             snippet = provider.snippet, size_estimate = provider.size_estimate,\n             sent_at = COALESCE(provider.sent_at, local.sent_at),\n             has_attachments = local.has_attachments OR provider.has_attachments,\n             is_read = provider.is_read, is_starred = local.is_starred OR provider.is_starred,\n             headers_jsonb = provider.headers_jsonb\n           FROM email_messages provider\n           WHERE local.id = $1 AND local.link_id = $3 AND provider.id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4530d8ed9ea92fc9447a74e038f9a1b12136f85c6776de4720d96de736687602"
+}

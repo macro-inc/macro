@@ -14,6 +14,15 @@ before touching the edit flow.
   (`POST /edit` and friends).
 - `src/run-edit.ts`: `runEditSession` — joins the sync-service WebSocket,
   drives the agents, flushes commits back.
+- `src/canvas/`: bounded CanvasEditor SDK, real QuickJS runner, live graphics/Loro
+  session, supervised writers, renderer-based text fitting, vision reads and
+  concurrency/acknowledgement tests. `direct.ts` runs main-agent SDK batches through
+  the same guarded apply path without another model. `browser.ts` leases reset
+  remote pages using fresh request-owned CDP connections; `cache.ts` stores only
+  bounded cloned values, never cross-request sockets or promises. `render.ts` uses the configured browser and
+  the read-only web `canvas-render.html` bundle; `text-layout.ts` revalidates
+  asynchronous measurements before the atomic commit. `POST /canvas`
+  joins an already initialized scene; it never creates a competing seed.
 - `src/ai-editing/`: the agent loop, prompts, tools, and op queue.
 - `src/endpoints/`: one file per surface — `edit.ts`, `docx.ts`, `forms.ts`,
   `spreadsheet.ts`, `comment-mark.ts`.
@@ -23,7 +32,7 @@ before touching the edit flow.
 ## Scope
 
 - Owns: the AI document-editing session (joining the doc, agent orchestration,
-  applying edits), DOCX/forms/spreadsheet AI endpoints, and comment-mark anchoring.
+  applying edits), Canvas/DOCX/forms/spreadsheet AI endpoints, and comment-mark anchoring.
 - Not here: the Loro/sync-service wire protocol itself, shared with the web
   app via `@macro-inc/collaboration`; browser auth and sync HTTP policy stay
   in `apps/web`.
@@ -38,6 +47,13 @@ before touching the edit flow.
   `src/endpoints/index.ts`.
 - Change the sandboxed edit API: `src/ai-editing/doc/` or `src/ai-editing/editor/`
   → `scripts/generate-sandbox.ts` (regenerates `src/editor-sandbox-code.ts`).
+
+- Change the Canvas SDK: `src/canvas/editor.ts` and `schema.ts` →
+  `scripts/generate-sandbox.ts` (regenerates `src/canvas/sandbox-code.ts`).
+  Commands validate on a disposable editor and commit once through the live
+  backend. `mentionUser` inserts the shared person-chip format without flattening
+  other text; ReadCanvas exposes bounded identities/offsets, with one U+FFFC per
+  existing chip in text offsets. It uses the same measured/revalidated commit. Keep asset-reference bookkeeping in its authorized host flow.
 
 ## Checks
 
@@ -57,3 +73,24 @@ before touching the edit flow.
 
 - Docs: `services/ai-editing-worker/AI_EDITING.md`,
   `services/ai-editing-worker/src/spreadsheet/README.md`
+
+
+## Canvas browser configuration
+
+Use the existing worker's BROWSER binding in deployed environments, with
+CANVAS_RENDER_URL pointing to the web app's `app/canvas-render.html` bundle.
+Locally run an isolated Chromium CDP browser reachable from the worker and set
+CANVAS_BROWSER_URL to its HTTP discovery origin plus CANVAS_RENDER_URL to the
+preview's HTTPS `canvas-render.html`. For example pass both through `wrangler dev
+--env local --var CANVAS_BROWSER_URL:<trusted-CDP-origin> --var
+CANVAS_RENDER_URL:<preview-render-URL>`. Keep authentication out of those URLs.
+The isolated render context loads no user cookies and never joins live sync.
+Without browser configuration, Canvas rendering and measured edits fail clearly;
+other document editing endpoints do not require this browser. Do not deploy the
+worker or reset an existing preview to configure it.
+
+Local performance scripts in `scripts/benchmark-canvas.mjs` and
+`collect-canvas-benchmark-traces.mjs` benchmark disposable source copies and export
+only safe timing/usage projections. Commands, fixture assumptions, actual results
+and cold/warm limitations live in `docs/architecture/canvas.md`; never print raw
+agent session logs or commit a browser storage-state file.

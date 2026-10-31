@@ -152,7 +152,16 @@ export type CreatePropertyScope = 'user' | 'team';
 /**
  * Data type for property values, determining storage and validation.
  */
-export type DataType = 'BOOLEAN' | 'DATE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+export type DataType = 'BOOLEAN' | 'DATE' | 'DATE_RANGE' | 'NUMBER' | 'STRING' | 'SELECT_NUMBER' | 'SELECT_STRING' | 'TAG' | 'ENTITY' | 'LINK';
+
+/**
+ * A span of time from `start` to `end`, both included. The end is never
+ * before the start: a range that would end earlier does not deserialize.
+ */
+export type DateRange = {
+    end: string;
+    start: string;
+};
 
 /**
  * Request to provision (get-or-create) the caller's tag set for a scope.
@@ -321,6 +330,8 @@ export type PropertyDataType = {
     type: 'boolean';
 } | {
     type: 'date';
+} | {
+    type: 'date_range';
 } | {
     type: 'number';
 } | {
@@ -527,6 +538,13 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    type: 'DateRange';
+    /**
+     * Date range value
+     * Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
+     */
+    value: DateRange;
+} | {
     type: 'SelectOption';
     /**
      * Select option(s) - always an array (check is_multi_select to determine if single or multi)
@@ -584,6 +602,9 @@ export type SetPropertyValue = {
 } | {
     type: 'date';
     value: string;
+} | {
+    type: 'date_range';
+    value: DateRange;
 } | {
     type: 'number';
     value: number;

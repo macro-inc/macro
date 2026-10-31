@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_send_attempts a SET cancelled=true\n                   WHERE a.message_id=$1 AND a.link_id=$2\n                     AND NOT a.cancelled AND NOT a.sent AND NOT a.delivery_unconfirmed\n                     AND EXISTS(SELECT 1 FROM email_links WHERE id=$2 AND provider='GMAIL')\n                     AND NOT EXISTS(SELECT 1 FROM email_scheduled_messages WHERE message_id=$1 AND link_id=$2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3b7b251ab2a7eaef184c9a8dee3c75a2136fafec1c9438715dfef58a3e62f00e"
+}

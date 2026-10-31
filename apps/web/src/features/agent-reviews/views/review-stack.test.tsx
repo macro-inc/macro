@@ -472,6 +472,42 @@ describe('review deck', () => {
     expect(screen.queryByText('Second email')).toBeNull();
     expect(decide).not.toHaveBeenCalled();
   });
+  it('says when the agent started a review at the account holder’s request', async () => {
+    render(() => (
+      <ReviewStack
+        review={{
+          id: 'review',
+          sessionId: 'session',
+          kind: 'email',
+          title: 'Follow-ups',
+          revision: 2,
+          updatedAt: 1,
+          presentedAt: 1,
+          decision: { via: 'chat' },
+          items: [
+            {
+              id: 'first',
+              status: 'completed',
+              draft: {
+                subject: 'First email',
+                body: 'Hello',
+                to: [{ email: 'first@example.com' }],
+              },
+            },
+          ],
+        }}
+        canAct
+        actions={{
+          decide: vi.fn(),
+          reload: vi.fn(),
+        }}
+      />
+    ));
+    await screen.findByText('Sent');
+    expect(
+      screen.getByText('Started by the agent at your request')
+    ).toBeTruthy();
+  });
   it('opens an invalid unvisited draft without dispatching any email', async () => {
     const decide = setup({
       items: [

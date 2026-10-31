@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const callClient = vi.hoisted(() => ({
   getCallRecord: vi.fn(),
   editCallRecord: vi.fn(),
+  graphql: false,
+  graphqlShare: vi.fn(),
 }));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -23,6 +25,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn(), failure: vi.fn(), success: vi.fn() },
 }));
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLS: true }));
+vi.mock('../storage/entity-mutations', () => ({
+  usesGraphqlSharePolicy: () => callClient.graphql,
+  updateEntitySharePolicy: callClient.graphqlShare,
+}));
 
 import { queryClient } from '@queries/client';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
@@ -121,10 +127,20 @@ const record = (over: Partial<CallRecord>): CallRecord => ({
 });
 
 describe('call team sharing helpers', () => {
+  it('uses the GraphQL share policy for flagged archived-call updates', async () => {
+    callClient.graphql = true;
+    await updateCallTeamShare('call-1', true);
+    expect(callClient.graphqlShare).toHaveBeenCalledWith('call', 'call-1', {
+      teamShareAccessLevel: 'view',
+    });
+    expect(callClient.editCallRecord).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     queryClient.clear();
     callClient.getCallRecord.mockReset();
     callClient.editCallRecord.mockReset();
+    callClient.graphql = false;
+    callClient.graphqlShare.mockReset();
   });
 
   it('never represents standalone calls as team shared, including stale record and cache values', () => {

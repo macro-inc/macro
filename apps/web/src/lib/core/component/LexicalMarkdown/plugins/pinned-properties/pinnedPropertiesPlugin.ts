@@ -35,6 +35,13 @@ export function $getPinnedProperties(): string[] {
   return $getState(root, pinnedPropertyIdsState);
 }
 
+/** Distinguish untouched default pins from an explicitly saved empty pin list. */
+export function $getStoredPinnedProperties(): string[] | undefined {
+  return Object.hasOwn($getRoot().exportJSON().$ ?? {}, 'pinnedPropertyIds')
+    ? $getPinnedProperties()
+    : undefined;
+}
+
 /**
  * Set property IDs on the root node
  * Must be called within an editor.update() callback

@@ -2,11 +2,11 @@ import '@fontsource-variable/inter';
 import '../../../index.css';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import PaperclipIcon from '@phosphor/paperclip.svg';
-import TextAa from '@phosphor/text-aa.svg';
-import TrashIcon from '@phosphor/trash.svg';
-import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
-import ArrowSquareOut from '@phosphor-icons/core/regular/arrow-square-out.svg?component-solid';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
+import TextAa from '@icon/system/regular/text-aa.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Button, SendButton } from '@ui';
 import { format } from 'date-fns/format';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
@@ -22,6 +22,7 @@ import { CalendarReplacementFixture } from './calendar-replacement-fixture';
 import { DraftOwnerFixture } from './draft-owner-fixture';
 import { DraftRecoveryFixture } from './draft-recovery-fixture';
 import { OutlookRecoveryFixture } from './outlook-recovery-fixture';
+import { ScheduleRecoveryFixture } from './schedule-recovery-fixture';
 import { SenderFixture } from './sender-fixture';
 
 type ScheduledItem = {
@@ -282,14 +283,18 @@ function Fixture() {
                   />
                 </Show>
                 <div class="ml-auto flex shrink-0 items-center gap-1">
-                  <Button label="Delete draft" size="icon-composer">
-                    <TrashIcon />
+                  <Button
+                    aria-label="Delete draft"
+                    tooltip="Delete draft"
+                    size="icon-md"
+                  >
+                    <TrashIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
-                  <Button label="Attach" size="icon-composer">
-                    <PaperclipIcon />
+                  <Button aria-label="Attach" tooltip="Attach" size="icon-md">
+                    <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
-                  <Button label="Format" size="icon-composer">
-                    <TextAa />
+                  <Button aria-label="Format" tooltip="Format" size="icon-md">
+                    <TextAa class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
                   <div class="shrink-0">
                     <EmailDateSelector
@@ -306,9 +311,8 @@ function Fixture() {
                     appearance="composer"
                     disabled={actionDisabled()}
                     aria-label={actionLabel()}
-                    tooltip={actionLabel()}
+                    tooltip={{ content: actionLabel(), shortcut: 'cmd+enter' }}
                     onClick={submit}
-                    shortcut="cmd+enter"
                   />
                 </div>
               </div>
@@ -348,6 +352,8 @@ render(
       <DraftOwnerFixture />
     ) : new URLSearchParams(location.search).has('recovery') ? (
       <DraftRecoveryFixture />
+    ) : new URLSearchParams(location.search).has('scheduled-recovery') ? (
+      <ScheduleRecoveryFixture />
     ) : new URLSearchParams(location.search).has('android-back') ? (
       <AndroidBackFixture />
     ) : (

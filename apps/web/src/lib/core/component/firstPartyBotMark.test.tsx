@@ -1,4 +1,3 @@
-import { CLAUDE_BOT_PRINCIPAL_ID } from '@core/constant/claudeAgent';
 import { CODEX_BOT_PRINCIPAL_ID } from '@core/constant/codexAgent';
 import {
   CURSOR_BOT_ID,
@@ -8,7 +7,6 @@ import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_PRINCIPAL_ID } from '@core/constant/macroCoder';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import MacroLogo from '@icon/macro-logo.svg';
-import ClaudeIcon from '@icon/wide-claude.svg';
 import CodexIcon from '@icon/wide-codex-ide.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import { cleanup, render } from '@solidjs/testing-library';
@@ -20,7 +18,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: vi.fn() }),
 }));
 vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutate: vi.fn() }),
+  getOrCreateDirectMessage: vi.fn(),
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => undefined,
@@ -53,7 +51,6 @@ describe('firstPartyBotMark', () => {
   it('gives the partner agents their own marks', () => {
     expect(firstPartyBotMark(CURSOR_BOT_PRINCIPAL_ID)?.Icon).toBe(CursorIcon);
     expect(firstPartyBotMark(CURSOR_BOT_ID)?.Icon).toBe(CursorIcon);
-    expect(firstPartyBotMark(CLAUDE_BOT_PRINCIPAL_ID)?.Icon).toBe(ClaudeIcon);
     expect(firstPartyBotMark(CODEX_BOT_PRINCIPAL_ID)?.Icon).toBe(CodexIcon);
   });
 

@@ -50,7 +50,7 @@ where
 {
     let creator = viewer_of(&user);
     let source = match request.source {
-        FormSource::New => CreateSource::NewDatabase,
+        FormSource::New { is_hidden_in_drive } => CreateSource::NewDatabase { is_hidden_in_drive },
         FormSource::Table {
             database_id,
             table_id,

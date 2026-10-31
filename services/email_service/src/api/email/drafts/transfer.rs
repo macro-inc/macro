@@ -16,6 +16,9 @@ use uuid::Uuid;
 /// Reuse the same operation ID when retrying after a lost response.
 #[derive(Deserialize, ToSchema)]
 pub struct TransferDraftRequest {
+    /// Generation captured with the source draft.
+    #[serde(default)]
+    pub draft_generation: i32,
     pub operation_id: Uuid,
     pub destination_link_id: Uuid,
 }
@@ -43,6 +46,7 @@ pub async fn handler(
         .transfer(
             authorization.authorization.user.macro_user_id,
             email::domain::draft_transfer::DraftTransferRequest {
+                draft_generation: request.draft_generation,
                 id: request.operation_id,
                 source_id,
                 source_link_id: link.id,

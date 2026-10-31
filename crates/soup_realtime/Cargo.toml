@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [features]
 consumer = [
+  "dep:call",
   "dep:channels",
   "dep:chat",
   "dep:documents",
@@ -40,6 +41,7 @@ ports = [
 [dependencies]
 agent_session = { path = "../agent_session", default-features = false, optional = true }
 broadcast = { path = "../broadcast", optional = true }
+call = { path = "../call", default-features = false, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 messages = { path = "../messages", features = ["broker"] }
 chat = { path = "../chat", default-features = false, optional = true }

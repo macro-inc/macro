@@ -6,13 +6,36 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
 import { entitySearch } from '../search';
+import { EntityAccess } from '../sharing/access';
 
 type ProjectDetail = GetProjectHandlerResponses[200]['data']['projectMetadata'];
+
 type ProjectItem =
   GetProjectContentHandlerResponses[200]['data'][number]['item'];
 
 /** A Macro project: a folder-like container for documents, chats, and subprojects. */
 export class Project extends PropertiedEntity<ProjectDetail> {
+  /** Read this project's sharing configuration. */
+  async sharePermissions() {
+    return unwrap(
+      await this.client.storage.getProjectPermissionsV2({
+        path: { id: this.id },
+      }),
+    );
+  }
+
+  /** Read the caller's effective access level. */
+  async accessLevel() {
+    return unwrap(
+      await this.client.storage.getProjectUserAccessLevel({
+        path: { id: this.id },
+      }),
+    );
+  }
+
+  /** Access requests and direct user grants. */
+  readonly access = new EntityAccess(this.client, 'project', this);
+
   /** Favorites identify projects as `project`. */
   readonly entityType = 'project';
 

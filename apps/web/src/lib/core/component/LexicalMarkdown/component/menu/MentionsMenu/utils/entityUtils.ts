@@ -56,7 +56,13 @@ export function getMentionItemName(item: MentionItem): string {
       ]
         .filter(Boolean)
         .join(' ');
+    case 'bookingLink':
+    case 'calendarEvent':
+      return item.data.title;
     case 'entity':
       return item.data.name ?? (item.bucket === 'email' ? 'No Subject' : '');
+    case 'externalChat':
+    case 'routine':
+      return item.data.name;
   }
 }

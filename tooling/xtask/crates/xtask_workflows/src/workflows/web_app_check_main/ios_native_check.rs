@@ -3,11 +3,12 @@
 //! (the required status check) covers it without a ruleset change. Web
 //! bundles ship over the air, but native changes only reach users through
 //! the App Store, so a PR whose bundle depends on new native code must not
-//! merge before that native build is actually downloadable. The gate:
+//! merge before Apple has approved that native build; the prod deploy that
+//! ships the bundle releases it (`ios-app-store.mjs publish`). The gate:
 //!
 //! 1. Detects native changes: a path filter over `apps/web/tauri/**`,
 //!    minus what never reaches the iOS binary (anything Android-only by
-//!    name, the desktop updater manifest, editor config) — the same
+//!    name, the desktop updater manifest, editor config, Markdown) — the same
 //!    exclusions as the native tree hash in `scripts/ios_native_tree.sh` —
 //!    or a bump of the client cache wasm package version
 //!    (`crates/client/cache-wasm/Cargo.toml`): the app compiles the cache
@@ -18,14 +19,14 @@
 //!    file outside it, i.e. everything.
 //! 2. Verifies the PR bumped the iOS release numbers (`just ios-bump`):
 //!    marketing version, build number, and `min-native-build.json`.
-//! 3. Asks the App Store Connect API whether exactly that version + build is
-//!    live on the App Store, built from the native tree this PR's current
-//!    merge result has (fetched through the API, so native code that landed
-//!    on main after the release also fails it, even on a re-run: the
-//!    shipped build lacks it), and fails with instructions otherwise — add the
-//!    `ios-update` label to run the `iOS App Store Release` workflow and
-//!    wait for Apple's approval; `iOS Release Watch` re-runs this job once
-//!    the release is live.
+//! 3. Asks the App Store Connect API whether Apple approved exactly that
+//!    version + build (held for release, or live), built from the native
+//!    tree this PR's current merge result has (fetched through the API, so
+//!    native code that landed on main after the release also fails it, even
+//!    on a re-run: the approved build lacks it), and fails with instructions
+//!    otherwise — add the `ios-update` label to run the `iOS App Store
+//!    Release` workflow and wait for Apple's approval; `iOS Release Watch`
+//!    re-runs this job once Apple approves.
 //!
 //! The App Store Connect key comes from Doppler (`ios-release/prd` via the
 //! `IOS_RELEASE_DOPPLER_TOKEN` secret), shared with the release workflow.
@@ -61,23 +62,24 @@ pub(super) fn job() -> Job {
     Job::default()
         .name(JOB_NAME)
         .runs_on(runners::Runner::TinyNoCache.to_string())
-        // Reads only: the PR's labels and merge commit, and a base-branch fetch.
+        // Reads the PR and base branch; updates one gate-status comment on same-repo PRs.
         .permissions(
             Permissions::default()
                 .contents(Level::Read)
-                .pull_requests(Level::Read),
+                .pull_requests(Level::Write),
         )
         // Shallow: the path filter uses the API, and the bump check fetches
         // the base branch itself, only when it runs.
-        .add_step(super::checkout("Checkout Repo", false))
+        .add_step(super::checkout("Checkout Repo", false).id("checkout"))
         .add_step(paths_filter())
         .add_step(cache_wasm_version_bump())
         .add_step(read_labels())
         .add_step(setup_bun())
         .add_step(verify_bump())
         .add_step(fetch_credentials())
-        .add_step(require_live_version())
+        .add_step(require_approved_version())
         .add_step(skip_notice())
+        .add_step(pr_comment())
 }
 
 fn gated() -> Expression {
@@ -95,6 +97,13 @@ fn paths_filter() -> Step<Use> {
         .add_with(("predicate-quantifier", "every"))
         .add_with((
             "filters",
+            // Mirror NATIVE_TREE_EXCLUDE in scripts/ios_native_tree.sh: paths
+            // named for another platform (android, macos, linux, windows,
+            // desktop) never reach the iOS binary. The generator rejects
+            // globs that match nothing, so only the shapes present in the
+            // tree today are listed; when a file in a new shape appears
+            // (e.g. the first windows_* module), extend this list to keep it
+            // in step with the regex.
             indoc::indoc! {"
                 ios_native:
                   - 'apps/web/tauri/**'
@@ -103,8 +112,22 @@ fn paths_filter() -> Step<Use> {
                   - '!apps/web/tauri/**/android_*/**'
                   - '!apps/web/tauri/**/android.*'
                   - '!apps/web/tauri/**/*.android.*'
+                  - '!apps/web/tauri/**/macos/**'
+                  - '!apps/web/tauri/**/macos_*'
+                  - '!apps/web/tauri/**/macos_*/**'
+                  - '!apps/web/tauri/**/macos.*'
+                  - '!apps/web/tauri/**/*.macos.*'
+                  - '!apps/web/tauri/**/linux_*'
+                  - '!apps/web/tauri/**/linux_*/**'
+                  - '!apps/web/tauri/**/desktop/**'
+                  - '!apps/web/tauri/**/desktop-*'
+                  - '!apps/web/tauri/**/desktop-*/**'
+                  - '!apps/web/tauri/**/desktop_*'
+                  - '!apps/web/tauri/**/desktop_*/**'
+                  - '!apps/web/tauri/**/desktop.*'
                   - '!apps/web/tauri/desktop-release.json'
                   - '!apps/web/tauri/.helix/**'
+                  - '!apps/web/tauri/**/*.md'
             "},
         ))
 }
@@ -168,6 +191,7 @@ fn setup_bun() -> Step<Use> {
             "setup-bun",
             "0c5077e51419868618aeaa5fe8019c62421857d6",
         ) // v2.2.0
+        .id("bun")
         .if_condition(gated())
         .add_with(("bun-version", "1.3.13"))
 }
@@ -176,6 +200,7 @@ fn verify_bump() -> Step<Run> {
     Step::new("Verify iOS release numbers were bumped")
         .run("bun scripts/ios-verify-native-bump.mjs")
         .if_condition(gated())
+        .id("bump")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         // The base the merge result was built on (fetched by the cache-wasm step).
         .add_env(("BASE_REF", "${{ steps.cache-wasm.outputs.base_sha }}"))
@@ -189,18 +214,19 @@ fn fetch_credentials() -> Step<Run> {
             "../scripts/ios_app_store_connect_credentials.sh"
         ))
         .shell("bash")
+        .id("credentials")
         .if_condition(gated())
         .add_env(("DOPPLER_TOKEN", vars::IOS_RELEASE_DOPPLER_TOKEN))
 }
 
-/// Compares the live build's stamp against the native tree of the PR's
+/// Compares the approved build's stamp against the native tree of the PR's
 /// *current* merge result — exactly what the floor derived from this build
 /// claims ships. Asked through the API rather than taken from the checkout:
 /// a re-run (the watcher's, the label workflow's, a human's) checks out the
 /// merge commit as of the run's original event, which may predate native
 /// code landing on main.
-fn require_live_version() -> Step<Run> {
-    Step::new("Require the App Store release to be live")
+fn require_approved_version() -> Step<Run> {
+    Step::new("Require Apple's approval of the App Store release")
         .run(concat!(
             include_str!("../scripts/ios_native_tree.sh"),
             include_str!("../scripts/pr_merge_commit.sh"),
@@ -208,6 +234,7 @@ fn require_live_version() -> Step<Run> {
         ))
         .if_condition(gated())
         .shell("bash")
+        .id("live")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .add_env(("GH_TOKEN", "${{ github.token }}"))
         .add_env(("GH_REPO", "${{ github.repository }}"))
@@ -221,4 +248,22 @@ fn skip_notice() -> Step<Run> {
              don't break the native/web contract — skipping the App Store release gate.\"",
         )
         .if_condition(Expression::new(format!("{NATIVE_CHANGED} && {SKIP_LABEL}")))
+}
+
+/// Keep release instructions visible on the PR even when an earlier step fails.
+fn pr_comment() -> Step<Use> {
+    Step::new("Update iOS gate status on the PR")
+        .uses(
+            "actions",
+            "github-script",
+            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
+        )
+        .if_condition(Expression::new(
+            "!cancelled() && github.event.pull_request.head.repo.full_name == github.repository",
+        ))
+        .add_env(("IOS_GATE_STEPS", "${{ toJSON(steps) }}"))
+        .add_with((
+            "script",
+            include_str!("../scripts/ios_native_check_comment.js"),
+        ))
 }

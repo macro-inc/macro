@@ -104,6 +104,40 @@ Hide the contact from CRM listings. Display-only; reversible with [unhide](#unhi
 
 ***
 
+### messageThreadById()
+
+> **messageThreadById**(`id`): [`MessageThread`](../../../messages/thread/classes/MessageThread.md)
+
+A shared message thread scoped to this resource.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `id` | `string` |
+
+#### Returns
+
+[`MessageThread`](../../../messages/thread/classes/MessageThread.md)
+
+***
+
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`permission`](../../../entity/classes/FavoritableEntity.md#permission)
+
+***
+
 ### rename()
 
 > **rename**(`name`): `Promise`\<`void`\>
@@ -119,6 +153,24 @@ Rename the contact for the caller's current team.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### timelinePage()
+
+> **timelinePage**(`selection?`): `Promise`\<\{ `entries`: (\{ `activity`: \{ `action`: `string`; `actor`: [`User`](../../../users/user/classes/User.md); `actor_id`: `string`; `id`: `string`; `occurred_at`: `string`; `payload?`: `unknown`; \}; `message?`: `undefined`; `type`: `"activity"`; \} \| \{ `activity?`: `undefined`; `message`: [`CrmComment`](../../comment/classes/CrmComment.md); `type`: `"message"`; \})[]; `nextCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; `previousCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; \}\>
+
+A mixed message and activity timeline page.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `selection?` | [`TimelineOptions`](../../../messages/thread/interfaces/TimelineOptions.md)\<[`CrmComment`](../../comment/classes/CrmComment.md)\> |
+
+#### Returns
+
+`Promise`\<\{ `entries`: (\{ `activity`: \{ `action`: `string`; `actor`: [`User`](../../../users/user/classes/User.md); `actor_id`: `string`; `id`: `string`; `occurred_at`: `string`; `payload?`: `unknown`; \}; `message?`: `undefined`; `type`: `"activity"`; \} \| \{ `activity?`: `undefined`; `message`: [`CrmComment`](../../comment/classes/CrmComment.md); `type`: `"message"`; \})[]; `nextCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; `previousCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; \}\>
 
 ***
 

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE import_entity SET waiting_on = $2, updated_at = NOW()\n                    WHERE waiting_on = $1 AND status = 'importing'\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "168a4a9273e26ac21e208f6f76327b879ddf76f93f411d0ae47dd792f84c2a3a"
+}

@@ -4,7 +4,7 @@ use crate::domain::{
     ports::{Calendars, Directory},
 };
 use calendar_events::domain::{
-    meeting_links::create_event_with_macro_call,
+    meeting_links::{create_event_with_macro_call, first_macro_call_url},
     models::{
         CalendarAttendeeInput, CalendarEventDraft, CalendarSyncStatus, ConferenceChange, EventTime,
         EventTransparency, OccurrenceRange,
@@ -292,6 +292,7 @@ impl<O: CalendarOccurrenceService, M: CalendarCreationRecoveryService, L: Meetin
             conference: (!event.macro_call && event.google_meet)
                 .then_some(ConferenceChange::ProviderDefault),
             out_of_office: None,
+            guest_policy: None,
         };
         if event.macro_call {
             if event.google_meet {
@@ -442,24 +443,6 @@ where
 fn carries_url(location: Option<&str>, description: Option<&str>, url: &str) -> bool {
     location.is_some_and(|value| value.contains(url))
         || description.is_some_and(|value| value.contains(url))
-}
-
-/// The join link already written into an event, including inside the
-/// generated HTML paragraph.
-fn first_macro_call_url(location: Option<&str>, description: Option<&str>) -> Option<String> {
-    for text in [location, description].into_iter().flatten() {
-        for token in text.split(|character: char| {
-            character.is_whitespace() || matches!(character, '"' | '\'' | '<' | '>' | '&')
-        }) {
-            let token = token.trim_end_matches(|character: char| {
-                matches!(character, '.' | ',' | ')' | ']' | ';')
-            });
-            if token.starts_with("http") && token.contains("/meet/join/") {
-                return Some(token.to_string());
-            }
-        }
-    }
-    None
 }
 
 #[cfg(test)]

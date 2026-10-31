@@ -331,6 +331,147 @@ async fn admission_pause_rejects_new_mailbox_but_preserves_reconnect(db: PgPool)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reconnect_resumes_organization_commands_under_the_new_grant(db: PgPool) {
+    use email::domain::{
+        mailbox::commands::MailboxCommandRepository,
+        models::mailbox_action::{MailboxAction, MailboxActionTarget, PendingMailboxState},
+        ports::EmailRepo,
+    };
+    let owner = actor(&db, "resume@example.com").await;
+    let link = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(owner.0)),
+    )
+    .initialize(attempt(&db, owner.clone()).await)
+    .await
+    .unwrap();
+    let (thread, message, other) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+    sqlx::query!(
+        "INSERT INTO email_threads(id,link_id) VALUES($1,$2)",
+        thread,
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    for (id, provider_id) in [(message, "outlook-message"), (other, "outlook-other")] {
+        sqlx::query!(
+            "INSERT INTO email_messages(id,link_id,thread_id,provider_id) VALUES($1,$2,$3,$4)",
+            id,
+            link,
+            thread,
+            provider_id
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+    }
+    let target_for = |message_id, provider_id: &str, is_read| MailboxActionTarget {
+        message_id,
+        provider_id: Some(provider_id.into()),
+        pending: PendingMailboxState {
+            is_read: Some(is_read),
+            ..Default::default()
+        },
+    };
+    let target = |is_read| target_for(message, "outlook-message", is_read);
+    let repo = email::outbound::EmailPgRepo::new(db.clone());
+    let retrying = repo
+        .enqueue_mailbox_action(
+            link,
+            owner.1.clone(),
+            &MailboxAction::Read(true),
+            &[target(true)],
+        )
+        .await
+        .unwrap();
+    let queued = repo
+        .enqueue_mailbox_action(
+            link,
+            owner.1.clone(),
+            &MailboxAction::Read(false),
+            &[target(false)],
+        )
+        .await
+        .unwrap();
+    let sync = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
+    let lease = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+    assert_eq!(lease.id, retrying);
+    // An authorization failure releases the lease for a later retry.
+    sync.release_command(&lease, 300).await.unwrap();
+    let confirming = repo
+        .enqueue_mailbox_action(
+            link,
+            owner.1.clone(),
+            &MailboxAction::Read(true),
+            &[target_for(other, "outlook-other", true)],
+        )
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE email_mailbox_commands SET status = 'confirming' WHERE id = $1",
+        confirming
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxInitializationService::new(PgMailboxInitialization(db.clone()), Grants(grant(owner.0)))
+        .initialize(attempt(&db, owner.clone()).await)
+        .await
+        .unwrap();
+    let generation = sqlx::query_scalar!(
+        "SELECT sync_generation FROM email_links WHERE id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(generation, lease.mailbox.sync_generation + 1);
+    let commands = sqlx::query!(
+        "SELECT id,status,generation FROM email_mailbox_commands WHERE link_id = $1 ORDER BY accepted_order",
+        link
+    )
+    .fetch_all(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        commands
+            .iter()
+            .map(|c| (c.id, c.status.as_str(), c.generation))
+            .collect::<Vec<_>>(),
+        vec![
+            (retrying, "pending", generation),
+            (queued, "pending", generation),
+            (confirming, "pending", generation)
+        ]
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT command_id FROM email_pending_mailbox_state WHERE message_id = $1",
+            message
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        queued,
+        "the newest accepted intent stays visible across the reconnect"
+    );
+    let mut resumed = Vec::new();
+    for _ in 0..2 {
+        let lease = sync.claim_command(Uuid::now_v7()).await.unwrap().unwrap();
+        resumed.push((lease.id, lease.mailbox.sync_generation));
+    }
+    resumed.sort();
+    let mut expected = vec![(retrying, generation), (confirming, generation)];
+    expected.sort();
+    assert_eq!(
+        resumed, expected,
+        "a confirming command resumes instead of blocking later commands"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn concurrent_gmail_and_outlook_connections_share_one_remaining_free_slot(db: PgPool) {
     let owner = actor(&db, "concurrent-limit@example.com").await;
     sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider) VALUES($1,$2,$3,'first@gmail.example','GMAIL')",Uuid::new_v4(),owner.1.as_ref(),owner.0.to_string()).execute(&db).await.unwrap();

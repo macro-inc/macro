@@ -12,6 +12,9 @@ use crate::{
 use email_api_client::domain::models::{MailboxState, SendRequest};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
+mod delivery_status;
+mod sent_view;
+
 const ACTOR: &str = "macro|outlook-test@example.com";
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -361,6 +364,7 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
     DraftCheckpoint {
         revision:lease.revision,actor_id:lease.actor_id.clone(),stage,stage_started_at:chrono::Utc::now(),
         prepared:PreparedDraft {reply_to:None,request:SendRequest {
+            message_id: None,
             message:serde_json::from_value(serde_json::json!({"db_id":lease.message_id,"link_id":lease.mailbox.link_id,"subject":"Local subject"})).unwrap(),
             from:models_email::service::address::ContactInfo {email:"outlook-test@example.com".into(),name:None,photo_url:None},parent_message_id:None,references:None,
         },files:Vec::new(),removals:Vec::new()},
@@ -368,6 +372,88 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
         submission_started:matches!(stage,DraftStage::Submitting | DraftStage::Confirming),
         completed_files:0,completed_removals:0,transfer:None,
     }
+}
+
+async fn inbox_state(db: &PgPool, thread: Uuid) -> (bool, Option<chrono::DateTime<chrono::Utc>>) {
+    let row = sqlx::query!(
+        "SELECT inbox_visible,latest_inbound_message_ts FROM email_threads WHERE id = $1",
+        thread
+    )
+    .fetch_one(db)
+    .await
+    .unwrap();
+    (row.inbox_visible, row.latest_inbound_message_ts)
+}
+
+/// Outlook accepts the Macro draft as provider draft "a", and sync reads it back.
+async fn sync_draft(sync: &PgMailboxSync, link: Uuid) {
+    let lease = sync
+        .claim_draft(
+            Uuid::now_v7(),
+            crate::domain::mailbox::drafts::models::DraftClaimMode::All,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    sync.settle_draft(&lease, &checkpoint(&lease, DraftStage::Ready))
+        .await
+        .unwrap();
+    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let state = MailboxState {
+        is_draft: true,
+        ..MailboxState::default()
+    };
+    sync.ingest(&work, snapshot(link, "a", state, "v2"))
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_unsynced_draft_only_thread_stays_out_of_the_inbox(db: PgPool) {
+    let (_, _, input, _) = setup(&db, false).await;
+    assert_eq!(inbox_state(&db, input.thread_db_id).await, (false, None));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_synced_draft_only_thread_stays_out_of_the_inbox(db: PgPool) {
+    let (sync, _, input, link) = setup(&db, false).await;
+    sync_draft(&sync, link).await;
+    let provider_id = sqlx::query_scalar!(
+        "SELECT provider_id FROM email_messages WHERE id = $1",
+        input.db_id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(provider_id.as_deref(), Some("a"));
+    assert_eq!(inbox_state(&db, input.thread_db_id).await, (false, None));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_synced_reply_draft_returns_archived_received_mail_to_the_inbox(db: PgPool) {
+    let (sync, _, input, link) = setup(&db, false).await;
+    sqlx::query!(
+        r#"INSERT INTO email_messages (id,link_id,thread_id,provider_id,provider_thread_id,internal_date_ts,mailbox_state)
+        VALUES ($1,$2,$3,'received','conversation','2026-09-30T12:00:00Z','{"in_inbox":false}')"#,
+        Uuid::now_v7(),
+        link,
+        input.thread_db_id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sync_draft(&sync, link).await;
+    let draft_updated_at = sqlx::query_scalar!(
+        "SELECT updated_at FROM email_messages WHERE id = $1 AND provider_id = 'a'",
+        input.db_id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(
+        inbox_state(&db, input.thread_db_id).await,
+        (true, Some(draft_updated_at))
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -517,7 +603,7 @@ async fn cancellation_that_wins_before_submission_prevents_delivery(db: PgPool) 
 async fn deletion_retains_a_fenced_remote_cleanup_intent(db: PgPool) {
     let (sync, repo, input, link) = setup(&db, true).await;
     assert!(
-        repo.delete_draft_message(input.db_id, input.thread_db_id, &[link], Some(ACTOR))
+        repo.delete_draft_message(input.db_id, input.thread_db_id, &[link], Some(ACTOR), 0)
             .await
             .unwrap()
             .is_some()

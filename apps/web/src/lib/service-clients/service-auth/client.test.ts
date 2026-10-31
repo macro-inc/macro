@@ -125,3 +125,19 @@ describe('subscription checkout conflicts', () => {
     expect(result._unsafeUnwrapErr()[0]).toEqual({ code: 'CONFLICT', message });
   });
 });
+
+describe('GitHub reconnect', () => {
+  test('starts OAuth without deleting the current link', async () => {
+    fetchCheckout.mockResolvedValueOnce(
+      ok({ url: 'https://github.com/login/oauth/authorize' })
+    );
+    const result =
+      await authServiceClient.reauthenticateGithub('tauri://localhost');
+    expect(result.isOk()).toBe(true);
+    expect(fetchCheckout).toHaveBeenCalledTimes(1);
+    expect(fetchCheckout).toHaveBeenCalledWith(
+      expect.stringContaining('/link/github'),
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+});

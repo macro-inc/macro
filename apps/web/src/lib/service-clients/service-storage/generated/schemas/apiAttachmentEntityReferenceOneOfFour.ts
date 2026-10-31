@@ -4,12 +4,11 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { ApiAttachmentCommentReference } from './apiAttachmentCommentReference';
 import type { ApiAttachmentEntityReferenceOneOfFourAllOf } from './apiAttachmentEntityReferenceOneOfFourAllOf';
-import type { ApiAttachmentGenericReference } from './apiAttachmentGenericReference';
 
 /**
- * Referenced from any non-message source entity.
+ * Referenced from a comment on a document, initiative, CRM record, or call.
  */
 export type ApiAttachmentEntityReferenceOneOfFour =
-  ApiAttachmentGenericReference & ApiAttachmentEntityReferenceOneOfFourAllOf;
+  ApiAttachmentCommentReference & ApiAttachmentEntityReferenceOneOfFourAllOf;

@@ -1,4 +1,5 @@
 import type {
+  ActivityType,
   ChannelType,
   GetChannelAttachmentsResponses,
   GetChannelParticipantsResponses,
@@ -9,11 +10,20 @@ import type {
 import { type RichMessage, toBody } from '../../mentions';
 import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { AgentConversation } from '../agent-sessions/conversation';
 import { PropertiedEntity } from '../entity';
+import type { StaticImage } from '../images/image';
+import {
+  MessageThread,
+  type TimelineOptions,
+  timeline,
+} from '../messages/thread';
 import { entitySearch } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
+import { ChannelActivity } from './activity';
 import { Message } from './message';
+import type { ChannelPicture } from './picture';
 import { postToChannel } from './post';
 import type { Thread } from './thread';
 
@@ -30,6 +40,59 @@ export type ChannelAttachment =
  * A channel.
  */
 export class Channel extends PropertiedEntity<ChannelDetail> {
+  /** Record a view or interaction in this channel. */
+  async recordActivity(type: ActivityType): Promise<ChannelActivity> {
+    return new ChannelActivity(
+      this.client,
+      this,
+      unwrap(
+        await this.client.storage.postActivity({
+          body: { activity_type: type, channel_id: this.id },
+        }),
+      ),
+    );
+  }
+
+  /** Set an uploaded profile picture, or clear it. */
+  async setPicture(picture?: ChannelPicture): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.setChannelPicture({
+        path: { channel_id: this.id },
+        body: { profile_picture_id: picture?.id ?? null },
+      }),
+    );
+  }
+
+  /** A shared message thread scoped to this resource. */
+  messageThreadById(id: string): MessageThread {
+    return MessageThread.byId(
+      this.client,
+      { type: 'channel', entity: this },
+      id,
+    );
+  }
+
+  /** A mixed message and activity timeline page. */
+  timelinePage(selection?: TimelineOptions<Message>) {
+    return timeline(
+      this.client,
+      { type: 'channel', entity: this },
+      (record) => Message.from(this.client, this.id, record),
+      selection,
+    );
+  }
+
+  /** Conversations maintained by agents in this channel. */
+  async agentConversations(): Promise<AgentConversation[]> {
+    return unwrap(
+      await this.client.agentHarness.listAgentConversations({
+        path: { channel_id: this.id },
+      }),
+    ).conversations.map(
+      (record) => new AgentConversation(this.client, this, record),
+    );
+  }
+
   /** Favorites identify channels as `channel`. */
   readonly entityType = 'channel';
 
@@ -103,18 +166,22 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
 
   /**
    * Post a message. Plain text, or a rich body composed with `msg`.
+   * `images` attaches static images, such as one from
+   * `macro.images.generate()`, below the text.
    *
    * Works with a channel webhook token as well as a normal one — see
    * {@link postToChannel} for which endpoint that picks and what it costs.
+   * The webhook endpoint takes no images.
    */
   async send(
     body: string | RichMessage,
-    opts?: { thread?: Thread },
+    opts?: { thread?: Thread; images?: StaticImage[] },
   ): Promise<Message> {
     const id = await postToChannel(
       this.client,
       opts?.thread ?? this,
       toBody(body),
+      opts?.images,
     );
     return Message.byId(this.client, this.id, id);
   }

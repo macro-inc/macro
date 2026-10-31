@@ -16,7 +16,10 @@ const VIEWER = 'macro|ada@acme.com';
 
 let dispose: (() => void) | undefined;
 afterEach(() => dispose?.());
-beforeEach(() => sessionStorage.clear());
+beforeEach(() => {
+  sessionStorage.clear();
+  localStorage.clear();
+});
 
 function setup(world: Partial<FakeOnboardingWorld> = {}, next?: string) {
   const fake = createFakeOnboarding(world);

@@ -1,23 +1,58 @@
 import { useHoldParentHoverCardOpen } from '@core/component/HoverCard';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { cn, Dropdown } from '@ui';
-import { createSignal, type JSX, splitProps } from 'solid-js';
-import type { Property } from '../types';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  type JSX,
+  splitProps,
+  untrack,
+} from 'solid-js';
+import type { Property, PropertyApiValues } from '../types';
+import { withApiValues } from '../utils/transforms';
 import {
   type PropertyEditFn,
+  type PropertyPickFn,
   PropertyRootContext,
   type PropertyRootContextValue,
   type PropertySaveFn,
 } from './context';
 
 interface PropertyRootProps
-  extends Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onSave' | 'property'> {
+  extends Omit<
+    JSX.HTMLAttributes<HTMLDivElement>,
+    'onSave' | 'property' | 'children'
+  > {
   property: Property;
   canEdit?: boolean;
   onSave?: PropertySaveFn;
   onEdit?: PropertyEditFn;
-  onRefresh?: () => void;
+  /** A function receives the property as shown, including a pick still saving. */
+  children?: JSX.Element | ((property: Accessor<Property>) => JSX.Element);
 }
+
+/**
+ * A pick the source has not shown yet. `base` is unset while the save runs;
+ * after it succeeds, the pick stays until the source emits a newer property.
+ * The definition ID survives a new property's ID assignment mid-save, but not
+ * a Root that is reused for another property.
+ */
+type PendingValue = {
+  value: PropertyApiValues;
+  propertyDefinitionId: string;
+  base?: Property;
+};
+
+/**
+ * The names the last pick's picker showed, by entity ID. They outlive the
+ * pending value: a chip's own read can answer after the source shows the pick,
+ * and chips use these names only while that read loads.
+ */
+type PickedNames = {
+  names: ReadonlyMap<string, string>;
+  propertyDefinitionId: string;
+};
 
 export function Root(props: PropertyRootProps) {
   const [local, rest] = splitProps(props, [
@@ -25,7 +60,6 @@ export function Root(props: PropertyRootProps) {
     'canEdit',
     'onSave',
     'onEdit',
-    'onRefresh',
     'class',
     'children',
   ]);
@@ -37,14 +71,67 @@ export function Root(props: PropertyRootProps) {
 
   useHoldParentHoverCardOpen(editorOpen);
 
+  // Editors close before their save finishes, and the source only catches up
+  // once the cache projects the write, so show the pick until then.
+  const [pending, setPending] = createSignal<PendingValue>();
+  const property = createMemo(() => {
+    const current = pending();
+    return current &&
+      current.propertyDefinitionId === local.property.propertyDefinitionId &&
+      (current.base === undefined || current.base === local.property)
+      ? withApiValues(local.property, current.value)
+      : local.property;
+  });
+  const [picked, setPicked] = createSignal<PickedNames>();
+
+  const save: PropertyPickFn = async (saved, value, entityNames) => {
+    const onSave = local.onSave;
+    if (!onSave) return;
+    const entry: PendingValue = {
+      value,
+      propertyDefinitionId: saved.propertyDefinitionId,
+    };
+    setPending(entry);
+    setPicked(
+      entityNames && {
+        names: entityNames,
+        propertyDefinitionId: saved.propertyDefinitionId,
+      }
+    );
+    try {
+      await onSave(saved, value);
+      if (pending() === entry) setPending({ ...entry, base: local.property });
+    } catch (error) {
+      if (pending() === entry) {
+        setPending(undefined);
+        setPicked(undefined);
+      }
+      throw error;
+    }
+  };
+
+  // A touch editor leaves focus in the field the user was typing in (a
+  // composer's title), and a picker sheet hands it back there.
+  let focusAtOpen: Element | null = null;
+
   // Focus restoration helper - used by both closeEditor and onOpenChange
   // When a value is saved, the component may remount (due to reactive updates),
   // so we fall back to finding the trigger by property ID if the anchor is stale.
   const restoreFocusToAnchor = () => {
     const propertyId = local.property.propertyId;
     const anchor = editorAnchor();
+    const focusedAtOpen = focusAtOpen;
 
     setTimeout(() => {
+      // Focus is back where the editor found it; moving it to the pill would
+      // drop the phone keyboard.
+      if (
+        focusedAtOpen &&
+        focusedAtOpen !== document.body &&
+        document.activeElement === focusedAtOpen
+      )
+        return;
+
       // First try the stored anchor if it's still in the DOM
       if (anchor?.isConnected) {
         anchor.focus();
@@ -53,7 +140,10 @@ export function Root(props: PropertyRootProps) {
 
       // Fallback: find the trigger by property ID (handles remount case)
       const root = document.querySelector(`[data-property-id="${propertyId}"]`);
-      const trigger = root?.querySelector('button');
+      // Row actions can precede the value editor; restore focus to its trigger.
+      const trigger = root?.querySelector<HTMLButtonElement>(
+        'button:not([data-property-row-action])'
+      );
       if (trigger) {
         trigger.focus();
       }
@@ -61,19 +151,24 @@ export function Root(props: PropertyRootProps) {
   };
 
   const value: PropertyRootContextValue = {
-    property: () => local.property,
+    property,
+    pickedEntityName: (entityId) => {
+      const current = picked();
+      return current?.propertyDefinitionId ===
+        local.property.propertyDefinitionId
+        ? current.names.get(entityId)
+        : undefined;
+    },
     canEdit: () => local.canEdit ?? false,
     get onSave() {
-      return local.onSave;
+      return local.onSave && save;
     },
     get onEdit() {
       return local.onEdit;
     },
-    get onRefresh() {
-      return local.onRefresh;
-    },
     editorOpen,
     openEditor: (anchor) => {
+      focusAtOpen = document.activeElement;
       if (anchor) setEditorAnchor(() => anchor);
       setEditorOpen(true);
     },
@@ -81,6 +176,13 @@ export function Root(props: PropertyRootProps) {
       setEditorOpen(false);
       restoreFocusToAnchor();
     },
+  };
+
+  const children = () => {
+    const content = local.children;
+    return typeof content === 'function'
+      ? untrack(() => content(property))
+      : content;
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -106,7 +208,7 @@ export function Root(props: PropertyRootProps) {
           data-property-type={local.property.valueType}
           {...rest}
         >
-          {local.children}
+          {children()}
         </div>
       </Dropdown>
     </PropertyRootContext.Provider>

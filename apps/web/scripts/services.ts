@@ -26,9 +26,9 @@ export const services: Service[] = [
 	},
 	{
 		name: "document-cognition",
-		dev: "https://document-cognition-dev.macro.com/api-doc/openapi.json",
-		prod: "https://document-cognition-dev.macro.com/api-doc/openapi.json",
-		local: "http://localhost:8085/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/cognition/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/cognition/api-doc/openapi.json",
+		local: "http://localhost:8101/cognition/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-cognition/",
 		orvalKey: "cognitionService",
 	},
@@ -124,9 +124,9 @@ export const services: Service[] = [
 
 export const documentCognitionBase: Service = {
 	name: "document-cognition",
-	dev: "https://document-cognition-dev.macro.com",
-	prod: "https://document-cognition.macro.com",
-	local: "http://localhost:8085",
+	dev: "https://dev-gateway.macro.com/cognition",
+	prod: "https://gateway.macro.com/cognition",
+	local: "http://localhost:8101/cognition",
 	output: "../src/lib/service-clients/service-cognition/",
 	orvalKey: "cognitionService",
 };

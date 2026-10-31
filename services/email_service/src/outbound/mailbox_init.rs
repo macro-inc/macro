@@ -355,31 +355,14 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
                     macro_uuid::generate_uuid_v7(),link_id,link.sync_generation,kind
                 ).execute(&mut *tx).await.map_err(unavailable)?;
             }
-            // Old leases cannot write into this generation. Keep uncertain sends
-            // for reconciliation rather than treating a reconnect as permission to resend.
+            // Old leases cannot write into this generation. Organization commands
+            // read provider state before every write, so the replacement grant
+            // resumes them, with their pending state, instead of abandoning them.
             sqlx::query!(r#"
-                UPDATE email_mailbox_commands SET status = CASE WHEN status = 'pending' THEN 'cancelled' ELSE 'unknown' END,
-                    lease_id = NULL,lease_until = NULL,updated_at = now()
+                UPDATE email_mailbox_commands SET generation = $2,lease_id = NULL,lease_until = NULL,
+                    status = 'pending',available_at = now(),updated_at = now()
                 WHERE link_id = $1 AND generation <> $2 AND status IN ('pending','running','confirming')
             "#,link_id,link.sync_generation).execute(&mut *tx).await.map_err(unavailable)?;
-            let affected = sqlx::query!(r#"
-                DELETE FROM email_pending_mailbox_state p USING email_mailbox_commands c
-                WHERE p.command_id = c.id AND c.link_id = $1 AND c.generation <> $2 RETURNING p.message_id
-            "#,link_id,link.sync_generation).fetch_all(&mut *tx).await.map_err(unavailable)?;
-            for pending in affected {
-                let thread = sqlx::query_scalar!(r#"
-                    UPDATE email_messages SET is_read = COALESCE((mailbox_state->>'is_read')::boolean,is_read),
-                        is_starred = COALESCE((mailbox_state->>'is_flagged')::boolean,is_starred)
-                    WHERE id = $1 RETURNING thread_id
-                "#,pending.message_id).fetch_optional(&mut *tx).await.map_err(unavailable)?;
-                if let Some(thread) = thread {
-                    email_db_client::threads::update::recompute_thread_metadata(
-                        &mut tx, thread, link_id,
-                    )
-                    .await
-                    .map_err(unavailable)?;
-                }
-            }
         }
         sqlx::query!("INSERT INTO email_link_initializations (attempt_id,actor_id,link_id) VALUES ($1,$2,$3)",request.attempt,request.actor.as_ref(),link_id)
             .execute(&mut *tx).await.map_err(unavailable)?;

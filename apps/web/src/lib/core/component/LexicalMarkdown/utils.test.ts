@@ -2,7 +2,11 @@
 import { SupportedNodeTypes } from '@macro-inc/lexical-core';
 import { $getRoot, $isParagraphNode, createEditor } from 'lexical';
 import { describe, expect, it, vi } from 'vitest';
-import { $getCaretRect, setEditorStateFromHtml } from './utils';
+import {
+  editorStateAsMarkdown,
+  setEditorStateFromHtml,
+  setEditorStateFromMarkdown,
+} from './utils';
 
 // utils.ts imports the plugin barrel, whose leaves open the storage and
 // connection-gateway sockets on import.
@@ -57,11 +61,27 @@ describe('setEditorStateFromHtml', () => {
   });
 });
 
-describe('$getCaretRect', () => {
-  it('returns null when the document has no selection range', () => {
+describe('setEditorStateFromMarkdown', () => {
+  it('keeps the blank line a restored composer draft was written with', () => {
     const editor = makeEditor();
-    window.getSelection()?.removeAllRanges();
+    const draft = 'hello\n\n \n\nworld';
 
-    expect(editor.read(() => $getCaretRect())).toBeNull();
+    setEditorStateFromMarkdown(editor, draft);
+
+    expect(topLevel(editor)).toEqual([
+      { paragraph: true, text: 'hello' },
+      { paragraph: true, text: '' },
+      { paragraph: true, text: 'world' },
+    ]);
+    expect(editorStateAsMarkdown(editor)).toBe(draft);
+  });
+  it('imports external markdown without the empty-paragraph sentinel', () => {
+    const editor = makeEditor();
+
+    setEditorStateFromMarkdown(editor, 'hello\n\n \n\nworld', 'external');
+
+    expect(
+      editor.read(() => $getRoot().getTextContent()).includes('\u200b')
+    ).toBe(false);
   });
 });

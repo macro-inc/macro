@@ -24,6 +24,7 @@ vi.mock('../notification-navigation', () => ({
 vi.mock('../notification-resolvers', () => ({
   DefaultDocumentNameResolver: vi.fn(async () => undefined),
   DefaultUserNameResolver: vi.fn(async () => undefined),
+  DefaultUserAvatarResolver: vi.fn(async () => undefined),
 }));
 
 import {
@@ -178,7 +179,8 @@ describe('maybeHandlePlatformNotification', () => {
     const result = await toPlatformNotificationData(
       createReminderNotification(),
       resolveUserName,
-      resolveDocumentName
+      resolveDocumentName,
+      async () => undefined
     );
 
     expect(result).toEqual({
@@ -239,12 +241,33 @@ describe('maybeHandlePlatformNotification', () => {
     expect(showNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Someone <General>',
+        notificationId: 'notification-1',
         options: expect.objectContaining({
           body: 'invited you to',
         }),
       })
     );
     expect(handle.onClick).toHaveBeenCalledOnce();
+  });
+
+  it('silences the system alert when Macro plays its own sound', async () => {
+    const showNotification = vi.fn<
+      PlatformNotificationState['showNotification']
+    >(async () => createNotificationHandle());
+    const notificationInterface = createNotificationInterface(showNotification);
+
+    await maybeHandlePlatformNotification(
+      createChannelInviteNotification(),
+      notificationInterface,
+      {} as SplitManager,
+      { silent: true }
+    );
+
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({ silent: true }),
+      })
+    );
   });
 
   it('opens the original notification target only when its platform handle is clicked', async () => {
@@ -270,7 +293,11 @@ describe('maybeHandlePlatformNotification', () => {
       expect(focus).toHaveBeenCalledOnce();
       expect(openNotification).toHaveBeenCalledExactlyOnceWith(
         notification,
-        layout
+        layout,
+        false,
+        undefined,
+        undefined,
+        { source: 'browser_push' }
       );
       expect(handle.close).toHaveBeenCalledOnce();
     } finally {
@@ -319,8 +346,124 @@ it('uses the project discussion bot display name for platform notifications', as
   const result = await toPlatformNotificationData(
     notification,
     async () => undefined,
+    async () => undefined,
     async () => undefined
   );
   expect(result?.title).toContain('Launch agent');
   expect(JSON.stringify(result)).toContain('Launch');
+});
+
+describe('platform notification sender and conversation', () => {
+  function channelMessage(
+    channelType: 'public' | 'directMessage',
+    senderProfilePictureUrl?: string
+  ): UnifiedNotification {
+    return baseNotification({
+      entity_id: 'channel-1',
+      sender_id: 'macro|ada@example.com',
+      notification_event_type: 'channel_message_send',
+      notification_metadata: {
+        tag: 'channel_message_send',
+        content: {
+          messageId: 'message-1',
+          messageContent: 'Ship it',
+          sender: 'macro|ada@example.com',
+          channelType,
+          senderProfilePictureUrl,
+        },
+      },
+    } as Partial<UnifiedNotification>);
+  }
+
+  it('names the sender, their avatar, and the group conversation', async () => {
+    const resolveUserAvatar = vi.fn(
+      async () => 'https://cdn.example.com/ada.png'
+    );
+    const result = await toPlatformNotificationData(
+      channelMessage('public'),
+      async () => 'Ada',
+      async () => 'design',
+      resolveUserAvatar
+    );
+
+    expect(result).toMatchObject({
+      title: 'Ada <design>',
+      sender: {
+        id: 'macro|ada@example.com',
+        name: 'Ada',
+        avatarUrl: 'https://cdn.example.com/ada.png',
+      },
+      conversation: { id: 'channel-1', name: 'design' },
+    });
+    expect(resolveUserAvatar).toHaveBeenCalledExactlyOnceWith(
+      'macro|ada@example.com'
+    );
+  });
+
+  it('keeps a direct message unnamed and prefers the avatar the server sent', async () => {
+    const resolveUserAvatar = vi.fn(
+      async () => 'https://cdn.example.com/old.png'
+    );
+    const result = await toPlatformNotificationData(
+      channelMessage('directMessage', 'https://cdn.example.com/ada.png'),
+      async () => 'Ada',
+      async () => 'Ada, Grace',
+      resolveUserAvatar
+    );
+
+    expect(result?.title).toBe('Ada');
+    expect(result?.sender?.avatarUrl).toBe('https://cdn.example.com/ada.png');
+    expect(result?.conversation).toEqual({ id: 'channel-1', name: undefined });
+    expect(resolveUserAvatar).not.toHaveBeenCalled();
+  });
+
+  it('names the bot and the channel for a bot reply', async () => {
+    const result = await toPlatformNotificationData(
+      baseNotification({
+        entity_id: 'channel-1',
+        notification_event_type: 'channel_message_reply',
+        notification_metadata: {
+          tag: 'channel_message_reply',
+          content: {
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            senderDisplayName: 'pickle',
+            messageContent: 'Task completed',
+            channelType: 'private',
+            channelName: 'bug-reports',
+          },
+        },
+      } as Partial<UnifiedNotification>),
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('pickle <bug-reports>');
+    expect(result?.sender?.name).toBe('pickle');
+  });
+
+  it('leaves out a target it cannot name', async () => {
+    const result = await toPlatformNotificationData(
+      channelMessage('public'),
+      async () => 'Ada',
+      async () => undefined,
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('Ada');
+    expect(result?.conversation?.name).toBeUndefined();
+  });
+
+  it('has no sender when nobody can be named', async () => {
+    const result = await toPlatformNotificationData(
+      createChannelInviteNotification(),
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('Someone <General>');
+    expect(result?.sender).toBeUndefined();
+  });
 });

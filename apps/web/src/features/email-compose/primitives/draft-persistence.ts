@@ -3,13 +3,14 @@ import {
   type DeleteEmailDraft,
   DraftPersistRejected,
   type DraftSaveResult,
-  type EmailComposeFeedback,
   type EmailDraftStorage,
 } from '../context/compose-capabilities';
 import type { EmailDraft } from '../core/email-draft';
 import type { LocalDraft } from '../core/local-draft';
 import type { DraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
+
+export type DraftPersistence = ReturnType<typeof createDraftPersistence>;
 
 /** Sent from another device: the server outcome supersedes the local draft. */
 export const isAlreadySentRejection = (error: unknown) =>
@@ -18,19 +19,16 @@ export const isAlreadySentRejection = (error: unknown) =>
 /**
  * A discard's delete. An already-sent verdict is not a failure: the reset
  * the caller performs next is exactly what that verdict asks for, so it is
- * announced and swallowed. Every other rejection propagates.
+ * swallowed. Every other rejection propagates.
  */
 export async function deleteDraftForDiscard(
   drafts: Pick<EmailDraftStorage, 'deleteDraft'>,
-  input: DeleteEmailDraft,
-  notices: Pick<EmailComposeFeedback, 'feedback'>,
-  alreadySentMessage: string
+  input: DeleteEmailDraft
 ): Promise<void> {
   try {
     await drafts.deleteDraft(input);
   } catch (error) {
     if (!isAlreadySentRejection(error)) throw error;
-    notices.feedback.alert(alreadySentMessage);
   }
 }
 
@@ -50,6 +48,7 @@ export async function deleteDraftForDiscard(
  */
 export function createDraftPersistence(options: {
   session: DraftSession;
+  draftGeneration?: () => number;
   drafts: Pick<
     EmailDraftStorage,
     'saveDraft' | 'deleteDraft' | 'saveLocalDraft' | 'retryDraft' | 'readDraft'
@@ -68,6 +67,7 @@ export function createDraftPersistence(options: {
   const { session } = options;
   let localRevision = options.localDraft?.revision;
   let localGeneration = options.localDraft?.generation;
+  let removal: Promise<void> = Promise.resolve();
   const mint = (draft: EmailDraft) => {
     if (session.draftId()) return;
     localRevision = undefined;
@@ -91,12 +91,24 @@ export function createDraftPersistence(options: {
   };
 
   return {
+    localVersion(): Pick<LocalDraft, 'generation' | 'revision'> | undefined {
+      return localGeneration !== undefined && localRevision !== undefined
+        ? { generation: localGeneration, revision: localRevision }
+        : undefined;
+    },
+    restored(local: Pick<LocalDraft, 'revision' | 'generation'> | undefined) {
+      localRevision = local?.revision;
+      localGeneration = local?.generation;
+    },
     async saveLocally(input: {
       draft: EmailDraft | null;
       inboxId?: string;
       attachments: readonly DraftFormAttachment[];
     }) {
       if (!options.drafts.saveLocalDraft) return;
+      // The copy being deleted refuses edits. Address the draft the delete
+      // leaves: a fresh one, or the same one when the delete failed.
+      await removal;
       // Preserve an emptied working copy too; a failed delete must not restore
       // the earlier body on reload. An untouched composer has no identity.
       if (!input.draft && !session.draftId()) return;
@@ -150,22 +162,29 @@ export function createDraftPersistence(options: {
     },
     /** The draft has no content left: delete its row and drop its identity. */
     async remove(input: { inboxId?: string; completingThread?: boolean }) {
-      const draftId = session.draftId();
-      const epoch = session.epoch();
-      if (draftId) {
-        try {
-          await options.drafts.deleteDraft({
-            draftId,
-            threadId: session.threadId(),
-            ...input,
-          });
-        } catch (error) {
-          recordRejection(error, epoch);
-          throw error;
+      const removed = Promise.withResolvers<void>();
+      removal = removed.promise;
+      try {
+        const draftId = session.draftId();
+        const epoch = session.epoch();
+        if (draftId) {
+          try {
+            await options.drafts.deleteDraft({
+              draftId,
+              draftGeneration: options.draftGeneration?.() ?? 0,
+              threadId: session.threadId(),
+              ...input,
+            });
+          } catch (error) {
+            recordRejection(error, epoch);
+            throw error;
+          }
         }
+        if (session.isStale(epoch)) return;
+        session.dispatch({ type: 'emptied' });
+      } finally {
+        removed.resolve();
       }
-      if (session.isStale(epoch)) return;
-      session.dispatch({ type: 'emptied' });
     },
 
     /**

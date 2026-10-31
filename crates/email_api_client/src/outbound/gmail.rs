@@ -81,6 +81,10 @@ fn is_quota_403_body(body: &str) -> bool {
     QUOTA_403_REASONS.iter().any(|reason| body.contains(reason))
 }
 
+/// Gmail's per-second 429 shares this one's `rateLimitExceeded` reason; only
+/// the message tells the concurrency limit apart.
+const CONCURRENCY_429_MESSAGE: &str = "Too many concurrent requests for user";
+
 pub(crate) fn map_gmail_error(error: GmailApiHttpError) -> EmailApiError {
     match error {
         GmailApiHttpError::Http {
@@ -91,14 +95,16 @@ pub(crate) fn map_gmail_error(error: GmailApiHttpError) -> EmailApiError {
             401 => EmailApiError::AuthRequired,
             403 if is_quota_403_body(&body) => EmailApiError::RateLimited {
                 retry_after,
-                origin: RateLimitOrigin::Provider,
+                origin: RateLimitOrigin::Provider { concurrency: false },
             },
             403 => EmailApiError::Forbidden,
             404 => EmailApiError::NotFound,
             409 => EmailApiError::Conflict,
             429 => EmailApiError::RateLimited {
                 retry_after,
-                origin: RateLimitOrigin::Provider,
+                origin: RateLimitOrigin::Provider {
+                    concurrency: body.contains(CONCURRENCY_429_MESSAGE),
+                },
             },
             500..=599 => EmailApiError::Transient {
                 message: format!("Gmail API returned {status}: {body}"),

@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH sources AS MATERIALIZED (\n                SELECT array_append(ARRAY(SELECT team_id::text FROM team_user WHERE user_id = $1)\n                    || ARRAY(SELECT channel_id::text FROM comms_channel_participants WHERE user_id = $1 AND left_at IS NULL), $1) AS ids),\n            candidates AS MATERIALIZED (\n                SELECT $2::uuid AS id WHERE $2::uuid IS NOT NULL\n                UNION\n                SELECT ea.entity_id FROM entity_access ea, sources s\n                WHERE $2::uuid IS NULL AND ea.entity_type = 'external_chat' AND ea.source_id = ANY(s.ids)\n                UNION\n                SELECT rs.chat_id FROM external_chat_read_state rs WHERE $2::uuid IS NULL AND rs.user_id = $1)\n            SELECT g.id,g.provider,g.name,g.kind,g.user_id,g.remote_id,g.state,g.adopted_at,g.backfill_state,g.backfill_imported,\n            (SELECT count(*) FROM (SELECT 1 FROM external_chat_message m WHERE m.chat_id=g.id AND m.message_id IS NOT NULL\n              AND m.deleted_at IS NULL AND m.origin<>'history' AND m.kind<>'system'\n              AND NOT EXISTS(SELECT 1 FROM external_chat_person p WHERE p.id=m.person_id AND p.user_id=$1)\n              AND (r.message_id IS NULL OR (m.source_at,m.id)>(r.read_at,r.message_id)) LIMIT $3) unread) AS \"unread_count!\",\n            (SELECT max(source_at) FROM external_chat_message WHERE chat_id=g.id AND message_id IS NOT NULL) AS last_message_at\n            FROM candidates c JOIN external_chat g ON g.id=c.id\n            LEFT JOIN external_chat_read_state r ON r.chat_id=g.id AND r.user_id=$1\n            -- On the candidate, not the chat: Postgres would otherwise check every chat.\n            WHERE ($2::uuid IS NOT NULL OR external_chat_can_view(c.id,$1))\n            ORDER BY g.adopted_at DESC LIMIT 2000",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "remote_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "adopted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "backfill_state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "backfill_imported",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "unread_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "last_message_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "13f77af5dad557c08f09bd71d74135985c749820a96c4ae2af02f6db9bed9541"
+}

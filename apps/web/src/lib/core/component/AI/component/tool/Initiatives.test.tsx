@@ -1,3 +1,4 @@
+import { projectHostedContent } from '@app/features/projects/open-project';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import {
   type Component,
@@ -110,7 +111,7 @@ it('expands project results and opens a native project view', () => {
     shiftKey: true,
   });
   expect(open).toHaveBeenCalledWith(
-    { type: 'component', id: `initiative-view~${projectId}~overview` },
+    projectHostedContent(projectId, 'overview'),
     { preferNewSplit: true }
   );
 });

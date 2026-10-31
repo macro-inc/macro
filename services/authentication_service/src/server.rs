@@ -78,6 +78,9 @@ use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
+use user_language::{
+    domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
+};
 
 use crate::{
     api::{
@@ -94,7 +97,7 @@ use crate::{
     outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter,
 };
 use std::{sync::Arc, time::Duration};
-use tokio_util::task::TaskTracker;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 /// Build the service from the environment and serve until shutdown.
 pub async fn run() -> anyhow::Result<()> {
@@ -130,11 +133,14 @@ pub async fn run() -> anyhow::Result<()> {
     // A separate KMS key from the Microsoft one by design: sharing it would
     // grant whatever decrypts Cursor keys access to the key protecting
     // everyone's mailbox credentials.
+    // Agents' own API keys share it: they are read by the same agent harness
+    // and protected by the same IAM grants.
+    let cursor_kms = cursor_api_key::cipher::AwsKmsCiphertexts::new(
+        aws_sdk_kms::Client::new(&aws_config),
+        config.cursor_api_key_kms_key_id()?,
+    );
     let cursor_api_key_cipher = Arc::new(cursor_api_key::cipher::KmsCursorApiKeyCipher::new(
-        cursor_api_key::cipher::AwsKmsCiphertexts::new(
-            aws_sdk_kms::Client::new(&aws_config),
-            config.cursor_api_key_kms_key_id()?,
-        ),
+        cursor_kms.clone(),
     )) as Arc<dyn cursor_api_key::cipher::CursorApiKeyCipher>;
 
     let internal_api_key = config.internal_api_key.clone();
@@ -458,6 +464,7 @@ pub async fn run() -> anyhow::Result<()> {
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
                         connection_gateway_client,
                     ),
+                    channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
             ),
         )
@@ -499,6 +506,10 @@ pub async fn run() -> anyhow::Result<()> {
             redis: redis_client,
         },
     };
+    let user_language_service = Arc::new(UserLanguageServiceImpl::new(PgUserLanguageRepo::new(
+        db.clone(),
+    )));
+
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
         discount_client: StripeDiscountClient::new(
@@ -630,10 +641,23 @@ pub async fn run() -> anyhow::Result<()> {
         team_analytics,
     )
     .with_contacts_enqueuer(contacts_enqueuer)
-    .with_event_broker(macro_event_broker)
+    .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup);
     let teams_service = Arc::new(teams_service_impl);
+    // Reminds people of team invites they have not answered. Replicas claim
+    // disjoint invites, so every replica sweeps.
+    let invite_reminders_stop = CancellationToken::new();
+    let invite_reminders = TaskTracker::new();
+    invite_reminders.spawn(
+        teams::inbound::invite_reminder_worker::run_invite_reminder_sweep(
+            teams_service.clone(),
+            teams::inbound::invite_reminder_worker::INVITE_REMINDER_SWEEP_INITIAL_DELAY,
+            teams::inbound::invite_reminder_worker::INVITE_REMINDER_SWEEP_INTERVAL,
+            invite_reminders_stop.clone().cancelled_owned(),
+        ),
+    );
+    invite_reminders.close();
     let user_deletion = Arc::new(
         crate::outbound::user_deletion::UserDeletionAdapter::new(
             db.clone(),
@@ -663,6 +687,23 @@ pub async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let agent_api_keys = Arc::new(agent_api_keys::domain::AgentKeyService::new(
+        agent_api_keys::outbound::PgAgentKeyRepo::new(db.clone()),
+        agent_api_keys::outbound::KmsAgentKeyCipher::new(cursor_kms),
+        agent_api_keys::outbound::EntitlementKeyPlans::new(
+            ai_billing::outbound::RolesTeamsEntitlementSource::new(
+                user_roles_and_permissions_service.clone(),
+                teams_repo_impl.clone(),
+            ),
+        ),
+    ));
+    // Only to authorize changes to an agent's API key, with the agents' own
+    // rule; agents themselves are created and edited in document storage.
+    let bots = Arc::new(bots::domain::service::BotServiceImpl::new(
+        PgBotsRepo::new(db.clone()),
+        macro_event_broker.clone(),
+    ));
+
     let server_result = api::setup_and_serve(
         ApiContext {
             inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
@@ -673,6 +714,8 @@ pub async fn run() -> anyhow::Result<()> {
             auth_client: Arc::new(auth_client),
             microsoft_auth,
             cursor_api_key_cipher,
+            agent_api_keys,
+            bots,
             codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client,
@@ -709,6 +752,7 @@ pub async fn run() -> anyhow::Result<()> {
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
+            user_language_service,
             gtm_invite_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
@@ -744,6 +788,19 @@ pub async fn run() -> anyhow::Result<()> {
         sweep.abort();
     }
 
+    // Lets a sweep in progress finish: its reminders are already counted as
+    // sent, so abandoning the batch would drop them.
+    invite_reminders_stop.cancel();
+    if tokio::time::timeout(INVITE_REMINDER_DRAIN_TIMEOUT, invite_reminders.wait())
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            timeout_seconds = INVITE_REMINDER_DRAIN_TIMEOUT.as_secs(),
+            "timed out waiting for the team invite reminder sweep to finish"
+        );
+    }
+
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
     match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {
@@ -761,6 +818,7 @@ pub async fn run() -> anyhow::Result<()> {
 }
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
+const INVITE_REMINDER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const MICROSOFT_GRANT_CLEANUP_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 // SAFETY: this is not a secret value

@@ -86,6 +86,7 @@ export function createCalendarEventToEditorInitialValues(
           declineMessage: event.outOfOffice?.declineMessage ?? '',
         }
       : undefined,
+    guestPolicy: event.guestPolicy ?? undefined,
   };
 
   if (event.time.kind === 'allDay') {
@@ -147,10 +148,15 @@ function attendees(
   });
 }
 
-/** Merge editable EventForm values back into the deferred tool arguments. */
+/**
+ * Merge editable EventForm values back into the deferred tool arguments.
+ * `sendGuestPolicy` is whether guest permissions may be sent: the rollout
+ * is on and the chosen calendar has them (Outlook calendars do not).
+ */
 export function editorSubmitValuesToCreateCalendarEvent(
   values: EventEditorSubmitValues,
-  original: CompatibleCalendarEvent
+  original: CompatibleCalendarEvent,
+  sendGuestPolicy: boolean
 ): CreateCalendarEvent {
   // A create's submit values carry `outOfOffice` exactly while the editor kind
   // is out of office, so its presence decides the tool's event type.
@@ -190,5 +196,9 @@ export function editorSubmitValuesToCreateCalendarEvent(
             : {}),
         }
       : undefined,
+    guestPolicy:
+      outOfOffice || !sendGuestPolicy
+        ? undefined
+        : (values.guestPolicy ?? original.guestPolicy),
   };
 }

@@ -53,6 +53,11 @@ type PaneRun = { pane: PaneId; machine: Run };
 
 type Settle = (result: NavigationResult) => void;
 
+export type RegisterCommitCallback = (
+  navigation: Navigation,
+  callback: () => void
+) => void;
+
 const URL_KEY = '@url';
 
 /** What each pane, and the URL navigation run, has in flight. */
@@ -133,12 +138,18 @@ export type Runner = ReturnType<typeof createRunner>;
  */
 export function createRunner(options: {
   /** Phase work for a run; `waiting` hears when a phase goes async. */
-  phases(waiting: (state: Running) => void): MachineScopes<RunState, RunEvent>;
+  phases(
+    waiting: (state: Running) => void,
+    onCommit: RegisterCommitCallback
+  ): MachineScopes<RunState, RunEvent>;
   /** Panes still open; runs of the others are dropped once idle. */
   live(): readonly PaneId[];
 }) {
   const inFlight = createInFlight();
-  const settlers = new WeakMap<Navigation, Settle>();
+  const settlers = new WeakMap<
+    Navigation,
+    { settle: Settle; callbacks: (() => void)[] }
+  >();
   const outstanding = new Set<Promise<unknown>>();
   const waiters: (() => void)[] = [];
   const paneRuns: PaneRun[] = [];
@@ -162,9 +173,12 @@ export function createRunner(options: {
     });
     let result: NavigationResult | undefined;
 
-    settlers.set(navigation, (value) => {
-      result = value;
-      resolve(value);
+    settlers.set(navigation, {
+      settle(value) {
+        result = value;
+        deferred.resolve(value);
+      },
+      callbacks: [],
     });
     fireAndForget(track(promise), 'split-router');
     begin();
@@ -175,7 +189,11 @@ export function createRunner(options: {
   const settle = (navigation: Navigation, result: NavigationResult) => {
     const settler = settlers.get(navigation);
     settlers.delete(navigation);
-    settler?.(result);
+    settler?.settle(result);
+  };
+
+  const onCommit: RegisterCommitCallback = (navigation, callback) => {
+    settlers.get(navigation)?.callbacks.push(callback);
   };
 
   const isOpen = () => {
@@ -204,7 +222,19 @@ export function createRunner(options: {
     committing += 1;
 
     try {
-      return navigation.apply(entries);
+      const result = navigation.apply(entries);
+      const callbacks = settlers.get(navigation)?.callbacks.splice(0) ?? [];
+      if (result.status === 'committed') {
+        for (const callback of callbacks) {
+          if (disposed) break;
+          try {
+            callback();
+          } catch (error) {
+            console.error('Split router commit callback failed', error);
+          }
+        }
+      }
+      return result;
     } catch (error) {
       console.error('Split router could not commit a navigation', error);
       return CANCELLED_RESULT;
@@ -219,7 +249,10 @@ export function createRunner(options: {
     key: string,
     execute: (command: RunCommand) => void
   ): Run => {
-    const scopes = options.phases((state) => inFlight.show(key, state));
+    const scopes = options.phases(
+      (state) => inFlight.show(key, state),
+      onCommit
+    );
     const machine = createMachine<RunState, RunEvent, RunCommand>({
       initial: IDLE,
       def: runDef,

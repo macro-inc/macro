@@ -1,7 +1,10 @@
 import type {
   EntityActionListState,
+  EntityActionNavigationHandler,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
+import { makeAddTagAction } from '@app/features/next-soup/actions';
+import { createFolderRowDropTarget } from '@app/features/next-soup/actions/folder-drop-zone';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
   ContextMenuContent,
@@ -9,8 +12,15 @@ import {
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
-import type { EntityData } from '@entity';
+import {
+  type EntityData,
+  type EntityDragSelection,
+  EntityDragSelectionContext,
+} from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import type { TreeTag } from '@property/tags/core/tag-tree';
+import { DroppedTagApplier } from '@property/tags/DroppedTagApplier';
+import { createTagDropTarget } from '@property/tags/tag-drag-and-drop';
 import { cn } from '@ui';
 import {
   type Accessor,
@@ -43,8 +53,17 @@ interface SoupEntityContextMenuProps {
    * them. Desktop only: the mobile long-press drawer shows the actions alone.
    */
   extraItems?: JSX.Element;
-  /** A list that completes its own rows, such as Home's work feed. Desktop only. */
+  /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  /** Where the view moves after an action that removes the row (Mark Done). */
+  createActionNavigationHandler?: () =>
+    | EntityActionNavigationHandler
+    | undefined;
+  /**
+   * The folder the list shows, when the split's content doesn't say so
+   * itself (Drive hosts folders inside its own view).
+   */
+  viewedProjectId?: string;
 }
 
 export const SoupEntityContextMenu: FlowComponent<
@@ -56,11 +75,39 @@ export const SoupEntityContextMenu: FlowComponent<
   const menuEntities = () =>
     getSoupMenuEntities(props.entity, props.selectedEntities());
 
+  const dragSelection: EntityDragSelection = {
+    entities: menuEntities,
+    selected: () => props.selectedEntities(),
+    clear: () => props.list.selection.clear(),
+  };
+  const row = () => (
+    <EntityDragSelectionContext.Provider value={dragSelection}>
+      {props.children}
+    </EntityDragSelectionContext.Provider>
+  );
+
   const pickers = createSoupEntityMenuPickers({
     entity: () => props.entity,
     entities: menuEntities,
     anchor: menuPosition,
   });
+
+  const addTagAction = makeAddTagAction();
+  const canEditTags = () => addTagAction.canExecute(props.entity);
+  const [droppedTag, setDroppedTag] = createSignal<{
+    tag: TreeTag;
+    entities: EntityData[];
+  }>();
+  // Dropping onto a selected row tags the whole selection, like the menu.
+  const tagDropTarget = createTagDropTarget({
+    disabled: () => isMobile() || !canEditTags(),
+    onDropTag: (tag) =>
+      setDroppedTag({
+        tag,
+        entities: menuEntities().filter(addTagAction.canExecute),
+      }),
+  });
+  const folderDropTarget = createFolderRowDropTarget(() => props.entity);
 
   return (
     <Switch>
@@ -76,28 +123,41 @@ export const SoupEntityContextMenu: FlowComponent<
                   entity: props.entity,
                   list: props.list,
                   viewContext: props.viewContext,
+                  markDoneDelegate: props.markDoneDelegate,
+                  createActionNavigationHandler:
+                    props.createActionNavigationHandler,
+                  viewedProjectId: props.viewedProjectId,
                 });
               },
             }));
           }}
         >
-          {props.children}
+          {row()}
         </div>
       </Match>
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenuTrigger
             as={props.as}
-            class={cn('h-full w-full group/cm-trigger', props.class)}
+            ref={(element: HTMLElement) => {
+              tagDropTarget?.ref(element);
+              folderDropTarget?.ref(element);
+            }}
+            class={cn(
+              'h-full w-full group/cm-trigger',
+              (tagDropTarget?.isOver() || folderDropTarget?.isOver()) &&
+                'rounded-xl outline-2 -outline-offset-2 outline-accent',
+              props.class
+            )}
             on:contextmenu={(event: MouseEvent) =>
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }
           >
-            {props.children}
+            {row()}
           </ContextMenuTrigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>
-              <ContextMenuContent class="w-64 text-xs text-ink-muted">
+              <ContextMenuContent class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted">
                 <SoupEntityActionsMenu
                   entities={menuEntities()}
                   list={props.list}
@@ -106,12 +166,29 @@ export const SoupEntityContextMenu: FlowComponent<
                   onEditTags={pickers.openTagPicker()}
                   extraItems={props.extraItems}
                   markDoneDelegate={props.markDoneDelegate}
+                  createActionNavigationHandler={
+                    props.createActionNavigationHandler
+                  }
+                  viewedProjectId={props.viewedProjectId}
                 />
               </ContextMenuContent>
             </Show>
           </ContextMenu.Portal>
         </ContextMenu>
         <pickers.Pickers />
+        <Show when={droppedTag()} keyed>
+          {(drop) => (
+            <DroppedTagApplier
+              tag={drop.tag}
+              entities={drop.entities}
+              onDone={() =>
+                setDroppedTag((current) =>
+                  current === drop ? undefined : current
+                )
+              }
+            />
+          )}
+        </Show>
       </Match>
     </Switch>
   );

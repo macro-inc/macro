@@ -151,7 +151,7 @@ it('rejects without refreshing when the server refuses the create', async () => 
   expect(mock.refetch).not.toHaveBeenCalled();
 });
 
-it('seeds the live query edge from an authoritative create without overwriting its fields', async () => {
+it('seeds the live detail and identity edges from an authoritative create without overwriting its fields', async () => {
   const cache = new QueryClient();
   const host = { ...createNoopCacheHost(), disabled: false };
   const write = vi.spyOn(host, 'writeQuery');
@@ -170,18 +170,21 @@ it('seeds the live query edge from an authoritative create without overwriting i
     shareWithTeam: true,
     properties: [],
   });
-  expect(write).toHaveBeenCalledExactlyOnceWith(
-    expect.objectContaining({
-      operationName: 'Initiative',
-      variables: { initiativeId: 'project' },
-      data: {
-        user: {
-          id: 'viewer',
-          initiative: { __typename: 'GraphqlSoupInitiative', id: 'project' },
+  expect(write).toHaveBeenCalledTimes(2);
+  for (const operationName of ['Initiative', 'InitiativeIdentity']) {
+    expect(write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationName,
+        variables: { initiativeId: 'project' },
+        data: {
+          user: {
+            id: 'viewer',
+            initiative: { __typename: 'GraphqlSoupInitiative', id: 'project' },
+          },
         },
-      },
-    })
-  );
+      })
+    );
+  }
   cache.clear();
 });
 

@@ -8,6 +8,12 @@
   ],
   "permissions": [
     "auth:allow-authenticate",
+    "file-export:allow-available",
+    "file-export:allow-beginExport",
+    "file-export:allow-appendExport",
+    "file-export:allow-finishExport",
+    "file-export:allow-discardExport",
+
     "edit-menu:allow-set-native-menu-suppressed",
     "pasteboard:allow-read-pasteboard-text",
     "network-status:allow-watch-status",

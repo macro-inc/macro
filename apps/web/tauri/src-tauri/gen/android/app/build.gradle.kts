@@ -50,6 +50,11 @@ val tauriProperties = Properties().apply {
 }
 
 android {
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
     compileSdk = 36
     namespace = "com.macro.workspace.mobile"
     defaultConfig {
@@ -99,6 +104,10 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    packaging {
+        // JSpecify and OpenTelemetry both ship this OSGi metadata; Android does not use it.
+        resources.excludes.add("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
+    }
 }
 
 rust {
@@ -106,6 +115,7 @@ rust {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.activity:activity-ktx:1.10.1")

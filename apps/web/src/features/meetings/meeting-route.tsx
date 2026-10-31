@@ -24,7 +24,7 @@ import { MeetingPage } from './views/meeting-page';
 export function MeetingRouteContent(props: {
   shareToken: string;
   onCallStateChange: (connected: boolean) => void;
-  onLeave: () => void;
+  onLeave: (path: string) => void;
 }) {
   const [search] = useSearchParams();
   const location = useLocation();

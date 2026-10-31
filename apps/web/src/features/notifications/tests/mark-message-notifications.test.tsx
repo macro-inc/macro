@@ -4,11 +4,12 @@ import { render, waitFor } from '@solidjs/testing-library';
 import { createMemo, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  MarkMessageNotifications,
-  MessageNotificationIndexContext,
-} from '../components/MarkMessageNotifications';
+import { MessageNotificationIndexContext } from '../components/MarkMessageNotifications';
 import { indexUnreadMessageNotifications } from '../unread-message-notifications';
+import {
+  installMessageIntersectionObserver,
+  ObservedMessage as MarkMessageNotifications,
+} from './message-read-visibility';
 
 const mocks = vi.hoisted(() => ({
   notificationSource: undefined as NotificationSource | undefined,
@@ -42,9 +43,11 @@ function documentMentionNotification(
 describe('MarkMessageNotifications', () => {
   const bulkMarkAsRead = vi.fn<NotificationSource['bulkMarkAsRead']>();
   let matchingNotifications: UnifiedNotification[];
+  let intersect: ReturnType<typeof installMessageIntersectionObserver>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    intersect = installMessageIntersectionObserver();
     matchingNotifications = [
       documentMentionNotification('notification-1'),
       documentMentionNotification('notification-2'),
@@ -66,7 +69,7 @@ describe('MarkMessageNotifications', () => {
     } as unknown as NotificationSource;
   });
 
-  it('marks every document mention from the mounted channel message as read', async () => {
+  it('keeps mounted notifications unread until their message becomes visible', async () => {
     render(() => (
       <MarkMessageNotifications
         messageId="message-1"
@@ -76,20 +79,24 @@ describe('MarkMessageNotifications', () => {
       </MarkMessageNotifications>
     ));
 
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    intersect(false);
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    intersect();
     await waitFor(() => {
       expect(matchingNotifications.every((n) => n.viewed_at)).toBe(true);
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(bulkMarkAsRead).toHaveBeenCalledOnce();
     expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
 
-  it('marks scoped notifications on mount and live updates without reading the global feed', async () => {
-    const observer = vi.fn();
-    vi.stubGlobal('IntersectionObserver', observer);
+  it('marks scoped notifications and live updates only while visible without reading the global feed', async () => {
     const globalRead = vi.spyOn(
       mocks.notificationSource!,
       'notificationsByEntity'
@@ -113,16 +120,23 @@ describe('MarkMessageNotifications', () => {
       );
     });
     expect(globalRead).not.toHaveBeenCalled();
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    intersect();
     await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
     expect(bulkMarkAsRead).toHaveBeenCalledWith(matchingNotifications);
+    intersect(false);
+    setNotifications([documentMentionNotification('offscreen-live')]);
+    expect(bulkMarkAsRead).toHaveBeenCalledOnce();
+    intersect();
+    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(2));
     for (let i = 0; i < 4; i++) {
       const liveNotifications = [documentMentionNotification(`live-${i}`)];
       setNotifications(liveNotifications);
-      await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(i + 2));
+      intersect();
+      await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(i + 3));
       expect(bulkMarkAsRead).toHaveBeenLastCalledWith(liveNotifications);
     }
     expect(globalRead).not.toHaveBeenCalled();
-    expect(observer).not.toHaveBeenCalled();
     expect(view.container.firstElementChild?.tagName).toBe('SPAN');
   });
 
@@ -153,11 +167,14 @@ describe('MarkMessageNotifications', () => {
       );
     });
     expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    intersect();
     setNotifications(0, 'state', 'unseen');
+    intersect();
     await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
 
     setNotifications(0, 'state', 'seen');
     setNotifications(1, documentMentionNotification('second'));
+    intersect();
     expect(bulkMarkAsRead).toHaveBeenCalledOnce();
     finishMark!();
     await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(2));
@@ -166,6 +183,64 @@ describe('MarkMessageNotifications', () => {
     ]);
     setNotifications(1, 'state', 'seen');
     finishMark!();
+  });
+
+  it('ignores queued visibility from an earlier notification batch', async () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(100);
+    const [notifications, setNotifications] = createSignal(
+      matchingNotifications
+    );
+    render(() => {
+      const index = createMemo(() =>
+        indexUnreadMessageNotifications(notifications())
+      );
+      return (
+        <MessageNotificationIndexContext.Provider value={index}>
+          <MarkMessageNotifications
+            messageId="message-1"
+            parent={{ type: 'channel', id: 'channel-1' }}
+          >
+            <span>Message</span>
+          </MarkMessageNotifications>
+        </MessageNotificationIndexContext.Provider>
+      );
+    });
+    clock.mockReturnValue(200);
+    const deliverOldVisibility = intersect.queue();
+    clock.mockReturnValue(300);
+    const incoming = [documentMentionNotification('new-offscreen-batch')];
+    setNotifications(incoming);
+    deliverOldVisibility();
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    clock.mockReturnValue(400);
+    intersect(false);
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    clock.mockReturnValue(500);
+    intersect();
+    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
+    expect(bulkMarkAsRead).toHaveBeenCalledWith(incoming);
+  });
+
+  it('waits for foreground and a fresh observation before reading a background notification', async () => {
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    const view = render(() => (
+      <MarkMessageNotifications
+        messageId="message-1"
+        parent={{ type: 'channel', id: 'channel-1' }}
+      >
+        <span>Message</span>
+      </MarkMessageNotifications>
+    ));
+    intersect();
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    hidden.mockReturnValue(false);
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(bulkMarkAsRead).not.toHaveBeenCalled();
+    intersect();
+    await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledOnce());
+    view.unmount();
+    intersect();
+    expect(bulkMarkAsRead).toHaveBeenCalledOnce();
   });
 
   it('bounds retries for the same notifications and retries a new batch after exhaustion', async () => {
@@ -195,6 +270,7 @@ describe('MarkMessageNotifications', () => {
         );
       });
 
+      intersect();
       await waitFor(() => {
         expect(bulkMarkAsRead).toHaveBeenCalledTimes(3);
         expect(consoleError).toHaveBeenCalledTimes(3);
@@ -203,7 +279,6 @@ describe('MarkMessageNotifications', () => {
       setNotifications(
         [...matchingNotifications].reverse().map((n) => ({ ...n }))
       );
-      await new Promise((resolve) => setTimeout(resolve, 0));
       expect(bulkMarkAsRead).toHaveBeenCalledTimes(3);
 
       const incoming = [documentMentionNotification('new-after-failure')];
@@ -211,6 +286,7 @@ describe('MarkMessageNotifications', () => {
         for (const notification of notifications) notification.state = 'seen';
       });
       setNotifications(incoming);
+      intersect();
       await waitFor(() => expect(bulkMarkAsRead).toHaveBeenCalledTimes(4));
       expect(bulkMarkAsRead).toHaveBeenLastCalledWith(incoming);
     } finally {

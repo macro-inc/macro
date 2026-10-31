@@ -4,12 +4,12 @@
  * guidance aligned with the authenticated app and import pipeline.
  */
 import CaretDown from '@phosphor/caret-down.svg';
-import { A } from '@solidjs/router';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { isServer } from 'solid-js/web';
 import markDesyncPlaceholder from '../../assets/mark-desync-placeholder.jpg';
 import markAvatar from '../../assets/people/mark.jpeg';
-import { MacroMarkIcon } from '../components/graphics/MacroMarkIcon';
+import { FeatureComparisons } from '../../features/marketing/components/comparisons/FeatureComparisons';
+import { migrationComparisons } from '../../features/marketing/core/migration-comparisons';
 import { ModuleGraphic } from '../components/graphics/ModuleGraphic';
 import { MODULE_LOGOS } from '../components/graphics/moduleLogos';
 import { SetupGraphic } from '../components/graphics/SetupGraphic';
@@ -111,38 +111,6 @@ function BookCallButton(props: { large?: boolean; label?: string }) {
   );
 }
 
-/** Inline link styled like the surrounding body copy. */
-function InlineLink(props: {
-  href: string;
-  external?: boolean;
-  children: JSX.Element;
-}) {
-  const style: JSX.CSSProperties = {
-    color: 'var(--a0)',
-    'text-decoration': 'none',
-  };
-  return (
-    <Show
-      when={props.external}
-      fallback={
-        <A href={props.href} class="migrate-link" style={style}>
-          {props.children}
-        </A>
-      }
-    >
-      <a
-        href={props.href}
-        target="_blank"
-        rel="noreferrer"
-        class="migrate-link"
-        style={style}
-      >
-        {props.children}
-      </a>
-    </Show>
-  );
-}
-
 function SectionHeading(props: {
   eyebrow?: string;
   title: string;
@@ -196,332 +164,6 @@ function SectionHeading(props: {
           {props.children}
         </p>
       </Show>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Comparison-table marks and cells
-// ---------------------------------------------------------------------------
-
-type Cell = boolean;
-
-function CheckMark() {
-  return (
-    <svg
-      width="16"
-      height="13"
-      viewBox="0 0 16 13"
-      aria-label="Yes"
-      role="img"
-      style={{ display: 'block' }}
-    >
-      <path
-        d="M1.5 6.5 L5.8 11 L14.5 1.6"
-        fill="none"
-        stroke="var(--a0)"
-        stroke-width="2.4"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-    </svg>
-  );
-}
-
-function CrossMark() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 13 13"
-      aria-label="No"
-      role="img"
-      style={{ display: 'block', opacity: 0.45 }}
-    >
-      <path
-        d="M2 2 L11 11 M11 2 L2 11"
-        fill="none"
-        stroke="var(--c4)"
-        stroke-width="1.8"
-        stroke-linecap="round"
-      />
-    </svg>
-  );
-}
-
-function ComparisonCell(props: { value: Cell }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        'align-items': 'center',
-        'justify-content': 'center',
-        'min-height': '22px',
-      }}
-    >
-      <Show when={props.value} fallback={<CrossMark />}>
-        <CheckMark />
-      </Show>
-    </div>
-  );
-}
-
-function ComparisonKey() {
-  return (
-    <div class="migrate-comparison-legend">
-      <span>
-        <CheckMark /> Available
-      </span>
-      <span>
-        <CrossMark /> Not offered as a built-in tool
-      </span>
-    </div>
-  );
-}
-
-const compareHeaderStyle = (macro: boolean): JSX.CSSProperties => ({
-  'align-items': 'center',
-  'background-color': 'transparent',
-  color: macro ? 'var(--a0)' : 'var(--c2)',
-  display: 'flex',
-  'font-family': "'Inter', body",
-  'font-size': mobile() ? '9px' : '11px',
-  'font-weight': '400',
-  'justify-content': 'center',
-  'letter-spacing': '0.04em',
-  'line-height': 1.1,
-  padding: mobile() ? '10px 6px' : '12px 12px',
-  'text-align': 'center',
-  'text-transform': macro ? 'uppercase' : 'none',
-});
-
-const compareRowBg = (rowIndex: number) =>
-  rowIndex % 2 === 1
-    ? 'color-mix(in srgb, var(--c4) 4%, var(--b0))'
-    : 'var(--b0)';
-
-function CompareHeaderLabel(props: {
-  label: string;
-  macro: boolean;
-  href?: string;
-}) {
-  return (
-    <span
-      style={{
-        'align-items': 'center',
-        display: 'inline-flex',
-        'flex-direction': 'column',
-        gap: mobile() ? '5px' : '7px',
-      }}
-    >
-      <Show when={props.macro}>
-        <MacroMarkIcon
-          style={{
-            color: 'var(--a0)',
-            display: 'block',
-            fill: 'currentColor',
-            flex: 'none',
-            height: mobile() ? '13px' : '15px',
-            overflow: 'visible',
-            stroke: 'none',
-          }}
-        />
-      </Show>
-      <Show when={props.href} fallback={<span>{props.label}</span>}>
-        {(href) => (
-          <A
-            href={href()}
-            style={{
-              color: 'inherit',
-              'text-underline-offset': '3px',
-              'text-decoration': 'underline',
-            }}
-          >
-            {props.label}
-          </A>
-        )}
-      </Show>
-    </span>
-  );
-}
-
-const WORLD_DETAILS: Record<string, string> = {
-  'Superhuman Mail': '/email#compare-superhuman',
-  Notion: '/documents#compare-notion',
-  Slack: '/channels#compare-slack',
-  Linear: '/tasks#compare-linear',
-  ClickUp: '/posts/clickup-alternative',
-};
-
-const WORLD_COLUMNS = [
-  'Macro',
-  'Superhuman Mail',
-  'Notion',
-  'Slack',
-  'Linear',
-  'ClickUp',
-];
-
-type WorldRow = {
-  feature: string;
-  href: string;
-  external?: boolean;
-  cells: [Cell, Cell, Cell, Cell, Cell, Cell];
-};
-
-const WORLD_ROWS: WorldRow[] = [
-  {
-    feature: 'Full email client',
-    href: '/email',
-    cells: [true, true, false, false, false, false],
-  },
-  {
-    feature: 'Team chat / channels',
-    href: '/channels',
-    cells: [true, false, false, true, false, true],
-  },
-  {
-    feature: 'Task management',
-    href: '/tasks',
-    cells: [true, false, true, true, true, true],
-  },
-  {
-    feature: 'Collaborative docs',
-    href: '/documents',
-    cells: [true, false, true, true, true, true],
-  },
-  {
-    feature: 'Dedicated CRM',
-    href: '/crm',
-    cells: [true, false, false, false, false, false],
-  },
-  {
-    feature: 'Video calls',
-    href: '/calls',
-    cells: [true, false, false, true, false, true],
-  },
-  {
-    feature: 'Agents',
-    href: '/agents',
-    cells: [true, true, true, true, true, true],
-  },
-  {
-    feature: 'Email, tasks, and chat in one inbox',
-    href: `${DOCS}/product/inbox`,
-    external: true,
-    cells: [true, false, false, false, false, false],
-  },
-];
-
-function WorldTable() {
-  const gridTemplate = () =>
-    mobile()
-      ? 'minmax(140px, 1.2fr) repeat(6, minmax(100px, 1fr))'
-      : 'minmax(0, 1.8fr) repeat(6, minmax(0, 1fr))';
-
-  return (
-    <div
-      class="migrate-world-table-scroll"
-      tabIndex={0}
-      role="region"
-      aria-label="Compare all tools; scroll sideways for more"
-      style={{
-        '-webkit-overflow-scrolling': 'touch',
-        'max-width': '100%',
-        'min-width': '0',
-        'overflow-x': 'auto',
-        width: '100%',
-      }}
-    >
-      <div
-        style={{
-          'box-sizing': 'border-box',
-          display: 'grid',
-          'font-family': "'Inter', body",
-          'grid-template-columns': gridTemplate(),
-          'min-width': mobile() ? '820px' : '760px',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Empty top-left cell with the notched frame used on /email. */}
-        <div
-          style={{
-            'background-color': 'transparent',
-            'border-bottom': '1px solid var(--b2)',
-          }}
-        />
-        <For each={WORLD_COLUMNS}>
-          {(col, index) => (
-            <div
-              style={{
-                ...compareHeaderStyle(index() === 0),
-                'border-top': '1px solid var(--b2)',
-                'border-bottom': '1px solid var(--b2)',
-                'border-left': '1px solid var(--b2)',
-                'border-right':
-                  index() === WORLD_COLUMNS.length - 1
-                    ? '1px solid var(--b2)'
-                    : '0',
-                padding: mobile() ? '10px 4px' : '12px 8px',
-              }}
-            >
-              <CompareHeaderLabel
-                label={col}
-                macro={index() === 0}
-                href={WORLD_DETAILS[col]}
-              />
-            </div>
-          )}
-        </For>
-
-        <For each={WORLD_ROWS}>
-          {(row, rowIndex) => (
-            <>
-              <div
-                style={{
-                  'align-items': 'center',
-                  'background-color': compareRowBg(rowIndex()),
-                  'border-bottom': '1px solid var(--b2)',
-                  'border-left': '1px solid var(--b2)',
-                  color: 'var(--c2)',
-                  display: 'flex',
-                  'font-size': mobile() ? '10px' : '12px',
-                  left: mobile() ? '0' : 'auto',
-                  'line-height': 1.25,
-                  padding: mobile() ? '9px 10px' : '10px 20px',
-                  position: mobile() ? 'sticky' : 'static',
-                  'z-index': mobile() ? 1 : 'auto',
-                }}
-              >
-                <InlineLink href={row.href} external={row.external}>
-                  {row.feature}
-                </InlineLink>
-              </div>
-              <For each={row.cells}>
-                {(cell, cellIndex) => (
-                  <div
-                    style={{
-                      'align-items': 'center',
-                      'background-color': compareRowBg(rowIndex()),
-                      'border-bottom': '1px solid var(--b2)',
-                      'border-left': '1px solid var(--b2)',
-                      'border-right':
-                        cellIndex() === row.cells.length - 1
-                          ? '1px solid var(--b2)'
-                          : '0',
-                      display: 'flex',
-                      'justify-content': 'center',
-                      padding: mobile() ? '9px 4px' : '10px 8px',
-                    }}
-                  >
-                    <ComparisonCell value={cell} />
-                  </div>
-                )}
-              </For>
-            </>
-          )}
-        </For>
-      </div>
     </div>
   );
 }
@@ -702,7 +344,7 @@ export const RouteMigrate: Component = () => {
         .migrate-page :focus-visible { outline: 2px solid var(--c1); outline-offset: 4px; }
         .migrate-full-comparison { width: 100%; max-width: 980px; min-width: 0; }
         .migrate-full-comparison h2 { font-family: display; font-size: clamp(28px, 4vw, 40px); font-weight: calc(315 + var(--cream-slab-weight-increase, 0)); letter-spacing: -0.015em; margin: 0 0 16px; }
-        .migrate-full-comparison-content { display: grid; gap: 24px; padding-top: 20px; min-width: 0; }
+        .migrate-page .migrate-full-comparison .feature-comparisons { width: 100%; max-width: none; margin: 0; --comparison-header-size: 15px; --comparison-header-padding: 20px 10px; }
         .migrate-connected-tools { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px; width: 100%; max-width: 760px; justify-items: center; }
         .migrate-agent-prompt { max-width: 660px; margin: 0; padding: 4px 0 4px 24px; border-left: 2px solid var(--c4); color: var(--c2); font: 400 20px/1.55 Inter, body; text-wrap: pretty; }
         .migrate-practical-faq details { border-bottom: 1px solid var(--b2); padding: 20px 0; }
@@ -713,12 +355,9 @@ export const RouteMigrate: Component = () => {
         .migrate-practical-faq p { color: var(--c4); font: 400 15px/1.75 Inter, body; margin: 16px 0 0; }
         .migrate-practical-faq a { color: var(--c2); text-decoration: underline; text-underline-offset: 3px; }
         @media (max-width: 699px) { .migrate-connected-tools { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; } .migrate-agent-prompt { font-size: 17px; padding-left: 16px; } }
-        .migrate-comparison-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px 24px; color: var(--c4); font-family: Inter, body; font-size: 12px; }
-        .migrate-comparison-legend > span { display: inline-flex; align-items: center; gap: 8px; }
         .migrate-scroll-hint { color: var(--c4); font-family: Inter, body; font-size: 12px; margin: 12px 0 0; }
         @media (hover) {
           .migrate-cta-button:hover { transform: scale(1.02); }
-          .migrate-link:hover { text-decoration: underline; }
         }
         .migrate-hero-graphic, .migrate-module-graphic { display: block; height: auto; width: 100%; }
         .migrate-world-table-scroll,
@@ -1253,14 +892,14 @@ export const RouteMigrate: Component = () => {
         }}
       >
         <div class="migrate-full-comparison">
-          <h2>Compare all tools</h2>
-          <div class="migrate-full-comparison-content">
-            <WorldTable />
-            <ComparisonKey />
-            <Show when={mobile()}>
-              <p class="migrate-scroll-hint">Scroll sideways to compare →</p>
-            </Show>
-          </div>
+          <FeatureComparisons
+            title="Compare all tools"
+            comparisons={migrationComparisons}
+            tableMinWidth={900}
+          />
+          <Show when={mobile()}>
+            <p class="migrate-scroll-hint">Scroll sideways to compare →</p>
+          </Show>
         </div>
       </section>
 

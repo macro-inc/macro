@@ -82,8 +82,8 @@ function ControlsOnDepthDemo() {
           <Panel depth={depth}>
             <Panel.Body class="flex flex-wrap gap-2 p-3">
               <Button variant="ghost">Ghost</Button>
-              <Button variant="outline">Outline</Button>
-              <Button variant="accent">Accent</Button>
+              <Button variant="secondary">Outline</Button>
+              <Button variant="primary">Primary</Button>
               <Button variant="danger">Danger</Button>
             </Panel.Body>
           </Panel>
@@ -144,10 +144,12 @@ export default defineDoc({
       'Set `depth` on the container and let children read `bg-surface`.',
       'Use `bg-inset` for wells (inputs and code blocks) and `Layer offset={1}` with `bg-surface` for raised items.',
       'Verify new components at several depths using the toolbar control.',
+      'Float menus, popovers, editor panels, and floating toolbars on `menu-surface`; open dialogs with `Dialog`, which owns `elevated-surface`.',
     ],
     dont: [
       'Do not reference `bg-surface-2` and friends directly in a component; that pins it to one depth.',
       'Do not nest more than about three depth steps — past that the steps stop reading.',
+      'Do not hand-build an overlay from `bg-menu`, `bg-surface`, a border, and a shadow, or reuse the retired `bg-menu-glass`.',
     ],
   },
 });

@@ -1,6 +1,8 @@
 import type { MacroOpts } from './config';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
+import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
+import { ApiKeyNamespace } from './entities/api-keys/namespace';
 import { BotsNamespace } from './entities/bots/namespace';
 import { CalendarNamespace } from './entities/calendar/namespace';
 import { CallRecordNamespace } from './entities/calls/namespace';
@@ -10,18 +12,28 @@ import { CrmNamespace } from './entities/crm/namespace';
 import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
 import { EmailNamespace } from './entities/email/namespace';
+import { EntityMentionNamespace } from './entities/entity-mentions/namespace';
+import { ExternalChatsNamespace } from './entities/external-chat/namespace';
 import { FavoritesNamespace } from './entities/favorites/namespace';
 import { ForeignEntityNamespace } from './entities/foreign/namespace';
 import { FormNamespace } from './entities/forms/namespace';
+import { GithubPullRequestNamespace } from './entities/github-pull-requests/namespace';
+import { HarnessNamespace } from './entities/harnesses/namespace';
+import { ImagesNamespace } from './entities/images/namespace';
+import { InitiativeNamespace } from './entities/initiatives/namespace';
+import { MeetingNamespace } from './entities/meetings/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
 import { ProjectNamespace } from './entities/projects/namespace';
 import { PropertiesNamespace } from './entities/properties/namespace';
+import { RoutineNamespace } from './entities/routines/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
+import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
 import { WebhooksNamespace } from './entities/webhooks/namespace';
+import { WhatsAppNamespace } from './entities/whatsapp/namespace';
 import { WorkspaceNamespace } from './entities/workspace/namespace';
 import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
@@ -78,50 +90,122 @@ export {
   wrapXml,
 } from './mentions';
 export type { RequestActivity } from './utils/activity';
-
 export class Macro<T extends MacroOpts = MacroOpts> {
+  /** routines resources and operations. */
+  readonly routines: RoutineNamespace;
+
+  /** unfurls resources and operations. */
+  readonly unfurls: UnfurlNamespace;
+
+  /** agents resources and operations. */
+  readonly agents: AgentNamespace;
+
+  /** initiatives resources and operations. */
+  readonly initiatives: InitiativeNamespace;
+
+  /** apiKeys resources and operations. */
+  readonly apiKeys: ApiKeyNamespace;
+
+  /** harnesses resources and operations. */
+  readonly harnesses: HarnessNamespace;
+
+  /** meetings resources and operations. */
+  readonly meetings: MeetingNamespace;
+
+  /** githubPullRequests resources and operations. */
+  readonly githubPullRequests: GithubPullRequestNamespace;
+
+  /** entityMentions resources and operations. */
+  readonly entityMentions: EntityMentionNamespace;
+
   readonly agentSessions: AgentSessionNamespace;
+
   readonly ai: AiNamespace;
+
   readonly bots: BotsNamespace;
+
   readonly calendar: CalendarNamespace;
+
   readonly calls: CallRecordNamespace;
+
   readonly channels: ChannelNamespace;
+
+  /** Chats from external providers (WhatsApp) added to Macro: read, share and send. */
+  readonly externalChats: ExternalChatsNamespace;
+
+  /** The current user's WhatsApp account and chat list; add chats from it. */
+  readonly whatsapp: WhatsAppNamespace;
+
   readonly chats: ChatNamespace;
+
   readonly crm: CrmNamespace;
+
   readonly databases: DatabaseNamespace;
+
   readonly documents: DocumentNamespace;
+
   readonly email: EmailNamespace;
+
   readonly favorites: FavoritesNamespace;
+
   readonly foreignEntities: ForeignEntityNamespace;
+
   /** Build forms and submit answers without granting respondents database access. */
   readonly forms: FormNamespace;
+
+  /** Generate images with AI and attach them to messages. */
+  readonly images: ImagesNamespace;
+
   readonly notifications: NotificationNamespace;
+
   readonly pins: PinsNamespace;
+
   readonly projects: ProjectNamespace;
+
   readonly properties: PropertiesNamespace;
+
   readonly tasks: TaskNamespace;
+
   readonly teams: TeamNamespace;
+
   readonly users: UserNamespace;
+
   readonly webhooks: WebhooksNamespace;
+
   /** Browse workspace activity with type, task, time, tag and inbox filters. */
   readonly workspace: WorkspaceNamespace;
+
   readonly events: MacroEvents;
+
   /** Base URL of the Macro web app, used to build entity URLs. */
   readonly webAppUrl: string;
+
   /** Direct access to the underlying hey-api service clients. */
   readonly _client: MacroClient;
+
   private readonly opts: T;
 
   constructor(opts: T) {
     this.opts = opts;
     const client = new MacroClient(opts);
     this._client = client;
+    this.routines = new RoutineNamespace(client);
+    this.unfurls = new UnfurlNamespace(client);
+    this.agents = new AgentNamespace(client);
+    this.initiatives = new InitiativeNamespace(client);
+    this.apiKeys = new ApiKeyNamespace(client);
+    this.harnesses = new HarnessNamespace(client);
+    this.meetings = new MeetingNamespace(client);
+    this.githubPullRequests = new GithubPullRequestNamespace(client);
+    this.entityMentions = new EntityMentionNamespace(client);
     this.agentSessions = new AgentSessionNamespace(client);
     this.ai = new AiNamespace(client);
     this.bots = new BotsNamespace(client);
     this.calendar = new CalendarNamespace(client);
     this.calls = new CallRecordNamespace(client);
     this.channels = new ChannelNamespace(client);
+    this.externalChats = new ExternalChatsNamespace(client);
+    this.whatsapp = new WhatsAppNamespace(client);
     this.chats = new ChatNamespace(client);
     this.crm = new CrmNamespace(client);
     this.databases = new DatabaseNamespace(client);
@@ -130,6 +214,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
+    this.images = new ImagesNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
@@ -159,13 +244,94 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
+export type { FoldedAgentSessionLog } from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
+export {
+  AgentConversation,
+  ConversationTurn,
+} from './entities/agent-sessions/conversation';
 export type {
   CreateReviewOptions,
   ReviewCalendarDraft,
   ReviewEmailDraft,
 } from './entities/agent-sessions/review';
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
+export { ToolApproval } from './entities/agent-sessions/tool-approval';
+export { Agent, type AgentOptions } from './entities/agents/agent';
+export { UserApiKey } from './entities/api-keys/api-key';
+export { CalendarNote } from './entities/calendar/note';
+export { ChannelActivity } from './entities/channels/activity';
+export { ChannelPicture } from './entities/channels/picture';
+export { ChatGeneration, ChatMessage } from './entities/chats/generation';
+export {
+  CrmPipeline,
+  PipelineColumn,
+  PipelineRow,
+  PipelineTable,
+} from './entities/crm/pipeline';
+export type {
+  DatabaseQueryOptions,
+  DatabaseQueryResult,
+  QueryColumn,
+  QueryResultSet,
+  QueryStatement,
+  QueryTableVersion,
+} from './entities/databases/query';
+export { DocumentAnchor } from './entities/documents/anchor';
+export { DocumentVersion } from './entities/documents/version';
+export {
+  DraftAttachment,
+  type DraftOptions,
+  EmailDraft,
+} from './entities/email/draft';
+export { EmailFilter, type EmailFilterOptions } from './entities/email/filter';
+export { EntityMention } from './entities/entity-mentions/mention';
+export {
+  ExternalChat,
+  type ExternalChatContent,
+} from './entities/external-chat/chat';
+export { ExternalChatMessage } from './entities/external-chat/message';
+export { ExternalChatParticipant } from './entities/external-chat/participant';
+export { ExternalChatSend } from './entities/external-chat/send';
+export { ExternalChatUpload } from './entities/external-chat/upload';
+export {
+  GithubPullRequest,
+  PullRequestChangeset,
+} from './entities/github-pull-requests/pull-request';
+export { Harness } from './entities/harnesses/harness';
+export { DevicePairing, HarnessPairing } from './entities/harnesses/pairing';
+export { GeneratedImage, StaticImage } from './entities/images/image';
+export type {
+  GenerateImageAspectRatio,
+  GenerateImageOptions,
+} from './entities/images/namespace';
+export {
+  Initiative,
+  type InitiativeOptions,
+} from './entities/initiatives/initiative';
+export type { InitiativeSummary } from './entities/initiatives/namespace';
+export { Meeting } from './entities/meetings/meeting';
+export type { TimelineOptions } from './entities/messages/thread';
+export { type MessageParent, MessageThread } from './entities/messages/thread';
+export type { EntityReference } from './entities/reference';
+export type {
+  RoutineEventFilter,
+  RoutineTriggerOptions,
+  SingleRoutineTrigger,
+} from './entities/routines/routine';
+export {
+  Routine,
+  RoutineExecution,
+  type RoutineOptions,
+} from './entities/routines/routine';
+export { AccessRequest, EntityAccess } from './entities/sharing/access';
+export type { SharePermissionOptions } from './entities/sharing/permissions';
+export type { TaskSummary } from './entities/tasks/task';
+export { WhatsAppAccount } from './entities/whatsapp/account';
+export {
+  WhatsAppChat,
+  type WhatsAppCommunity,
+} from './entities/whatsapp/chat';
 export type {
   WorkspaceFilters,
   WorkspaceItem,

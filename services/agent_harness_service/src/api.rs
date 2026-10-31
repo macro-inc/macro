@@ -69,15 +69,23 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     gateway: RuntimeGatewayState<Auth>,
     models: AgentModelsRouterState<Models, Auth>,
     repositories: AgentRepositoriesRouterState<Auth>,
-    claude_auth: Router,
+    public_mcp: Router,
+    listening: Option<tokio::sync::watch::Sender<bool>>,
+    cognition: Router,
+    universal_input: Router,
+    scheduling: Router,
+    preview: Router,
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
     capabilities: Router,
+    mode_choice: Router,
     conversations: Router,
     pull_requests: Router,
     tool_approvals: Router,
+    app_connections: Router,
     code_executions: Router,
+    notifications: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
 }
 
@@ -101,22 +109,78 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             gateway,
             models,
             repositories,
-            claude_auth: Router::new(),
+            public_mcp: Router::new(),
+            listening: None,
+            cognition: Router::new(),
+            universal_input: Router::new(),
+            scheduling: Router::new(),
+            preview: Router::new(),
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
             capabilities: Router::new(),
+            mode_choice: Router::new(),
             conversations: Router::new(),
             pull_requests: Router::new(),
             tool_approvals: Router::new(),
+            app_connections: Router::new(),
             code_executions: Router::new(),
+            notifications: Router::new(),
             changes,
         }
+    }
+
+    /// Attach internal durable system-event production.
+    pub fn with_notifications(mut self, router: Router) -> Self {
+        self.notifications = router;
+        self
+    }
+
+    /// Release background dispatch only once this process has bound HTTP.
+    pub fn with_listening_signal(mut self, listening: tokio::sync::watch::Sender<bool>) -> Self {
+        self.listening = Some(listening);
+        self
+    }
+
+    /// Mount the public MCP and OAuth routes outside the browser API middleware.
+    pub fn with_public_mcp(mut self, router: Router) -> Self {
+        self.public_mcp = router;
+        self
+    }
+
+    /// Mount chat, completions, and integrations at their existing public paths.
+    pub fn with_cognition(mut self, router: Router) -> Self {
+        self.cognition = router;
+        self
+    }
+
+    /// Attach the crate-owned Command K inference router.
+    pub fn with_universal_input(mut self, router: Router) -> Self {
+        self.universal_input = router;
+        self
+    }
+
+    /// Attach routine APIs with their existing scheduling middleware.
+    pub fn with_scheduling(mut self, router: Router) -> Self {
+        self.scheduling = router;
+        self
+    }
+
+    /// Attach preview controls; public preview apps retain their isolated origin.
+    pub fn with_preview(mut self, router: Router) -> Self {
+        self.preview = router;
+        self
     }
 
     /// Attach model-specific harness capability discovery routes.
     pub fn with_capabilities(mut self, router: Router) -> Self {
         self.capabilities = router;
+        self
+    }
+
+    /// Attach the composer's Auto mode choice.
+    pub fn with_mode_choice(mut self, router: Router) -> Self {
+        self.mode_choice = router;
         self
     }
 
@@ -129,12 +193,6 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach session-authorized code execution records.
     pub fn with_code_executions(mut self, router: Router) -> Self {
         self.code_executions = router;
-        self
-    }
-
-    /// Attach the optional owner-authenticated Claude demo connection routes.
-    pub fn with_claude_auth(mut self, router: Router) -> Self {
-        self.claude_auth = router;
         self
     }
 
@@ -165,6 +223,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the routes answering tool calls held for the owner's approval.
     pub fn with_tool_approvals(mut self, router: Router) -> Self {
         self.tool_approvals = router;
+        self
+    }
+
+    /// Attach the route continuing a session once its owner connects an app.
+    pub fn with_app_connections(mut self, router: Router) -> Self {
+        self.app_connections = router;
         self
     }
 }
@@ -217,6 +281,11 @@ where
     Models: AgentModelsService,
     Changes: AgentChanges,
 {
+    let listening = states.listening.clone();
+    let public_mcp = states.public_mcp.clone();
+    let cognition = states.cognition.clone();
+    let scheduling = states.scheduling.clone();
+    let preview = states.preview.clone();
     let inner = api_router(states)
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         .merge(health_router(runtime_commands_ready))
@@ -231,6 +300,10 @@ where
                 .quality(CompressionLevel::Fastest),
         );
     let app = mount_at_root_and_prefix(inner, GATEWAY_PATH_PREFIX)
+        .merge(cognition)
+        .merge(scheduling)
+        .merge(preview)
+        .merge(public_mcp)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(SwaggerUi::new("/agent-harness/docs").url(
             "/agent-harness/api-doc/openapi.json",
@@ -241,6 +314,9 @@ where
         .await
         .with_context(|| format!("failed to bind agent harness service to port {port}"))?;
 
+    if let Some(listening) = listening {
+        listening.send_replace(true);
+    }
     tracing::info!(port, "agent harness service http listening");
 
     axum::serve(listener, app.into_make_service())
@@ -263,25 +339,33 @@ where
     Models: AgentModelsService,
     Changes: AgentChanges,
 {
+    let tool_actions =
+        agent_session::inbound::axum_router::tool_actions::agent_session_tool_actions_router(
+            states.control.clone(),
+        );
     let agent_sessions = agent_session_read_router(states.read.clone())
         .merge(agent_session_control_router(states.control))
         .merge(agent_session_create_router(states.create))
         .merge(states.sharing)
         .merge(states.pull_requests)
         .merge(states.tool_approvals)
+        .merge(states.app_connections)
         .merge(states.code_executions)
+        .merge(states.notifications)
         .merge(agent_changes_router(states.changes));
     Router::new()
         .nest("/agent-sessions", agent_sessions)
+        .merge(tool_actions)
         .merge(agent_sandbox_size_router(states.read.clone()))
         .merge(agent_coding_preferences_router(states.read))
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
-        .merge(states.claude_auth)
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
         .merge(states.capabilities)
+        .merge(states.mode_choice)
         .merge(states.conversations)
+        .nest("/universal_input", states.universal_input)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

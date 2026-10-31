@@ -167,6 +167,13 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// Resolve ordinary shares on an external chat.
+    fn get_external_chat_access(
+        &self,
+        form_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+
     /// The highest access level a user's grants hold on every live form they
     /// reach, ordered by form id. A public audience alone never lists a form,
     /// and trashed forms are left out.
@@ -321,8 +328,8 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
 
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
-    /// Checks both the `calls` table (active calls) and the `call_records` table
-    /// (archived calls). Returns `None` if the call does not exist in either table.
+    /// Resolves the durable identity for native and imported calls.
+    /// Returns `None` if the call entity does not exist.
     fn get_call_channel(
         &self,
         call_id: &Uuid,
@@ -563,6 +570,10 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
     /// access or inherited access through the project hierarchy via `entity_access`.
     /// For Channel: returns active channel participants.
     /// Returns `AccessError::BadRequest` for unsupported types (Team, User).
+    ///
+    /// The activity team feed applies this audience in SQL
+    /// (`crates/activity/src/outbound/pg_activity_repo/team_feed.sql`); keep
+    /// the two in step.
     fn get_users_by_entity(
         &self,
         entity_id: &str,
@@ -571,7 +582,7 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
 
     /// Resolve a call ID to its channel ID and share permission ID.
     ///
-    /// Checks both `calls` (active) and `call_records` (archived) tables.
+    /// Resolves the durable identity for native and imported calls.
     fn get_call_channel(
         &self,
         call_id: &Uuid,

@@ -1,7 +1,7 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import ClockIcon from '@phosphor/clock.svg';
-import FilesIcon from '@phosphor/files.svg';
-import UsersIcon from '@phosphor/users.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import FilesIcon from '@icon/system/regular/files.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { For, type ParentComponent } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { DRIVE_TABS, type DriveLocation, type DriveTab } from '../core/types';

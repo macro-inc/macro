@@ -9,6 +9,7 @@ mod installation_state;
 mod link;
 mod repository;
 mod sync;
+mod webhook_delivery;
 
 #[cfg(feature = "sync")]
 pub use app_jwt::AppJwt;
@@ -22,16 +23,19 @@ pub use github_pull_requests::domain::models::{
     GithubPullRequestLabel, GithubPullRequestMerge, GithubPullRequestMergeability,
     GithubPullRequestMergeabilityEntry, GithubPullRequestMergeabilityRequest,
     GithubPullRequestMergeabilityResponse, GithubPullRequestNumber, GithubPullRequestRef,
-    GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestStatus,
-    GithubPullRequestUpdateRejection, GithubPullRequestUser, GithubRepositoryMergeSettings,
-    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
-    SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse, latest_reviews,
+    GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestState,
+    GithubPullRequestStatus, GithubPullRequestUpdateRejection, GithubPullRequestUser,
+    GithubRepositoryMergeSettings, GithubStateOutcome, MergeGithubPullRequestRequest,
+    MergeGithubPullRequestResponse, SetGithubPullRequestDraftRequest,
+    SetGithubPullRequestDraftResponse, SetGithubPullRequestStateRequest,
+    SetGithubPullRequestStateResponse, latest_reviews,
 };
 pub use installation_state::{
     InstallationState, InstallationStateError, sign_installation_state, verify_installation_state,
 };
 pub use link::{
-    GithubAccessToken, GithubExchangeTokenResponse, GithubLink, GithubLinkStatus, GithubUserInfo,
+    GithubAccessToken, GithubExchangeTokenResponse, GithubGrantLinkOutcome, GithubLink,
+    GithubLinkStatus, GithubUserInfo,
 };
 pub use repository::{GithubRepository, PullRequestIndexPage, PullRequestIndexRequest};
 pub use sync::{
@@ -40,6 +44,9 @@ pub use sync::{
     GithubUserInstallationsPage, GithubWebhookEventType, MacroTaskId, ResolvedTeamTaskReference,
     TeamTaskReference, ValidatedGithubWebhookEvent, extract_github_mentions,
     pull_request_task_reference, strip_markdown_code,
+};
+pub use webhook_delivery::{
+    GithubWebhookReceived, GithubWebhookRepository, GithubWebhookSender, MAX_WEBHOOK_PAYLOAD_BYTES,
 };
 /// Errors that can occur during github operations.
 #[derive(Debug, thiserror::Error)]
@@ -53,6 +60,9 @@ pub enum GithubError {
     /// The Github link token has expired and the user must reauthenticate.
     #[error("reauthentication required")]
     ReauthenticationRequired,
+    /// Reconnect must use the currently linked GitHub account.
+    #[error("disconnect the current GitHub account before linking a different account")]
+    AccountMismatch,
     /// No refresh token was provided in the token exchange
     #[error("no refresh token provided in token exchange")]
     NoRefreshTokenProvided,

@@ -18,13 +18,17 @@ alwaysApply: false
 - Each top-level route picks its shell in `app-router-view.tsx`
   (`routes/shells.tsx`): `authRoute` pages and booking links render without app
   chrome, and `appRoute` renders `AppShell` — the app's providers
-  (`AppProviders`), chrome (`AppChrome` in `Layout.tsx`), and the split layout.
-  Put state only the app's views use in `AppProviders`, not `Root`; `Root` keeps
-  what every page or a call needs.
+  (`AppProviders`), layout/context owner (`SplitLayoutProvider`), chrome
+  (`AppChrome` in `Layout.tsx`), and split content. Compose these in the route
+  shell; keep `AppChrome` independent of page selection. Put state only the app's
+  views use in `AppProviders`, not `Root`; `Root` keeps what every page or call needs.
 - `index.html` paints a boot shell before any JS runs: the saved theme's
   background, the rail column, and the desktop app's content card — no app
   content. The first shell to mount dismisses it (`dismissBootShell`). Keep its
   rail width and desktop inset in step with `SidebarRail` and `SplitLayout`.
+- Read a supported iOS notification launch intent before mounting the router;
+  keep startup payload validators in the generated compact push-schema entry
+  rather than importing the full service schema bundle.
 - Do not register an asset-caching service worker. Keep `public/sw.js` at its
   deployed URL so existing workers can update, clear their shell and asset
   caches, and unregister; it must not intercept requests.

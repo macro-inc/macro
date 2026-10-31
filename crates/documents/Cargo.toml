@@ -23,8 +23,10 @@ ai_tools = [
   "dep:ai_engine",
   "dep:ai_toolset",
   "dep:ai_usage",
+  "dep:docx_engine",
   "dep:fig_engine",
   "dep:async-trait",
+  "dep:loro",
   "dep:macro_tower_layers",
   "dep:messages",
   "dep:macro_db_client",
@@ -189,10 +191,12 @@ ai_toolset = { path = "../ai_toolset", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
 async-trait = { workspace = true, optional = true }
 lexical_client = { path = "../lexical_client", optional = true }
+loro = { workspace = true, optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 messages = { path = "../messages", optional = true, features = ["ports"] }
 model_file_type = { path = "../model_file_type", optional = true }
 ai_engine = { path = "../ai_engine", optional = true }
+docx_engine = { path = "../docx_engine", optional = true }
 fig_engine = { path = "../fig_engine", optional = true }
 pptx_engine = { path = "../pptx_engine", optional = true, features = ["embedded-fonts", "schema"] }
 psd_engine = { path = "../psd_engine", optional = true }

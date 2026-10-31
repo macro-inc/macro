@@ -6,7 +6,7 @@ import {
   useMessageLink,
   useMessageRootsQuery,
 } from '@queries/messages/document-messages';
-import { Show } from 'solid-js';
+import { Match, Switch } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**
@@ -22,19 +22,19 @@ type DocumentDiscussionProps = {
 export function DocumentDiscussion(props: DocumentDiscussionProps) {
   const authenticated = useIsAuthenticated();
   return (
-    <Show
-      when={authenticated() === true}
-      fallback={
+    <Switch>
+      <Match when={authenticated() === true}>
+        <AuthenticatedDocumentDiscussion {...props} />
+      </Match>
+      <Match when={authenticated() === false}>
         <p class="mt-3 text-xs text-ink-muted">Sign in to view comments.</p>
-      }
-    >
-      <AuthenticatedDocumentDiscussion {...props} />
-    </Show>
+      </Match>
+    </Switch>
   );
 }
 
 function AuthenticatedDocumentDiscussion(props: DocumentDiscussionProps) {
-  const { documentId, kind, permissions } = useMarkdownDocument();
+  const { documentId, kind, permissions, state } = useMarkdownDocument();
   const id = documentId();
   const documentKind = kind();
   const blockName = documentKind === 'document' ? 'md' : documentKind;
@@ -52,6 +52,7 @@ function AuthenticatedDocumentDiscussion(props: DocumentDiscussionProps) {
     <EntityDiscussion
       parent={parent()}
       targetId={discussionTarget()}
+      scrollReady={state.editor.md.locationReady === true}
       canWrite={permissions.canComment()}
       canModerate={permissions.isOwner()}
       link={{ type: blockName, id }}

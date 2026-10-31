@@ -9,8 +9,8 @@ import { InspectorSelect } from './inspector-select';
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
+import Eyedropper from '@icon/system/regular/eyedropper.svg';
 import { Slider } from '@kobalte/core/slider';
-import Eyedropper from '@phosphor/eyedropper.svg';
 import { createSignal, For, Index, Show } from 'solid-js';
 import {
   COLOR_FORMATS,

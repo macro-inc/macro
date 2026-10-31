@@ -173,6 +173,44 @@ describe('recurrence submission', () => {
     ]);
   });
 
+  // October 1, 2026 is a Thursday.
+  it('reads a weekly rule without weekdays as the weekly preset and keeps its text', () => {
+    const controller = controllerFor(
+      { ...recurringValue, recurrenceLines: ['RRULE:FREQ=WEEKLY'] },
+      { isEdit: true }
+    );
+    expect(controller.recurrenceChoice()).toBe('weekly');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY',
+    ]);
+
+    // The rule follows the start, as the preset does.
+    controller.setStart('2026-10-02T18:00');
+    controller.setField('end', '2026-10-02T18:30');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY',
+    ]);
+  });
+
+  it('opens a weekly rule with an end but no weekdays on the start’s weekday', () => {
+    const controller = controllerFor(
+      { ...recurringValue, recurrenceLines: ['RRULE:FREQ=WEEKLY;COUNT=3'] },
+      { isEdit: true }
+    );
+    expect(controller.recurrenceChoice()).toBe('custom');
+    expect(controller.customConfig().byDay).toEqual(['TH']);
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY;COUNT=3',
+    ]);
+
+    // Moved to Friday, the series keeps the Thursday the editor shows.
+    controller.setStart('2026-10-02T18:00');
+    controller.setField('end', '2026-10-02T18:30');
+    expect(controller.submitValues()?.recurrenceLines).toEqual([
+      'RRULE:FREQ=WEEKLY;BYDAY=TH;COUNT=3',
+    ]);
+  });
+
   it('converts UNTIL when changing a timed event to all-day', () => {
     const controller = controllerFor(
       {
@@ -468,6 +506,121 @@ describe('out of office', () => {
   });
 });
 
+it('submits guest permissions only when they change', () => {
+  const controller = controllerFor(
+    {
+      ...timedRange(3),
+      title: 'Planning',
+      guestPolicy: {
+        canModify: false,
+        canInviteOthers: false,
+        canSeeOtherGuests: true,
+      },
+    },
+    { isEdit: true }
+  );
+  expect(controller.isDirty()).toBe(false);
+  expect(controller.submitValues()?.guestPolicy).toBeUndefined();
+
+  controller.setGuestPolicy({
+    canModify: false,
+    canInviteOthers: true,
+    canSeeOtherGuests: true,
+  });
+  expect(controller.isDirty()).toBe(true);
+  expect(controller.submitValues()?.guestPolicy).toEqual({
+    canModify: false,
+    canInviteOthers: true,
+    canSeeOtherGuests: true,
+  });
+
+  controller.setGuestPolicy({
+    canModify: false,
+    canInviteOthers: false,
+    canSeeOtherGuests: true,
+  });
+  expect(controller.isDirty()).toBe(false);
+  expect(controller.submitValues()?.guestPolicy).toBeUndefined();
+});
+
+it('returns locked details to the event’s own and keeps the viewer’s reminders', () => {
+  const controller = controllerFor(
+    {
+      start: '2030-01-01T12:00',
+      end: '2030-01-01T13:00',
+      title: 'Planning',
+      location: 'Room 1',
+      description: 'Agenda',
+      recurrenceLines: ['RRULE:FREQ=DAILY'],
+      reminders: { useDefault: false, overrides: [] },
+    },
+    { isEdit: true }
+  );
+  controller.setField('title', 'Planning review');
+  controller.setField('location', 'Room 4');
+  controller.setField('description', 'Agenda and notes');
+  controller.setStart('2030-01-01T15:00');
+  controller.changeRecurrenceChoice('none');
+  controller.setReminderMinutes([30]);
+
+  controller.resetDetails();
+
+  expect(controller.submitValues()).toMatchObject({
+    title: 'Planning',
+    location: 'Room 1',
+    description: 'Agenda',
+    time: { kind: 'timed' },
+    reminders: {
+      useDefault: false,
+      overrides: [{ method: 'popup', minutes: 30 }],
+    },
+  });
+  expect(controller.state().start).toBe('2030-01-01T12:00');
+  expect(controller.recurrenceLines()).toEqual(['RRULE:FREQ=DAILY']);
+  expect(controller.isDirty()).toBe(true);
+
+  controller.setReminderMinutes([]);
+  expect(controller.isDirty()).toBe(false);
+});
+
+it('drops guest permissions picked before switching to a calendar without them', () => {
+  const google = {
+    id: 'work',
+    label: 'Work',
+    color: '#123456',
+    provider: 'google' as const,
+    isPrimary: true,
+    capabilities: {
+      autoDecline: true,
+      emailReminders: true,
+      customRecurrence: true,
+      removeConference: true,
+      resetRsvp: true,
+      guestPolicy: true,
+    },
+  };
+  const outlook = {
+    ...google,
+    id: 'personal',
+    label: 'Personal Outlook',
+    provider: 'outlook' as const,
+    capabilities: { ...google.capabilities, guestPolicy: false },
+  };
+  const controller = controllerFor(
+    { ...timedRange(3), title: 'Planning', calendarId: 'work' },
+    { calendarOptions: () => [google, outlook] }
+  );
+  controller.setGuestPolicy({
+    canModify: true,
+    canInviteOthers: true,
+    canSeeOtherGuests: true,
+  });
+  expect(controller.submitValues()?.guestPolicy).toBeDefined();
+
+  controller.setField('calendarId', 'personal');
+  expect(controller.submitValues()?.guestPolicy).toBeUndefined();
+});
+
 it('preserves a requested conference on an unsupported calendar until the user resolves it', () => {
   const controller = controllerFor(
     { ...timedRange(3), title: 'Meeting', conference: 'google_meet' },
@@ -485,6 +638,7 @@ it('preserves a requested conference on an unsupported calendar until the user r
             customRecurrence: false,
             removeConference: false,
             resetRsvp: false,
+            guestPolicy: false,
           },
         },
       ],
@@ -523,6 +677,7 @@ it('allows unrelated edits to an existing Teams meeting on a calendar without co
             customRecurrence: false,
             removeConference: false,
             resetRsvp: false,
+            guestPolicy: false,
           },
         },
       ],
@@ -532,4 +687,73 @@ it('allows unrelated edits to an existing Teams meeting on a calendar without co
   expect(controller.conferenceError()).toBeUndefined();
   expect(controller.canSave()).toBe(true);
   expect(controller.submitValues()?.conference).toBeUndefined();
+});
+
+describe('moving the start', () => {
+  const timed = {
+    allDay: false,
+    start: '2030-01-01T10:00',
+    end: '2030-01-01T11:30',
+  };
+
+  it('carries the end along, keeping the event’s length', () => {
+    const controller = controllerFor(timed);
+    controller.setStart('2030-01-01T14:00');
+    expect(controller.state()).toMatchObject({
+      start: '2030-01-01T14:00',
+      end: '2030-01-01T15:30',
+    });
+    controller.setStart('2030-01-02T23:00');
+    expect(controller.state().end).toBe('2030-01-03T00:30');
+    expect(controller.dateRangeError()).toBeUndefined();
+  });
+
+  it('leaves an end the user picked in this edit where they put it', () => {
+    const controller = controllerFor(timed);
+    controller.setEnd('2030-01-01T17:00');
+    controller.setStart('2030-01-01T15:00');
+    expect(controller.state()).toMatchObject({
+      start: '2030-01-01T15:00',
+      end: '2030-01-01T17:00',
+    });
+  });
+
+  it('does the same for all-day dates', () => {
+    const allDay = { allDay: true, start: '2030-01-01', end: '2030-01-02' };
+    const following = controllerFor(allDay);
+    following.setStart('2030-01-05');
+    expect(following.state().end).toBe('2030-01-06');
+
+    const picked = controllerFor(allDay);
+    picked.setEnd('2030-01-04');
+    picked.setStart('2030-01-03');
+    expect(picked.state().end).toBe('2030-01-04');
+  });
+
+  it('follows the start again once the times are rewritten', () => {
+    const toggled = controllerFor(timed);
+    toggled.setEnd('2030-01-01T17:00');
+    toggled.setAllDay(true);
+    toggled.setStart('2030-01-03');
+    expect(toggled.state()).toMatchObject({
+      start: '2030-01-03',
+      end: '2030-01-03',
+    });
+
+    const reset = controllerFor(timed, { isEdit: true });
+    reset.setEnd('2030-01-01T17:00');
+    reset.resetDetails();
+    reset.setStart('2030-01-01T12:00');
+    expect(reset.state().end).toBe('2030-01-01T13:30');
+  });
+
+  it('keeps the end of a range that has no length to keep', () => {
+    const controller = controllerFor({
+      allDay: false,
+      start: '2030-01-01T12:00',
+      end: '2030-01-01T09:00',
+    });
+    controller.setStart('2030-01-01T08:00');
+    expect(controller.state().end).toBe('2030-01-01T09:00');
+  });
 });

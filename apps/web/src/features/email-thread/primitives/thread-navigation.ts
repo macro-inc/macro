@@ -594,16 +594,44 @@ export function createThreadNavigation(
     }
     return true;
   };
-  const markDone = () => {
-    if (!host.listNavigation) return context.archiveThread();
-    host.listNavigation.markDone(context.archiveThread);
+  const markDone = () => context.archiveThreadAndAdvance();
+
+  /** 'o' toggles the focused (or last) message open or closed. */
+  const expandFocusedMessage = () => {
+    const target = getHotkeyTarget();
+    const messageId = target?.message.db_id;
+    if (!target || !messageId) return false;
+    const expand = !isMessageRenderedExpanded(target);
+    context.messages.setExpandedBodyId(messageId, expand);
+    if (expand) {
+      revealMessageAfterLayout(
+        messageId,
+        untrack(context.messages.list),
+        untrack(context.messagesListRef)
+      );
+    }
     return true;
   };
+
+  /** 'shift+o' opens every message, including the collapsed middle run. */
+  const expandAllMessages = () => {
+    const messages = context.messages.list();
+    if (messages.length === 0) return false;
+    setUserOpenedMiddle(true);
+    if (context.messages.hiddenChipFocused()) leaveHiddenChip();
+    for (const message of messages) {
+      if (message.db_id)
+        context.messages.setExpandedBodyId(message.db_id, true);
+    }
+    return true;
+  };
+
   onMount(() =>
     host.registerKeyboard?.({
       replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
       replyAllToFocusedMessage: () => openHotkeyTarget('reply-all'),
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
+      canActOnSender: context.canActOnSender,
       blockSender: context.blockSender,
       markDone,
       markNotDone: context.markThreadNotDone,
@@ -618,6 +646,8 @@ export function createThreadNavigation(
       navigateToNextMessage,
       activate,
       cancel,
+      expandFocusedMessage,
+      expandAllMessages,
     })
   );
 

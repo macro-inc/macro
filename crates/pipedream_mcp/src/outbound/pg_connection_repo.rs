@@ -1,9 +1,10 @@
-use crate::domain::models::{MacroUserIdStr, PipedreamConnection};
-use crate::domain::ports::ConnectionStore;
+use crate::domain::models::{ConnectorOverlay, MacroUserIdStr, PipedreamConnection};
+use crate::domain::ports::{AppConnections, ConnectionStore, ConnectorOverlays};
 use macro_user_id::cowlike::CowLike;
 use sqlx::PgPool;
 
-/// Postgres-backed [`ConnectionStore`] over the `pipedream_mcp_connections` table.
+/// Postgres-backed [`ConnectionStore`] over the `pipedream_mcp_connections` table,
+/// and [`ConnectorOverlays`] over `mcp_overlays`.
 ///
 /// Rows hold no secrets: Pipedream owns the OAuth grants, we persist only
 /// the app, its display name, and the Pipedream account ID.
@@ -56,6 +57,7 @@ impl ConnectionStore for PgConnectionRepo {
             SELECT user_id, app_slug, server_name, account_id, enabled
             FROM pipedream_mcp_connections
             WHERE user_id = $1 AND app_slug = $2
+                AND NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $2)
             "#,
             user_id.as_ref(),
             app_slug,
@@ -99,8 +101,9 @@ impl ConnectionStore for PgConnectionRepo {
         let rows = sqlx::query!(
             r#"
             SELECT user_id, app_slug, server_name, account_id, enabled
-            FROM pipedream_mcp_connections
+            FROM pipedream_mcp_connections c
             WHERE user_id = $1
+                AND NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = c.app_slug)
             ORDER BY server_name
             "#,
             user_id.as_ref(),
@@ -122,6 +125,61 @@ impl ConnectionStore for PgConnectionRepo {
     }
 }
 
+impl AppConnections for PgConnectionRepo {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_enabled_for_app(
+        &self,
+        app_slug: &str,
+    ) -> anyhow::Result<Vec<PipedreamConnection>> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT user_id, app_slug, server_name, account_id, enabled
+            FROM pipedream_mcp_connections
+            WHERE app_slug = $1 AND enabled
+                AND NOT EXISTS (SELECT 1 FROM mcp_overlays o WHERE o.app_slug = $1)
+            "#,
+            app_slug,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                to_record(
+                    row.user_id,
+                    row.app_slug,
+                    row.server_name,
+                    row.account_id,
+                    row.enabled,
+                )
+            })
+            .collect()
+    }
+}
+
+impl ConnectorOverlays for PgConnectionRepo {
+    #[tracing::instrument(skip(self), err)]
+    async fn overlays(&self) -> anyhow::Result<Vec<ConnectorOverlay>> {
+        Ok(sqlx::query_as!(
+            ConnectorOverlay,
+            "SELECT app_slug, server_url FROM mcp_overlays ORDER BY app_slug"
+        )
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn overlay(&self, app_slug: &str) -> anyhow::Result<Option<ConnectorOverlay>> {
+        Ok(sqlx::query_as!(
+            ConnectorOverlay,
+            "SELECT app_slug, server_url FROM mcp_overlays WHERE app_slug = $1",
+            app_slug,
+        )
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+}
+
 fn to_record(
     user_id: String,
     app_slug: String,
@@ -138,3 +196,6 @@ fn to_record(
         enabled,
     })
 }
+
+#[cfg(test)]
+mod test;

@@ -291,7 +291,7 @@ where
             // No JSON-RPC request to name; unique so nothing withdraws it.
             request_id: serde_json::Value::String(macro_uuid::generate_uuid_v7().to_string()),
             owner: call.owner.clone(),
-            requested_by: call.prompter.user.clone(),
+            requested_by: call.prompter.acting_user().cloned(),
             server_slug: call.server_slug,
             server_name: call.server_name,
             tool_name: call.tool_name,
@@ -501,7 +501,7 @@ where
         server_slug: &str,
         tool: &str,
     ) -> Result<bool, EgressError> {
-        match &prompter.user {
+        match prompter.acting_user() {
             Some(user) => {
                 self.store
                     .is_standing(session, user, server_slug, tool)
@@ -718,7 +718,7 @@ where
             turn_action_id: call.prompter.action_id,
             request_id: call.call.id.clone(),
             owner: call.owner.clone(),
-            requested_by: call.prompter.user.clone(),
+            requested_by: call.prompter.acting_user().cloned(),
             server_slug: call.server_slug.clone(),
             server_name: call.server_name.clone(),
             tool_name: call.call.name.clone(),

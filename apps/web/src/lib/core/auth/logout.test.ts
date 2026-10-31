@@ -29,6 +29,13 @@ vi.mock('@queries/email/local-drafts', () => ({
   flushLocalDrafts: vi.fn(async () => {}),
   listLocalDrafts: vi.fn(async () => []),
 }));
+vi.mock('@queries/email/send-queue', () => ({
+  readEmailSendIntents: vi.fn(async () => []),
+  settledSendAttempt: () => ({ status: 'ACCEPTED' }),
+}));
+vi.mock('@queries/email/outbox-session', () => ({
+  setEmailOutboxSession: vi.fn(),
+}));
 vi.mock('@core/constant/servers', () => ({
   SERVER_HOSTS: { 'auth-logout': 'https://auth.example.com/oauth2/logout' },
 }));
@@ -41,6 +48,7 @@ vi.mock('@graphql-cache/lifecycle', () => ({
   clearRegisteredCaches: vi.fn(async () => {}),
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  recordGraphqlMutationQueueCleared: vi.fn(async () => {}),
   setGraphqlSoupSessionActive: vi.fn(),
 }));
 vi.mock('@queries/auth/user-info', () => ({
@@ -65,6 +73,7 @@ import {
   flushLocalDrafts,
   listLocalDrafts,
 } from '@queries/email/local-drafts';
+import { readEmailSendIntents } from '@queries/email/send-queue';
 import { authServiceClient } from '@service-auth/client';
 import { setGraphqlSoupSessionActive } from '@service-storage/graphql-soup';
 import { confirmDialog } from '@ui';
@@ -208,6 +217,28 @@ describe('local draft logout warning', () => {
       expect(confirmDialog).toHaveBeenLastCalledWith(
         expect.objectContaining({
           body: expect.stringContaining('1 draft(s)'),
+        }),
+        expect.anything()
+      );
+      expect(authServiceClient.logout).not.toHaveBeenCalled();
+    } finally {
+      dispose();
+    }
+  });
+
+  it('warns about queued sends after their working copies have been retired', async () => {
+    vi.mocked(readEmailSendIntents).mockResolvedValueOnce([
+      { uuid: 'send' },
+    ] as Awaited<ReturnType<typeof readEmailSendIntents>>);
+    const { logout, dispose } = createRoot((dispose) => ({
+      logout: useLogout(),
+      dispose,
+    }));
+    try {
+      await logout();
+      expect(confirmDialog).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('signing out does not cancel them'),
         }),
         expect.anything()
       );

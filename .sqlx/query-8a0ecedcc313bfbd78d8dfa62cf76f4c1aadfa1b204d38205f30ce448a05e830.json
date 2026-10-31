@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_entities (id, user_id, title, created_via, started_at, ended_at, duration_ms, share_permission_id)\n                VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a0ecedcc313bfbd78d8dfa62cf76f4c1aadfa1b204d38205f30ce448a05e830"
+}

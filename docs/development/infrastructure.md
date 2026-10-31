@@ -106,7 +106,8 @@ specifically:
 - **`MacroConfig` reads only `APP_SECRETS_JSON` in ECS.** A plain container
   `environment:` entry is invisible to it. Put values that infra produces (ARNs,
   endpoints) into Doppler with a Pulumi `doppler.Secret`, as
-  `infra/stacks/preview-gateway` does. Plain `environment:` is for `ENVIRONMENT`,
+  `infra/stacks/agent-harness-service` does; that stack then needs
+  `doppler:dopplerToken` as `secure:` config. Plain `environment:` is for `ENVIRONMENT`,
   `DD_*`, and values read through `macro_env_var` or `OVERRIDE_*`.
 - **Secrets go in Doppler, not Secrets Manager.** Add the value to the service's
   Doppler project; it reaches the task through `DopplerEcsEnvironment` and the
@@ -160,12 +161,20 @@ local resources.
 | Trigger | What runs |
 | --- | --- |
 | Push to `main` | `deploy_on_push.yml`: builds nix binaries and Lambdas, runs migrations on the in-VPC runner, then `pulumi up` on dev for every service in `.github/services-config.json` |
-| Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app |
+| Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app; once the web app is deployed, `ios-app-store-publish.yml` releases the held iOS App Store version |
 | Pull request touching a mapped stack | `pulumi_preview_pr.yml` previews against dev and comments; `code_check_infra.yml` runs Biome and `tsc` |
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
 
 - Only stacks listed in `services-config.json` deploy automatically. `gateway`,
   `macrodb`, `doppler-projects`, `monitoring`, and a few others are manual.
+- Dev MacroDB's primary and replica are both configured as `db.t4g.large`
+  (8 GiB). Replica resizing requires a separate `macrodb` deployment; dev's
+  `applyImmediately` setting makes that resize interrupt replica connections.
+  Resize the replica before deploying the DSS pool change through the service
+  stack, and verify that old DSS tasks have drained before relying on the new
+  cap. Three dev tasks permit 60 replica connections after rollout, or 120
+  during a full overlap on later rollouts. The first rollout can permit 360:
+  three old tasks at 100 connections each plus three new tasks at 20 each.
 - Services marked `bootstrap_pending` or `deploy_enabled: false` are skipped.
 - **Migrations deploy before services** and must work with the code already
   running ([database guide](database.md)).
@@ -180,8 +189,25 @@ local resources.
 - Raw `aws.sqs.Queue` instead of `Queue`; `createImage`; `createServiceRole`
   (grants `dynamodb:*`).
 - Lambda env vars holding resolved secret values.
-- `web-app` and `website` pin `@pulumi/aws` v6 and are excluded from `tsc`.
+- `web-app` and `website` pin `@pulumi/aws` v6. `bun run check` checks the
+  web-app in its separate TypeScript project, then runs the backend-free
+  web-delivery regressions in separate Bun processes.
+
+For web bundle publication order, asset/error cache policies, and backend-free
+checks, see [web-app delivery](../../infra/stacks/web-app/README.md) and
+[the website CDN](../../infra/stacks/website/README.md#app-cache-policy).
 
 Stale docs to treat with suspicion: `SLACK_IMPORT_ROLLOUT.md` (the worker is on
-and receives `APP_SECRETS_JSON` now), `web-app/README.md` (`yarn`),
-`fusion-auth/README.md`.
+and receives `APP_SECRETS_JSON` now), `fusion-auth/README.md`.
+
+## Agent backend
+
+`agent-harness-service` is the only ECS agent service. Its process also owns
+chat/completions, workspace MCP/OAuth, preview SSH/HTTP/control, routine cron
+and event workers, and projection refresh sweeps. `preview-gateway` retains
+only networking, and `document-cognition` retains the projection queue and
+public DNS record. `mcp-server` retains its public DNS record. Both hostnames
+point at the shared gateway, preserving public URLs and OAuth callbacks. The
+retired MCP and schedule stack programs contain no compute resources. Follow
+[the cutover guide](../guides/consolidate-agent-services.md) before deployment;
+old listener rules must be retired before the harness claims their priorities.

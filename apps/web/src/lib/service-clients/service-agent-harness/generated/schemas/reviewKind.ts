@@ -14,4 +14,5 @@ export type ReviewKind = (typeof ReviewKind)[keyof typeof ReviewKind];
 export const ReviewKind = {
   email: 'email',
   calendar: 'calendar',
+  import: 'import',
 } as const;

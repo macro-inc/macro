@@ -1,5 +1,6 @@
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { OutlookRsvpAction } from '@app/features/calendar/views/event-replacement';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
@@ -37,8 +38,8 @@ export function EventRsvpSection(props: {
     props.event.recurrenceLines.length > 0 ||
     props.event.recurrenceId !== undefined;
   const canRespond = () =>
+    props.event.viewerCan.rsvp &&
     selfAttendee() !== undefined &&
-    !props.event.isReadOnly &&
     !props.event.isCancelled;
 
   const rsvp = createCalendarRsvpController(() =>
@@ -55,15 +56,25 @@ export function EventRsvpSection(props: {
 
   return (
     <Show when={canRespond()}>
-      <div class="border-edge-muted flex items-center gap-3 border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs mobile:border-0 mobile:bg-transparent mobile:px-6 mobile:pt-4 mobile:pb-2">
-        <span>Going?</span>
+      <div class="border-edge-muted flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-active px-4 py-2.5 text-sm text-ink-muted sm:text-xs mobile:border-0 mobile:bg-transparent mobile:px-6 mobile:pt-4 mobile:pb-2">
+        <span class="flex shrink-0 items-center gap-2">
+          Going?
+          <span role="status" class="size-3.5">
+            <Show when={rsvp.pending()}>
+              <SpinnerIcon
+                aria-hidden="true"
+                class="size-3.5 animate-spin motion-reduce:animate-none"
+              />
+              <span class="sr-only">Saving response…</span>
+            </Show>
+          </span>
+        </span>
         <div class="ml-auto flex shrink-0 gap-3 lg:gap-2">
           <For each={RSVP_OPTIONS}>
             {(option) => (
               <Button
                 variant="ghost"
                 size={props.buttonSize ?? 'sm'}
-                depth={3}
                 class="bg-ink/5 px-3 aria-pressed:bg-accent-bg aria-pressed:text-accent mobile:min-h-11"
                 aria-pressed={
                   selfAttendee()?.responseStatus === option.response
@@ -75,16 +86,15 @@ export function EventRsvpSection(props: {
             )}
           </For>
         </div>
+        <Show when={rsvp.error()}>
+          {(error) => (
+            <p role="alert" class="basis-full text-xs text-failure">
+              {error()}
+            </p>
+          )}
+        </Show>
       </div>
-      <p role="status" aria-live="polite" class="text-xs text-ink-muted">
-        {rsvp.pending() ? 'Saving response…' : rsvp.error()}
-      </p>
-      <Show
-        when={
-          props.event.calendar.provider === 'outlook' &&
-          !selfAttendee()?.isOrganizer
-        }
-      >
+      <Show when={props.event.calendar.provider === 'outlook'}>
         <OutlookRsvpAction
           target={{
             eventId: props.event.eventId,

@@ -1,10 +1,11 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { useKeyPressed } from '@core/util/useKeyPressed';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useSearchInputFocus } from '@property/utils';
 import { ERROR_MESSAGES } from '@property/utils/errorHandling';
@@ -307,12 +308,23 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     return items;
   });
 
+  // On touch the menu leaves focus in the field behind it; keys typed there
+  // are text, not picks.
+  const handleKeyDown = (event: KeyboardEvent) => {
+    if (
+      event.target !== searchInputRef &&
+      isEditableInput(event.target as Element)
+    )
+      return;
+    dropdown.handleKeyDown(event);
+  };
+
   onMount(() => {
-    document.addEventListener('keydown', dropdown.handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
   });
 
   onCleanup(() => {
-    document.removeEventListener('keydown', dropdown.handleKeyDown);
+    document.removeEventListener('keydown', handleKeyDown);
   });
 
   useSearchInputFocus(

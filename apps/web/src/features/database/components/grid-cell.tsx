@@ -1,7 +1,8 @@
+import { TimeRangeEditor } from '@app/components/date-time-range/time-range-editor';
 import { fireAndForget } from '@core/util/fireAndForget';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Tooltip } from '@kobalte/core/tooltip';
-import CaretDownIcon from '@phosphor/caret-down.svg';
 import { PropertyDateSelector } from '@property/editors/selectors/PropertyDateSelector';
 import { Checkbox } from '@ui/components/Checkbox';
 import { Dropdown } from '@ui/components/Dropdown';
@@ -25,6 +26,7 @@ import {
 } from '../../../observability/ui-operation';
 import { useOptionEditing } from '../context/option-editing';
 import { fromCellDate, toCellDate } from '../core/cell-date';
+import { cellTimeRange, toCellTimeRange } from '../core/cell-date-range';
 import {
   type DatabaseEntityType,
   type DatabaseMention,
@@ -67,6 +69,8 @@ export type GridCellProps = GridCellEditorOptions & {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
   emptyLabel?: string;
+  /** Text values wrap onto as many lines as they need instead of truncating to one. */
+  wrap?: boolean;
   canEdit: boolean;
   renderTextEditor?: (props: DatabaseTextEditorProps) => JSX.Element;
   renderTextValue?: (value: string) => JSX.Element;
@@ -151,7 +155,9 @@ export function GridCell(props: GridCellProps) {
   const isBoolean = () =>
     props.column.dataType === 'BOOLEAN' && !props.column.isMultiSelect;
   const isDate = () =>
-    props.column.dataType === 'DATE' && !props.column.isMultiSelect;
+    (props.column.dataType === 'DATE' ||
+      props.column.dataType === 'DATE_RANGE') &&
+    !props.column.isMultiSelect;
   const hasPopupEditor = () =>
     isOptionColumn(props.column) || (isDate() && editable());
   const startsEditing = Boolean(
@@ -197,7 +203,7 @@ export function GridCell(props: GridCellProps) {
     setSelectedMention(undefined);
     if (isEntity()) {
       setMentionSearch(seed?.replace(/^@/, '') ?? '');
-      setDraft(seed?.replace(/^@/, '') ?? '');
+      setDraft(`@${seed?.replace(/^@/, '') ?? ''}`);
       setSelectAll(false);
       setEditing(true);
       setMentionOpen(true);
@@ -407,14 +413,13 @@ export function GridCell(props: GridCellProps) {
             <div
               class="grid"
               inert={isEntity() && editing()}
-              classList={{
-                invisible: isEntity() && editing() && draft() !== '',
-              }}
+              classList={{ invisible: isEntity() && editing() }}
             >
               <TextCell
                 column={props.column}
                 value={props.value}
                 emptyLabel={props.emptyLabel}
+                wrap={props.wrap}
                 editable={editable()}
                 isEntity={isEntity()}
                 mentionPreview={mentionPreview()}
@@ -547,6 +552,7 @@ function TextCell(props: {
   column: DatabaseViewColumn;
   value: DatabaseCellValue;
   emptyLabel?: string;
+  wrap?: boolean;
   editable: boolean;
   isEntity: boolean;
   mentionPreview: MentionPreview | undefined;
@@ -589,6 +595,12 @@ function TextCell(props: {
         (!props.isEntity && formatted()) ||
         undefined
       }
+      onContextMenu={(event) => {
+        if (!props.onOpen || !props.editable) return;
+        event.preventDefault();
+        event.stopPropagation();
+        props.onBeginEdit(undefined, event);
+      }}
       onClick={(event) => {
         if (props.onOpen) props.onOpen();
         else if (props.editable) props.onBeginEdit(undefined, event);
@@ -638,7 +650,12 @@ function TextCell(props: {
       <Show when={props.hasResolvedMentionLabel}>
         <span class="sr-only">{props.column.name}: </span>
       </Show>
-      <span class="truncate">
+      <span
+        classList={{
+          truncate: !props.wrap,
+          'min-w-0 wrap-break-word': props.wrap,
+        }}
+      >
         <Switch
           fallback={
             (props.column.dataType === 'STRING' &&
@@ -695,10 +712,6 @@ function InlineEditor(props: {
   const [focused, setFocused] = createSignal(false);
   const errorId = createUniqueId();
   let finishing = false;
-  const showingReference = () =>
-    props.column.dataType === 'ENTITY' &&
-    props.originalValue !== null &&
-    props.draft === '';
   // An earlier row's save can settle this column's type while this editor is
   // focused. Keep its DOM for this edit; use the latest type when committing.
   const renderTextEditor =
@@ -797,7 +810,7 @@ function InlineEditor(props: {
               }}
               type="text"
               data-cell-text-editor
-              placeholder={showingReference() ? undefined : props.emptyLabel}
+              placeholder={props.emptyLabel}
               inputmode={
                 props.column.dataType === 'NUMBER' ? 'decimal' : undefined
               }
@@ -819,11 +832,7 @@ function InlineEditor(props: {
                 if (!props.mentionOpen) commit(false);
               }}
               onKeyDown={onKeyDown}
-              class="min-h-9 w-full min-w-0 px-2.5 py-1.5 text-[13px] text-ink outline-none"
-              classList={{
-                'bg-transparent': !showingReference(),
-                'bg-transparent caret-transparent': showingReference(),
-              }}
+              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none"
             />
           }
         >
@@ -1110,7 +1119,7 @@ function SelectCell(props: GridCellProps) {
   );
 }
 
-/** Date cells edit through the shared property date selector. */
+/** Date and date-range cells edit through the shared property selectors. */
 function DateCell(props: GridCellProps) {
   const opening = createEditorMeasurement(() => props.column.dataType);
   let openingEvent: Event | undefined;
@@ -1209,7 +1218,12 @@ function DateCell(props: GridCellProps) {
           {shown()}
         </Dropdown.Trigger>
         <Dropdown.Content
-          class="flex max-h-96 w-70 flex-col overflow-hidden p-0 text-sm"
+          class={
+            props.column.dataType === 'DATE_RANGE'
+              ? // The range fields open their date and time lists inside.
+                'portal-scope w-max max-w-[calc(100vw-1rem)] overflow-visible p-0 text-sm'
+              : 'flex max-h-96 w-70 flex-col overflow-hidden p-0 text-sm'
+          }
           // A menu's closing animation must not delay Tab into the next cell.
           style={{ animation: 'none' }}
           onKeyDown={(event: KeyboardEvent) => {
@@ -1219,18 +1233,35 @@ function DateCell(props: GridCellProps) {
           }}
           onCloseAutoFocus={keys.onCloseAutoFocus}
         >
-          <PropertyDateSelector
-            property={{ displayName: props.column.name }}
-            selectedDate={fromCellDate(props.value)}
-            initialQuery={query()}
-            onSelectDate={(date) =>
-              fireAndForget(
-                props.onWrite(date ? toCellDate(date) : null),
-                'database'
-              )
+          <Show
+            when={props.column.dataType === 'DATE_RANGE'}
+            fallback={
+              <PropertyDateSelector
+                property={{ displayName: props.column.name }}
+                selectedDate={fromCellDate(props.value)}
+                initialQuery={query()}
+                onSelectDate={(date) =>
+                  fireAndForget(
+                    props.onWrite(date ? toCellDate(date) : null),
+                    'database'
+                  )
+                }
+                onClose={() => setOpen(false)}
+              />
             }
-            onClose={() => setOpen(false)}
-          />
+          >
+            <TimeRangeEditor
+              subject={props.column.name}
+              range={cellTimeRange(props.value)}
+              onChange={(range) =>
+                fireAndForget(
+                  props.onWrite(range ? toCellTimeRange(range) : null),
+                  'database'
+                )
+              }
+              onClear={() => setOpen(false)}
+            />
+          </Show>
         </Dropdown.Content>
       </Dropdown>
     </Show>

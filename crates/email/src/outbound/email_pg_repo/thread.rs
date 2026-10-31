@@ -16,6 +16,7 @@ pub(super) async fn thread_by_id(
         DbThreadRow,
         r#"
         SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
+               t.has_received_mail,
                t.latest_inbound_message_ts, t.latest_outbound_message_ts,
                t.latest_non_spam_message_ts, t.created_at, t.updated_at,
                t.project_id
@@ -45,6 +46,7 @@ pub(super) async fn thread_metadata_by_ids(
         SELECT
             id AS "thread_id!",
             link_id,
+            has_received_mail,
             latest_inbound_message_ts,
             latest_outbound_message_ts,
             latest_non_spam_message_ts,
@@ -81,13 +83,16 @@ pub(super) async fn thread_mail_projections_by_ids(
     // viewer's sources has no distinct estimate, and the planner then probes
     // `entity_access` once per source, thousands of times for some viewers,
     // instead of once per requested thread.
+    //
+    // The Macro-draft and received-mail rules restate `recompute_thread_metadata`
+    // (email_db_client threads/update.rs). Change both together.
     let rows = sqlx::query!(
         r#"
         WITH message_facts AS (
             SELECT m.id, m.thread_id, m.is_draft, m.is_read,
-                m.is_draft AND m.provider_id IS NULL AS macro_draft,
+                draft.macro_draft,
                 ((facts.in_inbox AND NOT facts.in_sent)
-                    OR (m.is_draft AND m.provider_id IS NULL)) AS inbox_visible,
+                    OR (draft.macro_draft AND thread.has_received_mail)) AS inbox_visible,
                 NOT facts.in_trash
                 AND LOWER(SPLIT_PART(c.email_address, '@', 2)) IS DISTINCT FROM $3
                 AND (
@@ -101,26 +106,32 @@ pub(super) async fn thread_mail_projections_by_ids(
                     SELECT 1 FROM email_message_calendar_invites i WHERE i.message_id = m.id
                 )) AS has_calendar_attachment,
                 GREATEST(
-                    CASE WHEN facts.in_inbox AND (
-                        NOT (m.is_draft OR m.is_sent) OR EXISTS (
+                    CASE WHEN facts.in_inbox AND NOT m.is_draft AND (
+                        NOT m.is_sent OR EXISTS (
                             SELECT 1 FROM email_message_recipients r
                             WHERE r.message_id = m.id AND r.contact_id = m.from_contact_id
                         )) THEN m.internal_date_ts END,
-                    CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END
+                    CASE WHEN draft.macro_draft AND thread.has_received_mail THEN m.updated_at END
                 ) AS inbound_ts,
                 GREATEST(
-                    CASE WHEN NOT (facts.in_junk OR facts.in_trash) THEN m.internal_date_ts END,
-                    CASE WHEN m.is_draft AND m.provider_id IS NULL THEN m.updated_at END
+                    CASE WHEN NOT (facts.in_junk OR facts.in_trash) THEN COALESCE(m.internal_date_ts, CASE WHEN m.is_draft THEN m.created_at END) END,
+                    CASE WHEN draft.macro_draft AND NOT (facts.in_junk OR facts.in_trash) THEN m.updated_at END
                 ) AS all_ts,
                 CASE WHEN m.is_sent AND NOT facts.in_trash THEN m.internal_date_ts END AS sent_ts,
-                CASE WHEN NOT facts.in_trash THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
-                CASE WHEN NOT facts.in_trash THEN jsonb_build_object(
+                CASE WHEN NOT facts.in_trash AND (m.is_draft OR NOT facts.in_junk) THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
+                CASE WHEN NOT facts.in_trash AND (m.is_draft OR NOT facts.in_junk) THEN jsonb_build_object(
                     'id', m.id, 'subject', m.subject, 'snippet', m.snippet, 'is_draft', m.is_draft,
                     'sender_email', c.email_address, 'sender_name', COALESCE(m.from_name, c.name), 'sender_photo_url', c.sfs_photo_url
                 ) END AS preview
             FROM email_messages m
+            JOIN email_threads thread ON thread.id = m.thread_id
             LEFT JOIN email_contacts c ON c.id = m.from_contact_id
             JOIN email_message_mailbox_facts facts ON facts.id = m.id
+            CROSS JOIN LATERAL (
+                SELECT m.is_draft AND (m.provider_id IS NULL OR EXISTS (
+                    SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id = m.id AND NOT d.delete_requested
+                )) AS macro_draft
+            ) draft
             CROSS JOIN LATERAL (
                 SELECT COALESCE(bool_or(f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_true,
                     COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_address) = LOWER(c.email_address)), false) AS address_false,
@@ -179,7 +190,7 @@ pub(super) async fn thread_mail_projections_by_ids(
         LEFT JOIN draft_states ds ON ds.thread_id = t.id
         LEFT JOIN LATERAL (
             SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id, m.from_name
-            FROM email_messages m WHERE m.thread_id = t.id AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+            FROM email_messages m WHERE m.thread_id = t.id AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash AND NOT mf.in_junk) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
         ) am ON TRUE
         LEFT JOIN email_contacts ac ON ac.id = am.from_contact_id
         LEFT JOIN LATERAL (
@@ -227,13 +238,14 @@ pub(super) async fn messages_by_thread_id_paginated(
         DbMessageRow,
         r#"
         SELECT
-            id, provider_id, thread_id, provider_thread_id, replying_to_id,
+            draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,
             global_id, link_id, provider_history_id, internal_date_ts, snippet,
             size_estimate, subject, sent_at, has_attachments, is_read, is_starred,
             is_sent, is_draft, body_text, body_html_sanitized, body_macro,
             headers_jsonb, created_at, updated_at
         FROM email_messages
         WHERE thread_id = $1
+          AND NOT (is_draft AND COALESCE((mailbox_state->>'provider_missing')::boolean, false))
         ORDER BY COALESCE(internal_date_ts, sent_at, created_at) DESC, id DESC
         LIMIT $2 OFFSET $3
         "#,
@@ -260,7 +272,7 @@ pub(super) async fn latest_content_message_rows(
     let rows = sqlx::query_as::<_, DbMessageRow>(
         r#"
         SELECT
-            message.id, message.provider_id, message.thread_id,
+            message.draft_generation, message.id, message.provider_id, message.thread_id,
             message.provider_thread_id, message.replying_to_id,
             message.global_id, message.link_id, message.provider_history_id,
             message.internal_date_ts, message.snippet, message.size_estimate,
@@ -272,7 +284,7 @@ pub(super) async fn latest_content_message_rows(
         FROM UNNEST($1::uuid[]) AS requested(thread_id)
         CROSS JOIN LATERAL (
             SELECT
-                id, provider_id, thread_id, provider_thread_id, replying_to_id,
+                draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,
                 global_id, link_id, provider_history_id, internal_date_ts,
                 snippet, size_estimate, subject, sent_at, has_attachments,
                 is_read, is_starred, is_sent, is_draft, body_text,
@@ -308,7 +320,7 @@ pub(super) async fn cross_inbox_reply_drafts(
         DbMessageRow,
         r#"
         SELECT
-            id, provider_id, thread_id, provider_thread_id, replying_to_id,
+            draft_generation, id, provider_id, thread_id, provider_thread_id, replying_to_id,
             global_id, link_id, provider_history_id, internal_date_ts, snippet,
             size_estimate, subject, sent_at, has_attachments, is_read, is_starred,
             is_sent, is_draft, body_text, body_html_sanitized, body_macro,
@@ -343,9 +355,9 @@ pub(super) async fn insert_thread(
     let result = sqlx::query_scalar!(
         r#"
         INSERT INTO email_threads (id, provider_id, link_id, inbox_visible, is_read,
-                             latest_inbound_message_ts, latest_outbound_message_ts,
-                             latest_non_spam_message_ts)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                             has_received_mail, latest_inbound_message_ts,
+                             latest_outbound_message_ts, latest_non_spam_message_ts)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (link_id, provider_id) WHERE provider_id IS NOT NULL DO UPDATE
         SET
             latest_inbound_message_ts = EXCLUDED.latest_inbound_message_ts,
@@ -360,6 +372,7 @@ pub(super) async fn insert_thread(
         link_id,
         thread.inbox_visible,
         thread.is_read,
+        thread.has_received_mail,
         thread.latest_inbound_message_ts,
         thread.latest_outbound_message_ts,
         thread.latest_non_spam_message_ts,

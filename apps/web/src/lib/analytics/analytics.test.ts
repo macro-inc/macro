@@ -6,6 +6,12 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   identify: vi.fn(),
   init: vi.fn(),
+  group: vi.fn(),
+  resetGroups: vi.fn(),
+  groups: {} as Record<string, string>,
+  unregister: vi.fn(),
+  reset: vi.fn(),
+  setPersonProperties: vi.fn(),
   gtag: vi.fn(),
   fbq: vi.fn(),
 }));
@@ -26,6 +32,12 @@ vi.mock('posthog-js', () => ({
     capture = mocks.capture;
     identify = mocks.identify;
     init = mocks.init;
+    group = mocks.group;
+    resetGroups = mocks.resetGroups;
+    getGroups = () => mocks.groups;
+    unregister = mocks.unregister;
+    reset = mocks.reset;
+    setPersonProperties = mocks.setPersonProperties;
   },
 }));
 
@@ -38,6 +50,7 @@ beforeEach(() => {
   vi.stubGlobal('fbq', mocks.fbq);
   mocks.platform = 'web';
   mocks.touch = false;
+  mocks.groups = {};
 });
 
 afterEach(() => {
@@ -131,6 +144,23 @@ describe('Meta pixel platform support', () => {
 });
 
 describe('PostHog exception frames', () => {
+  it('overwrites persisted document identity on automatic events, including after reset', async () => {
+    vi.stubEnv('VITE_POSTHOG_API_KEY', 'test-key');
+    const { analytics } = await import('./analytics');
+    const { frontendInstanceId } = await import(
+      '@app/observability/frontend-instance'
+    );
+    const beforeSend = mocks.init.mock.calls[0][1].before_send;
+    for (const event of ['$pageview', '$exception']) {
+      analytics.reset();
+      expect(
+        beforeSend({
+          event,
+          properties: { frontend_instance_id: 'old-document' },
+        }).properties.frontend_instance_id
+      ).toBe(frontendInstanceId);
+    }
+  });
   async function beforeSendException(value: string, filenames: string[]) {
     vi.stubEnv('VITE_POSTHOG_API_KEY', 'test-key');
     await import('./analytics');
@@ -222,5 +252,74 @@ describe('PostHog exception frames', () => {
     expect(
       await sendException(['https://macro.com/app/app-gifhAVYj.js'])
     ).toEqual(['https://macro.com/app/app-gifhAVYj.js']);
+  });
+});
+
+describe('interface language', () => {
+  it('records the language once, and again when it changes', async () => {
+    const { analytics } = await import('./analytics');
+
+    analytics.setInterfaceLanguage('de');
+    analytics.setInterfaceLanguage('de');
+    analytics.setInterfaceLanguage('ja');
+
+    expect(mocks.setPersonProperties.mock.calls).toEqual([
+      [{ interface_language: 'de' }],
+      [{ interface_language: 'ja' }],
+    ]);
+  });
+
+  it('records the same language again after logout resets PostHog', async () => {
+    const { analytics } = await import('./analytics');
+
+    analytics.setInterfaceLanguage('de');
+    analytics.reset();
+    analytics.setInterfaceLanguage('de');
+
+    expect(mocks.reset).toHaveBeenCalledTimes(1);
+    expect(mocks.setPersonProperties).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('PostHog team group', () => {
+  const team = {
+    id: '00000000-0000-0000-0000-000000000001',
+    name: 'Acme',
+    enterprise: false,
+  };
+
+  it('groups events by team, re-sending only when the team changes', async () => {
+    const { analytics } = await import('./analytics');
+
+    analytics.setTeamGroup(team);
+    analytics.setTeamGroup(team);
+    analytics.setTeamGroup({ ...team, name: 'Acme Inc' });
+
+    expect(mocks.group.mock.calls).toEqual([
+      ['team', team.id, { name: 'Acme', enterprise: false }],
+      ['team', team.id, { name: 'Acme Inc', enterprise: false }],
+    ]);
+  });
+
+  it('sets the group again after logout resets PostHog', async () => {
+    const { analytics } = await import('./analytics');
+
+    analytics.setTeamGroup(team);
+    analytics.reset();
+    analytics.setTeamGroup(team);
+
+    expect(mocks.reset).toHaveBeenCalledTimes(1);
+    expect(mocks.group).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears the team group only when one is set', async () => {
+    const { analytics } = await import('./analytics');
+
+    analytics.clearTeamGroup();
+    expect(mocks.resetGroups).not.toHaveBeenCalled();
+
+    mocks.groups = { team: team.id };
+    analytics.clearTeamGroup();
+    expect(mocks.resetGroups).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,6 +3,9 @@
 use connection_gateway_client::client::ConnectionGatewayClient;
 use futures::{StreamExt, stream};
 
+#[cfg(test)]
+mod test;
+
 /// Signal every viewer of a connected inbox's calendars — the link owner
 /// plus its delegated users — that the calendar projection changed. Best
 /// effort: an inactive or unreachable viewer only misses a refresh nudge.
@@ -41,7 +44,9 @@ pub async fn cg_refresh_calendar(
     recipients.sort();
     recipients.dedup();
     if team_sharing_enabled {
-        cg_refresh_team_calendar(client, db, &recipients, team_ooo_changed).await;
+        // These recipients' own refresh below already refreshes their team
+        // views, so only their teammates need the team refresh.
+        cg_refresh_team_calendar(client, db, &recipients, team_ooo_changed, false).await;
     }
     for macro_id in recipients {
         let _ = client
@@ -53,13 +58,39 @@ pub async fn cg_refresh_calendar(
     }
 }
 
+/// Tell one requester their request to join `event_id` was answered. It names
+/// the event, whose id they hold, and not the sharer's inbox.
+#[tracing::instrument(skip(client, requester_id), level = "debug")]
+pub async fn cg_refresh_join_request(
+    client: &ConnectionGatewayClient,
+    requester_id: &str,
+    event_id: uuid::Uuid,
+) {
+    if !cfg!(feature = "connection_gateway") {
+        return;
+    }
+    let payload = serde_json::to_value(
+        calendar_events::domain::models::RefreshCalendarEvent::JoinRequestAnswered { event_id },
+    )
+    .unwrap_or_default();
+    let _ = client
+        .refresh_calendar(requester_id, payload)
+        .await
+        .inspect_err(
+            |e| tracing::error!(%event_id, "Failed to refresh the requester's calendar: {e}"),
+        );
+}
+
 /// Invalidate teammate projections without exposing the underlying inbox IDs.
+/// `notify_sharers` also refreshes `shared_by` themselves, for changes no
+/// inbox refresh reaches them with, such as their own sharing setting.
 #[tracing::instrument(skip(client, db, shared_by))]
 pub async fn cg_refresh_team_calendar(
     client: &ConnectionGatewayClient,
     db: &sqlx::PgPool,
     shared_by: &[String],
     team_ooo_changed: bool,
+    notify_sharers: bool,
 ) {
     if !cfg!(feature = "connection_gateway") || shared_by.is_empty() {
         return;
@@ -90,19 +121,40 @@ pub async fn cg_refresh_team_calendar(
         },
     )
     .unwrap_or_default();
-    stream::iter(recipients.into_iter().flatten())
-        .for_each_concurrent(16, |user_id| {
-            let payload = payload.clone();
-            async move {
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(3),
-                    client.refresh_calendar(&user_id, payload),
-                ).await {
-                    Ok(Ok(_)) => {},
-                    Ok(Err(error)) => tracing::warn!(error=?error, "failed to invalidate a team calendar projection"),
-                    Err(_) => tracing::warn!("team calendar invalidation timed out"),
+    stream::iter(team_refresh_recipients(
+        recipients,
+        shared_by,
+        notify_sharers,
+    ))
+    .for_each_concurrent(16, |user_id| {
+        let payload = payload.clone();
+        async move {
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                client.refresh_calendar(&user_id, payload),
+            )
+            .await
+            {
+                Ok(Ok(_)) => {}
+                Ok(Err(error)) => {
+                    tracing::warn!(error=?error, "failed to invalidate a team calendar projection")
                 }
+                Err(_) => tracing::warn!("team calendar invalidation timed out"),
             }
-        })
-        .await;
+        }
+    })
+    .await;
+}
+
+/// The users a team refresh reaches, leaving out the sharers unless asked.
+fn team_refresh_recipients(
+    found: Vec<Option<String>>,
+    shared_by: &[String],
+    notify_sharers: bool,
+) -> Vec<String> {
+    found
+        .into_iter()
+        .flatten()
+        .filter(|user_id| notify_sharers || !shared_by.contains(user_id))
+        .collect()
 }

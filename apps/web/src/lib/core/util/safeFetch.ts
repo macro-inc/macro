@@ -1,11 +1,11 @@
 import { SERVER_HOSTS, SYNC_SERVICE_HOSTS } from '@core/constant/servers';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
 import { platformFetch } from './platformFetch';
 import type { ObjectLike, ResultError } from './result';
 import { sleep } from './sleep';
-import { redactCallLinkTokens } from './telemetryUrl';
+import { redactLinkTokens } from './telemetryUrl';
 
 const tracedOrigins: ReadonlySet<string> = (() => {
   const origins = new Set<string>();
@@ -45,8 +45,12 @@ function tracedFetch(
   const url = requestUrl(input);
   if (!url) return platformFetch(input, init);
   const method = (init.method ?? 'GET').toUpperCase();
-  const path = redactCallLinkTokens(url.pathname);
-  const span = Telemetry.clientSpan(`http ${method} ${path}`);
+  const path = redactLinkTokens(url.pathname);
+  const span = traceOptions?.parentSpan
+    ? traceOptions.parentSpan.run(() =>
+        Telemetry.clientSpan(`http ${method} ${path}`)
+      )
+    : Telemetry.clientSpan(`http ${method} ${path}`);
   const started = performance.now();
   span.setAttr('http.method', method);
   // Path only: query strings can carry tokens.
@@ -81,12 +85,10 @@ function tracedFetch(
         error instanceof Error
           ? {
               name: error.name,
-              message: redactCallLinkTokens(error.message),
-              stack: error.stack
-                ? redactCallLinkTokens(error.stack)
-                : undefined,
+              message: redactLinkTokens(error.message),
+              stack: error.stack ? redactLinkTokens(error.stack) : undefined,
             }
-          : redactCallLinkTokens(String(error))
+          : redactLinkTokens(String(error))
       );
       throw error;
     } finally {
@@ -172,8 +174,10 @@ export interface RetryConfig {
   delay?: 'exponential' | number;
 }
 
-/** Trace-only classification for responses that are expected by the caller. */
+/** Trace context and response classification, never forwarded to fetch. */
 export interface SafeFetchTraceOptions {
+  /** Restore the action's parent after async auth or mutation scheduling. */
+  parentSpan?: Span;
   /** Non-OK responses that should not mark the HTTP span as failed. */
   expectedStatusCodes?: readonly number[];
 }
@@ -327,7 +331,11 @@ export async function safeFetch<
           return ok({ contentType, body: text } as T);
         }
 
-        if (contentType.includes('application/octet-stream')) {
+        if (
+          contentType.includes('application/octet-stream') ||
+          contentType.includes('text/calendar') ||
+          contentType.includes('message/rfc822')
+        ) {
           return ok(new Uint8Array(await response.arrayBuffer()) as T);
         }
 
@@ -347,9 +355,7 @@ export async function safeFetch<
         return fetchErr([
           {
             code: 'UNKNOWN_ERROR',
-            message: redactCallLinkTokens(
-              `An unknown error occurred: ${error}`
-            ),
+            message: redactLinkTokens(`An unknown error occurred: ${error}`),
           },
         ]);
       }

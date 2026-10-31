@@ -219,6 +219,32 @@ it('preserves the existing picture if upload confirmation fails', async () => {
   );
 });
 
+it('keeps a cached picture visible when its background refresh fails', async () => {
+  const queryKey = channelKeys.picture('channel').queryKey;
+  client.setQueryDefaults(queryKey, { retry: false });
+  client.setQueryData(queryKey, 'cached-picture');
+  vi.mocked(previewDataLoader.load).mockRejectedValue(new Error('Unavailable'));
+  dispose = render(
+    () => (
+      <QueryClientProvider client={client}>
+        <ChannelAvatar
+          channelId="channel"
+          fallback={<span data-testid="picture-fallback" />}
+        />
+      </QueryClientProvider>
+    ),
+    document.body
+  );
+  const image = document.querySelector('img');
+  expect(image?.getAttribute('src')).toBe('/file/cached-picture');
+
+  await client.refetchQueries({ queryKey });
+
+  expect(client.getQueryState(queryKey)?.status).toBe('error');
+  expect(client.getQueryData(queryKey)).toBe('cached-picture');
+  expect(document.querySelector('img')).toBe(image);
+});
+
 it('tracks cached picture ids so a menu built before one loads recomputes', () => {
   createRoot((dispose) => {
     const cachedPictureId = createCachedChannelPicture();

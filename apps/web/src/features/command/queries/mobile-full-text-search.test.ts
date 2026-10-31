@@ -7,13 +7,44 @@ import { createMobileFullTextSearch } from './mobile-full-text-search';
 
 const capture = vi.hoisted(() => ({
   options: undefined as CreateSearchStateOptions | undefined,
+  pending: false,
+  serviceEnabled: true,
 }));
 vi.mock('@app/features/soup/search', () => ({
   createSearchState: (options: CreateSearchStateOptions) => {
     capture.options = options;
-    return {};
+    return {
+      isSettling: () => false,
+      searchQuery: {
+        get isPending() {
+          return capture.pending;
+        },
+        get isEnabled() {
+          return capture.serviceEnabled && (options.enabled?.() ?? true);
+        },
+      },
+    };
   },
 }));
+
+it('keeps an enabled initial query settling before it starts fetching', () => {
+  createRoot((dispose) => {
+    const [query, setQuery] = createSignal('teo');
+    const search = createMobileFullTextSearch(query, () => 'all');
+    capture.pending = true;
+    expect(search.isSettling()).toBe(true);
+    capture.pending = false;
+    expect(search.isSettling()).toBe(false);
+    capture.pending = true;
+    capture.serviceEnabled = false;
+    expect(search.isSettling()).toBe(false);
+    capture.serviceEnabled = true;
+    setQuery('');
+    expect(search.isSettling()).toBe(false);
+    capture.pending = false;
+    dispose();
+  });
+});
 
 it('maps Email and People without mailbox facets and gates Projects/empty queries', () => {
   createRoot((dispose) => {

@@ -1,4 +1,4 @@
-use super::list_entities::{build_summary, retain_excluding_self_chat};
+use super::list_entities::build_summary;
 #[allow(unused_imports)]
 use super::*;
 use ai_toolset::schema::generate_validated_input_schema;
@@ -482,57 +482,35 @@ fn test_from_soup_item_resolves_tags_via_caller_map() {
 }
 
 #[test]
-fn test_retain_excluding_self_chat_drops_only_the_current_chat() {
-    let self_chat_id = Uuid::new_v4();
-    let other_chat_id = Uuid::new_v4();
-    let mut items = vec![
-        EntityItem::AiChat {
-            id: self_chat_id,
-            name: "Current chat".to_string(),
-            tags: vec![],
-        },
-        EntityItem::AiChat {
-            id: other_chat_id,
-            name: "Other chat".to_string(),
-            tags: vec![],
-        },
-        EntityItem::Document {
-            id: Uuid::new_v4(),
-            name: "doc.md".to_string(),
-            file_type: None,
-            sub_type: None,
-            tags: vec![],
-        },
-    ];
-
-    retain_excluding_self_chat(&mut items, Some(self_chat_id));
-
-    assert_eq!(items.len(), 2, "the current chat should be dropped");
+fn agent_listing_includes_sessions_and_excludes_legacy_chats() {
+    let ast = ListEntities::default().entity_filter_ast(None);
+    assert_eq!(
+        serde_json::to_value(ast.chat_filter).unwrap(),
+        serde_json::json!({"l":{"cid":Uuid::nil()}})
+    );
+    assert_eq!(
+        serde_json::to_value(ast.agent_session_filter).unwrap(),
+        serde_json::json!({"l":"inc"})
+    );
+    let only_sessions: ListEntities = serde_json::from_value(serde_json::json!({"includeTypes":["agent_session"], "asf":{"l":{"id":"0195ceb6-ec2e-7023-80e4-6e084fa6cccd"}}})).unwrap();
+    let ast = only_sessions.entity_filter_ast(None);
+    assert_eq!(
+        serde_json::to_value(ast.agent_session_filter).unwrap(),
+        serde_json::json!({"l":{"id":"0195ceb6-ec2e-7023-80e4-6e084fa6cccd"}})
+    );
+    assert!(ast.document_filter.is_some());
+    let documents: ListEntities =
+        serde_json::from_value(serde_json::json!({"includeTypes":["document"]})).unwrap();
     assert!(
-        items
-            .iter()
-            .any(|item| matches!(item, EntityItem::AiChat { id, .. } if *id == other_chat_id)),
-        "unrelated chats should be kept"
+        documents
+            .entity_filter_ast(None)
+            .agent_session_filter
+            .is_none()
     );
     assert!(
-        items
-            .iter()
-            .any(|item| matches!(item, EntityItem::Document { .. })),
-        "non-chat items should be kept"
+        serde_json::from_value::<ListEntities>(serde_json::json!({"includeTypes":["ai_chat"]}))
+            .is_err()
     );
-}
-
-#[test]
-fn test_retain_excluding_self_chat_is_noop_without_a_running_chat() {
-    let mut items = vec![EntityItem::AiChat {
-        id: Uuid::new_v4(),
-        name: "Some chat".to_string(),
-        tags: vec![],
-    }];
-
-    retain_excluding_self_chat(&mut items, None);
-
-    assert_eq!(items.len(), 1, "nothing to exclude outside a chat session");
 }
 
 // run `cargo test -p soup inbound::toolset::test::print_input_schema -- --nocapture --include-ignored`

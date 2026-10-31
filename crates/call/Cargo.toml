@@ -88,6 +88,7 @@ serde = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }

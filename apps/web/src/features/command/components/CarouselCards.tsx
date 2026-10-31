@@ -1,6 +1,6 @@
-import { getIconConfig } from '@core/component/EntityIcon';
-import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
+import { t } from '@app/lib/i18n';
+import CaretLeft from '@icon/system/regular/caret-left.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { cn, Hotkey } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -46,16 +46,15 @@ export function CarouselCards(props: {
                   type="button"
                   id={props.itemId(item)}
                   data-create-card
-                  aria-label={`Create ${item.label}`}
+                  aria-label={t('create.createItem', { label: item.label })}
                   aria-pressed={active()}
                   aria-hidden={distance() > 5}
                   tabindex={active() ? 0 : -1}
                   class={cn(
                     'absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 h-36 flex-col items-start rounded-xl border p-3 text-left outline-none transition-[left,opacity,background-color,box-shadow,border-color] duration-300 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-accent',
-                    getIconConfig(item.blockName).foreground,
                     active()
-                      ? 'border-current/30 bg-current/[0.04] shadow-[0_0_20px_0] shadow-current/[0.06]'
-                      : 'border-ink/8 bg-ink/[0.03] hover:border-ink/20',
+                      ? 'border-ink/20 bg-ink/[0.06] text-ink'
+                      : 'border-ink/8 bg-ink/[0.03] text-ink-muted hover:border-ink/20',
                     distance() > 5 && 'invisible'
                   )}
                   style={{
@@ -74,12 +73,7 @@ export function CarouselCards(props: {
                   }}
                   onClick={() => props.onChoose(item)}
                 >
-                  <div
-                    class={cn(
-                      'flex size-8 shrink-0 items-center justify-center rounded-lg',
-                      getIconConfig(item.blockName).background
-                    )}
-                  >
+                  <div class="flex size-8 shrink-0 items-center justify-center rounded-lg border border-ink/8 bg-ink/[0.06]">
                     <div class="size-5 [&_svg]:size-full">
                       <Dynamic component={item.icon} />
                     </div>
@@ -116,7 +110,7 @@ export function CarouselCards(props: {
       >
         <button
           type="button"
-          aria-label="Previous create option"
+          aria-label={t('create.previousCreateOption')}
           class="flex size-8 shrink-0 items-center justify-center rounded-full border border-edge-muted bg-dialog text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
           onClick={() => props.onStep(-1)}
         >
@@ -127,7 +121,10 @@ export function CarouselCards(props: {
             {(page) => (
               <button
                 type="button"
-                aria-label={`Browse create options ${page * 3 + 1}–${Math.min(page * 3 + 3, props.items.length)}`}
+                aria-label={t('create.browseCreateOptions', {
+                  start: page * 3 + 1,
+                  end: Math.min(page * 3 + 3, props.items.length),
+                })}
                 aria-pressed={Math.floor(props.selectedIndex / 3) === page}
                 class="flex h-6 items-center justify-center outline-none focus-visible:outline-2 focus-visible:outline-accent"
                 onClick={() => props.onSelect(page * 3)}
@@ -146,7 +143,7 @@ export function CarouselCards(props: {
         </div>
         <button
           type="button"
-          aria-label="Next create option"
+          aria-label={t('create.nextCreateOption')}
           class="flex size-8 shrink-0 items-center justify-center rounded-full border border-edge-muted bg-dialog text-ink-muted hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
           onClick={() => props.onStep(1)}
         >

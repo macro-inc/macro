@@ -254,9 +254,27 @@ describe('the GraphQL row source', () => {
         id: 'macro|viewer@databases.test',
         groupSoup: {
           bins: [
-            { key: WON, totalCount: 2, nextCursor: null, items: [] },
-            { key: LEAD, totalCount: 1, nextCursor: null, items: [] },
-            { key: '', totalCount: 4, nextCursor: null, items: [] },
+            {
+              key: WON,
+              label: null,
+              totalCount: 2,
+              nextCursor: null,
+              items: [],
+            },
+            {
+              key: LEAD,
+              label: null,
+              totalCount: 1,
+              nextCursor: null,
+              items: [],
+            },
+            {
+              key: '',
+              label: null,
+              totalCount: 4,
+              nextCursor: null,
+              items: [],
+            },
           ],
         },
       },
@@ -333,6 +351,52 @@ describe('the GraphQL row source', () => {
         },
       },
     });
+  });
+
+  it('reads a property value type from a newer server as an empty cell', async () => {
+    const fromNewerServer = JSON.parse(
+      '{"__typename":"GraphqlRatingPropertyValue","rating":4}'
+    );
+    const server = fakeClient(() =>
+      soupPage(
+        [
+          row(ACME, DEALS, '80', [
+            property(NAME, {
+              __typename: 'GraphqlStringPropertyValue',
+              stringValue: 'Acme',
+            }),
+            property(AMOUNT, fromNewerServer),
+          ]),
+        ],
+        null
+      )
+    );
+    const source = createGraphqlRowSource({
+      client: server.client,
+      catalog: { tables: [] },
+      requestPolicy: 'network-only',
+      people: noPeople,
+    });
+
+    const page = await source.page(
+      { type: 'soup', table: DEALS, propf: null, keyHint: null },
+      [],
+      null,
+      500,
+      {
+        decode: (_rows, operation) => operation(),
+        request: () => {},
+        headers: () => ({}),
+      }
+    );
+
+    expect(page._unsafeUnwrap().rows).toEqual([
+      {
+        id: ACME,
+        position: '80',
+        cells: { [NAME]: { type: 'text', value: 'Acme' } },
+      },
+    ]);
   });
 
   it('follows the Soup cursor page by page', async () => {

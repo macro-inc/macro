@@ -13,7 +13,8 @@ use crate::domain::models::{
 };
 use crate::inbound::mutation_router::{
     CalendarMutationApiError, CalendarUpdateScopeParam, CreateCalendarEventRequest,
-    DeleteCalendarEventQuery, RsvpCalendarEventRequest, UpdateCalendarEventRequest,
+    DeleteCalendarEventQuery, InviteCalendarEventGuestsRequest, RsvpCalendarEventRequest,
+    UpdateCalendarEventRequest,
 };
 
 fn sample_draft() -> CalendarEventDraft {
@@ -38,6 +39,7 @@ fn sample_draft() -> CalendarEventDraft {
         reminders: Some(EventReminders::default()),
         conference: Some(crate::domain::models::ConferenceChange::GoogleMeet),
         out_of_office: None,
+        guest_policy: None,
     }
 }
 
@@ -208,6 +210,30 @@ fn rsvp_body_matches_the_router_request() {
 }
 
 #[test]
+fn invite_body_matches_the_router_request() {
+    let body = invite_body(
+        None,
+        &[CalendarAttendeeInput {
+            email: "ada@example.com".to_string(),
+            is_optional: true,
+            response_status: None,
+        }],
+        &CalendarUpdateScope::ThisEvent {
+            recurrence_id: "k-1".to_string(),
+        },
+    );
+    let request: InviteCalendarEventGuestsRequest = serde_json::from_value(body).unwrap();
+    assert_eq!(request.guests.len(), 1);
+    assert_eq!(request.guests[0].email, "ada@example.com");
+    assert!(request.guests[0].optional);
+    assert!(matches!(
+        request.scope,
+        Some(CalendarUpdateScopeParam::ThisEvent)
+    ));
+    assert_eq!(request.recurrence_id.as_deref(), Some("k-1"));
+}
+
+#[test]
 fn router_error_bodies_round_trip_to_their_domain_failures() {
     let cases = [
         CalendarMutationError::NotFound,
@@ -215,6 +241,12 @@ fn router_error_bodies_round_trip_to_their_domain_failures() {
         CalendarMutationError::ReadOnly,
         CalendarMutationError::NoWritableCalendar,
         CalendarMutationError::NotAttendee,
+        CalendarMutationError::NotOrganizer,
+        CalendarMutationError::GuestsCannotInvite,
+        CalendarMutationError::GuestListHidden,
+        CalendarMutationError::GuestsCannotModify,
+        CalendarMutationError::AlreadyOnCalendar,
+        CalendarMutationError::JoinRequestOpen,
         CalendarMutationError::InvalidInput("bad".to_string()),
         CalendarMutationError::ReauthRequired("expired".to_string()),
         CalendarMutationError::ProviderRejected("no".to_string()),

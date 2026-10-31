@@ -69,6 +69,94 @@ fn kinds(segments: &[Segment]) -> Vec<(SegmentKind, bool)> {
 }
 
 #[test]
+fn code_execution_steps_show_observed_sdk_operations_without_source_or_results() {
+    let part = MessagePart::ToolUse {
+        id: ToolUseId("code-1".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Other {
+            kind: "other".into(),
+            input: Some(serde_json::json!({"source": "secret program"})),
+            result: Some(serde_json::json!({
+                "result": {"data": "private result"},
+                "activity": [
+                    {"id": 1, "label": "Search documents", "status": "completed"},
+                    {"id": 2, "label": "Read email", "status": "failed"},
+                    {"id": 3, "label": "Create document", "status": "unknown"},
+                    {"id": 4, "label": "Read email", "status": "running"}
+                ]
+            })),
+            output: None,
+            error: None,
+        },
+    };
+    let live = segments(std::slice::from_ref(&part), false);
+    assert_eq!(
+        live[0].rows,
+        vec![
+            ActivityRow {
+                id: "code-1:1".into(),
+                label: "Search documents".into(),
+                detail: None,
+                status: ActivityStatus::Completed
+            },
+            ActivityRow {
+                id: "code-1:2".into(),
+                label: "Read email".into(),
+                detail: None,
+                status: ActivityStatus::Failed
+            },
+            ActivityRow {
+                id: "code-1:3".into(),
+                label: "Create document".into(),
+                detail: None,
+                status: ActivityStatus::Interrupted
+            },
+            ActivityRow {
+                id: "code-1:4".into(),
+                label: "Read email".into(),
+                detail: None,
+                status: ActivityStatus::Running
+            },
+        ]
+    );
+    assert_eq!(
+        segments(std::slice::from_ref(&part), true)[0].rows[3].status,
+        ActivityStatus::Interrupted
+    );
+
+    let mut external = part;
+    if let MessagePart::ToolUse { name, .. } = &mut external {
+        *name = ToolName::Mcp {
+            server: "external".into(),
+            tool: "ExecuteCode".into(),
+        };
+    }
+    assert_eq!(segments(&[external], true)[0].rows.len(), 1);
+}
+
+#[test]
+fn code_without_observed_requests_keeps_its_tool_step() {
+    let part = MessagePart::ToolUse {
+        id: ToolUseId("code-2".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({"activity": []})),
+            error: None,
+        },
+    };
+    assert_eq!(segments(&[part], true)[0].rows[0].label, "Execute code");
+}
+
+#[test]
 fn an_unfinished_passage_is_the_one_open_segment() {
     let parts = [text("Looking into it")];
     assert_eq!(

@@ -23,9 +23,18 @@ impl AnalyticsClientTeamAnalytics {
     }
 }
 
+/// PostHog group analytics: attributes the event to the team group, keyed the
+/// same way the web app's `posthog.group('team', ...)` call keys it.
+#[derive(Debug, Eq, PartialEq, Serialize)]
+struct TeamAnalyticsGroups {
+    team: uuid::Uuid,
+}
+
 #[derive(Debug, Eq, PartialEq, Serialize)]
 struct TeamAnalyticsProperties {
     team_id: uuid::Uuid,
+    #[serde(rename = "$groups")]
+    groups: TeamAnalyticsGroups,
     #[serde(skip_serializing_if = "Option::is_none")]
     team_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -46,6 +55,7 @@ impl TeamAnalyticsProperties {
     fn new(team_id: uuid::Uuid) -> Self {
         Self {
             team_id,
+            groups: TeamAnalyticsGroups { team: team_id },
             team_name: None,
             team_invite_id: None,
             owner_id: None,

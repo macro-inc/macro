@@ -1,0 +1,10 @@
+# Installed automatically by the Nix shellHook (`prek install --overwrite`).
+repos:
+  - repo: local
+    hooks:
+      - id: pii
+        name: Scan staged diff for PII and secrets
+        language: system
+        entry: python3 tooling/pii/scan.py
+        pass_filenames: false
+        always_run: true

@@ -331,7 +331,7 @@ fn mail_supplement_golden_round_trip_preserves_server_only_facts() {
     let encoded = encode_cache_projection_supplement(&supplement).unwrap();
     assert_eq!(
         encoded,
-        "Awxzb3VwLW1haWwtdjI7R3JhcGhxbFNvdXBFbWFpbFRocmVhZDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEFZW1haWwBgIDZ276wlQYAAAE"
+        "Awxzb3VwLW1haWwtdjU7R3JhcGhxbFNvdXBFbWFpbFRocmVhZDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEFZW1haWwBgIDZ276wlQYAAAE"
     );
     let decoded = decode_cache_projection_supplement(&encoded).unwrap();
     assert_eq!(decoded, supplement);
@@ -458,4 +458,27 @@ fn supplement_decoder_rejects_invalid_profile_partition_and_record_binding() {
         decode_cache_projection_supplement(&encode_unchecked(&wrong_record)),
         Err(SoupCacheProjectionWireError::RecordKeyPartitionMismatch)
     ));
+}
+
+#[test]
+fn legacy_mail_capsules_decode_without_claiming_current_preview_semantics() {
+    let encoded = "Awxzb3VwLW1haWwtdjI7R3JhcGhxbFNvdXBFbWFpbFRocmVhZDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEFZW1haWwBgIDZ276wlQYAAAE";
+    let supplement = decode_cache_projection_supplement(encoded).unwrap();
+    let legacy = SoupCacheProjectionSupplement::mail_legacy_v2(
+        supplement.record_key().clone(),
+        supplement.mail_facts().unwrap().clone(),
+    );
+    assert_eq!(
+        encode_cache_projection_supplement(&legacy).unwrap(),
+        encoded
+    );
+    assert_eq!(supplement.target_profile().token().as_str(), "soup-mail-v2");
+    assert_ne!(
+        supplement.target_profile(),
+        &item_filter_index::mail::profile()
+    );
+    assert_eq!(
+        encode_cache_projection_supplement(&supplement).unwrap(),
+        encoded
+    );
 }

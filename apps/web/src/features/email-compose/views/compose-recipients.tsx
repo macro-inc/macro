@@ -1,9 +1,8 @@
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
-import { RecipientSelector } from '@core/component/RecipientSelector';
-
 import { cn } from '@ui';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
+import { ComposeRecipientInput } from '../components/compose-recipient-input';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { useCompose } from '../context/compose-context';
 import type { RecipientFieldId } from '../core/email-recipient';
@@ -168,10 +167,8 @@ export function ComposeRecipients(props: {
     requestAnimationFrame(() => inputEls[field]?.focus());
   };
 
-  // Collapsing is deferred so the transient blur of tapping a suggestion
-  // (whose selection lands via a debounced onChange) doesn't fold the row
-  // mid-entry — picking a recipient cancels the pending collapse and
-  // refocuses the input for the next one.
+  // Defer collapse across the transient blur when tapping a suggestion.
+  // Picking a recipient cancels the pending collapse and refocuses the input.
   let collapseTimer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(collapseTimer));
 
@@ -200,7 +197,7 @@ export function ComposeRecipients(props: {
     inputRef?: (el: HTMLElement) => void,
     opts?: { focusOnMount?: boolean; includeSelf?: boolean; inputId?: string }
   ) => (
-    <RecipientSelector
+    <ComposeRecipientInput
       inputRef={(el) => {
         inputEls[field] = el;
         inputRef?.(el);

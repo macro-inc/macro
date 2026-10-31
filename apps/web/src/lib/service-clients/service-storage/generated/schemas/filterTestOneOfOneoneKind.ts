@@ -10,5 +10,5 @@ export type FilterTestOneOfOneoneKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const FilterTestOneOfOneoneKind = {
-  options: 'options',
+  checkbox: 'checkbox',
 } as const;
