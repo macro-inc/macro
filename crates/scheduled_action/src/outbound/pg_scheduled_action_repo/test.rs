@@ -1101,3 +1101,52 @@ async fn backfill_owner_grants_is_idempotent_and_fails_closed(pool: PgPool) {
     assert!(run_backfill(&pool).await.is_err());
     assert!(direct_grants(&pool, conflict_id).await.is_empty());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_consumed_firing_is_not_due_again_after_its_claim_goes_stale(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let due = |name: &str| {
+        let mut action = sample_action(user_owner(USER_A), name);
+        action.next_run_at = Some(Utc::now() - chrono::Duration::hours(1));
+        action
+    };
+    let consumed = repo.create_action(due("consumed")).await.unwrap();
+    let unconsumed = repo.create_action(due("unconsumed")).await.unwrap();
+    for action in [&consumed, &unconsumed] {
+        repo.claim_action(
+            &action.id.unwrap(),
+            action.configuration_revision,
+            action.next_run_at,
+        )
+        .await
+        .unwrap();
+    }
+    // What the executor does as soon as it claims a scheduled firing.
+    repo.update_next_run_at(&consumed.id.unwrap())
+        .await
+        .unwrap();
+
+    // The process dies mid-run: neither claim is released and both go stale.
+    sqlx::query!(
+        "UPDATE scheduled_action SET claimed = $1",
+        Utc::now() - MAX_ACTION_TIME - chrono::Duration::minutes(1),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // The poller takes both again; it starts the ones whose firing is due.
+    let polled = repo.get_next_unclaimed_actions(100).await.unwrap();
+    let next_run = |id: Uuid| {
+        polled
+            .iter()
+            .find(|action| action.id == Some(id))
+            .and_then(|action| action.next_run_at)
+            .unwrap()
+    };
+    let now = Utc::now();
+    assert!(next_run(consumed.id.unwrap()) > now);
+    // Without consuming it, the same past firing would run again.
+    assert!(next_run(unconsumed.id.unwrap()) <= now);
+}

@@ -96,7 +96,8 @@ async fn manual_and_cron_refusals_release_claims_and_advance_schedule_without_re
         assert!(executor.live_updates.0.lock().unwrap().is_empty());
         assert_eq!(executor.repo.claims.load(Ordering::SeqCst), 1);
         assert_eq!(executor.repo.releases.load(Ordering::SeqCst), 1);
-        assert_eq!(executor.repo.rescheduled.load(Ordering::SeqCst), 1);
+        // Once when the firing is claimed, again after the run.
+        assert_eq!(executor.repo.rescheduled.load(Ordering::SeqCst), 2);
         assert!(executor.repo.claim.lock().unwrap().is_none());
         let records = executor.repo.records.lock().unwrap();
         assert_eq!(records.len(), 1);
@@ -184,6 +185,42 @@ async fn admitted_model_execution_uses_the_persisted_owner_and_automation_featur
     assert_eq!(executor.runner.preparations.load(Ordering::SeqCst), 1);
     assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 1);
     assert!(executor.repo.records.lock().unwrap()[0].is_success);
+}
+
+#[tokio::test]
+async fn a_scheduled_firing_is_consumed_before_its_program_runs() {
+    // A process that dies mid-run must not leave the same firing due again.
+    let executor = executor(Repo::default(), Runner::default());
+    executor.execute_action(action()).await.unwrap();
+    for _ in 0..50 {
+        if executor.runner.calls.load(Ordering::SeqCst) == 1 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(executor.repo.rescheduled.load(Ordering::SeqCst), 1);
+    executor.runner.finish.cancel();
+    drain(&executor).await;
+    assert_eq!(executor.repo.rescheduled.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn a_manual_run_leaves_the_next_firing_alone_until_it_ends() {
+    let mut manual = action();
+    manual.next_run_at = Some(Utc::now() + chrono::Duration::hours(1));
+    let executor = executor(Repo::default(), Runner::default());
+    executor.execute_action(manual).await.unwrap();
+    for _ in 0..50 {
+        if executor.runner.calls.load(Ordering::SeqCst) == 1 {
+            break;
+        }
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(executor.repo.rescheduled.load(Ordering::SeqCst), 0);
+    executor.runner.finish.cancel();
+    drain(&executor).await;
+    assert_eq!(executor.repo.rescheduled.load(Ordering::SeqCst), 1);
 }
 
 #[derive(Default)]

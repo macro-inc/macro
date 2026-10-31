@@ -336,6 +336,20 @@ where
                     return;
                 }
             };
+            // Consume a scheduled firing before anything runs. If this process
+            // dies mid-run, its claim goes stale and the poller would otherwise
+            // find the same firing due and repeat every step's side effects;
+            // a lost firing beats a doubled one.
+            if matches!(firing, RoutineRun::Scheduled { .. }) {
+                let consumed = tokio::time::timeout(
+                    BOOKKEEPING_TIMEOUT,
+                    executor.repo.update_next_run_at(&id),
+                )
+                .await;
+                if !matches!(consumed, Ok(Ok(()))) {
+                    tracing::error!(action_id=?id, "failed to consume the scheduled firing");
+                }
+            }
             let mut ready_tx = Some(ready_tx);
             let mut handle = ExecutionHandle::default();
             let result = bounded(deadline, executor.cancellation.cancelled(), async {
