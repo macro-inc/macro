@@ -1956,6 +1956,10 @@ pub async fn run() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
+                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                        (*conn_gateway_client).clone(),
+                        db.clone(),
+                    ),
                 ),
             ),
             authorization_state.clone(),

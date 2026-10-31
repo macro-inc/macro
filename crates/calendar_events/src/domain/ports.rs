@@ -918,10 +918,10 @@ pub enum CalendarJoinRequestError {
 /// and for sharers reading the requests on their events.
 pub trait CalendarJoinRequestService: Send + Sync + 'static {
     /// Ask the person who shared an event with one of the requester's
-    /// channels to add them as a guest, notifying them when the request
-    /// becomes pending. Asking again while pending changes nothing; asking
-    /// after a decline is refused with `Declined`, so the sharer is asked
-    /// only once.
+    /// channels to add them as a guest. When the request becomes pending this
+    /// notifies them and refreshes the open request lists of their inbox's
+    /// viewers. Asking again while pending changes nothing; asking after a
+    /// decline is refused with `Declined`, so the sharer is asked only once.
     fn request_to_join(
         &self,
         requester_id: &str,

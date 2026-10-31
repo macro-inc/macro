@@ -309,6 +309,7 @@ pub(crate) type DssCalendarJoinRequestService =
         calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
             NotificationIngressType,
         >,
+        crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh,
     >;
 
 /// Calendar join-request router state.

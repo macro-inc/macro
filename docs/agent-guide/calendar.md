@@ -882,7 +882,8 @@ says `You've asked to join this event` and refreshes to `Requested` or `Invited`
 notification (Settings → Notifications → Calendar → Requests to join), which Home lists as
 `<requester> asked to join <event>` with a person-plus glyph, like a comment row. It opens the event,
 whose details list each request with `Add as guest` and `Decline` on desktop and in the phone
-drawer. Adding writes the guest through the same invite path as `Add guests`, so Google or
+drawer. A new request appears in details already open, for the owner and delegates of the sharer's
+inbox, without a reload; a repeated or refused ask changes nothing there. Adding writes the guest through the same invite path as `Add guests`, so Google or
 Outlook sends the invitation and the mention then opens the viewer's own copy. Declining sends
 the requester nothing, but their card then reads `Declined` and `The person who shared this event
 declined your request to join.` with no `Ask to join`, and offers `Add to calendar` again. A
