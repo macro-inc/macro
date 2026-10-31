@@ -1,7 +1,7 @@
 import { useMaybeBlockId } from '@core/block';
-import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import type { Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { cn, Layer } from '@ui';
@@ -94,7 +94,10 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
               when={!isEmpty()}
               fallback={
                 <>
-                  <CircleDashedEmpty class="size-3 shrink-0 opacity-50" />
+                  <PropertyEmptyIcon
+                    propertyDefinitionId={props.property().propertyDefinitionId}
+                    class="text-ink-extra-muted"
+                  />
                   <span class="truncate flex-1 opacity-50 @max-[840px]/u-list:hidden">
                     {props.property().displayName}
                   </span>

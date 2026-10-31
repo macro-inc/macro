@@ -77,6 +77,8 @@ the SVG and no additional empty-icon dimming. Empty assignees use
 `cube`; empty projects use `cube-dashed`, with a dash at every corner rather than
 a dashed stack. Use the same dashed cube for empty Project values in title pills,
 list cells, side-panel values, and group headers.
+Draw the cube's dash gaps as explicit segments; `pathLength`-normalized dashes
+become solid when SVG optimization merges the individual edges.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
 tokens for icons and group-header tints. Their defaults are muted gray, blended
