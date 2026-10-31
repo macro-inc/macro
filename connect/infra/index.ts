@@ -232,7 +232,7 @@ const database = new aws.rds.Instance(
     allocatedStorage: 20,
     storageType: 'gp3',
     storageEncrypted: true,
-    dbName: 'connect',
+    dbName: 'macro_connect',
     username: 'connect_api',
     manageMasterUserPassword: true,
     dbSubnetGroupName: dbSubnets.name,
@@ -258,7 +258,7 @@ const databaseUrl = pulumi.secret(
     .all([database.address, dbSecret.secretString])
     .apply(([address, secret]) => {
       const credentials = JSON.parse(secret) as { password: string };
-      return `postgresql://connect_api:${encodeURIComponent(credentials.password)}@${address}:5432/connect`;
+      return `postgresql://connect_api:${encodeURIComponent(credentials.password)}@${address}:5432/macro_connect`;
     }),
 );
 const runtimeSecret = new aws.secretsmanager.Secret(`${name}-runtime`, {
