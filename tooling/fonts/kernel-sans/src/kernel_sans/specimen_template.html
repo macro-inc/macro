@@ -1,0 +1,707 @@
+{{STANDALONE_HEAD}}<title>Kernel Sans</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300..800&display=swap">
+<style>
+@font-face {
+  font-family: "Kernel Sans";
+  src: url("{{FONT_URL}}") format("woff2");
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: block;
+}
+
+/* Layout: a font-editor sheet. Metric lines, unit labels and point markers
+   run through every section; the specimen font sets all text. */
+:root {
+  --paper: #eef1f5;
+  --panel: #ffffff;
+  --ink: #0b0e15;
+  --muted: #586174;
+  --rule: #d3d9e3;
+  --metric: #3461f0;
+  --advance: #e2474d;
+  --sel: rgba(52, 97, 240, 0.12);
+  --font-display: "Kernel Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --step--1: 0.8125rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.75rem;
+  --step-3: 2.75rem;
+  --radius: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0c0f14;
+    --panel: #141922;
+    --ink: #e7ebf2;
+    --muted: #8d96a8;
+    --rule: #252c39;
+    --metric: #7395ff;
+    --advance: #ff6d72;
+    --sel: rgba(115, 149, 255, 0.16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0c0f14;
+  --panel: #141922;
+  --ink: #e7ebf2;
+  --muted: #8d96a8;
+  --rule: #252c39;
+  --metric: #7395ff;
+  --advance: #ff6d72;
+  --sel: rgba(115, 149, 255, 0.16);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.mono, code, pre, output, .tag, .label {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.01em;
+}
+.label { text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+h2 {
+  font-size: var(--step-3);
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+h3 { font-size: var(--step-1); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+p { margin: 0; max-width: 62ch; }
+section { padding-block: clamp(48px, 8vw, 96px); border-top: 1px solid var(--rule); }
+.section-head { display: grid; gap: 12px; margin-bottom: 32px; }
+.section-head .label { display: flex; gap: 12px; }
+:focus-visible { outline: 2px solid var(--metric); outline-offset: 2px; }
+
+/* Top bar */
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-block: 18px;
+}
+.top strong { font-weight: 650; font-size: var(--step-1); letter-spacing: -0.01em; }
+.top .mono { color: var(--muted); }
+
+/* Hero: the word sits on real metric lines */
+.hero { border-top: 0; padding-block: 8px 56px; }
+.stage {
+  --size: clamp(76px, 21vw, 248px);
+  position: relative;
+  overflow: hidden;
+  border-block: 1px solid var(--rule);
+}
+.mline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--metric);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.mline span {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--metric);
+}
+.mline.base { opacity: 1; }
+.mline.asc span, .mline.desc span, .mline.base span { top: auto; bottom: 2px; }
+/* The ascender label sits on the left, above the word, so it never collides
+   with the cap-height label; the x-height label hangs below its line on the
+   right, clear of the word's first letter. */
+.mline.asc span { right: auto; left: 0; }
+.word {
+  font-size: var(--size);
+  line-height: 1.2;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  outline: none;
+  position: relative;
+  caret-color: var(--advance);
+}
+.word:focus-visible { outline: 2px dashed var(--metric); outline-offset: 4px; }
+.hero-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: end;
+  margin-top: 28px;
+}
+.lede { font-size: var(--step-2); line-height: 1.25; letter-spacing: -0.015em; font-weight: 400; text-wrap: balance; }
+.control { display: grid; gap: 8px; }
+.control-row { display: flex; align-items: center; gap: 12px; }
+input[type="range"] { width: 100%; accent-color: var(--metric); }
+output { min-width: 9ch; text-align: right; color: var(--muted); }
+
+/* Details */
+.details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.detail { margin: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); display: grid; grid-template-rows: auto 1fr; }
+.outline { border-bottom: 1px solid var(--rule); }
+.outline svg { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; max-height: 420px; }
+.outline .metrics line { stroke: var(--metric); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.outline .metrics line.adv { stroke: var(--advance); }
+.outline .ink { fill: var(--ink); fill-opacity: 0.08; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.outline .handles line { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.outline .off circle { fill: var(--panel); stroke: var(--advance); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.outline .on rect { fill: var(--metric); }
+.detail figcaption { padding: 18px 20px 20px; display: grid; gap: 8px; align-content: start; }
+.detail p { color: var(--muted); }
+.tag { color: var(--muted); }
+
+/* Weights */
+.waterfall { list-style: none; margin: 0; padding: 0; display: grid; }
+.waterfall li {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 16px;
+  align-items: baseline;
+  padding-block: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.waterfall .sample { font-size: clamp(1.5rem, 3.6vw, 2.75rem); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
+.waterfall .meta { display: grid; gap: 2px; }
+.waterfall .meta b { font-family: var(--font-display); font-size: var(--step-0); font-weight: 600; }
+
+/* Tester */
+.tester-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; gap: 20px 28px; align-items: end; margin-bottom: 20px; }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.toggle {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  padding: 7px 11px;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.toggle[aria-pressed="true"] { border-color: var(--metric); background: var(--sel); color: var(--metric); }
+.tester {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-height: 12rem;
+  line-height: 1.15;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+.tester:focus { border-color: var(--metric); }
+
+/* Compare */
+.compare { display: grid; }
+.compare .row { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 16px; align-items: baseline; padding-block: 14px; border-bottom: 1px solid var(--rule); }
+.compare .text { font-size: clamp(1.6rem, 4.6vw, 3.4rem); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
+.compare .row.kernel .text { font-family: var(--font-display); }
+.compare .row.inter .text { font-family: "Inter", sans-serif; }
+.compare .row.system .text { font-family: system-ui, -apple-system, sans-serif; }
+.weight-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Glyphs */
+.glyph-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+.glyph-groups { display: grid; gap: 28px; min-width: 0; }
+.glyph-group h3 { margin-bottom: 10px; font-size: var(--step-0); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); border-left: 1px solid var(--rule); border-top: 1px solid var(--rule); }
+.cell {
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 26px;
+  aspect-ratio: 1 / 1;
+  border: 0;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  min-width: 0;
+}
+.cell:hover { background: var(--sel); }
+.cell[aria-pressed="true"] { background: var(--metric); color: var(--panel); }
+.inspector {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  display: grid;
+}
+.inspector svg { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--rule); }
+.inspector svg line { stroke: var(--metric); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.inspector svg line.adv { stroke: var(--advance); opacity: 0.9; }
+.inspector svg text.g { fill: var(--ink); font-family: var(--font-display); }
+.inspector svg text.ml { fill: var(--metric); font-family: var(--font-mono); font-size: 34px; }
+.inspector dl { margin: 0; padding: 16px 18px 18px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 16px; }
+.inspector dt { color: var(--muted); font-family: var(--font-mono); font-size: var(--step--1); }
+.inspector dd { margin: 0; font-family: var(--font-mono); font-size: var(--step--1); overflow-wrap: anywhere; }
+.inspector .weight-pick { padding: 0 18px 18px; }
+
+/* In use */
+.ui {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ui-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 18px 20px; border-bottom: 1px solid var(--rule); }
+.ui-head h3 { font-size: var(--step-1); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--rule); }
+.stat { padding: 18px 20px; display: grid; gap: 4px; border-right: 1px solid var(--rule); min-width: 0; }
+.stat:last-child { border-right: 0; }
+.stat .v { font-size: var(--step-3); font-weight: 600; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat .k { color: var(--muted); font-size: var(--step--1); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 560px; }
+th, td { text-align: left; padding: 11px 20px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font-weight: 500; color: var(--muted); font-size: var(--step--1); }
+td.num, th.num { text-align: right; }
+tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: var(--step--1); font-weight: 500; border: 1px solid currentColor; }
+.pill.ok { color: var(--metric); }
+.pill.bad { color: var(--advance); }
+
+/* Install */
+.install { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.code { position: relative; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); }
+.code pre { margin: 0; padding: 20px; overflow-x: auto; line-height: 1.6; }
+.code .copy { position: absolute; top: 10px; right: 10px; }
+.features { width: 100%; min-width: 0; }
+.features td:first-child { font-family: var(--font-mono); font-size: var(--step--1); color: var(--metric); }
+.features td { white-space: normal; padding: 10px 12px 10px 0; }
+footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .hero-row, .tester-controls, .install, .glyph-layout { grid-template-columns: minmax(0, 1fr); }
+  .details { grid-template-columns: minmax(0, 1fr); }
+  .inspector { position: static; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat:nth-child(2) { border-right: 0; }
+  .stat:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+}
+@media (max-width: 560px) {
+  .waterfall li, .compare .row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <strong>Kernel Sans</strong>
+    <span class="mono">v{{VERSION}} · 300–800 · {{GLYPH_COUNT}} glyphs</span>
+  </header>
+
+  <section class="hero" aria-label="Kernel Sans">
+    <div class="stage" id="stage">
+      <div class="mline asc" data-m="760"><span>asc 760</span></div>
+      <div class="mline cap" data-m="720"><span>cap 720</span></div>
+      <div class="mline x" data-m="540"><span>x 540</span></div>
+      <div class="mline base" data-m="0"><span>0</span></div>
+      <div class="mline desc" data-m="-200"><span>desc −200</span></div>
+      <div class="word" id="heroWord" contenteditable="true" spellcheck="false" role="textbox" aria-label="Editable sample word">Kernel</div>
+    </div>
+    <div class="hero-row">
+      <p class="lede">A neo-grotesque in the Inter and SF Pro mould, cut with squircle curves, 45° chamfers, ink traps and square dots.</p>
+      <div class="control">
+        <label class="label" for="heroW">Weight</label>
+        <div class="control-row">
+          <input type="range" id="heroW" min="300" max="800" step="1" value="400">
+          <output id="heroWOut" for="heroW">400 Regular</output>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="details">
+    <div class="section-head">
+      <span class="label">Construction · ExtraBold outlines</span>
+      <h2>Four details on a familiar skeleton</h2>
+      <p>The proportions follow Inter and SF Pro: a 540-unit x-height on a 720 cap height, flat horizontal terminals and nearly even strokes. Everything that makes it feel engineered comes from four rules.</p>
+    </div>
+    <div class="details">
+{{DETAILS}}
+    </div>
+  </section>
+
+  <section id="weights">
+    <div class="section-head">
+      <span class="label">Weights</span>
+      <h2>Six weights, one variable axis</h2>
+      <p>Every outline is computed from the stem width, so the static weights and the variable font come from the same drawing.</p>
+    </div>
+    <ol class="waterfall" id="waterfall"></ol>
+  </section>
+
+  <section id="tester-section">
+    <div class="section-head">
+      <span class="label">Type tester</span>
+      <h2>Try it</h2>
+    </div>
+    <div class="tester-controls">
+      <div class="control">
+        <label class="label" for="tSize">Size</label>
+        <div class="control-row"><input type="range" id="tSize" min="14" max="160" value="56"><output id="tSizeOut" for="tSize">56 px</output></div>
+      </div>
+      <div class="control">
+        <label class="label" for="tWeight">Weight</label>
+        <div class="control-row"><input type="range" id="tWeight" min="300" max="800" value="400"><output id="tWeightOut" for="tWeight">400</output></div>
+      </div>
+      <div class="toggles" role="group" aria-label="OpenType features">
+        <button class="toggle" type="button" data-feat="ss01" aria-pressed="false">ss01 single-storey a</button>
+        <button class="toggle" type="button" data-feat="ss02" aria-pressed="false">ss02 distinct I l</button>
+        <button class="toggle" type="button" data-feat="zero" aria-pressed="false">zero slashed</button>
+        <button class="toggle" type="button" data-feat="case" aria-pressed="false">case forms</button>
+        <button class="toggle" type="button" data-feat="tnum" aria-pressed="false">tnum tabular</button>
+      </div>
+    </div>
+    <div class="tester" id="tester" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Type tester">Quarterly sync: 1,024 nodes online — latency 0.42 ms (−18%). Ship build Il1 at 09:30?</div>
+  </section>
+
+  <section id="compare">
+    <div class="section-head">
+      <span class="label">Next to its references</span>
+      <h2>Close to Inter and SF Pro, sharper at the edges</h2>
+      <p>The third row uses your system UI face, which is SF Pro on Apple devices.</p>
+    </div>
+    <div class="compare">
+      <div class="row kernel"><span class="label">Kernel Sans</span><span class="text">Hamburgefonstiv 2048</span></div>
+      <div class="row inter"><span class="label">Inter</span><span class="text">Hamburgefonstiv 2048</span></div>
+      <div class="row system"><span class="label">System UI</span><span class="text">Hamburgefonstiv 2048</span></div>
+    </div>
+  </section>
+
+  <section id="glyphs">
+    <div class="section-head">
+      <span class="label">Character set · {{ENCODED_COUNT}} encoded</span>
+      <h2>Glyphs</h2>
+      <p>Basic Latin, Latin-1, Windows-1252 punctuation, arrows and math. Select a glyph to see it on its metrics.</p>
+    </div>
+    <div class="glyph-layout">
+      <div class="glyph-groups" id="glyphGroups"></div>
+      <aside class="inspector" aria-live="polite">
+        <svg id="inspSvg" viewBox="-80 -1000 900 1300" role="img" aria-label="Selected glyph on its metrics"></svg>
+        <dl>
+          <dt>Name</dt><dd id="iName"></dd>
+          <dt>Unicode</dt><dd id="iCode"></dd>
+          <dt>Advance</dt><dd id="iAdv"></dd>
+        </dl>
+        <div class="weight-pick" id="inspWeights" role="group" aria-label="Inspector weight"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="use">
+    <div class="section-head">
+      <span class="label">In use · sample data</span>
+      <h2>Built for interfaces</h2>
+      <p>Figures are proportional in running text. Tables and counters turn on <code>tnum</code> (<code>font-variant-numeric: tabular-nums</code>) so columns line up.</p>
+    </div>
+    <div class="ui">
+      <div class="ui-head"><h3>Build pipeline</h3><span class="mono">Last 24 hours</span></div>
+      <div class="stats">
+        <div class="stat"><span class="k">Builds</span><span class="v">1,284</span></div>
+        <div class="stat"><span class="k">Pass rate</span><span class="v">98.6%</span></div>
+        <div class="stat"><span class="k">p95 duration</span><span class="v">4:17</span></div>
+        <div class="stat"><span class="k">Queue</span><span class="v">07</span></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Run</th><th>Branch</th><th>Status</th><th class="num">Duration</th><th class="num">Tests</th></tr></thead>
+          <tbody>
+            <tr><td>#40918</td><td>main</td><td><span class="pill ok">Passed</span></td><td class="num">3:42</td><td class="num">11,806</td></tr>
+            <tr><td>#40917</td><td>feat/search-index</td><td><span class="pill ok">Passed</span></td><td class="num">4:09</td><td class="num">11,794</td></tr>
+            <tr><td>#40916</td><td>fix/offline-sync</td><td><span class="pill bad">Failed</span></td><td class="num">1:58</td><td class="num">6,210</td></tr>
+            <tr><td>#40915</td><td>main</td><td><span class="pill ok">Passed</span></td><td class="num">3:51</td><td class="num">11,790</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="section-head">
+      <span class="label">Install</span>
+      <h2>Use it on the web</h2>
+      <p>Files live in <code>tooling/fonts/kernel-sans/fonts/</code>: the variable font in <code>variable/</code> and each static weight as <code>otf/</code>, <code>ttf/</code> and <code>woff2/</code>.</p>
+    </div>
+    <div class="install">
+      <div class="code">
+        <pre id="cssSnippet">@font-face {
+  font-family: "Kernel Sans";
+  src: url("KernelSans[wght].woff2") format("woff2");
+  font-weight: 300 800;
+  font-display: swap;
+}
+
+body {
+  font-family: "Kernel Sans", system-ui, sans-serif;
+}</pre>
+        <button class="toggle copy" type="button" id="copyCss">Copy</button>
+      </div>
+      <table class="features">
+        <tbody>
+          <tr><td>kern</td><td>Class kerning</td></tr>
+          <tr><td>liga</td><td>fi and fl ligatures</td></tr>
+          <tr><td>ss01</td><td>Single-storey a</td></tr>
+          <tr><td>ss02</td><td>Serifed I and tailed l, distinct from 1</td></tr>
+          <tr><td>calt</td><td>Colon raised between figures (09:30); dashes and math raised between capitals or figures (2026-10-30, A–Z)</td></tr>
+          <tr><td>zero</td><td>Slashed zero</td></tr>
+          <tr><td>tnum</td><td>Tabular figures for tables and counters</td></tr>
+          <tr><td>case</td><td>Brackets, dashes and guillemets raised for capitals</td></tr>
+          <tr><td>wght</td><td>Variable weight 300–800; named instances Light to ExtraBold</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p class="mono">Kernel Sans {{VERSION}} · generated by tooling/fonts/kernel-sans</p>
+  </footer>
+</div>
+
+<script id="data" type="application/json">{{DATA}}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById("data").textContent);
+  var M = data.metrics;
+  var WEIGHTS = Object.keys(data.weights).map(Number).sort(function (a, b) { return a - b; });
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function weightName(w) {
+    var best = WEIGHTS[0];
+    WEIGHTS.forEach(function (k) { if (Math.abs(k - w) < Math.abs(best - w)) best = k; });
+    return Math.abs(best - w) < 1 ? data.weights[best] : "";
+  }
+
+  /* Hero metric lines: the word's line box is 1.2em with the baseline 0.96em down. */
+  var stage = document.getElementById("stage");
+  var word = document.getElementById("heroWord");
+  function placeLines() {
+    var size = parseFloat(getComputedStyle(word).fontSize);
+    stage.querySelectorAll(".mline").forEach(function (el) {
+      var m = Number(el.dataset.m);
+      el.style.top = (size * (0.96 - m / 1000)) + "px";
+    });
+  }
+  placeLines();
+  window.addEventListener("resize", placeLines);
+
+  var heroW = document.getElementById("heroW");
+  var heroOut = document.getElementById("heroWOut");
+  function setHero(w) {
+    word.style.fontWeight = w;
+    heroW.value = w;
+    var n = weightName(w);
+    heroOut.textContent = Math.round(w) + (n ? " " + n : "");
+  }
+  var stopped = false;
+  heroW.addEventListener("input", function () { stopped = true; setHero(Number(heroW.value)); });
+  setHero(400);
+  if (!reduceMotion) {
+    var t0 = null;
+    var keys = [[0, 400], [0.15, 300], [0.55, 800], [1, 400]];
+    var dur = 2600;
+    heroW.addEventListener("pointerdown", function () { stopped = true; });
+    var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+    requestAnimationFrame(function step(ts) {
+      if (stopped) return;
+      if (t0 === null) t0 = ts;
+      var t = Math.min(1, (ts - t0) / dur);
+      for (var i = 0; i < keys.length - 1; i++) {
+        if (t >= keys[i][0] && t <= keys[i + 1][0]) {
+          var u = (t - keys[i][0]) / (keys[i + 1][0] - keys[i][0]);
+          setHero(keys[i][1] + (keys[i + 1][1] - keys[i][1]) * ease(u));
+        }
+      }
+      if (t < 1) requestAnimationFrame(step); else setHero(400);
+    });
+  }
+
+  /* Weights */
+  var wf = document.getElementById("waterfall");
+  WEIGHTS.forEach(function (w) {
+    var li = document.createElement("li");
+    li.innerHTML = '<span class="meta"><b></b><span class="mono"></span></span><span class="sample">Packets drift through quiet fiber at 02:47</span>';
+    li.querySelector("b").textContent = data.weights[w];
+    li.querySelector(".mono").textContent = w + " · stem " + data.stems[w];
+    li.querySelector(".sample").style.fontWeight = w;
+    wf.appendChild(li);
+  });
+
+  /* Tester */
+  var tester = document.getElementById("tester");
+  var tSize = document.getElementById("tSize"), tSizeOut = document.getElementById("tSizeOut");
+  var tWeight = document.getElementById("tWeight"), tWeightOut = document.getElementById("tWeightOut");
+  var feats = {};
+  function applyTester() {
+    tester.style.fontSize = tSize.value + "px";
+    tSizeOut.textContent = tSize.value + " px";
+    tester.style.fontWeight = tWeight.value;
+    var n = weightName(Number(tWeight.value));
+    tWeightOut.textContent = tWeight.value + (n ? " " + n : "");
+    var on = Object.keys(feats).filter(function (k) { return feats[k]; });
+    tester.style.fontFeatureSettings = on.length ? on.map(function (k) { return '"' + k + '" 1'; }).join(", ") : "normal";
+  }
+  tSize.addEventListener("input", applyTester);
+  tWeight.addEventListener("input", applyTester);
+  document.querySelectorAll(".toggle[data-feat]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      feats[b.dataset.feat] = on;
+      applyTester();
+    });
+  });
+  applyTester();
+
+  /* Glyph set */
+  var groups = [
+    ["Uppercase", function (c) { return /^[A-Z]$/.test(c); }],
+    ["Lowercase", function (c) { return /^[a-z]$/.test(c); }],
+    ["Figures", function (c) { return /^[0-9]$/.test(c); }],
+    ["Accented and extended letters", function (c) { return /\p{L}/u.test(c); }],
+    ["Punctuation, symbols and arrows", function () { return true; }],
+  ];
+  var items = data.glyphs.map(function (g) { return { g: g, c: String.fromCodePoint(g.u), feat: null }; });
+  var alts = data.alternates.map(function (g) { return { g: g, c: String.fromCodePoint(g.u), feat: g.f }; });
+  var host = document.getElementById("glyphGroups");
+  var cells = [];
+  var assigned = new Set();
+  function addGroup(title, list) {
+    if (!list.length) return;
+    var sec = document.createElement("div");
+    sec.className = "glyph-group";
+    var h = document.createElement("h3");
+    h.textContent = title + " · " + list.length;
+    var grid = document.createElement("div");
+    grid.className = "grid";
+    list.forEach(function (it) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "cell";
+      b.textContent = it.c;
+      if (it.feat) b.style.fontFeatureSettings = '"' + it.feat + '" 1';
+      b.setAttribute("aria-label", it.g.n);
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () { select(it, b); });
+      grid.appendChild(b);
+      cells.push(b);
+    });
+    sec.appendChild(h);
+    sec.appendChild(grid);
+    host.appendChild(sec);
+  }
+  groups.forEach(function (gr) {
+    var list = items.filter(function (it) { return !assigned.has(it) && gr[1](it.c); });
+    list.forEach(function (it) { assigned.add(it); });
+    addGroup(gr[0], list);
+  });
+  addGroup("Alternates", alts);
+
+  var inspWeight = 400, current = null, currentBtn = null;
+  var svg = document.getElementById("inspSvg");
+  var NS = "http://www.w3.org/2000/svg";
+  function el(name, attrs, text) {
+    var e = document.createElementNS(NS, name);
+    Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function select(it, btn) {
+    current = it;
+    if (currentBtn) currentBtn.setAttribute("aria-pressed", "false");
+    currentBtn = btn;
+    if (btn) btn.setAttribute("aria-pressed", "true");
+    drawInspector();
+  }
+  function drawInspector() {
+    if (!current) return;
+    var adv = current.g.w[String(inspWeight)];
+    var W = Math.max(adv + 300, 1100);
+    var x0 = (W - adv) / 2;
+    svg.setAttribute("viewBox", "0 -1000 " + W + " 1300");
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    [[M.asc, "asc"], [M.cap, "cap"], [M.xh, "x"], [0, "0"], [M.desc, "desc"]].forEach(function (m) {
+      svg.appendChild(el("line", { x1: 0, x2: W, y1: -m[0], y2: -m[0] }));
+      svg.appendChild(el("text", { "class": "ml", x: 8, y: -m[0] - 8 }, m[1]));
+    });
+    svg.appendChild(el("line", { "class": "adv", x1: x0, x2: x0, y1: -1000, y2: 300 }));
+    svg.appendChild(el("line", { "class": "adv", x1: x0 + adv, x2: x0 + adv, y1: -1000, y2: 300 }));
+    var t = el("text", { "class": "g", x: x0, y: 0, "font-size": 1000 }, current.c);
+    t.style.fontWeight = inspWeight;
+    if (current.feat) t.style.fontFeatureSettings = '"' + current.feat + '" 1';
+    svg.appendChild(t);
+    document.getElementById("iName").textContent = current.g.n;
+    document.getElementById("iCode").textContent = current.feat
+      ? "U+" + current.g.u.toString(16).toUpperCase().padStart(4, "0") + " + " + current.feat
+      : "U+" + current.g.u.toString(16).toUpperCase().padStart(4, "0");
+    document.getElementById("iAdv").textContent = adv + " units at " + inspWeight + " " + data.weights[inspWeight];
+  }
+  var pick = document.getElementById("inspWeights");
+  WEIGHTS.forEach(function (w) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "toggle";
+    b.textContent = w;
+    b.setAttribute("aria-pressed", w === inspWeight ? "true" : "false");
+    b.addEventListener("click", function () {
+      inspWeight = w;
+      pick.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      drawInspector();
+    });
+    pick.appendChild(b);
+  });
+  var startIdx = items.findIndex(function (it) { return it.c === "a"; });
+  var start = startIdx >= 0 ? startIdx : 0;
+  if (items.length) {
+    var firstBtn = cells.find(function (c) { return c.getAttribute("aria-label") === items[start].g.n; });
+    select(items[start], firstBtn);
+  }
+
+  /* Copy */
+  var copyBtn = document.getElementById("copyCss");
+  copyBtn.addEventListener("click", function () {
+    var text = document.getElementById("cssSnippet").textContent;
+    function selectIt() {
+      var r = document.createRange();
+      r.selectNodeContents(document.getElementById("cssSnippet"));
+      var s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+      copyBtn.textContent = "Selected";
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { copyBtn.textContent = "Copied"; }, selectIt);
+    } catch (e) { selectIt(); }
+    setTimeout(function () { copyBtn.textContent = "Copy"; }, 1800);
+  });
+})();
+</script>

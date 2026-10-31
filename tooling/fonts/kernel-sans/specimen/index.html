@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kernel Sans</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300..800&display=swap">
+<style>
+@font-face {
+  font-family: "Kernel Sans";
+  src: url("../fonts/variable/KernelSans%5Bwght%5D.woff2") format("woff2");
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: block;
+}
+
+/* Layout: a font-editor sheet. Metric lines, unit labels and point markers
+   run through every section; the specimen font sets all text. */
+:root {
+  --paper: #eef1f5;
+  --panel: #ffffff;
+  --ink: #0b0e15;
+  --muted: #586174;
+  --rule: #d3d9e3;
+  --metric: #3461f0;
+  --advance: #e2474d;
+  --sel: rgba(52, 97, 240, 0.12);
+  --font-display: "Kernel Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --step--1: 0.8125rem;
+  --step-0: 1rem;
+  --step-1: 1.25rem;
+  --step-2: 1.75rem;
+  --step-3: 2.75rem;
+  --radius: 4px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0c0f14;
+    --panel: #141922;
+    --ink: #e7ebf2;
+    --muted: #8d96a8;
+    --rule: #252c39;
+    --metric: #7395ff;
+    --advance: #ff6d72;
+    --sel: rgba(115, 149, 255, 0.16);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0c0f14;
+  --panel: #141922;
+  --ink: #e7ebf2;
+  --muted: #8d96a8;
+  --rule: #252c39;
+  --metric: #7395ff;
+  --advance: #ff6d72;
+  --sel: rgba(115, 149, 255, 0.16);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--step-0);
+  line-height: 1.5;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.mono, code, pre, output, .tag, .label {
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  letter-spacing: 0.01em;
+}
+.label { text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+h2 {
+  font-size: var(--step-3);
+  font-weight: 650;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+h3 { font-size: var(--step-1); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+p { margin: 0; max-width: 62ch; }
+section { padding-block: clamp(48px, 8vw, 96px); border-top: 1px solid var(--rule); }
+.section-head { display: grid; gap: 12px; margin-bottom: 32px; }
+.section-head .label { display: flex; gap: 12px; }
+:focus-visible { outline: 2px solid var(--metric); outline-offset: 2px; }
+
+/* Top bar */
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-block: 18px;
+}
+.top strong { font-weight: 650; font-size: var(--step-1); letter-spacing: -0.01em; }
+.top .mono { color: var(--muted); }
+
+/* Hero: the word sits on real metric lines */
+.hero { border-top: 0; padding-block: 8px 56px; }
+.stage {
+  --size: clamp(76px, 21vw, 248px);
+  position: relative;
+  overflow: hidden;
+  border-block: 1px solid var(--rule);
+}
+.mline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--metric);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.mline span {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--metric);
+}
+.mline.base { opacity: 1; }
+.mline.asc span, .mline.desc span, .mline.base span { top: auto; bottom: 2px; }
+/* The ascender label sits on the left, above the word, so it never collides
+   with the cap-height label; the x-height label hangs below its line on the
+   right, clear of the word's first letter. */
+.mline.asc span { right: auto; left: 0; }
+.word {
+  font-size: var(--size);
+  line-height: 1.2;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+  outline: none;
+  position: relative;
+  caret-color: var(--advance);
+}
+.word:focus-visible { outline: 2px dashed var(--metric); outline-offset: 4px; }
+.hero-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: end;
+  margin-top: 28px;
+}
+.lede { font-size: var(--step-2); line-height: 1.25; letter-spacing: -0.015em; font-weight: 400; text-wrap: balance; }
+.control { display: grid; gap: 8px; }
+.control-row { display: flex; align-items: center; gap: 12px; }
+input[type="range"] { width: 100%; accent-color: var(--metric); }
+output { min-width: 9ch; text-align: right; color: var(--muted); }
+
+/* Details */
+.details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.detail { margin: 0; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); display: grid; grid-template-rows: auto 1fr; }
+.outline { border-bottom: 1px solid var(--rule); }
+.outline svg { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; max-height: 420px; }
+.outline .metrics line { stroke: var(--metric); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.outline .metrics line.adv { stroke: var(--advance); }
+.outline .ink { fill: var(--ink); fill-opacity: 0.08; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.outline .handles line { stroke: var(--muted); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.outline .off circle { fill: var(--panel); stroke: var(--advance); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.outline .on rect { fill: var(--metric); }
+.detail figcaption { padding: 18px 20px 20px; display: grid; gap: 8px; align-content: start; }
+.detail p { color: var(--muted); }
+.tag { color: var(--muted); }
+
+/* Weights */
+.waterfall { list-style: none; margin: 0; padding: 0; display: grid; }
+.waterfall li {
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 16px;
+  align-items: baseline;
+  padding-block: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.waterfall .sample { font-size: clamp(1.5rem, 3.6vw, 2.75rem); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
+.waterfall .meta { display: grid; gap: 2px; }
+.waterfall .meta b { font-family: var(--font-display); font-size: var(--step-0); font-weight: 600; }
+
+/* Tester */
+.tester-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; gap: 20px 28px; align-items: end; margin-bottom: 20px; }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.toggle {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  padding: 7px 11px;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.toggle[aria-pressed="true"] { border-color: var(--metric); background: var(--sel); color: var(--metric); }
+.tester {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 24px;
+  min-height: 12rem;
+  line-height: 1.15;
+  outline: none;
+  overflow-wrap: anywhere;
+}
+.tester:focus { border-color: var(--metric); }
+
+/* Compare */
+.compare { display: grid; }
+.compare .row { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 16px; align-items: baseline; padding-block: 14px; border-bottom: 1px solid var(--rule); }
+.compare .text { font-size: clamp(1.6rem, 4.6vw, 3.4rem); line-height: 1.1; letter-spacing: -0.02em; overflow-wrap: anywhere; min-width: 0; }
+.compare .row.kernel .text { font-family: var(--font-display); }
+.compare .row.inter .text { font-family: "Inter", sans-serif; }
+.compare .row.system .text { font-family: system-ui, -apple-system, sans-serif; }
+.weight-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Glyphs */
+.glyph-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+.glyph-groups { display: grid; gap: 28px; min-width: 0; }
+.glyph-group h3 { margin-bottom: 10px; font-size: var(--step-0); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); border-left: 1px solid var(--rule); border-top: 1px solid var(--rule); }
+.cell {
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 26px;
+  aspect-ratio: 1 / 1;
+  border: 0;
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  min-width: 0;
+}
+.cell:hover { background: var(--sel); }
+.cell[aria-pressed="true"] { background: var(--metric); color: var(--panel); }
+.inspector {
+  position: sticky;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  display: grid;
+}
+.inspector svg { display: block; width: 100%; height: auto; border-bottom: 1px solid var(--rule); }
+.inspector svg line { stroke: var(--metric); stroke-width: 1; vector-effect: non-scaling-stroke; opacity: 0.6; }
+.inspector svg line.adv { stroke: var(--advance); opacity: 0.9; }
+.inspector svg text.g { fill: var(--ink); font-family: var(--font-display); }
+.inspector svg text.ml { fill: var(--metric); font-family: var(--font-mono); font-size: 34px; }
+.inspector dl { margin: 0; padding: 16px 18px 18px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 16px; }
+.inspector dt { color: var(--muted); font-family: var(--font-mono); font-size: var(--step--1); }
+.inspector dd { margin: 0; font-family: var(--font-mono); font-size: var(--step--1); overflow-wrap: anywhere; }
+.inspector .weight-pick { padding: 0 18px 18px; }
+
+/* In use */
+.ui {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ui-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 18px 20px; border-bottom: 1px solid var(--rule); }
+.ui-head h3 { font-size: var(--step-1); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--rule); }
+.stat { padding: 18px 20px; display: grid; gap: 4px; border-right: 1px solid var(--rule); min-width: 0; }
+.stat:last-child { border-right: 0; }
+.stat .v { font-size: var(--step-3); font-weight: 600; letter-spacing: -0.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat .k { color: var(--muted); font-size: var(--step--1); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 560px; }
+th, td { text-align: left; padding: 11px 20px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font-weight: 500; color: var(--muted); font-size: var(--step--1); }
+td.num, th.num { text-align: right; }
+tr:last-child td { border-bottom: 0; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: var(--step--1); font-weight: 500; border: 1px solid currentColor; }
+.pill.ok { color: var(--metric); }
+.pill.bad { color: var(--advance); }
+
+/* Install */
+.install { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.code { position: relative; background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); }
+.code pre { margin: 0; padding: 20px; overflow-x: auto; line-height: 1.6; }
+.code .copy { position: absolute; top: 10px; right: 10px; }
+.features { width: 100%; min-width: 0; }
+.features td:first-child { font-family: var(--font-mono); font-size: var(--step--1); color: var(--metric); }
+.features td { white-space: normal; padding: 10px 12px 10px 0; }
+footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .hero-row, .tester-controls, .install, .glyph-layout { grid-template-columns: minmax(0, 1fr); }
+  .details { grid-template-columns: minmax(0, 1fr); }
+  .inspector { position: static; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat:nth-child(2) { border-right: 0; }
+  .stat:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+}
+@media (max-width: 560px) {
+  .waterfall li, .compare .row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <strong>Kernel Sans</strong>
+    <span class="mono">v1.000 · 300–800 · 313 glyphs</span>
+  </header>
+
+  <section class="hero" aria-label="Kernel Sans">
+    <div class="stage" id="stage">
+      <div class="mline asc" data-m="760"><span>asc 760</span></div>
+      <div class="mline cap" data-m="720"><span>cap 720</span></div>
+      <div class="mline x" data-m="540"><span>x 540</span></div>
+      <div class="mline base" data-m="0"><span>0</span></div>
+      <div class="mline desc" data-m="-200"><span>desc −200</span></div>
+      <div class="word" id="heroWord" contenteditable="true" spellcheck="false" role="textbox" aria-label="Editable sample word">Kernel</div>
+    </div>
+    <div class="hero-row">
+      <p class="lede">A neo-grotesque in the Inter and SF Pro mould, cut with squircle curves, 45° chamfers, ink traps and square dots.</p>
+      <div class="control">
+        <label class="label" for="heroW">Weight</label>
+        <div class="control-row">
+          <input type="range" id="heroW" min="300" max="800" step="1" value="400">
+          <output id="heroWOut" for="heroW">400 Regular</output>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="details">
+    <div class="section-head">
+      <span class="label">Construction · ExtraBold outlines</span>
+      <h2>Four details on a familiar skeleton</h2>
+      <p>The proportions follow Inter and SF Pro: a 540-unit x-height on a 720 cap height, flat horizontal terminals and nearly even strokes. Everything that makes it feel engineered comes from four rules.</p>
+    </div>
+    <div class="details">
+<figure class="detail"><div class="outline"><svg viewBox="-40 -660 696 720" role="img" aria-label="Outline of o"><g class="metrics"><line x1="-736" x2="1352" y1="-760" y2="-760"/><line x1="-736" x2="1352" y1="-720" y2="-720"/><line x1="-736" x2="1352" y1="-540" y2="-540"/><line x1="-736" x2="1352" y1="0" y2="0"/><line x1="-736" x2="1352" y1="200" y2="200"/><line class="adv" x1="0" x2="0" y1="-1380" y2="780"/><line class="adv" x1="616" x2="616" y1="-1380" y2="780"/></g><g transform="scale(1,-1)"><path class="ink" d="M575 270C575 489 517 550 308 550C99 550 41 489 41 270C41 51 99 -10 308 -10C517 -10 575 51 575 270ZM407 270C407 133 391 107 308 107C225 107 209 133 209 270C209 407 225 433 308 433C391 433 407 407 407 270Z"/><g class="handles"><line x1="575" y1="270" x2="575" y2="489"/><line x1="517" y1="550" x2="308" y2="550"/><line x1="308" y1="550" x2="99" y2="550"/><line x1="41" y1="489" x2="41" y2="270"/><line x1="41" y1="270" x2="41" y2="51"/><line x1="99" y1="-10" x2="308" y2="-10"/><line x1="308" y1="-10" x2="517" y2="-10"/><line x1="575" y1="51" x2="575" y2="270"/><line x1="407" y1="270" x2="407" y2="133"/><line x1="391" y1="107" x2="308" y2="107"/><line x1="308" y1="107" x2="225" y2="107"/><line x1="209" y1="133" x2="209" y2="270"/><line x1="209" y1="270" x2="209" y2="407"/><line x1="225" y1="433" x2="308" y2="433"/><line x1="308" y1="433" x2="391" y2="433"/><line x1="407" y1="407" x2="407" y2="270"/></g><g class="off"><circle cx="575" cy="489" r="5.1"/><circle cx="517" cy="550" r="5.1"/><circle cx="99" cy="550" r="5.1"/><circle cx="41" cy="489" r="5.1"/><circle cx="41" cy="51" r="5.1"/><circle cx="99" cy="-10" r="5.1"/><circle cx="517" cy="-10" r="5.1"/><circle cx="575" cy="51" r="5.1"/><circle cx="407" cy="133" r="5.1"/><circle cx="391" cy="107" r="5.1"/><circle cx="225" cy="107" r="5.1"/><circle cx="209" cy="133" r="5.1"/><circle cx="209" cy="407" r="5.1"/><circle cx="225" cy="433" r="5.1"/><circle cx="391" cy="433" r="5.1"/><circle cx="407" cy="407" r="5.1"/></g><g class="on"><rect x="568.7" y="263.7" width="12.7" height="12.7"/><rect x="301.7" y="543.7" width="12.7" height="12.7"/><rect x="34.7" y="263.7" width="12.7" height="12.7"/><rect x="301.7" y="-16.3" width="12.7" height="12.7"/><rect x="568.7" y="263.7" width="12.7" height="12.7"/><rect x="400.7" y="263.7" width="12.7" height="12.7"/><rect x="301.7" y="100.7" width="12.7" height="12.7"/><rect x="202.7" y="263.7" width="12.7" height="12.7"/><rect x="301.7" y="426.7" width="12.7" height="12.7"/><rect x="400.7" y="263.7" width="12.7" height="12.7"/></g></g></svg></div><figcaption><h3>Squircle curves</h3><p>Every round contour is a superellipse (exponent 3.0 outside, 3.4 in the counter): the squared-off roundness of SF Pro pushed further.</p><span class="tag">o · ExtraBold 800</span></figcaption></figure>
+<figure class="detail"><div class="outline"><svg viewBox="-93.41999999999999 -666.36 421.2 421.2" role="img" aria-label="Outline of n"><g class="metrics"><line x1="-514.62" x2="748.98" y1="-760" y2="-760"/><line x1="-514.62" x2="748.98" y1="-720" y2="-720"/><line x1="-514.62" x2="748.98" y1="-540" y2="-540"/><line x1="-514.62" x2="748.98" y1="0" y2="0"/><line x1="-514.62" x2="748.98" y1="200" y2="200"/><line class="adv" x1="0" x2="0" y1="-1087.56" y2="176.03999999999996"/><line class="adv" x1="648" x2="648" y1="-1087.56" y2="176.03999999999996"/></g><g transform="scale(1,-1)"><path class="ink" d="M54 0H216V322L204 385L230 387C245 422 274 431 324 431C418 431 436 399 436 227V0H598V227C598 478 545 548 353 548C296 548 251 542 216 527V540H112L54 482Z"/><g class="handles"><line x1="230" y1="387" x2="245" y2="422"/><line x1="274" y1="431" x2="324" y2="431"/><line x1="324" y1="431" x2="418" y2="431"/><line x1="436" y1="399" x2="436" y2="227"/><line x1="598" y1="227" x2="598" y2="478"/><line x1="545" y1="548" x2="353" y2="548"/><line x1="353" y1="548" x2="296" y2="548"/><line x1="251" y1="542" x2="216" y2="527"/></g><g class="off"><circle cx="245" cy="422" r="3.1"/><circle cx="274" cy="431" r="3.1"/><circle cx="418" cy="431" r="3.1"/><circle cx="436" cy="399" r="3.1"/><circle cx="598" cy="478" r="3.1"/><circle cx="545" cy="548" r="3.1"/><circle cx="296" cy="548" r="3.1"/><circle cx="251" cy="542" r="3.1"/></g><g class="on"><rect x="50.2" y="-3.8" width="7.7" height="7.7"/><rect x="212.2" y="-3.8" width="7.7" height="7.7"/><rect x="212.2" y="318.2" width="7.7" height="7.7"/><rect x="200.2" y="381.2" width="7.7" height="7.7"/><rect x="226.2" y="383.2" width="7.7" height="7.7"/><rect x="320.2" y="427.2" width="7.7" height="7.7"/><rect x="432.2" y="223.2" width="7.7" height="7.7"/><rect x="432.2" y="-3.8" width="7.7" height="7.7"/><rect x="594.2" y="-3.8" width="7.7" height="7.7"/><rect x="594.2" y="223.2" width="7.7" height="7.7"/><rect x="349.2" y="544.2" width="7.7" height="7.7"/><rect x="212.2" y="523.2" width="7.7" height="7.7"/><rect x="212.2" y="536.2" width="7.7" height="7.7"/><rect x="108.2" y="536.2" width="7.7" height="7.7"/><rect x="50.2" y="478.2" width="7.7" height="7.7"/></g></g></svg></div><figcaption><h3>Chamfered stroke ends</h3><p>Free stem tops and curve terminals are clipped at 45°. The leg is 0.36 of the stem (58 units at ExtraBold), so the cut keeps its proportion at every weight.</p><span class="tag">n · ExtraBold 800</span></figcaption></figure>
+<figure class="detail"><div class="outline"><svg viewBox="62.099999999999994 -516.24 307.8 307.8" role="img" aria-label="Outline of n"><g class="metrics"><line x1="-245.70000000000002" x2="677.7" y1="-760" y2="-760"/><line x1="-245.70000000000002" x2="677.7" y1="-720" y2="-720"/><line x1="-245.70000000000002" x2="677.7" y1="-540" y2="-540"/><line x1="-245.70000000000002" x2="677.7" y1="0" y2="0"/><line x1="-245.70000000000002" x2="677.7" y1="200" y2="200"/><line class="adv" x1="0" x2="0" y1="-824.04" y2="99.36000000000001"/><line class="adv" x1="648" x2="648" y1="-824.04" y2="99.36000000000001"/></g><g transform="scale(1,-1)"><path class="ink" d="M54 0H216V322L204 385L230 387C245 422 274 431 324 431C418 431 436 399 436 227V0H598V227C598 478 545 548 353 548C296 548 251 542 216 527V540H112L54 482Z"/><g class="handles"><line x1="230" y1="387" x2="245" y2="422"/><line x1="274" y1="431" x2="324" y2="431"/><line x1="324" y1="431" x2="418" y2="431"/><line x1="436" y1="399" x2="436" y2="227"/><line x1="598" y1="227" x2="598" y2="478"/><line x1="545" y1="548" x2="353" y2="548"/><line x1="353" y1="548" x2="296" y2="548"/><line x1="251" y1="542" x2="216" y2="527"/></g><g class="off"><circle cx="245" cy="422" r="2.4"/><circle cx="274" cy="431" r="2.4"/><circle cx="418" cy="431" r="2.4"/><circle cx="436" cy="399" r="2.4"/><circle cx="598" cy="478" r="2.4"/><circle cx="545" cy="548" r="2.4"/><circle cx="296" cy="548" r="2.4"/><circle cx="251" cy="542" r="2.4"/></g><g class="on"><rect x="51.0" y="-3.0" width="6.0" height="6.0"/><rect x="213.0" y="-3.0" width="6.0" height="6.0"/><rect x="213.0" y="319.0" width="6.0" height="6.0"/><rect x="201.0" y="382.0" width="6.0" height="6.0"/><rect x="227.0" y="384.0" width="6.0" height="6.0"/><rect x="321.0" y="428.0" width="6.0" height="6.0"/><rect x="433.0" y="224.0" width="6.0" height="6.0"/><rect x="433.0" y="-3.0" width="6.0" height="6.0"/><rect x="595.0" y="-3.0" width="6.0" height="6.0"/><rect x="595.0" y="224.0" width="6.0" height="6.0"/><rect x="350.0" y="545.0" width="6.0" height="6.0"/><rect x="213.0" y="524.0" width="6.0" height="6.0"/><rect x="213.0" y="537.0" width="6.0" height="6.0"/><rect x="109.0" y="537.0" width="6.0" height="6.0"/><rect x="51.0" y="479.0" width="6.0" height="6.0"/></g></g></svg></div><figcaption><h3>Ink traps</h3><p>Acute joins are notched. The trap grows with weight, from 7 units at Light to 53 at ExtraBold, so heavy text keeps its crotches open.</p><span class="tag">n · ExtraBold 800</span></figcaption></figure>
+<figure class="detail"><div class="outline"><svg viewBox="-85.0 -800 440 440" role="img" aria-label="Outline of i"><g class="metrics"><line x1="-525.0" x2="795.0" y1="-760" y2="-760"/><line x1="-525.0" x2="795.0" y1="-720" y2="-720"/><line x1="-525.0" x2="795.0" y1="-540" y2="-540"/><line x1="-525.0" x2="795.0" y1="0" y2="0"/><line x1="-525.0" x2="795.0" y1="200" y2="200"/><line class="adv" x1="0" x2="0" y1="-1240" y2="80"/><line class="adv" x1="270" x2="270" y1="-1240" y2="80"/></g><g transform="scale(1,-1)"><path class="ink" d="M54 0H216V540H112L54 482ZM55 600H180L215 635V760H90L55 725Z"/><g class="handles"></g><g class="off"></g><g class="on"><rect x="50.0" y="-4.0" width="8.0" height="8.0"/><rect x="212.0" y="-4.0" width="8.0" height="8.0"/><rect x="212.0" y="536.0" width="8.0" height="8.0"/><rect x="108.0" y="536.0" width="8.0" height="8.0"/><rect x="50.0" y="478.0" width="8.0" height="8.0"/><rect x="51.0" y="596.0" width="8.0" height="8.0"/><rect x="176.0" y="596.0" width="8.0" height="8.0"/><rect x="211.0" y="631.0" width="8.0" height="8.0"/><rect x="211.0" y="756.0" width="8.0" height="8.0"/><rect x="86.0" y="756.0" width="8.0" height="8.0"/><rect x="51.0" y="721.0" width="8.0" height="8.0"/></g></g></svg></div><figcaption><h3>Square dots</h3><p>Dots are squares with two opposing chamfers, shared by i, j and all punctuation.</p><span class="tag">i · ExtraBold 800</span></figcaption></figure>
+    </div>
+  </section>
+
+  <section id="weights">
+    <div class="section-head">
+      <span class="label">Weights</span>
+      <h2>Six weights, one variable axis</h2>
+      <p>Every outline is computed from the stem width, so the static weights and the variable font come from the same drawing.</p>
+    </div>
+    <ol class="waterfall" id="waterfall"></ol>
+  </section>
+
+  <section id="tester-section">
+    <div class="section-head">
+      <span class="label">Type tester</span>
+      <h2>Try it</h2>
+    </div>
+    <div class="tester-controls">
+      <div class="control">
+        <label class="label" for="tSize">Size</label>
+        <div class="control-row"><input type="range" id="tSize" min="14" max="160" value="56"><output id="tSizeOut" for="tSize">56 px</output></div>
+      </div>
+      <div class="control">
+        <label class="label" for="tWeight">Weight</label>
+        <div class="control-row"><input type="range" id="tWeight" min="300" max="800" value="400"><output id="tWeightOut" for="tWeight">400</output></div>
+      </div>
+      <div class="toggles" role="group" aria-label="OpenType features">
+        <button class="toggle" type="button" data-feat="ss01" aria-pressed="false">ss01 single-storey a</button>
+        <button class="toggle" type="button" data-feat="ss02" aria-pressed="false">ss02 distinct I l</button>
+        <button class="toggle" type="button" data-feat="zero" aria-pressed="false">zero slashed</button>
+        <button class="toggle" type="button" data-feat="case" aria-pressed="false">case forms</button>
+        <button class="toggle" type="button" data-feat="tnum" aria-pressed="false">tnum tabular</button>
+      </div>
+    </div>
+    <div class="tester" id="tester" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Type tester">Quarterly sync: 1,024 nodes online — latency 0.42 ms (−18%). Ship build Il1 at 09:30?</div>
+  </section>
+
+  <section id="compare">
+    <div class="section-head">
+      <span class="label">Next to its references</span>
+      <h2>Close to Inter and SF Pro, sharper at the edges</h2>
+      <p>The third row uses your system UI face, which is SF Pro on Apple devices.</p>
+    </div>
+    <div class="compare">
+      <div class="row kernel"><span class="label">Kernel Sans</span><span class="text">Hamburgefonstiv 2048</span></div>
+      <div class="row inter"><span class="label">Inter</span><span class="text">Hamburgefonstiv 2048</span></div>
+      <div class="row system"><span class="label">System UI</span><span class="text">Hamburgefonstiv 2048</span></div>
+    </div>
+  </section>
+
+  <section id="glyphs">
+    <div class="section-head">
+      <span class="label">Character set · 239 encoded</span>
+      <h2>Glyphs</h2>
+      <p>Basic Latin, Latin-1, Windows-1252 punctuation, arrows and math. Select a glyph to see it on its metrics.</p>
+    </div>
+    <div class="glyph-layout">
+      <div class="glyph-groups" id="glyphGroups"></div>
+      <aside class="inspector" aria-live="polite">
+        <svg id="inspSvg" viewBox="-80 -1000 900 1300" role="img" aria-label="Selected glyph on its metrics"></svg>
+        <dl>
+          <dt>Name</dt><dd id="iName"></dd>
+          <dt>Unicode</dt><dd id="iCode"></dd>
+          <dt>Advance</dt><dd id="iAdv"></dd>
+        </dl>
+        <div class="weight-pick" id="inspWeights" role="group" aria-label="Inspector weight"></div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="use">
+    <div class="section-head">
+      <span class="label">In use · sample data</span>
+      <h2>Built for interfaces</h2>
+      <p>Figures are proportional in running text. Tables and counters turn on <code>tnum</code> (<code>font-variant-numeric: tabular-nums</code>) so columns line up.</p>
+    </div>
+    <div class="ui">
+      <div class="ui-head"><h3>Build pipeline</h3><span class="mono">Last 24 hours</span></div>
+      <div class="stats">
+        <div class="stat"><span class="k">Builds</span><span class="v">1,284</span></div>
+        <div class="stat"><span class="k">Pass rate</span><span class="v">98.6%</span></div>
+        <div class="stat"><span class="k">p95 duration</span><span class="v">4:17</span></div>
+        <div class="stat"><span class="k">Queue</span><span class="v">07</span></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Run</th><th>Branch</th><th>Status</th><th class="num">Duration</th><th class="num">Tests</th></tr></thead>
+          <tbody>
+            <tr><td>#40918</td><td>main</td><td><span class="pill ok">Passed</span></td><td class="num">3:42</td><td class="num">11,806</td></tr>
+            <tr><td>#40917</td><td>feat/search-index</td><td><span class="pill ok">Passed</span></td><td class="num">4:09</td><td class="num">11,794</td></tr>
+            <tr><td>#40916</td><td>fix/offline-sync</td><td><span class="pill bad">Failed</span></td><td class="num">1:58</td><td class="num">6,210</td></tr>
+            <tr><td>#40915</td><td>main</td><td><span class="pill ok">Passed</span></td><td class="num">3:51</td><td class="num">11,790</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="section-head">
+      <span class="label">Install</span>
+      <h2>Use it on the web</h2>
+      <p>Files live in <code>tooling/fonts/kernel-sans/fonts/</code>: the variable font in <code>variable/</code> and each static weight as <code>otf/</code>, <code>ttf/</code> and <code>woff2/</code>.</p>
+    </div>
+    <div class="install">
+      <div class="code">
+        <pre id="cssSnippet">@font-face {
+  font-family: "Kernel Sans";
+  src: url("KernelSans[wght].woff2") format("woff2");
+  font-weight: 300 800;
+  font-display: swap;
+}
+
+body {
+  font-family: "Kernel Sans", system-ui, sans-serif;
+}</pre>
+        <button class="toggle copy" type="button" id="copyCss">Copy</button>
+      </div>
+      <table class="features">
+        <tbody>
+          <tr><td>kern</td><td>Class kerning</td></tr>
+          <tr><td>liga</td><td>fi and fl ligatures</td></tr>
+          <tr><td>ss01</td><td>Single-storey a</td></tr>
+          <tr><td>ss02</td><td>Serifed I and tailed l, distinct from 1</td></tr>
+          <tr><td>calt</td><td>Colon raised between figures (09:30); dashes and math raised between capitals or figures (2026-10-30, A–Z)</td></tr>
+          <tr><td>zero</td><td>Slashed zero</td></tr>
+          <tr><td>tnum</td><td>Tabular figures for tables and counters</td></tr>
+          <tr><td>case</td><td>Brackets, dashes and guillemets raised for capitals</td></tr>
+          <tr><td>wght</td><td>Variable weight 300–800; named instances Light to ExtraBold</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <p class="mono">Kernel Sans 1.000 · generated by tooling/fonts/kernel-sans</p>
+  </footer>
+</div>
+
+<script id="data" type="application/json">{"weights":{"300":"Light","400":"Regular","500":"Medium","600":"SemiBold","700":"Bold","800":"ExtraBold"},"stems":{"300":64,"400":82,"500":98,"600":117,"700":139,"800":162},"metrics":{"upm":1000,"cap":720,"xh":540,"asc":760,"desc":-200},"glyphs":[{"n":"exclam","u":33,"w":{"300":235,"400":243,"500":257,"600":275,"700":295,"800":316}},{"n":"quotedbl","u":34,"w":{"300":373,"400":407,"500":437,"600":472,"700":513,"800":556}},{"n":"numbersign","u":35,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"dollar","u":36,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"percent","u":37,"w":{"300":786,"400":800,"500":813,"600":828,"700":846,"800":864}},{"n":"ampersand","u":38,"w":{"300":612,"400":624,"500":634,"600":645,"700":659,"800":673}},{"n":"quotesingle","u":39,"w":{"300":246,"400":254,"500":261,"600":270,"700":280,"800":291}},{"n":"parenleft","u":40,"w":{"300":319,"400":320,"500":327,"600":335,"700":344,"800":355}},{"n":"parenright","u":41,"w":{"300":319,"400":320,"500":327,"600":335,"700":344,"800":355}},{"n":"asterisk","u":42,"w":{"300":457,"400":457,"500":462,"600":469,"700":476,"800":482}},{"n":"plus","u":43,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"comma","u":44,"w":{"300":235,"400":243,"500":257,"600":275,"700":295,"800":316}},{"n":"hyphen","u":45,"w":{"300":392,"400":395,"500":398,"600":401,"700":405,"800":409}},{"n":"period","u":46,"w":{"300":235,"400":243,"500":257,"600":275,"700":295,"800":316}},{"n":"slash","u":47,"w":{"300":371,"400":380,"500":388,"600":398,"700":408,"800":420}},{"n":"zero","u":48,"w":{"300":584,"400":588,"500":591,"600":595,"700":599,"800":604}},{"n":"one","u":49,"w":{"300":387,"400":406,"500":423,"600":443,"700":467,"800":491}},{"n":"two","u":50,"w":{"300":587,"400":593,"500":599,"600":605,"700":613,"800":621}},{"n":"three","u":51,"w":{"300":566,"400":572,"500":576,"600":582,"700":588,"800":594}},{"n":"four","u":52,"w":{"300":613,"400":620,"500":626,"600":633,"700":641,"800":650}},{"n":"five","u":53,"w":{"300":566,"400":569,"500":572,"600":575,"700":579,"800":583}},{"n":"six","u":54,"w":{"300":582,"400":586,"500":590,"600":594,"700":599,"800":604}},{"n":"seven","u":55,"w":{"300":539,"400":546,"500":552,"600":560,"700":569,"800":578}},{"n":"eight","u":56,"w":{"300":590,"400":594,"500":598,"600":602,"700":607,"800":612}},{"n":"nine","u":57,"w":{"300":582,"400":586,"500":590,"600":594,"700":599,"800":604}},{"n":"colon","u":58,"w":{"300":235,"400":243,"500":257,"600":275,"700":295,"800":316}},{"n":"semicolon","u":59,"w":{"300":235,"400":243,"500":257,"600":275,"700":295,"800":316}},{"n":"less","u":60,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"equal","u":61,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"greater","u":62,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"question","u":63,"w":{"300":494,"400":511,"500":525,"600":542,"700":562,"800":583}},{"n":"at","u":64,"w":{"300":924,"400":946,"500":965,"600":988,"700":1014,"800":1042}},{"n":"A","u":65,"w":{"300":667,"400":686,"500":703,"600":724,"700":748,"800":772}},{"n":"B","u":66,"w":{"300":630,"400":638,"500":644,"600":652,"700":661,"800":671}},{"n":"C","u":67,"w":{"300":706,"400":710,"500":714,"600":719,"700":724,"800":729}},{"n":"D","u":68,"w":{"300":702,"400":704,"500":706,"600":708,"700":711,"800":714}},{"n":"E","u":69,"w":{"300":601,"400":603,"500":605,"600":607,"700":610,"800":613}},{"n":"F","u":70,"w":{"300":583,"400":584,"500":586,"600":587,"700":589,"800":591}},{"n":"G","u":71,"w":{"300":737,"400":741,"500":745,"600":749,"700":755,"800":760}},{"n":"H","u":72,"w":{"300":705,"400":712,"500":718,"600":726,"700":735,"800":744}},{"n":"I","u":73,"w":{"300":231,"400":240,"500":247,"600":256,"700":267,"800":277}},{"n":"J","u":74,"w":{"300":550,"400":554,"500":558,"600":562,"700":568,"800":573}},{"n":"K","u":75,"w":{"300":653,"400":668,"500":681,"600":697,"700":716,"800":735}},{"n":"L","u":76,"w":{"300":546,"400":548,"500":549,"600":551,"700":553,"800":555}},{"n":"M","u":77,"w":{"300":846,"400":862,"500":876,"600":894,"700":913,"800":934}},{"n":"N","u":78,"w":{"300":725,"400":732,"500":738,"600":746,"700":755,"800":764}},{"n":"O","u":79,"w":{"300":765,"400":770,"500":774,"600":779,"700":784,"800":790}},{"n":"P","u":80,"w":{"300":615,"400":622,"500":628,"600":635,"700":643,"800":652}},{"n":"Q","u":81,"w":{"300":765,"400":770,"500":774,"600":779,"700":784,"800":790}},{"n":"R","u":82,"w":{"300":616,"400":624,"500":631,"600":640,"700":650,"800":660}},{"n":"S","u":83,"w":{"300":626,"400":634,"500":640,"600":647,"700":656,"800":665}},{"n":"T","u":84,"w":{"300":644,"400":649,"500":654,"600":659,"700":665,"800":672}},{"n":"U","u":85,"w":{"300":710,"400":714,"500":718,"600":723,"700":728,"800":734}},{"n":"V","u":86,"w":{"300":667,"400":686,"500":703,"600":724,"700":748,"800":772}},{"n":"W","u":87,"w":{"300":923,"400":946,"500":966,"600":991,"700":1019,"800":1048}},{"n":"X","u":88,"w":{"300":637,"400":656,"500":673,"600":694,"700":718,"800":742}},{"n":"Y","u":89,"w":{"300":638,"400":656,"500":672,"600":690,"700":712,"800":734}},{"n":"Z","u":90,"w":{"300":640,"400":649,"500":657,"600":667,"700":678,"800":690}},{"n":"bracketleft","u":91,"w":{"300":346,"400":348,"500":355,"600":364,"700":375,"800":386}},{"n":"backslash","u":92,"w":{"300":371,"400":380,"500":388,"600":398,"700":408,"800":420}},{"n":"bracketright","u":93,"w":{"300":346,"400":348,"500":355,"600":364,"700":375,"800":386}},{"n":"asciicircum","u":94,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"underscore","u":95,"w":{"300":495,"400":500,"500":505,"600":510,"700":517,"800":524}},{"n":"grave","u":96,"w":{"300":239,"400":248,"500":256,"600":266,"700":278,"800":290}},{"n":"a","u":97,"w":{"300":560,"400":565,"500":569,"600":574,"700":580,"800":586}},{"n":"b","u":98,"w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"c","u":99,"w":{"300":545,"400":549,"500":552,"600":556,"700":561,"800":565}},{"n":"d","u":100,"w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"e","u":101,"w":{"300":572,"400":578,"500":583,"600":589,"700":596,"800":603}},{"n":"f","u":102,"w":{"300":363,"400":372,"500":380,"600":389,"700":400,"800":411}},{"n":"g","u":103,"w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"h","u":104,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"i","u":105,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"j","u":106,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"k","u":107,"w":{"300":511,"400":530,"500":547,"600":567,"700":590,"800":614}},{"n":"l","u":108,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"m","u":109,"w":{"300":874,"400":890,"500":905,"600":922,"700":943,"800":964}},{"n":"n","u":110,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"o","u":111,"w":{"300":587,"400":592,"500":597,"600":603,"700":609,"800":616}},{"n":"p","u":112,"w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"q","u":113,"w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"r","u":114,"w":{"300":367,"400":383,"500":396,"600":412,"700":430,"800":449}},{"n":"s","u":115,"w":{"300":525,"400":530,"500":534,"600":539,"700":545,"800":551}},{"n":"t","u":116,"w":{"300":321,"400":332,"500":342,"600":353,"700":366,"800":380}},{"n":"u","u":117,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"v","u":118,"w":{"300":542,"400":556,"500":568,"600":582,"700":599,"800":616}},{"n":"w","u":119,"w":{"300":782,"400":806,"500":828,"600":853,"700":883,"800":914}},{"n":"x","u":120,"w":{"300":516,"400":530,"500":543,"600":558,"700":576,"800":594}},{"n":"y","u":121,"w":{"300":542,"400":556,"500":568,"600":582,"700":599,"800":616}},{"n":"z","u":122,"w":{"300":495,"400":505,"500":515,"600":526,"700":538,"800":552}},{"n":"braceleft","u":123,"w":{"300":327,"400":347,"500":372,"600":401,"700":435,"800":471}},{"n":"bar","u":124,"w":{"300":280,"400":285,"500":291,"600":297,"700":304,"800":311}},{"n":"braceright","u":125,"w":{"300":327,"400":347,"500":372,"600":401,"700":435,"800":471}},{"n":"asciitilde","u":126,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"exclamdown","u":161,"w":{"300":235,"400":243,"500":257,"600":275,"700":295,"800":316}},{"n":"cent","u":162,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"sterling","u":163,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"currency","u":164,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"yen","u":165,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"brokenbar","u":166,"w":{"300":280,"400":285,"500":291,"600":297,"700":304,"800":311}},{"n":"section","u":167,"w":{"300":533,"400":546,"500":557,"600":571,"700":586,"800":602}},{"n":"dieresis","u":168,"w":{"300":374,"400":394,"500":411,"600":432,"700":456,"800":446}},{"n":"copyright","u":169,"w":{"300":858,"400":852,"500":846,"600":839,"700":831,"800":823}},{"n":"ordfeminine","u":170,"w":{"300":398,"400":407,"500":419,"600":431,"700":434,"800":427}},{"n":"guillemotleft","u":171,"w":{"300":449,"400":481,"500":509,"600":542,"700":581,"800":621}},{"n":"logicalnot","u":172,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"registered","u":174,"w":{"300":672,"400":667,"500":663,"600":659,"700":654,"800":648}},{"n":"macron","u":175,"w":{"300":309,"400":316,"500":322,"600":329,"700":337,"800":346}},{"n":"degree","u":176,"w":{"300":356,"400":360,"500":363,"600":367,"700":372,"800":376}},{"n":"plusminus","u":177,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"twosuperior","u":178,"w":{"300":395,"400":400,"500":405,"600":410,"700":417,"800":424}},{"n":"threesuperior","u":179,"w":{"300":395,"400":400,"500":405,"600":410,"700":417,"800":424}},{"n":"acute","u":180,"w":{"300":239,"400":248,"500":256,"600":266,"700":278,"800":290}},{"n":"mu","u":181,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"paragraph","u":182,"w":{"300":560,"400":585,"500":601,"600":619,"700":640,"800":662}},{"n":"periodcentered","u":183,"w":{"300":235,"400":243,"500":257,"600":275,"700":295,"800":316}},{"n":"cedilla","u":184,"w":{"300":212,"400":224,"500":235,"600":247,"700":262,"800":278}},{"n":"onesuperior","u":185,"w":{"300":395,"400":400,"500":405,"600":410,"700":417,"800":424}},{"n":"ordmasculine","u":186,"w":{"300":418,"400":423,"500":431,"600":439,"700":440,"800":433}},{"n":"guillemotright","u":187,"w":{"300":449,"400":481,"500":509,"600":542,"700":581,"800":621}},{"n":"onequarter","u":188,"w":{"300":873,"400":900,"500":924,"600":952,"700":986,"800":1020}},{"n":"onehalf","u":189,"w":{"300":873,"400":900,"500":924,"600":952,"700":986,"800":1020}},{"n":"threequarters","u":190,"w":{"300":873,"400":900,"500":924,"600":952,"700":986,"800":1020}},{"n":"questiondown","u":191,"w":{"300":494,"400":511,"500":525,"600":542,"700":562,"800":583}},{"n":"Agrave","u":192,"w":{"300":667,"400":686,"500":703,"600":724,"700":748,"800":772}},{"n":"Aacute","u":193,"w":{"300":667,"400":686,"500":703,"600":724,"700":748,"800":772}},{"n":"Acircumflex","u":194,"w":{"300":667,"400":686,"500":703,"600":724,"700":748,"800":772}},{"n":"Atilde","u":195,"w":{"300":667,"400":686,"500":703,"600":724,"700":748,"800":772}},{"n":"Adieresis","u":196,"w":{"300":667,"400":686,"500":703,"600":724,"700":748,"800":772}},{"n":"Aring","u":197,"w":{"300":667,"400":686,"500":703,"600":724,"700":748,"800":772}},{"n":"AE","u":198,"w":{"300":892,"400":915,"500":935,"600":959,"700":987,"800":1016}},{"n":"Ccedilla","u":199,"w":{"300":706,"400":710,"500":714,"600":719,"700":724,"800":729}},{"n":"Egrave","u":200,"w":{"300":601,"400":603,"500":605,"600":607,"700":610,"800":613}},{"n":"Eacute","u":201,"w":{"300":601,"400":603,"500":605,"600":607,"700":610,"800":613}},{"n":"Ecircumflex","u":202,"w":{"300":601,"400":603,"500":605,"600":607,"700":610,"800":613}},{"n":"Edieresis","u":203,"w":{"300":601,"400":603,"500":605,"600":607,"700":610,"800":613}},{"n":"Igrave","u":204,"w":{"300":231,"400":240,"500":247,"600":256,"700":267,"800":277}},{"n":"Iacute","u":205,"w":{"300":231,"400":240,"500":247,"600":256,"700":267,"800":277}},{"n":"Icircumflex","u":206,"w":{"300":231,"400":240,"500":247,"600":256,"700":267,"800":277}},{"n":"Idieresis","u":207,"w":{"300":231,"400":240,"500":247,"600":256,"700":267,"800":277}},{"n":"Eth","u":208,"w":{"300":719,"400":727,"500":735,"600":744,"700":754,"800":765}},{"n":"Ntilde","u":209,"w":{"300":725,"400":732,"500":738,"600":746,"700":755,"800":764}},{"n":"Ograve","u":210,"w":{"300":765,"400":770,"500":774,"600":779,"700":784,"800":790}},{"n":"Oacute","u":211,"w":{"300":765,"400":770,"500":774,"600":779,"700":784,"800":790}},{"n":"Ocircumflex","u":212,"w":{"300":765,"400":770,"500":774,"600":779,"700":784,"800":790}},{"n":"Otilde","u":213,"w":{"300":765,"400":770,"500":774,"600":779,"700":784,"800":790}},{"n":"Odieresis","u":214,"w":{"300":765,"400":770,"500":774,"600":779,"700":784,"800":790}},{"n":"multiply","u":215,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"Oslash","u":216,"w":{"300":765,"400":770,"500":774,"600":779,"700":784,"800":790}},{"n":"Ugrave","u":217,"w":{"300":710,"400":714,"500":718,"600":723,"700":728,"800":734}},{"n":"Uacute","u":218,"w":{"300":710,"400":714,"500":718,"600":723,"700":728,"800":734}},{"n":"Ucircumflex","u":219,"w":{"300":710,"400":714,"500":718,"600":723,"700":728,"800":734}},{"n":"Udieresis","u":220,"w":{"300":710,"400":714,"500":718,"600":723,"700":728,"800":734}},{"n":"Yacute","u":221,"w":{"300":638,"400":656,"500":672,"600":690,"700":712,"800":734}},{"n":"Thorn","u":222,"w":{"300":606,"400":614,"500":621,"600":629,"700":638,"800":648}},{"n":"germandbls","u":223,"w":{"300":621,"400":631,"500":640,"600":650,"700":662,"800":675}},{"n":"agrave","u":224,"w":{"300":560,"400":565,"500":569,"600":574,"700":580,"800":586}},{"n":"aacute","u":225,"w":{"300":560,"400":565,"500":569,"600":574,"700":580,"800":586}},{"n":"acircumflex","u":226,"w":{"300":560,"400":565,"500":569,"600":574,"700":580,"800":586}},{"n":"atilde","u":227,"w":{"300":560,"400":565,"500":569,"600":574,"700":580,"800":586}},{"n":"adieresis","u":228,"w":{"300":560,"400":565,"500":569,"600":574,"700":580,"800":586}},{"n":"aring","u":229,"w":{"300":560,"400":565,"500":569,"600":574,"700":580,"800":586}},{"n":"ae","u":230,"w":{"300":910,"400":910,"500":910,"600":909,"700":909,"800":908}},{"n":"ccedilla","u":231,"w":{"300":545,"400":549,"500":552,"600":556,"700":561,"800":565}},{"n":"egrave","u":232,"w":{"300":572,"400":578,"500":583,"600":589,"700":596,"800":603}},{"n":"eacute","u":233,"w":{"300":572,"400":578,"500":583,"600":589,"700":596,"800":603}},{"n":"ecircumflex","u":234,"w":{"300":572,"400":578,"500":583,"600":589,"700":596,"800":603}},{"n":"edieresis","u":235,"w":{"300":572,"400":578,"500":583,"600":589,"700":596,"800":603}},{"n":"igrave","u":236,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"iacute","u":237,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"icircumflex","u":238,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"idieresis","u":239,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"eth","u":240,"w":{"300":579,"400":584,"500":589,"600":594,"700":601,"800":608}},{"n":"ntilde","u":241,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"ograve","u":242,"w":{"300":587,"400":592,"500":597,"600":603,"700":609,"800":616}},{"n":"oacute","u":243,"w":{"300":587,"400":592,"500":597,"600":603,"700":609,"800":616}},{"n":"ocircumflex","u":244,"w":{"300":587,"400":592,"500":597,"600":603,"700":609,"800":616}},{"n":"otilde","u":245,"w":{"300":587,"400":592,"500":597,"600":603,"700":609,"800":616}},{"n":"odieresis","u":246,"w":{"300":587,"400":592,"500":597,"600":603,"700":609,"800":616}},{"n":"divide","u":247,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"oslash","u":248,"w":{"300":587,"400":592,"500":597,"600":602,"700":609,"800":616}},{"n":"ugrave","u":249,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"uacute","u":250,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"ucircumflex","u":251,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"udieresis","u":252,"w":{"300":587,"400":598,"500":608,"600":620,"700":634,"800":648}},{"n":"yacute","u":253,"w":{"300":542,"400":556,"500":568,"600":582,"700":599,"800":616}},{"n":"thorn","u":254,"w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"ydieresis","u":255,"w":{"300":542,"400":556,"500":568,"600":582,"700":599,"800":616}},{"n":"dotlessi","u":305,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"OE","u":338,"w":{"300":1011,"400":1015,"500":1019,"600":1023,"700":1028,"800":1033}},{"n":"oe","u":339,"w":{"300":946,"400":945,"500":945,"600":944,"700":943,"800":942}},{"n":"Scaron","u":352,"w":{"300":626,"400":634,"500":640,"600":647,"700":656,"800":665}},{"n":"scaron","u":353,"w":{"300":525,"400":530,"500":534,"600":539,"700":545,"800":551}},{"n":"Ydieresis","u":376,"w":{"300":638,"400":656,"500":672,"600":690,"700":712,"800":734}},{"n":"Zcaron","u":381,"w":{"300":640,"400":649,"500":657,"600":667,"700":678,"800":690}},{"n":"zcaron","u":382,"w":{"300":495,"400":505,"500":515,"600":526,"700":538,"800":552}},{"n":"florin","u":402,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"uni0237","u":567,"w":{"300":211,"400":222,"500":232,"600":243,"700":256,"800":270}},{"n":"circumflex","u":710,"w":{"300":314,"400":330,"500":344,"600":360,"700":380,"800":400}},{"n":"caron","u":711,"w":{"300":314,"400":330,"500":344,"600":360,"700":380,"800":400}},{"n":"breve","u":728,"w":{"300":288,"400":300,"500":311,"600":323,"700":338,"800":354}},{"n":"dotaccent","u":729,"w":{"300":179,"400":189,"500":199,"600":209,"700":222,"800":218}},{"n":"ring","u":730,"w":{"300":246,"400":250,"500":260,"600":272,"700":285,"800":300}},{"n":"ogonek","u":731,"w":{"300":215,"400":228,"500":239,"600":252,"700":268,"800":284}},{"n":"tilde","u":732,"w":{"300":332,"400":350,"500":365,"600":384,"700":405,"800":428}},{"n":"hungarumlaut","u":733,"w":{"300":370,"400":394,"500":416,"600":441,"700":471,"800":502}},{"n":"endash","u":8211,"w":{"300":496,"400":500,"500":503,"600":507,"700":511,"800":516}},{"n":"emdash","u":8212,"w":{"300":1000,"400":1000,"500":1000,"600":1000,"700":1000,"800":1000}},{"n":"quoteleft","u":8216,"w":{"300":219,"400":229,"500":238,"600":249,"700":262,"800":275}},{"n":"quoteright","u":8217,"w":{"300":219,"400":229,"500":238,"600":249,"700":262,"800":275}},{"n":"quotesinglbase","u":8218,"w":{"300":198,"400":209,"500":219,"600":230,"700":244,"800":258}},{"n":"quotedblleft","u":8220,"w":{"300":396,"400":428,"500":456,"600":490,"700":529,"800":569}},{"n":"quotedblright","u":8221,"w":{"300":396,"400":428,"500":456,"600":490,"700":529,"800":569}},{"n":"quotedblbase","u":8222,"w":{"300":375,"400":407,"500":436,"600":471,"700":510,"800":552}},{"n":"dagger","u":8224,"w":{"300":433,"400":442,"500":450,"600":459,"700":469,"800":480}},{"n":"daggerdbl","u":8225,"w":{"300":433,"400":442,"500":450,"600":459,"700":469,"800":480}},{"n":"bullet","u":8226,"w":{"300":366,"400":376,"500":385,"600":396,"700":408,"800":421}},{"n":"ellipsis","u":8230,"w":{"300":673,"400":718,"500":766,"600":823,"700":889,"800":958}},{"n":"perthousand","u":8240,"w":{"300":1088,"400":1105,"500":1121,"600":1139,"700":1160,"800":1182}},{"n":"guilsinglleft","u":8249,"w":{"300":301,"400":314,"500":326,"600":341,"700":357,"800":374}},{"n":"guilsinglright","u":8250,"w":{"300":301,"400":314,"500":326,"600":341,"700":357,"800":374}},{"n":"fraction","u":8260,"w":{"300":405,"400":417,"500":431,"600":447,"700":455,"800":455}},{"n":"Euro","u":8364,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"trademark","u":8482,"w":{"300":630,"400":641,"500":651,"600":663,"700":676,"800":691}},{"n":"arrowleft","u":8592,"w":{"300":798,"400":800,"500":802,"600":804,"700":806,"800":808}},{"n":"arrowup","u":8593,"w":{"300":440,"400":467,"500":484,"600":502,"700":519,"800":532}},{"n":"arrowright","u":8594,"w":{"300":798,"400":800,"500":802,"600":804,"700":806,"800":808}},{"n":"arrowdown","u":8595,"w":{"300":440,"400":467,"500":484,"600":502,"700":519,"800":532}},{"n":"arrowboth","u":8596,"w":{"300":958,"400":960,"500":962,"600":964,"700":966,"800":968}},{"n":"uni2197","u":8599,"w":{"300":711,"400":712,"500":713,"600":714,"700":715,"800":717}},{"n":"uni2198","u":8600,"w":{"300":711,"400":712,"500":713,"600":714,"700":715,"800":717}},{"n":"minus","u":8722,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"infinity","u":8734,"w":{"300":684,"400":696,"500":707,"600":720,"700":735,"800":750}},{"n":"approxequal","u":8776,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"notequal","u":8800,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"lessequal","u":8804,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"greaterequal","u":8805,"w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"f_i","u":64257,"w":{"300":574,"400":594,"500":611,"600":632,"700":656,"800":681}},{"n":"f_l","u":64258,"w":{"300":574,"400":594,"500":611,"600":632,"700":656,"800":681}}],"alternates":[{"n":"a.ss01","u":97,"f":"ss01","w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"l.ss02","u":108,"f":"ss02","w":{"300":238,"400":256,"500":272,"600":291,"700":313,"800":336}},{"n":"I.ss02","u":73,"f":"ss02","w":{"300":432,"400":446,"500":459,"600":474,"700":491,"800":509}},{"n":"zero.tf","u":48,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"one.tf","u":49,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"two.tf","u":50,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"three.tf","u":51,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"four.tf","u":52,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"five.tf","u":53,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"six.tf","u":54,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"seven.tf","u":55,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"eight.tf","u":56,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"nine.tf","u":57,"f":"tnum","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"zero.zero","u":48,"f":"zero","w":{"300":584,"400":588,"500":591,"600":595,"700":599,"800":604}},{"n":"plus.case","u":43,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"minus.case","u":8722,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"multiply.case","u":215,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"divide.case","u":247,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"equal.case","u":61,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"plusminus.case","u":177,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"less.case","u":60,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"greater.case","u":62,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"lessequal.case","u":8804,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"greaterequal.case","u":8805,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"notequal.case","u":8800,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"asciitilde.case","u":126,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"approxequal.case","u":8776,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"logicalnot.case","u":172,"f":"case","w":{"300":591,"400":600,"500":608,"600":618,"700":628,"800":640}},{"n":"colon.case","u":58,"f":"case","w":{"300":235,"400":243,"500":257,"600":275,"700":295,"800":316}},{"n":"guilsinglleft.case","u":8249,"f":"case","w":{"300":301,"400":314,"500":326,"600":341,"700":357,"800":374}},{"n":"guilsinglright.case","u":8250,"f":"case","w":{"300":301,"400":314,"500":326,"600":341,"700":357,"800":374}},{"n":"guillemotleft.case","u":171,"f":"case","w":{"300":449,"400":481,"500":509,"600":542,"700":581,"800":621}},{"n":"guillemotright.case","u":187,"f":"case","w":{"300":449,"400":481,"500":509,"600":542,"700":581,"800":621}},{"n":"hyphen.case","u":45,"f":"case","w":{"300":392,"400":395,"500":398,"600":401,"700":405,"800":409}},{"n":"endash.case","u":8211,"f":"case","w":{"300":496,"400":500,"500":503,"600":507,"700":511,"800":516}},{"n":"emdash.case","u":8212,"f":"case","w":{"300":1000,"400":1000,"500":1000,"600":1000,"700":1000,"800":1000}},{"n":"parenleft.case","u":40,"f":"case","w":{"300":319,"400":320,"500":327,"600":335,"700":344,"800":355}},{"n":"parenright.case","u":41,"f":"case","w":{"300":319,"400":320,"500":327,"600":335,"700":344,"800":355}},{"n":"bracketleft.case","u":91,"f":"case","w":{"300":346,"400":348,"500":355,"600":364,"700":375,"800":386}},{"n":"bracketright.case","u":93,"f":"case","w":{"300":346,"400":348,"500":355,"600":364,"700":375,"800":386}},{"n":"braceleft.case","u":123,"f":"case","w":{"300":327,"400":347,"500":372,"600":401,"700":435,"800":471}},{"n":"braceright.case","u":125,"f":"case","w":{"300":327,"400":347,"500":372,"600":401,"700":435,"800":471}},{"n":"bullet.case","u":8226,"f":"case","w":{"300":366,"400":376,"500":385,"600":396,"700":408,"800":421}},{"n":"arrowright.case","u":8594,"f":"case","w":{"300":798,"400":800,"500":802,"600":804,"700":806,"800":808}},{"n":"arrowleft.case","u":8592,"f":"case","w":{"300":798,"400":800,"500":802,"600":804,"700":806,"800":808}},{"n":"arrowboth.case","u":8596,"f":"case","w":{"300":958,"400":960,"500":962,"600":964,"700":966,"800":968}},{"n":"uni2197.case","u":8599,"f":"case","w":{"300":711,"400":712,"500":713,"600":714,"700":715,"800":717}},{"n":"uni2198.case","u":8600,"f":"case","w":{"300":711,"400":712,"500":713,"600":714,"700":715,"800":717}},{"n":"grave.case","u":96,"f":"case","w":{"300":250,"400":260,"500":269,"600":280,"700":293,"800":306}},{"n":"acute.case","u":180,"f":"case","w":{"300":250,"400":260,"500":269,"600":280,"700":293,"800":306}},{"n":"circumflex.case","u":710,"f":"case","w":{"300":350,"400":366,"500":380,"600":396,"700":416,"800":436}},{"n":"caron.case","u":711,"f":"case","w":{"300":350,"400":366,"500":380,"600":396,"700":416,"800":436}},{"n":"tilde.case","u":732,"f":"case","w":{"300":354,"400":372,"500":387,"600":406,"700":427,"800":450}},{"n":"dieresis.case","u":168,"f":"case","w":{"300":383,"400":403,"500":420,"600":441,"700":465,"800":455}},{"n":"dotaccent.case","u":729,"f":"case","w":{"300":179,"400":189,"500":199,"600":209,"700":222,"800":218}},{"n":"macron.case","u":175,"f":"case","w":{"300":333,"400":340,"500":346,"600":353,"700":361,"800":370}},{"n":"ring.case","u":730,"f":"case","w":{"300":247,"400":254,"500":262,"600":272,"700":284,"800":296}},{"n":"breve.case","u":728,"f":"case","w":{"300":312,"400":324,"500":335,"600":347,"700":362,"800":378}},{"n":"hungarumlaut.case","u":733,"f":"case","w":{"300":391,"400":417,"500":440,"600":466,"700":498,"800":530}},{"n":"agrave.ss01","u":224,"f":"ss01","w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"aacute.ss01","u":225,"f":"ss01","w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"acircumflex.ss01","u":226,"f":"ss01","w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"atilde.ss01","u":227,"f":"ss01","w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"adieresis.ss01","u":228,"f":"ss01","w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"aring.ss01","u":229,"f":"ss01","w":{"300":615,"400":619,"500":623,"600":628,"700":633,"800":639}},{"n":"Igrave.ss02","u":204,"f":"ss02","w":{"300":432,"400":446,"500":459,"600":474,"700":491,"800":509}},{"n":"Iacute.ss02","u":205,"f":"ss02","w":{"300":432,"400":446,"500":459,"600":474,"700":491,"800":509}},{"n":"Icircumflex.ss02","u":206,"f":"ss02","w":{"300":432,"400":446,"500":459,"600":474,"700":491,"800":509}},{"n":"Idieresis.ss02","u":207,"f":"ss02","w":{"300":432,"400":446,"500":459,"600":474,"700":491,"800":509}}]}</script>
+<script>
+(function () {
+  var data = JSON.parse(document.getElementById("data").textContent);
+  var M = data.metrics;
+  var WEIGHTS = Object.keys(data.weights).map(Number).sort(function (a, b) { return a - b; });
+  var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function weightName(w) {
+    var best = WEIGHTS[0];
+    WEIGHTS.forEach(function (k) { if (Math.abs(k - w) < Math.abs(best - w)) best = k; });
+    return Math.abs(best - w) < 1 ? data.weights[best] : "";
+  }
+
+  /* Hero metric lines: the word's line box is 1.2em with the baseline 0.96em down. */
+  var stage = document.getElementById("stage");
+  var word = document.getElementById("heroWord");
+  function placeLines() {
+    var size = parseFloat(getComputedStyle(word).fontSize);
+    stage.querySelectorAll(".mline").forEach(function (el) {
+      var m = Number(el.dataset.m);
+      el.style.top = (size * (0.96 - m / 1000)) + "px";
+    });
+  }
+  placeLines();
+  window.addEventListener("resize", placeLines);
+
+  var heroW = document.getElementById("heroW");
+  var heroOut = document.getElementById("heroWOut");
+  function setHero(w) {
+    word.style.fontWeight = w;
+    heroW.value = w;
+    var n = weightName(w);
+    heroOut.textContent = Math.round(w) + (n ? " " + n : "");
+  }
+  var stopped = false;
+  heroW.addEventListener("input", function () { stopped = true; setHero(Number(heroW.value)); });
+  setHero(400);
+  if (!reduceMotion) {
+    var t0 = null;
+    var keys = [[0, 400], [0.15, 300], [0.55, 800], [1, 400]];
+    var dur = 2600;
+    heroW.addEventListener("pointerdown", function () { stopped = true; });
+    var ease = function (t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+    requestAnimationFrame(function step(ts) {
+      if (stopped) return;
+      if (t0 === null) t0 = ts;
+      var t = Math.min(1, (ts - t0) / dur);
+      for (var i = 0; i < keys.length - 1; i++) {
+        if (t >= keys[i][0] && t <= keys[i + 1][0]) {
+          var u = (t - keys[i][0]) / (keys[i + 1][0] - keys[i][0]);
+          setHero(keys[i][1] + (keys[i + 1][1] - keys[i][1]) * ease(u));
+        }
+      }
+      if (t < 1) requestAnimationFrame(step); else setHero(400);
+    });
+  }
+
+  /* Weights */
+  var wf = document.getElementById("waterfall");
+  WEIGHTS.forEach(function (w) {
+    var li = document.createElement("li");
+    li.innerHTML = '<span class="meta"><b></b><span class="mono"></span></span><span class="sample">Packets drift through quiet fiber at 02:47</span>';
+    li.querySelector("b").textContent = data.weights[w];
+    li.querySelector(".mono").textContent = w + " · stem " + data.stems[w];
+    li.querySelector(".sample").style.fontWeight = w;
+    wf.appendChild(li);
+  });
+
+  /* Tester */
+  var tester = document.getElementById("tester");
+  var tSize = document.getElementById("tSize"), tSizeOut = document.getElementById("tSizeOut");
+  var tWeight = document.getElementById("tWeight"), tWeightOut = document.getElementById("tWeightOut");
+  var feats = {};
+  function applyTester() {
+    tester.style.fontSize = tSize.value + "px";
+    tSizeOut.textContent = tSize.value + " px";
+    tester.style.fontWeight = tWeight.value;
+    var n = weightName(Number(tWeight.value));
+    tWeightOut.textContent = tWeight.value + (n ? " " + n : "");
+    var on = Object.keys(feats).filter(function (k) { return feats[k]; });
+    tester.style.fontFeatureSettings = on.length ? on.map(function (k) { return '"' + k + '" 1'; }).join(", ") : "normal";
+  }
+  tSize.addEventListener("input", applyTester);
+  tWeight.addEventListener("input", applyTester);
+  document.querySelectorAll(".toggle[data-feat]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      feats[b.dataset.feat] = on;
+      applyTester();
+    });
+  });
+  applyTester();
+
+  /* Glyph set */
+  var groups = [
+    ["Uppercase", function (c) { return /^[A-Z]$/.test(c); }],
+    ["Lowercase", function (c) { return /^[a-z]$/.test(c); }],
+    ["Figures", function (c) { return /^[0-9]$/.test(c); }],
+    ["Accented and extended letters", function (c) { return /\p{L}/u.test(c); }],
+    ["Punctuation, symbols and arrows", function () { return true; }],
+  ];
+  var items = data.glyphs.map(function (g) { return { g: g, c: String.fromCodePoint(g.u), feat: null }; });
+  var alts = data.alternates.map(function (g) { return { g: g, c: String.fromCodePoint(g.u), feat: g.f }; });
+  var host = document.getElementById("glyphGroups");
+  var cells = [];
+  var assigned = new Set();
+  function addGroup(title, list) {
+    if (!list.length) return;
+    var sec = document.createElement("div");
+    sec.className = "glyph-group";
+    var h = document.createElement("h3");
+    h.textContent = title + " · " + list.length;
+    var grid = document.createElement("div");
+    grid.className = "grid";
+    list.forEach(function (it) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "cell";
+      b.textContent = it.c;
+      if (it.feat) b.style.fontFeatureSettings = '"' + it.feat + '" 1';
+      b.setAttribute("aria-label", it.g.n);
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () { select(it, b); });
+      grid.appendChild(b);
+      cells.push(b);
+    });
+    sec.appendChild(h);
+    sec.appendChild(grid);
+    host.appendChild(sec);
+  }
+  groups.forEach(function (gr) {
+    var list = items.filter(function (it) { return !assigned.has(it) && gr[1](it.c); });
+    list.forEach(function (it) { assigned.add(it); });
+    addGroup(gr[0], list);
+  });
+  addGroup("Alternates", alts);
+
+  var inspWeight = 400, current = null, currentBtn = null;
+  var svg = document.getElementById("inspSvg");
+  var NS = "http://www.w3.org/2000/svg";
+  function el(name, attrs, text) {
+    var e = document.createElementNS(NS, name);
+    Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function select(it, btn) {
+    current = it;
+    if (currentBtn) currentBtn.setAttribute("aria-pressed", "false");
+    currentBtn = btn;
+    if (btn) btn.setAttribute("aria-pressed", "true");
+    drawInspector();
+  }
+  function drawInspector() {
+    if (!current) return;
+    var adv = current.g.w[String(inspWeight)];
+    var W = Math.max(adv + 300, 1100);
+    var x0 = (W - adv) / 2;
+    svg.setAttribute("viewBox", "0 -1000 " + W + " 1300");
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    [[M.asc, "asc"], [M.cap, "cap"], [M.xh, "x"], [0, "0"], [M.desc, "desc"]].forEach(function (m) {
+      svg.appendChild(el("line", { x1: 0, x2: W, y1: -m[0], y2: -m[0] }));
+      svg.appendChild(el("text", { "class": "ml", x: 8, y: -m[0] - 8 }, m[1]));
+    });
+    svg.appendChild(el("line", { "class": "adv", x1: x0, x2: x0, y1: -1000, y2: 300 }));
+    svg.appendChild(el("line", { "class": "adv", x1: x0 + adv, x2: x0 + adv, y1: -1000, y2: 300 }));
+    var t = el("text", { "class": "g", x: x0, y: 0, "font-size": 1000 }, current.c);
+    t.style.fontWeight = inspWeight;
+    if (current.feat) t.style.fontFeatureSettings = '"' + current.feat + '" 1';
+    svg.appendChild(t);
+    document.getElementById("iName").textContent = current.g.n;
+    document.getElementById("iCode").textContent = current.feat
+      ? "U+" + current.g.u.toString(16).toUpperCase().padStart(4, "0") + " + " + current.feat
+      : "U+" + current.g.u.toString(16).toUpperCase().padStart(4, "0");
+    document.getElementById("iAdv").textContent = adv + " units at " + inspWeight + " " + data.weights[inspWeight];
+  }
+  var pick = document.getElementById("inspWeights");
+  WEIGHTS.forEach(function (w) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "toggle";
+    b.textContent = w;
+    b.setAttribute("aria-pressed", w === inspWeight ? "true" : "false");
+    b.addEventListener("click", function () {
+      inspWeight = w;
+      pick.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      drawInspector();
+    });
+    pick.appendChild(b);
+  });
+  var startIdx = items.findIndex(function (it) { return it.c === "a"; });
+  var start = startIdx >= 0 ? startIdx : 0;
+  if (items.length) {
+    var firstBtn = cells.find(function (c) { return c.getAttribute("aria-label") === items[start].g.n; });
+    select(items[start], firstBtn);
+  }
+
+  /* Copy */
+  var copyBtn = document.getElementById("copyCss");
+  copyBtn.addEventListener("click", function () {
+    var text = document.getElementById("cssSnippet").textContent;
+    function selectIt() {
+      var r = document.createRange();
+      r.selectNodeContents(document.getElementById("cssSnippet"));
+      var s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(r);
+      copyBtn.textContent = "Selected";
+    }
+    try {
+      navigator.clipboard.writeText(text).then(function () { copyBtn.textContent = "Copied"; }, selectIt);
+    } catch (e) { selectIt(); }
+    setTimeout(function () { copyBtn.textContent = "Copy"; }, 1800);
+  });
+})();
+</script>
