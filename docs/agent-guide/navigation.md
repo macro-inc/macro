@@ -40,7 +40,9 @@ A `vite:preloadError` (a lazy chunk or its CSS failed, usually after a deploy)
 reloads the tab right away, once per build per tab session, when it is online,
 holds no call or upload, and has no text being typed. Otherwise, and on a second
 failure in the same build, the rail's update button (a toast on touch layouts)
-offers the reload.
+offers the reload; the offer reloads a hidden tab by itself only if that build's
+one automatic reload is unspent. A failed route chunk can still end on the
+root error screen, which hides the offer.
 
 ## External links in the native app
 
