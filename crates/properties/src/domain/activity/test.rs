@@ -27,6 +27,7 @@ fn update(actor: Option<MacroUserIdStr<'static>>) -> EntityPropertyUpdatedMetada
         actor_user_id: actor,
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),

@@ -1,6 +1,6 @@
 # Type Alias: RefreshCalendarEvent
 
-> **RefreshCalendarEvent** = \{ `event`: `"synced"`; `link_id`: `string`; `team_ooo_changed`: `boolean`; \} \| \{ `event`: `"team_sharing_changed"`; `team_ooo_changed`: `boolean`; \}
+> **RefreshCalendarEvent** = \{ `event`: `"synced"`; `link_id`: `string`; `team_ooo_changed`: `boolean`; \} \| \{ `event`: `"team_sharing_changed"`; `team_ooo_changed`: `boolean`; \} \| \{ `event`: `"join_request_answered"`; `event_id`: `string`; \}
 
 Realtime signal that a connected inbox's calendar projection changed.
 
@@ -26,3 +26,14 @@ Realtime signal that a connected inbox's calendar projection changed.
 | ------ | ------ | ------ |
 | `event` | `"team_sharing_changed"` | - |
 | `team_ooo_changed` | `boolean` | True for sharing changes and any possibly affected OOO projection. |
+
+***
+
+### Type Literal
+
+\{ `event`: `"join_request_answered"`; `event_id`: `string`; \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `event` | `"join_request_answered"` | - |
+| `event_id` | `string` | The shared event they asked to join. |

@@ -8,6 +8,7 @@ import Plus from '@icon/system/regular/plus.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
+import { ProjectLinkPill } from '@property/component/ProjectLinkPill';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import {
   PropertiesProvider,
@@ -17,6 +18,7 @@ import {
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
   Property,
@@ -613,6 +615,11 @@ function SidePanelPropertyRow(props: {
                   fallback={
                     <SinglePill
                       getEmptyLabel={props.getEmptyLabel}
+                      opensProject={
+                        ctx.entityType === 'TASK' &&
+                        props.property.propertyDefinitionId ===
+                          SYSTEM_PROPERTY_IDS.PROJECT
+                      }
                       property={property()}
                     />
                   }
@@ -664,6 +671,7 @@ function SidePanelPropertyRow(props: {
 
 function SinglePill(props: {
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
+  opensProject?: boolean;
   property: Property;
 }) {
   const empty = () => !hasValue(props.property);
@@ -682,37 +690,43 @@ function SinglePill(props: {
     }
   );
 
-  return (
-    <PropertyNS.Tooltip property={props.property}>
-      <PropertyNS.Pill class="w-fit overflow-hidden">
+  const pill = () => (
+    <PropertyNS.Pill class="w-fit overflow-hidden">
+      <Show
+        when={!empty()}
+        fallback={
+          <SidePanel.EmptyPill label={props.getEmptyLabel?.(props.property)} />
+        }
+      >
         <Show
-          when={!empty()}
+          when={isNonUserEntity() && entity()}
           fallback={
-            <SidePanel.EmptyPill
-              label={props.getEmptyLabel?.(props.property)}
-            />
+            <>
+              <PropertyNS.Icon
+                property={props.property}
+                class="size-3 shrink-0"
+              />
+              <PropertyNS.Text property={props.property} class="min-w-0" />
+            </>
           }
         >
-          <Show
-            when={isNonUserEntity() && entity()}
-            fallback={
-              <>
-                <PropertyNS.Icon
-                  property={props.property}
-                  class="size-3 shrink-0"
-                />
-                <PropertyNS.Text property={props.property} class="min-w-0" />
-              </>
-            }
-          >
-            <span class="shrink-0 flex items-center">
-              {entityDisplay.icon()}
-            </span>
-            <span class="min-w-0 truncate">{entityDisplay.name()}</span>
-          </Show>
+          <span class="shrink-0 flex items-center">{entityDisplay.icon()}</span>
+          <span class="min-w-0 truncate">{entityDisplay.name()}</span>
         </Show>
-        <PropertyNS.Caret />
-      </PropertyNS.Pill>
+      </Show>
+      <PropertyNS.Caret />
+    </PropertyNS.Pill>
+  );
+
+  return (
+    <PropertyNS.Tooltip property={props.property}>
+      <Show when={props.opensProject} fallback={pill()}>
+        <ProjectLinkPill
+          property={props.property}
+          variant="ghost"
+          fallback={pill()}
+        />
+      </Show>
     </PropertyNS.Tooltip>
   );
 }

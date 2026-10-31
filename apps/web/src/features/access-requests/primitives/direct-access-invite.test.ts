@@ -15,6 +15,7 @@ it('grants view access by Macro email and preserves the address when the write f
       }),
       grants: () => [],
       loading: () => false,
+      notFound: () => false,
       busy: () => false,
       error: () => undefined,
       refresh: async () => undefined,

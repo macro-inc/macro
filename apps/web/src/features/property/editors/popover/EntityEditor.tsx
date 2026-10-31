@@ -52,6 +52,7 @@ function createEntityEditorDraft() {
   const [selectedRefs, setSelectedRefs] =
     createSignal<EntityReference[]>(initialRefs);
   const [dirty, setDirty] = createSignal(false);
+  const pickedNames = new Map<string, string>();
 
   const refsEqual = (a: EntityReference[], b: EntityReference[]) => {
     if (a.length !== b.length) return false;
@@ -72,7 +73,7 @@ function createEntityEditorDraft() {
         refs: refs.length > 0 ? refs : null,
       };
       try {
-        await ctx.onSave?.(property, apiValues);
+        await ctx.onSave?.(property, apiValues, pickedNames);
       } catch {
         // mutation onError owns toast
       }
@@ -83,7 +84,11 @@ function createEntityEditorDraft() {
   return {
     property,
     selectedRefs,
-    select: (refs: EntityReference[]) => {
+    select: (
+      refs: EntityReference[],
+      picked: readonly { id: string; name: string }[] = []
+    ) => {
+      for (const { id, name } of picked) pickedNames.set(id, name);
       setSelectedRefs(refs);
       setDirty(true);
     },
@@ -146,7 +151,8 @@ function EntityEditorSelector(
                 props.draft.selectedRefs(),
                 newOptions,
                 entityInfo
-              )
+              ),
+              entityInfo
             );
           }}
           onClose={props.draft.closeAndSave}

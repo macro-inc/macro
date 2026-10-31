@@ -1,4 +1,5 @@
 use super::*;
+use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 
 // ---------------------------------------------------------------------------
 // MacroTaskId::from_short_uuid
@@ -629,6 +630,130 @@ fn pull_request_task_reference_falls_back_to_the_macro_id() {
     let reference = pull_request_task_reference(&task, Some(&unreadable));
     assert_eq!(reference, format!("MACRO-{SHORT_UUID_A}"));
     assert_eq!(MacroTaskId::extract_from_text(&reference), [task]);
+}
+
+#[test]
+fn task_status_source_names_who_merged_over_the_webhook_sender() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "closed",
+            "pull_request": {
+                "merged": true,
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "merged_by": { "login": "merger", "id": 333 }
+            },
+            "sender": { "login": "automation", "id": 444 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "333".to_string(),
+                login: "merger".to_string(),
+            },
+        })
+    );
+}
+
+#[test]
+fn task_status_source_falls_back_to_the_sender_on_an_open_pull_request() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "opened",
+            "pull_request": {
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "merged_by": null
+            },
+            "sender": { "login": "opener", "id": 444 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "444".to_string(),
+                login: "opener".to_string(),
+            },
+        })
+    );
+}
+
+#[test]
+fn task_status_source_reads_the_pull_request_from_a_comment_event() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "pull_request": { "url": "https://api.github.com/repos/my-org/my-repo/pulls/42" }
+            },
+            "sender": { "login": "commenter", "id": 555 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "555".to_string(),
+                login: "commenter".to_string(),
+            },
+        })
+    );
+}
+
+#[test]
+fn task_status_source_is_none_for_a_comment_on_a_plain_issue() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "issue_comment".to_string(),
+        serde_json::json!({
+            "action": "created",
+            "issue": {
+                "html_url": "https://github.com/my-org/my-repo/issues/42",
+                "state": "open"
+            },
+            "sender": { "login": "commenter", "id": 555 }
+        }),
+    );
+
+    assert_eq!(event.task_status_for_event(), Some("In Review"));
+    assert_eq!(event.task_status_source(), None);
+}
+
+#[test]
+fn task_status_source_names_the_editor_of_an_already_merged_pull_request() {
+    let event = ValidatedGithubWebhookEvent::new(
+        "pull_request".to_string(),
+        serde_json::json!({
+            "action": "edited",
+            "pull_request": {
+                "merged": true,
+                "html_url": "https://github.com/my-org/my-repo/pull/42",
+                "merged_by": { "login": "merger", "id": 333 }
+            },
+            "sender": { "login": "editor", "id": 444 }
+        }),
+    );
+
+    assert_eq!(
+        event.task_status_source(),
+        Some(PropertyChangeSource::GithubPullRequest {
+            url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+            account: GithubAccount {
+                id: "444".to_string(),
+                login: "editor".to_string(),
+            },
+        })
+    );
 }
 
 #[test]

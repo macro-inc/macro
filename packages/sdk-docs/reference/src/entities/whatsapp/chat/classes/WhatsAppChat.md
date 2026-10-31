@@ -17,8 +17,9 @@ One chat of the current user's WhatsApp chat list: a group or a direct chat.
 | <a id="property-community"></a> `community` | `readonly` | () => `Promise`\<[`WhatsAppCommunity`](../type-aliases/WhatsAppCommunity.md) \| `undefined`\> | The WhatsApp community a group belongs to, if any: the community's own chat, its name, and whether this is its announcement group. | - |
 | <a id="property-id"></a> `id` | `public readonly` | `string` | - | [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`id`](../../../entity/classes/MacroEntity.md#property-id) |
 | <a id="property-kind"></a> `kind` | `readonly` | () => `Promise`\<[`ExternalChatKind`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatKind.md)\> | `group` or `direct`. | - |
-| <a id="property-lastactivityat"></a> `lastActivityAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | Newest activity WhatsApp reported, when known. | - |
+| <a id="property-lastactivityat"></a> `lastActivityAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | Newest activity WhatsApp reported; unknown for saved contacts never written to. | - |
 | <a id="property-name"></a> `name` | `readonly` | () => `Promise`\<`string`\> | Group subject (or member names), or the other person's name or number. | - |
+| <a id="property-phonenumber"></a> `phoneNumber` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | The other person's phone number (`+<digits>`) of a direct chat, when known. | - |
 | <a id="property-pinned"></a> `pinned` | `readonly` | () => `Promise`\<`boolean`\> | Pinned in WhatsApp. | - |
 | <a id="property-shared"></a> `shared` | `readonly` | () => `Promise`\<[`ExternalChat`](../../../external-chat/chat/classes/ExternalChat.md) \| `undefined`\> | Someone else's external chat for this chat, shared with the current user. | - |
 

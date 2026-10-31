@@ -55,6 +55,12 @@ tools — hexagonal, heavily feature-gated.
 ## Gotchas
 
 - Treat DATE property literals as non-matches; apply ordinary boolean negation and keep non-date email filtering unchanged.
+- All Mail excludes present messages in spam/junk or trash before pagination;
+  canonical cached previews and non-draft baselines use the same rule for Gmail
+  labels and Outlook mailbox facts. Mixed threads show their latest eligible message.
+  Synced Macro drafts in junk/trash must not advance All Mail timestamps.
+  Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
+  ordered, limited scans; do not add a separate whole-mailbox sort.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.

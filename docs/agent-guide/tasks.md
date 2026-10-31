@@ -94,7 +94,14 @@ to read the full value.
 The Projects collection reuses a single Due date column and hides Updated in compact panes.
 Property controls retain their selected values in accessible names when compact styles hide the text.
 The project pill beneath a task title shows the project icon and name without
-a `Project:` prefix.
+a `Project:` prefix. It and the Project row in the Properties side panel split in
+two once a project is set: the name opens the project (shift-click for a new
+split, and an already open project is focused instead of opened again), and the
+caret changes the project. Hovering the name turns its icon into an arrow. People
+who can't edit the task get the name alone, so they can still open the project.
+An empty or unavailable project keeps the plain pill, and composers never split it.
+Enter activates a pill or any other document control reached by keyboard. After a
+mouse click, Enter still moves to the editor.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,
@@ -110,9 +117,10 @@ or **Unpin from title**. Pinning adds the property to the title row; unpinning k
 its saved value and the side-panel row. The title pill's hover card also offers
 **Unpin** as a filled icon-only button with a gap: beside the value in a row,
 or beside the key above a full-width divider in a column.
-Status, Priority, and Assignees are pinned by default, with Project when
-enabled. Unpinning a default preserves the other pins, and clearing all pins stays
-cleared after reopening. The empty Project placeholder can also be pinned or
+Status, Priority, Assignees, and Due Date are pinned by default, with Project when
+enabled. Defaults apply only when the task has no saved pin list; customized pins
+stay unchanged. Unpinning a default preserves the other pins, and clearing all pins
+stays cleared after reopening. The empty Project placeholder can also be pinned or
 unpinned without creating an assignment; its pin follows the real assignment when
 one is saved. Builtin task properties cannot be deleted from the title or side panel.
 
@@ -854,7 +862,9 @@ Opening a project without access shows `You don't have access to this project`
 with the same Request access row and access level as documents. The owner
 reviews it under Share's `Permission requests`, and once granted the open
 project loads in place. Losing access while the project is open switches to
-that view. A deleted project shows `Project unavailable` with Try again.
+that view through the project skeleton, without a `Project unavailable` or
+stale `Access requested` flash. A deleted project shows `Project unavailable`
+with Try again, also when it is deleted while its request view is open.
 
 Project information panels start closed and float over the content at every
 width, both in the Tasks project view and standalone initiative blocks. Opening
@@ -998,10 +1008,11 @@ the server returns the new item ID. Use disposable tasks/folders for these check
 
 ## View and edit task properties
 
-An open task shows Status, Priority, and Assignees as property pills below its title. Task
-mentions and document references also show the same three pills in their hover-card preview,
-including properties that do not have a value yet. Click a preview pill to edit it without
-opening the task; the property picker keeps the preview open while you make a selection.
+An open task shows its pinned properties below the title, with Status, Priority,
+Assignees, and Due Date by default, plus Project when enabled. Task mentions and
+document references show Status, Priority, and Assignees in their hover-card preview,
+including properties that do not have a value yet. Click a preview pill to edit it
+without opening the task; the property picker keeps the preview open while you make a selection.
 Users with view or comment access see the same pills read-only.
 
 Each GitHub pull request linked to an open task shows a pill beside its property pills

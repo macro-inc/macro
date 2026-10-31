@@ -26,6 +26,7 @@ use models_properties::api::{
 use models_properties::convert_set_property_value_to_property_value;
 use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
@@ -247,6 +248,7 @@ where
         value: &Option<PropertyValue>,
         previous_value: &Option<PropertyValue>,
         access: &EditReceipt,
+        source: Option<&PropertyChangeSource>,
     ) -> PropertyMacroEvent {
         let PublishedEventActors {
             actor,
@@ -261,6 +263,7 @@ where
             actor_user_id,
             actor,
             on_behalf_of,
+            source: source.cloned(),
             value: value.clone(),
             previous_value: previous_value.clone(),
             updated_at: property.updated_at,
@@ -282,6 +285,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                None,
             ));
         }
     }
@@ -465,6 +469,7 @@ where
                     actor_user_id: Some(actor.clone().into_owned()),
                     actor: None,
                     on_behalf_of: None,
+                    source: None,
                     value: mutation.value.clone(),
                     previous_value: mutation.previous_value.clone(),
                     updated_at: mutation.property.updated_at,
@@ -613,20 +618,32 @@ where
         self.get_property_value(access, property_key.uuid()).await
     }
 
-    #[tracing::instrument(
-        skip(self, access),
-        fields(
-            entity_id = %access.entity_id(),
-            entity_type = ?access.entity_type(),
-            property_definition_id = %property_definition_id,
-            has_value = value.is_some()
-        )
-    )]
     async fn set_entity_property(
         &self,
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
+    ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
+        self.set_entity_property_with_source(access, property_definition_id, value, None)
+            .await
+    }
+
+    #[tracing::instrument(
+        skip(self, access, source),
+        fields(
+            entity_id = %access.entity_id(),
+            entity_type = ?access.entity_type(),
+            property_definition_id = %property_definition_id,
+            has_value = value.is_some(),
+            has_source = source.is_some()
+        )
+    )]
+    async fn set_entity_property_with_source(
+        &self,
+        access: &EditReceipt,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+        source: Option<PropertyChangeSource>,
     ) -> Result<EntityPropertyWithDefinition, PropertiesErr> {
         let subject = self.resolve_subject(access).await?;
         let entity_id = access.entity_id();
@@ -718,6 +735,7 @@ where
                 // value; the activity transition simply omits its "from" side.
                 &None,
                 access,
+                source.as_ref(),
             ));
             return Ok(EntityPropertyWithDefinition {
                 property,
@@ -765,6 +783,7 @@ where
             &property_value,
             &snapshot.previous_value,
             access,
+            source.as_ref(),
         ));
 
         Ok(EntityPropertyWithDefinition {
@@ -838,6 +857,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 task,
+                None,
             ));
         }
         Ok(())
@@ -902,6 +922,7 @@ where
             &mutation.value,
             &mutation.previous_value,
             access,
+            None,
         ));
 
         Ok(())
@@ -940,6 +961,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                None,
             ));
         }
 

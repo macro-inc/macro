@@ -31,6 +31,7 @@ use super::*;
 mod direct_chats;
 mod group_kinds;
 mod message_types;
+mod new_chats;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 /// A test user's id, typed.
@@ -158,6 +159,15 @@ impl World {
             .await
             .expect("the phone sends the initial chat list");
         device
+    }
+
+    /// The owner's Import: their chats waiting for the phone start importing.
+    async fn import_history(&self, user: &str) -> u32 {
+        self.linked
+            .import_history(&person(user), SendAuthority::Human)
+            .await
+            .unwrap()
+            .started
     }
 
     /// Adopts the group for `user` once the replica has listed it.
@@ -1074,6 +1084,13 @@ async fn adding_a_group_imports_its_earlier_messages_once_without_notifying(pool
 
     let binding = world.adopt(ALICE, &[]).await;
     assert_eq!(
+        backfill_state(&world, &binding, &["waiting_for_phone"]).await,
+        ("waiting_for_phone".to_owned(), 0),
+        "adding never asks the phone; the owner imports"
+    );
+    assert_eq!(world.alice.history_requests(), 0);
+    assert_eq!(world.import_history(ALICE).await, 1);
+    assert_eq!(
         backfill_state(&world, &binding, &["done", "partial"]).await,
         ("done".to_owned(), 2)
     );
@@ -1124,6 +1141,9 @@ async fn backfill_waits_for_an_offline_phone_and_never_duplicates_live_messages(
         .unwrap();
     world.alice.answer_history_requests(false);
     let binding = world.adopt(ALICE, &[]).await;
+    backfill_state(&world, &binding, &["waiting_for_phone"]).await;
+    world.import_history(ALICE).await;
+    backfill_state(&world, &binding, &["running"]).await;
 
     // Live while the import waits: kept live, once.
     let live = world
@@ -1136,16 +1156,23 @@ async fn backfill_waits_for_an_offline_phone_and_never_duplicates_live_messages(
         ["live during import"]
     );
     backfill_state(&world, &binding, &["waiting_for_phone"]).await;
+    let asked = world.alice.history_requests();
     let newest = world
         .customer
         .send_text(&world.group, "newest")
         .await
         .unwrap();
     world.timeline(&binding, &newest).await;
+    assert_eq!(
+        world.alice.history_requests(),
+        asked,
+        "an unanswered import is never retried behind the owner's back"
+    );
 
-    // The phone comes back: the import resumes and the page that contains
-    // the live message adds only what was missing.
+    // The phone comes back and the owner imports again: the page that
+    // contains the live message adds only what was missing.
     world.alice.answer_history_requests(true);
+    assert_eq!(world.import_history(ALICE).await, 1);
     backfill_state(&world, &binding, &["done"]).await;
     let stored = wait_for_rows(&world.pool, TIMEOUT, || async {
         let stored = origins(&world.pool, binding.id).await;
@@ -1187,11 +1214,19 @@ async fn a_quiet_group_waits_for_its_first_message_then_imports(pool: PgPool) {
         .unwrap();
     world.timeline(&binding, &first).await;
     assert_eq!(
+        backfill_state(&world, &binding, &["waiting_for_phone"])
+            .await
+            .0,
+        "waiting_for_phone",
+        "the first message makes the chat importable"
+    );
+    world.import_history(ALICE).await;
+    assert_eq!(
         backfill_state(&world, &binding, &["done", "partial"])
             .await
             .0,
         "done",
-        "the first message starts the import, which finds nothing earlier"
+        "the import finds nothing earlier"
     );
     assert_eq!(
         origins(&world.pool, binding.id).await,

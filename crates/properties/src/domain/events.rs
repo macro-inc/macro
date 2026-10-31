@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroPropertiesTopic;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityType, PropertyOwner};
@@ -122,6 +123,9 @@ pub struct EntityPropertyUpdatedMetadata {
     /// [`Self::actor`]. Absent means the actor is also the subject.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+    /// The outside event behind the change, when an integration made it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<PropertyChangeSource>,
     /// Full value after the update, or `None` when cleared without deleting the row.
     pub value: Option<PropertyValue>,
     /// Full value before the update: `None` when the property was newly

@@ -162,6 +162,7 @@ fn topic_events(
                 actor_user_id: actor_user_id.clone(),
                 actor: None,
                 on_behalf_of: None,
+                source: None,
                 value: Some(PropertyValue::SelectOption(vec![uuid(OPTION_ID)])),
                 previous_value: None,
                 updated_at: timestamp(UPDATED_AT),

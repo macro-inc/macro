@@ -309,6 +309,10 @@ the user's newest account for that app from the last fifteen minutes.
 
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
+- All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
+  an excluded preview or timestamp, including synced Macro drafts; Drafts and
+  Sent retain their own canonical membership.
+
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
@@ -449,8 +453,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
 - Mark loaded calendar and agent-session row notifications through the
   notification source (`markRowNotificationsSeenOnOpen`) so read dots update
-  immediately and failed writes roll back; calendar grid selections also mark
-  the canonical event read, excluding team projections.
+  immediately and failed writes roll back; calendar grid selections and links
+  to an event also mark the canonical event read, excluding team projections.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
@@ -482,6 +486,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,
   including an empty unread result after a read on another device.
+- Read folders for picking or moving through `createFolderList`
+  (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
+  folder open in Drive, including a team folder, is always in the list. Keep
+  move rules in `folder-destinations.ts` so the picker and drop targets agree.
+  Create one `createFolderDropTargets` per surface, not per row, so a long
+  folder tree shares its folder list and mutation. Rows learn what a drag
+  carries from `EntityDragSelectionContext`,
+  which `SoupEntityContextMenu` provides; see
+  [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
@@ -848,3 +861,6 @@ The backend-free browser regression is
 Use `features/channel/channel-icon.tsx` for conversation identity in rows,
 favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
 and bot personas share one renderer; keep surface sizing in the caller.
+
+- Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
+- Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.

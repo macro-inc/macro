@@ -62,6 +62,7 @@ fn update() -> EntityPropertyUpdatedMetadata {
         actor_user_id: Some(MacroUserIdStr::try_from_email("assigner@example.com").unwrap()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: value(&["bot|00000000-0000-0000-0000-00000000b07a"]),
         previous_value: None,
         updated_at: Utc::now(),

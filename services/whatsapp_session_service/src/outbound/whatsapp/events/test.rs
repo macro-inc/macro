@@ -1301,3 +1301,5 @@ async fn a_lid_store_failure_is_reported_instead_of_completing_nothing() {
             .is_err()
     );
 }
+
+mod contacts;
