@@ -1,5 +1,6 @@
 import { type ComponentProps, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { SYSTEM_PROPERTY_IDS } from '../constants';
 import { Property } from '../property';
 import { getEntityValues, hasValue } from '../utils';
 import { ProjectLinkPill } from './ProjectLinkPill';
@@ -56,7 +57,14 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                 fallback={
                   <Property.Icon
                     property={property()}
-                    class="size-3 shrink-0"
+                    class={
+                      property().propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.STATUS ||
+                      property().propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.PRIORITY
+                        ? 'size-4 shrink-0'
+                        : 'shrink-0'
+                    }
                   />
                 }
               >
@@ -69,6 +77,7 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
               </Switch>
               <Property.Text
                 property={property()}
+                hideIcon={property().specificEntityType === 'INITIATIVE'}
                 resolveSingleEntity={
                   props.showLabel ||
                   property().specificEntityType === 'INITIATIVE'
@@ -76,6 +85,7 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                 class="min-w-0 max-w-60"
                 fallback={
                   <Property.Empty
+                    propertyDefinitionId={property().propertyDefinitionId}
                     label={props.emptyLabel ?? property().displayName}
                   />
                 }

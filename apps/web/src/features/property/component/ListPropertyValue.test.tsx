@@ -14,7 +14,7 @@ vi.mock('@property', async () => {
         children: (property: () => EntityProperty) => JSX.Element;
       }) => props.children(() => props.property),
       Tooltip: passthrough,
-      EditTrigger: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+      Pill: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
         <button {...props} />
       ),
       Text: PropertyText,

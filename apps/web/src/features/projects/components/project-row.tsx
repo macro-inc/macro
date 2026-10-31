@@ -1,22 +1,35 @@
 import {
   TASK_GRID_COLUMNS,
+  type TaskGridColumnId,
   taskGridTemplate,
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
+import { t } from '@app/lib/i18n';
 import '@app/features/tasks-view/components/task-list/task-list.css';
 import { Entity, MultiSelectCheckbox } from '@entity';
-import StackIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
-import { cn } from '@ui';
-import { For, Show, Suspense } from 'solid-js';
+import { cn, ProgressPill } from '@ui';
+import { For, Match, Show, Suspense, Switch } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
 import { canEditProject } from '../core/project';
 
 // Projects reuse the task grid; its project column holds the due date.
-const gridStyle = taskGridTemplate({ indicator: true, project: true });
+export const PROJECT_GRID_COLUMNS = [
+  'indicator',
+  'content',
+  'status',
+  'priority',
+  'assignees',
+  'initiative',
+  'createdBy',
+  'timestamp',
+] as const satisfies readonly TaskGridColumnId[];
+
+const gridStyle = taskGridTemplate(PROJECT_GRID_COLUMNS);
 const columns = [
   { area: 'content', label: 'Project' },
   ...TASK_GRID_COLUMNS.map((column) => ({
@@ -78,6 +91,13 @@ export function ProjectRow(props: {
       ? ''
       : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
+  const progressLabel = () => {
+    const total = props.row.project.taskCount ?? 0;
+    const completed = props.row.project.completedTaskCount ?? 0;
+    if (total === 0) return t('common.progressNoTasks');
+    if (completed >= total) return t('common.progressAllDone');
+    return t('common.progressTasksDone', { completed, count: total });
+  };
   return (
     <PropertiesProvider
       entityId={props.row.project.id}
@@ -124,7 +144,7 @@ export function ProjectRow(props: {
             placement="content"
             class="flex min-w-0 items-center gap-2 truncate font-medium"
           >
-            <StackIcon class="size-4 shrink-0 text-ink-muted" />
+            <ProjectIcon class="size-4 shrink-0 text-ink-muted" />
             <span class="min-w-0 truncate">{props.row.project.name}</span>
           </Entity.Slot>
           <For each={TASK_GRID_COLUMNS}>
@@ -158,11 +178,20 @@ export function ProjectRow(props: {
             placement="createdBy"
             class="min-w-0 text-xs text-ink-muted @max-[1220px]/u-list:hidden"
           >
-            <span aria-label="Completed tasks">
-              {props.row.project.taskCount === undefined
-                ? '—'
-                : `${props.row.project.completedTaskCount ?? 0}/${props.row.project.taskCount}`}
-            </span>
+            <Switch fallback={<span>—</span>}>
+              <Match
+                when={
+                  props.row.project.taskCount !== undefined &&
+                  props.row.project.completedTaskCount !== undefined
+                }
+              >
+                <ProgressPill
+                  label={progressLabel()}
+                  value={props.row.project.completedTaskCount ?? 0}
+                  max={props.row.project.taskCount ?? 0}
+                />
+              </Match>
+            </Switch>
           </Entity.Slot>
           <Entity.Slot
             placement="timestamp"

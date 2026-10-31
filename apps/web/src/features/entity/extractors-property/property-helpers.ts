@@ -372,19 +372,28 @@ export function buildTaskProjectDefaultProperty(): Property {
 }
 
 /**
- * A task's key properties followed by its Project, or the Project placeholder
- * when the task isn't in a project.
+ * A task's key properties with Project before Assignees, using the Project
+ * placeholder when the task isn't in a project.
  */
 export function withTaskProject(
   keyProperties: Property[],
   properties: Property[]
 ): Property[] {
-  return [
-    ...keyProperties,
+  const project =
     properties.find(
       (property) =>
         property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
-    ) ?? buildTaskProjectDefaultProperty(),
+    ) ?? buildTaskProjectDefaultProperty();
+  const assigneesIndex = keyProperties.findIndex(
+    (property) =>
+      property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES
+  );
+  const projectIndex =
+    assigneesIndex < 0 ? keyProperties.length : assigneesIndex;
+  return [
+    ...keyProperties.slice(0, projectIndex),
+    project,
+    ...keyProperties.slice(projectIndex),
   ];
 }
 

@@ -50,6 +50,8 @@ State ownership, reactivity, and async error handling.
 
 ## Solid patterns
 
+- Use `Switch`/`Match` for mutually exclusive render states instead of nested `Show` fallbacks.
+
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems
   (DOM APIs, third-party libs). If you're using it to derive state or trigger
   updates, use a derived signal or wrap the setter instead.

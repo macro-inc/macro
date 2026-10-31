@@ -1,45 +1,6 @@
-import { cn, Surface } from '@ui';
+import { ProgressRing, Surface } from '@ui';
 import { Show } from 'solid-js';
 import { uploadProgress } from './uploadProgress';
-
-const RING_RADIUS = 6;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-/** Arc length a spinning ring shows when progress can't be measured. */
-const INDETERMINATE_ARC = 0.25;
-
-function ProgressRing(props: { fraction: number | null }) {
-  const offset = () =>
-    RING_CIRCUMFERENCE * (1 - (props.fraction ?? INDETERMINATE_ARC));
-
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      class={cn('size-4 shrink-0', props.fraction === null && 'animate-spin')}
-    >
-      <circle
-        cx="8"
-        cy="8"
-        r={RING_RADIUS}
-        fill="none"
-        stroke-width="2"
-        class="stroke-ink/15"
-      />
-      <circle
-        cx="8"
-        cy="8"
-        r={RING_RADIUS}
-        fill="none"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-dasharray={String(RING_CIRCUMFERENCE)}
-        stroke-dashoffset={offset()}
-        transform="rotate(-90 8 8)"
-        class="stroke-accent transition-[stroke-dashoffset] duration-150 ease-linear"
-      />
-    </svg>
-  );
-}
 
 /** Compact, non-dismissable indicator for every upload in flight. */
 export function UploadProgressIndicator() {

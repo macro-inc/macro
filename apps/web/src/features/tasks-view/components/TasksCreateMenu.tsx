@@ -2,7 +2,7 @@ import { CreateMenuItem } from '@app/components/view-shell/CreateMenuItem';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { t } from '@app/lib/i18n';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg';
-import StackIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
 import SubtaskIcon from '@icon/system/regular/tree-structure.svg';
 import { Dropdown } from '@ui';
@@ -61,7 +61,7 @@ export function TasksCreateMenu(props: {
           <Show when={props.onCreateProject}>
             {(createProject) => (
               <CreateMenuItem
-                icon={StackIcon}
+                icon={ProjectIcon}
                 title={t('create.projectLabel')}
                 description={t('create.guideProject')}
                 onSelect={() => {

@@ -163,7 +163,7 @@ type SelectOptionsProps = {
   onToggleOption: (value: string) => void;
   onAddOption?: (value: string) => Promise<void>;
   /** When provided, renders a "no value" item at the top of the list. */
-  clearOption?: { label: string; onClear: () => void };
+  clearOption?: { label: string; icon?: JSX.Element; onClear: () => void };
   onClose?: () => void;
 };
 
@@ -489,7 +489,9 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                                 showHotkey={dropdown.shouldShowHotkeys()}
                                 hotkeyShortcut="0"
                               >
-                                <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                                {clear().icon ?? (
+                                  <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                                )}
                                 <div class="flex-1 min-w-0 text-left">
                                   <p class="text-ink-muted truncate">
                                     {clear().label}

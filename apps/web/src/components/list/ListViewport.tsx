@@ -1,5 +1,6 @@
 import { createSignal, type JSX, Suspense } from 'solid-js';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import type { VirtualizerHandle } from 'virtua/solid';
+import { StickyVirtualizer } from './StickyVirtualizer';
 
 /** Shared virtual row engine for unified lists. Controllers own focus and paging. */
 export function ListViewport<T>(props: {
@@ -8,6 +9,7 @@ export function ListViewport<T>(props: {
   ref?: (handle?: VirtualizerHandle) => void;
   viewportRef?: (element: HTMLDivElement) => void;
   onScroll?: () => void;
+  isSticky?: (item: T) => boolean;
   children: (item: T) => JSX.Element;
 }) {
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
@@ -20,9 +22,10 @@ export function ListViewport<T>(props: {
       class="min-h-0 flex-1 overflow-auto overscroll-none"
     >
       <Suspense>
-        <Virtualizer
+        <StickyVirtualizer
           ref={props.ref}
           data={props.items}
+          isSticky={props.isSticky}
           scrollRef={viewport()}
           bufferSize={240}
           itemSize={44}
@@ -32,7 +35,7 @@ export function ListViewport<T>(props: {
           onScroll={props.onScroll}
         >
           {(row) => <div>{props.children(row)}</div>}
-        </Virtualizer>
+        </StickyVirtualizer>
       </Suspense>
     </div>
   );

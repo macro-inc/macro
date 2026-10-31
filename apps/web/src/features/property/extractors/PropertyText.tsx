@@ -36,6 +36,8 @@ type Props = {
   text?: string;
   /** Resolve a single linked item to its name instead of showing "1 item". */
   resolveSingleEntity?: boolean;
+  /** Omit the resolved entity icon when the caller renders it separately. */
+  hideIcon?: boolean;
 };
 
 /**
@@ -84,6 +86,7 @@ export function PropertyText(props: Props) {
           entityId={entityId}
           entityType={singleEntity()?.entity_type}
           class={props.class}
+          hideIcon={props.hideIcon}
         />
       )}
     </Show>
@@ -94,6 +97,7 @@ function EntityPropertyText(props: {
   entityId: string;
   entityType: EntityReference['entity_type'] | undefined;
   class?: string;
+  hideIcon?: boolean;
 }) {
   const { name, icon } = usePropertyEntityDisplay(
     () => props.entityId,
@@ -101,12 +105,14 @@ function EntityPropertyText(props: {
   );
   return (
     <span class={cn('inline-flex min-w-0 items-center gap-1.5', props.class)}>
-      <span
-        aria-hidden="true"
-        class="flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
-      >
-        {icon()}
-      </span>
+      <Show when={!props.hideIcon}>
+        <span
+          aria-hidden="true"
+          class="flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
+        >
+          {icon()}
+        </span>
+      </Show>
       <span class="truncate">{name()}</span>
     </span>
   );

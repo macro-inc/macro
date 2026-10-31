@@ -16,6 +16,35 @@ property, not the prop you passed in. Save handlers keep their own caches
 current, so `Property.Root` editors never refetch properties after a save;
 side-panel collections own their refresh (below).
 
+`extractors/PropertyEmpty.tsx` shares empty-value glyphs across task list rows,
+board cards, group and column headers, and pickers: the wide ascending priority
+bars at 30% opacity for no priority, a corner-dashed cube for no project, and a
+filled person in a dashed circular frame for no assignees. No priority uses the
+same color and display box as Low/Medium/High, without additional icon dimming.
+In task and project lists, empty icons other than No priority use 50%
+opacity; empty labels stay at 50% opacity. Populated values stay at full opacity.
+Other empty properties retain the dashed circle. Populated project properties
+use the regular cube icon through `Property.Icon`. Keep these state indicators
+static and readable in compact rows. When composing a project icon separately,
+pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
+Status and Urgent option icons default to 18px in desktop and mobile editors.
+Title property pills and side-panel Status/Priority values use 16px icons;
+other compact displays can override the size explicitly.
+Editable list cells use the shared ghost `Property.Pill` styling. Project hover
+cards use a cube header with the assigned value below it; empty Project hover
+cards retain the one-line empty message.
+
+`EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
+Show at most three individual chips by default and keep the rest in overflow.
+Measure actual title, tag, and control widths; collapse more trailing chips when
+their combined content overflows, then truncate the title as a last resort.
+Hidden tags keep the existing overflow picker and hover actions. Keep the visible
+chip count stable while a picker or its nested editor is active so resizing
+cannot discard the editing session. Hosts without a controller retain their
+explicit or default chip limit.
+Tag chips, overflow chips, and inline tag pills retain their compact desktop
+height on touch instead of adopting the shared button touch minimum.
+
 ## Side-panel collections
 
 Property rows use a 4px vertical gap, including inline Tags and the boundary

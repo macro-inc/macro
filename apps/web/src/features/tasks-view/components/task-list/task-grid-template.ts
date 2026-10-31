@@ -2,6 +2,27 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { DataType } from '@service-storage/generated/schemas/dataType';
 import { EntityType } from '@service-storage/generated/schemas/entityType';
 
+export type TaskGridColumnId =
+  | 'indicator'
+  | 'content'
+  | 'status'
+  | 'priority'
+  | 'initiative'
+  | 'assignees'
+  | 'createdBy'
+  | 'timestamp';
+
+const COLUMN_WIDTHS: Record<TaskGridColumnId, string> = {
+  indicator: '1rem',
+  content: 'minmax(0, 100%)',
+  status: 'var(--task-col-status, 7rem)',
+  priority: 'var(--task-col-priority, 7rem)',
+  initiative: 'var(--task-col-initiative, 8rem)',
+  assignees: 'var(--task-col-assignees, 7rem)',
+  createdBy: 'var(--task-col-created-by, 7rem)',
+  timestamp: 'var(--task-col-timestamp, 5rem)',
+};
+
 export const TASK_GRID_COLUMNS = [
   {
     id: 'status',
@@ -11,7 +32,7 @@ export const TASK_GRID_COLUMNS = [
     isMultiSelect: false,
     specificEntityType: null,
     sortKey: 'status',
-    width: 'var(--task-col-status, 7rem)',
+    width: COLUMN_WIDTHS.status,
   },
   {
     id: 'priority',
@@ -21,7 +42,7 @@ export const TASK_GRID_COLUMNS = [
     isMultiSelect: false,
     specificEntityType: null,
     sortKey: 'priority',
-    width: 'var(--task-col-priority, 7rem)',
+    width: COLUMN_WIDTHS.priority,
   },
   {
     id: 'assignees',
@@ -30,7 +51,7 @@ export const TASK_GRID_COLUMNS = [
     dataType: DataType.ENTITY,
     isMultiSelect: true,
     specificEntityType: EntityType.USER,
-    width: 'var(--task-col-assignees, 7rem)',
+    width: COLUMN_WIDTHS.assignees,
   },
 ] as const;
 
@@ -42,37 +63,40 @@ export const TASK_PROJECT_COLUMN = {
   dataType: DataType.ENTITY,
   isMultiSelect: false,
   specificEntityType: EntityType.INITIATIVE,
-  width: 'var(--task-col-initiative, 8rem)',
+  width: COLUMN_WIDTHS.initiative,
 } as const;
-
-/** Width for the "Created By" column - only shown on wide containers */
-const CREATED_BY_COLUMN_WIDTH = 'var(--task-col-created-by, 7rem)';
 
 export type TaskGridColumn =
   | (typeof TASK_GRID_COLUMNS)[number]
   | typeof TASK_PROJECT_COLUMN;
 
-/**
- * Wide-container grid (includes Created By). The project column exists only
- * while Projects is enabled, so disabled lists keep their exact layout.
- */
-export function taskGridTemplate(options: {
-  indicator: boolean;
-  project: boolean;
-}) {
-  const columns = [
-    ...(options.indicator ? [{ id: 'indicator', width: '1rem' }] : []),
-    { id: 'content', width: 'minmax(0, 100%)' },
-    ...TASK_GRID_COLUMNS,
-    ...(options.project ? [TASK_PROJECT_COLUMN] : []),
-    { id: 'createdBy', width: CREATED_BY_COLUMN_WIDTH },
-    { id: 'timestamp', width: 'var(--task-col-timestamp, 5rem)' },
-  ];
+/** Default grid order always places Project before Assignees. */
+export const DEFAULT_TASK_GRID_COLUMNS = [
+  'indicator',
+  'content',
+  'status',
+  'priority',
+  'initiative',
+  'assignees',
+  'createdBy',
+  'timestamp',
+] as const satisfies readonly TaskGridColumnId[];
+
+/** Task rows edit Status and Priority beside the title and show the creator last. */
+export const TASK_LIST_COLUMNS = [
+  'indicator',
+  'content',
+  'initiative',
+  'assignees',
+  'timestamp',
+  'createdBy',
+] as const satisfies readonly TaskGridColumnId[];
+
+export function taskGridTemplate(
+  columns: readonly TaskGridColumnId[] = DEFAULT_TASK_GRID_COLUMNS
+) {
   return {
-    'grid-template-columns': columns.map((column) => column.width).join(' '),
-    'grid-template-areas': `"${columns.map((column) => column.id).join(' ')}"`,
+    'grid-template-columns': columns.map((id) => COLUMN_WIDTHS[id]).join(' '),
+    'grid-template-areas': `"${columns.join(' ')}"`,
   };
 }
-
-/** Column span for full-width rows such as group headers. */
-export const taskGridColumnCount = (project: boolean) => (project ? 8 : 7);

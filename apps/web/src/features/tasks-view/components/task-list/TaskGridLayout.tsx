@@ -1,4 +1,9 @@
 import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
+import { useRegisterPriorityCollapseItem } from '@components/app/split-layout/layoutUtils';
+import {
   Entity,
   isProjectContainedEntity,
   MultiSelectCheckbox,
@@ -7,13 +12,11 @@ import {
   type TaskEntityWithProperties,
   UnreadIndicator,
 } from '@entity';
-import {
-  CreatedByBadgeSmall,
-  SharedBadgeSmall,
-} from '@entity/components/Badges';
+import { SharedBadgeSmall } from '@entity/components/Badges';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
+import { TaskPropertyControl } from '@entity/extractors-property/task-property-control';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import {
@@ -29,6 +32,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
+  TASK_LIST_COLUMNS,
   TASK_PROJECT_COLUMN,
   type TaskGridColumn,
   taskGridTemplate,
@@ -82,6 +86,13 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
   });
 
   const properties = createMemo(() => Array.from(propertyMap().values()));
+  const collapseController = createPriorityCollapseController();
+  const columns = () =>
+    TASK_LIST_COLUMNS.filter(
+      (column) =>
+        (column !== 'indicator' || !props.hideCheckbox) &&
+        (column !== 'initiative' || props.showProject === true)
+    );
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
 
@@ -116,13 +127,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
     >
       <Entity.Layout
         class={cn(
-          'task-grid-row w-full min-h-[inherit] items-center text-sm px-2',
+          'task-grid-row task-grid-icon-creator w-full min-h-[inherit] items-center text-sm px-2',
           'gap-2 grid grid-rows-[1fr]'
         )}
-        style={taskGridTemplate({
-          indicator: !props.hideCheckbox,
-          project: props.showProject === true,
-        })}
+        style={taskGridTemplate(columns())}
       >
         <Show when={!props.hideCheckbox}>
           <Entity.Slot placement="indicator" class="relative size-full group">
@@ -147,73 +155,74 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
 
         <Entity.Slot
           placement="content"
-          class="ph-no-capture font-medium truncate items-center gap-2 flex min-w-0"
-        >
-          <div class="size-4 shrink-0">
-            <Entity.Icon
-              entity={props.entity}
-              streamState={props.streamState}
-            />
-          </div>
-          <span class="truncate min-w-0">
-            <Entity.Title entity={props.entity} />
-          </span>
-          <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5">
-                <ProjectBreadCrumb
-                  entity={entity()}
-                  onClick={props.onProjectClick}
-                />
-              </span>
-            )}
-          </Show>
-          <Show when={props.isShared}>
-            <span class="@min-[841px]/u-list:hidden">
-              <SharedBadgeSmall ownerId={props.entity.ownerId} />
-            </span>
-            <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
-              <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
-            </span>
-          </Show>
-          <Show when={props.referencePropertyIds}>
-            {(ids) => (
-              <EntityReferenceProperties
-                entity={props.entity}
-                propertyIds={ids()}
-                compact={false}
-              />
-            )}
-          </Show>
-          <EntityRowTags
-            entityId={props.entity.id}
-            entityType={EntityType.TASK}
-            properties={entity().properties}
-            onFilterByTag={props.onFilterByTag}
-            class="ml-auto"
-          />
-        </Entity.Slot>
-
-        <For each={TASK_GRID_COLUMNS}>
-          {(col) => (
-            <Entity.Slot
-              placement={col.id}
-              class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
-            >
-              <ListPropertyValue
-                entityId={props.entity.id}
-                property={
-                  propertyMap().get(col.defId) ?? buildStubProperty(col)
-                }
-              />
-            </Entity.Slot>
+          ref={collapseController.setRow}
+          class={cn(
+            'ph-no-capture min-w-0 font-medium',
+            !props.hideCheckbox && 'ms-2'
           )}
-        </For>
+        >
+          <PriorityCollapseOverflowSensor
+            controller={collapseController}
+            truncateAsLastResort
+            class="w-full min-w-0 overflow-hidden"
+            contentClass="flex min-w-full items-center gap-2"
+          >
+            <TaskPropertyControl entity={props.entity} property="status" />
+            <div class="-mr-1 flex shrink-0 items-center touch:-mr-2">
+              <TaskPropertyControl entity={props.entity} property="priority" />
+            </div>
+            <span class="flex min-w-0 flex-1 items-center gap-2">
+              <span class="min-w-0 truncate">
+                <Entity.Title entity={props.entity} />
+              </span>
+              <Show when={props.isShared}>
+                <span class="task-shared-badge hidden shrink-0">
+                  <SharedBadgeSmall ownerId={props.entity.ownerId} />
+                </span>
+              </Show>
+            </span>
+            <Show when={isProjectContainedEntity(props.entity) && props.entity}>
+              {(entity) => {
+                const collapsed = useRegisterPriorityCollapseItem(
+                  collapseController.collapser,
+                  { id: 'folder', priority: Number.MIN_SAFE_INTEGER }
+                );
+                return (
+                  <span class="ph-no-capture text-ink text-xs shrink-0">
+                    <ProjectBreadCrumb
+                      entity={entity()}
+                      onClick={props.onProjectClick}
+                      collapsed={collapsed()}
+                    />
+                  </span>
+                );
+              }}
+            </Show>
+
+            <Show when={props.referencePropertyIds}>
+              {(ids) => (
+                <EntityReferenceProperties
+                  entity={props.entity}
+                  propertyIds={ids()}
+                  compact={false}
+                />
+              )}
+            </Show>
+            <EntityRowTags
+              entityId={props.entity.id}
+              entityType={EntityType.TASK}
+              properties={entity().properties}
+              collapse={collapseController.collapser}
+              onFilterByTag={props.onFilterByTag}
+              class="ml-auto"
+            />
+          </PriorityCollapseOverflowSensor>
+        </Entity.Slot>
 
         <Show when={props.showProject}>
           <Entity.Slot
             placement={TASK_PROJECT_COLUMN.id}
-            class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
+            class="ms-2 flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
           >
             <ListPropertyValue
               entityId={props.entity.id}
@@ -225,20 +234,44 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           </Entity.Slot>
         </Show>
 
-        <Entity.Slot
-          placement="createdBy"
-          class="hidden @min-[1221px]/u-list:flex items-center min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
+        <For
+          each={TASK_GRID_COLUMNS.filter(
+            (column) => column.id !== 'status' && column.id !== 'priority'
+          )}
         >
-          <OwnerLabel ownerId={props.entity.ownerId} viewerLabel="Me" />
-        </Entity.Slot>
+          {(col) => (
+            <Entity.Slot
+              placement={col.id}
+              class="ms-2 flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
+            >
+              <ListPropertyValue
+                entityId={props.entity.id}
+                property={
+                  propertyMap().get(col.defId) ?? buildStubProperty(col)
+                }
+              />
+            </Entity.Slot>
+          )}
+        </For>
 
         <Entity.Slot
           placement="timestamp"
-          class="text-xs text-right text-ink-extra-muted font-light"
+          class="task-updated-cell ms-2 whitespace-nowrap text-xs text-right text-ink-extra-muted font-light"
         >
           <Show when={!props.hasNotifications}>
             <Entity.Timestamp entity={props.entity} />
           </Show>
+        </Entity.Slot>
+
+        <Entity.Slot
+          placement="createdBy"
+          class="task-creator-cell ms-2 flex items-center justify-end min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
+        >
+          <OwnerLabel
+            ownerId={props.entity.ownerId}
+            viewerLabel="Me"
+            iconOnly
+          />
         </Entity.Slot>
       </Entity.Layout>
       <Suspense>
