@@ -32,6 +32,7 @@ import { cn } from '@ui/utils/classname';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import {
   TASK_GRID_COLUMNS,
+  TASK_LIST_COLUMNS,
   TASK_PROJECT_COLUMN,
   type TaskGridColumn,
   taskGridTemplate,
@@ -86,6 +87,12 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
 
   const properties = createMemo(() => Array.from(propertyMap().values()));
   const collapseController = createPriorityCollapseController();
+  const columns = () =>
+    TASK_LIST_COLUMNS.filter(
+      (column) =>
+        (column !== 'indicator' || !props.hideCheckbox) &&
+        (column !== 'initiative' || props.showProject === true)
+    );
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
 
@@ -123,14 +130,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           'task-grid-row task-grid-icon-creator w-full min-h-[inherit] items-center text-sm px-2',
           'gap-2 grid grid-rows-[1fr]'
         )}
-        style={taskGridTemplate({
-          indicator: !props.hideCheckbox,
-          project: props.showProject === true,
-          status: false,
-          priority: false,
-          projectBeforeAssignees: true,
-          createdByLast: true,
-        })}
+        style={taskGridTemplate(columns())}
       >
         <Show when={!props.hideCheckbox}>
           <Entity.Slot placement="indicator" class="relative size-full group">

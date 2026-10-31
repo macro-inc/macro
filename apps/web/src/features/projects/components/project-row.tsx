@@ -1,5 +1,6 @@
 import {
   TASK_GRID_COLUMNS,
+  type TaskGridColumnId,
   taskGridTemplate,
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import '@app/features/tasks-view/components/task-list/task-list.css';
@@ -16,7 +17,18 @@ import type { ProjectRow as ProjectRowData } from '../context/projects-context';
 import { canEditProject } from '../core/project';
 
 // Projects reuse the task grid; its project column holds the due date.
-const gridStyle = taskGridTemplate({ indicator: true, project: true });
+export const PROJECT_GRID_COLUMNS = [
+  'indicator',
+  'content',
+  'status',
+  'priority',
+  'assignees',
+  'initiative',
+  'createdBy',
+  'timestamp',
+] as const satisfies readonly TaskGridColumnId[];
+
+const gridStyle = taskGridTemplate(PROJECT_GRID_COLUMNS);
 const columns = [
   { area: 'content', label: 'Project' },
   ...TASK_GRID_COLUMNS.map((column) => ({

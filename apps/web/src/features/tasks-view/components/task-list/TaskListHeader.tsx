@@ -5,10 +5,10 @@ import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { cn, Tooltip } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { type JSX, Match, Show, Switch } from 'solid-js';
 import { useTasksView } from '../../tasks-view-context';
 import type { TaskSortId } from '../../types';
-import { taskGridTemplate } from './task-grid-template';
+import { type TaskGridColumnId, taskGridTemplate } from './task-grid-template';
 
 function SortableHeader(props: {
   label: string;
@@ -59,58 +59,54 @@ function SortableHeader(props: {
       )}
       style={{ 'grid-area': props.area }}
     >
-      <Show
-        when={props.sortId}
-        fallback={<span class="truncate">{label()}</span>}
-      >
-        {(sortId) => (
-          <button
-            ref={(element) => {
-              if (props.onWidthChange) {
-                createResizeObserver(element, ({ width }) =>
-                  props.onWidthChange?.(width)
-                );
-              }
-            }}
-            type="button"
-            aria-label={props.label}
-            data-blocks-navigation
-            class={cn(
-              'flex h-full w-max shrink-0 items-center gap-1 whitespace-nowrap text-ink-extra-muted hover:text-ink',
-              active() && 'text-ink'
-            )}
-            onClick={() => setPrimarySort(sortId())}
-          >
-            {label()}
-            <ArrowDownIcon
+      <Switch>
+        <Match when={props.sortId}>
+          {(sortId) => (
+            <button
+              ref={(element) => {
+                if (props.onWidthChange) {
+                  createResizeObserver(element, ({ width }) =>
+                    props.onWidthChange?.(width)
+                  );
+                }
+              }}
+              type="button"
+              aria-label={props.label}
+              data-blocks-navigation
               class={cn(
-                'size-3 shrink-0 transition-transform',
-                reversed() && 'rotate-180'
+                'flex h-full w-max shrink-0 items-center gap-1 whitespace-nowrap text-ink-extra-muted hover:text-ink',
+                active() && 'text-ink'
               )}
-            />
-          </button>
-        )}
-      </Show>
+              onClick={() => setPrimarySort(sortId())}
+            >
+              {label()}
+              <ArrowDownIcon
+                class={cn(
+                  'size-3 shrink-0 transition-transform',
+                  reversed() && 'rotate-180'
+                )}
+              />
+            </button>
+          )}
+        </Match>
+        <Match when={true}>
+          <span class="truncate">{label()}</span>
+        </Match>
+      </Switch>
     </div>
   );
 }
 
 export function TaskListHeader(props: {
+  columns: readonly TaskGridColumnId[];
   onTimestampWidthChange?: (width: number) => void;
 }) {
-  const { showTaskProject } = useTasksView();
+  const showTaskProject = () => props.columns.includes('initiative');
   return (
     <div
       role="row"
       class="task-grid-row task-grid-icon-creator grid h-10 w-full shrink-0 items-center gap-2 px-3 text-xs font-medium text-ink-extra-muted"
-      style={taskGridTemplate({
-        indicator: true,
-        project: showTaskProject(),
-        status: false,
-        priority: false,
-        projectBeforeAssignees: true,
-        createdByLast: true,
-      })}
+      style={taskGridTemplate(props.columns)}
     >
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
       <span

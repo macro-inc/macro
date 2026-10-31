@@ -64,7 +64,7 @@ import { TaskGroupHeader } from './TaskGroupHeader';
 import { TaskListContinuationRow } from './TaskListContinuationRow';
 import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
-import { taskGridColumnCount } from './task-grid-template';
+import { TASK_LIST_COLUMNS } from './task-grid-template';
 import './task-list.css';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -211,8 +211,11 @@ export function TaskList(props: TaskListProps) {
   );
 
   const visibleRows = source.items;
-  const columnCount = () =>
-    taskGridColumnCount(showTaskProject(), false, false);
+  const columns = () =>
+    TASK_LIST_COLUMNS.filter(
+      (column) => column !== 'initiative' || showTaskProject()
+    );
+  const columnCount = () => columns().length;
   const [assigningProjectTasks, setAssigningProjectTasks] =
     createSignal<string[]>();
   const tasksById = createMemo(() => {
@@ -460,6 +463,7 @@ export function TaskList(props: TaskListProps) {
           <ListLayoutProvider ref={grid}>
             <Show when={!isMobile()}>
               <TaskListHeader
+                columns={columns()}
                 onTimestampWidthChange={setTimestampHeaderWidth}
               />
             </Show>

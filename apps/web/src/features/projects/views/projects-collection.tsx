@@ -25,7 +25,6 @@ import {
   getSoupRowEntities,
 } from '@app/features/soup/collection/rows';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
-import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -52,7 +51,11 @@ import {
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
-import { ProjectListHeader, ProjectRow } from '../components/project-row';
+import {
+  PROJECT_GRID_COLUMNS,
+  ProjectListHeader,
+  ProjectRow,
+} from '../components/project-row';
 import { ProjectRowMenu } from '../components/project-row-menu';
 import { RenameProjectDialog } from '../components/rename-project-dialog';
 import {
@@ -709,7 +712,7 @@ export function ProjectsCollection(props: {
                           {(group) => (
                             <TaskGroupHeader
                               row={group()}
-                              columnCount={taskGridColumnCount(true)}
+                              columnCount={PROJECT_GRID_COLUMNS.length}
                               groupBy={collection.groupBy()}
                               expanded={collection.disclosure.isExpanded(
                                 group().groupId
@@ -783,7 +786,7 @@ export function ProjectsCollection(props: {
                             <div role="row" id={more().id}>
                               <div
                                 role="gridcell"
-                                aria-colspan={taskGridColumnCount(true)}
+                                aria-colspan={PROJECT_GRID_COLUMNS.length}
                                 class="flex justify-center py-2"
                               >
                                 <Button

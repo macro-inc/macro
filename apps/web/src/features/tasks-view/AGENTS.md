@@ -30,6 +30,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Size Updated from its measured, untruncated header with a 56px content minimum for single-line timestamps; share the width across rows, retain existing Created by spacing, and fade/collapse Updated over 160ms at 600px, disabling motion for reduced-motion preferences.
 - Keep Created by visible above 600px alongside Updated, with a 16px user-plus header icon aligned to creator avatars and a keyboard-focusable “Created by” tooltip; show the title's shared badge only while the creator column is hidden.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
+- Pass enabled grid columns as a typed ordered array; default Project before Assignees and derive full-row spans from the same array.
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, and a corner-dashed project cube; use the regular cube for set projects.
 - Use shared ghost-button interaction styling for editable list properties; dim empty icons and labels without applying opacity twice to No priority.

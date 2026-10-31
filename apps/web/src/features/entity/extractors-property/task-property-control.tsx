@@ -6,7 +6,7 @@ import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo, Show } from 'solid-js';
+import { createMemo, Match, Switch } from 'solid-js';
 import type { TaskEntityWithProperties } from '../types/entity';
 import { soupPropertyToProperty } from './property-helpers';
 
@@ -81,36 +81,32 @@ export function TaskPropertyControl(props: {
                 data-blocks-navigation
                 class="flex size-6 shrink-0 items-center justify-center rounded-full border-0 touch:size-9"
               >
-                <Show
-                  when={props.property === 'status'}
-                  fallback={
-                    <Show
-                      when={hasValue(shown())}
-                      fallback={
-                        <PropertyEmptyIcon
-                          propertyDefinitionId={definitionId()}
-                          class="size-4 text-ink-extra-muted mobile:size-5"
-                        />
+                <Switch>
+                  <Match when={props.property === 'status'}>
+                    <TaskStatusIcon
+                      statusId={statusId()}
+                      completed={props.entity.subType.is_completed}
+                      size="xs"
+                      class="size-4.5"
+                    />
+                  </Match>
+                  <Match when={hasValue(shown())}>
+                    <Property.Icon
+                      property={shown()}
+                      class={
+                        statusId() === PROPERTY_OPTION_IDS.PRIORITY.URGENT
+                          ? 'min-h-4 min-w-4'
+                          : 'min-h-4 min-w-4 mobile:min-h-5 mobile:min-w-5'
                       }
-                    >
-                      <Property.Icon
-                        property={shown()}
-                        class={
-                          statusId() === PROPERTY_OPTION_IDS.PRIORITY.URGENT
-                            ? 'min-h-4 min-w-4'
-                            : 'min-h-4 min-w-4 mobile:min-h-5 mobile:min-w-5'
-                        }
-                      />
-                    </Show>
-                  }
-                >
-                  <TaskStatusIcon
-                    statusId={statusId()}
-                    completed={props.entity.subType.is_completed}
-                    size="xs"
-                    class="size-4.5"
-                  />
-                </Show>
+                    />
+                  </Match>
+                  <Match when={true}>
+                    <PropertyEmptyIcon
+                      propertyDefinitionId={definitionId()}
+                      class="size-4 text-ink-extra-muted mobile:size-5"
+                    />
+                  </Match>
+                </Switch>
               </Property.Pill>
             </Property.Tooltip>
             <Property.PopoverEditor />
