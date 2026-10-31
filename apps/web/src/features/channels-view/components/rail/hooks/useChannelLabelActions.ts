@@ -106,8 +106,8 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     if (!sectionsEnabled()) {
       return t(
         scope === 'team'
-          ? 'channelLabels.sharedScope'
-          : 'channelLabels.personalScope'
+          ? 'channelLabels.sharedScopeDescription'
+          : 'channelLabels.personalScopeDescription'
       );
     }
     return t(
