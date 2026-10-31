@@ -48,7 +48,7 @@ function SortableHeader(props: {
       role="columnheader"
       aria-label={props.label}
       class={cn(
-        'flex min-w-0 items-center',
+        'ms-2 flex min-w-0 items-center',
         alignment(),
         props.narrowIcon &&
           props.align !== 'end' &&
@@ -104,7 +104,7 @@ export function TaskListHeader() {
       <span role="columnheader" style={{ 'grid-area': 'indicator' }} />
       <span
         role="columnheader"
-        class="truncate"
+        class="ms-2 truncate"
         style={{ 'grid-area': 'content' }}
       >
         Task
@@ -132,7 +132,7 @@ export function TaskListHeader() {
       <span
         role="columnheader"
         aria-label="Created by"
-        class="hidden @min-[1221px]/u-list:flex items-center justify-end"
+        class="hidden ms-2 @min-[1221px]/u-list:flex items-center justify-end"
         style={{ 'grid-area': 'createdBy' }}
       >
         <Tooltip label="Created by" as="span" tabIndex={0}>

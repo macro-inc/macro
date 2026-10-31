@@ -158,7 +158,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
         <Entity.Slot
           placement="content"
           ref={collapseController.setRow}
-          class="ph-no-capture min-w-0 font-medium"
+          class={cn(
+            'ph-no-capture min-w-0 font-medium',
+            !props.hideCheckbox && 'ms-2'
+          )}
         >
           <PriorityCollapseOverflowSensor
             controller={collapseController}
@@ -217,7 +220,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
         <Show when={props.showProject}>
           <Entity.Slot
             placement={TASK_PROJECT_COLUMN.id}
-            class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
+            class="ms-2 flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
           >
             <ListPropertyValue
               entityId={props.entity.id}
@@ -237,7 +240,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           {(col) => (
             <Entity.Slot
               placement={col.id}
-              class="flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
+              class="ms-2 flex items-center min-w-0 text-xs ph-no-capture @container/slot @max-[840px]/u-list:justify-center"
             >
               <ListPropertyValue
                 entityId={props.entity.id}
@@ -251,7 +254,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
 
         <Entity.Slot
           placement="timestamp"
-          class="task-updated-cell whitespace-nowrap text-xs text-right text-ink-extra-muted font-light"
+          class="task-updated-cell ms-2 whitespace-nowrap text-xs text-right text-ink-extra-muted font-light"
         >
           <Show when={!props.hasNotifications}>
             <Entity.Timestamp entity={props.entity} />
@@ -260,7 +263,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
 
         <Entity.Slot
           placement="createdBy"
-          class="hidden @min-[1221px]/u-list:flex items-center justify-end min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
+          class="hidden ms-2 @min-[1221px]/u-list:flex items-center justify-end min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
         >
           <OwnerLabel
             ownerId={props.entity.ownerId}

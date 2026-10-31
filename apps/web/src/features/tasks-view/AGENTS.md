@@ -30,9 +30,10 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Above 840px, keep Updated at 80px with an untruncated header; retain single-line timestamps and existing Created by spacing, and fade/collapse Updated over 160ms at 600px to preserve title space, disabling motion for reduced-motion preferences.
 - Show a 16px user-plus icon in the Created by header, right-aligned with creator avatars, with an accessible name and a keyboard-focusable “Created by” tooltip.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
+- Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, and a corner-dashed project cube; use the regular cube for set projects.
 - Collapse wide task-row tags only on measured content overflow, one chip at a time before truncating the title; preserve open tag editors through resizing and keep the share indicator beside the title.
-- Keep the collapsed tag-overflow chip after the title in narrow and phone task rows instead of hiding tags when the column layout disappears.
+- Keep the collapsed tag-overflow chip after the title on phone rows instead of dropping tags with the desktop columns.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.

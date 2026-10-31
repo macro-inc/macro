@@ -7,7 +7,13 @@
   --task-col-initiative: 8rem;
 }
 
+/* Include spacing inside visible tracks so hidden columns leave no grid gaps. */
 .task-grid-row.task-grid-icon-creator {
+  --task-col-assignees: 9.5rem;
+  --task-col-created-by: 0rem;
+  --task-col-timestamp: 5.5rem;
+  --task-col-initiative: 8.5rem;
+  column-gap: 0;
   transition: grid-template-columns 160ms ease;
 }
 
@@ -22,8 +28,7 @@
 
 @container u-list (min-width: 1221px) {
   .task-grid-row.task-grid-icon-creator {
-    --task-col-created-by: 1.5rem;
-    --task-col-timestamp: 5rem;
+    --task-col-created-by: 2rem;
   }
 }
 
@@ -46,9 +51,9 @@
   }
 
   .task-grid-row.task-grid-icon-creator {
-    --task-col-assignees: 2.5rem;
-    --task-col-initiative: 2rem;
-    --task-col-timestamp: 4rem;
+    --task-col-assignees: 3rem;
+    --task-col-initiative: 2.5rem;
+    --task-col-timestamp: 4.5rem;
   }
 }
 
@@ -59,6 +64,7 @@
   }
 
   .task-grid-icon-creator .task-updated-cell {
+    margin-inline-start: 0;
     opacity: 0;
     transform: translateX(4px);
     visibility: hidden;
