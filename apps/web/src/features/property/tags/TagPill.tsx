@@ -10,6 +10,7 @@ export type TagPillProps = TagPickerSourceProps & {
   dotClass?: string;
   triggerLabel?: string;
   onOpenChange?: (open: boolean) => void;
+  onActiveChange?: (active: boolean) => void;
   withClickBlock?: boolean;
 };
 
@@ -38,6 +39,7 @@ export function TagPill(props: TagPillProps) {
         props.triggerLabel ?? `Change or select tag ${props.tag.label}`
       }
       onOpenChange={props.onOpenChange}
+      onActiveChange={props.onActiveChange}
       withClickBlock={props.withClickBlock}
     >
       <TagDot color={props.tag.color} class={props.dotClass} />

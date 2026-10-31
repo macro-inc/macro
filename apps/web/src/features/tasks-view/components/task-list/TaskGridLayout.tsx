@@ -1,4 +1,8 @@
 import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
+import {
   Entity,
   isProjectContainedEntity,
   MultiSelectCheckbox,
@@ -83,6 +87,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
   });
 
   const properties = createMemo(() => Array.from(propertyMap().values()));
+  const collapseController = createPriorityCollapseController();
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
 
@@ -152,49 +157,61 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
 
         <Entity.Slot
           placement="content"
-          class="ph-no-capture font-medium truncate items-center gap-2 flex min-w-0"
+          ref={collapseController.setRow}
+          class="ph-no-capture min-w-0 font-medium"
         >
-          <TaskPropertyControl entity={props.entity} property="status" />
-          <div class="-mr-1 flex shrink-0 items-center touch:-mr-2">
-            <TaskPropertyControl entity={props.entity} property="priority" />
-          </div>
-          <span class="truncate min-w-0">
-            <Entity.Title entity={props.entity} />
-          </span>
-          <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5">
-                <ProjectBreadCrumb
-                  entity={entity()}
-                  onClick={props.onProjectClick}
-                />
+          <PriorityCollapseOverflowSensor
+            controller={collapseController}
+            truncateAsLastResort
+            class="w-full min-w-0 overflow-hidden"
+            contentClass="flex min-w-full items-center gap-2"
+          >
+            <TaskPropertyControl entity={props.entity} property="status" />
+            <div class="-mr-1 flex shrink-0 items-center touch:-mr-2">
+              <TaskPropertyControl entity={props.entity} property="priority" />
+            </div>
+            <span class="flex min-w-0 flex-1 items-center gap-2">
+              <span class="min-w-0 truncate">
+                <Entity.Title entity={props.entity} />
               </span>
-            )}
-          </Show>
-          <Show when={props.isShared}>
-            <span class="@min-[841px]/u-list:hidden">
-              <SharedBadgeSmall ownerId={props.entity.ownerId} />
+              <Show when={props.isShared}>
+                <span class="shrink-0 @min-[841px]/u-list:hidden">
+                  <SharedBadgeSmall ownerId={props.entity.ownerId} />
+                </span>
+                <span class="hidden shrink-0 @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
+                  <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
+                </span>
+              </Show>
             </span>
-            <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
-              <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
-            </span>
-          </Show>
-          <Show when={props.referencePropertyIds}>
-            {(ids) => (
-              <EntityReferenceProperties
-                entity={props.entity}
-                propertyIds={ids()}
-                compact={false}
-              />
-            )}
-          </Show>
-          <EntityRowTags
-            entityId={props.entity.id}
-            entityType={EntityType.TASK}
-            properties={entity().properties}
-            onFilterByTag={props.onFilterByTag}
-            class="ml-auto"
-          />
+            <Show when={isProjectContainedEntity(props.entity) && props.entity}>
+              {(entity) => (
+                <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5">
+                  <ProjectBreadCrumb
+                    entity={entity()}
+                    onClick={props.onProjectClick}
+                  />
+                </span>
+              )}
+            </Show>
+
+            <Show when={props.referencePropertyIds}>
+              {(ids) => (
+                <EntityReferenceProperties
+                  entity={props.entity}
+                  propertyIds={ids()}
+                  compact={false}
+                />
+              )}
+            </Show>
+            <EntityRowTags
+              entityId={props.entity.id}
+              entityType={EntityType.TASK}
+              properties={entity().properties}
+              collapse={collapseController.collapser}
+              onFilterByTag={props.onFilterByTag}
+              class="ml-auto"
+            />
+          </PriorityCollapseOverflowSensor>
         </Entity.Slot>
 
         <Show when={props.showProject}>

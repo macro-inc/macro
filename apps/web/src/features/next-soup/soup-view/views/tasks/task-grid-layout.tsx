@@ -1,5 +1,9 @@
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
+import {
   Entity,
   type EntityData,
   type EntityWithProperties,
@@ -81,6 +85,7 @@ export function TaskGridLayout(props: LayoutProps) {
   });
 
   const properties = createMemo(() => Array.from(propertyMap().values()));
+  const collapseController = createPriorityCollapseController();
 
   const saveMutation = useBulkSaveEntityPropertiesMutation();
 
@@ -150,42 +155,54 @@ export function TaskGridLayout(props: LayoutProps) {
 
         <Entity.Slot
           placement="content"
-          class="ph-no-capture font-medium truncate items-center gap-2 flex min-w-0"
+          ref={collapseController.setRow}
+          class="ph-no-capture min-w-0 font-medium"
         >
-          <div class="size-4 shrink-0">
-            <Entity.Icon
-              entity={props.entity}
-              streamState={props.streamState}
-            />
-          </div>
-          <span class="truncate min-w-0">
-            <Entity.Title entity={props.entity} />
-          </span>
-          <Show when={isProjectContainedEntity(props.entity) && props.entity}>
-            {(entity) => (
-              <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5">
-                <ProjectBreadCrumb
-                  entity={entity()}
-                  onClick={props.onProjectClick}
-                />
+          <PriorityCollapseOverflowSensor
+            controller={collapseController}
+            truncateAsLastResort
+            class="w-full min-w-0 overflow-hidden"
+            contentClass="flex min-w-full items-center gap-2"
+          >
+            <div class="size-4 shrink-0">
+              <Entity.Icon
+                entity={props.entity}
+                streamState={props.streamState}
+              />
+            </div>
+            <span class="flex min-w-0 flex-1 items-center gap-2">
+              <span class="min-w-0 truncate">
+                <Entity.Title entity={props.entity} />
               </span>
-            )}
-          </Show>
-          <Show when={props.isShared}>
-            <span class="@min-[841px]/u-list:hidden">
-              <SharedBadgeSmall ownerId={props.entity.ownerId} />
+              <Show when={props.isShared}>
+                <span class="shrink-0 @min-[841px]/u-list:hidden">
+                  <SharedBadgeSmall ownerId={props.entity.ownerId} />
+                </span>
+                <span class="hidden shrink-0 @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
+                  <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
+                </span>
+              </Show>
             </span>
-            <span class="hidden @min-[841px]/u-list:inline @min-[1221px]/u-list:hidden">
-              <CreatedByBadgeSmall ownerId={props.entity.ownerId} />
-            </span>
-          </Show>
-          <EntityRowTags
-            entityId={props.entity.id}
-            entityType={EntityType.TASK}
-            properties={entity().properties}
-            onFilterByTag={soupView?.filterByTag}
-            class="ml-auto"
-          />
+            <Show when={isProjectContainedEntity(props.entity) && props.entity}>
+              {(entity) => (
+                <span class="ph-no-capture text-ink text-xs shrink-0 truncate border border-edge-muted px-2 rounded-sm py-0.5">
+                  <ProjectBreadCrumb
+                    entity={entity()}
+                    onClick={props.onProjectClick}
+                  />
+                </span>
+              )}
+            </Show>
+
+            <EntityRowTags
+              entityId={props.entity.id}
+              entityType={EntityType.TASK}
+              properties={entity().properties}
+              collapse={collapseController.collapser}
+              onFilterByTag={soupView?.filterByTag}
+              class="ml-auto"
+            />
+          </PriorityCollapseOverflowSensor>
         </Entity.Slot>
 
         <For each={TASK_GRID_COLUMNS}>

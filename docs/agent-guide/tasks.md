@@ -90,7 +90,12 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 The Project column shows the linked project's name when one project is assigned,
 and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
-to read the full value.
+to read the full value. Tags collapse one at a time into the existing overflow
+chip only when the actual title, controls, and tags no longer fit. Short titles
+keep their tags visible; long titles truncate only after tag collapse. Open the
+overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
+An open picker or nested tag editor stays mounted while resizing. The share
+indicator remains immediately beside the title whenever it is shown.
 Task rows place Project before Assignees on desktop and phones. Narrow rows keep
 one assignee avatar plus the remaining count instead of a generic people icon.
 At list-container widths up to 840px, Project, Assignees, and Updated headers

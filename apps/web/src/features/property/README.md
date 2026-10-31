@@ -29,6 +29,14 @@ Status and Urgent option icons default to 18px in desktop and mobile editors.
 Title property pills and side-panel Status/Priority values use 16px icons;
 other compact displays can override the size explicitly.
 
+`EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
+Measure actual title, tag, and control widths; collapse trailing tag chips only
+when their combined content overflows, then truncate the title as a last resort.
+Hidden tags keep the existing overflow picker and hover actions. Keep the visible
+chip count stable while a picker or its nested editor is active so resizing
+cannot discard the editing session. Hosts without a controller retain their
+explicit or default chip limit.
+
 ## Side-panel collections
 
 Property rows use a 4px vertical gap, including inline Tags and the boundary
