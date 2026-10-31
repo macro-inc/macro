@@ -151,6 +151,129 @@ async fn shared_ids_cover_live_shares_the_member_holds_no_copy_of(pool: Pool<Pos
     );
 }
 
+async fn insert_user(pool: &Pool<Postgres>, id: &str) {
+    let macro_user_id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
+    )
+    .bind(macro_user_id)
+    .bind(id)
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query(r#"INSERT INTO "User" (id, email, macro_user_id) VALUES ($1, $1, $2)"#)
+        .bind(id)
+        .bind(macro_user_id)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
+/// Exchange's UID for a meeting it imported under `uid`.
+fn exchange_uid(uid: &str) -> String {
+    let wrapped: String = uid.bytes().map(|byte| format!("{byte:02X}")).collect();
+    format!(
+        "040000008200E00074C5B7101A82E008{}7643616C2D55696401000000{wrapped}00",
+        "0".repeat(48)
+    )
+}
+
+#[sqlx::test]
+async fn only_a_seat_on_the_meeting_keeps_a_shared_row_join_link(pool: Pool<Postgres>) {
+    const MEETING: &str = "shared@example.com";
+    let shared = insert_event(&pool, OWNER, MEETING, "default").await;
+    let channel_id = insert_channel(&pool).await;
+    share_with_channel(&pool, shared, channel_id).await;
+    let now = Utc::now();
+    let read = |user: &'static str| {
+        let pool = pool.clone();
+        async move {
+            let row = get_calendar_events_for_search(&pool, user, &[shared], now)
+                .await
+                .unwrap()
+                .remove(&shared)
+                .expect("the share stays visible");
+            (row.holds_meeting, row.conference_url.is_some())
+        }
+    };
+
+    assert_eq!(
+        read(OWNER).await,
+        (true, true),
+        "the sharer holds their row"
+    );
+    assert_eq!(read(MEMBER).await, (false, false), "a member holds nothing");
+
+    // A guest's own copy lets them keep the link on the sharer's row too.
+    let guest_copy = insert_event(&pool, ATTENDEE, MEETING, "default").await;
+    assert_eq!(read(ATTENDEE).await, (true, true), "a guest holds a seat");
+    assert_eq!(
+        read(MEMBER).await,
+        (false, false),
+        "their seat is not shared"
+    );
+
+    // A snapshot of the share was imported without the link, so it must not
+    // unlock the one on the sharer's row.
+    sqlx::query("UPDATE calendar_events SET is_snapshot = true WHERE id = $1")
+        .bind(guest_copy)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        read(ATTENDEE).await,
+        (false, false),
+        "a snapshot is no seat"
+    );
+
+    sqlx::query(
+        "UPDATE calendar_events SET is_snapshot = false, status = 'cancelled' WHERE id = $1",
+    )
+    .bind(guest_copy)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        read(ATTENDEE).await,
+        (false, false),
+        "a cancelled copy is gone"
+    );
+
+    // An Outlook copy of the meeting wraps the UID but is the same meeting.
+    sqlx::query("UPDATE calendar_events SET status = 'confirmed', ical_uid = $2 WHERE id = $1")
+        .bind(guest_copy)
+        .bind(exchange_uid(MEETING))
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        read(ATTENDEE).await,
+        (true, true),
+        "an Outlook copy is a seat"
+    );
+
+    // An inbox delegated to the member holds the meeting for them.
+    let delegated_copy = insert_event(&pool, STRANGER, MEETING, "default").await;
+    insert_user(&pool, MEMBER).await;
+    insert_user(&pool, STRANGER).await;
+    sqlx::query(
+        r#"
+        INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id)
+        SELECT $1, owner_id, source_link_id FROM calendar_events WHERE id = $2
+        "#,
+    )
+    .bind(MEMBER)
+    .bind(delegated_copy)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        read(MEMBER).await,
+        (true, true),
+        "a delegated copy is a seat"
+    );
+}
+
 #[sqlx::test]
 async fn search_metadata_reaches_a_channel_share_without_its_join_link(pool: Pool<Postgres>) {
     let shared = insert_event(&pool, OWNER, "shared@example.com", "default").await;
