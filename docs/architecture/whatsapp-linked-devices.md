@@ -145,8 +145,9 @@ there is nothing earlier to import, and its first message arrives live. If a
 chat update later brings a message from before the chat was added (the phone
 had history after all), it becomes `waiting_for_phone`.
 
-The web shows the owner a closable bottom-right prompt while any of their
-chats is `waiting_for_phone` ("open WhatsApp on your phone … **Import**").
+The web shows the owner an import bar in each chat that is
+`waiting_for_phone`, and on desktop a closable bottom-right prompt covering all
+of them ("open WhatsApp on your phone … **Import**").
 `POST /whatsapp/history-import` (the owner's own session) moves those chats
 to `pending` and signals `whatsapp_history_requested`; the replica holding the
 account then asks for the anchor message itself when it predates adoption (a

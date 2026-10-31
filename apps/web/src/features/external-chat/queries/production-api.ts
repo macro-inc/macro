@@ -8,6 +8,7 @@ import type { ExternalChatReplyContent } from '@service-storage/generated/schema
 import type { ExternalChatRichContent } from '@service-storage/generated/schemas/externalChatRichContent';
 import type { ExternalChatSendProgress } from '@service-storage/generated/schemas/externalChatSendProgress';
 import type { WhatsAppErrorCode } from '@service-storage/whatsapp-errors';
+import { whatsappLinkedClient } from '@service-storage/whatsapp-linked';
 import { err, ok } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { phoneFromJid } from '../../whatsapp-linked/core/account';
@@ -328,4 +329,5 @@ export const externalChatApi: ExternalChatApi = {
   },
   markRead: (id, messageId) => throwOnErr(() => client.markRead(id, messageId)),
   stopSync: (id) => throwOnErr(() => client.stopSync(id)),
+  importHistory: () => throwOnErr(() => whatsappLinkedClient.importHistory()),
 };

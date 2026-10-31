@@ -372,6 +372,21 @@ export function ExternalChatView(props: {
       source.chat.data?.backfill,
       source.chat.data?.accessLevel === 'owner'
     );
+  /** The owner can start the import here; it is the one place it always is. */
+  const canImport = () =>
+    source.chat.data?.accessLevel === 'owner' &&
+    source.chat.data.backfill?.state === 'waiting_for_phone';
+  const [startingImport, setStartingImport] = createSignal(false);
+  const startImport = async () => {
+    setStartingImport(true);
+    try {
+      await source.importHistory();
+    } catch {
+      toast.failure("Couldn't start importing earlier messages. Try again.");
+    } finally {
+      setStartingImport(false);
+    }
+  };
   const historyStart = () =>
     source.hasOlder()
       ? undefined
@@ -521,6 +536,27 @@ export function ExternalChatView(props: {
           <SidePanel.Toggle />
         </div>
       </ViewShell.TopBar>
+      {/* Always reachable, however far back the timeline is scrolled. */}
+      <Show when={canImport()}>
+        <div class="flex min-w-0 items-center gap-3 border-b border-edge-muted px-4 py-2 text-xs text-ink-muted">
+          <span class="min-w-0 flex-1">
+            Open WhatsApp on your phone to import earlier messages.
+          </span>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            class="shrink-0"
+            aria-label="Import earlier messages"
+            disabled={startingImport()}
+            onClick={() =>
+              fireAndForget(startImport(), 'external-chat.import-history')
+            }
+          >
+            {startingImport() ? 'Starting…' : 'Import'}
+          </Button>
+        </div>
+      </Show>
       {/* Members, sharing and syncing open in the generic floating side
           panel over the timeline, like an email thread's details. */}
       <div class="relative min-h-0 min-w-0 flex-1">
