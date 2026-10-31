@@ -36,7 +36,7 @@ vi.mock('@core/util/useSplitNavigationHandler', () => ({
 vi.mock('@property', () => ({
   Property: {
     Root: (props: { property: Property }) => (
-      <span>{JSON.stringify(props.property.value)}</span>
+      <button>{JSON.stringify(props.property.value)}</button>
     ),
   },
   useProperty: vi.fn(),
@@ -432,6 +432,29 @@ it('shows implicit task defaults as pinned while preserving deletion guards and 
   expect(screen.getByText('"Active"')).toBeTruthy();
   expect(screen.getByText('"High"')).toBeTruthy();
   expect(mocks.remove).not.toHaveBeenCalled();
+});
+
+it('keeps a focused value mounted while its placeholder gets an assignment', () => {
+  const placeholder = { ...field('Project'), propertyId: 'pending:Project' };
+  const [properties, setProperties] = createSignal<Property[]>([]);
+  mocks.getProperties = properties;
+  render(() => (
+    <EntityPropertiesSection
+      entityId="task"
+      entityType="TASK"
+      canEdit
+      showTags={false}
+      defaultProperties={() => [placeholder]}
+    />
+  ));
+  const value = screen.getByRole('button', { name: 'null' });
+  value.focus();
+
+  setProperties([{ ...field('Project', 'Launch'), propertyId: 'optimistic' }]);
+  setProperties([{ ...field('Project', 'Launch'), propertyId: 'assigned' }]);
+
+  expect(document.activeElement).toBe(value);
+  expect(value.textContent).toBe('"Launch"');
 });
 
 it('pins and unpins a virtual default without creating or deleting an assignment', async () => {
