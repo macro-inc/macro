@@ -173,6 +173,8 @@ fn form_over(table: &Table) -> Form {
         created_at: at(9),
         updated_at: at(9),
         is_hidden_in_drive: false,
+        responses_visible: false,
+        respondent_hidden: false,
     }
 }
 
@@ -258,6 +260,8 @@ async fn a_form_hidden_in_drive_stays_hidden_through_a_rename(pool: PgPool) {
     let repo = PgFormsRepo::new(pool.clone());
     let form = Form {
         is_hidden_in_drive: true,
+        responses_visible: false,
+        respondent_hidden: false,
         ..form_over(&table)
     };
     repo.create_form(&form, &layout_over(&table), true)
@@ -356,6 +360,8 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
                 status: Some(FormStatus::Closed),
                 closes_at: Some(Some(at(17))),
                 tally_visible: Some(true),
+                responses_visible: None,
+                respondent_hidden: None,
             },
             at(10),
             None,

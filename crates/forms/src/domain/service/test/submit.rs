@@ -4,14 +4,15 @@
 use std::collections::BTreeMap;
 
 use ::databases::domain::models::{DatabaseError, OpRefusal};
-use entity_access::domain::models::ViewAccessLevel;
+use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 use models_databases::{
     CellValue, CellWrite, DatabaseOp, EntityKind, EntityRef, OptionRef, RowsChange,
 };
 
 use super::*;
 use crate::domain::models::{
-    Answer, FormError, FormResponse, ResponseStatus, Submission, SubmissionOutcome,
+    Answer, FormError, FormResponse, ResponseStatus, SharingRefusal, Submission, SubmissionOutcome,
+    UpdateForm,
 };
 use crate::domain::ports::FormsService;
 
@@ -190,6 +191,54 @@ async fn a_signed_in_visitor_of_a_public_form_keeps_their_identity_and_one_respo
     assert_eq!(world.batches[0].viewer, VIEWER);
     assert_eq!(world.ledger.len(), 1);
     assert_eq!(world.ledger[0].respondent.as_deref(), Some(VIEWER));
+}
+
+#[tokio::test]
+async fn a_hidden_respondent_is_still_recorded_once_and_left_off_the_row() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    world.lock().unwrap().forms[0].form.respondent_hidden = true;
+    let forms = service(&world);
+    submit_as(&forms, VIEWER, employee_answers()).await.unwrap();
+    let again = submit_as(&forms, VIEWER, employee_answers()).await;
+    assert!(matches!(again, Err(FormError::AlreadyResponded)));
+    let world = world.lock().unwrap();
+    let (_, cells) = &world
+        .database(RSVP_DATABASE)
+        .table(RSVP_TABLE)
+        .unwrap()
+        .rows[0];
+    assert!(cells.get(&RESPONDENT).is_none());
+    // The row is written as the owner, so its author names nobody either.
+    assert_eq!(world.batches[0].viewer, OWNER);
+    assert_eq!(world.ledger.len(), 1);
+    assert_eq!(world.ledger[0].respondent.as_deref(), Some(VIEWER));
+    assert_eq!(world.event_types(), vec!["form.response_submitted"]);
+    assert!(world.events[0]["metadata"].get("respondent").is_none());
+}
+
+#[tokio::test]
+async fn a_form_cannot_turn_anonymous_after_a_response_names_its_respondent() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    submit_as(&forms, VIEWER, employee_answers()).await.unwrap();
+    let refused = forms
+        .update_form(
+            form_receipt::<EditAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner),
+            UpdateForm {
+                respondent_hidden: Some(true),
+                ..UpdateForm::default()
+            },
+        )
+        .await;
+    assert!(matches!(
+        refused,
+        Err(FormError::InvalidSharing(
+            SharingRefusal::RespondentsAlreadyNamed
+        ))
+    ));
+    assert!(!world.lock().unwrap().forms[0].form.respondent_hidden);
 }
 
 #[tokio::test]

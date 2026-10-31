@@ -31,6 +31,8 @@ const result: FormMutation = {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      respondentHidden: false,
       confirmationMessage: '',
       submittedColumnId: null,
       respondentColumnId: null,

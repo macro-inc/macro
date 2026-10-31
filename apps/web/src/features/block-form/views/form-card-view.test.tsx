@@ -21,6 +21,8 @@ function lunchPoll(access: FormDetail['access']): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: true,
+      responsesVisible: false,
+      respondentHidden: false,
       confirmationMessage: '',
       submittedColumnId: null,
       respondentColumnId: null,
@@ -125,6 +127,15 @@ describe('FormCardView poll', () => {
     expect(screen.getByText('3 votes · 75%')).toBeTruthy();
     expect(onOpen).not.toHaveBeenCalled();
     expect(onOpenResponses).not.toHaveBeenCalled();
+  });
+
+  it('sends anyone to the Responses tab when responses are shared', () => {
+    const { onOpen, onOpenResponses } = mount('view', (detail) => {
+      detail.form.responsesVisible = true;
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Responses' }));
+    expect(onOpenResponses).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
   });
 
   it('sends editors to the Responses tab', () => {

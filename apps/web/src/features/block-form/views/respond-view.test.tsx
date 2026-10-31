@@ -33,6 +33,8 @@ function offsite(): FormDetail {
       status: 'open',
       closesAt: null,
       tallyVisible: false,
+      responsesVisible: false,
+      respondentHidden: false,
       confirmationMessage: 'See you there!',
       submittedColumnId: null,
       respondentColumnId: null,
@@ -304,6 +306,41 @@ describe('RespondView', () => {
     expect(
       screen.getByRole('button', { name: 'Edit my response' })
     ).toBeTruthy();
+  });
+
+  it('offers the shared Responses table from a saved response and says names stay off it', () => {
+    const detail = offsite();
+    detail.form.responsesVisible = true;
+    detail.form.respondentHidden = true;
+    const { context } = createMockFormContext({
+      detail,
+      mine: {
+        status: 'submitted',
+        booking: null,
+        submittedAt: '2026-10-01T09:00:00Z',
+        answers: [
+          { question: 'q-name', value: { type: 'text', value: 'Ada' } },
+        ],
+      },
+    });
+    let opened = 0;
+    render(() => (
+      <FormProvider value={context}>
+        <RespondView
+          detail={detail}
+          compact={false}
+          refetch={async () => true}
+          onOpenResponses={() => opened++}
+        />
+      </FormProvider>
+    ));
+    expect(
+      screen.getByText(
+        /Everyone who can open this form sees your answers, without your name\./
+      )
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'See responses' }));
+    expect(opened).toBe(1);
   });
 
   it('shows a closed form’s saved response with the reason it can no longer be edited', () => {

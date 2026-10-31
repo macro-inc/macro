@@ -82,6 +82,8 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                 created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
                 updated_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
                 is_hidden_in_drive: false,
+                responses_visible: false,
+                respondent_hidden: false,
             },
             access: FormAccess::Owner,
             table_gone: false,

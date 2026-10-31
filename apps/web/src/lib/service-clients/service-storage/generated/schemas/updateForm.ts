@@ -22,6 +22,10 @@ export interface UpdateForm {
   confirmationMessage?: string;
   /** Its new description. */
   description?: string;
+  /** Whether respondent identity is withheld from response rows. */
+  respondentHidden?: boolean;
+  /** Whether people with View may read individual response rows. */
+  responsesVisible?: boolean;
   /** Open or close it. */
   status?: FormStatus;
   /** Whether respondents may read option tallies. */

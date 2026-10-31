@@ -60,6 +60,8 @@ fn a_form_detail_reads_as_the_web_client_expects() {
             created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2026, 9, 2, 9, 0, 0).unwrap(),
             is_hidden_in_drive: false,
+            responses_visible: false,
+            respondent_hidden: false,
         },
         access: FormAccess::Edit,
         table_gone: false,
@@ -116,6 +118,8 @@ fn a_form_detail_reads_as_the_web_client_expects() {
                 "respondentColumnId": null,
                 "audience": "members",
                 "tallyVisible": false,
+                "responsesVisible": false,
+                "respondentHidden": false,
                 "status": "open",
                 "closesAt": "2026-10-03T17:00:00Z",
                 "confirmationMessage": "",
@@ -412,6 +416,8 @@ fn a_form_takes_responses_while_open_and_before_it_closes() {
         created_at: now,
         updated_at: now,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        respondent_hidden: false,
     };
     assert!(form(FormStatus::Open, None).accepts_responses_at(now));
     assert!(
@@ -442,6 +448,8 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
             created_at: now,
             updated_at: now,
             is_hidden_in_drive: false,
+            responses_visible: false,
+            respondent_hidden: false,
         },
         access: FormAccess::View,
     };
@@ -459,6 +467,8 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
                 "respondentColumnId": null,
                 "audience": "public",
                 "tallyVisible": true,
+                "responsesVisible": false,
+                "respondentHidden": false,
                 "status": "closed",
                 "closesAt": null,
                 "confirmationMessage": "Thanks",
@@ -531,6 +541,8 @@ fn form_and_response_schemas_require_every_field_they_always_serialize() {
         created_at: now,
         updated_at: now,
         is_hidden_in_drive: false,
+        responses_visible: false,
+        respondent_hidden: false,
     };
     let response = FormResponse {
         id: FormResponseId::from_uuid(Uuid::from_u128(0xe1)),

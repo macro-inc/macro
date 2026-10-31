@@ -95,6 +95,8 @@ struct FormRow {
     trashed_at: Option<DateTime<Utc>>,
     name_follows_database: bool,
     is_hidden_in_drive: bool,
+    responses_visible: bool,
+    respondent_hidden: bool,
 }
 
 impl TryFrom<FormRow> for StoredForm {
@@ -119,6 +121,8 @@ impl TryFrom<FormRow> for StoredForm {
                 created_at: row.created_at,
                 updated_at: row.updated_at,
                 is_hidden_in_drive: row.is_hidden_in_drive,
+                responses_visible: row.responses_visible,
+                respondent_hidden: row.respondent_hidden,
             },
             trashed_at: row.trashed_at,
             name_follows_database: row.name_follows_database,
@@ -165,9 +169,9 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 id, name, description, owner_id, database_id, table_id,
                 submitted_column_id, respondent_column_id, audience, tally_visible,
                 status, closes_at, confirmation_message, created_at, updated_at,
-                name_follows_database, is_hidden_in_drive
+                name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             ON CONFLICT (table_id) DO NOTHING
             "#,
             form.id.into_uuid(),
@@ -187,6 +191,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             form.updated_at,
             name_follows_database,
             form.is_hidden_in_drive,
+            form.responses_visible,
+            form.respondent_hidden,
         )
         .execute(&mut *transaction)
         .await;
@@ -233,7 +239,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             SELECT id, name, description, owner_id, database_id, table_id,
                    submitted_column_id, respondent_column_id, audience, tally_visible,
                    status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             FROM forms WHERE id = $1
             "#,
             id.into_uuid(),
@@ -253,7 +259,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 SELECT id, name, description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
                 FROM forms WHERE id = ANY($1) AND trashed_at IS NULL
                 ORDER BY id
                 "#,
@@ -286,7 +292,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 SELECT id, name, description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
                 FROM forms WHERE database_id = $1 AND trashed_at IS NULL
                 ORDER BY created_at, id
                 "#,
@@ -368,12 +374,14 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 status = COALESCE($5, status),
                 closes_at = CASE WHEN $6 THEN $7 ELSE closes_at END,
                 tally_visible = COALESCE($8, tally_visible),
+                responses_visible = COALESCE($10, responses_visible),
+                respondent_hidden = COALESCE($11, respondent_hidden),
                 updated_at = $9
             WHERE id = $1
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             "#,
             id.into_uuid(),
             changes.description.as_deref(),
@@ -384,6 +392,8 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             changes.closes_at.flatten(),
             changes.tally_visible,
             updated_at,
+            changes.responses_visible,
+            changes.respondent_hidden,
         )
         .fetch_one(&mut *transaction)
         .await?;
@@ -407,7 +417,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             "#,
             id.into_uuid(),
             name,
@@ -433,7 +443,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             RETURNING id, name, description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
-                      name_follows_database, is_hidden_in_drive
+                      name_follows_database, is_hidden_in_drive, responses_visible, respondent_hidden
             "#,
             id.into_uuid(),
             updated_at,

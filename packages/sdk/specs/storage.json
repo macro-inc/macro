@@ -31632,6 +31632,8 @@
           "respondentColumnId",
           "audience",
           "tallyVisible",
+          "responsesVisible",
+          "respondentHidden",
           "status",
           "closesAt",
           "confirmationMessage",
@@ -31687,7 +31689,15 @@
           "respondentColumnId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted."
+            "description": "The person column each signed-in submission names its respondent in;\n`null` once deleted. When `respondent_hidden`, the form still owns\nthis column but does not write it."
+          },
+          "respondentHidden": {
+            "type": "boolean",
+            "description": "Whether respondent identity is withheld from response rows. The\nledger still records who responded so they cannot submit twice."
+          },
+          "responsesVisible": {
+            "type": "boolean",
+            "description": "Whether people with View may read individual response rows."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",
@@ -31716,7 +31726,7 @@
       },
       "FormAccess": {
         "type": "string",
-        "description": "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it.",
+        "description": "The caller's level on a form: view responds (and reads responses when\nthey are shared), edit changes questions and reads responses, owner\nalso sets the audience, closes and trashes it.",
         "enum": ["view", "edit", "owner"]
       },
       "FormCollaboration": {
@@ -44354,6 +44364,14 @@
           "description": {
             "type": "string",
             "description": "Its new description."
+          },
+          "respondentHidden": {
+            "type": "boolean",
+            "description": "Whether respondent identity is withheld from response rows."
+          },
+          "responsesVisible": {
+            "type": "boolean",
+            "description": "Whether people with View may read individual response rows."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",

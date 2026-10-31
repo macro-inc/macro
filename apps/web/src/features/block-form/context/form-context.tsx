@@ -180,6 +180,8 @@ export type FormMetadataPatch = {
   status?: FormStatus;
   closesAt?: string | null;
   tallyVisible?: boolean;
+  responsesVisible?: boolean;
+  respondentHidden?: boolean;
 };
 
 export type SubmitOutcome =
@@ -285,6 +287,8 @@ export type EditorsProps = {
 export type ResponsesGridProps = {
   databaseId: string;
   tableId: string;
+  /** Hide this column, as when the form withholds who responded. */
+  hideColumnId?: string | null;
 };
 
 /**

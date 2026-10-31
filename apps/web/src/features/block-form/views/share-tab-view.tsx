@@ -19,8 +19,8 @@ import type { Preview } from '../primitives/create-preview';
 
 /**
  * The Share tab (RFC 02 §2, §6): who can respond, the respond link, whether
- * the form takes responses and until when, and the people it is shared with
- * through the share dialog.
+ * the form takes responses and until when, whether responses and names are
+ * shared, and the people it is shared with through the share dialog.
  */
 export function ShareTabView(props: {
   detail: FormDetail;
@@ -170,6 +170,32 @@ export function ShareTabView(props: {
               )
             }
           />
+          <ToggleSwitch
+            size="md"
+            label="Share responses with team"
+            labelClass="text-sm text-ink"
+            checked={form().responsesVisible}
+            disabled={!isOwner() || pending()}
+            onChange={(responsesVisible) =>
+              fireAndForget(
+                update({ responsesVisible }, 'Sharing responses'),
+                'form-share'
+              )
+            }
+          />
+          <ToggleSwitch
+            size="md"
+            label="Anonymous"
+            labelClass="text-sm text-ink"
+            checked={form().respondentHidden}
+            disabled={!isOwner() || pending()}
+            onChange={(respondentHidden) =>
+              fireAndForget(
+                update({ respondentHidden }, 'Anonymous responses'),
+                'form-share'
+              )
+            }
+          />
           <label class="flex flex-col gap-1">
             <span class="text-xs font-medium text-ink-muted">
               Confirmation message
@@ -193,8 +219,8 @@ export function ShareTabView(props: {
           </label>
           <Show when={!isOwner()}>
             <p class="text-xs text-ink-muted">
-              Only the owner can change who responds, close the form or show
-              results.
+              Only the owner can change who responds, close the form, show
+              results, share responses or make them anonymous.
             </p>
           </Show>
         </div>

@@ -1,6 +1,6 @@
 //! Database row clauses for the flat and grouped Soup queries: a row is visible
-//! when its database is untrashed and the viewer holds a grant on it, or edits
-//! a live form over it.
+//! when its database is untrashed and the viewer holds a grant on it, edits a
+//! live form over it, or views a live form over it that shares its responses.
 
 use filter_ast::Expr;
 use item_filters::ast::database_row::DatabaseRowLiteral;
@@ -28,14 +28,18 @@ pub(in crate::outbound::pg_soup_repo) fn build_database_row_filter(
         .unwrap_or_default()
 }
 
-/// Databases the viewer reaches as an editor of a live form over them.
-const FORM_EDITOR_SEMI_JOIN: &str = r#"row_database.database_id IN (
+/// Databases the viewer reaches through a live form over them: as its editor,
+/// or as its viewer when it shares its responses.
+const FORM_SEMI_JOIN: &str = r#"row_database.database_id IN (
                     SELECT f.database_id
                     FROM forms f
                     JOIN entity_access ea ON ea.entity_id = f.id AND ea.entity_type = 'form'
                     JOIN user_source_ids us ON us.source_id = ea.source_id
                     WHERE f.trashed_at IS NULL
-                    AND ea.access_level IN ('edit', 'owner')
+                    AND (
+                        ea.access_level IN ('edit', 'owner')
+                        OR (ea.access_level = 'view' AND f.responses_visible)
+                    )
                 )"#;
 
 /// Rows are never viewed on their own: `ViewedAt` sorts them last and `ViewedUpdated`
@@ -59,6 +63,6 @@ pub(super) fn database_row_top_clause(sort: SimpleSortMethod, grouped: bool) -> 
         JOIN database_entities row_database ON row_database.database_id = row_table.database_id
         WHERE row_database.trashed_at IS NULL AND ({} OR {})"#,
         access_semi_join("row_database.database_id::text", "database"),
-        FORM_EDITOR_SEMI_JOIN,
+        FORM_SEMI_JOIN,
     )
 }

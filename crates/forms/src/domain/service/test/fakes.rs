@@ -459,6 +459,12 @@ impl FormsRepo for FakeRepo {
         if let Some(tally_visible) = changes.tally_visible {
             form.tally_visible = tally_visible;
         }
+        if let Some(responses_visible) = changes.responses_visible {
+            form.responses_visible = responses_visible;
+        }
+        if let Some(respondent_hidden) = changes.respondent_hidden {
+            form.respondent_hidden = respondent_hidden;
+        }
         form.updated_at = updated_at;
         Ok(FormUpdate::Updated(Box::new(form.clone())))
     }

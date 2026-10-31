@@ -22,15 +22,15 @@ const storage = vi.hoisted(() => ({
   createForm: vi.fn(),
   putFormLayout: vi.fn(),
   updateForm: vi.fn(),
-  applyDatabaseOps: vi.fn(),
+  createDatabaseColumn: vi.fn(),
 }));
 vi.mock('@queries/storage/forms', () => ({
   createForm: storage.createForm,
   putFormLayout: storage.putFormLayout,
   updateForm: storage.updateForm,
 }));
-vi.mock('@queries/storage/databases', () => ({
-  applyDatabaseOps: storage.applyDatabaseOps,
+vi.mock('@block-database/queries/columns', () => ({
+  createDatabaseColumn: storage.createDatabaseColumn,
 }));
 
 const draft = {
@@ -38,6 +38,8 @@ const draft = {
   options: ['Pizza', 'Salad'],
   multi: false,
   showResults: true,
+  shareResponses: false,
+  anonymous: false,
 };
 
 function created(sections: { id: string; kind: string }[]) {
@@ -56,7 +58,7 @@ describe('publishPoll', () => {
     storage.createForm.mockReturnValue(
       created([{ id: 'section-1', kind: 'questions' }])
     );
-    storage.applyDatabaseOps.mockReturnValue(
+    storage.createDatabaseColumn.mockReturnValue(
       errAsync({ code: 'INVALID_OP', message: 'No.' })
     );
     const discarded: string[] = [];
@@ -78,8 +80,34 @@ describe('publishPoll', () => {
     expect(result._unsafeUnwrapErr().message).toBe(
       'The new form has no section to hold the question.'
     );
-    expect(storage.applyDatabaseOps).not.toHaveBeenCalled();
+    expect(storage.createDatabaseColumn).not.toHaveBeenCalled();
     expect(discarded).toEqual(['form-1']);
+  });
+});
+
+it('patches tally, shared responses and anonymity after the layout is valid', async () => {
+  storage.createForm.mockReturnValue(
+    created([{ id: 'section-1', kind: 'questions' }])
+  );
+  storage.createDatabaseColumn.mockReturnValue(okAsync('column-1'));
+  storage.putFormLayout.mockReturnValue(okAsync({ detail: { sections: [] } }));
+  storage.updateForm.mockReturnValue(okAsync(undefined));
+  const result = await publishPoll(
+    {
+      question: 'Lunch?',
+      options: ['Pizza', 'Salad'],
+      multi: false,
+      showResults: false,
+      shareResponses: true,
+      anonymous: true,
+    },
+    () => okAsync(undefined)
+  );
+  expect(result.isOk()).toBe(true);
+  expect(storage.updateForm).toHaveBeenCalledWith('form-1', {
+    tallyVisible: false,
+    responsesVisible: true,
+    respondentHidden: true,
   });
 });
 
@@ -90,6 +118,8 @@ it('rejects duplicate options without creating a form or silently dropping a cho
       options: ['Pizza', ' pizza ', 'Salad'],
       multi: false,
       showResults: true,
+      shareResponses: false,
+      anonymous: false,
     },
     () => okAsync(undefined)
   );
