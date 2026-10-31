@@ -110,7 +110,7 @@ const INIT_COMMAND = 'graphql_cache_init_with_schema';
 const DRAFTS_NEED_UPDATE =
   'Update Macro to sync drafts saved on this device. Your queued drafts are preserved until the app is updated.';
 const CACHE_NEEDS_UPDATE =
-  'Update Macro to use the local cache on this device. Macro keeps working without it until the app is updated.';
+  'Update Macro to use the local cache on this device. Until the app is updated, drafts saved here do not sync, and queued drafts are preserved.';
 
 /**
  * The installed native app is older than this OTA bundle and lacks a cache
