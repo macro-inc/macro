@@ -17,7 +17,7 @@ use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsmeow::{Dialer, Signal};
 
 use crate::domain::account::{
-    AccountConfig, AccountSessions, BACKFILL_RETRY, BACKFILL_TIMEOUT, GROUPS_REFRESH_INTERVAL,
+    AccountConfig, AccountSessions, BACKFILL_TIMEOUT, GROUPS_REFRESH_INTERVAL,
 };
 use crate::domain::ports::LeaseError;
 use crate::domain::supervisor::{Supervisor, SupervisorConfig, SupervisorError};
@@ -48,10 +48,8 @@ pub struct Timings {
     /// Least time between requested group refreshes of one account.
     pub groups_refresh_interval: Duration,
     /// A history page request the phone has not answered after this waits
-    /// for the phone.
+    /// for the owner to start it again.
     pub backfill_timeout: Duration,
-    /// How often an import waiting for the phone asks again.
-    pub backfill_retry: Duration,
 }
 
 impl Timings {
@@ -70,7 +68,6 @@ impl Timings {
             health_every: Duration::from_secs(60),
             groups_refresh_interval: GROUPS_REFRESH_INTERVAL,
             backfill_timeout: BACKFILL_TIMEOUT,
-            backfill_retry: BACKFILL_RETRY,
         }
     }
 }
@@ -169,7 +166,6 @@ pub async fn start<Kms: WhatsAppKms + 'static>(
             tick_every: timings.tick_every,
             groups_refresh_interval: timings.groups_refresh_interval,
             backfill_timeout: timings.backfill_timeout,
-            backfill_retry: timings.backfill_retry,
         },
     );
     let supervisor = Supervisor::new(

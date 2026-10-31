@@ -26,7 +26,7 @@ import CloseIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { format } from 'date-fns';
+import { format, getDaysInMonth } from 'date-fns';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { CalendarCallSidebar } from '../calendar-call-sidebar';
 import { useCalendarFocus } from '../calendar-focus-target';
@@ -40,7 +40,7 @@ import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
 import { ConnectCalendarsPromotion } from './ConnectCalendarsPromotion';
 
-function CalendarMiniCalendar() {
+export function CalendarMiniCalendar() {
   const calendarView = useCalendarView();
   const calendarPager = useCalendarPager();
   const initialDate = new Date();
@@ -48,20 +48,32 @@ function CalendarMiniCalendar() {
   const currentDate = createMemo(
     () => calendarPager.activeDateInfo()?.view.calendar.getDate() ?? initialDate
   );
+  const [focusedDay, setFocusedDay] = createSignal(currentDate());
   const highlightedRange = createMemo(() => {
     const dateInfo = calendarPager.activeDateInfo();
     if (dateInfo?.view.type !== 'timeGridWeek') return undefined;
     return { end: dateInfo.end, start: dateInfo.start };
   });
 
-  // Month browsing and keyboard focus stay local to the mini calendar.
+  // Keep focus local and clamp month-end dates so shorter months stay tabbable.
   return (
     <MiniCalendar
       required
       fixedWeeks
       startOfWeek={calendarView.displaySettings.weekStartsOn}
       value={currentDate()}
+      focusedDay={focusedDay()}
       highlightedRange={highlightedRange()}
+      onMonthChange={(month) =>
+        setFocusedDay(
+          new Date(
+            month.getFullYear(),
+            month.getMonth(),
+            Math.min(focusedDay().getDate(), getDaysInMonth(month))
+          )
+        )
+      }
+      onFocusedDayChange={setFocusedDay}
       onValueChange={(date) => date && calendarPager.gotoDate(date)}
     />
   );
