@@ -24,6 +24,18 @@ services:
     depends_on:
       db:
         condition: service_healthy
+  demo:
+    build:
+      context: ..
+      dockerfile: connect/services/connect_demo/Dockerfile
+    ports:
+      - "${CONNECT_DEMO_PORT:-3000}:3000"
+    environment:
+      CONNECT_BASE_URL: http://api:8080
+      CONNECT_DEMO_CUSTOMER_KEY: ${CONNECT_DEMO_CUSTOMER_KEY:-}
+      CONNECT_DEMO_PUBLIC_URL: http://localhost:${CONNECT_DEMO_PORT:-3000}/demo
+    depends_on:
+      - api
 
 volumes:
   connect_db:
