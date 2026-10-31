@@ -146,7 +146,8 @@ impl InitiativeRead {
         &self.receipt
     }
 
-    pub(crate) fn task_receipts(&self) -> &[EntityAccessReceipt<ViewAccessLevel>] {
+    /// View receipts for the tasks this viewer may see, in the detail's order.
+    pub fn task_receipts(&self) -> &[EntityAccessReceipt<ViewAccessLevel>] {
         &self.task_receipts
     }
 }

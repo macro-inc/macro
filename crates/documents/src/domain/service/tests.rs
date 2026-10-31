@@ -1585,21 +1585,16 @@ fn team_policy_receipts() -> Vec<EntityAccessReceipt<EditAccessLevel>> {
         )
         .unwrap(),
     );
-    for auth in [
-        EntityAccessAuth::Internal,
-        EntityAccessAuth::Unauthenticated,
-    ] {
-        receipts.push(
-            EntityAccessReceipt::try_new(
-                auth,
-                entity.clone(),
-                EntityPermission::AccessLevel {
-                    access_level: AccessLevel::Owner,
-                },
-            )
-            .unwrap(),
-        );
-    }
+    receipts.push(
+        EntityAccessReceipt::try_new(
+            EntityAccessAuth::Internal,
+            entity.clone(),
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            },
+        )
+        .unwrap(),
+    );
     receipts
 }
 

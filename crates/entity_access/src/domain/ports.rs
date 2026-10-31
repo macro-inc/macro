@@ -104,6 +104,15 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         agent_session_id: &str,
     ) -> impl Future<Output = Result<Option<AgentSessionParent>, AccessError>> + Send;
 
+    /// The projects that contain a document: the one a live task's Project
+    /// property names, and those of live tasks whose discussion has the
+    /// document attached. Persisted relationships, not caller-supplied
+    /// grants.
+    fn get_containing_projects(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Vec<Uuid>, AccessError>> + Send;
+
     /// Whether a session row exists at all, for anyone.
     ///
     /// Asked only once a viewer has turned out to hold no grant, to tell

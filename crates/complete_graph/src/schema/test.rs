@@ -88,6 +88,8 @@ struct CountingSoupService {
     raw_team_receipts: Arc<AtomicUsize>,
     return_empty_raw: bool,
     raw_response: Arc<Mutex<Option<Vec<SoupItem<()>>>>>,
+    /// Items receipt hydration returns; the raw response when unset.
+    viewable_response: Arc<Mutex<Option<Vec<SoupItem<()>>>>>,
     frecency_calls: Arc<AtomicUsize>,
     frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
@@ -194,9 +196,52 @@ impl CountingSoupService {
     fn set_raw_response(&self, items: Vec<SoupItem<()>>) {
         *self.raw_response.lock().expect("raw response lock") = Some(items);
     }
+
+    fn set_viewable_response(&self, items: Vec<SoupItem<()>>) {
+        *self
+            .viewable_response
+            .lock()
+            .expect("viewable response lock") = Some(items);
+    }
 }
 
 impl SoupService for CountingSoupService {
+    async fn get_viewable_items(
+        &self,
+        receipts: Vec<EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>>,
+        team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+    ) -> Result<Vec<soup::domain::models::SoupProjectionHydration>, soup::domain::models::SoupErr>
+    {
+        self.raw_calls.fetch_add(1, Ordering::SeqCst);
+        if team_receipt.is_some() {
+            self.raw_team_receipts.fetch_add(1, Ordering::SeqCst);
+        }
+        let receipted = receipts
+            .iter()
+            .map(|receipt| {
+                let entity = receipt.entity();
+                entity
+                    .entity_type
+                    .with_entity_string(entity.entity_id.clone())
+            })
+            .collect::<std::collections::HashSet<_>>();
+        let response = self
+            .viewable_response
+            .lock()
+            .expect("viewable response lock")
+            .clone()
+            .or_else(|| self.raw_response.lock().expect("raw response lock").clone());
+        Ok(response
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|item| receipted.contains(&item.entity()))
+            .map(|item| soup::domain::models::SoupProjectionHydration {
+                item,
+                document_server_facts: None,
+            })
+            .collect())
+    }
+
     async fn get_user_soup<T>(
         &self,
         _req: soup::domain::models::SoupRequest<T>,
@@ -1132,12 +1177,15 @@ fn full_message(thread_id: Uuid) -> Message {
 }
 
 /// Entity access service whose team lookups are counted and return a team,
-/// and which grants View on the configured email threads only.
+/// which grants View on the configured email threads only, and which makes
+/// the viewer the owner of every initiative and agent session while a public
+/// link opens the configured ones to anyone.
 #[derive(Clone, Default)]
 struct CountingEntityAccessService {
     team_calls: Arc<AtomicUsize>,
     viewable_email_threads: Arc<Mutex<std::collections::HashSet<Uuid>>>,
     email_thread_checks: Arc<Mutex<Vec<Uuid>>>,
+    public_links: Arc<Mutex<HashMap<Uuid, AccessLevel>>>,
 }
 
 impl EntityAccessService for CountingEntityAccessService {
@@ -1226,12 +1274,43 @@ impl EntityAccessService for CountingEntityAccessService {
 
     async fn get_entity_permission(
         &self,
-        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+        entity_id: &str,
+        entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        Err(AccessError::internal("test access failure"))
+        // Documents reach this check only when the listing left them out;
+        // they are refused unless a test shares them by link.
+        if entity_type == EntityType::Document {
+            let id = Uuid::parse_str(entity_id).unwrap();
+            return self
+                .public_links
+                .lock()
+                .unwrap()
+                .get(&id)
+                .map(|access_level| EntityPermission::AccessLevel {
+                    access_level: *access_level,
+                })
+                .ok_or(AccessError::Unauthorized);
+        }
+        if !matches!(
+            entity_type,
+            EntityType::Initiative | EntityType::AgentSession
+        ) {
+            return Err(AccessError::internal("test access failure"));
+        }
+        if user_id.is_some_and(|user| AsRef::<str>::as_ref(user) == VALID_USER_ID) {
+            return Ok(EntityPermission::AccessLevel {
+                access_level: AccessLevel::Owner,
+            });
+        }
+        let id = Uuid::parse_str(entity_id).unwrap();
+        match self.public_links.lock().unwrap().get(&id) {
+            Some(access_level) => Ok(EntityPermission::AccessLevel {
+                access_level: *access_level,
+            }),
+            None => Err(AccessError::Unauthorized),
+        }
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -1543,6 +1622,9 @@ impl TestHarness {
                 graphql_soup::SoupItemLoader::new(
                     self.soup_service.clone(),
                     self.thread_reader.clone(),
+                    Arc::new(graphql_soup::EntityAccessViewAuthorizer(
+                        self.state.entity_access.as_ref().clone(),
+                    )),
                 ),
             ))
             .data(graphql_soup::AgentSessionEntityLoader(
@@ -1560,7 +1642,7 @@ impl TestHarness {
                 ),
             ))
             .data(graphql_properties::entity_properties_loader(
-                user_id.clone(),
+                Some(user_id.clone()),
                 NoOpEntityPropertyReader,
             ))
             .data(graphql_email::email_content_loader(
@@ -1789,7 +1871,7 @@ async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
     let loader = graphql_soup::AgentSessionEntityLoader(graphql_soup::soup_item_loader(
         soup_service.clone(),
         Arc::new(NoOpEmailService),
-        NoOpEntityAccessService,
+        CountingEntityAccessService::default(),
     ));
     let schema = build_schema_with_service::<
         CountingSoupService,

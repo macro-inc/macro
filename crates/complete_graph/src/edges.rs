@@ -28,7 +28,7 @@ use graphql_permission::{
     EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
 };
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
-use graphql_soup::SoupEntityEdges;
+use graphql_soup::{GraphqlSoupEntity, SoupEntityEdges};
 use predicate_index::{RecordKey, utc_timestamp_micros};
 use soup_filter_projection::{
     MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
@@ -77,7 +77,7 @@ where
     type ActivityEvent = GraphqlActivityEvent;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
     type AgentSessionEdges = SoupAgentSessionEdges;
-    type InitiativeEdges = SoupInitiativeEdges;
+    type InitiativeEdges = SoupInitiativeEdges<Self>;
     type CrmRecordEdges = SoupCrmRecordEdges;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
@@ -126,7 +126,10 @@ where
     }
 
     fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges {
-        SoupInitiativeEdges { initiative_id }
+        SoupInitiativeEdges {
+            initiative_id,
+            _edges: PhantomData,
+        }
     }
 
     fn crm_record_edges(record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
@@ -701,14 +704,49 @@ where
 }
 
 /// Initiative detail fields composed onto the canonical Soup entity.
-#[derive(Clone)]
-pub struct SoupInitiativeEdges {
+pub struct SoupInitiativeEdges<E> {
     /// Initiative whose domain-authorized details are requested.
     initiative_id: Uuid,
+    /// The edge set its tasks resolve with.
+    _edges: PhantomData<fn() -> E>,
+}
+
+impl<E> Clone for SoupInitiativeEdges<E> {
+    fn clone(&self) -> Self {
+        Self {
+            initiative_id: self.initiative_id,
+            _edges: PhantomData,
+        }
+    }
 }
 
 #[Object]
-impl SoupInitiativeEdges {
+impl<E: SoupEntityEdges> SoupInitiativeEdges<E> {
+    /// The associated tasks this viewer may view, from the same access walk
+    /// as `taskIds` and in its order. A public link opens each task the same
+    /// way it opens the project, so a caller with no account reads them too.
+    async fn tasks(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlSoupEntity<E>>> {
+        let receipts =
+            graphql_initiative::load_initiative_task_receipts(ctx, self.initiative_id).await?;
+        let order = receipts
+            .iter()
+            .map(|receipt| receipt.entity().entity_id.clone())
+            .collect::<Vec<_>>();
+        let mut hydrated = ctx
+            .data::<graphql_initiative::InitiativeEntityLoader>()?
+            .0
+            .hydrate_receipted(receipts)
+            .await?
+            .into_iter()
+            .map(|hydration| (hydration.item.entity().entity_id.into_owned(), hydration))
+            .collect::<HashMap<_, _>>();
+        Ok(order
+            .iter()
+            .filter_map(|id| hydrated.remove(id))
+            .map(GraphqlSoupEntity::new_with_projection)
+            .collect())
+    }
+
     /// Collaborators, independent of assignees.
     async fn member_ids(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<String>> {
         let detail = graphql_initiative::load_initiative_detail(ctx, self.initiative_id).await?;

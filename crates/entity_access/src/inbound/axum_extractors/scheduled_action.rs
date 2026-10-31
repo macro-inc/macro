@@ -22,7 +22,7 @@ use uuid::Uuid;
 
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
-    models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityType, RequiredPermission},
+    models::{Entity, EntityAccessReceipt, EntityType, RequiredPermission},
     ports::EntityAccessService,
 };
 
@@ -103,20 +103,15 @@ where
             .await
             .map_err(ExtractorError::from)?;
 
-        if !permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        }
-
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                user,
+                Entity {
                     entity_id: id.to_string(),
                     entity_type: EntityType::ScheduledAction,
                 },
-                auth: EntityAccessAuth::Authenticated(user),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+                permission,
+            )?,
             _marker: PhantomData,
         })
     }

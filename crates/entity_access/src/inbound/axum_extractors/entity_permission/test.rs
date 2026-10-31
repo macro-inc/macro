@@ -69,6 +69,7 @@ enum EntityAccessCall {
 #[derive(Clone, Default)]
 struct FakeEntityAccessService {
     bot_permission: Option<EntityPermission>,
+    public_level: Option<AccessLevel>,
     calls: Arc<Mutex<Vec<EntityAccessCall>>>,
 }
 
@@ -76,7 +77,14 @@ impl FakeEntityAccessService {
     fn with_bot_permission(permission: EntityPermission) -> Self {
         Self {
             bot_permission: Some(permission),
-            calls: Arc::default(),
+            ..Self::default()
+        }
+    }
+
+    fn with_public_level(access_level: AccessLevel) -> Self {
+        Self {
+            public_level: Some(access_level),
+            ..Self::default()
         }
     }
 
@@ -158,7 +166,7 @@ impl EntityAccessService for FakeEntityAccessService {
                 required_level,
             });
 
-        Ok(AccessLevel::View)
+        Ok(self.public_level.unwrap_or(AccessLevel::View))
     }
 
     async fn get_entity_permission(
@@ -339,7 +347,7 @@ async fn handler(
     extractor: EntityPermissionExtractor<FakeEntityAccessService, FakeAuthorizationService>,
 ) -> Json<Value> {
     let receipt = extractor.entity_access_receipt;
-    let auth = match receipt.auth {
+    let auth = match receipt.auth() {
         EntityAccessAuth::Authenticated(user_id) => json!({ "authenticated": user_id.to_string() }),
         EntityAccessAuth::Bot(bot_auth) => json!({ "bot": bot_auth }),
         EntityAccessAuth::Unauthenticated => json!("unauthenticated"),
@@ -348,9 +356,9 @@ async fn handler(
 
     Json(json!({
         "auth": auth,
-        "entity_id": receipt.entity.entity_id,
-        "entity_type": receipt.entity.entity_type.to_string(),
-        "permission": receipt.entity_permission,
+        "entity_id": receipt.entity().entity_id,
+        "entity_type": receipt.entity().entity_type.to_string(),
+        "permission": receipt.entity_permission(),
     }))
 }
 
@@ -468,6 +476,47 @@ async fn anonymous_requests_check_public_view_access() {
         }]
     );
     assert!(authorization.calls().is_empty());
+}
+
+#[tokio::test]
+async fn a_public_edit_link_reports_view_to_a_signed_out_caller() {
+    let mut reported = Vec::new();
+    for entity_type in ["document", "agent_session"] {
+        let (router, _entity_access, _authorization) = test_router_with_service(
+            FakeEntityAccessService::with_public_level(AccessLevel::Edit),
+        );
+
+        let (status, body) = send(
+            &router,
+            empty_body(request(&format!("/entity/{entity_type}/{ENTITY_ID}"))),
+        )
+        .await;
+
+        reported.push((
+            entity_type,
+            status,
+            body["auth"].clone(),
+            body["permission"]["access_level"].clone(),
+        ));
+    }
+
+    assert_eq!(
+        reported,
+        [
+            (
+                "document",
+                StatusCode::OK,
+                json!("unauthenticated"),
+                json!("view")
+            ),
+            (
+                "agent_session",
+                StatusCode::OK,
+                json!("unauthenticated"),
+                json!("view")
+            ),
+        ]
+    );
 }
 
 #[tokio::test]

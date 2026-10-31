@@ -8,7 +8,7 @@ use tower::ServiceExt;
 
 use super::*;
 use crate::{
-    domain::models::{EditAccessLevel, EntityAccessAuth},
+    domain::models::{AccessLevel, EditAccessLevel, EntityAccessAuth},
     inbound::axum_extractors::test_support::{
         AccessCall, FakeAuthorizationService, FakeEntityAccessService, TestState, USER_ID,
     },

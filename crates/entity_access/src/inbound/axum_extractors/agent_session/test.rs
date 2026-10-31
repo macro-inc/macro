@@ -1,5 +1,8 @@
 use super::*;
-use crate::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
+use crate::domain::models::{
+    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityPermission, OwnerAccessLevel,
+    ViewAccessLevel,
+};
 use crate::inbound::axum_extractors::test_support::{
     FakeAuthorizationService, FakeEntityAccessService, TestState, USER_ID,
 };
