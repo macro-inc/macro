@@ -206,3 +206,16 @@ async fn mcp_handlers_initialize_and_forward_session_for_sse_list_and_call() {
     let call: Value = serde_json::from_slice(&requests[5].body).unwrap();
     assert_eq!(call["params"]["arguments"]["query"], "hello");
 }
+
+#[test]
+fn tool_results_expand_json_text_only() {
+    let value = json!({"content": [
+        {"type": "text", "text": "{\"teams\":[{\"key\":\"MAC\"}]}"},
+        {"type": "text", "text": "plain words"},
+        {"type": "text", "text": "42"}
+    ]});
+    let expanded = expand_text_json(value);
+    assert_eq!(expanded["content"][0]["text"]["teams"][0]["key"], "MAC");
+    assert_eq!(expanded["content"][1]["text"], "plain words");
+    assert_eq!(expanded["content"][2]["text"], "42");
+}

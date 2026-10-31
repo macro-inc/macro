@@ -10,7 +10,7 @@ p { line-height: 1.45; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: 1rem; }
 button, a.button { padding: .45rem .7rem; border-radius: 6px; border: 1px solid #777; background: white; color: #242424; font: inherit; cursor: pointer; text-decoration: none; }
 textarea { width: 100%; min-height: 8rem; box-sizing: border-box; font: 14px monospace; }
-pre { overflow: auto; padding: 1rem; background: #f4f4f2; border-radius: 6px; }
+pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 1rem; background: #f4f4f2; border-radius: 6px; }
 .error { color: #a22; }
 #workspace { margin-top: 1.5rem; }
 #workspace .panel { margin: .75rem 0; }
