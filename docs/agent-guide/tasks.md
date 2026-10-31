@@ -799,6 +799,9 @@ in the project title and Projects row menus, copy `/app/initiative/<project-id>`
 which opens the project in Tasks; pasting it, or an older
 `/app/component/initiative-view~<project-id>~overview` link, into a markdown
 editor inserts a project mention. A link to a project discussion stays a link.
+Projects need an account to open, even with a Public link: signed out, the
+project page shows **Sign in to view this page** with Login and Sign Up, never
+an indefinite loader.
 Project properties live in the shared floating information panel and honor
 project access. Editors can rename the project; its owner can delete it.
 Deleting a project leaves its tasks in the workspace.
