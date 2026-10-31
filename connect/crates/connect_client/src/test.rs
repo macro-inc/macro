@@ -15,12 +15,15 @@ async fn calls_every_customer_route_with_the_shared_wire_contract() {
         .respond_with(
             ResponseTemplate::new(200).set_body_json(serde_json::json!([{
                 "id": "notion", "name": "Notion", "description": "Notes", "access": ["mcp"],
-                "mcp_url": "https://mcp.notion.com/mcp", "icon_url": null
+                "mcp_url": "https://mcp.notion.com/mcp", "icon_url": null,
+                "oauth_client": "dcr"
             }])),
         )
         .mount(&server)
         .await;
-    assert_eq!(client.catalog().await.unwrap()[0].id, "notion");
+    let catalog = client.catalog().await.unwrap();
+    assert_eq!(catalog[0].id, "notion");
+    assert_eq!(catalog[0].oauth_client, Some(wire::OAuthClient::Dcr));
 
     Mock::given(method("GET"))
         .and(path("/connect/v1/catalog/notion/icon.svg"))
