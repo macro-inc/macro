@@ -105,15 +105,16 @@ An open picker or nested tag editor stays mounted while resizing. The share
 indicator remains immediately beside the title whenever it is shown.
 Compact desktop rows keep tags after the title and before the trailing properties;
 phone rows retain the collapsed tag-overflow chip instead of dropping tags.
+Tag pills keep their compact height on touch.
 Task rows place Project before Assignees on desktop and phones. Narrow rows keep
 one assignee avatar plus the remaining count instead of a generic people icon.
 Desktop and tablet rows keep the compact column grid and its header at every
 pane width; only phones use the headerless narrow row layout. At list-container
 widths up to 840px, Project, Assignees, and Updated headers
-become icons with hover/focus tooltips and accessible names. Project occupies 32px,
-Assignees 40px, and Updated 64px above 600px; wider lists retain an 80px Updated
-column with its full label and sort arrow. At 600px, Updated fades and collapses
-over 160ms to leave more room for the title. Hidden Updated and Created by
+become icons with hover/focus tooltips and accessible names. Project occupies 32px
+and Assignees 40px. Updated fits its full header and sort arrow, with a 56px content
+minimum for single-line timestamps. At 600px, Updated fades and collapses over
+160ms to leave more room for the title. Hidden Updated and Created by
 columns reserve no width or spacing; visible cells own their 8px leading inset.
 Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
 Updated remains sortable. Created by is the final column, with a 16px avatar and a 16px gap after Updated. Its header shows a matching-size user-plus

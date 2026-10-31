@@ -11,7 +11,7 @@
 .task-grid-row.task-grid-icon-creator {
   --task-col-assignees: 9.5rem;
   --task-col-created-by: 2rem;
-  --task-col-timestamp: 5.5rem;
+  --task-col-timestamp: calc(max(3.5rem, var(--task-updated-header-width, 4rem)) + 0.5rem);
   --task-col-initiative: 8.5rem;
   column-gap: 0;
   transition: grid-template-columns 160ms ease;
@@ -47,7 +47,6 @@
   .task-grid-row.task-grid-icon-creator {
     --task-col-assignees: 3rem;
     --task-col-initiative: 2.5rem;
-    --task-col-timestamp: 4.5rem;
   }
 }
 

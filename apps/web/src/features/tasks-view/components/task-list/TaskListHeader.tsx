@@ -3,6 +3,7 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { cn, Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { useTasksView } from '../../tasks-view-context';
@@ -16,6 +17,7 @@ function SortableHeader(props: {
   align?: 'start' | 'end';
   class?: string;
   narrowIcon?: JSX.Element;
+  onWidthChange?: (width: number) => void;
 }) {
   const { state, setPrimarySort } = useTasksView();
   const active = () => state.sort[0]?.id === props.sortId;
@@ -63,11 +65,18 @@ function SortableHeader(props: {
       >
         {(sortId) => (
           <button
+            ref={(element) => {
+              if (props.onWidthChange) {
+                createResizeObserver(element, ({ width }) =>
+                  props.onWidthChange?.(width)
+                );
+              }
+            }}
             type="button"
             aria-label={props.label}
             data-blocks-navigation
             class={cn(
-              'flex h-full shrink-0 items-center gap-1 whitespace-nowrap text-ink-extra-muted hover:text-ink',
+              'flex h-full w-max shrink-0 items-center gap-1 whitespace-nowrap text-ink-extra-muted hover:text-ink',
               active() && 'text-ink'
             )}
             onClick={() => setPrimarySort(sortId())}
@@ -86,7 +95,9 @@ function SortableHeader(props: {
   );
 }
 
-export function TaskListHeader() {
+export function TaskListHeader(props: {
+  onTimestampWidthChange?: (width: number) => void;
+}) {
   const { showTaskProject } = useTasksView();
   return (
     <div
@@ -128,6 +139,7 @@ export function TaskListHeader() {
         class="task-updated-cell"
         align="end"
         narrowIcon={<ClockIcon class="size-4" />}
+        onWidthChange={props.onTimestampWidthChange}
       />
       <span
         role="columnheader"

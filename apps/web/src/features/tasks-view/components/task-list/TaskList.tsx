@@ -178,6 +178,8 @@ export function TaskList(props: TaskListProps) {
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   createScrollTopFade(viewport);
   const [grid, setGrid] = createSignal<HTMLDivElement>();
+  const [timestampHeaderWidth, setTimestampHeaderWidth] =
+    createSignal<number>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
 
   let scrollOffset = DEFAULT_TASKS_LIST_STATE.scrollOffset;
@@ -447,11 +449,19 @@ export function TaskList(props: TaskListProps) {
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
         class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden pb-2 pt-1 outline-none"
+        style={{
+          '--task-updated-header-width':
+            timestampHeaderWidth() === undefined
+              ? undefined
+              : `${timestampHeaderWidth()}px`,
+        }}
       >
         <div class="flex size-full min-h-0 min-w-0 flex-col px-2 @min-[640px]/u-list:px-3 mobile:px-1">
           <ListLayoutProvider ref={grid}>
             <Show when={!isMobile()}>
-              <TaskListHeader />
+              <TaskListHeader
+                onTimestampWidthChange={setTimestampHeaderWidth}
+              />
             </Show>
             <SwipableRowProvider
               container={viewport}
