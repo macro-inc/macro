@@ -13,7 +13,8 @@ use cal::{
     outbound::analytics_client::AnalyticsClientSink,
 };
 use calendar_events::{
-    domain::service::CalendarService, inbound::axum_router::CalendarRouterState,
+    domain::{ports::CalendarEventLabelReader, service::CalendarService},
+    inbound::axum_router::CalendarRouterState,
     outbound::pg::PgCalendarRepository,
 };
 use call::{
@@ -1039,6 +1040,9 @@ impl From<&ApiContext> for SearchHandlerState {
             ))
                 as Arc<dyn AgentSessionSearchMetadataService>,
             calendar_search_enabled: ctx.config.calendar_search_enabled,
+            calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
+                ctx.readonly_db.0.clone(),
+            ))) as Arc<dyn CalendarEventLabelReader>,
         }
     }
 }

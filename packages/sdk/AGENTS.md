@@ -72,7 +72,7 @@ the existing gateway prefixes.
   only on such a calendar, since writing someone's calendar grants it too. An
   own attendee row marked organizer counts only on a copy the user can change
   (`isReadOnly` false): Outlook names the mailbox owner as organizer on every
-  event of a read-only calendar. `eventRole` and `ToolEventRole::of` must stay
+  event of a read-only calendar. `eventRole` and `EventRole::of` must stay
   in step.
 - Calendar notes accept a document handle and the occurrence returned by calendar
   reads. `CalendarNote` owns optional team sharing and unlinking; clearing its team
