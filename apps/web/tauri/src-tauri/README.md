@@ -90,9 +90,11 @@ the JavaScript awaiting the sheet, and the finished sign-in has nowhere to go.
 `set_bundle_reload_hold` here, because the mobile foreground handler applies a
 completed bundle without asking the page. `apply_update` then answers `Held` and
 the bundle stays pending until the next hide or foreground after the release.
-Each document clears the hold when it acknowledges on mount, so a hold whose
-owner died cannot block updates until the next launch. The command requires a
-full app release; older binaries ignore the hold and keep reloading on foreground.
+Each document sends its hold state on mount, so a hold whose owner died cannot
+block updates until the next launch. Desktop has no foreground handler to hold
+and does not call the command. Mobile requires it, so the mobile native floors
+must reach a binary that has it; below that floor no bundle applies, so no
+update reload can land on a sheet.
 
 `frontend_instance_id` is generated once per document and attached to every
 PostHog event (including automatic exceptions/pageviews) and OTel resource.

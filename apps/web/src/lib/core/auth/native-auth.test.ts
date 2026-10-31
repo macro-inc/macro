@@ -6,9 +6,13 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@core/util/platform', () => ({
   getNativeMobilePlatform: mocks.platform,
-  isTauri: () => false,
 }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: async (command: string, args: unknown) =>
+    command === 'set_bundle_reload_hold'
+      ? undefined
+      : mocks.invoke(command, args),
+}));
 
 import {
   hasAutomaticReloadHolds,

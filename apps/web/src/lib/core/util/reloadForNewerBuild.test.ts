@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const native = vi.hoisted(() => ({
   invoke: vi.fn(),
-  isTauri: vi.fn(),
+  mobilePlatform: vi.fn(),
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -12,10 +12,8 @@ vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: native.invoke }));
 vi.mock('./platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./platform')>()),
-  isTauri: native.isTauri,
+  getNativeMobilePlatform: native.mobilePlatform,
 }));
-
-import { Telemetry } from '@macro-inc/observability';
 
 import {
   hasAutomaticReloadHolds,
@@ -25,6 +23,7 @@ import {
   type ReloadPage,
   reloadForNewerBuild,
   resetReloadForNewerBuildForTests,
+  syncNativeReloadHold,
 } from './reloadForNewerBuild';
 
 function fakePage(state: {
@@ -69,8 +68,8 @@ describe('holdAutomaticReload', () => {
     resetReloadForNewerBuildForTests();
   });
 
-  it('tells the native updater until the last hold is released', async () => {
-    native.isTauri.mockReturnValue(true);
+  it('tells the mobile updater until the last hold is released', async () => {
+    native.mobilePlatform.mockReturnValue('ios');
     native.invoke.mockResolvedValue(undefined);
 
     const first = holdAutomaticReload();
@@ -87,27 +86,38 @@ describe('holdAutomaticReload', () => {
     ]);
   });
 
-  it('keeps working on binaries that do not have the command', async () => {
-    native.isTauri.mockReturnValue(true);
-    native.invoke.mockRejectedValue(new Error('Command not found'));
-    const reported = vi.spyOn(Telemetry, 'error');
+  it('clears a hold left behind when a new document has none', async () => {
+    native.mobilePlatform.mockReturnValue('android');
+    native.invoke.mockResolvedValue(undefined);
 
-    const release = holdAutomaticReload();
-    expect(hasAutomaticReloadHolds()).toBe(true);
-    release();
+    await syncNativeReloadHold();
 
-    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(2));
-    await new Promise((resolve) => setTimeout(resolve));
-    expect(hasAutomaticReloadHolds()).toBe(false);
-    expect(reported).not.toHaveBeenCalled();
+    expect(native.invoke.mock.calls).toEqual([
+      ['set_bundle_reload_hold', { held: false }],
+    ]);
   });
 
-  it('stays off the native bridge on the web', () => {
-    native.isTauri.mockReturnValue(false);
+  it('keeps a hold taken before the document finished mounting', async () => {
+    native.mobilePlatform.mockReturnValue('ios');
+    native.invoke.mockResolvedValue(undefined);
+    holdAutomaticReload();
+    native.invoke.mockClear();
+
+    await syncNativeReloadHold();
+
+    expect(native.invoke.mock.calls).toEqual([
+      ['set_bundle_reload_hold', { held: true }],
+    ]);
+  });
+
+  it('stays off the native bridge outside the mobile apps', async () => {
+    native.mobilePlatform.mockReturnValue(undefined);
 
     holdAutomaticReload()();
+    await syncNativeReloadHold();
 
     expect(native.invoke).not.toHaveBeenCalled();
+    expect(hasAutomaticReloadHolds()).toBe(false);
   });
 });
 

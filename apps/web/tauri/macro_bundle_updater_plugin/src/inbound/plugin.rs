@@ -361,7 +361,8 @@ pub async fn perform_update<R: Runtime>(app_handle: tauri::AppHandle<R>) -> Resu
 ///
 /// A native auth sheet returns its result only to the document that opened it,
 /// and this process applies completed updates on foreground without asking
-/// that document, so the hold has to live here.
+/// that document, so the hold has to live here. Each document sends its state
+/// on mount, which clears a hold left by one that died holding.
 #[tauri::command]
 pub async fn set_bundle_reload_hold(
     service: tauri::State<'_, Mutex<PluginService>>,
@@ -382,11 +383,9 @@ pub async fn ack_bundle_update_reload<R: Runtime>(
         .path()
         .app_cache_dir()
         .map_err(|e| e.to_string())?;
-    let mut service = service.lock().await;
-    // Every document acknowledges on mount, and a new document holds nothing:
-    // a hold whose owner died must not block updates until the next launch.
-    service.set_reload_held(false);
     service
+        .lock()
+        .await
         .acknowledge_update_reload(&cache_dir, loaded_bundle_build)
         .await
         .map_err(|e| e.to_string())

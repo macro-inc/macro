@@ -7,7 +7,7 @@ import { createSignal } from 'solid-js';
 import { deviceLooksOffline } from './connectivity';
 import { fireAndForget } from './fireAndForget';
 import { isEditableInput } from './isEditableInput';
-import { isTauri } from './platform';
+import { getNativeMobilePlatform } from './platform';
 
 /** What the reload decision needs from the page; replaced in tests. */
 export interface ReloadPage {
@@ -82,16 +82,13 @@ export function hasAutomaticReloadHolds(): boolean {
 }
 
 /**
- * The native updater applies a finished bundle when the app returns to the
- * foreground, without asking this page, so a hold has to reach it too.
+ * The mobile updater applies a finished bundle when the app returns to the
+ * foreground, without asking this page, so a hold has to reach it too. A new
+ * document calls this on mount, because one that died holding never released.
  */
-async function syncNativeReloadHold() {
-  if (!isTauri()) return;
-  try {
-    await invoke('set_bundle_reload_hold', { held: holds.size > 0 });
-  } catch {
-    // Older binaries can load this OTA bundle but do not have the command.
-  }
+export async function syncNativeReloadHold(): Promise<void> {
+  if (!getNativeMobilePlatform()) return;
+  await invoke('set_bundle_reload_hold', { held: holds.size > 0 });
 }
 
 /**

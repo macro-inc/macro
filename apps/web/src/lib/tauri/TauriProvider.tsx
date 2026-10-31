@@ -5,7 +5,10 @@ import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
-import { hasAutomaticReloadHolds } from '@core/util/reloadForNewerBuild';
+import {
+  hasAutomaticReloadHolds,
+  syncNativeReloadHold,
+} from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
 import { PlatformNotificationProvider } from '@notifications';
 import { queryPersistence } from '@queries/client';
@@ -134,6 +137,7 @@ function TauriProvider(props: { children: JSX.Element }) {
         console.error('[bundle-update] ack_bundle_update_reload failed', e)
       );
     }
+    fireAndForget(syncNativeReloadHold(), 'bundle-update');
     // Fetch current status since events emitted before the listener registered are missed
     invoke<BundleUpdateStatus>('get_bundle_update_status')
       .then((status) => {
