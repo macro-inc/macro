@@ -23,6 +23,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::domain::{
+    labels::EventCopy,
     changes::CalendarChangeOp,
     ics::{CalendarEventExport, content_without_macro_call},
     models::{
@@ -2714,6 +2715,59 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         Ok(rows.into_iter().map(visible_calendar).collect())
+    }
+
+    #[tracing::instrument(skip(self, event_ids), fields(event_count = event_ids.len()), err)]
+    async fn event_copies(&self, event_ids: &[Uuid]) -> Result<Vec<EventCopy>, Report> {
+        let (rows, mut attendees, mut source_contents) = try_join!(
+            async {
+                sqlx::query!(
+                    r#"
+                    SELECT
+                        event.id,
+                        event.source_link_id,
+                        event.status,
+                        event.organizer_email,
+                        event.is_read_only,
+                        event.is_snapshot,
+                        event.guests_can_modify,
+                        event.guests_can_invite_others,
+                        event.guests_can_see_other_guests
+                    FROM calendar_events event
+                    WHERE event.id = ANY($1)
+                    "#,
+                    event_ids,
+                )
+                .fetch_all(&self.pool)
+                .await
+                .map_err(report)
+            },
+            fetch_attendees(&self.pool, event_ids),
+            fetch_source_contents(&self.pool, event_ids),
+        )?;
+        Ok(rows
+            .into_iter()
+            .map(|row| EventCopy {
+                event_id: row.id,
+                link_id: row.source_link_id,
+                status: event_status(&row.status),
+                organizer_email: row.organizer_email,
+                is_read_only: row.is_read_only,
+                is_snapshot: row.is_snapshot,
+                guest_policy: GuestPolicy {
+                    can_modify: row.guests_can_modify,
+                    can_invite_others: row.guests_can_invite_others,
+                    can_see_other_guests: row.guests_can_see_other_guests,
+                },
+                attendees: attendees.remove(&row.id).unwrap_or_default(),
+                calendar_ids: source_contents
+                    .remove(&row.id)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|source| source.calendar_id)
+                    .collect(),
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]

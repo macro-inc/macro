@@ -33,7 +33,7 @@ per-entity-type search plus a unified search across them — mounted into
 
 - Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
   `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
-  (domain only, no features, for its Macro call rule).
+  (domain only, no features, for its Macro call rule and label port).
 - Used by: `document_storage_service` (mounts `search_router`); called
   through `search_service_client`.
 

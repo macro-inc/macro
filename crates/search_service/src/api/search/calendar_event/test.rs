@@ -1,4 +1,5 @@
 use super::*;
+use calendar_events::domain::labels::{EventLabels, EventRole};
 use calendar_events::domain::meeting_links::attach_macro_call;
 use chrono::{NaiveDate, TimeZone, Utc};
 use opensearch_client::search::model::{Highlight, SearchHit};
@@ -51,12 +52,117 @@ fn returned_description(description: &str, holds_meeting: bool) -> Option<String
     info.description = Some(description.to_string());
     info.holds_meeting = holds_meeting;
     let results =
-        construct_search_result(vec![hit(id)], HashMap::from([(id, info)]), HashMap::new());
+        construct_search_result(
+            vec![hit(id)],
+            HashMap::from([(id, info)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
     results
         .into_iter()
         .next()
         .and_then(|row| row.metadata)
         .and_then(|metadata| metadata.description)
+}
+
+/// The metadata of a row for `info` under `labels`.
+fn labelled_row(mut info: CalendarEventSearchInfo, labels: EventLabels) -> CalendarEventMetadata {
+    let id = Uuid::new_v4();
+    info.id = id;
+    construct_search_result(
+        vec![hit(id)],
+        HashMap::from([(id, info)]),
+        HashMap::from([(id, labels)]),
+        HashMap::new(),
+    )
+    .into_iter()
+    .next()
+    .and_then(|row| row.metadata)
+    .expect("a row")
+}
+
+/// An event on a colleague's calendar comes back on the user's own inbox, so
+/// only the row's labels keep it from reading as the user's.
+#[test]
+fn a_row_on_a_colleagues_calendar_says_whose_it_is() {
+    let metadata = labelled_row(
+        timed_series(Uuid::nil()),
+        EventLabels {
+            calendar_name: Some("colleague@example.com".to_string()),
+            contributes_to_availability: Some(false),
+            inbox: Some("owner@example.com".to_string()),
+            role: None,
+        },
+    );
+    assert_eq!(
+        metadata.calendar_name.as_deref(),
+        Some("colleague@example.com")
+    );
+    assert_eq!(metadata.contributes_to_availability, Some(false));
+    assert_eq!(metadata.inbox.as_deref(), Some("owner@example.com"));
+    assert_eq!(metadata.role, None);
+}
+
+#[test]
+fn a_real_organizer_and_guest_keep_their_role_on_the_row() {
+    for (role, wire) in [
+        (EventRole::Organizer, CalendarEventSearchRole::Organizer),
+        (EventRole::Guest, CalendarEventSearchRole::Guest),
+    ] {
+        let metadata = labelled_row(
+            timed_series(Uuid::nil()),
+            EventLabels {
+                role: Some(role),
+                ..EventLabels::default()
+            },
+        );
+        assert_eq!(metadata.role, Some(wire));
+    }
+}
+
+/// A row whose labels failed to load still reaches the caller, without any.
+#[test]
+fn a_row_without_labels_says_nothing_about_the_calendar() {
+    let id = Uuid::new_v4();
+    let results = construct_search_result(
+        vec![hit(id)],
+        HashMap::from([(id, timed_series(id))]),
+        HashMap::new(),
+        HashMap::new(),
+    );
+    let metadata = results[0].metadata.as_ref().expect("metadata");
+    assert_eq!(metadata.calendar_name, None);
+    assert_eq!(metadata.contributes_to_availability, None);
+    assert_eq!(metadata.role, None);
+}
+
+/// Absent labels stay off the wire, like the row's other optional fields, and
+/// a row names the field the way an occurrence does.
+#[test]
+fn labels_serialize_under_the_occurrence_names() {
+    let metadata = labelled_row(
+        timed_series(Uuid::nil()),
+        EventLabels {
+            calendar_name: Some("Team".to_string()),
+            contributes_to_availability: Some(false),
+            inbox: Some("owner@example.com".to_string()),
+            role: Some(EventRole::Guest),
+        },
+    );
+    let row = serde_json::to_value(&metadata).expect("serializes");
+    assert_eq!(row["calendarName"], "Team");
+    assert_eq!(row["contributesToAvailability"], false);
+    assert_eq!(row["inbox"], "owner@example.com");
+    assert_eq!(row["role"], "guest");
+
+    let bare = serde_json::to_value(labelled_row(
+        timed_series(Uuid::nil()),
+        EventLabels::default(),
+    ))
+    .expect("serializes");
+    for field in ["calendarName", "contributesToAvailability", "inbox", "role"] {
+        assert!(bare.get(field).is_none(), "{field} stays off the wire");
+    }
 }
 
 #[test]
@@ -110,7 +216,12 @@ fn resolved_occurrence_rides_on_the_row() {
     info.occurrence_ends_at = Some(Utc.with_ymd_and_hms(2026, 8, 25, 10, 15, 0).unwrap());
 
     let results =
-        construct_search_result(vec![hit(id)], HashMap::from([(id, info)]), HashMap::new());
+        construct_search_result(
+            vec![hit(id)],
+            HashMap::from([(id, info)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
 
     assert_eq!(results.len(), 1);
     let metadata = results[0].metadata.as_ref().expect("metadata");
@@ -147,6 +258,7 @@ fn series_with_no_materialized_occurrence_keeps_its_row() {
         vec![hit(id)],
         HashMap::from([(id, timed_series(id))]),
         HashMap::new(),
+        HashMap::new(),
     );
 
     assert_eq!(results.len(), 1);
@@ -171,7 +283,12 @@ fn all_day_series_reads_the_date_pair() {
     info.end_date = Some(NaiveDate::from_ymd_opt(2026, 8, 26).unwrap());
 
     let results =
-        construct_search_result(vec![hit(id)], HashMap::from([(id, info)]), HashMap::new());
+        construct_search_result(
+            vec![hit(id)],
+            HashMap::from([(id, info)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
 
     let metadata = results[0].metadata.as_ref().expect("metadata");
     match &metadata.time {
@@ -191,7 +308,7 @@ fn hit_the_caller_cannot_see_is_dropped() {
     // The visibility query is the authority: an id absent from its result set
     // is one the caller lost access to since it was indexed.
     let id = Uuid::new_v4();
-    let results = construct_search_result(vec![hit(id)], HashMap::new(), HashMap::new());
+    let results = construct_search_result(vec![hit(id)], HashMap::new(), HashMap::new(), HashMap::new());
     assert!(
         results.is_empty(),
         "a hit with no visible row must not reach the response"
@@ -206,7 +323,12 @@ fn unreadable_span_is_dropped_rather_than_dated_wrong() {
     info.ends_at = None;
     // Neither leg of the time-shape constraint is satisfied.
     let results =
-        construct_search_result(vec![hit(id)], HashMap::from([(id, info)]), HashMap::new());
+        construct_search_result(
+            vec![hit(id)],
+            HashMap::from([(id, info)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
     assert!(results.is_empty());
 }
 
@@ -216,6 +338,7 @@ fn multiple_hits_for_one_event_collapse_into_one_row() {
     let results = construct_search_result(
         vec![hit(id), hit(id)],
         HashMap::from([(id, timed_series(id))]),
+        HashMap::new(),
         HashMap::new(),
     );
     assert_eq!(results.len(), 1, "one row per event entity");
@@ -232,6 +355,7 @@ fn organizer_rides_on_the_row_when_named() {
     let results = construct_search_result(
         vec![hit(id)],
         HashMap::from([(id, timed_series(id))]),
+        HashMap::new(),
         HashMap::new(),
     );
     let organizer = results[0]
@@ -252,7 +376,12 @@ fn organizer_absent_when_source_names_neither() {
     info.organizer_email = None;
     info.organizer_name = None;
     let results =
-        construct_search_result(vec![hit(id)], HashMap::from([(id, info)]), HashMap::new());
+        construct_search_result(
+            vec![hit(id)],
+            HashMap::from([(id, info)]),
+            HashMap::new(),
+            HashMap::new(),
+        );
     assert!(
         results[0]
             .metadata

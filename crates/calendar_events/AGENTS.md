@@ -302,7 +302,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   With meetings they attend, it is their own schedule for agents as for
   `TeamSourceOccurrence::is_personally_busy`. `viewer_can.organize` stays a
   capability, since writing a calendar lets the user act as its organizer, so
-  `ToolEventRole::of` and the SDK's `eventRole` count it only on such a
+  `EventRole::of` and the SDK's `eventRole` count it only on such a
   calendar, and `ReadCalendarEvent` reports anything else as
   `on_visible_calendar`. Microsoft Graph names the mailbox owner as organizer
   on every event of a read-only calendar such as Outlook's holidays, and the
@@ -313,7 +313,13 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   its canonical copy's flag, and a writable copy outranks a read-only one, so
   a meeting the user organizes keeps its role when a read-only calendar shows
   it too. The calendar's name is what tells an agent whose it is: Google names
-  a person's primary calendar after them or their address.
+  a person's primary calendar after them or their address. `domain::labels` is
+  the one place these rules live: the agent tools read `CalendarLabels` and
+  `EventRole::of` from it, and search rows, which agents read as often as
+  occurrences, get the same answer through `CalendarEventLabelReader`, which
+  labels every hit (`EventLabels::of`) from one read of the requester's
+  calendars and inboxes. Search reaches it as a trait object the host injects,
+  so it needs no outbound code from this crate.
 - Copies of one meeting pair by `calendar_meeting_uid(ical_uid)`, not the raw
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an
