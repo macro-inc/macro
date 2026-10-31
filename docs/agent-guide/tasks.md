@@ -96,15 +96,19 @@ keep their tags visible; long titles truncate only after tag collapse. Open the
 overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 An open picker or nested tag editor stays mounted while resizing. The share
 indicator remains immediately beside the title whenever it is shown.
-Narrow and phone rows keep the collapsed tag-overflow chip after the title and
-before the trailing properties, rather than dropping tags with the column layout.
+Compact desktop rows keep tags after the title and before the trailing properties;
+phone rows retain the collapsed tag-overflow chip instead of dropping tags.
 Task rows place Project before Assignees on desktop and phones. Narrow rows keep
 one assignee avatar plus the remaining count instead of a generic people icon.
-At list-container widths up to 840px, Project, Assignees, and Updated headers
+Desktop and tablet rows keep the compact column grid and its header at every
+pane width; only phones use the headerless narrow row layout. At list-container
+widths up to 840px, Project, Assignees, and Updated headers
 become icons with hover/focus tooltips and accessible names. Project occupies 32px,
-Assignees 40px, and Updated 64px; wider lists retain an 80px Updated column with
-its full label and sort arrow. Timestamps stay on one line, and Updated remains
-sortable. Created by is the final column, with a 16px avatar and a 16px gap after Updated. Its header shows a matching-size user-plus
+Assignees 40px, and Updated 64px above 600px; wider lists retain an 80px Updated
+column with its full label and sort arrow. At 600px, Updated fades and collapses
+over 160ms to leave more room for the title. Reduced-motion
+preferences disable the transition. Visible timestamps stay on one line, and
+Updated remains sortable. Created by is the final column, with a 16px avatar and a 16px gap after Updated. Its header shows a matching-size user-plus
 icon with a “Created by” tooltip on hover or focus. Owner names and the column label
 stay accessible; names remain available on hover. Its narrow-container visibility
 is unchanged.

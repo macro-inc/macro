@@ -19,14 +19,15 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 - Align wide desktop group-header glyphs with row status glyphs through shared Soup geometry; give narrow/mobile headers compact independent spacing, and preserve their 44px touch target and layout-neutral border.
 - Keep `soup-list` on list roots for shared row geometry; truncate long group labels instead of wrapping.
+- Keep desktop and tablet task rows on the shared column grid at every pane width with the column header mounted; use the headerless narrow row layout only on phones.
 - Set task-list horizontal padding from its container width: 8px below 640px, 12px from 640px, and 4px on phones.
 - Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
 - Render status and Urgent icons at 18px in task rows, list/board headers, cards, and property menus; use 16px group-header carets and preserve the existing hit targets.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit status and priority through leading `TaskPropertyControl` icons on desktop and mobile; place priority directly beside the title after the status gap, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Place Project before Assignees in wide and narrow task rows, including phones; keep one assignee avatar plus the remaining count in narrow rows.
-- At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, and Updated headers; keep Project at 32px, Assignees at 40px, and Updated at 64px, retaining one assignee avatar and its overflow count.
-- Above 840px, keep Updated at 80px with an untruncated header; retain single-line timestamps at every width, and keep Created by last with its existing avatar spacing and narrow-container visibility.
+- At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, and Updated headers; keep Project at 32px, Assignees at 40px, and Updated at 64px above 600px, retaining one assignee avatar and its overflow count.
+- Above 840px, keep Updated at 80px with an untruncated header; retain single-line timestamps and existing Created by spacing, and fade/collapse Updated over 160ms at 600px to preserve title space, disabling motion for reduced-motion preferences.
 - Show a 16px user-plus icon in the Created by header, right-aligned with creator avatars, with an accessible name and a keyboard-focusable “Created by” tooltip.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, and a corner-dashed project cube; use the regular cube for set projects.

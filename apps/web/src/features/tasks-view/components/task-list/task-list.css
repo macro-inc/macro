@@ -7,6 +7,19 @@
   --task-col-initiative: 8rem;
 }
 
+.task-grid-row.task-grid-icon-creator {
+  transition: grid-template-columns 160ms ease;
+}
+
+.task-grid-icon-creator .task-updated-cell {
+  min-width: 0;
+  overflow: hidden;
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    visibility 160ms;
+}
+
 @container u-list (min-width: 1221px) {
   .task-grid-row.task-grid-icon-creator {
     --task-col-created-by: 1.5rem;
@@ -36,5 +49,25 @@
     --task-col-assignees: 2.5rem;
     --task-col-initiative: 2rem;
     --task-col-timestamp: 4rem;
+  }
+}
+
+/* Fade Updated before the remaining columns crowd the task title. */
+@container u-list (max-width: 600px) {
+  .task-grid-row.task-grid-icon-creator {
+    --task-col-timestamp: 0rem;
+  }
+
+  .task-grid-icon-creator .task-updated-cell {
+    opacity: 0;
+    transform: translateX(4px);
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-grid-row.task-grid-icon-creator,
+  .task-grid-icon-creator .task-updated-cell {
+    transition: none;
   }
 }

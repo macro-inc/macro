@@ -125,6 +125,7 @@ export function TaskListHeader() {
         label="Updated"
         area="timestamp"
         sortId="updated_at"
+        class="task-updated-cell"
         align="end"
         narrowIcon={<ClockIcon class="size-4" />}
       />

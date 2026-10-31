@@ -21,6 +21,7 @@ import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import {
@@ -30,7 +31,6 @@ import {
   ListLayoutProvider,
   type TaskEntityWithProperties,
 } from '@entity';
-import { useListLayout } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -68,16 +68,6 @@ import { taskGridColumnCount } from './task-grid-template';
 import './task-list.css';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { fireAndForget } from '@core/util/fireAndForget';
-
-function ResponsiveTaskListHeader() {
-  const layout = useListLayout();
-
-  return (
-    <Show when={(layout?.isWide() ?? true) && !isTouchDevice()}>
-      <TaskListHeader />
-    </Show>
-  );
-}
 
 const getStatusProperty = (task: TaskEntityWithProperties) => {
   const status = task.properties?.find(
@@ -460,7 +450,9 @@ export function TaskList(props: TaskListProps) {
       >
         <div class="flex size-full min-h-0 min-w-0 flex-col px-2 @min-[640px]/u-list:px-3 mobile:px-1">
           <ListLayoutProvider ref={grid}>
-            <ResponsiveTaskListHeader />
+            <Show when={!isMobile()}>
+              <TaskListHeader />
+            </Show>
             <SwipableRowProvider
               container={viewport}
               canSwipeLeft={canCompleteTask}
