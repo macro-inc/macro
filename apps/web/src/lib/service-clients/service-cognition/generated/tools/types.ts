@@ -285,6 +285,11 @@ export type TaggedSessionAwareSearchResult = {
    * Tags on this item visible to the user.
    */
   tags?: AppliedTag[];
+  /**
+   * For a calendar event on a calendar outside the user's schedule that
+   * they neither organize nor attend: says so in plain words.
+   */
+  summary?: string | null;
 } & TaggedSessionAwareSearchResult1;
 export type TaggedSessionAwareSearchResult1 =
   | (DocumentSearchResponseItemWithMetadata & {

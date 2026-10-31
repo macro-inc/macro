@@ -1,4 +1,5 @@
 use ai_toolset::{ToolCallError, ToolResult};
+use calendar_events::domain::labels::off_schedule_summary;
 use item_filters::TagFilterMode;
 use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
@@ -117,6 +118,10 @@ pub struct TaggedSessionAwareSearchResult {
     /// Tags on this item visible to the user.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<AppliedTag>,
+    /// For a calendar event on a calendar outside the user's schedule that
+    /// they neither organize nor attend: says so in plain words.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
@@ -214,12 +219,25 @@ pub(super) async fn annotate_result_tags(
                 }
                 props.retain(|p| p.definition.data_type != DataType::Tag);
             }
+            let summary = calendar_event_summary(&item);
             Some(TaggedSessionAwareSearchResult {
                 item: SessionAwareSearchResult::from_unified(item)?,
                 tags,
+                summary,
             })
         })
         .collect())
+}
+
+/// The sentence for a result known to be off the user's schedule. Missing
+/// labels say nothing about whose calendar it is, so they get none.
+fn calendar_event_summary(item: &UnifiedSearchResponseItem) -> Option<String> {
+    let UnifiedSearchResponseItem::CalendarEvent(event) = item else {
+        return None;
+    };
+    let metadata = event.metadata.as_ref()?;
+    (metadata.contributes_to_availability == Some(false) && metadata.role.is_none())
+        .then(|| off_schedule_summary(&event.extra.name, metadata.calendar_name.as_deref()))
 }
 
 async fn fetch_caller_tag_sets(

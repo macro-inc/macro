@@ -134,6 +134,17 @@ impl CalendarLabels {
     }
 }
 
+/// Says in plain words that an event is not the user's. Models follow this
+/// sentence more reliably than the fields behind it, so every agent surface
+/// showing such an event gives it.
+pub fn off_schedule_summary(title: &str, calendar_name: Option<&str>) -> String {
+    format!(
+        "{title} is on {}, which the user can see but which is not part of their schedule and \
+         may be someone else's.",
+        calendar_name.unwrap_or("a calendar"),
+    )
+}
+
 /// One copy of an event, as much of it as labelling reads.
 #[derive(Debug, Clone)]
 pub struct EventCopy {

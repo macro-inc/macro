@@ -1458,6 +1458,7 @@ export const SearchToolResponse = z.object({
             })
           )
           .optional(),
+        summary: z.union([z.string(), z.null()]).optional(),
       })
       .and(
         z.any().superRefine((x, ctx) => {
