@@ -104,12 +104,28 @@ zbus = "5"
 block2 = "0.6"
 libc = "0.2"
 objc2 = "0.6"
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "CFString",
+] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = [
+  "std",
+  "libc",
+  "CGDirectDisplay",
+  "CGDisplayConfiguration",
+  "CGError",
+  "CGWindow",
+] }
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
+  "NSArray",
   "NSBundle",
   "NSData",
+  "NSDictionary",
+  "NSEnumerator",
   "NSError",
   "NSString",
+  "NSValue",
 ] }
 objc2-intents = { version = "0.3", default-features = false, features = [
   "std",

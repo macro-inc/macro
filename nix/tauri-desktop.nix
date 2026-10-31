@@ -886,8 +886,8 @@
             "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
-          "git+https://github.com/macro-inc/tauri?rev=285fb6b1#285fb6b1cb2fc20666da1688f4c74e240a100035" =
-            "sha256-++WQc4YpvoMPBFTuDj//856BguC1ArS6AeLTbIOn38Q=";
+          "git+https://github.com/macro-inc/tauri?rev=4b8a46f1#4b8a46f15c0a54a5c06a1486cd5432d444c17bd8" =
+            "sha256-nRfbjAGUWsbN5CBhFgfARFMEWquvCHvgsTH9a8BqA1g=";
           "git+https://github.com/tauri-apps/winit-gtk4?rev=3d7c7cd19d3c752f75762ceea535444e63bdf8de#3d7c7cd19d3c752f75762ceea535444e63bdf8de" =
             "sha256-2mFNnZcPnVqPQ2iakMoXSKXrlHiIv+HuQZ7iOwtrKb4=";
           "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
