@@ -25,6 +25,7 @@ import {
   ErrorBoundary,
   type JSX,
   Match,
+  onCleanup,
   type ParentProps,
   Suspense,
   Switch,
@@ -104,12 +105,48 @@ export function FileDetailLoadGate<
   entityType: string;
   label: string;
   load: (documentId: string) => Promise<T>;
+  /**
+   * Releases what a load opened, such as a markdown document's sync source,
+   * once its result can no longer be shown: its content replaced or removed,
+   * superseded by a newer load, resolved after the gate unmounted, or on
+   * unmount.
+   */
+  dispose?: (data: T) => void;
   children: (data: T) => JSX.Element;
 }) {
   const analytics = useAnalytics();
+  // Shown results are released when their content is disposed (after the
+  // editor it rendered); the rest here. Each result is released once.
+  const released = new WeakSet<T>();
+  const release = (data: T | undefined) => {
+    if (data === undefined || released.has(data)) return;
+    released.add(data);
+    props.dispose?.(data);
+  };
+  let unmounted = false;
+  let latestLoad = 0;
+  let current: T | undefined;
+  const load = async (documentId: string) => {
+    const request = ++latestLoad;
+    const data = await props.load(documentId);
+    // The resource ignores a superseded result, so nothing will show it.
+    if (unmounted || request !== latestLoad) release(data);
+    else current = data;
+    return data;
+  };
+  const unload = () => {
+    const previous = current;
+    current = undefined;
+    mutate(undefined);
+    release(previous);
+  };
+  onCleanup(() => {
+    unmounted = true;
+    release(current);
+  });
   const [document, { refetch, mutate }] = createResource(
     () => props.documentId,
-    props.load
+    load
   );
   // Counts the open once per document, as BlockLoader does for blocks; access
   // changes and retries reload the same document without reopening it.
@@ -127,14 +164,14 @@ export function FileDetailLoadGate<
   });
   const reload = () => {
     // Dispose the old editor and its sync source before loading a new token.
-    mutate(undefined);
+    unload();
     fireAndForget(refetch(), 'drive-view');
   };
   const sharedAccess = useSharedAccessUpdates(
     () => shareEntity('document', props.documentId),
     (level) => {
       if (level === null) {
-        mutate(undefined);
+        unload();
         return;
       }
       const loaded = document.state === 'ready' ? document.latest : undefined;
@@ -168,21 +205,25 @@ export function FileDetailLoadGate<
             />
           )}
         </Match>
-        <Match when={document()}>
-          {(data) => (
-            <ErrorBoundary
-              fallback={(error, reset) => (
-                <FileDetailBodyState
-                  label={props.label}
-                  error={error}
-                  actionLabel="Reset"
-                  onAction={reset}
-                />
-              )}
-            >
-              {props.children(data())}
-            </ErrorBoundary>
-          )}
+        <Match when={document()} keyed>
+          {(data) => {
+            // Runs after this content, and the editor it renders, is disposed.
+            onCleanup(() => release(data));
+            return (
+              <ErrorBoundary
+                fallback={(error, reset) => (
+                  <FileDetailBodyState
+                    label={props.label}
+                    error={error}
+                    actionLabel="Reset"
+                    onAction={reset}
+                  />
+                )}
+              >
+                {props.children(data)}
+              </ErrorBoundary>
+            );
+          }}
         </Match>
       </Switch>
     </Suspense>
