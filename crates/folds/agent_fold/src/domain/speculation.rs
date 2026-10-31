@@ -179,7 +179,8 @@ impl Pending {
 /// The method of a notification frame, if the row is one.
 fn notification_method(row: &AgentSessionLog) -> Option<&str> {
     match &row.content {
-        Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => match &acp.0 {
+        Message::ToRuntime(ToRuntimeMessage::Acp(acp))
+        | Message::Notification(ToRuntimeMessage::Acp(acp)) => match &acp.0 {
             RawJsonRpcMessage::Notification(notification) => Some(notification.method.as_ref()),
             _ => None,
         },
@@ -190,7 +191,8 @@ fn notification_method(row: &AgentSessionLog) -> Option<&str> {
 /// The action id a runtime-bound request carries, if the row is one.
 fn request_action_id(row: &AgentSessionLog) -> Option<AgentActionId> {
     match &row.content {
-        Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => match &acp.0 {
+        Message::ToRuntime(ToRuntimeMessage::Acp(acp))
+        | Message::Notification(ToRuntimeMessage::Acp(acp)) => match &acp.0 {
             RawJsonRpcMessage::Request(request) => AgentActionId::from_request_id(&request.id),
             _ => None,
         },

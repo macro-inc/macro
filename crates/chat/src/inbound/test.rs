@@ -517,6 +517,18 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         })
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> std::result::Result<
+        macro_authorization::ValidatedCredential,
+        Report<MacroAuthorizationError>,
+    > {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         _provided_key: &str,
@@ -543,6 +555,8 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
+                    agent_id: None,
                     macro_user_id: MacroUserIdStr::try_from(user_id.clone())
                         .expect("test user id should be valid"),
                     user_context: UserContext {

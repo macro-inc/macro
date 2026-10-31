@@ -5,7 +5,7 @@ import {
   saveLocalDraft,
 } from '@queries/email/local-drafts';
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
-import { createMemo, createRoot } from 'solid-js';
+import { createEffect, createMemo, createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { decodeBase64Utf8 } from '../../email-compose/core/decode-base64';
 import { createComposeContext } from '../../email-compose/tests/capabilities';
@@ -104,3 +104,45 @@ it.each([false, true])(
     }
   }
 );
+
+it('reopens a first-use local draft without sender metadata or any server thread', async () => {
+  await saveLocalDraft({
+    clientHandles: { draftId: 'first-draft', threadId: 'first-thread' },
+    draft: {
+      subject: 'First offline draft',
+      body_html: btoa('<p>Keep this text</p>'),
+    },
+    attachments: [],
+  });
+  await localDraftStore.close();
+  const loaded = Promise.withResolvers<void>();
+  const reopened = createRoot((dispose) => {
+    const source = createEmailThreadSource(() => 'first-thread', {
+      transport: 'graphql',
+      isSuccess: false,
+      isError: false,
+      isLoading: true,
+      resolvedThreadId: 'first-thread',
+      get data() {
+        throw new Error('Pending remote thread must not suspend recovery');
+      },
+    } as ThreadQueryResult<ThreadQueryData>);
+    createEffect(() => {
+      if (source.thread()) loaded.resolve();
+    });
+    return { source, dispose };
+  });
+  try {
+    await loaded.promise;
+    expect(reopened.source.thread()?.messages).toHaveLength(1);
+    expect(reopened.source.isLoading()).toBe(false);
+    expect(reopened.source.thread()?.messages[0]).toMatchObject({
+      db_id: 'first-draft',
+      subject: 'First offline draft',
+      body_html_sanitized: btoa('<p>Keep this text</p>'),
+    });
+    expect(reopened.source.thread()?.link_id).toBe('');
+  } finally {
+    reopened.dispose();
+  }
+});

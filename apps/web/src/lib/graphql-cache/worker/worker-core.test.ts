@@ -1334,6 +1334,17 @@ describe('CacheWorkerCore', () => {
     expect(messages.at(-1)).toEqual({ id: 2, ok: true, result: variants });
   });
 
+  it('fails a request kind from a newer page instead of answering it', async () => {
+    const messages: unknown[] = [];
+    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const core = new CacheWorkerCore();
+    const fromNewerPage = JSON.parse('{"id":1,"kind":"future-request"}');
+
+    await core.handleRequest(port, fromNewerPage);
+
+    expect(messages).toEqual([expect.objectContaining({ id: 1, ok: false })]);
+  });
+
   it('pushes cache changes even without affected operations', async () => {
     const writeResult = {
       revision: INITIAL_CACHE_REVISION,

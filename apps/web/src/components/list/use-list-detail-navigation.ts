@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { ListDataSource } from './list-data-source';
 
 export type ListDetailNavigationTarget = {
@@ -57,15 +57,64 @@ export function useListDetailNavigation<
       .map(options.getEntity)
       .find((entity) => entity?.id === options.currentId());
 
+  // Where the open entity sat when it was opened. Next and previous step
+  // from there even after it moves (a reply draft lifts a thread to the top
+  // of Signal) or leaves the list (a reply marks it done, another device
+  // archives it).
+  const anchor = createMemo<
+    { id: string; next: string[]; previous: string[] } | undefined
+  >((previous) => {
+    const id = options.currentId();
+    if (previous?.id === id) return previous;
+    const ids = options.source.items().flatMap((item) => {
+      const entity = options.getEntity(item);
+      return entity ? [entity.id] : [];
+    });
+    const index = ids.indexOf(id);
+    if (index === -1) return undefined;
+    return {
+      id,
+      next: ids.slice(index + 1),
+      previous: ids.slice(0, index).reverse(),
+    };
+  });
+
+  const startIndex = (items: readonly TItem[], direction: -1 | 1) => {
+    const indexById = new Map<string, number>();
+    items.forEach((item, index) => {
+      const entity = options.getEntity(item);
+      if (entity) indexById.set(entity.id, index);
+    });
+    const id = options.currentId();
+    const position = anchor();
+    if (position?.id !== id) {
+      const current = indexById.get(id);
+      return current === undefined ? undefined : current + direction;
+    }
+    // The entity sat just after its nearest surviving earlier neighbour, so
+    // stepping forward starts there, through any load-more row in between.
+    for (const neighbour of position.previous) {
+      const index = indexById.get(neighbour);
+      if (index !== undefined) return direction === 1 ? index + 1 : index;
+    }
+    // Otherwise the nearest surviving later neighbour took its place.
+    for (const neighbour of position.next) {
+      const index = indexById.get(neighbour);
+      if (index !== undefined) return direction === 1 ? index : index - 1;
+    }
+    // No neighbour it was opened beside remains (it was the only row loaded):
+    // step from where it is now.
+    const current = indexById.get(id);
+    return current === undefined ? undefined : current + direction;
+  };
+
   const target = (direction: -1 | 1): NavigationStep<TEntity> | undefined => {
     const items = options.source.items();
-    const currentIndex = items.findIndex(
-      (item) => options.getEntity(item)?.id === options.currentId()
-    );
-    if (currentIndex === -1) return;
+    const start = startIndex(items, direction);
+    if (start === undefined) return;
 
     for (
-      let index = currentIndex + direction;
+      let index = start;
       index >= 0 && index < items.length;
       index += direction
     ) {
@@ -73,6 +122,8 @@ export function useListDetailNavigation<
       if (!item) continue;
 
       const entity = options.getEntity(item);
+      // The open entity itself may have moved into the path.
+      if (entity?.id === options.currentId()) continue;
       if (entity) return { kind: 'entity', entity };
 
       const load =

@@ -7,15 +7,19 @@ import {
   createSignal,
   onCleanup,
 } from 'solid-js';
-import type { EmailDraftStorage } from '../context/compose-capabilities';
+import { match } from 'ts-pattern';
+import type {
+  EmailConnectivity,
+  EmailDraftStorage,
+} from '../context/compose-capabilities';
 import type { DraftSyncViewState } from '../core/local-draft';
 
 /** Recovery reads only metadata; file blobs are restored once when opening a draft. */
 export function createDraftSyncStatus(options: {
   drafts: EmailDraftStorage;
+  connectivity: EmailConnectivity;
   draftId: Accessor<string | undefined>;
   localSaveState: Accessor<'saving' | 'saved' | 'failed'>;
-  acknowledgeSaved: Accessor<boolean>;
   retry(): Promise<unknown>;
   discard(): Promise<unknown>;
 }) {
@@ -40,7 +44,19 @@ export function createDraftSyncStatus(options: {
     (local()?.status === 'deleting' &&
       (!local()?.queuedAttemptId ||
         local()?.queuedAttemptId !== local()?.latestAttemptId));
-  const state = createMemo<DraftSyncViewState | undefined>((previous) => {
+  // Saving is silent online. Offline, edits wait on this device.
+  const offlineState = (): DraftSyncViewState | undefined => {
+    const draft = local();
+    if (!draft || draft.acknowledgedRevision >= draft.revision) return;
+    if (!options.connectivity.looksOffline()) return;
+    return {
+      message: 'Saved on this device; waiting to sync',
+      detail: 'Changes stay on this device until you are back online.',
+      failed: false,
+      canKeepEditing: false,
+    };
+  };
+  const state = createMemo<DraftSyncViewState | undefined>(() => {
     if (!options.drafts.saveLocalDraft || !options.draftId()) return;
     const disk = options.localSaveState();
     const draft = local();
@@ -58,24 +74,28 @@ export function createDraftSyncStatus(options: {
         draft?.status ?? ''
       ) ||
       deletePending();
-    // Only a newly persisted version restarts the brief acknowledgement.
-    // Queue notifications and identity adoption do not count as another save.
-    if (!failed) {
-      if (!draft && (disk === 'saving' || saved.loading))
-        return previous && { ...previous, savedVersion: undefined };
-      if (!draft && !saved.latest?.draft) return;
+    const availability = options.drafts.syncAvailability?.() ?? 'ready';
+    if (disk !== 'failed' && availability !== 'ready') {
       return {
-        message: 'Draft saved',
-        savedVersion:
-          disk === 'saved' && options.acknowledgeSaved()
-            ? draft
-              ? `${draft.generation}:${draft.revision}`
-              : saved.latest?.draft?.updated_at
-            : undefined,
-        failed: false,
+        message: draft
+          ? 'Saved on this device; waiting to sync'
+          : 'Draft synchronization unavailable',
+        detail:
+          availability === 'recovering'
+            ? 'Reconnecting to saved changes…'
+            : availability === 'recovery-required'
+              ? 'Queued changes are preserved. Update or reload Macro to recover local storage.'
+              : 'Reconnect or retry to resume draft synchronization.',
+        failed: true,
+        action: match(availability)
+          .with('unavailable', () => 'retry' as const)
+          .with('recovery-required', () => 'reload' as const)
+          .with('recovering', () => undefined)
+          .exhaustive(),
         canKeepEditing: false,
       };
     }
+    if (!failed) return offlineState();
     return {
       message:
         disk === 'failed'
@@ -101,6 +121,7 @@ export function createDraftSyncStatus(options: {
     setBusy(true);
     setActionError(undefined);
     try {
+      await options.drafts.recoverSynchronization?.();
       await action();
       await refetch();
     } catch (error) {

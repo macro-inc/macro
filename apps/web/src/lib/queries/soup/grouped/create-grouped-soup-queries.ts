@@ -19,10 +19,8 @@ import type {
 import { soupKeys } from '@queries/soup/keys';
 import {
   isDisplayableSoupItem,
-  isInstructionsMdDoc,
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
@@ -53,6 +51,10 @@ export type GroupQueryData = {
 };
 
 export type CreateGroupedSoupQueriesArgs = {
+  groupedPaging?: Accessor<
+    | import('../graphql/create-grouped-soup-live-query').GroupedSoupPaging
+    | undefined
+  >;
   initialPage: Accessor<InitialGroupPage | undefined>;
   groupByField: Accessor<GroupByField | undefined>;
   soupParams: Accessor<SoupParams>;
@@ -109,12 +111,10 @@ function getNextGroupPageParam(lastPage: GroupQueryPage): string | null {
 
 export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
   const usesGraphql = () => args.transport() === 'graphql';
-  const instructionsIdQuery = useInstructionsMdIdQuery();
   const queryClient = useQueryClient();
 
   const mapItemToEntity = (item: SoupApiItem) => {
     if (!isDisplayableSoupItem(item)) return;
-    if (isInstructionsMdDoc(item, instructionsIdQuery)) return;
 
     return mapApiSoupItemToEntity(item);
   };
@@ -214,10 +214,8 @@ export function createGroupedSoupQueries(args: CreateGroupedSoupQueriesArgs) {
     GroupQueryData | undefined
   >(configs);
   const graphqlQueries = createGraphqlGroupedSoupQueries({
+    groupedPaging: args.groupedPaging,
     initialPage: args.initialPage,
-    groupByField: args.groupByField,
-    soupParams: args.soupParams,
-    soupBody: args.soupBody,
     enabled: () => usesGraphql() && args.queryOptions().enabled === true,
     itemFilter: () => args.queryOptions().meta?.itemFilter,
   });

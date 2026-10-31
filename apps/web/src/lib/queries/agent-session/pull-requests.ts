@@ -1,41 +1,49 @@
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { agentSessionPullRequestKeys } from './keys';
 
 const PULL_REQUEST_LINKS_STALE_TIME = 30_000;
 
+function pullRequestAgentSessionsQueryOptions(url: string | undefined) {
+  return queryOptions({
+    queryKey: agentSessionPullRequestKeys.forPullRequest(url ?? '').queryKey,
+    queryFn: async () =>
+      (
+        await throwOnErr(() =>
+          agentHarnessServiceClient.sessionsForPullRequest(url!)
+        )
+      ).sessionIds,
+    enabled: Boolean(url),
+    staleTime: PULL_REQUEST_LINKS_STALE_TIME,
+  });
+}
+
 /** Ids of the viewable sessions linked to the pull request at `url`. */
 export function usePullRequestAgentSessionsQuery(
   url: Accessor<string | undefined>
 ) {
-  return useQuery(() => ({
-    queryKey: agentSessionPullRequestKeys.forPullRequest(url() ?? '').queryKey,
+  return useQuery(() => pullRequestAgentSessionsQueryOptions(url()));
+}
+
+function agentSessionPullRequestsQueryOptions(sessionId: string) {
+  return queryOptions({
+    queryKey: agentSessionPullRequestKeys.forSession(sessionId).queryKey,
     queryFn: async () =>
       (
         await throwOnErr(() =>
-          agentHarnessServiceClient.sessionsForPullRequest(url()!)
+          agentHarnessServiceClient.listPullRequests(sessionId)
         )
-      ).sessionIds,
-    enabled: Boolean(url()),
+      ).pullRequests,
     staleTime: PULL_REQUEST_LINKS_STALE_TIME,
-  }));
+  });
 }
 
 /** The pull requests linked to a session, with who linked each. */
 export function useAgentSessionPullRequestsQuery(sessionId: Accessor<string>) {
-  return useQuery(() => ({
-    queryKey: agentSessionPullRequestKeys.forSession(sessionId()).queryKey,
-    queryFn: async () =>
-      (
-        await throwOnErr(() =>
-          agentHarnessServiceClient.listPullRequests(sessionId())
-        )
-      ).pullRequests,
-    staleTime: PULL_REQUEST_LINKS_STALE_TIME,
-  }));
+  return useQuery(() => agentSessionPullRequestsQueryOptions(sessionId()));
 }
 
 type PullRequestLinkChange = { sessionId: string; url: string };

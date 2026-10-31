@@ -6,10 +6,10 @@
  */
 
 import type { NodeRef, StyleInfo } from '@core/fig-engine/design-types';
+import LinkBreak from '@icon/system/regular/link-break.svg';
+import Sparkle from '@icon/system/regular/sparkle.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
 import { Popover } from '@kobalte/core/popover';
-import LinkBreak from '@phosphor/link-break.svg';
-import Sparkle from '@phosphor/sparkle.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
 import { Layer } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import {
@@ -123,7 +123,7 @@ export function StyleControl(props: {
           <Popover.Portal>
             <Layer depth={3}>
               <Popover.Content
-                class="fig-editor-theme z-modal flex max-h-96 w-60 flex-col rounded-xl border border-edge-muted bg-menu p-2 text-xs shadow-xl outline-none"
+                class="menu-surface fig-editor-theme z-modal flex max-h-96 w-60 flex-col p-2 text-xs outline-none"
                 aria-label={`${kind()} styles`}
                 data-testid="fig-style-popover"
                 onKeyDown={(e: KeyboardEvent) => {

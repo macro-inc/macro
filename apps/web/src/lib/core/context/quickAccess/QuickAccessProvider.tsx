@@ -32,6 +32,7 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
         : current.useList(...(args as Bucket[]));
     });
     return {
+      error: () => sourceList()?.error(),
       items: () => sourceList()?.items() ?? [],
       totalCount: () => sourceList()?.totalCount() ?? 0,
       hasMore: () => sourceList()?.hasMore() ?? false,

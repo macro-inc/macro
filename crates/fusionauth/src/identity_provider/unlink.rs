@@ -15,6 +15,7 @@ pub(crate) async fn unlink(
         .delete(format!(
             "{base_url}/api/identity-provider/link?identityProviderId={idp_id}&identityProviderUserId={idp_user_id}&userId={user_id}",
         ))
+        .timeout(super::LINK_REQUEST_TIMEOUT)
         .send()
         .await
         .map_err(FusionAuthClientError::transport)?;
@@ -22,6 +23,11 @@ pub(crate) async fn unlink(
     match res.status() {
         reqwest::StatusCode::OK => Ok(()),
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::NoIdentityProviderFound), // no idp to unlink
-        _ => Err(FusionAuthClientError::unexpected_response(res).await),
+        reqwest::StatusCode::BAD_REQUEST if super::link::is_missing_user(&body) => {
+            Err(FusionAuthClientError::UserDoesNotExist)
+        }
+        _ => Err(FusionAuthClientError::Generic(GenericErrorResponse {
+            message: body,
+        })),
     }
 }

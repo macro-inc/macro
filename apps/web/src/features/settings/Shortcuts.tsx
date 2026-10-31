@@ -904,6 +904,11 @@ const shortcutSections: ShortcutSection[] = [
         description: 'Focus AI chat',
       },
       { keys: ['g'], codes: ['KeyG'], description: 'Go to a view' },
+      {
+        keys: ['?'],
+        codes: ['ShiftLeft', 'Slash'],
+        description: 'Show shortcuts for the current view',
+      },
     ],
   },
   {
@@ -1002,10 +1007,94 @@ const shortcutSections: ShortcutSection[] = [
   {
     title: 'Email',
     items: [
+      { keys: ['/'], codes: ['Slash'], description: 'Search email' },
+      { keys: ['s'], codes: ['KeyS'], description: 'Star or unstar' },
+      {
+        keys: ['shift+m'],
+        codes: ['ShiftLeft', 'KeyM'],
+        description: 'Mute or unmute',
+      },
+      { keys: ['z'], codes: ['KeyZ'], description: 'Undo the last action' },
+      {
+        keys: ['escape'],
+        codes: ['Escape'],
+        description: 'Back to the list, then to Signal',
+      },
+      {
+        keys: ['g'],
+        codes: ['KeyG'],
+        description:
+          'Then i Signal, o Noise, s Favorites, t Sent, d Drafts, e Archived, a All',
+      },
+      {
+        keys: ['n', 'arrowdown'],
+        codes: ['KeyN'],
+        description: 'Next message',
+      },
+      {
+        keys: ['p', 'arrowup'],
+        codes: ['KeyP'],
+        description: 'Previous message',
+      },
+      {
+        keys: ['o'],
+        codes: ['KeyO'],
+        description: 'Expand or collapse message',
+      },
+      {
+        keys: ['shift+o'],
+        codes: ['ShiftLeft', 'KeyO'],
+        description: 'Expand all messages',
+      },
+      {
+        keys: [`${cmdOrCtrl}+arrowup`],
+        codes: [CmdOrCtrl, 'ArrowUp'],
+        description: 'Jump to top of list',
+      },
+      {
+        keys: [`${cmdOrCtrl}+arrowdown`],
+        codes: [CmdOrCtrl, 'ArrowDown'],
+        description: 'Jump to bottom of list',
+      },
       {
         keys: ['shift+v'],
         codes: ['ShiftLeft', 'KeyV'],
         description: 'Show or hide the reading pane',
+      },
+    ],
+  },
+  {
+    title: 'Email drafts',
+    items: [
+      {
+        keys: [`shift+${cmdOrCtrl}+.`, `shift+${cmdOrCtrl}+d`],
+        codes: ['ShiftLeft', CmdOrCtrl, 'Period'],
+        description: 'Discard draft',
+      },
+      {
+        keys: [`shift+${cmdOrCtrl}+u`],
+        codes: ['ShiftLeft', CmdOrCtrl, 'KeyU'],
+        description: 'Attach files',
+      },
+      {
+        keys: [`shift+${cmdOrCtrl}+x`],
+        codes: ['ShiftLeft', CmdOrCtrl, 'KeyX'],
+        description: 'Strikethrough',
+      },
+      {
+        keys: [`shift+${cmdOrCtrl}+7`],
+        codes: ['ShiftLeft', CmdOrCtrl, 'Digit7'],
+        description: 'Numbered list',
+      },
+      {
+        keys: [`shift+${cmdOrCtrl}+8`],
+        codes: ['ShiftLeft', CmdOrCtrl, 'Digit8'],
+        description: 'Bulleted list',
+      },
+      {
+        keys: [`shift+${cmdOrCtrl}+9`],
+        codes: ['ShiftLeft', CmdOrCtrl, 'Digit9'],
+        description: 'Quote',
       },
     ],
   },

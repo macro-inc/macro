@@ -43,7 +43,7 @@ opens the methods and exact request and response types for that namespace.
 | {@link src/entities/tasks/namespace!TaskNamespace | macro.tasks} | Work to track and complete, with assignees, due dates, and status. |
 | {@link src/entities/projects/namespace!ProjectNamespace | macro.projects} | Collections that organize documents and other workspace items. |
 | {@link src/entities/workspace/namespace!WorkspaceNamespace | macro.workspace} | A view across workspace activity, filtered by entity type, time, properties, or inbox state. |
-| {@link src/entities/databases/namespace!DatabaseNamespace | macro.databases} | Structured information in tables, with columns, rows, cells, and views. |
+| {@link src/entities/databases/namespace!DatabaseNamespace | macro.databases} | Structured information in tables, with typed handles, SQL queries, atomic version-guarded writes, and views. |
 | {@link src/entities/forms/namespace!FormNamespace | macro.forms} | Questions that collect responses into a database without giving respondents access to its other rows. |
 | {@link src/entities/properties/namespace!PropertiesNamespace | macro.properties} | Custom fields and their options, used to describe and filter entities. |
 | {@link src/entities/foreign/namespace!ForeignEntityNamespace | macro.foreignEntities} | References to items in external systems that are linked into Macro. |
@@ -78,6 +78,37 @@ opens the methods and exact request and response types for that namespace.
 | {@link src/entities/ai/namespace!AiNamespace | macro.ai} | AI operations on content you supply: structured generation and yes/no classification with Jev. |
 | {@link src/events/receiver!MacroEvents | macro.events} | Live entity events your application can subscribe to through a stream or webhook receiver. |
 | {@link src/entities/webhooks/namespace!WebhooksNamespace | macro.webhooks} | Persistent subscriptions that deliver events to your application's URL. |
+
+### Automation and resource management
+
+Routines, configurable agents and their hosts use typed handles:
+{@link src/entities/routines/namespace!RoutineNamespace | macro.routines},
+{@link src/entities/agents/namespace!AgentNamespace | macro.agents} and
+{@link src/entities/harnesses/namespace!HarnessNamespace | macro.harnesses}.
+Routine triggers can reference entities, and executions return transcript handles.
+Agent conversations and tool approvals retain channel/session scope.
+
+Use {@link src/entities/initiatives/namespace!InitiativeNamespace | macro.initiatives}
+for task initiatives, {@link src/entities/meetings/namespace!MeetingNamespace | macro.meetings}
+for schedules and invitations, and
+{@link src/entities/api-keys/namespace!ApiKeyNamespace | macro.apiKeys} for credentials.
+API key creation returns the secret separately; handles serialize metadata only.
+
+CRM pipelines live at `macro.crm.pipelines`; tables, columns and rows retain their
+pipeline authorization boundary. Email supports editable drafts, upload and
+forwarded attachment handles, scheduled sends, importance filters and follow-ups.
+Draft writes retain the selected inbox, and plain HTML is encoded for the wire.
+
+Shareable resources expose `.access` for revision-aware requests and direct grants.
+Message-bearing resources expose `messageThreadById` and `timelinePage`; timeline
+messages are seeded handles. Calendar occurrence iteration seeds event handles and
+preserves its viewport while paging. Document versions and PDF annotations are
+scoped to their parent document.
+
+GitHub pull request snapshots and diffs use `macro.githubPullRequests`. Cross-resource
+mentions use `macro.entityMentions`, with typed source and target references.
+`macro.unfurls` reads URL metadata; `chat.send` returns a generation with a response
+message handle and explicit cancellation. `macro.ai.usage` reads usage summaries.
 
 ## How to use entity handles
 

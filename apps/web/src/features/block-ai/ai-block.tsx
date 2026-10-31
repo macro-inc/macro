@@ -1,3 +1,4 @@
+import { reloadApp } from '@app/observability/reload';
 /**
  * The `.ai` block: app chrome (header, file menu, sharing) around the
  * Illustrator editor, wired to the worker engine, document storage, and
@@ -38,7 +39,7 @@ import {
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { Button } from '@ui/components/Button';
 import type { LoroDoc } from 'loro-crdt';
 import {
@@ -110,7 +111,7 @@ function AiHost(props: {
           message:
             'This file was replaced by a newer version (an upload or an AI edit). Reload to edit the latest version.',
           action: 'Reload',
-          onAction: () => window.location.reload(),
+          onAction: () => reloadApp('user_recovery'),
         }
       : props.notice;
   onMount(() => {
@@ -290,8 +291,8 @@ function DownloadOnly(props: { onDownload: () => void }): JSX.Element {
   return (
     <div class="flex size-full flex-col items-center justify-center gap-3 p-6 text-ink-muted text-sm">
       Illustrator files can't be edited here yet.
-      <Button variant="outline" size="sm" onClick={props.onDownload}>
-        <DownloadSimple />
+      <Button variant="secondary" size="sm" onClick={props.onDownload}>
+        <DownloadSimple class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         Download
       </Button>
     </div>

@@ -59,7 +59,10 @@ fn callback_original_url_rejects_invalid_urls() {
     assert!(validate_original_url(None).is_ok());
 }
 
-use crate::account_link_state::{AccountLinkState, AccountLinkStateKey, sign_account_link_state};
+use crate::account_link_state::{
+    AccountLinkState, AccountLinkStateKey, AdminConsentKind, sign_account_link_state,
+    sign_admin_consent_state,
+};
 use uuid::Uuid;
 
 const NOW: i64 = 1_730_000_000;
@@ -245,6 +248,172 @@ fn callback_accepts_unsigned_state_only_for_sign_in() {
         parse_callback_state("{not json", "google", &key(), NOW).unwrap_err(),
         CallbackStateError::Unparseable
     );
+}
+
+#[test]
+fn consent_failures_are_classified_from_entra_errors() {
+    for (error, description, expected) in [
+        (
+            Some("access_denied"),
+            Some(
+                "AADSTS65001: The user or administrator has not consented to use the application with ID 'a1b2' named 'Macro'. Send an interactive authorization request for this user and resource.",
+            ),
+            ConsentFailure::AdminConsentRequired,
+        ),
+        (
+            Some("access_denied"),
+            Some("AADSTS90094: The grant requires admin permission."),
+            ConsentFailure::AdminConsentRequired,
+        ),
+        (
+            Some("consent_required"),
+            None,
+            ConsentFailure::AdminConsentRequired,
+        ),
+        (
+            Some("interaction_required"),
+            Some("AADSTS50076: MFA required"),
+            ConsentFailure::AdminConsentRequired,
+        ),
+        (
+            Some("access_denied"),
+            Some("AADSTS65004: User declined to consent to access the app."),
+            ConsentFailure::Cancelled,
+        ),
+        (Some("access_denied"), None, ConsentFailure::Cancelled),
+        (
+            Some("server_error"),
+            Some("AADSTS90033: A transient error has occurred."),
+            ConsentFailure::Failed,
+        ),
+        (Some("invalid_request"), None, ConsentFailure::Failed),
+        (None, None, ConsentFailure::Failed),
+    ] {
+        assert_eq!(
+            ConsentFailure::classify(error, description),
+            expected,
+            "{error:?} / {description:?}"
+        );
+    }
+}
+
+#[test]
+fn aadsts_codes_are_extracted_without_the_rest_of_the_description() {
+    assert_eq!(
+        aadsts_code(
+            "AADSTS65001: The user or administrator has not consented to use the application with ID 'a1b2' named 'Macro' for user person@contoso.com."
+        ),
+        Some("AADSTS65001")
+    );
+    assert_eq!(
+        aadsts_code("Error: AADSTS90094 Trace ID: 0000"),
+        Some("AADSTS90094")
+    );
+    assert_eq!(aadsts_code("AADSTS"), None);
+    assert_eq!(aadsts_code("User declined"), None);
+}
+
+#[test]
+fn callback_accepts_signed_admin_consent_state_for_its_provider() {
+    let consent = AdminConsentState {
+        kind: AdminConsentKind::AdminConsent,
+        provider: LinkProvider::Microsoft,
+        original_url: "https://macro.com/app/inbox-link-callback".into(),
+    };
+    let token = sign_admin_consent_state(&consent, &key()).unwrap();
+
+    match parse_callback_state(&token, "microsoft", &key(), NOW).unwrap() {
+        CallbackState::AdminConsent(verified) => assert_eq!(verified, consent),
+        other => panic!("expected admin consent state, got {other:?}"),
+    }
+    assert_eq!(
+        parse_callback_state(&token, "google", &key(), NOW).unwrap_err(),
+        CallbackStateError::ProviderMismatch {
+            issued_for: LinkProvider::Microsoft
+        }
+    );
+}
+
+fn redirect_query(response: Response) -> Vec<(String, String)> {
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    let location = response.headers()[axum::http::header::LOCATION]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    Url::parse(&location)
+        .unwrap()
+        .query_pairs()
+        .into_owned()
+        .collect()
+}
+
+fn params(query: &str) -> Params {
+    serde_urlencoded::from_str(query).unwrap()
+}
+
+#[test]
+fn admin_consent_return_redirects_to_the_app_with_the_outcome() {
+    let consent = AdminConsentState {
+        kind: AdminConsentKind::AdminConsent,
+        provider: LinkProvider::Microsoft,
+        original_url: "https://macro.com/app/inbox-link-callback?view=all".into(),
+    };
+
+    let granted = admin_consent_outcome(
+        &params("state=s&admin_consent=True&tenant=cfc674f9-d10b-4b48-a2be-d018a76a6c27"),
+        &consent,
+    );
+    assert_eq!(
+        redirect_query(granted),
+        vec![
+            ("view".into(), "all".into()),
+            ("email_link_notice".into(), "admin_consent_granted".into()),
+            ("provider".into(), "outlook".into()),
+        ]
+    );
+
+    let declined = admin_consent_outcome(
+        &params(
+            "state=s&error=access_denied&error_description=AADSTS65004%3A+User+declined+to+consent",
+        ),
+        &consent,
+    );
+    assert_eq!(
+        redirect_query(declined),
+        vec![
+            ("view".into(), "all".into()),
+            ("email_link_error".into(), "cancelled".into()),
+            ("provider".into(), "outlook".into()),
+        ]
+    );
+}
+
+#[test]
+fn consent_failure_sends_a_link_flow_back_to_the_app() {
+    let link = link_state(LinkProvider::Microsoft, NOW + 60);
+
+    let response = consent_failure_response(
+        Some(&link),
+        &params(
+            "state=s&error=access_denied&error_description=AADSTS65001%3A+The+user+or+administrator+has+not+consented",
+        ),
+    );
+
+    assert_eq!(
+        redirect_query(response),
+        vec![
+            ("link_id".into(), link.link_id.to_string()),
+            ("email_link_error".into(), "admin_consent_required".into()),
+            ("provider".into(), "outlook".into()),
+        ]
+    );
+}
+
+#[test]
+fn consent_failure_during_sign_in_keeps_the_error_body() {
+    let response = consent_failure_response(None, &params("state=s&error=access_denied"));
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[test]

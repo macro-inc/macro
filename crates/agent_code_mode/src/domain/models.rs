@@ -32,15 +32,19 @@ impl std::fmt::Display for ExecutionId {
     }
 }
 
-/// Identity copied from the authenticated session, never from program arguments.
+/// Trusted session identity and the explicit, unresolved account choice.
 #[derive(Clone)]
 pub struct ExecutionIdentity {
     /// Run identity supplied by the session execution service.
     pub execution: ExecutionId,
+    /// Explicit account choice for this execution.
+    pub acting_as: ai_toolset::actor::ToolActor,
     /// Session whose owner authorized this execution.
     pub session: AgentSessionId,
-    /// User whose permissions the tools enforce.
+    /// Session owner; credential issuance resolves acting_as against the verified turn.
     pub owner: MacroUserIdStr<'static>,
+    /// Agent from the authenticated session, used to attribute SDK messages.
+    pub agent_id: bot_id::BotId,
     /// The server-resolved turn. Work cannot outlive or move to another turn.
     pub turn: Uuid,
 }
@@ -82,7 +86,7 @@ pub struct RecordedToolCall {
 }
 
 /// A dispatch result; unfinished work is never reported as success.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RecordedCallStatus {
     /// The dispatcher is still awaiting the tool.
@@ -102,6 +106,12 @@ pub enum RecordedCallStatus {
 pub struct ExecutionRecord {
     /// Execution identity.
     pub execution_id: ExecutionId,
+    /// Account choice bound to this saved execution; absent on historical records.
+    #[serde(default)]
+    pub acting_as: Option<ai_toolset::actor::ToolActor>,
+    /// Original turn, preventing another requester from replaying a saved result.
+    #[serde(default)]
+    pub turn_id: Option<Uuid>,
     /// The submitted JavaScript module.
     pub source: String,
     /// Overall execution state.
@@ -128,6 +138,9 @@ pub struct ExecutionReceipt {
     pub execution_id: ExecutionId,
     /// Last recorded outcome; running may be stale after a process interruption.
     pub status: ExecutionStatus,
+    /// Observed SDK operations for conversation activity snapshots.
+    #[serde(default)]
+    pub activity: Vec<ExecutionActivity>,
     /// Only the value explicitly returned by the program.
     pub result: Option<Value>,
     /// Safe failure text, when execution did not succeed.
@@ -167,7 +180,7 @@ pub enum CodeModeError {
 }
 
 /// A bounded SDK operation observed during execution; not an authorization or write receipt.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionActivity {
     /// Request identity within the execution.

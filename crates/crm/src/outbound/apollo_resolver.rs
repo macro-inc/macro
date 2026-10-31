@@ -6,10 +6,12 @@
 //! onto [`DomainMetadata`]. The full payload — minus our own Apollo
 //! workspace `account` record — is preserved in [`DomainMetadata::raw`].
 //!
-//! Best-effort: any failure (network error, non-2xx status, malformed
-//! body, missing `organization`) is logged and surfaced as
-//! [`DomainMetadata::default`] so the caller can persist a negative-cache
-//! row and avoid re-resolving the domain.
+//! Best-effort: a 2xx response without an `organization` (Apollo knows
+//! nothing about the domain) resolves to [`DomainMetadata::default`], the
+//! negative cache. A missing API key, network error, non-2xx status
+//! (including rate limits), or malformed body is logged and surfaced as
+//! [`DomainResolution::Unavailable`], so the domain is retried instead of
+//! cached empty.
 
 #[cfg(test)]
 mod test;
@@ -19,7 +21,10 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 
-use crate::domain::{company_metadata_resolver::CompanyMetadataResolver, model::DomainMetadata};
+use crate::domain::{
+    company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
+    model::DomainMetadata,
+};
 
 /// Default Apollo API base URL.
 const DEFAULT_BASE_URL: &str = "https://api.apollo.io";
@@ -68,12 +73,12 @@ impl ApolloCompanyMetadataResolver {
 
 impl CompanyMetadataResolver for ApolloCompanyMetadataResolver {
     #[tracing::instrument(skip(self))]
-    async fn resolve(&self, domain: &str) -> DomainMetadata {
+    async fn resolve(&self, domain: &str) -> DomainResolution {
         // No key configured (e.g. local without APOLLO_API_KEY): skip the
-        // call entirely rather than burning a 401 and caching an empty row.
+        // call entirely rather than burning a 401.
         if self.api_key.is_empty() {
             tracing::debug!(domain, "apollo enrich: no api key configured; skipping");
-            return DomainMetadata::default();
+            return DomainResolution::Unavailable;
         }
 
         let url = format!("{}/api/v1/organizations/enrich", self.base_url);
@@ -91,25 +96,25 @@ impl CompanyMetadataResolver for ApolloCompanyMetadataResolver {
                 Ok(body) => body,
                 Err(e) => {
                     tracing::warn!(error=?e, domain, "apollo enrich: failed to parse body");
-                    return DomainMetadata::default();
+                    return DomainResolution::Unavailable;
                 }
             },
             Ok(resp) => {
                 tracing::warn!(status = %resp.status(), domain, "apollo enrich: non-success status");
-                return DomainMetadata::default();
+                return DomainResolution::Unavailable;
             }
             Err(e) => {
                 tracing::warn!(error=?e, domain, "apollo enrich: request failed");
-                return DomainMetadata::default();
+                return DomainResolution::Unavailable;
             }
         };
 
         let Some(organization) = body.get("organization") else {
             tracing::warn!(domain, "apollo enrich: response had no organization");
-            return DomainMetadata::default();
+            return DomainResolution::Resolved(Box::default());
         };
 
-        map_organization(organization)
+        DomainResolution::Resolved(Box::new(map_organization(organization)))
     }
 }
 

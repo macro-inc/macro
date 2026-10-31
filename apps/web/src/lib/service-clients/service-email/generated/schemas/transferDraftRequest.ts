@@ -10,5 +10,7 @@
  */
 export interface TransferDraftRequest {
   destination_link_id: string;
+  /** Generation captured with the source draft. */
+  draft_generation?: number;
   operation_id: string;
 }

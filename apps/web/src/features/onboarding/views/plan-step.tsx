@@ -72,8 +72,8 @@ export function PlanStep(props: {
             ? trial.existingSubscription()
               ? 'You have an existing subscription. Review your subscription and payment details to restore access.'
               : trialEligible()
-                ? 'Every feature, every AI model and 1 TB of storage. Your first 30 days are on us, then $40/user/month.'
-                : 'Every feature, every AI model and 1 TB of storage. $40/user/month.'
+                ? 'Every feature, every AI model and 100 GB of storage. Your first 30 days are on us, then $40/user/month.'
+                : 'Every feature, every AI model and 100 GB of storage. $40/user/month.'
             : "We're confirming your access so you can continue to your workspace."}
         </p>
       </header>

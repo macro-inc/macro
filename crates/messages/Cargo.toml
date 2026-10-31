@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
+ai_tools = ["dep:ai_toolset", "dep:schemars", "ports"]
 annotations = ["dep:model", "ports"]
 broker = ["dep:macro_event_broker", "dep:macro_event_topics", "ports"]
 default = []
@@ -36,6 +37,7 @@ test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 ip_extractor = { path = "../ip_extractor", optional = true }
@@ -78,4 +80,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 initiative = { path = "../initiative", default-features = false, features = ["postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+models_permissions = { path = "../models_permissions" }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

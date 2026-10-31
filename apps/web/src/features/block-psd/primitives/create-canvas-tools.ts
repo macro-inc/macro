@@ -14,6 +14,7 @@
 import type { Point } from '@app/features/block-fig/core/camera';
 import type { IRect, Op, SelectMode, Target } from '@core/psd-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
 import { brushFor, newStrokeId, type PaintingTool } from '../core/brush';
 import { twoColorGradient } from '../core/gradient';
@@ -289,7 +290,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       }
       if (s.buffer.length > 0 || s.done) flushStroke();
     };
-    fireAndForget(send(), 'block-psd');
+    fireAndForget(send(), 'psd-editor');
   };
 
   let frame: number | undefined;
@@ -392,14 +393,20 @@ export function createCanvasTools(options: CanvasToolsOptions) {
       g.inFlight = false;
       flushMove();
     };
-    fireAndForget(run(), 'block-psd');
+    fireAndForget(run(), 'psd-editor');
   };
 
   /** The layers a Move drag takes: the one under the pointer, or the chosen. */
   const pickForMove = async (p: CanvasPointer): Promise<MovePick> => {
     let ids = editor.selected();
     if (view.toolOptions().autoSelect && !p.shift) {
-      const hit = await engine.hitTest(p.at.x, p.at.y);
+      let hit: number | null = null;
+      try {
+        hit = await engine.hitTest(p.at.x, p.at.y);
+      } catch (error) {
+        // The chosen layers, then. A click never awaits the pick.
+        Telemetry.error(error, { surface: 'psd-editor' });
+      }
       if (hit !== null && !ids.includes(hit)) {
         editor.chooseLayers([hit]);
         ids = [hit];
@@ -437,7 +444,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         [{ op: 'translate', ids: rows.map((r) => r.id), dx, dy }],
         gestureKey('nudge', nudgeKey)
       ),
-      'block-psd'
+      'psd-editor'
     );
   };
 
@@ -689,7 +696,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         if (!poly) {
           setPolygon({ points: [p.at], mode });
         } else if (closesPolygon(poly.points, p.at, CLOSE_SLOP / zoom())) {
-          fireAndForget(finishPolygon(true), 'block-psd');
+          fireAndForget(finishPolygon(true), 'psd-editor');
         } else setPolygon({ ...poly, points: [...poly.points, p.at] });
         refreshOverlay();
         return;
@@ -707,12 +714,12 @@ export function createCanvasTools(options: CanvasToolsOptions) {
             layer: editor.active() ?? null,
             mode,
           }),
-          'block-psd'
+          'psd-editor'
         );
         return;
       case 'eyedropper':
         gesture = { kind: 'eyedropper' };
-        fireAndForget(sampleColor(p), 'block-psd');
+        fireAndForget(sampleColor(p), 'psd-editor');
         return;
       case 'brush':
       case 'pencil':
@@ -738,7 +745,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
               sampleAll: view.toolOptions().sampleAll,
             },
           ]),
-          'block-psd'
+          'psd-editor'
         );
         return;
       }
@@ -749,7 +756,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         return;
       case 'type':
         options.onTypeStart?.();
-        fireAndForget(typeAt(p), 'block-psd');
+        fireAndForget(typeAt(p), 'psd-editor');
         return;
       case 'rectangle':
       case 'ellipse':
@@ -822,7 +829,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         g.current = p.at;
         break;
       case 'eyedropper':
-        fireAndForget(sampleColor(p), 'block-psd');
+        fireAndForget(sampleColor(p), 'psd-editor');
         return;
       case 'crop-draw': {
         const r = marqueeRect(g.start, p.at, {
@@ -885,7 +892,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
         if (!g.dragged || rect.w < 1 || rect.h < 1) {
           // A click deselects (unless it adds to or subtracts from it).
           if (g.mode === 'replace')
-            fireAndForget(editor.select({ type: 'none' }), 'block-psd');
+            fireAndForget(editor.select({ type: 'none' }), 'psd-editor');
           break;
         }
         fireAndForget(
@@ -898,7 +905,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
               ? { antialias: view.toolOptions().antialias }
               : {}),
           }),
-          'block-psd'
+          'psd-editor'
         );
         break;
       }
@@ -912,10 +919,10 @@ export function createCanvasTools(options: CanvasToolsOptions) {
               feather: view.toolOptions().feather,
               antialias: view.toolOptions().antialias,
             }),
-            'block-psd'
+            'psd-editor'
           );
         else if (g.mode === 'replace')
-          fireAndForget(editor.select({ type: 'none' }), 'block-psd');
+          fireAndForget(editor.select({ type: 'none' }), 'psd-editor');
         break;
       case 'gradient': {
         const t = fillTarget();
@@ -942,7 +949,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
               opacity: 1,
             },
           ]),
-          'block-psd'
+          'psd-editor'
         );
         break;
       }
@@ -956,7 +963,7 @@ export function createCanvasTools(options: CanvasToolsOptions) {
               shapeLayer(g.shape, rect, view.foreground())
             ),
           ]),
-          'block-psd'
+          'psd-editor'
         );
         break;
       }
@@ -990,19 +997,19 @@ export function createCanvasTools(options: CanvasToolsOptions) {
 
   const doubleClick = (p: CanvasPointer) => {
     if (polygon()) {
-      fireAndForget(finishPolygon(true), 'block-psd');
+      fireAndForget(finishPolygon(true), 'psd-editor');
       return;
     }
     if (transform()) {
-      fireAndForget(finishTransform(true), 'block-psd');
+      fireAndForget(finishTransform(true), 'psd-editor');
       return;
     }
     if (view.tool() === 'crop' && crop()) {
-      fireAndForget(finishCrop(true), 'block-psd');
+      fireAndForget(finishCrop(true), 'psd-editor');
       return;
     }
     if (view.tool() === 'move' && editable())
-      fireAndForget(editTextAt(p), 'block-psd');
+      fireAndForget(editTextAt(p), 'psd-editor');
   };
 
   /** Double-click with the Move tool on text edits it. */
@@ -1051,15 +1058,15 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   /** Enter: commits Free Transform, the crop, or a polygon. */
   const commit = (): boolean => {
     if (transform()) {
-      fireAndForget(finishTransform(true), 'block-psd');
+      fireAndForget(finishTransform(true), 'psd-editor');
       return true;
     }
     if (crop() && view.tool() === 'crop') {
-      fireAndForget(finishCrop(true), 'block-psd');
+      fireAndForget(finishCrop(true), 'psd-editor');
       return true;
     }
     if (polygon()) {
-      fireAndForget(finishPolygon(true), 'block-psd');
+      fireAndForget(finishPolygon(true), 'psd-editor');
       return true;
     }
     return false;
@@ -1068,15 +1075,15 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   /** Escape: cancels them. */
   const cancel = (): boolean => {
     if (transform()) {
-      fireAndForget(finishTransform(false), 'block-psd');
+      fireAndForget(finishTransform(false), 'psd-editor');
       return true;
     }
     if (crop()) {
-      fireAndForget(finishCrop(false), 'block-psd');
+      fireAndForget(finishCrop(false), 'psd-editor');
       return true;
     }
     if (polygon()) {
-      fireAndForget(finishPolygon(false), 'block-psd');
+      fireAndForget(finishPolygon(false), 'psd-editor');
       return true;
     }
     return false;
@@ -1085,10 +1092,10 @@ export function createCanvasTools(options: CanvasToolsOptions) {
   /** The tool changed: boxes that belong to the previous one end. */
   const toolChanged = (tool: Tool) => {
     if (tool !== 'crop' && crop())
-      fireAndForget(finishCrop(false), 'block-psd');
+      fireAndForget(finishCrop(false), 'psd-editor');
     if (tool === 'crop' && editable()) startCrop();
     if (tool !== 'polygonLasso' && polygon())
-      fireAndForget(finishPolygon(false), 'block-psd');
+      fireAndForget(finishPolygon(false), 'psd-editor');
     refreshOverlay();
   };
 

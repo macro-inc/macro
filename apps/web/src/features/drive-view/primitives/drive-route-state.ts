@@ -101,6 +101,7 @@ export function createDriveViewState(
       search: '',
       expandedFolderIds: [],
       favoritesOpen: true,
+      databasesOpen: true,
       rootOpen: true,
     },
   });

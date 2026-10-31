@@ -47,7 +47,12 @@ const operationMocks = vi.hoisted(() => {
   });
   return {
     graphql: false,
-    archive: vi.fn(async (): Promise<'committed' | 'queued'> => 'committed'),
+    archive: vi.fn(
+      async (_args: {
+        id: string;
+        value: boolean;
+      }): Promise<'committed' | 'queued'> => 'committed'
+    ),
     doneOverride: vi.fn((_ids: readonly string[], _done: boolean | undefined) =>
       Object.assign(vi.fn(), { release: vi.fn() })
     ),
@@ -89,6 +94,9 @@ vi.mock('@notifications', async (importOriginal) => ({
 vi.mock('@queries/email/integration', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/email/integration')>()),
   archiveEmailThread: operationMocks.archive,
+  // Settle each thread through the per-thread mock, as the bulk request does.
+  archiveEmailThreads: (ids: string[], value: boolean) =>
+    Promise.allSettled(ids.map((id) => operationMocks.archive({ id, value }))),
 }));
 vi.mock('@core/util/url', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/url')>()),
@@ -308,6 +316,52 @@ describe('agent session search navigation', () => {
     expect(getBlockHandle).not.toHaveBeenCalled();
     expect(goToLocationFromParams).not.toHaveBeenCalled();
   });
+});
+
+describe('project rows', () => {
+  const projectId = '01a1899a-b629-7e50-8e65-079fca623856';
+  const entity: EntityData = {
+    type: 'initiative',
+    id: projectId,
+    name: 'Roadmap',
+    ownerId: 'owner',
+  };
+
+  it.each([false, true])(
+    'opens a project through its Tasks-hosted identity (new split: %s)',
+    async (openInNewSplit) => {
+      const openWithSplit = vi.fn(() => ({ status: 'opened' }));
+      setGlobalSplitManager({
+        activeSplit: () => undefined,
+        getOrchestrator: () => ({
+          getBlockHandle: vi.fn(async () => undefined),
+        }),
+        openWithSplit,
+      } as unknown as SplitManager);
+      await openEntityInSplitFromUnifiedList(entity, { openInNewSplit });
+      expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+        {
+          type: 'initiative',
+          id: projectId,
+          entryMetadata: {
+            route: paneRoute(
+              { id: 'view-tasks', params: {} },
+              {
+                id: 'tasks-project',
+                params: { projectId, section: 'overview' },
+              }
+            ),
+            search: { tasks: { tab: ['projects'] } },
+          },
+          params: undefined,
+        },
+        expect.objectContaining({
+          preferNewSplit: openInNewSplit,
+          allowDuplicate: false,
+        })
+      );
+    }
+  );
 });
 
 const sendNotification = (id: string, messageId: string): UnifiedNotification =>
@@ -1617,7 +1671,7 @@ describe('getChannelEntityTarget', () => {
     expect(getChannelEntityTarget(entity)).toEqual({
       kind: 'message',
       messageId: 'notif-msg',
-      threadId: undefined,
+      threadId: 'notif-msg',
     });
   });
 
@@ -2058,9 +2112,9 @@ describe('getChannelEntityTarget', () => {
       } else {
         expect(search).toMatchObject({
           messageId: ['message'],
+          threadId: ['message'],
           seek: [expect.any(String)],
         });
-        expect(search?.threadId).toBeUndefined();
       }
       expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
         parentNotification,
@@ -2115,7 +2169,7 @@ describe('getChannelEntityTarget', () => {
     expect(getChannelEntityTarget(entity)).toEqual({
       kind: 'message',
       messageId: 'unread-older-msg',
-      threadId: undefined,
+      threadId: 'unread-older-msg',
     });
   });
 
@@ -2319,6 +2373,30 @@ describe('getDocumentCommentTarget', () => {
     expect(goToLocationFromParams).toHaveBeenCalledWith({
       comment_id: 'comment-1',
     });
+  });
+
+  it('opens the document itself on touch, where the thread covers it', async () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const openWithSplit = vi.fn(() => ({ status: 'unavailable' }));
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      documentRow([commentNotification('n1', 'comment-1')]),
+      {}
+    );
+
+    expect(openWithSplit).toHaveBeenCalledWith(
+      { type: 'md', id: 'doc-1', params: undefined },
+      expect.objectContaining({ activate: true })
+    );
+    expect(goToLocationFromParams).not.toHaveBeenCalled();
   });
 
   it('carries the comment through the Inbox preview route', () => {

@@ -21,8 +21,9 @@ mod tests;
 
 pub mod content_uploaded;
 pub mod copy_document;
-pub mod create_document;
 #[cfg(feature = "document_create")]
+pub mod create_canvas;
+pub mod create_document;
 pub mod create_markdown;
 #[cfg(feature = "document_create")]
 pub mod create_skill;
@@ -69,6 +70,7 @@ use sqlx::PgPool;
 use task_dedup::PgTaskDedupService;
 
 #[cfg(feature = "document_create")]
+use self::create_canvas::create_canvas_handler;
 use self::create_markdown::create_markdown_handler;
 #[cfg(feature = "document_create")]
 use self::create_skill::create_skill_handler;
@@ -331,6 +333,10 @@ where
 
     #[cfg(feature = "document_create")]
     let router = router
+        .route(
+            "/create_canvas",
+            axum::routing::post(create_canvas_handler::<T, Svc, Auth>),
+        )
         .route(
             "/create_markdown",
             axum::routing::post(create_markdown_handler::<T, Svc, Auth>),

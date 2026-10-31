@@ -1,6 +1,8 @@
 /**
  * Existing tab ids match the legacy mail view (`important` is Signal).
  * Favorites extends that list; entity action capabilities use `${view}-${tab}`.
+ * Focus comes last so the Signal/Noise pair keeps its position and hotkeys;
+ * the Inbox tabs and the touch layouts draw it before them.
  */
 export const EMAIL_TAB_IDS = [
   'important',
@@ -14,11 +16,12 @@ export const EMAIL_TAB_IDS = [
   'shared',
   'archived',
   'all',
+  'focus',
 ] as const;
 
 export type EmailTab = (typeof EMAIL_TAB_IDS)[number];
 
-const EMAIL_TAB_LABELS = {
+export const EMAIL_TAB_LABELS = {
   important: 'Signal',
   noise: 'Noise',
   favorites: 'Favorites',
@@ -30,6 +33,7 @@ const EMAIL_TAB_LABELS = {
   shared: 'Shared',
   archived: 'Archived',
   all: 'All',
+  focus: 'Focus',
 } as const satisfies Record<EmailTab, string>;
 
 export type EmailTabItem = {
@@ -43,3 +47,39 @@ export const EMAIL_TABS: readonly EmailTabItem[] = EMAIL_TAB_IDS.map((id) => ({
 }));
 
 export const DEFAULT_EMAIL_TAB: EmailTab = 'important';
+
+/** The views behind the desktop sidebar's Inbox item, as the header's tabs. */
+export const EMAIL_INBOX_TAB_IDS = [
+  'focus',
+  'important',
+  'noise',
+] as const satisfies readonly EmailTab[];
+
+export const isEmailInboxTab = (tab: EmailTab) =>
+  (EMAIL_INBOX_TAB_IDS as readonly EmailTab[]).includes(tab);
+
+/** How the Focus tab orders its threads. */
+export const EMAIL_FOCUS_SORT_IDS = [
+  'priority',
+  'importance',
+  'recent',
+] as const;
+
+export type EmailFocusSort = (typeof EMAIL_FOCUS_SORT_IDS)[number];
+
+export const DEFAULT_EMAIL_FOCUS_SORT: EmailFocusSort = 'priority';
+
+export const EMAIL_FOCUS_SORT_OPTIONS: readonly {
+  id: EmailFocusSort;
+  label: string;
+  /** A second line in the sort menu, for orders the label can't explain. */
+  description?: string;
+}[] = [
+  {
+    id: 'priority',
+    label: 'Priority',
+    description: 'Importance, halved every 2 days since mail last came in',
+  },
+  { id: 'importance', label: 'Importance' },
+  { id: 'recent', label: 'Most recent' },
+];

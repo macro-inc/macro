@@ -4,8 +4,9 @@ import {
 } from '@macro-inc/collaboration/websocket';
 import type { ToWebsocketMessage } from '@service-connection/generated/schemas/toWebsocketMessage';
 import type { FromWebsocketMessage } from '@service-connection/websocket';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas';
 import { createRoot, createSignal } from 'solid-js';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   notifications: vi.fn(),
@@ -38,6 +39,8 @@ vi.mock('@service-storage/graphql-soup-websocket', () => ({
 }));
 
 import { createNotificationSource } from '../notification-source';
+
+afterEach(() => vi.clearAllMocks());
 
 it('disables both feeds without reading pending data or mutating before sign-in', async () => {
   const [enabled, setEnabled] = createSignal(false);
@@ -84,6 +87,53 @@ it('disables both feeds without reading pending data or mutating before sign-in'
     await source.unmuteEntity({ type: 'document', id: 'document' });
     expect(mocks.mark).not.toHaveBeenCalled();
     expect(mocks.readData).not.toHaveBeenCalled();
+  } finally {
+    dispose();
+    ws.close();
+  }
+});
+
+it('does not expose the previous account’s muted items while the next account loads', () => {
+  const [enabled, setEnabled] = createSignal(true);
+  const [pending, setPending] = createSignal(false);
+  const [muted, setMuted] = createSignal<UserUnsubscribe[] | undefined>([
+    { item_id: 'alice-document', item_type: 'document' },
+  ]);
+  mocks.notifications.mockReturnValue({ transport: 'graphql' });
+  mocks.muted.mockReturnValue({
+    get isPending() {
+      return pending();
+    },
+    get data() {
+      return muted();
+    },
+  });
+  const ws = new WebsocketBuilder('ws://unused')
+    .withAutoConnect(false)
+    .withSerializer(
+      new JsonSerializer<ToWebsocketMessage, FromWebsocketMessage>()
+    )
+    .build();
+  const { source, dispose } = createRoot((dispose) => ({
+    source: createNotificationSource(ws, undefined, enabled),
+    dispose,
+  }));
+  try {
+    expect(source.mutedEntities()).toEqual([
+      { item_id: 'alice-document', item_type: 'document' },
+    ]);
+    setEnabled(false);
+    expect(source.mutedEntities()).toEqual([]);
+    setPending(true);
+    setMuted(undefined);
+    setEnabled(true);
+    expect(source.mutedEntities()).toEqual([]);
+
+    setMuted([{ item_id: 'bob-channel', item_type: 'channel' }]);
+    setPending(false);
+    expect(source.mutedEntities()).toEqual([
+      { item_id: 'bob-channel', item_type: 'channel' },
+    ]);
   } finally {
     dispose();
     ws.close();

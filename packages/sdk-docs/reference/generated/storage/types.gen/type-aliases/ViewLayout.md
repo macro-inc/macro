@@ -1,6 +1,6 @@
 # Type Alias: ViewLayout
 
-> **ViewLayout** = \{ `columns`: [`ViewColumn`](ViewColumn.md)[]; `kind`: `"table"`; \} \| \{ `cardFields`: `string`[]; `groupBy`: `string`; `hideEmptyLanes`: `boolean`; `kind`: `"board"`; `lanes`: [`Lane`](Lane.md)[]; `title`: `string`; \}
+> **ViewLayout** = \{ `columns`: [`ViewColumn`](ViewColumn.md)[]; `kind`: `"table"`; \} \| \{ `cardFields`: `string`[]; `groupBy`: `string`; `hideEmptyLanes`: `boolean`; `kind`: `"board"`; `lanes`: [`Lane`](Lane.md)[]; `title`: `string`; \} \| \{ `barFields?`: `string`[]; `colorBy`: `string` \| `null`; `groupBy`: `string` \| `null`; `kind`: `"timeline"`; `range`: `string`; `title`: `string`; \}
 
 How a view draws its rows.
 
@@ -29,3 +29,18 @@ How a view draws its rows.
 | `kind` | `"board"` | - |
 | `lanes` | [`Lane`](Lane.md)[] | How lanes show, in display order. A lane left out shows after the listed ones: the lane of empty cells first, then options in the column's order, or people by id. |
 | `title` | `string` | The column a card is titled by, of any type. Removing it titles the cards by the table's first remaining column. |
+
+***
+
+### Type Literal
+
+\{ `barFields?`: `string`[]; `colorBy`: `string` \| `null`; `groupBy`: `string` \| `null`; `kind`: `"timeline"`; `range`: `string`; `title`: `string`; \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `barFields?` | `string`[] | The columns a bar shows after its title, in order. |
+| `colorBy` | `string` \| `null` | The select or tag column whose options color the bars, if any. |
+| `groupBy` | `string` \| `null` | The single-select or single-person column whose values group the bars, if any; moving a bar to another group sets this column. |
+| `kind` | `"timeline"` | - |
+| `range` | `string` | The date-range column whose cells are the bars. |
+| `title` | `string` | The column a bar is labelled by, of any type. Removing it labels the bars by the table's first remaining column. |

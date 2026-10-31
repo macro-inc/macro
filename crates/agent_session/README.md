@@ -76,6 +76,19 @@ prompt spans also split `agent.turn.lock_wait_ms`, `agent.turn.admission_wait_ms
 and `agent.turn.first_text_ms`; their legacy `ttft_ms` can include reasoning or
 a tool call, but excludes usage and tool-result events.
 
+### A turn that ended without an answer
+
+In-memory prompt spans record what the turn said: `agent.turn.stop_reason`
+(`end_turn`, `cancelled`, `error`), `agent.turn.text_chars`,
+`agent.turn.tool_calls`, and `agent.turn.replied`, which is false when no text
+followed the last tool call. Such a turn also logs `the turn ended without a
+reply after its last tool call`; query `@agent.turn.replied:false` to find them.
+Then read the turn's last `chat_streaming` span: `gen_ai.response.finish_reasons`
+carries the provider's own stop reason (`end_turn`, `refusal`, `max_tokens`,
+`max_output_tokens`, `SAFETY`, ...), which Rig does not record for streamed
+calls. Each `execute_tool` span carries `macro.genai.tool.result_bytes`, whatever
+the content policy, so a result large enough to crowd the context shows there.
+
 ### From the send click to the first painted text
 
 The web app's `agent.prompt` span (service `web-app`) covers one prompt end to
@@ -86,7 +99,7 @@ join the same trace. Its `*_at_ms` attributes are milliseconds from the send:
 | Stage | Attribute | Where |
 | --- | --- | --- |
 | New session created, loaded, configured | `agent.prompt.created_at_ms`, `loaded_at_ms`, `configured_at_ms` | browser |
-| Control POST answered, including dispatch to the runtime | `agent.prompt.accepted_at_ms` | browser |
+| Prompt accepted, including dispatch to the runtime: the control POST answered, or the create for a first prompt that rode on it | `agent.prompt.accepted_at_ms` | browser |
 | `session/prompt` → first model chunk, per call | `macro.genai.chat.time_to_first_chunk_ms` on `chat_streaming` | harness |
 | `session/prompt` → first text at the session actor | `macro.genai.turn.time_to_first_text_ms` on `invoke_agent` | harness |
 | First agent output of any kind folded | `agent.prompt.first_output_at_ms` | browser |

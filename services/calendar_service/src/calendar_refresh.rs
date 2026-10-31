@@ -5,7 +5,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use tracing::Instrument;
 use uuid::Uuid;
 
-use crate::pubsub_util::cg_refresh_calendar;
+use crate::pubsub_util::{cg_refresh_calendar, cg_refresh_join_request};
 
 /// [`CalendarRefreshNotifier`] backed by the connection gateway: fans one
 /// mutation's refresh nudge out to the link owner and its delegates, exactly
@@ -57,6 +57,17 @@ impl CalendarRefreshNotifier for ConnectionGatewayCalendarRefresh {
             .in_current_span(),
         );
     }
+
+    async fn join_request_answered(&self, requester_id: &str, event_id: Uuid) {
+        let client = self.client.clone();
+        let requester_id = requester_id.to_string();
+        tokio::spawn(
+            async move {
+                cg_refresh_join_request(&client, &requester_id, event_id).await;
+            }
+            .in_current_span(),
+        );
+    }
 }
 
 impl calendar_events::domain::team::CalendarTeamNotifier for ConnectionGatewayCalendarRefresh {
@@ -66,7 +77,8 @@ impl calendar_events::domain::team::CalendarTeamNotifier for ConnectionGatewayCa
         let user_id = user_id.to_owned();
         tokio::spawn(
             async move {
-                crate::pubsub_util::cg_refresh_team_calendar(&client, &db, &[user_id], true).await;
+                crate::pubsub_util::cg_refresh_team_calendar(&client, &db, &[user_id], true, true)
+                    .await;
             }
             .in_current_span(),
         );

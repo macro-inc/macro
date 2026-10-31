@@ -1415,6 +1415,68 @@ async fn test_static_important_excludes_trashed(pool: Pool<Postgres>) -> anyhow:
     Ok(())
 }
 
+// The static important query restates email_message_mailbox_facts, so across every
+// combination of facts inputs it must page through the same threads, preview
+// messages and order as a query on the view itself.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_mailbox_facts_matrix")
+    )
+)]
+async fn test_static_important_matches_mailbox_facts(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let expected: Vec<_> = sqlx::query!(
+        r#"
+        SELECT thread_id AS "thread_id!", subject, ts AS "ts!" FROM (
+            SELECT DISTINCT ON (m.thread_id) m.thread_id, m.subject, COALESCE(m.internal_date_ts, m.created_at) AS ts
+            FROM email_messages m
+            JOIN email_message_mailbox_facts mf ON mf.id = m.id
+            WHERE m.link_id = $1
+              AND mf.is_present AND NOT mf.in_trash
+              AND (m.is_draft OR (mf.provider_is_important AND mf.in_inbox))
+            ORDER BY m.thread_id, ts DESC
+        ) latest
+        ORDER BY ts DESC, thread_id DESC
+        "#,
+        link_id
+    )
+    .fetch_all(&pool)
+    .await?
+    .into_iter()
+    .map(|row| (row.thread_id, row.subject, row.ts))
+    .collect();
+
+    let limit = 50;
+    let mut actual = Vec::new();
+    let mut query = Query::Sort(SimpleSortMethod::UpdatedAt, ());
+    loop {
+        let page =
+            preview_views::important::important_preview_cursor(&pool, &[link_id], limit, &query)
+                .await?;
+        actual.extend(page.iter().map(|r| (r.id, r.name.clone(), r.sort_ts)));
+        let Some(last) = page.last().filter(|_| page.len() == limit as usize) else {
+            break;
+        };
+        let cursor = Cursor {
+            id: last.id,
+            limit: limit as usize,
+            val: CursorVal {
+                sort_type: SimpleSortMethod::UpdatedAt,
+                last_val: last.sort_ts,
+            },
+            filter: (),
+        };
+        query = Query::new(Some(cursor), SimpleSortMethod::UpdatedAt, ());
+    }
+
+    assert!(expected.len() > 1000, "fixture should qualify many threads");
+    assert_eq!(actual, expected);
+
+    Ok(())
+}
+
 // Static starred query should exclude trashed starred messages (thread 10).
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",

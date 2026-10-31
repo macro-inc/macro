@@ -356,7 +356,10 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
         </ListLayoutProvider>
         <Show when={props.records.length > visibleCount()}>
           <div class="flex justify-center p-3">
-            <Button onClick={() => setVisibleCount((count) => count + 50)}>
+            <Button
+              variant="secondary"
+              onClick={() => setVisibleCount((count) => count + 50)}
+            >
               Load more runs
             </Button>
           </div>

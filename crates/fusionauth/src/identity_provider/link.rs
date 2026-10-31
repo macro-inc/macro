@@ -27,6 +27,17 @@ impl FusionAuthErrorBody {
     }
 }
 
+/// Link lookups and deletes report a deleted user as a validation error.
+pub(super) fn is_missing_user(body: &str) -> bool {
+    serde_json::from_str::<FusionAuthErrorBody>(body)
+        .ok()
+        .is_some_and(|body| {
+            body.field_errors
+                .get("userId")
+                .is_some_and(|errors| errors.iter().any(|error| error.code == "[invalid]userId"))
+        })
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 /// Response containing identity provider links.
@@ -81,20 +92,41 @@ pub(crate) async fn get_links(
     let res = client
         .client()
         .get(url)
+        .timeout(super::LINK_REQUEST_TIMEOUT)
         .send()
         .await
-        .map_err(FusionAuthClientError::transport)?;
+        .map_err(|e| {
+            FusionAuthClientError::Generic(GenericErrorResponse {
+                message: e.to_string(),
+            })
+        })?;
 
-    match res.status() {
+    let status = res.status();
+    match status {
         reqwest::StatusCode::OK => {
             let response: RetrieveLinkResponse =
                 res.json().await.map_err(FusionAuthClientError::transport)?;
 
-            tracing::trace!(identity_provider=?response.idp_links, "links found");
+            tracing::trace!(link_count = response.idp_links.len(), "links found");
 
             Ok(response.idp_links)
         }
-        _ => Err(FusionAuthClientError::unexpected_response(res).await),
+        reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::NoIdentityProviderFound),
+        _ => {
+            let body = res.text().await.map_err(|e| {
+                FusionAuthClientError::Generic(GenericErrorResponse {
+                    message: e.to_string(),
+                })
+            })?;
+            if status == reqwest::StatusCode::BAD_REQUEST && is_missing_user(&body) {
+                return Err(FusionAuthClientError::UserDoesNotExist);
+            }
+            tracing::error!(%status, "unexpected response from fusionauth");
+
+            Err(FusionAuthClientError::Generic(GenericErrorResponse {
+                message: "unknown error".to_string(),
+            }))
+        }
     }
 }
 
@@ -133,6 +165,7 @@ pub(crate) async fn link_user(
     let res = client
         .client()
         .post(format!("{base_url}/api/identity-provider/link",))
+        .timeout(super::LINK_REQUEST_TIMEOUT)
         .json(&request)
         .send()
         .await

@@ -131,7 +131,7 @@ pub struct Capabilities {
     pub conditional_column_cleanup: bool,
     /// Retyping through AI is unavailable until its recovery guarantees exist.
     pub safe_linked_type_changes: bool,
-    /// False: screeners reveal links, but independent booking URLs remain usable.
+    /// False: gates reveal links, but independent booking URLs remain usable.
     pub required_booking_qualification: bool,
 }
 /// An authorized snapshot of the actual durable draft and current schema.

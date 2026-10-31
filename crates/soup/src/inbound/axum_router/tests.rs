@@ -211,6 +211,15 @@ impl SoupService for MockSoup {
         ))
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a crate::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<crate::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
@@ -225,6 +234,14 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
     async fn resolve_message_operation(
         &self,
         _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -292,10 +309,11 @@ impl EmailService for MockEmail {
         }))
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -354,6 +372,7 @@ impl EmailService for MockEmail {
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _draft_id: uuid::Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -587,6 +606,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -719,6 +747,14 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn resolve_thread_read_id(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        Ok(thread_id)
+    }
+
     async fn resolve_message_operation(
         &self,
         _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
@@ -776,10 +812,11 @@ impl EmailService for MockEmailLinkResult {
         (self.get_link_result)()
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        _request: email::domain::models::SendingInboxRequest<'_>,
+    ) -> Result<email::domain::models::ResolvedSendingInbox, email::domain::models::EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -838,6 +875,7 @@ impl EmailService for MockEmailLinkResult {
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
         _draft_id: uuid::Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -1763,6 +1801,29 @@ async fn it_can_expand_assoc_ast() {
 // ============================================================================
 
 use item_filters::ast::CrmScope;
+
+#[test]
+fn ast_endpoint_initiative_filter_opts_initiatives_in() {
+    use item_filters::ast::initiative::{InitiativeLiteral, initiatives_requested};
+    let api: ApiEntityFilterAst =
+        serde_json::from_value(json!({ "if": { "l": { "ns": "unseen" } } })).unwrap();
+    let ast = api.into_entity_ast().unwrap();
+    let tree = ast
+        .initiative_filter
+        .as_deref()
+        .expect("initiative filter kept");
+    assert!(initiatives_requested(Some(tree)));
+    assert!(matches!(
+        tree,
+        filter_ast::Expr::Literal(InitiativeLiteral::NotificationState(
+            item_filters::NotificationState::Unseen
+        ))
+    ));
+
+    // Omitted on the wire means no initiatives, as before.
+    let api: ApiEntityFilterAst = serde_json::from_value(json!({})).unwrap();
+    assert!(api.into_entity_ast().unwrap().initiative_filter.is_none());
+}
 
 #[test]
 fn ast_endpoint_email_crm_domains_stamps_scope_and_ands_into_tree() {

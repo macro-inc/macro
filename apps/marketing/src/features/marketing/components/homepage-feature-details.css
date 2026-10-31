@@ -1,0 +1,11 @@
+.homepage-feature-more-group { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 16px; }
+.homepage-feature-more-label { margin-right: 6px; color: var(--color-ink-muted); font: 400 14px/1.5 'Inter Variable', Inter, sans-serif; }
+.homepage-feature-more { display: flex; justify-content: center; }
+.homepage-feature-more > a { display: inline-flex; align-items: center; justify-content: center; gap: 14px; min-height: 46px; padding: 10px 16px; border: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--color-ink) 3%, transparent); color: var(--color-ink); font: 500 15px/1.5 'Inter Variable', Inter, sans-serif; cursor: pointer; text-decoration: none; }
+.homepage-feature-more > a:hover { background: color-mix(in srgb, var(--color-ink) 7%, transparent); }
+.homepage-feature-more > a > svg { width: 14px; height: 14px; color: var(--color-ink-muted); }
+.homepage-feature-more > a:focus-visible { outline: 2px solid var(--color-ink-muted); outline-offset: 3px; }
+@media (max-width: 479px) {
+  .homepage-feature-more-label { width: 100%; margin: 0; text-align: center; }
+  .homepage-feature-more > a { min-width: 116px; }
+}

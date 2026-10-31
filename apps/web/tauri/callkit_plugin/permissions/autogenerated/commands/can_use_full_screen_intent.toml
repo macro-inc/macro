@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-can-use-full-screen-intent"
+description = "Enables the can_use_full_screen_intent command without any pre-configured scope."
+commands.allow = ["can_use_full_screen_intent"]
+
+[[permission]]
+identifier = "deny-can-use-full-screen-intent"
+description = "Denies the can_use_full_screen_intent command without any pre-configured scope."
+commands.deny = ["can_use_full_screen_intent"]

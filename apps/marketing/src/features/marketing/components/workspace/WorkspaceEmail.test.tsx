@@ -68,9 +68,7 @@ it('edits sample tags in the details panel and keeps them after reopening', asyn
       account="all"
     />
   ));
-  fireEvent.click(
-    view.getByRole('button', { name: 'Read Next steps for our team' })
-  );
+  fireEvent.click(view.getByRole('button', { name: 'Read Homepage feedback' }));
   fireEvent.click(view.getByRole('button', { name: 'Toggle email details' }));
   fireEvent.pointerDown(view.getByRole('button', { name: 'Add tags' }), {
     button: 0,
@@ -93,7 +91,7 @@ it('edits sample tags in the details panel and keeps them after reopening', asyn
     )
   );
   const row = view.getByRole('button', {
-    name: 'Read Next steps for our team',
+    name: 'Read Homepage feedback',
   });
   expect(within(row).getAllByText('Launch').length).toBeGreaterThan(0);
   expect(within(row).queryByText('Customers')).toBeNull();

@@ -6,7 +6,7 @@ const serverHostLocal: Servers = {
   'pdf-service': 'http://localhost:4567',
   'document-storage-service': 'http://localhost:8086',
   'websocket-service': 'ws://localhost:6969',
-  'cognition-service': 'http://localhost:8085',
+  'cognition-service': 'http://localhost:8101/cognition',
   'connection-gateway': 'ws://localhost:8082',
   'notification-service': 'http://localhost:8089',
   'static-file': 'http://localhost:8100',
@@ -18,9 +18,9 @@ const serverHostLocal: Servers = {
   // that prefix is carried here.
   'calendar-service': 'http://localhost:8088/calendar',
   'image-proxy-service': 'http://localhost:8097',
-  'scheduled-action': 'http://localhost:8099',
+  'scheduled-action': 'http://localhost:8101/scheduled-action',
   'agent-harness': 'http://localhost:8101',
-  preview: 'http://localhost:8110',
+  preview: 'http://localhost:8101/preview',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';

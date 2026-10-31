@@ -27,6 +27,7 @@ class FakeMessagePort extends EventTarget {
         ? transfers
         : (transfers as StructuredSerializeOptions | undefined)?.transfer,
     });
+    this.dispatchEvent(new Event('sent'));
   }
 
   start(): void {}
@@ -50,8 +51,9 @@ class FakeMessagePort extends EventTarget {
   }
 }
 
-const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-
+// Effect resumes fibers with setImmediate under Node, which can fire after a
+// setTimeout(0) (including the one that resolves `ready`), so assertions on
+// delivered frames wait for them instead of assuming one timer tick suffices.
 describe('Effect worker transport', () => {
   it('buffers sends until ready and preserves their order', async () => {
     const endpoint = new FakeMessagePort();
@@ -68,15 +70,52 @@ describe('Effect worker transport', () => {
 
     endpoint.ready();
     await transport.ready;
-    expect(endpoint.sent.map(({ message }) => message)).toEqual([
-      [EFFECT_WORKER_REQUEST_TAG, 'first'],
-      [EFFECT_WORKER_REQUEST_TAG, 'second'],
-    ]);
+    await vi.waitFor(() =>
+      expect(endpoint.sent.map(({ message }) => message)).toEqual([
+        [EFFECT_WORKER_REQUEST_TAG, 'first'],
+        [EFFECT_WORKER_REQUEST_TAG, 'second'],
+      ])
+    );
 
     endpoint.emit({ kind: 'response' });
-    await flush();
-    expect(received).toEqual([{ kind: 'response' }]);
+    await vi.waitFor(() => expect(received).toEqual([{ kind: 'response' }]));
 
+    await Effect.runPromise(transport.close());
+  });
+
+  it('reports a restarted runner on an already-ready port', async () => {
+    const endpoint = new FakeMessagePort();
+    const onError = vi.fn();
+    const transport = createEffectWorkerTransport({
+      endpoint: endpoint as unknown as MessagePort,
+      onMessage: vi.fn(),
+      onError,
+    });
+    try {
+      endpoint.ready();
+      await transport.ready;
+      endpoint.ready();
+      expect(onError).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ name: 'WorkerRestartedError' })
+      );
+    } finally {
+      await Effect.runPromise(transport.close());
+    }
+  });
+
+  it('rejects startup when a second ready frame arrives before readiness settles', async () => {
+    const endpoint = new FakeMessagePort();
+    const transport = createEffectWorkerTransport({
+      endpoint: endpoint as unknown as MessagePort,
+      onMessage: vi.fn(),
+      onError: vi.fn(),
+    });
+    const rejected = expect(transport.ready).rejects.toMatchObject({
+      name: 'WorkerRestartedError',
+    });
+    endpoint.ready();
+    endpoint.ready();
+    await rejected;
     await Effect.runPromise(transport.close());
   });
 
@@ -120,9 +159,13 @@ describe('Effect worker transport', () => {
     await transport.ready;
 
     const channel = new MessageChannel();
+    const sent = new Promise<void>((resolve) => {
+      endpoint.addEventListener('sent', () => resolve(), { once: true });
+    });
     await Effect.runPromise(
       transport.send({ port: channel.port1 }, [channel.port1])
     );
+    await sent;
     const framed = endpoint.sent[0]?.message as
       | [number, { port: MessagePort }]
       | undefined;
@@ -167,13 +210,13 @@ describe('Effect worker transport', () => {
 
     await parent.ready;
     Effect.runSync(parent.send({ kind: 'request' }));
-    await flush();
-    expect(runnerMessage).toEqual({ kind: 'request' });
+    await vi.waitFor(() => expect(runnerMessage).toEqual({ kind: 'request' }));
     expect(runnerPortId).toBe(0);
 
     Effect.runSync(runner.send(0, { kind: 'response' }));
-    await flush();
-    expect(parentMessages).toEqual([{ kind: 'response' }]);
+    await vi.waitFor(() =>
+      expect(parentMessages).toEqual([{ kind: 'response' }])
+    );
 
     await Effect.runPromise(
       Effect.all([parent.close(), runner.close()], { discard: true })

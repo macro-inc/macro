@@ -9,6 +9,7 @@ types, the `EmailThread` edge resolvers, and draft mutations.
 
 - `src/objects.rs`: `GraphqlSoupEmailMessage`, `GraphqlMailPreviewMessage`, and
   the loaders that fetch message bodies vs. previews.
+- `src/send.rs`: idempotent send/cancel/status plus actor/inbox-scoped pending-send pagination.
 - `src/mutation.rs`: `GraphqlEmailMutation` (save/delete draft, mark seen/unread,
   update label).
 - `src/loaders.rs`: DataLoader batching for thread metadata, mail projection,

@@ -6,14 +6,27 @@ export type PropertySaveFn = (
   value: PropertyApiValues
 ) => Promise<void>;
 
+/**
+ * Saves a pick. An entity editor also passes the names its picker showed, by
+ * entity ID, so the pick can be named before the entity's own read loads.
+ */
+export type PropertyPickFn = (
+  property: Property,
+  value: PropertyApiValues,
+  entityNames?: ReadonlyMap<string, string>
+) => Promise<void>;
+
 export type PropertyEditFn = (property: Property, anchor?: HTMLElement) => void;
 
 export interface PropertyRootContextValue {
+  /** The property as shown: a pick still saving replaces the source value. */
   property: () => Property;
+  /** The name the picker showed for an entity in the pick being shown. */
+  pickedEntityName: (entityId: string) => string | undefined;
   canEdit: () => boolean;
-  onSave?: PropertySaveFn;
+  /** Saves through the consumer's handler and shows the pick until then. */
+  onSave?: PropertyPickFn;
   onEdit?: PropertyEditFn;
-  onRefresh?: () => void;
 
   // Local editor open state. Populated by EditTrigger when the consumer hasn't
   // supplied an external onEdit; consumed by PopoverEditor. The anchor passed

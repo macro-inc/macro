@@ -10,7 +10,9 @@ Macro works solo, but everything is better with friends. Teams get auto-shared t
 
 ## Create a team and invite people
 
-Click **Team** in the bottom left to create a team. You can add the first members right there, or invite more later by email from **Settings → Team**. Invitees see the pending invitation when they sign in. Owners can also copy an invite link for any pending invite and share it directly, instead of relying on email.
+Open **Settings → Team** and click **Create Team**. You can add the first members right there, or invite more later by email from the same page. Invitees see the pending invitation when they sign in. You can also copy an invite link for any pending invite and share it directly, instead of relying on email.
+
+By default, any member can invite people. Admins and owners can turn off **Members can invite** to limit invitations to admins.
 
 <Note>
   Team subscriptions require a paid seat for every member. See [Billing & plans](/account/billing).
@@ -27,17 +29,17 @@ Teams have three roles, in increasing order of access:
 | Role | What it adds |
 | --- | --- |
 | **Member** | Everything shared with the team: team tasks, shared calls, visible CRM records |
-| **Admin** | Manage CRM visibility: toggle [Email Sync](/product/crm) per company, hide or unhide records |
-| **Owner** | Everything above, plus inviting and removing members |
+| **Admin** | Remove members, choose seat plans, control **Auto-join on domain** and **Members can invite**, and manage CRM visibility: toggle [Email Sync](/product/crm) per company, hide or unhide records |
+| **Owner** | Everything above, plus changing members' roles |
 
-Owners can remove any member except themselves. When someone is removed, they lose team-shared content automatically, and removing them from [channels](/permissions) revokes everything that was shared there.
+Admins and owners can remove members. When someone is removed, they lose team-shared content automatically, and removing them from [channels](/permissions) revokes everything that was shared there.
 
 ## What's shared with a team
 
 Joining a team changes the default sharing for a few block types. Everything else stays private until you share it:
 
 - **Tasks** are visible to the whole team by default.
-- **Calls** are recorded, transcribed, and shared to team memory by default; anyone can opt a call out, which keeps it in their personal memory only.
+- **Calls** started from a channel are recorded, transcribed, and shared with the team by default; participants can turn off **Share with team** during the call.
 - **Emails** with tracked customers are shared through the [CRM](/product/crm) when Email Sync is on for that company.
 - **[Snippets](/product/snippets)** stay personal until you turn on **Share with team** in the snippet's side panel; a shared snippet appears in every teammate's <kbd>;</kbd> menu and they can edit it.
 
@@ -45,6 +47,6 @@ See [Permissions](/permissions) for the full sharing model.
 
 ## Sign-in and enterprise
 
-Macro signs in with your Google account, the same one your Gmail or Google Workspace email syncs from. For a GDPR data processing agreement or EU hosting, contact [support@macro.com](mailto:support@macro.com). For FedRAMP or running Macro on your own infrastructure, contact [self-host@macro.com](mailto:self-host@macro.com).
+You sign in to Macro with Google, with Apple on iOS, or with a one-time code sent to your email. Signing in with Google uses the same account your Gmail or Google Workspace email syncs from. For a GDPR data processing agreement or EU hosting, contact [support@macro.com](mailto:support@macro.com). For FedRAMP or running Macro on your own infrastructure, contact [self-host@macro.com](mailto:self-host@macro.com).
 
 [Security](/security) covers encryption, certifications, retention, and how agents handle team data.

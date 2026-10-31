@@ -425,7 +425,7 @@ const CHANNEL_BODY = {
         type: 'keyword',
         index: true,
       },
-      // copy_to indexes the name without modifying the message's _source.content.
+      // Queried directly alongside content so message-body highlights stay intact.
       imported_author: IMPORTED_AUTHOR_MAPPING,
       mentions: {
         type: 'keyword',

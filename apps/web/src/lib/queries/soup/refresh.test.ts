@@ -76,6 +76,21 @@ it('leaves unrelated loaded REST lists alone for a known session', async () => {
   expect(client.getQueryData(key)).toBe('updated');
 });
 
+it('refreshes a flat AST list, whose key normy returns with null slots', async () => {
+  const astKey = soupKeys.astItems({
+    params: { sort_method: 'updated_at', limit: 100 },
+    body: { asf: { l: 'inc' } } as never,
+  }).queryKey;
+  dependencies.mockReturnValue([JSON.parse(JSON.stringify(astKey))]);
+  const queryFn = vi.fn(async () => 'idle');
+  mountList(astKey, queryFn, 'running');
+
+  await refreshSoupEntities(['session']);
+
+  expect(queryFn).toHaveBeenCalledOnce();
+  expect(client.getQueryData(astKey)).toBe('idle');
+});
+
 it('awaits REST and repeats when another update arrives during revalidation', async () => {
   dependencies.mockReturnValue([key]);
   const responses: Array<(state: string) => void> = [];

@@ -51,6 +51,14 @@ passwordless/password flows against the FusionAuth HTTP API.
 - Calls to Google or Microsoft name the provider:
   `FusionAuthClientError::provider_transport("Google", e)`.
 
+## Gotchas
+
+- Link lookup and unlink map HTTP 400 `userId` / `[invalid]userId` errors to
+  `UserDoesNotExist`; other validation, authentication, and server failures
+  must remain errors. Never log identity-provider link tokens.
+- Bound identity-provider link lookup, creation, and deletion requests to thirty
+  seconds, including response-body reads; their callers may hold account locks.
+
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md` (FusionAuth base URL/keys

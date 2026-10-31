@@ -1,4 +1,3 @@
-import { Tabs } from '@kobalte/core/tabs';
 import { TabSelector } from '@ui';
 import { For } from 'solid-js';
 
@@ -19,7 +18,7 @@ export function FormTabs(props: {
 }) {
   return (
     <TabSelector>
-      <Tabs
+      <TabSelector.Root
         value={props.tab}
         onChange={(value) => {
           const tab = TABS.find((tab) => tab.value === value);
@@ -46,7 +45,7 @@ export function FormTabs(props: {
             )}
           </For>
         </TabSelector.List>
-      </Tabs>
+      </TabSelector.Root>
     </TabSelector>
   );
 }

@@ -6,7 +6,26 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use url::Url;
 
-use super::url_parsers::parse_custom_title;
+use super::url_parsers::{EmbedInfo, EmbedType, parse_custom_title, parse_embed_info};
+
+/// The type of embeddable content for services that support iframe embedding.
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+pub enum UnfurlEmbedType {
+    /// No embeddable content.
+    #[default]
+    None,
+    /// Video content (Loom, Supercut, etc.).
+    Video,
+}
+
+impl From<EmbedType> for UnfurlEmbedType {
+    fn from(embed_type: EmbedType) -> Self {
+        match embed_type {
+            EmbedType::Video => UnfurlEmbedType::Video,
+        }
+    }
+}
 
 /// Unfurl response for a single URL: the URL itself plus any metadata that
 /// was extracted from the page's `<head>` (title, description, image,
@@ -27,6 +46,16 @@ pub struct GetUnfurlResponse {
     /// The page's favicon URL, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub favicon_url: Option<String>,
+    /// The type of embeddable content, if the URL supports iframe embedding.
+    #[serde(default, skip_serializing_if = "is_embed_type_none")]
+    pub embed_type: UnfurlEmbedType,
+    /// The iframe-embeddable URL for services like Loom or Supercut.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embed_url: Option<String>,
+}
+
+fn is_embed_type_none(embed_type: &UnfurlEmbedType) -> bool {
+    matches!(embed_type, UnfurlEmbedType::None)
 }
 
 impl GetUnfurlResponse {
@@ -68,12 +97,23 @@ impl GetUnfurlResponse {
             favicon_url = Some(joined.to_string());
         }
 
+        // Check for embeddable content (video services like Loom, Supercut).
+        let (embed_type, embed_url) = match parse_embed_info(url) {
+            Some(EmbedInfo {
+                embed_type,
+                embed_url,
+            }) => (embed_type.into(), Some(embed_url)),
+            None => (UnfurlEmbedType::None, None),
+        };
+
         GetUnfurlResponse {
             url: url.to_string(),
             title,
             description,
             image_url,
             favicon_url,
+            embed_type,
+            embed_url,
         }
     }
 }

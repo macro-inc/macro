@@ -1,9 +1,10 @@
+import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowLeft from '@phosphor/arrow-left.svg';
-import ArrowRight from '@phosphor/arrow-right.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
-import Spinner from '@phosphor/spinner.svg';
+import ArrowLeft from '@icon/system/regular/arrow-left.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import PaperPlaneTilt from '@icon/system/regular/paper-plane-tilt.svg';
+import Spinner from '@icon/system/regular/spinner.svg';
 import { Button, cn } from '@ui';
 import {
   createMemo,
@@ -208,7 +209,7 @@ export function RespondView(props: {
                 }
                 footer={
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     class="self-start"
                     onClick={() => {
                       respond.restartPreview();
@@ -235,7 +236,7 @@ export function RespondView(props: {
                 />
                 <Show when={step().preview}>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     class="self-start"
                     onClick={() => {
                       respond.restartPreview();
@@ -254,8 +255,8 @@ export function RespondView(props: {
               aria-busy="true"
               aria-label="Loading"
             >
-              <div class="h-24 animate-pulse rounded-xl bg-hover" />
-              <div class="h-24 animate-pulse rounded-xl bg-hover" />
+              <ListSkeleton.Bar class="h-24 w-full rounded-xl" />
+              <ListSkeleton.Bar class="h-24 w-full rounded-xl" />
             </div>
           </Match>
           <Match
@@ -282,7 +283,7 @@ export function RespondView(props: {
                   Your saved response couldn’t be loaded.
                 </p>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   class="self-start"
                   disabled={unavailable().retrying}
                   aria-busy={unavailable().retrying}
@@ -307,7 +308,7 @@ export function RespondView(props: {
                 Nothing you entered was submitted. Try again in a moment.
               </p>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 class="mt-2 self-start"
                 onClick={() => fireAndForget(retry(), 'form-respond')}
@@ -384,7 +385,7 @@ export function RespondView(props: {
                   <>
                     <Show when={confirmation().booking}>
                       <Button
-                        variant="cta"
+                        variant="primary"
                         class="self-start"
                         onClick={() => {
                           respond.openBooking();
@@ -610,7 +611,7 @@ export function RespondView(props: {
                   </Show>
                   <Button
                     type="submit"
-                    variant="cta"
+                    variant="primary"
                     size="md"
                     disabled={answering().submitting || answering().uploading}
                     aria-busy={answering().submitting}

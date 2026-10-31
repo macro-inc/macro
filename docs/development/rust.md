@@ -38,7 +38,7 @@ unit tests. Standalone pure-logic crates need no database setup.
 | `just build` | Build with the workspace's default Cargo selection, using the SQLx cache. |
 | `just rust-check` | Type-check the Rust workspace using the SQLx cache. |
 | `cargo fmt` | Format Rust code. |
-| `just check` | Fast, change-scoped format/lint/code-rule gate; not a type check or test runner. |
+| `just check` | Fast, change-scoped format/lint/code-rule/PII gate; not a type check or test runner. |
 | `just check full` | Add TypeScript checking and Rust clippy to the gate. |
 | `just clippy` | Run workspace Rust lints using the SQLx cache. |
 
@@ -67,6 +67,10 @@ There is no root `just test` recipe. Tests use the live local schema, not offlin
 query metadata. If a test reports missing SQLx cache data, follow the
 [database troubleshooting workflow](database.md#troubleshooting);
 do not enable offline mode to work around it.
+
+CI limits Cargo to two concurrent build jobs for tests because linking several
+large service test binaries can exhaust runner memory. Nextest's test worker
+count is configured separately; the build limit does not reduce test coverage.
 
 Keep tests in a sibling `test.rs` (CS-49). For example, `src/user.rs` declares:
 

@@ -25,6 +25,17 @@ beforeEach(() => {
   reduced = false;
   hidden = false;
   vi.useFakeTimers();
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    width: 800,
+    height: 600,
+    right: 800,
+    bottom: 600,
+    toJSON: () => ({}),
+  });
   vi.stubGlobal('fetch', vi.fn());
   vi.spyOn(document, 'hidden', 'get').mockImplementation(() => hidden);
   vi.stubGlobal('matchMedia', () => ({
@@ -125,11 +136,27 @@ it('shows multiple conversations without a navigation sidebar', () => {
 
 it('shows channel access in Share and retains the chosen permission after reopening', () => {
   const view = render(() => <ChannelPermissionsDemo />);
+  expect(
+    view.container.querySelector('[data-document-share]')?.textContent
+  ).toContain('Share');
   visible(true);
   vi.advanceTimersByTime(1300);
+  expect(view.container.querySelector('.channel-demo-cursor')).toBeTruthy();
+  vi.advanceTimersByTime(600);
+  expect(
+    view.queryByRole('combobox', {
+      name: 'Access for Julia, Teo, Gabriel +1 other',
+    })
+  ).toBeNull();
+  advanceTo(() =>
+    view.queryByRole('combobox', {
+      name: 'Access for Julia, Teo, Gabriel +1 other',
+    })
+  );
   const access = view.getByRole('combobox', {
     name: 'Access for Julia, Teo, Gabriel +1 other',
   });
+  fireEvent.pointerDown(access);
   expect((access as HTMLSelectElement).value).toBe('view');
   fireEvent.change(access, { target: { value: 'comment' } });
   fireEvent.click(view.getByRole('button', { name: 'Cancel' }));
@@ -382,4 +409,74 @@ it('keeps document edits when email opens in a third split and closes only the s
   );
   await Promise.resolve();
   expect(view.container.querySelectorAll('.channel-work-item')).toHaveLength(0);
+});
+
+function advanceTo(reached: () => unknown) {
+  for (let elapsed = 0; elapsed < 30000 && !reached(); elapsed += 50)
+    vi.advanceTimersByTime(50);
+  expect(!!reached()).toBe(true);
+}
+
+it('types and selects the channel, grants access, then opens the delivered document', () => {
+  const view = render(() => <ChannelPermissionsDemo />);
+  visible(true);
+  advanceTo(() => view.queryByRole('option', { name: /launch/ }));
+  const input = view.getByRole<HTMLInputElement>('textbox', {
+    name: 'Email or group',
+  });
+  expect(input.value).toBe('l');
+  expect(view.queryByRole('button', { name: 'Open #launch' })).toBeNull();
+  advanceTo(() => view.queryByRole('button', { name: 'Open #launch' }));
+  expect(
+    (
+      view.getByRole('combobox', {
+        name: 'Access for Julia, Teo, Gabriel +1 other',
+      }) as HTMLSelectElement
+    ).value
+  ).toBe('view');
+  advanceTo(() => view.queryByRole('log', { name: 'Channel launch' }));
+  expect(
+    view.getByText(/Please check your items before tomorrow/)
+  ).toBeTruthy();
+  expect(view.getByRole('button', { name: 'Launch checklist' })).toBeTruthy();
+  advanceTo(() => view.queryByRole('region', { name: 'Shared work' }));
+  expect(
+    view.getByRole('textbox', { name: 'Document title' }).textContent
+  ).toBe('Launch checklist');
+  expect(
+    view.getByRole('textbox', { name: 'Document body' }).textContent
+  ).toContain('Final checks for tomorrow');
+  vi.advanceTimersByTime(9500);
+  expect(view.queryByRole('log', { name: 'Channel launch' })).toBeNull();
+  expect(view.queryByRole('button', { name: 'Open #launch' })).toBeNull();
+});
+
+it('uses the same channel grant and delivery when a visitor shares manually', async () => {
+  const view = render(() => <ChannelPermissionsDemo />);
+  const share = view.getByRole('button', { name: 'Share' });
+  fireEvent.pointerDown(share);
+  fireEvent.click(share);
+  const dialog = within(view.getByRole('dialog'));
+  fireEvent.input(dialog.getByRole('textbox', { name: 'Email or group' }), {
+    target: { value: 'launch' },
+  });
+  fireEvent.click(dialog.getByRole('option', { name: /launch/ }));
+  await Promise.resolve();
+  fireEvent.input(dialog.getByRole('textbox', { name: 'Optional message' }), {
+    target: { value: 'Please review my changes.' },
+  });
+  fireEvent.click(dialog.getByRole('button', { name: /^Share/ }));
+  expect(
+    view.getByRole('combobox', {
+      name: 'Access for Julia, Teo, Gabriel +1 other',
+    })
+  ).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: 'Open #launch' }));
+  expect(view.getByText(/Please review my changes/)).toBeTruthy();
+  fireEvent.click(view.getByRole('button', { name: 'Launch checklist' }));
+  expect(
+    view.getByRole('textbox', { name: 'Document title' }).textContent
+  ).toBe('Launch checklist');
+  vi.advanceTimersByTime(30000);
+  expect(view.getByText(/Please review my changes/)).toBeTruthy();
 });

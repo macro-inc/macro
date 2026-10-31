@@ -18,9 +18,9 @@ export type HomeTypeFilter =
   | 'tasks'
   | 'email'
   | 'channels'
-  | 'chats'
   | 'agents'
-  | 'projects'
+  | 'folders'
+  | 'initiatives'
   | 'github'
   | 'calendar';
 

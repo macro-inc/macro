@@ -4,6 +4,7 @@ import { type RichText, validRichText } from '../rich-text';
 import { validBoxGeometry } from './box-geometry';
 import type { ShapeDefinition } from './definition';
 export type TextFont = 'sans' | 'serif' | 'mono';
+export type TextFitMode = 'grow' | 'contain' | 'error';
 export type TextGeometry = Readonly<{
   width: number;
   height: number;
@@ -11,6 +12,8 @@ export type TextGeometry = Readonly<{
   fontSize: number;
   fontFamily: TextFont;
   content: RichText;
+  /** Explicit host layout policy; absent preserves the host's default. */
+  fitText?: TextFitMode;
 }>;
 /** The host measures with its actual fonts; the core never calls browser layout. */
 export type TextMeasurer = (
@@ -30,7 +33,9 @@ export const textDefinition: ShapeDefinition<'text'> = {
       v.fontSize > 0 &&
       v.fontSize <= 10000 &&
       ['sans', 'serif', 'mono'].includes(String(v.fontFamily)) &&
-      validRichText(v.content)
+      validRichText(v.content) &&
+      (v.fitText === undefined ||
+        ['grow', 'contain', 'error'].includes(String(v.fitText)))
     );
   },
   freezeGeometry: (geometry) => Object.freeze({ ...geometry }),

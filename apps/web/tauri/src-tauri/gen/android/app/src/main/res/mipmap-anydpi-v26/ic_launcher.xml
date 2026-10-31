@@ -2,7 +2,7 @@
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
   <foreground>
     <!-- The 72dp artwork occupies the central 72dp of the 108dp adaptive layer. -->
-    <inset android:drawable="@drawable/ic_macro_alpha_foreground" android:inset="16.6667%"/>
+    <inset android:drawable="@drawable/ic_macro_foreground" android:inset="16.6667%"/>
   </foreground>
   <background android:drawable="@color/ic_launcher_background"/>
 </adaptive-icon>

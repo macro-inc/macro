@@ -338,13 +338,13 @@ test('touch formatting and sheet navigation preserve workbook state', async ({
   await page.getByRole('tab', { name: 'Sheet1', exact: true }).tap();
   await expect(cell(page, 'B2')).toHaveText('$10.00');
   await button(page, 'Find and replace').tap();
-  const dialog = page.getByRole('dialog');
-  await expectInsideViewport(page, dialog);
+  const findBar = page.getByRole('search', { name: 'Find and replace' });
+  await expectInsideViewport(page, findBar);
   await page.getByRole('textbox', { name: 'Find in sheet' }).fill('Design');
-  await button(page, 'Find next').tap();
-  await expect(dialog.getByRole('status')).toContainText('1 of 1 matches');
-  await button(page, 'Close find and replace').tap();
-  await expect(dialog).toBeHidden();
+  await button(page, 'Next match').tap();
+  await expect(findBar.getByRole('status')).toContainText('1/1');
+  await button(page, 'Close find bar').tap();
+  await expect(findBar).toBeHidden();
   await expect(addressBar(page)).toHaveValue('A2');
 });
 

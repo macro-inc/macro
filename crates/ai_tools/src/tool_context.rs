@@ -38,13 +38,15 @@ use databases::inbound::toolset::DatabasesToolContext;
 use databases_sql::toolset::DatabasesSqlToolContext;
 use databases_sql::{DatabasesSql, ViewOnlyAccess};
 use documents::{
-    domain::ports::{TaskPropertiesPort, task_property_edit_receipt},
+    domain::ports::{TaskPropertiesPort, credited_task_edit_receipt, task_property_edit_receipt},
     inbound::toolset::DocumentToolContext,
 };
 use email::{
     domain::service::EmailServiceImpl, inbound::toolset::EmailToolContext, outbound::EmailPgRepo,
 };
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel,
+};
 use entity_access::domain::ports::EntityAccessService as _;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
@@ -62,6 +64,8 @@ use macro_event_broker::{
     NoopMacroEventBroker,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_change_source::PropertyChangeSource;
+use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
 use projects::inbound::toolset::ProjectToolContext;
@@ -83,7 +87,9 @@ pub use channel_media::build_channel_media_upload_tool_context_test;
 pub use channel_media::{
     ToolChannelMediaUploadToolContext, build_channel_media_upload_tool_context,
 };
+mod agent_sessions;
 mod coding_agents;
+pub use agent_sessions::{ToolReadAgentSessionContext, build_read_agent_session_context};
 pub use coding_agents::{ToolCodingAgentToolContext, build_coding_agent_tool_context};
 mod images;
 #[cfg(any(test, feature = "test-support"))]
@@ -94,7 +100,9 @@ mod forms;
 pub use forms::{FormsToolConfig, ToolFormsToolContext, build_forms_tool_context};
 
 mod initiatives;
-pub use initiatives::{ToolInitiativeToolContext, build_initiative_tool_context};
+pub use initiatives::{
+    ToolInitiativeService, ToolInitiativeToolContext, build_initiative_tool_context,
+};
 
 use activity_metadata::ToolActivityMetadataResolver;
 pub use ai_toolset::RequestContext;
@@ -396,6 +404,9 @@ fn message_service_with_side_effects(
                     Arc::new(access.clone()),
                 ),
                 realtime.clone(),
+                channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                    pool.clone(),
+                ),
             ),
             messages::domain::delivery::DiscussionDelivery::new(
                 messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
@@ -494,12 +505,14 @@ pub fn build_team_calendar_tool_context(
 /// `calendar_service_url` with the shared internal API key; Macro calls
 /// attached to new events are minted through `call_service` and linked on
 /// `app_url`, the browser origin users open meetings on.
+/// `shared_event_copies` lets the agent add copies of channel-shared events.
 pub fn build_calendar_tool_context(
     pool: sqlx::PgPool,
     calendar_service_url: macro_service_urls::CalendarServiceUrl,
     internal_api_key: String,
     call_service: Arc<ToolCallService>,
     app_url: macro_service_urls::AppServiceUrl,
+    shared_event_copies: bool,
 ) -> ToolCalendarToolContext {
     CalendarToolContext::new(
         Arc::new(
@@ -518,6 +531,7 @@ pub fn build_calendar_tool_context(
             ),
         ),
     )
+    .with_shared_event_copies(shared_event_copies)
 }
 
 /// Settings-only scheduling service; no provider/calendar writes are exposed here.
@@ -732,6 +746,17 @@ pub fn build_team_repository(pool: sqlx::PgPool) -> Arc<ToolTeamService> {
     Arc::new(TeamRepositoryImpl::new(pool))
 }
 
+/// Build the import ledger for hosts that run Notion workspace imports: it
+/// tells the agent session presenting a plan's review when the plan is ready
+/// and when its write ends.
+pub fn build_import_repo(pool: sqlx::PgPool) -> import::outbound::pg_import_repo::PgImportRepo {
+    import::outbound::pg_import_repo::PgImportRepo::new(pool.clone()).with_session_notifications(
+        Arc::new(agent_session::outbound::notifications::PgNotificationStore(
+            pool,
+        )),
+    )
+}
+
 /// Build the team AI tool context from a Postgres pool.
 pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
     TeamToolContext::new(
@@ -747,7 +772,13 @@ pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
 pub struct NoOpTaskProperties;
 
 impl TaskPropertiesPort for NoOpTaskProperties {
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&MacroUserIdStr<'static>>,
+        _source: Option<&PropertyChangeSource>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
     async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
@@ -790,14 +821,59 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             .map_err(Into::into)
     }
 
-    async fn update_task_status(&self, task_id: &str, status: &str) -> anyhow::Result<()> {
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            task_id = %access.entity().entity_id,
+            status,
+            unchanged = tracing::field::Empty,
+            credited = tracing::field::Empty
+        ),
+        err
+    )]
+    async fn update_task_status(
+        &self,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<&MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
+        status: &str,
+    ) -> anyhow::Result<()> {
+        use properties::PropertiesService as _;
+
         let status_option = StatusOption::try_from(status).map_err(|e| anyhow::anyhow!(e))?;
-
-        self.system_properties
-            .update_task_status(task_id, status_option)
+        let current = self
+            .properties
+            .get_system_property_value(
+                &access.clone().try_into_requirement::<ViewAccessLevel>()?,
+                system_properties::SystemPropertyKey::Status,
+            )
             .await?;
-
-        Ok(())
+        // PR edits and comments re-send In Review; an unchanged status publishes nothing.
+        if current == Some(PropertyValue::SelectOption(vec![status_option.uuid()])) {
+            tracing::Span::current().record("unchanged", true);
+            return Ok(());
+        }
+        let access =
+            credited_task_edit_receipt(self.entity_access_service.as_ref(), access, credited_user)
+                .await;
+        tracing::Span::current().record(
+            "credited",
+            matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
+        );
+        self.properties
+            .set_entity_property_with_source(
+                &access,
+                system_properties::SystemPropertyKey::STATUS_UUID,
+                Some(
+                    models_properties::api::requests::SetPropertyValue::SelectOption {
+                        option_id: status_option.uuid(),
+                    },
+                ),
+                source.cloned(),
+            )
+            .await
+            .map(|_| ())
+            .map_err(Into::into)
     }
 
     async fn set_entity_property(
@@ -885,6 +961,10 @@ impl CallRtcClient for NoOpCallRtcClient {
 
     async fn delete_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    async fn list_rooms(&self) -> anyhow::Result<Vec<call::domain::models::RtcRoom>> {
+        Ok(Vec::new())
     }
 
     async fn generate_token<'a>(
@@ -1100,6 +1180,21 @@ pub type ToolDocumentToolContext = DocumentToolContext<
     ToolEntityAccessService,
     documents::outbound::editing_worker_client::ReqwestEditingWorkerClient,
 >;
+
+/// Type alias for the discussion tool context.
+pub type ToolMessageToolContext =
+    messages::inbound::toolset::MessageToolContext<ToolEntityAccessService>;
+
+/// Build the discussion tool context over the message service and access
+/// checks the document tools comment through, so a host wires one message
+/// service for every Discussion.
+pub fn build_message_tool_context(documents: &ToolDocumentToolContext) -> ToolMessageToolContext {
+    messages::inbound::toolset::MessageToolContext::new(
+        documents.messages.clone(),
+        documents.entity_access_service.clone(),
+    )
+    .with_actor(documents.actor)
+}
 
 /// Type alias for the foreign entity service implementation used by AI tools.
 pub type ToolForeignEntityService = ForeignEntityServiceImpl<PgForeignEntityRepo>;
@@ -1371,19 +1466,17 @@ pub type ToolProjectToolContext = ProjectToolContext<
     ToolProjectService,
     ToolEntityAccessService,
     ToolDocumentService,
-    ToolChatService,
     ToolUserEmailService,
 >;
 
 /// Build the project tool context from shared domain and access services.
-/// The move services must be the same instances the document, chat, and
+/// The move services must be the same instances the document and
 /// email tool contexts run on so moves share their side-effect wiring.
 pub fn build_project_tool_context(
     pool: sqlx::PgPool,
     macro_event_broker: ToolEventBroker,
     entity_access_service: Arc<ToolEntityAccessService>,
     document_service: Arc<ToolDocumentService>,
-    chat_service: Arc<ToolChatService>,
     email_service: Arc<ToolUserEmailService>,
 ) -> ToolProjectToolContext {
     let project_service = projects::domain::service::ProjectServiceImpl::new(
@@ -1405,7 +1498,6 @@ pub fn build_project_tool_context(
         Arc::new(project_service),
         entity_access_service,
         document_service,
-        chat_service,
         email_service,
     )
 }
@@ -1448,6 +1540,14 @@ pub fn build_favorites_tool_context(
 /// Type alias for the chat tool context
 pub type ToolChatToolContext = ChatToolContext<ToolChatService, ToolEntityAccessService>;
 
+/// What an imported document holds.
+pub(crate) enum ImportedContent {
+    /// Macro markdown.
+    Markdown(String),
+    /// A Notion page, converted by lexical-service.
+    Notion(documents::domain::notion_markdown::NotionMarkdown),
+}
+
 /// Creates the Macro entities the import pipeline's fixed mapping calls for
 /// (linear → task, notion → md, slack → channel), reusing the same document
 /// creator and channel service the other AI tools run on. Task system
@@ -1469,37 +1569,101 @@ pub struct ToolEntityCreator {
     pub document_properties: ToolDocumentPropertiesApplicator,
     /// Team roster lookups, to resolve source-tool emails to teammates.
     pub team_repository: Arc<ToolTeamService>,
+    /// Project lifecycle for reviewed issue tracker imports.
+    pub initiative_service: Arc<ToolInitiativeService>,
+    /// Folder creation for workspace imports (shared with project tools).
+    pub project_service: Arc<ToolProjectService>,
+    /// Database creation and writes for workspace imports (shared with
+    /// database tools).
+    pub databases_service: Arc<ToolDatabasesService>,
+    /// Team sharing of documents workspace imports write (shared with
+    /// document tools).
+    pub document_service: Arc<ToolDocumentService>,
 }
 
 impl ToolEntityCreator {
-    fn creation_principal(user: &MacroUserIdStr<'static>) -> model_owner::CreationPrincipal {
+    pub(crate) fn creation_principal(
+        user: &MacroUserIdStr<'static>,
+    ) -> model_owner::CreationPrincipal {
         model_owner::CreationPrincipal::BotForUser {
             bot: bot_id::MACRO_AI_BOT_ID,
             user: user.clone(),
         }
     }
 
+    /// Require `user` to hold edit access on `folder`, as the project and
+    /// document tools do before creating inside one.
+    pub(crate) async fn authorize_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        folder: uuid::Uuid,
+    ) -> anyhow::Result<()> {
+        self.entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &folder.to_string(),
+                model_entity::EntityType::Project,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("no edit access to folder {folder}: {error:?}"))?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
     async fn create_doc(
         &self,
         user: &MacroUserIdStr<'static>,
+        id: Option<uuid::Uuid>,
         name: &str,
-        markdown: &str,
-        is_task: bool,
-        team_id: Option<uuid::Uuid>,
+        content: ImportedContent,
+        subtype: documents::domain::create::MarkdownSubtype,
+        folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
     ) -> anyhow::Result<String> {
         use std::str::FromStr as _;
-        let document = documents::domain::create::NewPlainTextDocument::builder(
-            documents::domain::create::NewDocumentMetadata::new(name.to_string()),
-        )
-        .file_type(model::document::FileType::from_str("md").expect("md is a valid file type"))
-        .text(markdown.to_string())
-        .task_flag(is_task, team_id)
-        .build()?;
+        let mut metadata = documents::domain::create::NewDocumentMetadata::builder(name);
+        if let Some(id) = id {
+            metadata = metadata.id(id);
+        }
+        if let Some(dates) = dates {
+            metadata = metadata
+                .created_at(dates.created)
+                .updated_at(dates.last_edited);
+        }
+        if let Some(folder) = folder {
+            self.authorize_folder(user, folder).await?;
+            metadata = metadata.project_id(folder);
+        }
         let ai_for_user = Self::creation_principal(user);
-        let created = self
-            .document_creator
-            .create_plain_text(&ai_for_user, document)
-            .await?;
+        let created = match content {
+            ImportedContent::Markdown(markdown) => {
+                let document =
+                    documents::domain::create::NewPlainTextDocument::builder(metadata.build())
+                        .file_type(
+                            model::document::FileType::from_str("md")
+                                .expect("md is a valid file type"),
+                        )
+                        .text(markdown)
+                        .markdown_subtype(subtype)
+                        .build()?;
+                self.document_creator
+                    .create_plain_text(&ai_for_user, document)
+                    .await?
+            }
+            ImportedContent::Notion(notion) => {
+                self.document_creator
+                    .create_notion_markdown(
+                        &ai_for_user,
+                        documents::domain::create::NewNotionDocument {
+                            metadata: metadata.build(),
+                            notion,
+                            subtype,
+                        },
+                    )
+                    .await?
+            }
+        };
         Ok(created
             .into_response()
             .document_response
@@ -1510,7 +1674,7 @@ impl ToolEntityCreator {
     }
 
     /// The user's team id (when they have one) and its member ids.
-    async fn team_roster(
+    pub(crate) async fn team_roster(
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> (Option<uuid::Uuid>, Vec<MacroUserIdStr<'static>>) {
@@ -1540,10 +1704,98 @@ impl ToolEntityCreator {
         }
     }
 
+    /// Create an imported task (with `id` when given), in `folder` when
+    /// given, numbered within the user's team and shared with it when
+    /// `share_with_team`, then apply its properties best-effort.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "a task carries its id, content, properties, folder, dates and sharing"
+    )]
+    pub(crate) async fn create_imported_task(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Option<uuid::Uuid>,
+        name: &str,
+        content: ImportedContent,
+        properties: &import::domain::ports::ImportedTaskProperties,
+        folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
+        share_with_team: bool,
+    ) -> anyhow::Result<String> {
+        // Same team resolution as the CreateDocument tool, so imported tasks
+        // number correctly within the user's team; the roster doubles as the
+        // assignee-email lookup. A teamless user gets a private task.
+        let (team_id, roster) = self.team_roster(user).await;
+        let subtype = documents::domain::create::MarkdownSubtype::Task {
+            property_values: None,
+            share_with_team: share_with_team && team_id.is_some(),
+            team_id,
+        };
+        let task_id = self
+            .create_doc(user, id, name, content, subtype, folder, dates)
+            .await?;
+        self.apply_task_properties(user, &task_id, properties, &roster)
+            .await;
+        Ok(task_id)
+    }
+
+    /// Create an imported markdown document, in `folder` when given and with
+    /// its source's `dates` when known, then apply its properties best-effort.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "an imported document carries its id, name, content, properties, folder and dates"
+    )]
+    pub(crate) async fn create_imported_document(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Option<uuid::Uuid>,
+        name: &str,
+        notion: documents::domain::notion_markdown::NotionMarkdown,
+        properties: &import::domain::ports::ImportedDocumentProperties,
+        folder: Option<uuid::Uuid>,
+        dates: Option<import::domain::ports::SourceDates>,
+    ) -> anyhow::Result<String> {
+        let document_id = self
+            .create_doc(
+                user,
+                id,
+                name,
+                ImportedContent::Notion(notion),
+                documents::domain::create::MarkdownSubtype::Note,
+                folder,
+                dates,
+            )
+            .await?;
+        let access = match self
+            .entity_access_service
+            .generate_entity_access_receipt::<EditAccessLevel>(
+                user,
+                None,
+                &document_id,
+                model_entity::EntityType::Document,
+            )
+            .await
+        {
+            Ok(access) => access,
+            Err(error) => {
+                tracing::warn!(
+                    document_id,
+                    error = ?error,
+                    "failed to authorize imported document properties"
+                );
+                return Ok(document_id);
+            }
+        };
+        self.document_properties
+            .apply(user, &access, &document_id, properties)
+            .await;
+        Ok(document_id)
+    }
+
     /// Apply imported task properties best-effort: each one logs and is
     /// skipped on failure so a bad label or unknown assignee never sinks
     /// the import.
-    async fn apply_task_properties(
+    pub(crate) async fn apply_task_properties(
         &self,
         user: &MacroUserIdStr<'static>,
         task_id: &str,
@@ -1556,10 +1808,15 @@ impl ToolEntityCreator {
         let principal = Self::creation_principal(user);
 
         if let Some(status) = properties.status.as_deref()
-            && let Err(e) = self
-                .task_properties
-                .update_task_status(task_id, status)
-                .await
+            && let Err(e) = match StatusOption::try_from(status) {
+                Ok(option) => self
+                    .task_properties
+                    .system_properties
+                    .update_task_status(task_id, option)
+                    .await
+                    .map_err(anyhow::Error::from),
+                Err(e) => Err(anyhow::anyhow!(e)),
+            }
         {
             tracing::warn!(task_id, status, error = ?e, "failed to set imported task status");
         }
@@ -1655,48 +1912,39 @@ impl import::domain::ports::EntityCreator for ToolEntityCreator {
         markdown: &str,
         properties: &import::domain::ports::ImportedTaskProperties,
     ) -> anyhow::Result<String> {
-        // Same team resolution as the CreateDocument tool, so imported tasks
-        // number correctly within the user's team; the roster doubles as the
-        // assignee-email lookup.
-        let (team_id, roster) = self.team_roster(user).await;
-        let task_id = self.create_doc(user, name, markdown, true, team_id).await?;
-        self.apply_task_properties(user, &task_id, properties, &roster)
-            .await;
-        Ok(task_id)
+        self.create_imported_task(
+            user,
+            None,
+            name,
+            ImportedContent::Markdown(markdown.to_string()),
+            properties,
+            None,
+            None,
+            // Single tracked tasks (Linear) are shared with the team, as
+            // tasks the user makes are.
+            true,
+        )
+        .await
     }
 
-    async fn create_markdown_doc(
+    async fn create_notion_document(
         &self,
         user: &MacroUserIdStr<'static>,
         name: &str,
-        markdown: &str,
+        notion_markdown: &str,
+        links: &import::domain::ports::NotionLinks,
         properties: &import::domain::ports::ImportedDocumentProperties,
     ) -> anyhow::Result<String> {
-        let document_id = self.create_doc(user, name, markdown, false, None).await?;
-        let access = match self
-            .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                user,
-                None,
-                &document_id,
-                model_entity::EntityType::Document,
-            )
-            .await
-        {
-            Ok(access) => access,
-            Err(error) => {
-                tracing::warn!(
-                    document_id,
-                    error = ?error,
-                    "failed to authorize imported document properties"
-                );
-                return Ok(document_id);
-            }
-        };
-        self.document_properties
-            .apply(user, &access, &document_id, properties)
-            .await;
-        Ok(document_id)
+        self.create_imported_document(
+            user,
+            None,
+            name,
+            crate::import_workspace::notion_markdown(notion_markdown, links),
+            properties,
+            None,
+            None,
+        )
+        .await
     }
 
     async fn create_channel(
@@ -1740,6 +1988,16 @@ pub type ToolImportService = import::domain::service::ImportServiceImpl<
     ToolMcpSelector,
     ToolEntityCreator,
     import::outbound::mcp_slack_source::McpSlackSource<ToolMcpSelector>,
+    import_notion::outbound::pipedream::PipedreamNotionConnections<
+        pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+        pipedream_mcp::outbound::api::PipedreamClient,
+    >,
+>;
+
+/// The custom MCP server tools, wired by hosts holding the MCP credentials
+/// key.
+pub type ToolMcpServerToolContext = mcp_client::inbound::toolset::McpServerToolContext<
+    mcp_client::outbound::pg_server_repo::PgServerRepo,
 >;
 
 /// Type alias for the import tool context, wired by hosts with connector access.
@@ -1819,6 +2077,9 @@ pub struct ToolServiceContext {
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
+    /// Custom MCP server tools. `unwired` in hosts without the MCP
+    /// credentials key — calls there fail with a clear error.
+    pub mcp_server_tool_context: ToolMcpServerToolContext,
     /// Built per-request via a manual `FromRef` below so it can carry the
     /// running chat's id — the derive's field-clone would freeze it at
     /// startup with no chat id set.
@@ -1829,9 +2090,14 @@ pub struct ToolServiceContext {
     pub channel_media_upload_tool_context: ToolChannelMediaUploadToolContext,
     pub bot_tool_context: ToolBotToolContext,
     pub coding_agent_tool_context: ToolCodingAgentToolContext,
+    /// Authorized agent-session conversation reads.
+    pub read_agent_session_context: ToolReadAgentSessionContext,
     pub project_tool_context: ToolProjectToolContext,
     /// Favorite toggles; the same favorites back `soup_service`'s favorites filter.
     pub favorites_tool_context: ToolFavoritesToolContext,
+    /// The Discussion of any item: the same message service the document
+    /// tools comment through.
+    pub message_tool_context: ToolMessageToolContext,
     /// Native task project lifecycle, properties, sharing and history.
     pub initiative_tool_context: ToolInitiativeToolContext,
     pub team_tool_context: ToolTeamToolContext,
@@ -1859,18 +2125,24 @@ pub struct ToolServiceContext {
 pub type ToolConnectorToolContext = pipedream_mcp::inbound::toolset::ConnectorToolContext<
     pipedream_mcp::outbound::api::PipedreamClient,
     pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+    mcp_select::NativeOverlayConnections<mcp_client::outbound::pg_server_repo::PgServerRepo>,
 >;
 
 /// Wire connector discovery at the composition boundary.
+///
+/// `native_servers` answers for overlaid apps, which connect through the
+/// native MCP stack; `None` where that stack has no encryption key.
 pub fn build_connector_tool_context(
     pool: sqlx::PgPool,
     client: Option<Arc<pipedream_mcp::outbound::api::PipedreamClient>>,
+    native_servers: Option<Arc<mcp_client::outbound::pg_server_repo::PgServerRepo>>,
 ) -> ToolConnectorToolContext {
     pipedream_mcp::inbound::toolset::ConnectorToolContext {
         service: Arc::new(
             pipedream_mcp::domain::service::discovery::ConnectorDiscovery::new(
                 client,
                 Arc::new(pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool)),
+                Arc::new(mcp_select::NativeOverlayConnections::new(native_servers)),
             ),
         ),
     }
@@ -1902,6 +2174,7 @@ impl ToolServiceContext {
     /// call this once when they build the context for that agent's session.
     pub fn with_actor(mut self, actor: bot_id::BotId) -> Self {
         self.document_tool_context = self.document_tool_context.with_actor(actor);
+        self.message_tool_context = self.message_tool_context.with_actor(actor);
         self.image_generation_tool_context = self.image_generation_tool_context.with_actor(actor);
         self.properties_tool_context = self.properties_tool_context.with_actor(actor);
         self.project_tool_context = self.project_tool_context.with_actor(actor);
@@ -1912,6 +2185,28 @@ impl ToolServiceContext {
         self.pipeline_tool_context.actor = actor;
         self.crm_transfer_tool_context.actor = actor;
         self.databases_sql_tool_context = self.databases_sql_tool_context.with_actor(actor);
+        self
+    }
+
+    /// Run the tools for `caller`, as the public MCP authenticated it: an
+    /// agent writes as itself; an MCP client writes as the Macro bot with its
+    /// name on the post ("via Claude Code"); a pasted API key writes as the
+    /// Macro bot.
+    pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
+        match caller {
+            ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
+            ai_toolset::ToolCaller::McpClient { name: Some(name) } => self.with_via(name),
+            ai_toolset::ToolCaller::McpClient { name: None } | ai_toolset::ToolCaller::ApiKey => {
+                self
+            }
+        }
+    }
+
+    /// Label the posts the tools make with the client the user works
+    /// through.
+    fn with_via(mut self, client: &str) -> Self {
+        self.message_tool_context = self.message_tool_context.with_via(client.to_owned());
+        self.channel_tool_context = self.channel_tool_context.with_via(client.to_owned());
         self
     }
 

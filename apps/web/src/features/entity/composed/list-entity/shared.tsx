@@ -46,6 +46,8 @@ export interface BaseListEntityProps<E extends EntityData = EntityData>
   titleTrailing?: JSX.Element;
   /** Caller-owned metadata ahead of the entity's own, in wide rows only. */
   meta?: JSX.Element;
+  /** Caller-owned metadata after the entity's own, in wide rows only. */
+  metaEnd?: JSX.Element;
   hideContentHits?: boolean;
   /** Resolved app display name for a linked GitHub PR author, when available. */
   authorDisplayName?: string;
@@ -86,6 +88,9 @@ export interface LayoutProps {
   /** Supporting text after the title in the standard content slot. */
   titleTrailing?: JSX.Element;
   meta?: JSX.Element;
+  metaEnd?: JSX.Element;
+  /** Stored reference values alongside the existing property pills. */
+  referenceProperties?: JSX.Element;
   checked?: boolean;
   authorDisplayName?: string;
   hideCheckbox?: boolean;
@@ -129,6 +134,8 @@ const ListLayoutContext = createContext<ListLayoutContextValue>();
 export function ListLayoutProvider(props: {
   ref: Accessor<HTMLElement | undefined>;
   narrowLayout?: NarrowLayoutVariant;
+  /** Responsive rows have a nonzero width and their layout can be restored. */
+  onMeasured?: () => void;
   children: JSX.Element;
 }) {
   const [isWide, setIsWide] = createSignal(true);
@@ -137,7 +144,9 @@ export function ListLayoutProvider(props: {
     const el = props.ref();
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
-      setIsWide((entries[0]?.contentRect.width ?? 0) >= WIDE_BREAKPOINT);
+      const width = entries[0]?.contentRect.width ?? 0;
+      setIsWide(width >= WIDE_BREAKPOINT);
+      if (width > 0) props.onMeasured?.();
     });
     observer.observe(el);
     onCleanup(() => observer.disconnect());

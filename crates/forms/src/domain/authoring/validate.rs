@@ -312,7 +312,7 @@ fn resolve_rules(
         return Err(fail(
             Code::EmptyScreeningGroup,
             "rules",
-            "Add a condition or remove the screener; an empty group qualifies everyone.",
+            "Add a condition or remove the gate; an empty group qualifies everyone.",
         ));
     }
     if depth >= 8 {
@@ -580,7 +580,7 @@ pub fn canonical_preserving(
                     return Err(fail(
                         Code::GateReferencesLaterQuestion,
                         "rules",
-                        "Screeners may only reference questions in earlier sections.",
+                        "Gates may only reference questions in earlier sections.",
                     ));
                 }
                 check_rules(rules, columns)?;

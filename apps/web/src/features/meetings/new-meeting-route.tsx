@@ -32,7 +32,7 @@ import { MeetingPage } from './views/meeting-page';
 function NewMeetingSetup(props: {
   userId: string;
   onCallStateChange: (connected: boolean, shareToken: string) => void;
-  onLeave: () => void;
+  onLeave: (path: string) => void;
 }) {
   const call = useCallContext();
   const lifecycle = useMeetingSessionLifecycle();
@@ -183,7 +183,7 @@ function NewMeetingSetup(props: {
 
 export function NewMeetingRoute(props: {
   onCallStateChange: (connected: boolean, shareToken: string) => void;
-  onLeave: () => void;
+  onLeave: (path: string) => void;
 }) {
   const authenticated = useIsAuthenticated();
   const userId = useUserId();

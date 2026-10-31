@@ -177,6 +177,7 @@ pub struct DbThreadRow {
     pub link_id: uuid::Uuid,
     pub inbox_visible: bool,
     pub is_read: bool,
+    pub has_received_mail: bool,
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
     pub latest_outbound_message_ts: Option<DateTime<Utc>>,
     pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
@@ -193,6 +194,7 @@ impl From<DbThreadRow> for ThreadRow {
             link_id: row.link_id,
             inbox_visible: row.inbox_visible,
             is_read: row.is_read,
+            has_received_mail: row.has_received_mail,
             latest_inbound_message_ts: row.latest_inbound_message_ts,
             latest_outbound_message_ts: row.latest_outbound_message_ts,
             latest_non_spam_message_ts: row.latest_non_spam_message_ts,
@@ -206,6 +208,8 @@ impl From<DbThreadRow> for ThreadRow {
 /// DB row for a message record.
 #[derive(sqlx::FromRow)]
 pub struct DbMessageRow {
+    /// Draft edit generation; changes at send and cancellation boundaries.
+    pub draft_generation: i32,
     pub id: uuid::Uuid,
     pub provider_id: Option<String>,
     pub thread_id: uuid::Uuid,
@@ -235,6 +239,7 @@ pub struct DbMessageRow {
 impl From<DbMessageRow> for MessageRow {
     fn from(row: DbMessageRow) -> Self {
         Self {
+            draft_generation: row.draft_generation,
             db_id: row.id,
             provider_id: row.provider_id,
             thread_db_id: row.thread_id,

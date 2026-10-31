@@ -9,8 +9,10 @@ import { revalidateActivityQueries } from '../activity/push-registry';
 import { agentSessionKeys } from '../agent-session/keys';
 import { callKeys } from '../call/keys';
 import { queryClient } from '../client';
+import { invalidateExternalChat } from '../external-chats';
 import { refreshActiveGraphqlPreviewQueries } from '../preview/active-queries';
 import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
+import { soupKeys } from '../soup/keys';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { databasesKeys, entityKeys } from '../storage/keys';
 import { accessRequestKeys } from './keys';
@@ -48,8 +50,13 @@ export function invalidateAccessRequests(entity: ShareEntity) {
 }
 export function refreshSharedAccess(entity: ShareEntity) {
   fireAndForget(invalidateAccessRequests(entity), 'access-requests');
+  if (entity.entityType === 'external_chat') {
+    invalidateExternalChat(entity.entityId);
+    return;
+  }
   // Permissions change list membership even when the item was never cached.
   invalidateAllSoup();
+  queryClient.invalidateQueries({ queryKey: soupKeys.search._def });
   fireAndForget(refreshActiveGraphqlSoupQueries(), 'access-requests');
   const includesDescendants = entity.entityType === 'project';
   fireAndForget(

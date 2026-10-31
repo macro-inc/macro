@@ -1,4 +1,5 @@
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { confirmDialog } from '@ui';
@@ -9,6 +10,8 @@ export interface OpenEventComposerOptions {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
   onCalendarChange?: (calendarId: string, color: string) => void;
+  /** Called with a new event once it exists, before the composer closes. */
+  onCreated?: (created: CreatedCalendarEvent) => void;
   onClose?: () => void;
 }
 
@@ -36,6 +39,7 @@ export function useOpenEventComposer() {
           onSaveSuccess: () => {
             eventSaved = true;
           },
+          onCreated: options.onCreated,
         },
       },
       {

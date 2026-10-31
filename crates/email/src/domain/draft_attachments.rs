@@ -64,6 +64,7 @@ pub struct AttachmentEditFacts {
     pub authorized: bool,
     pub editable: bool,
     pub scheduled: bool,
+    pub generation_matches: bool,
     pub provider: UserProvider,
     pub total_bytes: u64,
 }
@@ -78,7 +79,7 @@ pub fn validate_attachment_edit(
     if !facts.editable {
         return Err(AttachmentError::NotFound);
     }
-    if facts.scheduled {
+    if facts.scheduled || !facts.generation_matches {
         return Err(AttachmentError::DeliveryConflict);
     }
     let maximum = match facts.provider {
@@ -132,6 +133,8 @@ pub trait DraftAttachmentRepository: EmailUserRepo {
         link: Uuid,
         draft: Uuid,
         change: AttachmentChange,
+
+        expected_generation: i32,
     ) -> impl Future<Output = Result<(), AttachmentError>> + Send;
 }
 
@@ -192,6 +195,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
         link: Uuid,
         draft: Uuid,
         upload: DraftAttachmentUpload,
+        expected_generation: i32,
     ) -> Result<(AttachmentDraft, String), AttachmentError> {
         let DraftAttachmentUpload {
             file_name,
@@ -223,6 +227,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
                 link,
                 draft,
                 AttachmentChange::Upload(attachment.clone()),
+                expected_generation,
             )
             .await?;
         let url = self.storage.upload_url(&attachment).await?;
@@ -235,6 +240,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
         link: Uuid,
         draft: Uuid,
         id: Uuid,
+        expected_generation: i32,
     ) -> Result<(), AttachmentError> {
         self.inbox(actor, link).await?;
         let attachment = self
@@ -249,6 +255,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
                 link,
                 draft,
                 AttachmentChange::CompleteUpload(attachment),
+                expected_generation,
             )
             .await
     }
@@ -259,6 +266,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
         link: Uuid,
         draft: Uuid,
         id: Uuid,
+        expected_generation: i32,
     ) -> Result<AttachmentReference, AttachmentError> {
         self.inbox(actor, link).await?;
         let source = self
@@ -293,6 +301,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
                 link,
                 draft,
                 AttachmentChange::Forward(source.clone()),
+                expected_generation,
             )
             .await?;
         Ok(source)
@@ -305,6 +314,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
         draft: Uuid,
         attachment_id: Uuid,
         kind: RemovalKind,
+        expected_generation: i32,
     ) -> Result<(), AttachmentError> {
         self.inbox(actor, link).await?;
         self.repository
@@ -316,6 +326,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
                     attachment_id,
                     kind,
                 },
+                expected_generation,
             )
             .await
     }

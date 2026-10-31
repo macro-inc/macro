@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session\n            SET manager_replica_id = NULL\n            WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f1a226ad1131f5b0684e9252cb6fe31623fb023cd46f1b7297bb55c3e5e463eb"
+}

@@ -1,5 +1,5 @@
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
-import { buildEntityPropertiesInput } from '@queries/properties/graphql/entity';
+import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
   EntityActivityDocument,
@@ -26,9 +26,9 @@ type EntityActivityQueryOptions = {
 
 /**
  * Live urql query for one Soup-backed entity's recent activity, newest
- * first. Reuses the exact-single-entity Soup input builder from the
- * properties query, so the same entity types are supported (everything but
- * `USER`) and the query pauses (`isEnabled` false) for the rest.
+ * first. Reuses the exact-single-entity Soup input builder, so the same
+ * entity types are supported (everything but `USER`) and the query pauses
+ * (`isEnabled` false) for the rest.
  */
 export function createEntityActivityQuery(
   context: Pick<ActivityContext, 'graphql'>,
@@ -37,7 +37,7 @@ export function createEntityActivityQuery(
   const input = createMemo(() => {
     const entityId = options.entityId();
     if (!options.enabled() || entityId.length === 0) return undefined;
-    return buildEntityPropertiesInput(options.entityType(), entityId);
+    return buildGraphqlEntitySoupInput(options.entityType(), entityId);
   });
 
   const client = createMemo(context.graphql);

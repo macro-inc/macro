@@ -48,17 +48,16 @@ export function ToolCallPart(props: {
     settledToolStatus(props.part.status, props.context.inFlight);
   // The chat block's failed-tool treatment: the same row, faded, with a quiet
   // trailing label — not a separate error card.
+  const stopped = () =>
+    (props.part.status === 'pending' || props.part.status === 'running') &&
+    status() === 'completed';
   const common = (): ToolCallCommon => ({
     id: props.part.id,
     label: toolLabel(props.part.name),
     status: status(),
     muted: failed(),
-    trailing: failed()
-      ? 'Failed'
-      : (props.part.status === 'pending' || props.part.status === 'running') &&
-          status() === 'completed'
-        ? 'Stopped'
-        : undefined,
+    stopped: stopped(),
+    trailing: failed() ? 'Failed' : stopped() ? 'Stopped' : undefined,
   });
 
   // Non-keyed matches preserve the disclosure when a streamed update replaces
@@ -131,7 +130,8 @@ export function ToolCallPart(props: {
               props.part.name.kind === 'mcp' &&
               (props.part.name.server === 'macro' ||
                 (props.part.name.server === 'macro_internal' &&
-                  props.part.name.tool === 'DescribeCodeTools')) &&
+                  (props.part.name.tool === 'DescribeCodeTools' ||
+                    props.part.name.tool === 'ReadCodeDocs'))) &&
               hasToolRenderer(props.part.name.tool)
             }
             fallback={<ExchangeToolCall detail={detail()} common={common()} />}

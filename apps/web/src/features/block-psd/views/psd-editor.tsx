@@ -11,12 +11,13 @@ import { paletteColor } from '@app/features/block-fig/primitives/create-peer-ove
 import { IS_MAC } from '@core/constant/isMac';
 import type { IRect } from '@core/psd-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowUUpLeft from '@phosphor/arrow-u-up-left.svg';
-import ArrowUUpRight from '@phosphor/arrow-u-up-right.svg';
-import CloudArrowUp from '@phosphor/cloud-arrow-up.svg';
-import CloudCheck from '@phosphor/cloud-check.svg';
-import Keyboard from '@phosphor/keyboard.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
+import ArrowUUpLeft from '@icon/system/regular/arrow-u-up-left.svg';
+import ArrowUUpRight from '@icon/system/regular/arrow-u-up-right.svg';
+import CloudArrowUp from '@icon/system/regular/cloud-arrow-up.svg';
+import CloudCheck from '@icon/system/regular/cloud-check.svg';
+import Keyboard from '@icon/system/regular/keyboard.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
+import { Telemetry } from '@macro-inc/observability';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -164,7 +165,7 @@ export function PsdEditor() {
   let root!: HTMLDivElement;
 
   onMount(() => {
-    fireAndForget(editor.start(), 'block-psd');
+    fireAndForget(editor.start(), 'psd-editor');
     if (document.activeElement === document.body)
       root.focus({ preventScroll: true });
   });
@@ -210,7 +211,7 @@ export function PsdEditor() {
                 opacity: Math.round(value * 255),
               },
             ]),
-            'block-psd'
+            'psd-editor'
           );
         return true;
       })
@@ -334,19 +335,28 @@ export function PsdEditor() {
       f.type.startsWith('image/')
     );
     if (files.length === 0) {
-      fireAndForget(commands.paste(), 'block-psd');
+      fireAndForget(commands.paste(), 'psd-editor');
       return;
     }
-    for (const file of files) fireAndForget(commands.paste(file), 'block-psd');
+    for (const file of files) fireAndForget(commands.paste(file), 'psd-editor');
   };
 
   const dropFiles = async (files: File[], at: Point) => {
-    for (const file of files)
+    for (const file of files) {
+      let bytes: ArrayBuffer;
+      try {
+        bytes = await file.arrayBuffer();
+      } catch (error) {
+        Telemetry.error(error, { surface: 'psd-editor' });
+        context.notifyError(`${file.name} could not be added.`);
+        continue;
+      }
       await commands.placeImage(
-        await file.arrayBuffer(),
+        bytes,
         file.name.replace(/\.[^.]+$/, '') || 'Layer',
         at
       );
+    }
   };
 
   // ---- other people ----------------------------------------------------------
@@ -411,7 +421,7 @@ export function PsdEditor() {
       if (!ready) return;
       clearTimeout(fontsTimer);
       fontsTimer = setTimeout(
-        () => fireAndForget(loadFonts(), 'block-psd'),
+        () => fireAndForget(loadFonts(), 'psd-editor'),
         400
       );
     })
@@ -452,8 +462,8 @@ export function PsdEditor() {
   let previewed: string | undefined;
   const preview = (ops: Parameters<typeof editor.apply>[0] | null) => {
     previewed = ops ? JSON.stringify(ops) : undefined;
-    if (ops) fireAndForget(editor.preview(ops), 'block-psd');
-    else fireAndForget(editor.cancelPreview(), 'block-psd');
+    if (ops) fireAndForget(editor.preview(ops), 'psd-editor');
+    else fireAndForget(editor.cancelPreview(), 'psd-editor');
   };
   /** Keeps the preview when it shows these operations, else applies them. */
   const applyPreviewed = async (ops: Parameters<typeof editor.apply>[0]) => {
@@ -485,26 +495,26 @@ export function PsdEditor() {
         <span class="flex-1" />
         <Show when={editor.enabled()}>
           <Button
+            aria-label="Undo"
             variant="ghost"
             size="icon-sm"
-            label="Undo"
             tooltip={`Undo · ${IS_MAC ? '⌘Z' : 'Ctrl+Z'}`}
             disabled={!editor.canUndo()}
             data-testid="psd-undo"
-            onClick={() => fireAndForget(editor.undo(), 'block-psd')}
+            onClick={() => fireAndForget(editor.undo(), 'psd-editor')}
           >
-            <ArrowUUpLeft />
+            <ArrowUUpLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button
+            aria-label="Redo"
             variant="ghost"
             size="icon-sm"
-            label="Redo"
             tooltip={`Redo · ${IS_MAC ? '⇧⌘Z' : 'Ctrl+⇧Z'}`}
             disabled={!editor.canRedo()}
             data-testid="psd-redo"
-            onClick={() => fireAndForget(editor.redo(), 'block-psd')}
+            onClick={() => fireAndForget(editor.redo(), 'psd-editor')}
           >
-            <ArrowUUpRight />
+            <ArrowUUpRight class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <span
             class="flex size-6 items-center justify-center text-ink-muted"
@@ -528,13 +538,13 @@ export function PsdEditor() {
           </span>
         </Show>
         <Button
+          aria-label="Keyboard shortcuts"
           variant="ghost"
           size="icon-sm"
-          label="Keyboard shortcuts"
           tooltip={`Keyboard shortcuts · ${IS_MAC ? '⌘/' : 'Ctrl+/'}`}
           onClick={() => setShowShortcuts((s) => !s)}
         >
-          <Keyboard />
+          <Keyboard class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <OptionsBar
@@ -596,7 +606,7 @@ export function PsdEditor() {
             onDropFiles={
               editor.enabled()
                 ? (files, at) =>
-                    fireAndForget(dropFiles(files, at), 'block-psd')
+                    fireAndForget(dropFiles(files, at), 'psd-editor')
                 : undefined
             }
           >
@@ -730,7 +740,7 @@ export function PsdEditor() {
                 editor.apply([
                   { op: 'imageSize', width, height, interpolation },
                 ]),
-                'block-psd'
+                'psd-editor'
               );
             }}
           />
@@ -744,7 +754,7 @@ export function PsdEditor() {
               commands.closeDialog();
               fireAndForget(
                 editor.apply([{ op: 'canvasSize', width, height, anchor }]),
-                'block-psd'
+                'psd-editor'
               );
             }}
           />
@@ -764,7 +774,7 @@ export function PsdEditor() {
                 commands.closeDialog();
                 fireAndForget(
                   applyPreviewed(commands.filterOp(spec)),
-                  'block-psd'
+                  'psd-editor'
                 );
               }}
             />
@@ -791,7 +801,7 @@ export function PsdEditor() {
                   applyPreviewed(
                     commands.filterOp({ type: 'adjust', adjustment })
                   ),
-                  'block-psd'
+                  'psd-editor'
                 );
               }}
             />
@@ -811,7 +821,7 @@ export function PsdEditor() {
               commands.closeDialog();
               fireAndForget(
                 editor.select({ type: 'feather', radius }),
-                'block-psd'
+                'psd-editor'
               );
             }}
           />
@@ -834,7 +844,7 @@ export function PsdEditor() {
                     type: 'expand',
                     pixels: Math.round(d().contract ? -pixels : pixels),
                   }),
-                  'block-psd'
+                  'psd-editor'
                 );
               }}
             />
@@ -854,7 +864,7 @@ export function PsdEditor() {
               commands.closeDialog();
               fireAndForget(
                 editor.apply([{ op: 'setResolution', ppi }]),
-                'block-psd'
+                'psd-editor'
               );
             }}
           />

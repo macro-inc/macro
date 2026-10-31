@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT local.id AS local_id, provider.id AS provider_id\n           FROM email_attachments local JOIN email_attachments provider\n             ON provider.provider_attachment_id = local.provider_attachment_id\n           WHERE local.message_id = $1 AND provider.message_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "local_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "154d913c6186d95bbeab12cc5b57f8e2b3aeef475e0952c07f30eda1ba9be6d7"
+}

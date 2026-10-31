@@ -462,12 +462,13 @@ impl SoupItemDataLoader {
 #[derive(Clone)]
 pub struct AgentSessionEntityLoader(pub SoupItemDataLoader);
 
-/// Primary-backed Soup reader for `soupUpdates` hydration. A patch announces a
-/// write that committed milliseconds earlier, before a replica has replayed
-/// it, so a replica read returns the pre-write row and the client caches it
-/// as current. Lists keep the replica-backed reader.
+/// Primary-backed Soup reader for reads that must see a write committed
+/// moments earlier, before a replica has replayed it: `soupUpdates`
+/// hydration, where a replica read returns the pre-write row and the client
+/// caches it as current, and `soupEntity`, which opens an entity right after
+/// it is created or edited. Lists keep the replica-backed reader.
 #[derive(Clone)]
-pub struct SoupUpdateHydrationLoader(pub SoupItemDataLoader);
+pub struct PrimarySoupItemLoader(pub SoupItemDataLoader);
 
 /// Build the Soup DataLoader from the Soup service and the access-checked
 /// email thread reader.
@@ -506,15 +507,23 @@ where
     SoupItemDataLoader::new(loader)
 }
 
-/// Build an OR tree from literals, falling back to an impossible literal when empty.
+/// Build an OR tree from literals, falling back to an impossible literal when
+/// empty. Balanced, not folded: a batch of hundreds of ids folded linearly is
+/// a tree too deep for downstream walkers and serializers.
 fn literal_tree<T>(literals: Vec<T>, impossible: T) -> Arc<Expr<T>> {
-    Arc::new(
-        literals
-            .into_iter()
-            .map(Expr::val)
-            .reduce(Expr::or)
-            .unwrap_or_else(|| Expr::val(impossible)),
-    )
+    let mut nodes = literals.into_iter().map(Expr::val).collect::<Vec<_>>();
+    while nodes.len() > 1 {
+        let mut pairs = nodes.into_iter();
+        let mut next = Vec::new();
+        while let Some(left) = pairs.next() {
+            next.push(match pairs.next() {
+                Some(right) => Expr::or(left, right),
+                None => left,
+            });
+        }
+        nodes = next;
+    }
+    Arc::new(nodes.pop().unwrap_or_else(|| Expr::val(impossible)))
 }
 
 /// Parse an entity's id, which every Soup-hydrated entity carries as a UUID.
@@ -578,7 +587,8 @@ fn entity_filter_ast(entities: &[Entity<'static>]) -> Result<EntityFilterAst, So
             | EntityType::Reminder
             | EntityType::CrmPipeline
             | EntityType::Database
-            | EntityType::Form => {
+            | EntityType::Form
+            | EntityType::ExternalChat => {
                 return Err(rootcause::report!(
                     "entity type {} is not represented in Soup",
                     entity.entity_type

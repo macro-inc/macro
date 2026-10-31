@@ -27,6 +27,9 @@ import {
   type GraphqlCalendarOutOfOfficeAutoDeclineMode,
   type GraphqlCalendarRsvpScope,
   type GraphqlCalendarUpdateScope,
+  InviteCalendarEventGuestsDocument,
+  type InviteCalendarEventGuestsMutation,
+  type InviteCalendarEventGuestsMutationVariables,
   RespondToCalendarEventDocument,
   type RespondToCalendarEventMutation,
   UpdateCalendarEventDocument,
@@ -37,6 +40,7 @@ import type { AnyVariables, Client, OperationResult } from '@urql/core';
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import type {
   DeleteCalendarEventArgs,
+  InviteCalendarEventGuestsArgs,
   RsvpCalendarEventArgs,
   UpdateCalendarEventArgs,
 } from '../mutations';
@@ -51,6 +55,7 @@ import {
   occurrenceKeyOf,
   patchedEvent,
   patchedOccurrence,
+  withInvitedGuests,
   withRsvp,
 } from './optimistic';
 import { epochDay } from './range';
@@ -63,6 +68,7 @@ export type CalendarMutationHost = Pick<
 type EventRecord = CalendarEventFieldsFragment;
 type OccurrenceRecord = CalendarOccurrenceItemFieldsFragment;
 type Payload = CalendarMutationPayloadFieldsFragment;
+type InviteScope = InviteCalendarEventGuestsMutationVariables['input']['scope'];
 
 /** A calendar mutation the server rejected; `code` is the REST error code. */
 export class CalendarMutationError extends Error {
@@ -310,6 +316,71 @@ export async function executeGraphqlRsvp(
   return settle(host, result, result.data?.respondToCalendarEvent ?? undefined);
 }
 
+/** Adds guests to the series or one occurrence through the durable queue. */
+export async function executeGraphqlInviteGuests(
+  host: CalendarMutationHost,
+  args: InviteCalendarEventGuestsArgs,
+  client: Client = getGraphqlSoupClient()
+): Promise<CalendarMutationOutcome> {
+  assertCreated(args.eventId);
+  const oneOccurrence = args.scope === 'this_event';
+  const [event, occurrences] = await Promise.all([
+    cachedEvent(host, args.eventId),
+    cachedOccurrences(host, args.eventId),
+  ]);
+  // Like an RSVP: guests added to one occurrence join that instance's own
+  // attendee list; guests added to the series join the series list and every
+  // instance that carries its own, as the provider applies it.
+  const patchedOccurrences = occurrences
+    .filter((occurrence) =>
+      oneOccurrence
+        ? occurrence.occurrenceKey === args.occurrenceKey
+        : occurrence.overrideAttendees !== null
+    )
+    .map((occurrence) => ({
+      __typename: occurrence.__typename,
+      id: occurrence.id,
+      overrideAttendees: withInvitedGuests(
+        occurrence.overrideAttendees ?? event?.attendees ?? [],
+        args.guests
+      ),
+    }));
+  const result = await executeOptimisticMutation(
+    client,
+    InviteCalendarEventGuestsDocument,
+    {
+      input: {
+        eventId: args.eventId,
+        guests: args.guests.map((guest) => ({
+          email: guest.email,
+          optional: guest.optional ?? false,
+        })),
+        scope: graphqlEnum<InviteScope>(args.scope ?? 'all'),
+        ...(args.calendarId ? { calendarId: args.calendarId } : {}),
+        ...(args.recurrenceId ? { recurrenceId: args.recurrenceId } : {}),
+      },
+    },
+    {
+      inviteCalendarEventGuests: payloadOf(
+        event && !oneOccurrence
+          ? {
+              __typename: EVENT_TYPENAME,
+              id: args.eventId,
+              attendees: withInvitedGuests(event.attendees, args.guests),
+            }
+          : undefined,
+        patchedOccurrences
+      ),
+    } as OptimisticResponse<InviteCalendarEventGuestsMutation>,
+    { uuid: uuidv4() }
+  ).toPromise();
+  return settle(
+    host,
+    result,
+    result.data?.inviteCalendarEventGuests ?? undefined
+  );
+}
+
 /** Patches an event, the series or one occurrence, through the durable queue. */
 export async function executeGraphqlUpdate(
   host: CalendarMutationHost,
@@ -396,6 +467,7 @@ export async function executeGraphqlUpdate(
         ...(patch.reminders
           ? { reminders: graphqlReminders(patch.reminders) }
           : {}),
+        ...(patch.guestPolicy ? { guestPolicy: patch.guestPolicy } : {}),
         ...(patch.conference
           ? {
               conference: graphqlEnum<GraphqlCalendarConferenceChange>(
@@ -562,6 +634,22 @@ export async function executeGraphqlCreate(
       comment: null,
     })),
     reminders,
+    guestPolicy: args.guestPolicy ?? {
+      canModify: false,
+      canInviteOthers: true,
+      canSeeOtherGuests: true,
+    },
+    isSnapshot: false,
+    // The viewer organizes what they create; the server adds their own
+    // attendee row, and with it the RSVP, when the event lands.
+    viewerCan: {
+      editDetails: true,
+      inviteGuests: true,
+      removeGuests: true,
+      setGuestPolicy: calendar?.capabilities.guestPolicy ?? false,
+      rsvp: false,
+      organize: true,
+    },
     createdAt: now,
     updatedAt: now,
   };
@@ -616,6 +704,7 @@ export async function executeGraphqlCreate(
             }
           : {}),
         ...(args.macroCall ? { macroCall: true } : {}),
+        ...(args.guestPolicy ? { guestPolicy: args.guestPolicy } : {}),
         ...(args.outOfOffice
           ? {
               outOfOffice: {

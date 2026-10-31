@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE folders AS (\n            SELECT child.id, child.\"parentId\" AS parent_id, child.name, 1 AS depth\n            FROM \"Project\" child\n            WHERE child.\"parentId\" = $1 AND child.\"deletedAt\" IS NULL\n            UNION ALL\n            SELECT child.id, child.\"parentId\", child.name, folders.depth + 1\n            FROM \"Project\" child\n            JOIN folders ON child.\"parentId\" = folders.id\n            WHERE child.\"deletedAt\" IS NULL\n        )\n        SELECT\n            id AS \"id!\",\n            parent_id AS \"parent_id!\",\n            name AS \"name!\",\n            depth AS \"depth!\"\n        FROM folders\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "parent_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "depth!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "aa1a119e12755e3a4f1c97699e1df7316ba8dc6f8f602a100d1f49f4aabc18d8"
+}

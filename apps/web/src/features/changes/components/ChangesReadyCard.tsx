@@ -1,8 +1,8 @@
 import { DiffCounts } from '@app/components/diff-view';
-import GitBranchIcon from '@phosphor/git-branch.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import RowsIcon from '@phosphor/rows.svg';
-import XIcon from '@phosphor/x.svg';
+import GitBranchIcon from '@icon/system/regular/git-branch.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import RowsIcon from '@icon/system/regular/rows.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { describeFileCount } from '../core/changeset';
@@ -37,7 +37,7 @@ export function ChangesReadyCard(props: {
           tooltip="Dismiss"
           onClick={() => props.onDismiss()}
         >
-          <XIcon />
+          <XIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="flex items-center gap-2 font-mono text-[11px] text-ink-placeholder">
@@ -46,7 +46,7 @@ export function ChangesReadyCard(props: {
       </div>
       <div class="flex flex-wrap gap-1.5">
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="gap-1.5"
           onClick={() => props.onReview()}
@@ -56,7 +56,7 @@ export function ChangesReadyCard(props: {
         </Button>
         <Show when={props.linkedUrl}>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             class="gap-1.5"
             onClick={props.onViewPullRequest}

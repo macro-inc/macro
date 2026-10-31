@@ -296,3 +296,24 @@ fn stopping_the_turn_hides_a_held_tool_call() {
     );
     assert!(machine.metadata().pending_interactions.is_empty());
 }
+
+#[test]
+fn failed_turns_clear_on_the_next_prompt() {
+    let mut machine = FoldMachineImpl::new();
+    prompt(&mut machine, "p");
+    assert!(push(
+        &mut machine,
+        "to_server",
+        json!({"id": "p", "error": {"code": -32603, "message": "Runtime failed"}}),
+    ));
+    assert_eq!(machine.metadata().turn, TurnState::Failed);
+
+    prompt(&mut machine, "next");
+    assert_eq!(machine.metadata().turn, TurnState::Running);
+    push(
+        &mut machine,
+        "to_server",
+        json!({"id": "next", "result": {"stopReason": "cancelled"}}),
+    );
+    assert_eq!(machine.metadata().turn, TurnState::Idle);
+}

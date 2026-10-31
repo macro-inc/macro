@@ -1,73 +1,12 @@
-use crate::context::{self};
+use crate::context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
-use lambda_runtime::{
-    Error, LambdaEvent,
-    tracing::{self},
-};
-use models_email::service::pubsub::ScheduledPubsubMessage;
-use sqlx::PgPool;
+use lambda_runtime::{Error, LambdaEvent, tracing};
 
-#[tracing::instrument(skip(ctx, _event))]
+#[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(
     ctx: context::Context,
     _event: LambdaEvent<EventBridgeEvent>,
 ) -> Result<(), Error> {
-    // grab all drafts with passed send_time that have not been sent already
-    let notifications = fetch_pending_scheduled_messages(&ctx.db)
-        .await
-        .unwrap_or_else(|e| {
-            tracing::error!(error=?e, "Error fetching scheduled messages");
-            Vec::new()
-        });
-
-    if !notifications.is_empty() {
-        tracing::info!(notifications = ?notifications, "Sending scheduled email pubsub messages");
-    }
-
-    for notif in notifications.into_iter() {
-        let message_id = notif.message_id;
-        let link_id = notif.link_id;
-        if let Err(e) = ctx
-            .sqs_client
-            .enqueue_email_scheduled_message(notif, None)
-            .await
-        {
-            tracing::error!(
-                error = ?e,
-                link_id = link_id.to_string(),
-                message_id = message_id.to_string(),
-                "Error enqueueing scheduled notification",
-            );
-        };
-    }
-
+    ctx.recovery.scan().await?;
     Ok(())
-}
-
-/// Fetches all scheduled messages that are ready to be sent.
-/// Only returns messages where:
-/// - send_time has passed (< now())
-/// - sent = false
-/// - the associated email message is still a draft (is_draft = true)
-#[tracing::instrument(skip(pool), err)]
-pub async fn fetch_pending_scheduled_messages(
-    pool: &PgPool,
-) -> anyhow::Result<Vec<ScheduledPubsubMessage>> {
-    let messages = sqlx::query_as!(
-        ScheduledPubsubMessage,
-        r#"
-        SELECT
-            esm.link_id, esm.message_id
-        FROM email_scheduled_messages esm
-        JOIN email_messages em ON em.id = esm.message_id
-        WHERE
-            esm.send_time < now()
-            AND esm.sent = FALSE
-            AND em.is_draft = TRUE
-        "#,
-    )
-    .fetch_all(pool)
-    .await?;
-
-    Ok(messages)
 }

@@ -10,13 +10,13 @@ import type {
   AnimationStart,
 } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import Play from '@phosphor/play.svg';
-import Plus from '@phosphor/plus.svg';
-import Sliders from '@phosphor/sliders-horizontal.svg';
-import Star from '@phosphor-fill/star-fill.svg';
+import Star from '@icon/system/fill/star-fill.svg';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import ListNumbers from '@icon/system/regular/list-numbers.svg';
+import Play from '@icon/system/regular/play.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Sliders from '@icon/system/regular/sliders-horizontal.svg';
 import { For, type JSX, Show } from 'solid-js';
 import {
   CLASS_LABELS,
@@ -171,7 +171,7 @@ export function AnimationsTab() {
     <>
       <RibbonGroup label="Preview">
         <RibbonTextButton
-          label="Preview"
+          aria-label="Preview"
           tooltip="Preview the slide's animations"
           data-testid="pptx-animation-preview"
           disabled={!env.slide()?.animations?.length}
@@ -304,8 +304,8 @@ export function AnimationsTab() {
           )}
         </RibbonPopover>
         <RibbonTextButton
-          label="Animation pane"
-          variant={anim.pane() ? 'accent' : 'ghost'}
+          aria-label="Animation pane"
+          variant={anim.pane() ? 'primary' : 'ghost'}
           aria-pressed={anim.pane()}
           data-testid="pptx-animation-pane-toggle"
           onClick={anim.togglePane}
@@ -379,7 +379,7 @@ export function AnimationsTab() {
           }
         />
         <RibbonButton
-          label="Move earlier"
+          aria-label="Move earlier"
           tooltip="Move Earlier"
           data-testid="pptx-animation-earlier"
           disabled={ro() || (anim.current() ?? 0) === 0}
@@ -395,7 +395,7 @@ export function AnimationsTab() {
           <ArrowUp />
         </RibbonButton>
         <RibbonButton
-          label="Move later"
+          aria-label="Move later"
           tooltip="Move Later"
           data-testid="pptx-animation-later"
           disabled={

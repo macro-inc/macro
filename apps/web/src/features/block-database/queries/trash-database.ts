@@ -58,7 +58,7 @@ export function trashDatabase(
         });
         return ok(undefined);
       })
-      .exhaustive();
+      .exhaustive(() => err({ kind: 'unreachable' }));
   };
   return new ResultAsync(trashed());
 }

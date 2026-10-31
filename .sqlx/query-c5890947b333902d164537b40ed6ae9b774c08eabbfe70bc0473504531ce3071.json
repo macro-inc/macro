@@ -1,0 +1,75 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- One page of the viewer's teammates' activity on entities shared with the\n-- viewer. See `team_feed.rs` for the paging contract.\n--\n-- $1 viewer id, $2/$3 cursor position (NULL for the first page),\n-- $4 rows to return, $5 fewest raw rows one teammate's scan reads,\n-- $6 raw rows one page reads across all teammates.\nWITH viewer_source AS (\n    -- The principals an `entity_access` grant can name to reach the viewer:\n    -- the viewer, their teams, and the channels they are active in.\n    SELECT 'user'::entity_access_source_type AS source_type, $1::text AS source_id\n    UNION ALL\n    SELECT 'team', tu.team_id::text FROM team_user tu WHERE tu.user_id = $1\n    UNION ALL\n    SELECT 'channel', cp.channel_id::text\n    FROM comms_channel_participants cp\n    WHERE cp.user_id = $1 AND cp.left_at IS NULL\n),\nviewer_inbox AS (\n    -- Inboxes whose threads the viewer owns: their own links and those\n    -- delegated to them as primary.\n    SELECT l.id AS link_id FROM email_links l WHERE l.macro_id = $1\n    UNION\n    SELECT mul.link_id FROM macro_user_links mul WHERE mul.primary_macro_id = $1\n),\nteammate AS (\n    SELECT DISTINCT member.user_id\n    FROM team_user viewer\n    JOIN team_user member ON member.team_id = viewer.team_id\n    WHERE viewer.user_id = $1 AND member.user_id <> $1\n),\nscan AS (\n    SELECT GREATEST($5, $6 / GREATEST(count(*), 1))::bigint AS rows FROM teammate\n),\nscanned AS (\n    -- Per teammate, one seek of the subject index that stops at $4 visible\n    -- rows or after `scan.rows` raw rows. A scan that stops at that cap\n    -- also emits its last raw row (`scan_rank = scan.rows`) as a frontier.\n    SELECT s.*\n    FROM teammate t\n    CROSS JOIN LATERAL (\n        SELECT w.*\n        FROM (\n            SELECT e.*,\n                   row_number() OVER (ORDER BY e.occurred_at DESC, e.id DESC) AS scan_rank,\n                   -- Mirrors `EntityAccessService::get_users_by_entity` for\n                   -- every entity type activity records; anything else is\n                   -- hidden. Forms are hidden too: their rows name\n                   -- respondents, so they reach only their subject.\n                   CASE\n                       WHEN e.entity_type = 'channel' THEN e.entity_id IN (\n                           SELECT vs.source_id FROM viewer_source vs\n                           WHERE vs.source_type = 'channel'\n                       )\n                       -- A call's audience is its channel's, or its direct\n                       -- user grants when it has none.\n                       WHEN e.entity_type = 'call' THEN EXISTS (\n                           SELECT 1 FROM call_entities ce\n                           WHERE ce.id = e.entity_uuid\n                             AND CASE\n                                 WHEN ce.channel_id IS NULL THEN EXISTS (\n                                     SELECT 1 FROM entity_access ea\n                                     WHERE ea.entity_id = ce.id AND ea.entity_type = 'call'\n                                       AND ea.source_type = 'user' AND ea.source_id = $1\n                                       AND ea.granted_from_project_id IS NULL\n                                 )\n                                 ELSE ce.channel_id::text IN (\n                                     SELECT vs.source_id FROM viewer_source vs\n                                     WHERE vs.source_type = 'channel'\n                                 )\n                             END\n                       )\n                       WHEN e.entity_type IN (\n                           'document', 'project', 'chat', 'initiative', 'database',\n                           'crm_company', 'email_thread'\n                       ) THEN EXISTS (\n                           SELECT 1 FROM entity_access ea\n                           WHERE ea.entity_id::text = e.entity_id\n                             AND ea.entity_type = e.entity_type\n                             AND (ea.source_type, ea.source_id) IN (\n                                 SELECT vs.source_type, vs.source_id FROM viewer_source vs\n                             )\n                       ) OR (e.entity_type = 'email_thread' AND EXISTS (\n                           SELECT 1 FROM email_threads et\n                           WHERE et.id = e.entity_uuid\n                             AND et.link_id IN (SELECT vi.link_id FROM viewer_inbox vi)\n                       ))\n                       ELSE false\n                   END AS visible\n            FROM (\n                SELECT e.id, e.actor_id, e.action, e.action_payload, e.subject_id,\n                       e.entity_type, e.entity_id, e.occurred_at,\n                       -- Only these id columns are uuids; a malformed id\n                       -- must hide its row, not fail the page.\n                       CASE WHEN e.entity_type IN ('call', 'email_thread') THEN\n                           CASE WHEN e.entity_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'\n                                THEN e.entity_id::uuid\n                           END\n                       END AS entity_uuid\n                FROM activity_events e\n                WHERE e.subject_id = t.user_id\n                  -- No cursor reads from the top. COALESCE, unlike an\n                  -- `IS NULL OR` branch, keeps this an index condition in\n                  -- generic plans.\n                  AND (e.occurred_at, e.id) < (\n                      COALESCE($2::timestamptz, 'infinity'),\n                      COALESCE($3::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff')\n                  )\n                ORDER BY e.occurred_at DESC, e.id DESC\n                LIMIT (SELECT rows FROM scan)\n            ) e\n        ) w\n        WHERE w.visible OR w.scan_rank = (SELECT rows FROM scan)\n        LIMIT $4\n    ) s\n),\nboundary AS (\n    -- The newest frontier: below it some teammate's rows were not read.\n    SELECT * FROM scanned\n    WHERE scan_rank = (SELECT rows FROM scan)\n    ORDER BY occurred_at DESC, id DESC\n    LIMIT 1\n)\n(\n    SELECT s.id AS \"id!\", s.actor_id AS \"actor_id!\", s.action AS \"action!\",\n           s.action_payload, s.subject_id AS \"subject_id!\",\n           s.entity_type AS \"entity_type!\", s.entity_id AS \"entity_id!\",\n           s.occurred_at AS \"occurred_at!\", false AS \"is_boundary!\"\n    FROM scanned s\n    WHERE s.visible\n      AND NOT EXISTS (\n          SELECT 1 FROM boundary b WHERE (s.occurred_at, s.id) < (b.occurred_at, b.id)\n      )\n    ORDER BY s.occurred_at DESC, s.id DESC\n    LIMIT $4\n)\nUNION ALL\nSELECT b.id, b.actor_id, b.action, b.action_payload, b.subject_id, b.entity_type,\n       b.entity_id, b.occurred_at, true\nFROM boundary b\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "actor_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "action!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "action_payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "subject_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "entity_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "entity_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "occurred_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "is_boundary!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c5890947b333902d164537b40ed6ae9b774c08eabbfe70bc0473504531ce3071"
+}

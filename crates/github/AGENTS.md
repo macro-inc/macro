@@ -14,6 +14,9 @@ link flow, following the hexagonal architecture pattern.
 - `src/inbound/github_sync_router.rs`: GitHub App install redirect, OAuth
   callback, and the webhook handler.
 - `src/inbound/pull_request_index_router.rs`: the HTTP surface for indexed PRs.
+- `src/broker.rs` + `src/domain/models/webhook_delivery.rs`: every verified
+  delivery, whatever its event, published to `macro.github_webhooks` for
+  subscribers such as routines.
 - `src/outbound/github_sync_client.rs`, `src/outbound/github_auth_client.rs`:
   GitHub's own REST/App API clients.
 - `src/outbound/pg_github_repo.rs`, `src/outbound/pg_github_sync_repo.rs`: the
@@ -23,6 +26,10 @@ link flow, following the hexagonal architecture pattern.
 
 - Owns: account linking (`link` feature), the App installation/webhook sync
   (`sync` feature), and the Axum router/webhook verification for both.
+  The `installation_claims` feature exposes whether a user has linked GitHub
+  and who may see an installation's deliveries, without the rest of the sync
+  stack. A personal installation counts only while the account that installed
+  it is the one linked.
 - Not here: the pull request model, merge rules, and PR listing/service →
   `crates/github_pull_requests`, which this crate re-exports and calls into.
 
@@ -32,7 +39,7 @@ link flow, following the hexagonal architecture pattern.
   `documents`, `fusionauth`, `connection_gateway_client`, `macro_service_urls`,
   `notification`/`model_notifications`.
 - Used by: `agent_harness_service`, `agent_harness`, `agent_egress`,
-  `document_storage_service`, `authentication_service`.
+  `document_storage_service`, `authentication_service`, `scheduled_action`.
 
 ## Recipes
 
@@ -44,9 +51,25 @@ link flow, following the hexagonal architecture pattern.
 ## Checks
 
 - `cargo test -p github --all-features` (`SQLX_OFFLINE` unset).
+- Start local PostgreSQL and Redis first (`docs/development/database.md`);
+  `REDIS_URL` overrides the Redis test endpoint. Keep the token-cache race test
+  enabled in CI, which provisions Redis.
 - `just check` (from this directory) runs `cargo check --all-features`.
 
 ## Gotchas
+
+- Missing FusionAuth identities/grants require reauthentication; infrastructure
+  errors remain errors. After OAuth proves GitHub identity, refresh the grant
+  before returning an existing link. Reassign every sharer when its grant owner
+  is gone, using the old owner as a compare-and-swap condition. Hold the user
+  guard then the GitHub account guard through OAuth grant writes and DB changes;
+  disconnect follows the same order. Cache tokens by identity and GitHub account.
+- Keep lock-pool acquisition and advisory waits bounded at five seconds; only
+  the dedicated lock connections use the five-second lock and ten-second
+  statement timeouts. Never expire idle transactions while grant writes run.
+- Grant replacement is unlink/relink with best-effort restoration. A timeout
+  leaves the remote result uncertain; a crash can leave no grant. Preserve
+  Macro links so a later verified OAuth attempt can recreate it.
 
 - Webhook signature verification uses `hmac`/`subtle` for constant-time
   comparison — don't swap in a plain `==` when touching

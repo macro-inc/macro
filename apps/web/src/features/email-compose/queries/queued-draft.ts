@@ -33,6 +33,7 @@ export function queuedDraftSaveArgs({
     senderIsSignal: senderAccount?.draft_is_signal,
     newThreadOwnerId,
     draftId: handles.draftId,
+    draftGeneration: draft.draft_generation ?? 0,
     threadDbId: handles.threadId,
     // Persist the selected inbox itself: the primary inbox can change before replay.
     linkId: senderLinkId || undefined,

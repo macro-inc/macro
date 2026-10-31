@@ -26,13 +26,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
+import { hapticImpact } from '@core/mobile/haptics';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
-import PaperclipIcon from '@phosphor/paperclip.svg';
+import PaperclipIcon from '@icon/system/regular/paperclip.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
@@ -211,6 +212,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       };
       props.editor.controls.clear();
       attachments.setAttached([]);
+      hapticImpact('light');
       props.onSend(sendInput);
     }
   );
@@ -270,29 +272,29 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const LeftButton = () => (
     <Button
+      tooltip="Attach files"
       variant="ghost"
-      size="icon-composer"
-      class="text-ink not-touch:text-composer-ink touch:size-6"
-      label="Attach files"
+      size="icon-md"
+      class="text-ink not-touch:text-composer-ink"
       aria-label="Attach files"
       onClick={() => {
         // Open synchronously from the tap so the native picker retains user activation.
         fileInputRef?.click();
       }}
     >
-      <PaperclipIcon />
+      <PaperclipIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
     </Button>
   );
 
   const StopButton = () => (
     <Button
-      variant={isTouchDevice() ? 'ghost' : 'strong'}
-      size="icon-composer"
-      label="Stop generating"
-      hotkey={TOKENS.chat.stop}
+      aria-label="Stop generating"
+      tooltip={{ content: 'Stop generating', hotkey: TOKENS.chat.stop }}
+      variant={isTouchDevice() ? 'ghost' : 'secondary'}
+      size="icon-md"
       onClick={() => props.onStop?.()}
       class={cn(
-        'touch:size-7.5 [&_svg]:stroke-[4px]',
+        'touch:size-7.5',
         isTouchDevice() &&
           'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'
@@ -305,9 +307,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const SendButton = () => (
     <UiSendButton
       appearance="composer"
-      tooltip={'Ask AI'}
-      shortcut="enter"
-      tooltipPlacement="top"
+      tooltip={{ content: 'Ask AI', placement: 'top', shortcut: 'enter' }}
       disabled={!canSendMessage()}
       class="touch:rounded-full"
       onClick={() => sendMessage()}

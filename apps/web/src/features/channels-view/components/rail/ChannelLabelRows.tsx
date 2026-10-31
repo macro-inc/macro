@@ -1,4 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import {
   ContextMenuContent,
@@ -9,17 +10,17 @@ import {
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ChannelEntity } from '@entity';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import ChecksIcon from '@icon/system/regular/checks.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TagIcon from '@icon/system/regular/tag.svg';
+import TagSimpleIcon from '@icon/system/regular/tag-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import ChecksIcon from '@phosphor/checks.svg';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TagIcon from '@phosphor/tag.svg';
-import TagSimpleIcon from '@phosphor/tag-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { cn, Dropdown } from '@ui';
@@ -105,7 +106,9 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
         tabIndex={-1}
         title={
           props.label.rule
-            ? `Name contains “${props.label.rule.contains}”`
+            ? t('channelLabels.nameContains', {
+                text: props.label.rule.contains,
+              })
             : props.label.name
         }
         aria-expanded={state().open}
@@ -125,10 +128,11 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
       <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2 items-center gap-0.5">
         <Dropdown placement="bottom-end">
           <Dropdown.Trigger
+            aria-label={`Options for ${props.label.name}`}
+            tooltip={`Options for ${props.label.name}`}
             as={ViewSidebar.Control}
             variant="ghost"
             size="icon-sm"
-            label={`Options for ${props.label.name}`}
             class="opacity-0 transition-opacity group-hover/channel-label:opacity-100 focus-visible:opacity-100 data-expanded:opacity-100 touch:opacity-100"
             onMouseDown={(event: MouseEvent) => event.stopPropagation()}
           >
@@ -144,7 +148,11 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
             <Dropdown.Group>
               <MenuRow
                 icon={PencilSimpleIcon}
-                label={props.label.rule ? 'Edit smart label' : 'Rename'}
+                label={
+                  props.label.rule
+                    ? t('channelLabels.editSmartLabel')
+                    : t('entityActions.rename')
+                }
                 onSelect={() =>
                   fireAndForget(
                     props.label.rule
@@ -156,7 +164,7 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
               />
               <MenuRow
                 icon={ChecksIcon}
-                label="Mark all as read"
+                label={t('channelLabels.markAllAsRead')}
                 disabled={state().unreadCount === 0}
                 onSelect={() => rail.markLabelRead(props.label)}
               />
@@ -165,7 +173,11 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
             <Dropdown.Group>
               <MenuRow
                 icon={TrashIcon}
-                label={props.label.rule ? 'Delete smart label' : 'Delete label'}
+                label={
+                  props.label.rule
+                    ? t('channelLabels.deleteSmartLabel')
+                    : t('channelLabels.deleteLabel')
+                }
                 onSelect={() =>
                   fireAndForget(rail.deleteLabel(props.label), 'channels-view')
                 }
@@ -174,7 +186,7 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
           </Dropdown.Content>
         </Dropdown>
         <ViewSidebar.Control
-          label={`${state().open ? 'Collapse' : 'Expand'} ${props.label.name}`}
+          aria-label={`${state().open ? 'Collapse' : 'Expand'} ${props.label.name}`}
           aria-expanded={state().open}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={() => rail.toggleLabel(props.label.id)}
@@ -200,7 +212,7 @@ export function ChannelsCreateMenu() {
       when={rail.channelTagsEnabled() && rail.labelsAvailable()}
       fallback={
         <ViewSidebar.Control
-          label="Create channel"
+          aria-label="Create channel"
           onClick={openNewChannelModal}
         >
           <PlusIcon class="size-3.5" />
@@ -209,10 +221,11 @@ export function ChannelsCreateMenu() {
     >
       <Dropdown placement="bottom-end">
         <Dropdown.Trigger
+          aria-label="Create channel or label"
+          tooltip="Create channel or label"
           as={ViewSidebar.Control}
           variant="ghost"
           size="icon-sm"
-          label="Create channel or label"
         >
           <PlusIcon class="size-3.5" />
         </Dropdown.Trigger>
@@ -226,19 +239,19 @@ export function ChannelsCreateMenu() {
           <Dropdown.Group>
             <MenuRow
               icon={HashIcon}
-              label="New channel"
+              label={t('channelLabels.newChannel')}
               onSelect={openNewChannelModal}
             />
             <MenuRow
               icon={TagIcon}
-              label="New label"
+              label={t('channelLabels.newLabel')}
               onSelect={() =>
                 fireAndForget(rail.createLabel([]), 'channels-view')
               }
             />
             <MenuRow
               icon={FilterIcon}
-              label="New smart label"
+              label={t('channelLabels.newSmartLabel')}
               onSelect={() =>
                 fireAndForget(rail.createSmartTag(), 'channels-view')
               }
@@ -274,7 +287,7 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
         {(label) => (
           <MenuItem
             icon={TagSimpleIcon}
-            text={`Ungroup from “${label().name}”`}
+            text={t('channelLabels.ungroupFrom', { label: label().name })}
             onClick={() => rail.setChannelLabel(props.channel.id, undefined)}
           />
         )}
@@ -282,9 +295,16 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
       <ContextMenu.Sub>
         <SubTrigger
           icon={TagIcon}
-          text={currentLabel() ? 'Move to label' : 'Add to label'}
+          text={
+            currentLabel()
+              ? t('channelLabels.moveToLabel')
+              : t('channelLabels.addToLabel')
+          }
         />
-        <ContextMenuContent submenu class="w-56 text-xs text-ink-muted">
+        <ContextMenuContent
+          submenu
+          class="min-w-56 max-w-[22rem] text-xs text-ink-muted"
+        >
           {/* Kobalte radio items only work inside a RadioGroup. */}
           <ContextMenu.RadioGroup
             value={currentLabel()?.id ?? ''}
@@ -308,7 +328,7 @@ export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
           </Show>
           <MenuItem
             icon={PlusIcon}
-            text="New label…"
+            text={t('channelLabels.newLabelEllipsis')}
             onClick={() =>
               fireAndForget(
                 rail.createLabel([props.channel.id]),

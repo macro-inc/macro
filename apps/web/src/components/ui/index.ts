@@ -1,4 +1,6 @@
 export { ActionDialogShell } from './components/ActionDialogShell';
+export type { ApiKeyInputProps } from './components/ApiKeyInput';
+export { ApiKeyInput } from './components/ApiKeyInput';
 export type {
   AvatarGroupProps,
   AvatarGroupSize,
@@ -21,13 +23,16 @@ export {
 } from './components/Badge';
 export type {
   ButtonClassOptions,
+  ButtonFinish,
   ButtonProps,
   ButtonSize,
+  ButtonTooltip,
+  ButtonTooltipOptions,
   ButtonVariant,
   ButtonVariantProps,
 } from './components/Button';
 export { Button, buttonClasses, buttonVariants } from './components/Button';
-export { ButtonGroup } from './components/ButtonGroup';
+export { ButtonGroup, type ButtonGroupProps } from './components/ButtonGroup';
 export type {
   CalendarMonthMenuProps,
   CalendarMonthSelectorProps,
@@ -40,7 +45,7 @@ export {
 } from './components/Calendar';
 export { Card, type CardProps } from './components/Card';
 export type { ChatInputProps, ChatInputRows } from './components/ChatInput';
-export type { CheckboxProps } from './components/Checkbox';
+export type { CheckboxProps, CheckboxSize } from './components/Checkbox';
 export {
   Checkbox,
   InlineCheckbox,
@@ -78,6 +83,7 @@ export type { DeleteDialogProps } from './components/DeleteDialog';
 export { DeleteDialog } from './components/DeleteDialog';
 export type { DialogProps } from './components/Dialog';
 export { Dialog } from './components/Dialog';
+export type { DropdownMultiSelectItemProps } from './components/Dropdown';
 export { Dropdown } from './components/Dropdown';
 export type {
   EmptyStateAction,
@@ -145,10 +151,9 @@ export { NumberUnitInput } from './components/NumberUnitInput';
 export { Panel } from './components/Panel';
 export type { PillButtonProps, PillButtonTone } from './components/PillButton';
 export { PillButton } from './components/PillButton';
-export type { RadioGroupProps } from './components/RadioGroup';
+export type { RadioGroupProps, RadioGroupSize } from './components/RadioGroup';
 export { RadioGroup } from './components/RadioGroup';
 export { Scroll } from './components/Scroll';
-export { SegmentedControl } from './components/SegmentedControl';
 export type {
   SelectContentProps,
   SelectIconProps,
@@ -172,9 +177,13 @@ export type {
 } from './components/Slider';
 export { Slider } from './components/Slider';
 export { Surface } from './components/Surface';
-export { TabbedControl } from './components/TabbedControl';
 export { TabSelector } from './components/TabSelector';
-export type { TabItem, TabsProps } from './components/Tabs';
+export type {
+  TabOption,
+  TabsProps,
+  TabsSize,
+  TabsTouchStyle,
+} from './components/Tabs';
 export { Tabs } from './components/Tabs';
 export { TagDot, type TagDotProps, type TagDotSize } from './components/TagDot';
 export type {
@@ -187,7 +196,10 @@ export type {
   TextFieldTextAreaProps,
 } from './components/TextField';
 export { TextField } from './components/TextField';
-export type { ToggleSwitchProps } from './components/ToggleSwitch';
+export type {
+  ToggleSwitchProps,
+  ToggleSwitchSize,
+} from './components/ToggleSwitch';
 export { ToggleSwitch } from './components/ToggleSwitch';
 export type {
   ToolbarButtonProps,

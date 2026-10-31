@@ -8,28 +8,51 @@
 
 import { throwOnErr } from '@core/util/result';
 import { storageServiceClient } from '@service-storage/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { githubPullRequestChangesKeys } from './keys';
 
 const GITHUB_PULL_REQUEST_CHANGES_STALE_TIME = 60 * 1000;
 
+function githubPullRequestChangesQueryOptions(id: string | undefined) {
+  return queryOptions({
+    queryKey: githubPullRequestChangesKeys.summary(id ?? '').queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        storageServiceClient.getGithubPullRequestChanges({ id: id! })
+      ),
+    enabled: Boolean(id),
+    retry: false,
+    staleTime: GITHUB_PULL_REQUEST_CHANGES_STALE_TIME,
+  });
+}
+
 /** The changes of the pull request behind a foreign entity record. */
 export function useGithubPullRequestChangesQuery(
   foreignEntityId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = foreignEntityId();
-    return {
-      queryKey: githubPullRequestChangesKeys.summary(id ?? '').queryKey,
-      queryFn: () =>
-        throwOnErr(() =>
-          storageServiceClient.getGithubPullRequestChanges({ id: id! })
-        ),
-      enabled: Boolean(id),
-      retry: false,
-      staleTime: GITHUB_PULL_REQUEST_CHANGES_STALE_TIME,
-    };
+  return useQuery(() =>
+    githubPullRequestChangesQueryOptions(foreignEntityId())
+  );
+}
+
+function githubPullRequestChangesPatchQueryOptions(
+  id: string | undefined,
+  changeset: string | undefined
+) {
+  return queryOptions({
+    queryKey: githubPullRequestChangesKeys.patch(id ?? '', changeset ?? '')
+      .queryKey,
+    queryFn: () =>
+      throwOnErr(() =>
+        storageServiceClient.getGithubPullRequestChangesPatch({
+          id: id!,
+          changeset: changeset!,
+        })
+      ),
+    enabled: Boolean(id) && Boolean(changeset),
+    retry: 1,
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 
@@ -41,22 +64,7 @@ export function useGithubPullRequestChangesPatchQuery(
   foreignEntityId: Accessor<string | undefined>,
   changesetId: Accessor<string | undefined>
 ) {
-  return useQuery(() => {
-    const id = foreignEntityId();
-    const changeset = changesetId();
-    return {
-      queryKey: githubPullRequestChangesKeys.patch(id ?? '', changeset ?? '')
-        .queryKey,
-      queryFn: () =>
-        throwOnErr(() =>
-          storageServiceClient.getGithubPullRequestChangesPatch({
-            id: id!,
-            changeset: changeset!,
-          })
-        ),
-      enabled: Boolean(id) && Boolean(changeset),
-      retry: 1,
-      staleTime: Number.POSITIVE_INFINITY,
-    };
-  });
+  return useQuery(() =>
+    githubPullRequestChangesPatchQueryOptions(foreignEntityId(), changesetId())
+  );
 }

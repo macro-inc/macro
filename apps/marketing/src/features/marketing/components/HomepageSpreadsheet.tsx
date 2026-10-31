@@ -19,9 +19,20 @@ import TextB from '@phosphor/text-b.svg';
 import TextItalic from '@phosphor/text-italic.svg';
 import TextStrikethrough from '@phosphor/text-strikethrough.svg';
 import TextUnderline from '@phosphor/text-underline.svg';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  lazy,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { DocMention } from './documents/DocMention';
 import { CUSTOMERS, type DemoCell } from './spreadsheet-demo-data';
 import './homepage-spreadsheet.css';
+
+const LinkedRecord = lazy(() => import('./SpreadsheetRecordPreview'));
 
 const NAME = 'Customers to reach';
 const COLUMNS = Array.from({ length: 26 }, (_, column) =>
@@ -85,6 +96,12 @@ export default function HomepageSpreadsheet() {
   const [rows, setRows] = createSignal(200);
   const [firstRow, setFirstRow] = createSignal(0);
   const [notice, setNotice] = createSignal('');
+  const [record, setRecord] = createSignal<DemoCell['reference']>();
+  let mentionTrigger: HTMLButtonElement | undefined;
+  const closeRecord = () => {
+    setRecord(undefined);
+    queueMicrotask(() => mentionTrigger?.focus({ preventScroll: true }));
+  };
   let grid: HTMLDivElement | undefined;
   let editInput: HTMLInputElement | undefined;
   const active = () => cells()[selected()] ?? { value: '' };
@@ -104,7 +121,10 @@ export default function HomepageSpreadsheet() {
   function commit() {
     if (!editing()) return;
     if (draft() !== active().value)
-      change({ ...cells(), [selected()]: { ...active(), value: draft() } });
+      change({
+        ...cells(),
+        [selected()]: { ...active(), value: draft(), reference: undefined },
+      });
     setEditing(false);
   }
   function select(next: string) {
@@ -192,12 +212,21 @@ export default function HomepageSpreadsheet() {
   }
 
   return (
-    <div class="relative pb-24">
+    <div class="relative">
+      <Show when={record()}>
+        {(reference) => (
+          <Suspense>
+            <LinkedRecord
+              company={cells()[`B${reference().row}`]?.value ?? ''}
+              person={cells()[`A${reference().row}`]?.value ?? ''}
+              email={cells()[`C${reference().row}`]?.value ?? ''}
+              kind={reference().kind}
+              onClose={closeRecord}
+            />
+          </Suspense>
+        )}
+      </Show>
       <div class="workspace-demo homepage-spreadsheet">
-        <div class="homepage-compose-status">
-          <span>{NAME}</span>
-          <span>Interactive demo</span>
-        </div>
         <section
           class="homepage-sheet-editor"
           aria-label={`${NAME} spreadsheet`}
@@ -427,7 +456,11 @@ export default function HomepageSpreadsheet() {
                 event.preventDefault();
                 change({
                   ...cells(),
-                  [selected()]: { ...active(), value: '' },
+                  [selected()]: {
+                    ...active(),
+                    value: '',
+                    reference: undefined,
+                  },
                 });
               } else if (
                 event.key.length === 1 &&
@@ -513,7 +546,39 @@ export default function HomepageSpreadsheet() {
                           >
                             <Show
                               when={editing() && selected() === key}
-                              fallback={display(cell())}
+                              fallback={
+                                <Show
+                                  when={cell()?.reference}
+                                  fallback={display(cell())}
+                                >
+                                  {(reference) => (
+                                    <button
+                                      type="button"
+                                      class="homepage-sheet-mention"
+                                      aria-label={`Open ${cell()?.value}`}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        select(key);
+                                        mentionTrigger = event.currentTarget;
+                                        setRecord(reference());
+                                      }}
+                                      onDblClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                      onKeyDown={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                    >
+                                      <DocMention
+                                        item={{
+                                          kind: reference().kind,
+                                          label: cell()?.value ?? '',
+                                        }}
+                                      />
+                                    </button>
+                                  )}
+                                </Show>
+                              }
                             >
                               <input
                                 ref={editInput}
@@ -588,28 +653,6 @@ export default function HomepageSpreadsheet() {
             </Tool>
           </div>
         </section>
-      </div>
-      <div class="pointer-events-none absolute bottom-0 left-2 z-10 text-ink-muted sm:left-6">
-        <span class="sr-only">Interactive demo — try editing a cell.</span>
-        <svg
-          class="h-[160px] w-[200px] -rotate-6"
-          viewBox="0 0 200 165"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          {/* Hand-lettered so the marker note stays consistent without a font download. */}
-          <path d="M59 112C8 99 8 47 38 7M22 13C28 12 33 9 38 7C38 14 39 19 41 24" />
-          <g transform="translate(0 40)">
-            <path d="M70 70C84 68 98 67 108 69M91 69L87 102" />
-            <path d="M107 81L104 101M106 88C113 76 120 77 123 80" />
-            <path d="M127 80C124 89 125 94 130 94C137 94 141 82 143 78M143 78C137 101 135 115 123 116C116 116 116 111 121 108" />
-            <path d="M163 85L160 103M165 75L165 76M181 75L174 98Q174 105 182 100M167 85L186 83" />
-          </g>
-        </svg>
       </div>
     </div>
   );

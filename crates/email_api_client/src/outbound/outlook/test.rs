@@ -125,6 +125,29 @@ async fn accepted_send_does_not_require_a_response_body() {
 }
 
 #[tokio::test]
+async fn bodyless_send_declares_zero_content_length() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("POST"))
+        .and(path("/v1.0/me/messages/draft/send"))
+        .and(header("content-length", "0"))
+        .respond_with(ResponseTemplate::new(202))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1.0/me/messages/draft/send"))
+        .respond_with(ResponseTemplate::new(411))
+        .mount(&server)
+        .await;
+    assert_eq!(
+        api.submit_draft(&token, &ProviderId::new("draft").unwrap())
+            .await
+            .unwrap(),
+        SubmissionOutcome::Accepted
+    );
+}
+
+#[tokio::test]
 async fn throttling_respects_provider_retry_after() {
     let (server, api, token) = setup().await;
     Mock::given(method("GET"))
@@ -140,7 +163,7 @@ async fn throttling_respects_provider_retry_after() {
         error,
         EmailApiError::RateLimited {
             retry_after: Some(Duration::from_secs(17)),
-            origin: RateLimitOrigin::Provider
+            origin: RateLimitOrigin::Provider { concurrency: false }
         }
     );
 }
@@ -592,6 +615,39 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
     );
 }
 
+#[test]
+fn reply_snippets_leave_out_the_quoted_message() {
+    let snippet = |body: serde_json::Value| {
+        let source = serde_json::from_value(json!({
+            "id":"m","conversationId":"c","subject":"RE: Hello",
+            "bodyPreview":"Preview with quoted history","body":body
+        }))
+        .unwrap();
+        super::messages::normalize(source, Vec::new(), Uuid::new_v4(), &[])
+            .unwrap()
+            .content
+            .message
+            .snippet
+    };
+    assert_eq!(
+        snippet(json!({"contentType":"html","content":concat!(
+            "<html><body><div>Tell gab   I said\nhello</div>",
+            "<div id=\"appendonsend\"></div><hr><div id=\"divRplyFwdMsg\">",
+            "<b>From:</b> Teo<br><b>Sent:</b> Tuesday<br><b>To:</b> Gab<br>",
+            "<b>Subject:</b> Hello</div><div>Original message</div></body></html>"
+        )}))
+        .as_deref(),
+        Some("Tell gab I said hello")
+    );
+    assert_eq!(
+        snippet(json!({"contentType":"text","content":
+            "Me too\n\nOn Tue, Oct 20, 2026 at 3:00 PM Teo <teo@example.com> wrote:\n> God I love outlook"
+        }))
+        .as_deref(),
+        Some("Me too")
+    );
+}
+
 #[tokio::test]
 async fn cloud_reference_attachments_preserve_provider_open_without_download_bytes() {
     let (server, api, token) = setup().await;
@@ -612,4 +668,22 @@ async fn cloud_reference_attachments_preserve_provider_open_without_download_byt
     assert_eq!(attachment.filename.as_deref(), Some("shared.pdf"));
     assert!(attachment.data_url.is_none());
     assert_eq!(server.received_requests().await.unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn message_mime_returns_the_original_bytes() {
+    let (server, api, token) = setup().await;
+    let mime = b"Subject: hi\r\n\r\nbody";
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/message-1/$value"))
+        .and(header("authorization", "Bearer test-bearer"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(&mime[..]))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let bytes = api
+        .mime(&token, &ProviderId::new("message-1").unwrap())
+        .await
+        .unwrap();
+    assert_eq!(bytes, mime);
 }

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE granola_sync_connections SET enabled = true, endpoint_id = $2, signing_secret = $3, scope = $4\n             WHERE id = $1 AND last_error IS NULL AND endpoint_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a42fdcf3527f593ba141955607cb371a4cb001ea6b5443f9b1ebb11d709e7f2a"
+}

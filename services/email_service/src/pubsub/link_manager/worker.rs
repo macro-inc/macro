@@ -6,11 +6,26 @@ use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use futures::StreamExt;
 use sqlx::PgPool;
 use sqs_client::SQS;
+use std::convert::Infallible;
+use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::{Instant, MissedTickBehavior, interval_at};
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
+
+#[cfg(test)]
+mod test;
+
+/// How long each renewal hides a message being processed from other workers.
+const VISIBILITY_EXTENSION_SECONDS: i32 = 300;
+/// How often a message being processed renews its visibility. Several renewals fit in one
+/// extension, so a failed renewal doesn't expose the message.
+const VISIBILITY_RENEWAL_INTERVAL: Duration = Duration::from_secs(60);
 
 /// method that ingests sqs messages and calls the process function for each
 #[allow(clippy::too_many_arguments)]
@@ -25,6 +40,7 @@ pub async fn run_worker(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
 ) {
     run_worker_with_cancellation(
         worker,
@@ -37,6 +53,7 @@ pub async fn run_worker(
         connection_gateway_client,
         notification_ingress_service,
         macro_event_broker,
+        contacts_ingress,
         CancellationToken::new(),
     )
     .await;
@@ -57,6 +74,7 @@ pub async fn run_worker_with_cancellation(
     connection_gateway_client: ConnectionGatewayClient,
     notification_ingress_service: Arc<NotificationIngressType>,
     macro_event_broker: PubSubEventBroker,
+    contacts_ingress: Arc<SqsContactsIngress<SqsContactsQueue>>,
     cancellation_token: CancellationToken,
 ) {
     let outlook = loop {
@@ -104,6 +122,7 @@ pub async fn run_worker_with_cancellation(
             redis_client.clone(),
             sqs_client.clone(),
             macro_event_broker.clone(),
+            contacts_ingress,
         )),
         db,
         sqs_worker: worker.clone(),
@@ -139,12 +158,23 @@ pub async fn run_worker_with_cancellation(
                             let result = futures::stream::iter(messages.iter())
                                 .then(|message| {
                                     let ctx = ctx.clone();
+                                    let worker = &worker;
+                                    let span = tracing::info_span!(
+                                        "email.link_manager.message",
+                                        message_id = message.message_id.as_deref(),
+                                    );
                                     async move {
-                                        let result = process::process_message(
-                                            ctx,
-                                            message,
+                                        let result = while_renewing_visibility(
+                                            || {
+                                                worker.extend_visibility(
+                                                    message,
+                                                    VISIBILITY_EXTENSION_SECONDS,
+                                                )
+                                            },
+                                            process::process_message(ctx, message),
                                         )
-                                            .await;
+                                        .instrument(span)
+                                        .await;
 
                                         match result {
                                             Ok(_) => Ok(()),
@@ -206,5 +236,36 @@ pub async fn run_worker_with_cancellation(
         {
             return;
         }
+    }
+}
+
+/// Runs `work` while calling `renew` every [`VISIBILITY_RENEWAL_INTERVAL`], so a message
+/// that outlives the queue's visibility timeout (a large mailbox purge) isn't redelivered
+/// and processed a second time while the first run is still going.
+async fn while_renewing_visibility<T, R, RenewFuture>(renew: R, work: impl Future<Output = T>) -> T
+where
+    R: FnMut() -> RenewFuture,
+    RenewFuture: Future<Output = anyhow::Result<()>>,
+{
+    tokio::select! {
+        output = work => output,
+        never = renew_visibility(renew) => match never {},
+    }
+}
+
+async fn renew_visibility<R, RenewFuture>(mut renew: R) -> Infallible
+where
+    R: FnMut() -> RenewFuture,
+    RenewFuture: Future<Output = anyhow::Result<()>>,
+{
+    let mut ticks = interval_at(
+        Instant::now() + VISIBILITY_RENEWAL_INTERVAL,
+        VISIBILITY_RENEWAL_INTERVAL,
+    );
+    ticks.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    loop {
+        ticks.tick().await;
+        // A failed renewal is retried on the next tick; the work keeps running either way.
+        renew().await.ok();
     }
 }

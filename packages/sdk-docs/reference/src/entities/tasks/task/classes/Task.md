@@ -12,6 +12,7 @@ and adds task-specific state.
 
 | Property | Modifier | Type | Default value | Description | Overrides | Inherited from |
 | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-access"></a> `access` | `readonly` | [`EntityAccess`](../../../sharing/access/classes/EntityAccess.md) | `...` | Access requests and direct user grants. | - | [`Document`](../../../documents/document/classes/Document.md).[`access`](../../../documents/document/classes/Document.md#property-access) |
 | <a id="property-branchedfrom"></a> `branchedFrom` | `readonly` | () => `Promise`\<[`Document`](../../../documents/document/classes/Document.md) \| `undefined`\> | `...` | The document this one was branched from, if any. | - | [`Document`](../../../documents/document/classes/Document.md).[`branchedFrom`](../../../documents/document/classes/Document.md#property-branchedfrom) |
 | <a id="property-createdat"></a> `createdAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the document was created. | - | [`Document`](../../../documents/document/classes/Document.md).[`createdAt`](../../../documents/document/classes/Document.md#property-createdat) |
 | <a id="property-deletedat"></a> `deletedAt` | `readonly` | () => `Promise`\<`string` \| `undefined`\> | `...` | When the document was deleted, if it has been. | - | [`Document`](../../../documents/document/classes/Document.md).[`deletedAt`](../../../documents/document/classes/Document.md#property-deletedat) |
@@ -25,6 +26,22 @@ and adds task-specific state.
 | <a id="property-search"></a> `search` | `static` | (`client`, `query`, `searchOpts?`) => `AsyncGenerator`\<`Task`\> | `...` | Search tasks by name and content, most relevant first, auto-paginated. | [`Document`](../../../documents/document/classes/Document.md).[`search`](../../../documents/document/classes/Document.md#property-search) | - |
 
 ## Methods
+
+### anchors()
+
+> **anchors**(): `Promise`\<[`DocumentAnchor`](../../../documents/anchor/classes/DocumentAnchor.md)[]\>
+
+PDF annotations in this document.
+
+#### Returns
+
+`Promise`\<[`DocumentAnchor`](../../../documents/anchor/classes/DocumentAnchor.md)[]\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`anchors`](../../../documents/document/classes/Document.md#anchors)
+
+***
 
 ### branchName()
 
@@ -140,6 +157,28 @@ Returns a handle to the new document.
 
 ***
 
+### createHighlight()
+
+> **createHighlight**(`options`): `Promise`\<[`DocumentAnchor`](../../../documents/anchor/classes/DocumentAnchor.md)\>
+
+Create a standalone PDF highlight.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | `Omit`\<[`PdfHighlightAnchorRequest`](../../../../../generated/storage/types.gen/type-aliases/PdfHighlightAnchorRequest.md), `"uuid"`\> |
+
+#### Returns
+
+`Promise`\<[`DocumentAnchor`](../../../documents/anchor/classes/DocumentAnchor.md)\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`createHighlight`](../../../documents/document/classes/Document.md#createhighlight)
+
+***
+
 ### delete()
 
 > **delete**(`opts?`): `Promise`\<`void`\>
@@ -220,6 +259,44 @@ GitHub pull requests associated with the document.
 
 ***
 
+### meetingNotes()
+
+> **meetingNotes**(): `Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
+
+Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access.
+
+#### Returns
+
+`Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`meetingNotes`](../../../documents/document/classes/Document.md#meetingnotes)
+
+***
+
+### messageThreadById()
+
+> **messageThreadById**(`id`): [`MessageThread`](../../../messages/thread/classes/MessageThread.md)
+
+A shared message thread scoped to this resource.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `id` | `string` |
+
+#### Returns
+
+[`MessageThread`](../../../messages/thread/classes/MessageThread.md)
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`messageThreadById`](../../../documents/document/classes/Document.md#messagethreadbyid)
+
+***
+
 ### move()
 
 > **move**(`project`): `Promise`\<`void`\>
@@ -239,6 +316,60 @@ Move the document into a project (or out of one, with `null`).
 #### Inherited from
 
 [`Document`](../../../documents/document/classes/Document.md).[`move`](../../../documents/document/classes/Document.md#move)
+
+***
+
+### permission()
+
+> **permission**(): `Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+Read the caller's effective permission on this entity.
+
+#### Returns
+
+`Promise`\<\{ `permission`: [`EntityPermission`](../../../../../generated/storage/types.gen/type-aliases/EntityPermission.md); `status`: `"access"`; \} \| \{ `status`: `"no_access"`; \}\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`permission`](../../../documents/document/classes/Document.md#permission)
+
+***
+
+### permissionsToken()
+
+> **permissionsToken**(): `Promise`\<`string`\>
+
+Mint a scoped permissions token.
+
+#### Returns
+
+`Promise`\<`string`\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`permissionsToken`](../../../documents/document/classes/Document.md#permissionstoken)
+
+***
+
+### prepareSave()
+
+> **prepareSave**(`parts`): `Promise`\<[`PreSaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/PreSaveDocumentResponseData.md)\>
+
+Prepare multipart content saving and return the service's upload instructions.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `parts` | [`SaveBomPart`](../../../../../generated/storage/types.gen/type-aliases/SaveBomPart.md)[] |
+
+#### Returns
+
+`Promise`\<[`PreSaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/PreSaveDocumentResponseData.md)\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`prepareSave`](../../../documents/document/classes/Document.md#preparesave)
 
 ***
 
@@ -319,6 +450,28 @@ Restore a soft-deleted document.
 
 ***
 
+### save()
+
+> **save**(`options`): `Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+Commit uploaded content. Does not retry uncertain writes.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `options` | [`SaveDocumentRequest`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentRequest.md) |
+
+#### Returns
+
+`Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`save`](../../../documents/document/classes/Document.md#save)
+
+***
+
 ### setProperty()
 
 > **setProperty**(`property`, `value?`): `Promise`\<`void`\>
@@ -365,6 +518,22 @@ Share the document with the owner's team, or unshare it.
 
 ***
 
+### sharePermissions()
+
+> **sharePermissions**(): `Promise`\<[`SharePermissionV2`](../../../../../generated/storage/types.gen/type-aliases/SharePermissionV2.md)\>
+
+Sharing configuration.
+
+#### Returns
+
+`Promise`\<[`SharePermissionV2`](../../../../../generated/storage/types.gen/type-aliases/SharePermissionV2.md)\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`sharePermissions`](../../../documents/document/classes/Document.md#sharepermissions)
+
+***
+
 ### shortId()
 
 > **shortId**(): `Promise`\<`string`\>
@@ -381,6 +550,22 @@ The document's short id (used in compact links and branch names).
 
 ***
 
+### simpleSave()
+
+> **simpleSave**(): `Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+Commit a simple document save.
+
+#### Returns
+
+`Promise`\<[`SaveDocumentResponseData`](../../../../../generated/storage/types.gen/type-aliases/SaveDocumentResponseData.md)\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`simpleSave`](../../../documents/document/classes/Document.md#simplesave)
+
+***
+
 ### teamShare()
 
 > **teamShare**(): `Promise`\<[`DocumentTeamShareResponse`](../../../../../generated/storage/types.gen/type-aliases/DocumentTeamShareResponse.md)\>
@@ -394,6 +579,28 @@ Whether the document is shared with the owner's team, and which team.
 #### Inherited from
 
 [`Document`](../../../documents/document/classes/Document.md).[`teamShare`](../../../documents/document/classes/Document.md#teamshare)
+
+***
+
+### timelinePage()
+
+> **timelinePage**(`selection?`): `Promise`\<\{ `entries`: (\{ `activity`: \{ `action`: `string`; `actor`: [`User`](../../../users/user/classes/User.md); `actor_id`: `string`; `id`: `string`; `occurred_at`: `string`; `payload?`: `unknown`; \}; `message?`: `undefined`; `type`: `"activity"`; \} \| \{ `activity?`: `undefined`; `message`: [`Comment`](../../../documents/comment/classes/Comment.md); `type`: `"message"`; \})[]; `nextCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; `previousCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; \}\>
+
+A mixed message and activity timeline page.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `selection?` | [`TimelineOptions`](../../../messages/thread/interfaces/TimelineOptions.md)\<[`Comment`](../../../documents/comment/classes/Comment.md)\> |
+
+#### Returns
+
+`Promise`\<\{ `entries`: (\{ `activity`: \{ `action`: `string`; `actor`: [`User`](../../../users/user/classes/User.md); `actor_id`: `string`; `id`: `string`; `occurred_at`: `string`; `payload?`: `unknown`; \}; `message?`: `undefined`; `type`: `"activity"`; \} \| \{ `activity?`: `undefined`; `message`: [`Comment`](../../../documents/comment/classes/Comment.md); `type`: `"message"`; \})[]; `nextCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; `previousCursor`: [`MessageCursor`](../../../../../generated/storage/types.gen/type-aliases/MessageCursor.md) \| `undefined`; \}\>
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`timelinePage`](../../../documents/document/classes/Document.md#timelinepage)
 
 ***
 
@@ -468,6 +675,28 @@ Apply multi-select option deltas atomically across this entity's properties.
 
 ***
 
+### version()
+
+> **version**(`version`): [`DocumentVersion`](../../../documents/version/classes/DocumentVersion.md)
+
+A handle to an immutable version.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `version` | `number` |
+
+#### Returns
+
+[`DocumentVersion`](../../../documents/version/classes/DocumentVersion.md)
+
+#### Inherited from
+
+[`Document`](../../../documents/document/classes/Document.md).[`version`](../../../documents/document/classes/Document.md#version)
+
+***
+
 ### webUrl()
 
 > **webUrl**(): `string`
@@ -511,21 +740,23 @@ A handle to a task by document id. Details load on first access.
 
 > `static` **create**(`client`, `opts`): `Promise`\<`Task`\>
 
-Create a task. `team` scopes the team task number and may be omitted
-when the creator belongs to exactly one team; `shareWithTeam` defaults
-to true.
+Create a task, with its initiative, assignees and due date in the same
+request. The task starts Not started.
 
 #### Parameters
 
-| Parameter | Type |
-| ------ | ------ |
-| `client` | `MacroClient` |
-| `opts` | \{ `markdown?`: `string`; `name`: `string`; `project?`: [`Project`](../../../projects/project/classes/Project.md); `shareWithTeam?`: `boolean`; `team?`: [`Team`](../../../teams/team/classes/Team.md); \} |
-| `opts.markdown?` | `string` |
-| `opts.name` | `string` |
-| `opts.project?` | [`Project`](../../../projects/project/classes/Project.md) |
-| `opts.shareWithTeam?` | `boolean` |
-| `opts.team?` | [`Team`](../../../teams/team/classes/Team.md) |
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `client` | `MacroClient` | - |
+| `opts` | \{ `assignees?`: [`User`](../../../users/user/classes/User.md)[]; `dueDate?`: `Date`; `initiative?`: [`Initiative`](../../../initiatives/initiative/classes/Initiative.md); `markdown?`: `string`; `name`: `string`; `project?`: [`Project`](../../../projects/project/classes/Project.md); `shareWithTeam?`: `boolean`; `team?`: [`Team`](../../../teams/team/classes/Team.md); \} | - |
+| `opts.assignees?` | [`User`](../../../users/user/classes/User.md)[] | Assignees; defaults to the creator. Pass `[]` to leave it unassigned. |
+| `opts.dueDate?` | `Date` | - |
+| `opts.initiative?` | [`Initiative`](../../../initiatives/initiative/classes/Initiative.md) | The initiative (shown as the task's Project in the app) it belongs to. |
+| `opts.markdown?` | `string` | - |
+| `opts.name` | `string` | - |
+| `opts.project?` | [`Project`](../../../projects/project/classes/Project.md) | Folder the task document is filed in; unrelated to `initiative`. |
+| `opts.shareWithTeam?` | `boolean` | Defaults to true. |
+| `opts.team?` | [`Team`](../../../teams/team/classes/Team.md) | Scopes the team task number; may be omitted when the creator belongs to exactly one team. |
 
 #### Returns
 
@@ -588,6 +819,29 @@ any markdown area.
 #### Inherited from
 
 [`Document`](../../../documents/document/classes/Document.md).[`createSnippet`](../../../documents/document/classes/Document.md#createsnippet)
+
+***
+
+### findSimilar()
+
+> `static` **findSimilar**(`client`, `opts`): `Promise`\<[`SimilarTask`](../interfaces/SimilarTask.md)[]\>
+
+Existing tasks of the caller or their team that look like the same work
+as a task with this title and body, most similar first. Creates and
+changes nothing; check it before creating a task.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+| `opts` | \{ `body?`: `string`; `title`: `string`; \} |
+| `opts.body?` | `string` |
+| `opts.title` | `string` |
+
+#### Returns
+
+`Promise`\<[`SimilarTask`](../interfaces/SimilarTask.md)[]\>
 
 ***
 
@@ -657,3 +911,23 @@ returns deleted chats and projects; those are filtered out here.
 #### Inherited from
 
 [`Document`](../../../documents/document/classes/Document.md).[`recentlyDeleted`](../../../documents/document/classes/Document.md#recentlydeleted)
+
+***
+
+### summaries()
+
+> `static` **summaries**(`client`, `tasks`): `Promise`\<[`TaskSummary`](../interfaces/TaskSummary.md)[]\>
+
+Names and state of many tasks in one request, in the order given. Tasks
+that no longer exist are left out.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+| `tasks` | `Task`[] |
+
+#### Returns
+
+`Promise`\<[`TaskSummary`](../interfaces/TaskSummary.md)[]\>

@@ -12,6 +12,39 @@ const instant = (value: InvitationDateTime | null | undefined) => {
   return Number.isFinite(date.getTime()) ? date.getTime() : undefined;
 };
 
+const occurrenceBounds = (item: CalendarOccurrenceItem) => {
+  const time = item.occurrence.time;
+  return {
+    start: new Date(
+      time.kind === 'timed' ? time.startsAt : `${time.startDate}T00:00:00`
+    ).getTime(),
+    end: new Date(
+      time.kind === 'timed' ? time.endsAt : `${time.endDate}T00:00:00`
+    ).getTime(),
+  };
+};
+
+/**
+ * The occurrence is at the invitation's own time, so it can stand for the
+ * invitation; a proposal or a newer email than the calendar has its own time.
+ */
+export function occurrenceAtInvitationTime(
+  invitation: CalendarInvitation,
+  item: CalendarOccurrenceItem
+): boolean {
+  const start = instant(invitation.start);
+  if (start === undefined) return false;
+  // An all-day invitation and a timed copy from midnight to midnight span the
+  // same instants but are different times.
+  const allDay = invitation.start?.kind === 'date';
+  if (allDay !== (item.occurrence.time.kind === 'allDay')) return false;
+  const end = instant(invitation.end);
+  const occurrence = occurrenceBounds(item);
+  return (
+    start === occurrence.start && (end === undefined || end === occurrence.end)
+  );
+}
+
 /** Availability uses busy, noncancelled, nondeclined occurrences and exclusive ends. */
 export function invitationConflicts(
   invitation: CalendarInvitation,
@@ -32,12 +65,6 @@ export function invitationConflicts(
   const start = instant(invitation.start);
   const end = instant(invitation.end);
   if (start === undefined || end === undefined) return false;
-  const time = item.occurrence.time;
-  const otherStart = new Date(
-    time.kind === 'timed' ? time.startsAt : `${time.startDate}T00:00:00`
-  ).getTime();
-  const otherEnd = new Date(
-    time.kind === 'timed' ? time.endsAt : `${time.endDate}T00:00:00`
-  ).getTime();
-  return start < otherEnd && end > otherStart;
+  const other = occurrenceBounds(item);
+  return start < other.end && end > other.start;
 }

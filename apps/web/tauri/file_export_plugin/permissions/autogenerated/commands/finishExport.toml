@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-finishExport"
+description = "Enables the finishExport command without any pre-configured scope."
+commands.allow = ["finishExport"]
+
+[[permission]]
+identifier = "deny-finishExport"
+description = "Denies the finishExport command without any pre-configured scope."
+commands.deny = ["finishExport"]

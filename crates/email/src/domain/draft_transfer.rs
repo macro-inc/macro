@@ -18,6 +18,9 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DraftTransferRequest {
+    /// Source edit generation captured with the transfer request.
+    #[serde(default)]
+    pub draft_generation: i32,
     pub id: Uuid,
     pub source_id: Uuid,
     pub source_link_id: Uuid,
@@ -299,6 +302,7 @@ pub trait DraftRetirementGateway: Send + Sync + 'static {
 pub struct DraftRetirementService<R, G> {
     pub repository: R,
     pub gateway: G,
+    pub writes_enabled: bool,
 }
 impl<R: DraftTransferRepository, G: DraftRetirementGateway> DraftRetirementService<R, G> {
     pub async fn execute_once(&self) -> Result<bool, MailboxError> {
@@ -319,6 +323,9 @@ impl<R: DraftTransferRepository, G: DraftRetirementGateway> DraftRetirementServi
             }
             if plan.source_provider == UserProvider::Gmail {
                 return Ok(RetirementOutcome::OriginalRemains);
+            }
+            if !self.writes_enabled {
+                return Ok(RetirementOutcome::Retry);
             }
             let Some(facts) = self.gateway.inspect(&plan).await? else {
                 return Ok(RetirementOutcome::Removed);

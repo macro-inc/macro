@@ -27,6 +27,8 @@ impl SendMessageRequest {
         let msg = self.message;
 
         CreateDraftInput {
+            frozen_signature_html: None,
+            draft_generation: msg.draft_generation,
             sender_email: None,
             db_id: msg.db_id,
             provider_id: msg.provider_id,

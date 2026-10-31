@@ -1,6 +1,7 @@
 //! Microsoft Graph calendar adapter using the same transport and admission as mail.
 mod automatic_decline;
 mod conference_body;
+mod invite;
 mod normalize;
 mod recurrence;
 mod replacement;
@@ -13,7 +14,7 @@ use crate::domain::{
     models::{AccessToken, EmailApiError, MailboxAccess, StreamToken},
     ports::ScopedMailboxRepository,
 };
-use calendar_events::domain::{models::*, outlook::*, ports::*};
+use calendar_events::domain::{ics::EventSnapshot, models::*, outlook::*, ports::*};
 use reqwest::Method;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -638,6 +639,8 @@ impl CalendarMutationProvider for OutlookApiClientRepository {
             })),
             conference: draft.conference,
             out_of_office: draft.out_of_office.clone(),
+            // Outlook has no guest policy; the domain refuses one first.
+            guest_policy: None,
         };
         let mut body = patch_body(&patch, None)?;
         let key = creation_provider_id(
@@ -736,6 +739,16 @@ impl CalendarMutationProvider for OutlookApiClientRepository {
             ))),
             None => Ok(ProviderInstanceUpdateOutcome::SeriesGone),
         }
+    }
+    async fn refresh_event(
+        &self,
+        token: &str,
+        target: &ProviderCalendarTarget,
+        id: &str,
+    ) -> Result<Option<CalendarEventUpsert>, CalendarProviderError> {
+        self.calendar_scope(target)?
+            .calendar_refresh(&AccessToken::new(token.to_owned()), target, id)
+            .await
     }
     async fn delete_event(
         &self,
@@ -886,6 +899,35 @@ impl CalendarMutationProvider for OutlookApiClientRepository {
         Ok(ProviderRsvpOutcome::RespondedAndRemoved(Box::new(
             echo.event,
         )))
+    }
+    async fn add_attendees(
+        &self,
+        token: &str,
+        target: &ProviderCalendarTarget,
+        id: &str,
+        _actor: &ActorInboxes,
+        guests: &[CalendarAttendeeInput],
+        scope: &CalendarUpdateScope,
+    ) -> Result<ProviderInviteOutcome, CalendarProviderError> {
+        self.calendar_scope(target)?
+            .add_calendar_guests(
+                &AccessToken::new(token.to_owned()),
+                target,
+                id,
+                guests,
+                scope,
+            )
+            .await
+    }
+    async fn import_event(
+        &self,
+        _token: &str,
+        _target: &ProviderCalendarTarget,
+        _source: &EventSnapshot,
+    ) -> Result<ProviderImportOutcome, CalendarProviderError> {
+        Err(unsupported(
+            "Microsoft Graph cannot create an event under another meeting's iCalendar UID",
+        ))
     }
     async fn stop_watch_channel(
         &self,

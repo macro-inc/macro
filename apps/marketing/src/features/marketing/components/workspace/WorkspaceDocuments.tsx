@@ -58,6 +58,7 @@ export function WorkspaceDocuments(props: {
   onShare?: () => void;
   sharingDescription?: string;
   hideCollectionNavigation?: boolean;
+  backLabel?: string;
 }) {
   const w = props.workspace;
   const [panel, setPanel] = createSignal<boolean>();
@@ -177,7 +178,10 @@ export function WorkspaceDocuments(props: {
               <Button
                 variant="plain"
                 size="icon-sm"
-                label={w.view() === 'home' ? 'Back to Home' : 'Back to files'}
+                label={
+                  props.backLabel ??
+                  (w.view() === 'home' ? 'Back to Home' : 'Back to files')
+                }
                 onClick={() => w.backToCollection('documents')}
               >
                 <ArrowLeft />
@@ -211,6 +215,7 @@ export function WorkspaceDocuments(props: {
                 );
                 w.openItem('messages');
               }}
+              data-document-share
             >
               <Show when={props.onShare} fallback={<Hash />}>
                 <Share />

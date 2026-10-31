@@ -1,4 +1,4 @@
-import { createProjectDetailQuery } from '@app/features/projects/queries/project-identity';
+import { createProjectIdentityQuery } from '@app/features/projects/queries/project-identity';
 import type { FacetSelection, SortSelection } from '@app/features/soup';
 import { sortItems } from '@app/features/soup/collection/transforms';
 import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
@@ -100,16 +100,19 @@ export function createTaskBoardQueries(options: {
       return [];
     }
 
-    return rawColumns().flatMap((column) => (column.id ? [column.id] : []));
+    // A column the server already named needs no identity read.
+    return rawColumns().flatMap((column) =>
+      column.id && column.label === column.id ? [column.id] : []
+    );
   });
 
   const projects = mapArray(projectIds, (id) =>
-    createProjectDetailQuery(getGraphqlSoupClient, options.userId, () => id)
+    createProjectIdentityQuery(getGraphqlSoupClient, options.userId, () => id)
   );
 
   const projectMap = createMemo(() => {
     const entries = projects().flatMap((query) => {
-      const project = query.isSuccess ? query.data?.project : undefined;
+      const project = query.isSuccess ? query.data : undefined;
 
       return project ? [[project.id, project] as const] : [];
     });
@@ -123,17 +126,25 @@ export function createTaskBoardQueries(options: {
     }
 
     if (options.grouping() === 'project') {
-      return projectMap().get(column.id)?.name ?? 'Unavailable project';
+      if (column.label !== column.id) return column.label;
+      return projectMap().get(column.id)?.name ?? 'Project unavailable';
     }
 
     return column.label;
   };
 
   const columns = createMemo(() => {
-    return rawColumns().map((column) => ({
+    const labeled = rawColumns().map((column) => ({
       ...column,
       label: columnLabel(column),
     }));
+    if (options.grouping() !== 'project') return labeled;
+    // Search results arrive in result order; projects follow the list:
+    // by name, No Project last.
+    return labeled.sort((a, b) => {
+      if (!a.id || !b.id) return a.id ? -1 : b.id ? 1 : 0;
+      return a.label.localeCompare(b.label);
+    });
   });
 
   const save = useBulkSaveEntityPropertiesMutation();

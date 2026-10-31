@@ -287,6 +287,7 @@ async fn seed_teams(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
             sql_string(&spec.user_id(&team.owner)),
             sql_string(&format!("sub_seed_{}_{key}", spec.scenario)),
             (team.members.len() + 1).to_string(),
+            "true".to_string(),
         ]
     }));
 
@@ -320,7 +321,7 @@ async fn seed_teams(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
 
     let statements = vec![
         format!(
-            "INSERT INTO team (id, name, owner_id, subscription_id, seat_count) VALUES\n  {team_values}"
+            "INSERT INTO team (id, name, owner_id, subscription_id, seat_count, paying) VALUES\n  {team_values}"
         ),
         format!("INSERT INTO team_user (user_id, team_id, team_role) VALUES\n  {member_values}"),
         format!("INSERT INTO team_crm_settings (team_id, crm_enabled) VALUES\n  {crm_values}"),

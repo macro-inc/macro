@@ -59,8 +59,10 @@ export function useEmailSearchMention(
     };
   });
 
+  // Nothing tells a viewer they lost access, so each search asks again when shown.
   const emailSearchQuery = useSearchSoupQuery(args, () => ({
     enabled: !usesQuickAccess() && listEnabled(),
+    staleTime: 0,
   }));
 
   const remoteEmailList = createLazyMemo((): EntityItem[] => {

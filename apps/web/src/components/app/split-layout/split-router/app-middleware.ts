@@ -6,7 +6,11 @@ import {
 } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
-import { crmPipelineSearch } from '@app/features/crm/crm-route';
+import {
+  crmPeopleSearch,
+  crmRecordSearch,
+  legacyCrmPipelineId,
+} from '@app/features/crm/crm-route';
 import {
   driveDocumentFromContent,
   drivePath,
@@ -23,17 +27,42 @@ import {
   type SplitRouterMiddlewareContext,
   type SplitRouterMiddlewareResult,
 } from '@app/lib/split-router';
+import { recordNavigationBreadcrumb } from '@app/observability/navigation-breadcrumb';
 import { paneRootMatch } from '@app/routes/app-route';
 import { URL_PARAMS as CALL_URL_PARAMS } from '@block-call/constants';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_URL_PARAMS } from '@block-pdf/constants';
+import { openInNewTabMiddleware } from '@components/app/tab-layout/open-in-tab-middleware';
+import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { match } from 'ts-pattern';
 import { decodeLegacyPair } from './legacy-route';
 
 type AppMiddlewareState = {
   isTouchDevice: () => boolean;
 };
+
+function crmPipelinePath(pipelineId: string): string {
+  return `/companies/pipeline/${encodeURIComponent(pipelineId)}`;
+}
+
+/** Customers showed a pipeline as a list tab before it had its own route. */
+function redirectLegacyCrmPipeline({
+  to,
+  cause,
+  externalSearch,
+  redirect,
+}: SplitRouterMiddlewareContext): SplitRouterMiddlewareResult | undefined {
+  if (to.location.route.matches.at(-1)?.id !== 'view-companies') return;
+
+  const pipelineId = legacyCrmPipelineId(
+    to.location.search,
+    cause === 'initial' || cause === 'external' ? externalSearch : undefined
+  );
+  if (!pipelineId) return;
+
+  return redirect(crmPipelinePath(pipelineId));
+}
 
 /** Upgrade legacy component and block URLs when supported; on touch, keep
  * document details in their full-block routes instead of inline Drive views. */
@@ -52,6 +81,14 @@ function redirectLegacyRoutes(
       return redirect(
         `/${driveDocumentBlockType(documentType)}/${encodeURIComponent(documentId)}`
       );
+    }
+  }
+
+  // Touch shows records on their own pages, as the Customers lists open them.
+  if (rootId === 'view-companies' && isTouch) {
+    const { recordType, recordId } = routeParams(route);
+    if (typeof recordType === 'string' && typeof recordId === 'string') {
+      return redirect(`/${recordType}/${encodeURIComponent(recordId)}`);
     }
   }
 
@@ -85,12 +122,8 @@ function redirectLegacyRoutes(
     .with({ type: 'component' }, ({ id }) =>
       routes.byId.has(`view-${id}`) ? `/${id}` : undefined
     )
-    // A pipeline has no view of its own; Customers opens on it, on touch too.
-    .with({ type: 'pipeline' }, ({ id }) => {
-      const query = new URLSearchParams();
-      replacePaneSearchParams(query, [crmPipelineSearch(id)]);
-      return `/companies?${query}`;
-    })
+    // A pipeline opens in Customers, on touch too.
+    .with({ type: 'pipeline' }, ({ id }) => crmPipelinePath(id))
     .when(
       () => isTouch,
       () => undefined
@@ -101,6 +134,19 @@ function redirectLegacyRoutes(
       ({ id }) => `/channels/${encodeURIComponent(id)}`
     )
     .with({ type: 'task' }, ({ id }) => `/tasks/${encodeURIComponent(id)}`)
+    .with(
+      { type: 'company' },
+      ({ id }) => `/companies/company/${encodeURIComponent(id)}`
+    )
+    // A contact opens from People, whose list its breadcrumb returns to.
+    .with({ type: 'contact' }, ({ id }) => {
+      const query = new URLSearchParams();
+      // An explicit query replaces the entry's search, so keep what it carries.
+      replacePaneSearchParams(query, [
+        { ...to.location.search, ...crmPeopleSearch },
+      ]);
+      return `/companies/contact/${encodeURIComponent(id)}?${query}`;
+    })
     // Like a task, a project opens in Tasks, under its Projects tab.
     .with({ type: 'initiative' }, ({ id }) => {
       const query = new URLSearchParams();
@@ -181,6 +227,10 @@ function migrateLegacySearch({
       (id) => id === 'home-document' || id === 'home-preview',
       () => homeDocumentMapping
     )
+    .with('companies-record', () => ({
+      namespace: crmRecordSearch.namespace,
+      fields: [[COMMENT_LINK_PARAM, 'commentId']] as const,
+    }))
     .with(CALENDAR_ROUTE_ID, () => ({
       namespace: CALENDAR_SEARCH_NAMESPACE,
       fields: [['eventId', 'eventId']] as const,
@@ -230,7 +280,13 @@ export function createAppSplitRouterMiddleware(
   state: AppMiddlewareState
 ): readonly SplitRouterMiddleware[] {
   return [
+    // First: a cmd+click becomes a tab with the proposed entry as-is; legacy
+    // redirects still run when that tab is activated.
+    openInNewTabMiddleware,
     (context) => redirectLegacyRoutes(context, state),
+    redirectLegacyCrmPipeline,
     migrateLegacySearch,
+    // Last, so it records the entry that remains after every redirect.
+    recordNavigationBreadcrumb,
   ];
 }

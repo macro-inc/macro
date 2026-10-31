@@ -29,6 +29,7 @@ const PROJECTED_BUCKETS: ReadonlySet<Bucket> = new Set([
   'dm',
   'crm_company',
   'crm_contact',
+  'initiative',
 ]);
 const BROWSE_PAGE_SIZE = 50;
 const SEARCH_LIMIT = 500;
@@ -55,6 +56,8 @@ export function createProjectedList<T extends { id: string }>(options: {
   enabled?: Accessor<boolean>;
   /** Visible fallback rows; duplicates do not grow the combined menu. */
   existingItems?: Accessor<readonly T[]>;
+  /** Snapshot of source availability; reading it must not trigger a new request. */
+  sourceAttributes?: Accessor<Record<string, number>>;
   /** Keep already-materialized matches visible while a new query is pending. */
   filterPreviousItems?: (items: T[], query: string) => T[];
   materialize: (documents: SearchDocumentWire[]) => Promise<T[]>;
@@ -68,8 +71,11 @@ export function createProjectedList<T extends { id: string }>(options: {
   const [items, setItems] = createSignal<T[]>([]);
   const [hasMore, setHasMore] = createSignal(false);
   const [loading, setLoading] = createSignal<'idle' | 'initial' | 'more'>(
-    'idle'
+    untrack(() =>
+      options.enabled?.() !== false && buckets().length > 0 ? 'initial' : 'idle'
+    )
   );
+  const [error, setError] = createSignal<unknown>();
   let current: Request | undefined;
   onCleanup(() => {
     current = undefined;
@@ -115,6 +121,11 @@ export function createProjectedList<T extends { id: string }>(options: {
     span.setAttr('search.query_length', request.query.length);
     span.setAttr('search.append', append);
     try {
+      for (const [key, value] of Object.entries(
+        untrack(() => options.sourceAttributes?.() ?? {})
+      )) {
+        span.setAttr(key, value);
+      }
       do {
         const page = await span.span(
           'quick_access.search_page',
@@ -158,11 +169,13 @@ export function createProjectedList<T extends { id: string }>(options: {
       );
       request.cursor = cursor;
       request.pages = pages;
+      setError(undefined);
       setItems([...merged.values()]);
       setHasMore(cursor !== undefined);
     } catch (error) {
       span.error('Quick Access cache search failed');
       if (current !== request) return;
+      setError(error);
       // Rows and their continuation are a committed window. A failed replay
       // (or append) must leave both intact so normal pagination can retry.
       // The mentions page loader guards automatic retries at the same frontier.
@@ -200,6 +213,7 @@ export function createProjectedList<T extends { id: string }>(options: {
     // Genuine query/bucket changes, disabling, and disposal still fence off
     // obsolete responses and their queued refreshes.
     current = undefined;
+    setError(undefined);
     setHasMore(false);
     const sameBuckets =
       previous?.buckets.length === activeBuckets.length &&
@@ -228,6 +242,7 @@ export function createProjectedList<T extends { id: string }>(options: {
 
   return {
     items,
+    error,
     hasMore,
     isLoading: () => loading() === 'initial',
     isLoadingMore: () => loading() === 'more',

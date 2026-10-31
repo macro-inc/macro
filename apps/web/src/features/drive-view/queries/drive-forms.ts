@@ -14,6 +14,7 @@ export function selectDriveForms(
   if (scope === 'attachments') return [];
   const search = selection.search.trim().toLocaleLowerCase();
   return listed.flatMap(({ form, access }) => {
+    if (form.isHiddenInDrive) return [];
     if (location.tab === 'shared' && form.ownerId === userId) return [];
     if (
       location.tab === 'owned' &&
@@ -33,4 +34,15 @@ export function selectDriveForms(
       },
     ];
   });
+}
+
+/** The databases made for forms kept out of Drive, which stay out with them. */
+export function hiddenFormDatabases(
+  listed: readonly ListedForm[]
+): ReadonlySet<string> {
+  return new Set(
+    listed.flatMap(({ form }) =>
+      form.isHiddenInDrive ? [form.databaseId] : []
+    )
+  );
 }

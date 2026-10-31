@@ -23,6 +23,7 @@ secret!(DOPPLER_TOKEN);
 secret!(IOS_RELEASE_DOPPLER_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
+secret!(MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64);
 secret!(MACOS_RELEASE_DOPPLER_TOKEN);
 secret!(NIX_CACHE_SIGNING_KEY);
 secret!(POSTHOG_API_KEY);
@@ -45,6 +46,9 @@ pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
 /// `nix-cache.macro.com-1:BASE64...`. Trusted by the nix daemon so substituted
 /// paths verify.
 pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
+
+/// Limit concurrent test links, which can each consume several GiB.
+pub const RUST_TEST_BUILD_JOBS: u32 = 2;
 
 /// Nextest thread count for the test job. Tuned for the previous
 /// `linux-extra-beefy` runner; revisit if `namespace-profile-linux-mid` is

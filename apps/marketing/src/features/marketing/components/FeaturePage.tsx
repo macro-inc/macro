@@ -4,9 +4,11 @@ import { For, type JSX, Show } from 'solid-js';
 import { ctaHref, handleCtaClick } from '../../../app/utils/utilCta';
 import palette from '../../../styles/dark-theme.css?inline';
 import uiStyles from '../../../styles/site-ui.css?inline';
-import { HomepageFeatureHeading } from './HomepageFeatureHeading';
 import './workspace-story.css';
 import './feature-page.css';
+import './product-feature-section.css';
+import './product-page-preview.css';
+import { isEmbeddedProductPage } from './productPagePreview';
 
 // The frozen UI utilities and palette apply only inside this page. Legacy
 // public routes retain their own CSS; no authenticated app styles are loaded.
@@ -20,9 +22,11 @@ export function FeaturePage(props: {
   children: JSX.Element;
   productSpacing?: boolean;
 }) {
+  const embedded = isEmbeddedProductPage();
   return (
     <main
       class="feature-page"
+      data-product-preview={embedded ? 'true' : undefined}
       data-product-spacing={props.productSpacing ? 'true' : undefined}
     >
       <style>{uiProperties}</style>
@@ -35,7 +39,7 @@ export function FeaturePage(props: {
 export function FeaturePageCta(props: { name: string; label?: string }) {
   return (
     <a
-      class="feature-page-cta"
+      class="site-nav-start feature-page-cta"
       href={ctaHref()}
       onClick={(event) => handleCtaClick(event, props.name)}
     >
@@ -47,7 +51,7 @@ export function FeaturePageCta(props: { name: string; label?: string }) {
 
 export function FeaturePageSection(props: {
   id: string;
-  title: string;
+  title: string | readonly string[];
   description: string;
   children: JSX.Element;
 }) {
@@ -57,11 +61,16 @@ export function FeaturePageSection(props: {
       id={props.id}
       aria-labelledby={`${props.id}-title`}
     >
-      <HomepageFeatureHeading
-        id={`${props.id}-title`}
-        title={props.title}
-        description={props.description}
-      />
+      <header class="product-feature-intro">
+        <h2 id={`${props.id}-title`}>
+          <For
+            each={typeof props.title === 'string' ? [props.title] : props.title}
+          >
+            {(line) => <span>{line}</span>}
+          </For>
+        </h2>
+        <p>{props.description}</p>
+      </header>
       {props.children}
     </section>
   );
@@ -72,7 +81,6 @@ export function FeaturePageFaq(props: {
   id: string;
   eyebrow?: string;
   title: string;
-  introduction?: JSX.Element;
   items: readonly { q: string; a: JSX.Element }[];
 }) {
   return (
@@ -82,10 +90,6 @@ export function FeaturePageFaq(props: {
         <p class="feature-page-eyebrow">{props.eyebrow}</p>
       </Show>
       <h2 id={props.id}>{props.title}</h2>
-      <Show when={props.introduction}>
-        <div class="feature-page-prose">{props.introduction}</div>
-        <h3>Frequently asked questions</h3>
-      </Show>
       <div class="feature-page-faq">
         <For each={props.items}>
           {(item) => (
