@@ -262,6 +262,17 @@ describe('recoverFromFailedLoad', () => {
     expect(again.page.reload).not.toHaveBeenCalled();
     expect(again.prompts).toHaveLength(1);
 
+    // Another build reloaded since: build-a still never reloads again, so two
+    // stale builds served in turn cannot reload each other.
+    resetReloadForNewerBuildForTests();
+    const next = fakePage({ hidden: false, offline: false });
+    recoverFromFailedLoad(next.page, undefined, 'build-c');
+    expect(next.page.reload).toHaveBeenCalledOnce();
+    resetReloadForNewerBuildForTests();
+    const back = fakePage({ hidden: false, offline: false });
+    recoverFromFailedLoad(back.page, undefined, 'build-a');
+    expect(back.page.reload).not.toHaveBeenCalled();
+
     resetReloadForNewerBuildForTests();
     const unavailable = vi
       .spyOn(Storage.prototype, 'getItem')

@@ -147,13 +147,20 @@ export interface ReloadOnce {
 
 const FAILED_LOAD_RELOAD_KEY = 'macro:failed-load-reload';
 
+/** Records every build this tab session reloaded for, so two stale builds
+ * served in turn cannot reload each other in a loop. */
 const sessionReloadOnce: ReloadOnce = {
   claim(build) {
     try {
-      if (sessionStorage.getItem(FAILED_LOAD_RELOAD_KEY) === build) {
-        return false;
-      }
-      sessionStorage.setItem(FAILED_LOAD_RELOAD_KEY, build);
+      const saved: unknown = JSON.parse(
+        sessionStorage.getItem(FAILED_LOAD_RELOAD_KEY) ?? '[]'
+      );
+      const builds = Array.isArray(saved) ? saved : [];
+      if (builds.includes(build)) return false;
+      sessionStorage.setItem(
+        FAILED_LOAD_RELOAD_KEY,
+        JSON.stringify([...builds, build])
+      );
       return true;
     } catch {
       return false;
