@@ -77,8 +77,11 @@ const ReadProjectToolResponse = (props: { items: ReadProjectItem[] }) => {
         data={props.items}
         bufferSize={itemHeight * 5}
         itemSize={itemHeight}
+        // Sized by its rows, which are taller on touch and shorter among an
+        // agent's grouped tool rows than the estimate.
         style={{
-          height: `${Math.min(props.items.length * itemHeight, maxHeight)}px`,
+          height: 'auto',
+          'max-height': `${maxHeight}px`,
           contain: 'content',
         }}
       >

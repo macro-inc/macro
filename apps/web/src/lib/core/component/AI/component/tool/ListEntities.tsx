@@ -137,8 +137,11 @@ const ListEntitiesToolResponse = (props: {
         data={results()}
         bufferSize={itemHeight * 5}
         itemSize={itemHeight}
+        // Sized by its rows, which are taller on touch and shorter among an
+        // agent's grouped tool rows than the estimate.
         style={{
-          height: `${Math.min(results().length * itemHeight, maxHeight)}px`,
+          height: 'auto',
+          'max-height': `${maxHeight}px`,
           contain: 'content',
         }}
       >
