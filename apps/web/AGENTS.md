@@ -449,8 +449,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
 - Mark loaded calendar and agent-session row notifications through the
   notification source (`markRowNotificationsSeenOnOpen`) so read dots update
-  immediately and failed writes roll back; calendar grid selections also mark
-  the canonical event read, excluding team projections.
+  immediately and failed writes roll back; calendar grid selections and links
+  to an event also mark the canonical event read, excluding team projections.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media

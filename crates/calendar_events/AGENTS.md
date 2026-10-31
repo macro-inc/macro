@@ -189,18 +189,23 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   domain retires the sharer's notification: opening the event marks it seen,
   a trigger on `calendar_event_join_requests` running
   `delete_answered_join_request_notification` deletes it when anyone answers
-  the request, and two triggers on `calendar_events` running
-  `delete_calendar_event_join_request_notifications` delete it with the event
-  row, or when the row turns `cancelled` (Outlook can keep a cancelled
-  meeting). That covers the ways a copy goes away listed for channel grants
-  above, and each delete reaches open clients through
+  the request, a second there running
+  `delete_removed_join_request_notification` deletes it with the request row,
+  which the requester's account deletion cascades away, and two triggers on
+  `calendar_events` running `delete_calendar_event_join_request_notifications`
+  delete it with the event row, or when the row turns `cancelled` (Outlook can
+  keep a cancelled meeting). That covers the ways a copy goes away listed for
+  channel grants above, and each delete reaches open clients through
   `trg_notify_user_notification_deletes`. An event can hold several open
-  requests, so the answer's trigger matches the `requestId` in the notification's
-  metadata, not the event alone. The notifier only queues, so a backlog can
-  deliver a notification after that cleanup; a `notification` insert trigger
-  skips it while the event is gone or cancelled or the request is no longer
-  pending, locking the event and then the request to decide in order with a
-  change in flight. The cancelled row keeps its requests, as it keeps its
+  requests, so the triggers on the request row match the `requestId` in the
+  notification's metadata, not the event alone. The notifier only queues, so a
+  backlog can deliver a notification after that cleanup; a `notification`
+  insert trigger skips it while the event is gone or cancelled or the request
+  is no longer pending, locking the event and then the request to decide in
+  order with a change in flight. Deleting an event reaches both delete cleanups
+  in one transaction, and whichever runs first leaves nothing for the other.
+  Both lock only `notification` rows, once the delete holds its row, so neither
+  changes that order. The cancelled row keeps its requests, as it keeps its
   grants, and a cancelled occurrence changes neither.
 - Calendar mentions reach the agent as document mentions (`blockName`
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which

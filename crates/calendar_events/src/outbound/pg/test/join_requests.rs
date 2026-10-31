@@ -815,3 +815,186 @@ async fn an_answer_waits_for_a_queued_insert_then_retires_it(pool: PgPool) {
     assert!(answering.await.unwrap().unwrap().is_some());
     assert_eq!(stored_notifications(&pool).await, 0);
 }
+
+/// The statement `delete_user` runs, which cascades the user's requests away.
+async fn delete_account(
+    executor: impl sqlx::PgExecutor<'_>,
+    user_id: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, user_id)
+        .execute(executor)
+        .await
+        .map(|_| ())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_the_requesters_account_retires_their_requests_notification(pool: PgPool) {
+    let removed = open_request(&pool).await;
+    let still_open = another_open_request(&pool, &removed).await;
+    let delegate_id = "macro|join-queued-delegate@example.com";
+    insert_user(&pool, delegate_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let about_removed =
+        insert_join_request_notification(&pool, &removed, &[SHARER_ID, delegate_id]).await;
+    let about_still_open = insert_join_request_notification(&pool, &still_open, &[SHARER_ID]).await;
+    let reminder = store_notification(
+        &pool,
+        "calendar_event_reminder",
+        removed.event_id,
+        serde_json::json!({}),
+        &[SHARER_ID],
+    )
+    .await;
+    let mut listener = PgListener::connect_with(&pool).await.unwrap();
+    listener.listen("notification_events").await.unwrap();
+
+    delete_account(&pool, MEMBER_ID).await.unwrap();
+
+    assert_eq!(repo.get_join_request(removed.id).await.unwrap(), None);
+    assert!(!recipient_holds(&pool, about_removed).await);
+    let mut published = published_delete(&mut listener).await;
+    assert_eq!(
+        published["notificationId"],
+        serde_json::json!(about_removed)
+    );
+    let recipients = published["userIds"].as_array_mut().unwrap();
+    recipients.sort_by_key(ToString::to_string);
+    assert_eq!(
+        *recipients,
+        vec![serde_json::json!(delegate_id), serde_json::json!(SHARER_ID)]
+    );
+
+    assert!(recipient_holds(&pool, about_still_open).await);
+    assert!(recipient_holds(&pool, reminder).await);
+    assert_eq!(
+        repo.list_pending_join_requests(removed.event_id)
+            .await
+            .unwrap(),
+        std::slice::from_ref(&still_open)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_the_event_retires_each_join_request_notification_once(pool: PgPool) {
+    let first = open_request(&pool).await;
+    let second = another_open_request(&pool, &first).await;
+    let event_id = first.event_id;
+    let about_first = insert_join_request_notification(&pool, &first, &[SHARER_ID]).await;
+    let about_second = insert_join_request_notification(&pool, &second, &[SHARER_ID]).await;
+    let mut listener = PgListener::connect_with(&pool).await.unwrap();
+    listener.listen("notification_events").await.unwrap();
+
+    sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(stored_notifications(&pool).await, 0);
+
+    let mut retired = vec![
+        published_delete(&mut listener).await["notificationId"].clone(),
+        published_delete(&mut listener).await["notificationId"].clone(),
+    ];
+    retired.sort_by_key(ToString::to_string);
+    let mut expected = vec![
+        serde_json::json!(about_first),
+        serde_json::json!(about_second),
+    ];
+    expected.sort_by_key(ToString::to_string);
+    assert_eq!(retired, expected);
+
+    // Sent after the delete, so a third publish would arrive ahead of it.
+    sqlx::query!(r#"SELECT pg_notify('notification_events', '{"marker":true}')"#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        published_delete(&mut listener).await,
+        serde_json::json!({ "marker": true })
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_queued_insert_waits_for_an_account_delete_then_stores_nothing(pool: PgPool) {
+    let request = open_request(&pool).await;
+    let mut deleting = pool.begin().await.unwrap();
+    let blocker = backend_pid(&mut deleting).await;
+    delete_account(&mut *deleting, MEMBER_ID).await.unwrap();
+
+    let arriving = tokio::spawn({
+        let pool = pool.clone();
+        let request = request.clone();
+        async move { ingress_insert(&pool, &request).await }
+    });
+    wait_for_blocked_transaction(&pool, blocker).await;
+    deleting.commit().await.unwrap();
+
+    assert!(!arriving.await.unwrap().unwrap());
+    assert_eq!(stored_notifications(&pool).await, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_queued_insert_is_stored_when_the_account_delete_it_waited_for_rolls_back(pool: PgPool) {
+    let request = open_request(&pool).await;
+    let mut deleting = pool.begin().await.unwrap();
+    let blocker = backend_pid(&mut deleting).await;
+    delete_account(&mut *deleting, MEMBER_ID).await.unwrap();
+
+    let arriving = tokio::spawn({
+        let pool = pool.clone();
+        let request = request.clone();
+        async move { ingress_insert(&pool, &request).await }
+    });
+    wait_for_blocked_transaction(&pool, blocker).await;
+    deleting.rollback().await.unwrap();
+
+    assert!(arriving.await.unwrap().unwrap());
+    assert_eq!(stored_notifications(&pool).await, 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_account_delete_waits_for_a_queued_insert_then_retires_it(pool: PgPool) {
+    let request = open_request(&pool).await;
+    let mut arriving = pool.begin().await.unwrap();
+    let blocker = backend_pid(&mut arriving).await;
+    assert!(ingress_insert(&mut *arriving, &request).await.unwrap());
+
+    let deleting = tokio::spawn({
+        let pool = pool.clone();
+        async move { delete_account(&pool, MEMBER_ID).await }
+    });
+    wait_for_blocked_transaction(&pool, blocker).await;
+    arriving.commit().await.unwrap();
+
+    deleting.await.unwrap().unwrap();
+    assert_eq!(stored_notifications(&pool).await, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_event_delete_waits_for_an_account_delete_and_both_retire_once(pool: PgPool) {
+    let request = open_request(&pool).await;
+    let event_id = request.event_id;
+    let asked = insert_join_request_notification(&pool, &request, &[SHARER_ID]).await;
+    let mut listener = PgListener::connect_with(&pool).await.unwrap();
+    listener.listen("notification_events").await.unwrap();
+    let mut deleting_account = pool.begin().await.unwrap();
+    let blocker = backend_pid(&mut deleting_account).await;
+    delete_account(&mut *deleting_account, MEMBER_ID)
+        .await
+        .unwrap();
+
+    let deleting_event = tokio::spawn({
+        let pool = pool.clone();
+        async move {
+            sqlx::query!("DELETE FROM calendar_events WHERE id = $1", event_id)
+                .execute(&pool)
+                .await
+        }
+    });
+    wait_for_blocked_transaction(&pool, blocker).await;
+    deleting_account.commit().await.unwrap();
+
+    deleting_event.await.unwrap().unwrap();
+    assert_eq!(stored_notifications(&pool).await, 0);
+    let published = published_delete(&mut listener).await;
+    assert_eq!(published["notificationId"], serde_json::json!(asked));
+}
