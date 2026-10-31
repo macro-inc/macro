@@ -216,13 +216,18 @@ it('says while history imports and shows older messages as they land', () => {
     backfill: { state: 'waiting_for_phone', imported: 1 },
   });
   fake.setMessages(messages);
-  expect(screen.getByRole('status').textContent).toBe(
-    'Earlier messages not imported. Open WhatsApp on your phone, then import them.'
-  );
+  expect(
+    screen.getByText('Open WhatsApp on your phone to import earlier messages.')
+  ).toBeTruthy();
   const ids = [...document.querySelectorAll('[data-message-id]')].map((row) =>
     row.getAttribute('data-message-id')
   );
   expect(ids).toEqual(['message-1', 'message-2']);
+  // The owner can always start the import here, prompt or not.
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Import earlier messages' })
+  );
+  expect(fake.capabilities.importHistory).toHaveBeenCalledOnce();
 
   fake.setChat({ ...chat, backfill: { state: 'done', imported: 1 } });
   expect(screen.queryByText(/Importing history|Waiting for/)).toBeNull();
@@ -266,6 +271,9 @@ it('tells a shared viewer whose phone the import waits for', () => {
   ).toHaveLength(2);
   // Not "No messages yet" while history is still coming.
   expect(screen.queryByText(/No messages yet/)).toBeNull();
+  expect(
+    screen.queryByRole('button', { name: 'Import earlier messages' })
+  ).toBeNull();
 });
 
 it('plays stored images and voice notes inline, like Chat, and opens other files', () => {

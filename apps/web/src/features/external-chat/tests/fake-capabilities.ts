@@ -97,6 +97,7 @@ export function createFakeChat(
     fileUrl: (fileId: string) => `https://files.example.test/${fileId}`,
     markRead: vi.fn(async (_messageId: string) => undefined),
     stopSync: vi.fn(async () => undefined),
+    importHistory: vi.fn(async () => undefined),
   } satisfies ExternalChatCapabilities;
   return { capabilities, setChat, setMessages, setDelivery };
 }
