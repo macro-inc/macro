@@ -5,7 +5,9 @@ import {
   attentionFor,
   collectIssues,
   inspectionTargets,
+  isFinished,
   senderStatusOf,
+  sentSteps,
 } from '../core/attention';
 import type { AttentionReason, Enrollment } from '../core/model';
 import { createContactQueries } from './contacts';
@@ -28,18 +30,32 @@ export function useMarketingEnrollments() {
   return useQuery(() => marketingEnrollmentsQueryOptions(userId()));
 }
 
-/** Delivery problems for these enrollments, by enrollment id. */
-async function readAttention(userId: string, entries: Enrollment[]) {
+/** What the scheduler says about a contact's enrollments, by enrollment id. */
+export type ContactDelivery = {
+  /** Problems the stored status does not show. */
+  reasons: Record<string, AttentionReason>;
+  /** Steps already sent. */
+  sent: Record<string, number>;
+  /** Enrollments with nothing left to send. */
+  finished: string[];
+};
+
+async function readAttention(
+  userId: string,
+  entries: Enrollment[]
+): Promise<ContactDelivery> {
   const senders = await createContactQueries(() => userId).loadSenders();
   const status = (senderId: string) => senderStatusOf(senders, senderId);
-  const { found } = await collectIssues(
+  const { found, sent } = await collectIssues(
     createGmailSequenceDelivery().inspect,
     inspectionTargets(entries, status)
   );
-  const result: Record<string, AttentionReason> = {};
+  const result: ContactDelivery = { reasons: {}, sent: {}, finished: [] };
   for (const entry of entries) {
     const reason = attentionFor(entry, status, found);
-    if (reason) result[entry.id] = reason;
+    if (reason) result.reasons[entry.id] = reason;
+    result.sent[entry.id] = sentSteps(entry, sent);
+    if (isFinished(entry, sent)) result.finished.push(entry.id);
   }
   return result;
 }
@@ -61,7 +77,7 @@ export function contactAttentionQueryOptions(
   };
 }
 
-/** Failed, missing, or disconnected sends for one contact's enrollments. */
+/** Delivery problems and progress for one contact's enrollments. */
 export function useContactAttention(entries: () => Enrollment[]) {
   const userId = useUserId();
   // Plain copies: the cached queryFn must not hold the snapshot query's store.

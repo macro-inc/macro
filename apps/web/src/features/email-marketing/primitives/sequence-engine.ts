@@ -14,7 +14,9 @@ import {
   type MarketingContact,
   type MarketingSnapshot,
   MIN_START_DELAY_MS,
+  newId,
   normalizeEmail,
+  nothingDelivered,
   planSteps,
   replyParent,
   rescheduleSteps,
@@ -58,6 +60,8 @@ function isConflict(error: unknown) {
 
 type Guard = (current: MarketingSnapshot) => boolean;
 type Match = (entry: Enrollment, current: MarketingSnapshot) => boolean;
+/** An inbox's unsent sequence drafts, read at most once per action. */
+type ScheduledDrafts = (senderId: string) => Promise<Set<string> | undefined>;
 
 /** Uses the existing server scheduler. No timers, sending secrets, or browser-open requirement. */
 export function createSequenceEngine(
@@ -66,7 +70,7 @@ export function createSequenceEngine(
   options: EngineOptions = {}
 ) {
   const now = options.now ?? (() => new Date());
-  const id = options.id ?? (() => crypto.randomUUID());
+  const id = options.id ?? newId;
   const senderStatus = (senderId: string) =>
     options.senderStatus ? options.senderStatus(senderId) : 'ready';
 
@@ -174,23 +178,54 @@ export function createSequenceEngine(
     );
   }
 
-  /** Cancel every open draft in memory; the caller saves the result. */
-  async function cancelDrafts(enrollment: Enrollment) {
+  /** One scheduler read per inbox for the length of one action. */
+  function scheduledDrafts(): ScheduledDrafts {
+    const reads = new Map<string, Promise<Set<string> | undefined>>();
+    async function read(senderId: string) {
+      try {
+        return await delivery.scheduled(senderId);
+      } catch {
+        // Unknown: cancel each step and let the server decide.
+        return undefined;
+      }
+    }
+    return (senderId) => {
+      let ids = reads.get(senderId);
+      if (!ids) {
+        ids = read(senderId);
+        reads.set(senderId, ids);
+      }
+      return ids;
+    };
+  }
+
+  /**
+   * Cancel every open draft in memory; the caller saves the result. A queued
+   * step past its time that the scheduler no longer lists was sent, so it is
+   * marked without a request.
+   */
+  async function cancelDrafts(
+    enrollment: Enrollment,
+    scheduled?: ScheduledDrafts
+  ) {
     const open = openDrafts(enrollment);
     if (!open.length) return [];
-    const status = senderStatus(enrollment.senderId);
-    if (status === undefined) return [new MarketingError('inboxesLoading')];
-    if (status === 'disconnected') {
-      // Disconnecting an inbox deletes its scheduled emails with it, and this
-      // user cannot act on drafts in an inbox that is not theirs.
-      for (const step of open) step.status = 'canceled';
-      enrollment.error = 'inboxDisconnected';
-      return [];
-    }
-    const errors: unknown[] = [];
+    if (senderStatus(enrollment.senderId) === undefined)
+      return [new MarketingError('inboxesLoading')];
+    const time = now().getTime();
+    const pastDue = (step: (typeof open)[number]) =>
+      step.status === 'queued' && new Date(step.sendAt).getTime() <= time;
+    const listed =
+      scheduled && open.some(pastDue)
+        ? await scheduled(enrollment.senderId)
+        : undefined;
     // Last step first: a reply whose parent draft is deleted would send
-    // unthreaded, so earlier steps go only after the replies to them.
+    // unthreaded, so an earlier step goes only after every reply to it.
     for (const step of open.reverse()) {
+      if (listed && pastDue(step) && !listed.has(step.draftId!)) {
+        step.status = 'delivery_started';
+        continue;
+      }
       try {
         step.status = await delivery.cancel(enrollment.senderId, {
           draftId: step.draftId!,
@@ -198,10 +233,21 @@ export function createSequenceEngine(
           threadId: step.threadId,
         });
       } catch (error) {
-        errors.push(error);
+        return [error];
       }
     }
-    return errors;
+    return [];
+  }
+
+  /** Nothing is left to send or resume: every step was sent or is past its time. */
+  function finished(enrollment: Enrollment) {
+    const time = now().getTime();
+    return enrollment.steps.every(
+      (step) =>
+        step.status === 'delivery_started' ||
+        ((step.status === 'canceled' || step.status === 'pending') &&
+          new Date(step.sendAt).getTime() <= time)
+    );
   }
 
   /** Create and schedule every pending step, in order. Earlier steps are left as they are. */
@@ -246,8 +292,7 @@ export function createSequenceEngine(
     } catch (error) {
       const failures = await cancelDrafts(enrollment);
       enrollment.status = 'needs_attention';
-      if (enrollment.error !== 'inboxDisconnected')
-        enrollment.error = failures.length ? 'cancelFailed' : 'scheduleFailed';
+      enrollment.error = failures.length ? 'cancelFailed' : 'scheduleFailed';
       try {
         await writer.settle();
       } catch {
@@ -355,7 +400,11 @@ export function createSequenceEngine(
     return { enrolled, failures };
   }
 
-  async function stopSaved(saved: Enrollment, status: 'paused' | 'stopped') {
+  async function stopSaved(
+    saved: Enrollment,
+    status: 'paused' | 'stopped',
+    scheduled: ScheduledDrafts
+  ) {
     // A stale tab must not turn a stopped contact back into a resumable one.
     if (saved.status === status) return;
     if (!STOPPABLE[status].includes(saved.status))
@@ -367,14 +416,17 @@ export function createSequenceEngine(
       throw new MarketingError('inboxesLoading');
     const enrollment = structuredClone(saved);
     const writer = recordWriter(enrollment, saved, () => true);
-    const failures = await cancelDrafts(enrollment);
-    enrollment.status = failures.length ? 'needs_attention' : status;
-    enrollment.error = failures.length
-      ? 'cancelFailed'
-      : enrollment.error === 'inboxDisconnected'
-        ? 'inboxDisconnected'
-        : undefined;
-    await writer.write();
+    const failures = await cancelDrafts(enrollment, scheduled);
+    // A finished enrollment has nothing to pause; it stays as it is.
+    const done =
+      !failures.length && status === 'paused' && finished(enrollment);
+    enrollment.status = failures.length
+      ? 'needs_attention'
+      : done
+        ? 'scheduled'
+        : status;
+    enrollment.error = failures.length ? 'cancelFailed' : undefined;
+    if (!deepEqual(enrollment, saved)) await writer.write();
     if (failures.length)
       throw new MarketingError(
         'cancelFailed',
@@ -390,7 +442,8 @@ export function createSequenceEngine(
   async function stopById(
     enrollmentId: string,
     status: 'paused' | 'stopped',
-    matches: Match
+    matches: Match,
+    scheduled: ScheduledDrafts
   ) {
     for (let attempt = 1; ; attempt++) {
       const current = latest ?? (await load());
@@ -399,7 +452,7 @@ export function createSequenceEngine(
       );
       if (!saved || !matches(saved, current)) return;
       try {
-        await stopSaved(saved, status);
+        await stopSaved(saved, status, scheduled);
         return;
       } catch (error) {
         if (!isConflict(error) || attempt >= MAX_WRITE_ATTEMPTS) throw error;
@@ -412,10 +465,11 @@ export function createSequenceEngine(
   async function stopWhere(matches: Match, status: 'paused' | 'stopped') {
     const first = await load();
     const targets = first.enrollments.filter((entry) => matches(entry, first));
+    const scheduled = scheduledDrafts();
     const failures: ContactFailure[] = [];
     for (const target of targets) {
       try {
-        await stopById(target.id, status, matches);
+        await stopById(target.id, status, matches, scheduled);
       } catch (error) {
         failures.push({ email: target.contact.email, error });
       }
@@ -471,7 +525,7 @@ export function createSequenceEngine(
       const current = await load();
       if (!current.enrollments.some((item) => item.id === entry.id))
         throw new MarketingError('enrollmentMissing');
-      await stopById(entry.id, status, () => true);
+      await stopById(entry.id, status, () => true, scheduledDrafts());
     },
     async resume(entry: Enrollment) {
       const current = await load();
@@ -491,11 +545,13 @@ export function createSequenceEngine(
       const enrollment = structuredClone(saved);
       const time = now().getTime();
       // Never-sent steps: canceled by the pause, or never drafted because the
-      // pause landed mid-scheduling. Past-due ones are skipped, not sent late.
+      // pause landed mid-scheduling. Once something was sent, past-due steps
+      // are skipped, not sent late; a contact who received nothing starts over.
+      const restart = nothingDelivered(saved);
       const remaining = enrollment.steps.filter(
         (step) =>
           (step.status === 'canceled' || step.status === 'pending') &&
-          new Date(step.sendAt).getTime() > time
+          (restart || new Date(step.sendAt).getTime() > time)
       );
       if (!remaining.length) throw new MarketingError('nothingToResume');
       const moved = new Map(
@@ -588,6 +644,12 @@ export function createSequenceEngine(
     },
     /** Stop enrollments whose campaign record is gone, so nothing sends unseen. */
     async stopOrphans() {
+      // An unreadable campaign record is not a deleted one.
+      const current = await load();
+      if (current.unreadable)
+        throw new MarketingError('unreadableRecords', {
+          count: current.unreadable,
+        });
       throwFailures(
         await stopWhere(
           (entry, current) =>
@@ -600,12 +662,20 @@ export function createSequenceEngine(
     /** Cancel scheduled sequence emails that no enrollment record knows about. */
     async cancelUntracked(senderId: string, draftIds: string[]) {
       requireReadySender(senderId);
-      // Recheck against a fresh load: a step recorded since is not untracked.
+      // Recheck against a fresh load: a step recorded since is not untracked,
+      // and an unreadable record may be the one that tracks it.
+      const current = await load();
+      if (current.unreadable)
+        throw new MarketingError('unreadableRecords', {
+          count: current.unreadable,
+        });
       const known = new Set(
-        (await load()).enrollments.flatMap((entry) =>
+        current.enrollments.flatMap((entry) =>
           entry.steps.flatMap((step) =>
             step.draftId &&
-            (step.status === 'queued' || step.status === 'scheduling')
+            (step.status === 'queued' ||
+              step.status === 'scheduling' ||
+              step.status === 'delivery_started')
               ? step.draftId
               : []
           )
@@ -615,7 +685,9 @@ export function createSequenceEngine(
       for (const draftId of draftIds) {
         if (known.has(draftId)) continue;
         try {
-          await delivery.cancel(senderId, { draftId });
+          // An email Gmail is already sending can't be recalled.
+          if ((await delivery.cancel(senderId, { draftId })) !== 'canceled')
+            errors.push(new MarketingError('cancelFailed'));
         } catch (error) {
           errors.push(error);
         }

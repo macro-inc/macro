@@ -1,4 +1,4 @@
-import { throwOnErr } from '@core/util/result';
+import { ThrownResultError, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { contactsClient } from '@service-contacts/client';
@@ -55,23 +55,20 @@ export function createContactQueries(
     async loadContacts() {
       // The GraphQL source spans every CRM team the viewer can see.
       const [personal, gmail, crm] = await Promise.all([
-        contactsClient.getContacts(),
+        throwOnErr(() => contactsClient.getContacts()),
         emailClient.listContacts(),
         fetchCrmContacts({ limit: CRM_CONTACT_LIMIT }),
       ]);
-      if (personal.isErr())
-        throw new Error(
-          personal.error.map((error) => error.message).join('; ')
-        );
+      // An account without Gmail just has no Gmail contacts.
       if (
         gmail.isErr() &&
         !gmail.error.every((error) =>
           ['NOT_FOUND', 'NO_GMAIL_GRANT'].includes(error.code)
         )
       )
-        throw new Error(gmail.error.map((error) => error.message).join('; '));
+        throw new ThrownResultError(gmail.error);
       return mergeContacts([
-        ...personal.value.contacts.map((id) => ({
+        ...personal.contacts.map((id) => ({
           email: id.replace(/^macro\|/, ''),
           name: '',
         })),

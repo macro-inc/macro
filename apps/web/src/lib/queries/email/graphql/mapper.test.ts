@@ -26,6 +26,7 @@ const message: EmailThreadMessageFieldsFragment = {
   hasAttachments: true,
   scheduledSendTime: '2026-08-07T12:00:00Z',
   scheduledSendStatus: 'FAILED',
+  scheduledSendSource: null,
   from: { email: 'from@example.com', name: 'From', photoUrl: 'from-photo' },
   to: [{ email: 'to@example.com', name: 'To', photoUrl: null }],
   cc: [],

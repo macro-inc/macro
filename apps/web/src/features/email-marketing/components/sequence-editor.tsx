@@ -9,6 +9,7 @@ import {
   type Campaign,
   DEFAULT_OPT_OUT_LINE,
   isReplyStep,
+  newId,
   replySubject,
   type Sender,
   type SequenceStep,
@@ -60,6 +61,7 @@ export function SequenceEditor(props: {
             value={props.campaign.senderId || undefined}
             placeholder={t('emailMarketing.chooseInbox')}
             disabled={props.disabled}
+            personal
             options={props.senders.map((sender) => ({
               value: sender.id,
               label: sender.ready
@@ -299,7 +301,7 @@ export function SequenceEditor(props: {
               steps: [
                 ...props.campaign.steps,
                 {
-                  id: crypto.randomUUID(),
+                  id: newId(),
                   delayDays: props.campaign.steps.length ? 2 : 0,
                   subject: '',
                   body: '',

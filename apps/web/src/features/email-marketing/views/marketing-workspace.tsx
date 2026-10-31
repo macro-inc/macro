@@ -47,6 +47,7 @@ import {
   isReplaceable,
   isUnsubscribed,
   type MarketingContact,
+  newId,
   normalizeEmail,
 } from '../core/model';
 import { createMarketingWorkspace } from '../primitives/workspace';
@@ -59,6 +60,8 @@ type Edit = { base: Campaign; draft: Campaign };
 
 export function MarketingWorkspaceView(props: {
   capabilities: MarketingCapabilities;
+  /** Lets the host run `leave` before navigating away; false stays. */
+  registerLeave?: (leave: () => Promise<boolean>) => void;
 }) {
   const workspace = createMarketingWorkspace(props.capabilities);
   const panel = useSplitPanel();
@@ -113,13 +116,14 @@ export function MarketingWorkspaceView(props: {
     snapshot().campaigns.find((campaign) => campaign.id === openId());
   /** The open campaign as shown: local edits over the stored copy. */
   const shown = () => edit()?.draft ?? stored();
-  const changed = () => {
-    const current = edit();
-    return !!current && !deepEqual(current.draft, current.base);
-  };
+  const changed = () => !!edit();
   const conflict = () => changed() && !deepEqual(stored(), edit()?.base);
+  // An edit undone back to its base shows the stored record again.
   const change = (draft: Campaign) =>
-    setEdit((current) => ({ base: current?.base ?? stored() ?? draft, draft }));
+    setEdit((current) => {
+      const base = current?.base ?? stored() ?? draft;
+      return deepEqual(draft, base) ? undefined : { base, draft };
+    });
   const close = () => {
     setEdit(undefined);
     setOpenId(undefined);
@@ -175,13 +179,6 @@ export function MarketingWorkspaceView(props: {
         sequences: enrollmentsOf(item.email).length,
         unsubscribed: isUnsubscribed(snapshot(), item.email),
       }));
-  /** Live enrollments whose campaign record is gone (deleted in the database). */
-  const orphans = () =>
-    snapshot().enrollments.filter(
-      (entry) =>
-        entry.status !== 'stopped' &&
-        !snapshot().campaigns.some((item) => item.id === entry.campaignId)
-    ).length;
   const untrackedCount = () =>
     Object.values(workspace.untracked()).reduce(
       (total, ids) => total + ids.length,
@@ -203,6 +200,7 @@ export function MarketingWorkspaceView(props: {
     close();
     return true;
   }
+  props.registerLeave?.(leaveCampaign);
   async function go(next: Section) {
     if (!(await leaveCampaign())) return;
     setSection(next);
@@ -219,8 +217,9 @@ export function MarketingWorkspaceView(props: {
     setCreating(true);
   }
   async function create(name: string, template: Template) {
+    if (!(await leaveCampaign())) return;
     const campaign: Campaign = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name,
       description: '',
       senderId: workspace.senders().find((sender) => sender.ready)?.id ?? '',
@@ -310,7 +309,7 @@ export function MarketingWorkspaceView(props: {
     await act(
       'unsubscribe',
       () => workspace.engine.unsubscribe(person.email),
-      () => t('emailMarketing.noticeUnsubscribed', { email: person.email })
+      () => t('emailMarketing.noticeUnsubscribed')
     );
     setUnsubscribing(undefined);
   }
@@ -320,7 +319,7 @@ export function MarketingWorkspaceView(props: {
         'enrollment.stop_orphans',
         () => workspace.engine.stopOrphans(),
         () => t('emailMarketing.noticeOrphansStopped'),
-        { enrollments: orphans() }
+        { enrollments: workspace.orphans().length }
       ),
       SURFACE
     );
@@ -350,7 +349,10 @@ export function MarketingWorkspaceView(props: {
             class="flex items-start justify-between gap-3 rounded-lg border border-failure/20 bg-failure/5 px-4 py-3 text-sm text-ink"
             role="alert"
           >
-            <span class="whitespace-pre-line">{errorMessage(cause())}</span>
+            {/* Per-contact failures name the address. */}
+            <span class="ph-no-capture whitespace-pre-line">
+              {errorMessage(cause())}
+            </span>
             <Button
               type="button"
               variant="link"
@@ -386,7 +388,7 @@ export function MarketingWorkspaceView(props: {
           </div>
         )}
       </Show>
-      <Show when={orphans()}>
+      <Show when={workspace.orphans().length}>
         {(count) => (
           <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-failure/5 px-4 py-2 text-xs text-ink">
             {t('emailMarketing.orphansNotice', { count: count() })}
@@ -601,7 +603,12 @@ export function MarketingWorkspaceView(props: {
                 )}
               </Show>
             )}
-            {body(<DeliveryPanel senders={workspace.senders()} />)}
+            {body(
+              <DeliveryPanel
+                senders={workspace.senders()}
+                loadFailed={!!workspace.sendersError()}
+              />
+            )}
           </Match>
         </Switch>
       </ViewShell.Main>
@@ -687,6 +694,8 @@ export function MarketingWorkspaceView(props: {
         }
         disabled={workspace.busy() || !snapshot().writable}
         attention={workspace.enrollmentAttention}
+        sentSteps={workspace.sentSteps}
+        isFinished={workspace.isFinished}
         onClose={() => setContact(undefined)}
         onCloseAutoFocus={returnFocus}
         onOpenCrm={props.capabilities.openContact}
@@ -700,9 +709,13 @@ export function MarketingWorkspaceView(props: {
         onCloseAutoFocus={returnFocus}
         pending={workspace.busy()}
         tone="danger"
-        title={t('emailMarketing.unsubscribeTitle', {
-          email: unsubscribing()?.email ?? '',
-        })}
+        title={
+          <span class="ph-no-capture">
+            {t('emailMarketing.unsubscribeTitle', {
+              email: unsubscribing()?.email ?? '',
+            })}
+          </span>
+        }
         body={t('emailMarketing.unsubscribeBody')}
         confirmLabel={t('emailMarketing.markUnsubscribed')}
         cancelLabel={t('emailMarketing.cancel')}

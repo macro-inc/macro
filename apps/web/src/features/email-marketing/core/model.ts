@@ -1,4 +1,5 @@
 import { addDays, differenceInCalendarDays } from 'date-fns';
+import { v7 as uuidv7 } from 'uuid';
 import { z } from 'zod';
 import { ENROLLMENT_ERRORS, MarketingError } from './errors';
 
@@ -119,6 +120,19 @@ export const EMPTY_SNAPSHOT: MarketingSnapshot = {
 export const DEFAULT_OPT_OUT_LINE =
   'If you would prefer not to receive these emails, reply "unsubscribe".';
 
+/** An id for a record stored in the user's database. */
+export function newId() {
+  return uuidv7();
+}
+
+/** Cut text to `max` UTF-16 units without splitting a surrogate pair. */
+export function truncate(text: string, max: number) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const last = cut.charCodeAt(cut.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -130,17 +144,20 @@ export function isUnsubscribed(snapshot: MarketingSnapshot, email: string) {
   );
 }
 
+/** No step of the enrollment was ever handed to Gmail or is still queued. */
+export function nothingDelivered(entry: Enrollment) {
+  return entry.steps.every(
+    (step) => step.status === 'pending' || step.status === 'canceled'
+  );
+}
+
 /**
  * A failed enrollment with nothing queued or delivered can be replaced by a
- * fresh one. Paused and stopped enrollments still block, by design.
+ * fresh one. Paused and stopped enrollments still block, by design: a bulk
+ * enroll must not undo a deliberate pause or stop.
  */
 export function isReplaceable(entry: Enrollment) {
-  return (
-    entry.status === 'needs_attention' &&
-    entry.steps.every(
-      (step) => step.status === 'pending' || step.status === 'canceled'
-    )
-  );
+  return entry.status === 'needs_attention' && nothingDelivered(entry);
 }
 
 export function isEnrollmentErrorCode(
@@ -288,9 +305,10 @@ export function planSteps(
 }
 
 /**
- * The draft a reply step answers: the nearest earlier step that was queued
- * or sent. `undefined` starts a new thread, for example when the earlier
- * emails were skipped on resume.
+ * The draft a reply step answers: the nearest earlier step in its own thread
+ * (back to the email that started it) that was queued or sent. `undefined`
+ * starts a new thread, for example when that thread's emails were skipped on
+ * resume.
  */
 export function replyParent(steps: QueuedStep[], index: number) {
   if (!steps[index]?.asReply) return undefined;
@@ -301,6 +319,7 @@ export function replyParent(steps: QueuedStep[], index: number) {
       (step.status === 'queued' || step.status === 'delivery_started')
     )
       return step.draftId;
+    if (!step.asReply) return undefined;
   }
   return undefined;
 }

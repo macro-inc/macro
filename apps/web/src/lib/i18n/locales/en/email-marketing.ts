@@ -36,6 +36,7 @@ export default {
   statusScheduled: 'Scheduled',
   statusStopped: 'Stopped',
   statusNeedsAttention: 'Needs attention',
+  statusCompleted: 'Completed',
   unsubscribed: 'Unsubscribed',
 
   // Delivery problems
@@ -223,6 +224,7 @@ export default {
   inboxConnected: 'Connected',
   inboxReconnect: 'Reconnect required',
   noInboxes: 'Connect a Gmail inbox in Settings to start sending.',
+  inboxesLoadFailed: 'Couldn’t load your Gmail inboxes. Refresh to try again.',
   howSendingWorks: 'How sending works',
   howSendingScheduled:
     'Each email is scheduled in your inbox when you enroll someone. Follow-ups can reply in the first email’s thread.',
@@ -264,7 +266,7 @@ export default {
   noticeEnrollmentPaused: 'Enrollment paused.',
   noticeEnrollmentStopped: 'Enrollment stopped. Upcoming emails canceled.',
   noticeResumed: 'Upcoming emails rescheduled.',
-  noticeUnsubscribed: '{{email}} is unsubscribed from every campaign.',
+  noticeUnsubscribed: 'Contact unsubscribed from every campaign.',
   noticeOrphansStopped: 'Enrollments without a campaign were stopped.',
   noticeUntrackedCanceled: 'Untracked sequence emails were canceled.',
 
@@ -319,4 +321,6 @@ export default {
   errorStorageUnavailable: 'Couldn’t reach Email Marketing records. Try again.',
   errorChangedElsewhere:
     'These records changed somewhere else. Refresh and try again.',
+  errorRefreshFailed:
+    "Done, but the latest records couldn't be loaded. Refresh to see them.",
 };

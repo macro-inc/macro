@@ -18,13 +18,15 @@ export function MarketingContactCard(props: { email: string }) {
         normalizeEmail(entry.contact.email) === normalizeEmail(props.email)
     ) ?? [];
   const attention = useContactAttention(entries);
-  const reasons = () => (attention.isPending ? undefined : attention.data);
+  const delivery = () => (attention.isPending ? undefined : attention.data);
   return (
     <ContactEnrollments
       entries={entries()}
       loading={query.isPending}
       unsubscribed={!!snapshot() && isUnsubscribed(snapshot()!, props.email)}
-      attention={(entry) => reasons()?.[entry.id]}
+      attention={(entry) => delivery()?.reasons[entry.id]}
+      sentSteps={(entry) => delivery()?.sent[entry.id]}
+      isFinished={(entry) => !!delivery()?.finished.includes(entry.id)}
       error={
         query.isError && !snapshot()
           ? t('emailMarketing.enrollmentsLoadFailed')

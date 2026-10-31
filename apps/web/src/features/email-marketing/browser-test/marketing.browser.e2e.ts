@@ -110,6 +110,9 @@ test('creates, personalizes, threads, enrolls, cross-references CRM, pauses, res
     .click();
   await expect(reply).not.toBeChecked();
   await page.getByLabel('Email 3 subject').fill('One more idea');
+  await page
+    .getByLabel('Opt-out line added to every email')
+    .fill('{{firstName}}, reply "unsubscribe" to stop these emails.');
   await expect(page.getByText('Unsaved changes')).toBeVisible();
   await page.getByRole('button', { name: 'Save draft' }).click();
   await notice(page, 'Campaign saved');
@@ -120,9 +123,10 @@ test('creates, personalizes, threads, enrolls, cross-references CRM, pauses, res
     .click();
   const preview = page.getByRole('dialog');
   await expect(preview).toContainText('Re: Welcome to Macro, Alex');
+  await expect(preview).toContainText('Alex, reply "unsubscribe"');
   await choose(page, 'Preview contact', 'Jamie Chen');
   await expect(preview).toContainText('Re: Welcome to Macro, Jamie');
-  await expect(preview).toContainText('reply "unsubscribe"');
+  await expect(preview).toContainText('Jamie, reply "unsubscribe"');
   await preview.getByRole('button', { name: 'Close' }).click();
 
   await activateAndEnroll(page, ['alex@example.com', 'jamie@example.com']);
@@ -209,7 +213,7 @@ test('unsubscribing stops a contact in every campaign and blocks enrolling them 
     .getByRole('dialog')
     .getByRole('button', { name: 'Mark unsubscribed' })
     .click();
-  await notice(page, 'alex@example.com is unsubscribed');
+  await notice(page, 'Contact unsubscribed from every campaign.');
   expect((await outbox(page)).map((draft) => draft.email)).toEqual([
     'sam@example.com',
     'sam@example.com',
@@ -242,7 +246,7 @@ test('unsubscribing stops a contact in every campaign and blocks enrolling them 
     'Unsubscribed from every campaign.'
   );
   await page.keyboard.press('Escape');
-  await notice(page, 'sam@example.com is unsubscribed');
+  await notice(page, 'Contact unsubscribed from every campaign.');
   expect(await outbox(page)).toEqual([]);
 
   // A campaign Sam was never in still can't enroll Sam.
@@ -377,6 +381,151 @@ test('a stale tab cannot overwrite a campaign another tab changed', async ({
     data.campaigns.find((item: { id: string }) => item.id === 'example-welcome')
       .name
   ).toBe('Renamed in another tab');
+});
+
+test('an edit typed and undone follows the stored campaign again', async ({
+  page,
+  context,
+}) => {
+  const other = await context.newPage();
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await other.goto(path, { waitUntil: 'domcontentloaded' });
+  for (const client of [page, other])
+    await openCampaign(client, 'Customer onboarding');
+  const name = page.getByLabel('Campaign name');
+  await name.press('End');
+  await name.press('x');
+  await name.press('Backspace');
+  await expect(page.getByText('Unsaved changes')).toHaveCount(0);
+  await other.getByLabel('Campaign name').fill('Renamed in another tab');
+  await other.getByRole('button', { name: 'Save draft' }).click();
+  await notice(other, 'Campaign saved');
+  // The first try reads the newer copy; nothing of this tab's is left to keep.
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('This campaign changed');
+  await expect(name).toHaveValue('Renamed in another tab');
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await notice(page, 'Campaign is active');
+});
+
+test('creating a campaign saves the open campaign’s edits first', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await page.getByLabel('Campaign name').fill('Onboarding, edited');
+  await page.getByRole('button', { name: 'New campaign' }).first().click();
+  const create = page.getByRole('dialog');
+  await create.getByLabel('Campaign name').fill('Second campaign');
+  await create.getByRole('button', { name: 'Create campaign' }).click();
+  await notice(page, 'Campaign created');
+  await expect(page.getByLabel('Campaign name')).toHaveValue('Second campaign');
+  const data = await stored(page);
+  expect(
+    data.campaigns.map((item: { name: string }) => item.name).sort()
+  ).toEqual(['A friendly check-in', 'Onboarding, edited', 'Second campaign']);
+});
+
+test('leaving Email Marketing saves the open campaign’s edits', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await page.getByLabel('Email 1 subject').fill('Saved on the way out');
+  await page
+    .getByRole('complementary', { name: 'Outer sidebar' })
+    .getByRole('button', { name: 'Home', exact: true })
+    .click();
+  await notice(page, 'Campaign saved');
+  const data = await stored(page);
+  expect(
+    data.campaigns.find((item: { id: string }) => item.id === 'example-welcome')
+      .steps[0].subject
+  ).toBe('Saved on the way out');
+});
+
+test('an empty campaign name explains itself and can be discarded', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await page.getByLabel('Campaign name').fill('  ');
+  await page.getByRole('button', { name: 'All campaigns' }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    /Give your campaign a name\./
+  );
+  await page.getByRole('button', { name: 'Discard my changes' }).click();
+  await expect(page.getByLabel('Campaign name')).toHaveValue(
+    'Customer onboarding'
+  );
+  await page.getByRole('button', { name: 'All campaigns' }).click();
+  await expect(
+    page.getByRole('button', { name: /A friendly check-in/ })
+  ).toBeVisible();
+});
+
+test('contacts picked in earlier CRM searches stay picked and are enrolled', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await notice(page, 'Campaign is active');
+  await page.getByRole('button', { name: 'Enroll contacts' }).click();
+  const dialog = page.getByRole('dialog');
+  const search = dialog.getByLabel('Search contacts');
+  for (const name of ['Riley', 'Taylor']) {
+    await search.fill(name);
+    await dialog.getByRole('button', { name: 'Search CRM' }).click();
+    await dialog
+      .getByText(`${name.toLowerCase()}@example.com`, { exact: true })
+      .click();
+  }
+  await search.fill('');
+  const riley = dialog.getByRole('checkbox', { name: /riley@example\.com/ });
+  await expect(riley).toBeChecked();
+  // An earlier pick can be unchecked; it then leaves with its search.
+  await dialog.getByText('riley@example.com', { exact: true }).click();
+  await expect(
+    dialog.getByRole('button', { name: 'Enroll 1 contact' })
+  ).toBeVisible();
+  await search.fill('Riley');
+  await dialog.getByRole('button', { name: 'Search CRM' }).click();
+  await dialog.getByText('riley@example.com', { exact: true }).click();
+  await dialog.getByText(/permission to email/).click();
+  await dialog.getByRole('button', { name: 'Enroll 2 contacts' }).click();
+  await notice(page, /enrolled\. Emails scheduled/);
+  expect(
+    [...new Set((await outbox(page)).map((draft) => draft.email))].sort()
+  ).toEqual(['riley@example.com', 'taylor@example.com']);
+});
+
+test('a malformed date in a record edited in the database still renders', async ({
+  page,
+}) => {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await activateAndEnroll(page, ['alex@example.com']);
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('marketing-test')!);
+    data.enrollments[0].steps[0].sendAt = 'next Tuesday';
+    data.unsubscribed = [
+      { email: 'sam@example.com', unsubscribedAt: 'last week' },
+    ];
+    localStorage.setItem('marketing-test', JSON.stringify(data));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await openCampaign(page, 'Customer onboarding');
+  await pick(page, 'Campaign views', 'Enrollments');
+  await expect(
+    page.getByRole('article', { name: 'Alex Morgan' })
+  ).toContainText('Welcome to Macro, Alex');
+  await nav(page)
+    .getByRole('button', { name: /Unsubscribed/ })
+    .click();
+  await expect(page.getByRole('list', { name: 'Unsubscribed' })).toContainText(
+    'sam@example.com'
+  );
 });
 
 test('blocks duplicate enrollment and disables writes on a read-only database', async ({

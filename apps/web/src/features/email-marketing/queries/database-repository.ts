@@ -6,6 +6,7 @@ import type {
 import { throwOnErr } from '@core/util/result';
 import { databasesClient } from '@service-storage/databases';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
+import type { PropertyValue } from '@service-storage/generated/schemas/propertyValue';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import type { z } from 'zod';
 import type { MarketingRepository } from '../context/contracts';
@@ -17,10 +18,10 @@ import {
   enrollmentSchema,
   type MarketingSnapshot,
   normalizeEmail,
+  truncate,
   type Unsubscribe,
   unsubscribeSchema,
 } from '../core/model';
-import { type MarketingRow, readMarketingTable } from './database-rows';
 
 const DATABASE_NAME = 'Email Marketing';
 const CAMPAIGNS = 'Email campaigns';
@@ -39,6 +40,16 @@ const DATA = 'Sequence data';
 const HEADERS = [NAME, DATA];
 /** Row writes share a 2 MiB request limit; keep a margin for headers and ops. */
 const MAX_WRITE_BYTES = 1_500_000;
+/** Reads of one table restarted by writes landing mid-read, in all. */
+const MAX_READ_ATTEMPTS = 5;
+
+/** One row's text cells, unparsed. Missing cells are `undefined`. */
+type MarketingRow = { rowId: string; name?: string; data?: string };
+
+/** Names match the way the databases service compares them, so a case-only rename still matches. */
+function sameName(a: string, b: string) {
+  return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
 
 /**
  * Pick this user's own Email Marketing database: one named Email Marketing,
@@ -50,8 +61,9 @@ const MAX_WRITE_BYTES = 1_500_000;
  */
 function chooseDatabase(listed: ListedDatabase[]) {
   const has = (item: ListedDatabase, name: string) =>
-    item.tables.some((table) => table.name === name);
-  const named = (item: ListedDatabase) => item.database.name === DATABASE_NAME;
+    item.tables.some((table) => sameName(table.name, name));
+  const named = (item: ListedDatabase) =>
+    sameName(item.database.name, DATABASE_NAME);
   const candidates = listed.filter(
     (item) =>
       item.grant === 'owner' &&
@@ -72,10 +84,11 @@ function chooseDatabase(listed: ListedDatabase[]) {
 }
 
 function column(table: TableDetail, name: string) {
-  const result = table.columns.find(
-    (item) =>
-      (item.column.display_name ?? item.definition.definition.display_name) ===
+  const result = table.columns.find((item) =>
+    sameName(
+      item.column.display_name ?? item.definition.definition.display_name,
       name
+    )
   );
   if (!result) throw new MarketingError('columnMissing', { name });
   return result;
@@ -105,6 +118,51 @@ function parseRows<T>(rows: MarketingRow[], schema: z.ZodType<T>) {
   return { values, unreadable };
 }
 
+function textOf(value: PropertyValue | undefined) {
+  return value?.type === 'String' ? value.value : undefined;
+}
+
+/**
+ * Every row of one table and the table version they reflect, read from the
+ * primary so a write committed just before is never missing. A write that
+ * lands during the read restarts it.
+ */
+async function readTable(databaseId: string, table: TableDetail) {
+  const name = column(table, NAME).column.id;
+  const data = column(table, DATA).column.id;
+  for (let attempt = 1; ; attempt++) {
+    const rows: MarketingRow[] = [];
+    let version: number | undefined;
+    let after: string | undefined;
+    for (;;) {
+      const page = await databasesClient.queryRows({
+        id: databaseId,
+        tableId: table.table.id,
+        request: { after },
+      });
+      if (page.isErr() && page.error.some((error) => error.code === 'CONFLICT'))
+        break;
+      const {
+        rows: items,
+        next,
+        version: at,
+      } = await throwOnErr(async () => page);
+      if (version !== undefined && at !== version) break;
+      version = at;
+      for (const row of items)
+        rows.push({
+          rowId: row.rowId,
+          name: textOf(row.cells[name]),
+          data: textOf(row.cells[data]),
+        });
+      if (!next) return { rows, version };
+      after = next;
+    }
+    if (attempt >= MAX_READ_ATTEMPTS)
+      throw new MarketingError('changedElsewhere');
+  }
+}
+
 /** A version conflict or a table removed under us: reload and try again. */
 function writeError(errors: { code: string }[]) {
   return errors.some(
@@ -123,7 +181,7 @@ export function createDatabaseMarketingRepository(): MarketingRepository {
   let creating: Promise<void> | undefined;
 
   const tableNamed = (name: TableName) =>
-    tables.find((table) => table.table.name === name);
+    tables.find((table) => sameName(table.table.name, name));
 
   async function load(): Promise<MarketingSnapshot> {
     const listed = await throwOnErr(() => databasesClient.list());
@@ -144,18 +202,17 @@ export function createDatabaseMarketingRepository(): MarketingRepository {
     const id = databaseId;
     const detail = await throwOnErr(() => databasesClient.get({ id }));
     const found = TABLE_NAMES.map((name) =>
-      detail.tables.find((table) => table.table.name === name)
+      detail.tables.find((table) => sameName(table.table.name, name))
     );
-    // A missing table reads as empty; the next write imports it.
+    // A missing table reads as empty; the next write imports it. Writes then
+    // carry the versions these rows were read at.
     const rows = await Promise.all(
-      found.map((table) =>
-        table
-          ? readMarketingTable(table.table.id, {
-              name: column(table, NAME).column.property_definition_id,
-              data: column(table, DATA).column.property_definition_id,
-            })
-          : []
-      )
+      found.map(async (table) => {
+        if (!table) return [];
+        const read = await readTable(id, table);
+        table.table.version = read.version;
+        return read.rows;
+      })
     );
     const campaigns = parseRows(rows[0], campaignSchema);
     const enrollments = parseRows(rows[1], enrollmentSchema);
@@ -171,7 +228,7 @@ export function createDatabaseMarketingRepository(): MarketingRepository {
       rowIds.set(unsubscribeKey(value), rowId);
     return {
       campaigns: campaigns.values.map(({ name, value }) => {
-        const renamed = name?.trim().slice(0, 120);
+        const renamed = name && truncate(name.trim(), 120);
         return renamed ? { ...value, name: renamed } : value;
       }),
       enrollments: enrollments.values.map(({ value }) => value),

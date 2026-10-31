@@ -32,9 +32,18 @@ export type DraftRef = {
   threadId?: string;
 };
 
+/** A step to read back from the scheduler. */
+export type InspectedStep = DraftRef & {
+  sendAt: string;
+  /** The record says the scheduler has it: queued, or already handed to Gmail. */
+  queued: boolean;
+};
+
 export type Inspection = {
   issues: Record<string, DeliveryIssue>;
   untracked: string[];
+  /** Steps that left the scheduler after their send time: sent. */
+  sent: string[];
 };
 
 export type DraftContent = {
@@ -53,14 +62,16 @@ export interface SequenceDelivery {
     draft: DraftRef
   ): Promise<'canceled' | 'delivery_started'>;
   /**
-   * Read back the scheduler for one inbox's queued steps: problems keyed by
-   * draft id (steps without one are omitted), and scheduled sequence emails
-   * that none of `steps` accounts for.
+   * Draft ids of the inbox's unsent sequence emails, in every delivery state;
+   * `undefined` when there are more than one read can list.
    */
-  inspect(
-    senderId: string,
-    steps: (DraftRef & { sendAt: string })[]
-  ): Promise<Inspection>;
+  scheduled(senderId: string): Promise<Set<string> | undefined>;
+  /**
+   * Read back the scheduler for one inbox's steps: problems keyed by draft id
+   * (steps without one are omitted), scheduled sequence emails that none of
+   * `steps` accounts for, and steps already sent.
+   */
+  inspect(senderId: string, steps: InspectedStep[]): Promise<Inspection>;
 }
 
 export type MarketingCapabilities = {

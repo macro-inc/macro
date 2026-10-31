@@ -1,3 +1,4 @@
+import { useBeforeLeave } from '@app/lib/split-router';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useUserId } from '@core/context/user';
 import { queryClient } from '@queries/client';
@@ -52,5 +53,15 @@ export function EmailMarketing() {
       open({ type: 'email', id: threadId });
     },
   };
-  return <MarketingWorkspaceView capabilities={capabilities} />;
+  // Leaving the module saves open edits the way leaving a campaign does.
+  let leave: (() => Promise<boolean>) | undefined;
+  useBeforeLeave(() => leave?.() ?? true);
+  return (
+    <MarketingWorkspaceView
+      capabilities={capabilities}
+      registerLeave={(guard) => {
+        leave = guard;
+      }}
+    />
+  );
 }

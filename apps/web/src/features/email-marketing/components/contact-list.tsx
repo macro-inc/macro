@@ -1,5 +1,6 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { Badge, EmptyStatePanel } from '@ui';
+import { isValid } from 'date-fns';
 import { For, Show } from 'solid-js';
 import type { MarketingContact, Unsubscribe } from '../core/model';
 
@@ -43,7 +44,7 @@ export function ContactList(props: {
                 class="flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-left outline-none not-touch:hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:outline-accent touch:min-h-[44px]"
                 onClick={() => props.onOpen(row.contact)}
               >
-                <span class="min-w-0 flex-1">
+                <span class="ph-no-capture min-w-0 flex-1">
                   <span class="block truncate text-sm font-medium">
                     {row.contact.name || row.contact.email}
                   </span>
@@ -102,10 +103,15 @@ export function UnsubscribedList(props: { entries: Unsubscribe[] }) {
           >
             {(entry) => (
               <li class="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                <span class="min-w-0 truncate">{entry.email}</span>
-                <span class="shrink-0 text-xs text-ink-muted">
-                  {date().format(new Date(entry.unsubscribedAt))}
+                <span class="ph-no-capture min-w-0 truncate">
+                  {entry.email}
                 </span>
+                {/* A record edited in the database can hold any text as a date. */}
+                <Show when={isValid(new Date(entry.unsubscribedAt))}>
+                  <span class="shrink-0 text-xs text-ink-muted">
+                    {date().format(new Date(entry.unsubscribedAt))}
+                  </span>
+                </Show>
               </li>
             )}
           </For>
