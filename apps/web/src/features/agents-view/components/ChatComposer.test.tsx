@@ -16,7 +16,7 @@ import {
 } from 'lexical';
 import { createSignal, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
 
@@ -195,6 +195,35 @@ function importAtStart(markdown: string) {
   );
 }
 
+/** Attach the editor to a document root, so focus and DOM selection run. */
+function connectRoot() {
+  const root = document.createElement('div');
+  root.contentEditable = 'true';
+  document.body.append(root);
+  editor.lexical?.setRootElement(root);
+  onTestFinished(() => {
+    editor.lexical?.setRootElement(null);
+    root.remove();
+  });
+  return root;
+}
+
+/** Focus the root as triggerFocusInput does; the composer's restoreFocusPlugin then focuses the editor. */
+function focusEditor(root: HTMLElement) {
+  root.focus();
+  editor.lexical?.focus(undefined, { defaultSelection: 'rootEnd' });
+}
+
+/** Characters before the DOM caret in `root`, or undefined when it is elsewhere. */
+function domCaretOffset(root: HTMLElement) {
+  const selection = window.getSelection();
+  if (!selection?.anchorNode || !root.contains(selection.anchorNode)) return;
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.setEnd(selection.anchorNode, selection.anchorOffset);
+  return range.toString().length;
+}
+
 function caretOffset() {
   return editor.lexical?.read(() => {
     const selection = $getSelection();
@@ -292,15 +321,22 @@ describe('Chat session input', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('leaves the caret after a draft seeded when the editor connects', () => {
-    editor.connect = importAtStart;
+  it('focuses a draft seeded when the editor connects after the draft', () => {
+    let root: HTMLElement | undefined;
+    editor.connect = (markdown) => {
+      root = connectRoot();
+      importAtStart(markdown);
+    };
     render(() => (
       <ChatSessionInput initialInput="Ask about @Routine" onSend={vi.fn()} />
     ));
+    if (!root) throw new Error('the editor never connected');
+    focusEditor(root);
     expect(caretOffset()).toBe('Ask about @Routine'.length);
+    expect(domCaretOffset(root)).toBe('Ask about @Routine'.length);
   });
 
-  it('leaves the caret after a draft the host applies to an open editor', () => {
+  it('focuses a draft the host applies to an open editor after the draft', () => {
     editor.setMarkdown.mockImplementation(importAtStart);
     const [draft, setDraft] = createSignal('');
     render(() => (
@@ -310,8 +346,19 @@ describe('Chat session input', () => {
         onSend={vi.fn()}
       />
     ));
+    const root = connectRoot();
+    // Typed in earlier, then left for the Compose with agent button.
+    focusEditor(root);
+    const button = document.createElement('button');
+    document.body.append(button);
+    onTestFinished(() => button.remove());
+    button.focus();
     setDraft('Ask about @Routine');
+    // Applying the draft doesn't take focus.
+    expect(document.activeElement).toBe(button);
+    focusEditor(root);
     expect(caretOffset()).toBe('Ask about @Routine'.length);
+    expect(domCaretOffset(root)).toBe('Ask about @Routine'.length);
   });
 
   it('shows only the model control and submits a trimmed follow-up', () => {

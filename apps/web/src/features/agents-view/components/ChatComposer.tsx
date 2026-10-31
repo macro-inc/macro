@@ -31,12 +31,11 @@ import { makeEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
 import {
-  $addUpdateTag,
   $getRoot,
   $getSelection,
   $isRangeSelection,
   $isTextNode,
-  SKIP_DOM_SELECTION_TAG,
+  $setSelection,
 } from 'lexical';
 import {
   createEffect,
@@ -180,22 +179,19 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
-  // Markdown import leaves the selection at the start, and programmatic focus
-  // restores it there (restoreFocusPlugin). Keep it after a seeded draft (Ask
-  // AI's mentions) so typing continues the draft, without taking focus.
-  // Discrete, so a focus right after doesn't merge into this update and skip
-  // placing the DOM caret with it.
-  const selectDraftEnd = () => {
+  // Markdown import leaves the selection at the start, and focusing the editor
+  // restores it there. After a seeded draft (Ask AI's mentions), put the caret
+  // at its end when the editor has focus. Otherwise clear the selection, so
+  // the next focus lands at the end (withRestoreFocus('rootEnd')) without this
+  // update moving the DOM selection or taking focus.
+  const placeCaretAfterDraft = () => {
     const focused = editor.lexical
       .getRootElement()
       ?.contains(document.activeElement);
-    editor.lexical.update(
-      () => {
-        if (!focused) $addUpdateTag(SKIP_DOM_SELECTION_TAG);
-        $getRoot().selectEnd();
-      },
-      { discrete: true }
-    );
+    editor.lexical.update(() => {
+      if (focused) $getRoot().selectEnd();
+      else $setSelection(null);
+    });
   };
 
   // Only host draft changes should replace the editor contents.
@@ -205,7 +201,7 @@ export function ChatComposer(props: {
       (draft) => {
         if (draft === editor.controls.getMarkdown()) return;
         editor.controls.setMarkdown(draft);
-        selectDraftEnd();
+        placeCaretAfterDraft();
       }
     )
   );
@@ -312,7 +308,7 @@ export function ChatComposer(props: {
         config={editor}
         initialValue={props.draft}
         onConnect={() => {
-          if (props.draft) selectDraftEnd();
+          if (props.draft) placeCaretAfterDraft();
         }}
         placeholder={
           isTouchDevice()
