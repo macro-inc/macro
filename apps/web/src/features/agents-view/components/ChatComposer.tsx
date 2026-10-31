@@ -183,14 +183,19 @@ export function ChatComposer(props: {
   // Markdown import leaves the selection at the start, and programmatic focus
   // restores it there (restoreFocusPlugin). Keep it after a seeded draft (Ask
   // AI's mentions) so typing continues the draft, without taking focus.
+  // Discrete, so a focus right after doesn't merge into this update and skip
+  // placing the DOM caret with it.
   const selectDraftEnd = () => {
     const focused = editor.lexical
       .getRootElement()
       ?.contains(document.activeElement);
-    editor.lexical.update(() => {
-      if (!focused) $addUpdateTag(SKIP_DOM_SELECTION_TAG);
-      $getRoot().selectEnd();
-    });
+    editor.lexical.update(
+      () => {
+        if (!focused) $addUpdateTag(SKIP_DOM_SELECTION_TAG);
+        $getRoot().selectEnd();
+      },
+      { discrete: true }
+    );
   };
 
   // Only host draft changes should replace the editor contents.
