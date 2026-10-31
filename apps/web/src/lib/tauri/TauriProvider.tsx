@@ -90,6 +90,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     setNativeAppUpdateRequiredDialogOpen,
   ] = createSignal(false);
   let hasShownNativeAppUpdateRequiredDialog = false;
+  let hasShownNativeUpdateReason = false;
 
   function performBundleUpdate() {
     invoke<boolean>('perform_update').catch((e) =>
@@ -98,17 +99,17 @@ function TauriProvider(props: { children: JSX.Element }) {
   }
 
   createEffect(() => {
-    if (
-      hasShownNativeAppUpdateRequiredDialog ||
-      !(
-        shouldShowNativeAppUpdateRequiredDialog(bundleUpdateStatus()) ||
-        nativeUpdateRequired() !== undefined
-      )
-    ) {
-      return;
-    }
+    const reason = nativeUpdateRequired();
+    // A missing cache command opens the dialog once with its reason, even
+    // after the bundle updater's request was dismissed: it replaces a toast.
+    const showReason = reason !== undefined && !hasShownNativeUpdateReason;
+    const showBundle =
+      !hasShownNativeAppUpdateRequiredDialog &&
+      shouldShowNativeAppUpdateRequiredDialog(bundleUpdateStatus());
+    if (!showReason && !showBundle) return;
 
     hasShownNativeAppUpdateRequiredDialog = true;
+    if (reason !== undefined) hasShownNativeUpdateReason = true;
     setNativeAppUpdateRequiredDialogOpen(true);
   });
 
