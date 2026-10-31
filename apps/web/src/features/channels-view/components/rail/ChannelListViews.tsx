@@ -8,35 +8,35 @@ import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
 import { cn } from '@ui';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
-import { channelMentionsUser } from '../../../utils';
-import { ChannelsEmptyState } from '../../ChannelsEmptyState';
-import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
-import { ChannelOption } from '../ChannelOption';
+import { channelMentionsUser } from '../../utils';
+import { ChannelsEmptyState } from '../ChannelsEmptyState';
+import { ConversationsCreateMenu } from '../ConversationsCreateMenu';
+import { ChannelLabelMenuItems } from './ChannelLabelRows';
+import { ChannelOption } from './ChannelOption';
 import {
   ChannelRailItemContextMenu,
   CONVERSATION_CARD_HEIGHT,
   ConversationCard,
   isPrimaryMouseDown,
-} from '../ChannelRailItems';
+} from './ChannelRailItems';
+import { ChannelSortDropdown } from './ChannelSortDropdown';
 import {
   ALL_THREADS_ROW_ID,
   domIdForRow,
   rowKeyForChannel,
   useChannelsRail,
-} from '../ChannelsRailContext';
+} from './ChannelsRailContext';
 import {
   CollapsibleSection,
   RailListError,
   RailListLoading,
   RailListLoadingMore,
-} from '../ChannelsRailSection';
+} from './ChannelsRailSection';
 import {
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailVirtualizer,
-} from '../hooks/useChannelRailState';
-import { ChannelLabelMenuItems } from './ChannelLabelRows';
-import { ChannelSortDropdown } from './ChannelSortDropdown';
+} from './hooks/useChannelRailState';
 
 export function RecentConversationCard(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();

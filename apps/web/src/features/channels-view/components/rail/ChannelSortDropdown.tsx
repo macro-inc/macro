@@ -3,8 +3,8 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import { Dropdown } from '@ui';
 import { For } from 'solid-js';
-import type { ChannelListSort, ChannelsSortGroup } from '../../../types';
-import { useChannelsRail } from '../ChannelsRailContext';
+import type { ChannelListSort, ChannelsSortGroup } from '../../types';
+import { useChannelsRail } from './ChannelsRailContext';
 
 const CHANNEL_SORT_OPTIONS: {
   value: ChannelListSort;

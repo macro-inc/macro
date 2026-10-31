@@ -8,33 +8,24 @@ import {
   splitProps,
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelLabelMenuItems } from './ChannelLabelRows';
+import { ChannelLabelMenuItems, ChannelsCreateMenu } from './ChannelLabelRows';
 
 const rail = vi.hoisted(() => ({
   channelTagsEnabled: (): boolean => false,
-  sectionsEnabled: (): boolean => true,
   labelsAvailable: (): boolean => true,
-  canShareSections: () => true,
   labels: () => [
     { id: 'label', name: 'Cached label', channelIds: ['channel'] },
   ],
   createLabel: vi.fn(),
+  createSmartTag: vi.fn(),
   setChannelLabel: vi.fn(),
-  isLabelOpen: () => true,
-  labelUnreadCount: () => 0,
-  sectionPreferences: () => ({ sort: 'name' }),
-  setSectionPreferences: vi.fn(),
-  isGroupOpen: () => true,
-  toggleGroup: vi.fn(),
-  toggleLabel: vi.fn(),
-  renameLabel: vi.fn(),
-  deleteLabel: vi.fn(),
-  markLabelRead: vi.fn(),
 }));
+const openNewChannelModal = vi.hoisted(() => vi.fn());
 
 vi.mock('./ChannelsRailContext', () => ({ useChannelsRail: () => rail }));
 vi.mock('./hooks/useChannelRailState', () => ({}));
 vi.mock('./ChannelRailItems', () => ({}));
+vi.mock('@channel/CreateChannelModal', () => ({ openNewChannelModal }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@app/components/view-shell', () => ({
@@ -47,9 +38,7 @@ vi.mock('@app/components/view-shell', () => ({
       }
     ) => {
       const [local, rest] = splitProps(props, ['label', 'variant', 'size']);
-      return (
-        <button {...rest} aria-label={local.label ?? rest['aria-label']} />
-      );
+      return <button {...rest} aria-label={local.label} />;
     },
   },
 }));
@@ -73,9 +62,10 @@ vi.mock('@kobalte/core/context-menu', () => ({
 }));
 
 let setEnabled: Setter<boolean>;
+let setLabelsAvailable: Setter<boolean>;
 beforeEach(() => {
   [rail.channelTagsEnabled, setEnabled] = createSignal(false);
-  rail.sectionsEnabled = () => true;
+  [rail.labelsAvailable, setLabelsAvailable] = createSignal(true);
   vi.clearAllMocks();
   vi.stubGlobal('scrollTo', vi.fn());
 });
@@ -85,30 +75,67 @@ afterEach(() => {
 });
 
 describe('channel tag flag in rail menus', () => {
-  it('restores the original label assignment action when the redesign is disabled', () => {
-    const [sectionsEnabled, setSectionsEnabled] = createSignal(false);
-    rail.sectionsEnabled = sectionsEnabled;
+  it('shows direct channel creation until labels load and removes label actions if they become unavailable', async () => {
     setEnabled(true);
-    render(() => (
-      <ChannelLabelMenuItems
-        channel={{
-          id: 'channel',
-          name: 'Channel',
-          ownerId: 'viewer',
-          type: 'channel',
-          channelType: 'team',
-        }}
-      />
-    ));
-    fireEvent.click(screen.getByText('Ungroup from “Cached label”'));
-    expect(rail.setChannelLabel).toHaveBeenLastCalledWith('channel', undefined);
-    setSectionsEnabled(true);
-    fireEvent.click(screen.getByText('Remove from “Cached label”'));
-    expect(rail.setChannelLabel).toHaveBeenLastCalledWith(
-      'channel',
-      undefined,
-      'label'
+    setLabelsAvailable(false);
+    render(() => <ChannelsCreateMenu />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create channel' }));
+    expect(openNewChannelModal).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole('button', { name: 'Create channel or label' })
+    ).toBeNull();
+    expect(screen.queryByText('New label')).toBeNull();
+    expect(screen.queryByText('New smart label')).toBeNull();
+
+    setLabelsAvailable(true);
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Create channel or label' }),
+      { key: 'ArrowDown' }
     );
+    const labelAction = await screen.findByRole('menuitem', {
+      name: 'New label',
+    });
+    expect(labelAction.getAttribute('aria-disabled')).not.toBe('true');
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'New smart label' })
+        .getAttribute('aria-disabled')
+    ).not.toBe('true');
+
+    setLabelsAvailable(false);
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Create channel' }));
+    expect(openNewChannelModal).toHaveBeenCalledTimes(2);
+    expect(rail.createLabel).not.toHaveBeenCalled();
+    expect(rail.createSmartTag).not.toHaveBeenCalled();
+  });
+
+  it('keeps direct channel creation available and removes an open label menu when disabled', async () => {
+    render(() => <ChannelsCreateMenu />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create channel' }));
+    expect(openNewChannelModal).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).toBeNull();
+
+    setEnabled(true);
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Create channel or label' }),
+      { key: 'ArrowDown' }
+    );
+    expect(
+      await screen.findByRole('menuitem', { name: 'New label' })
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('menuitem', { name: 'New smart label' })
+    ).toBeTruthy();
+
+    setEnabled(false);
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Create channel' }));
+    expect(openNewChannelModal).toHaveBeenCalledTimes(2);
+    expect(rail.createLabel).not.toHaveBeenCalled();
+    expect(rail.createSmartTag).not.toHaveBeenCalled();
   });
 
   it('hides cached label actions when the flag changes without remounting', () => {
@@ -118,49 +145,23 @@ describe('channel tag flag in rail menus', () => {
     } as ChannelEntity;
     render(() => <ChannelLabelMenuItems channel={channel} />);
 
-    expect(screen.queryByText('Add to section')).toBeNull();
+    expect(screen.queryByText('Move to label')).toBeNull();
     expect(screen.queryByText('Cached label')).toBeNull();
 
     setEnabled(true);
-    expect(screen.getByText('Add to section')).toBeTruthy();
+    expect(screen.getByText('Move to label')).toBeTruthy();
     expect(screen.getByText('Cached label')).toBeTruthy();
-    expect(screen.getByText('Remove from “Cached label”')).toBeTruthy();
+    expect(screen.getByText('Ungroup from “Cached label”')).toBeTruthy();
 
     setEnabled(false);
-    expect(screen.queryByText('Add to section')).toBeNull();
+    expect(screen.queryByText('Move to label')).toBeNull();
     expect(screen.queryByText('Cached label')).toBeNull();
-    expect(screen.queryByText('Remove from “Cached label”')).toBeNull();
+    expect(screen.queryByText('Ungroup from “Cached label”')).toBeNull();
     expect(rail.setChannelLabel).not.toHaveBeenCalled();
   });
 
-  it.each(['public', 'private'] as const)(
-    'offers personal sections for %s channels without offering shared sections',
-    (channelType) => {
-      setEnabled(true);
-      render(() => (
-        <ChannelLabelMenuItems
-          channel={{
-            id: 'channel',
-            name: 'Channel',
-            ownerId: 'user',
-            type: 'channel',
-            channelType,
-          }}
-        />
-      ));
-      expect(screen.getByText('Personal')).toBeTruthy();
-      expect(screen.queryByText('Shared with team')).toBeNull();
-      fireEvent.click(screen.getByText('Remove from “Cached label”'));
-      expect(rail.setChannelLabel).toHaveBeenCalledWith(
-        'channel',
-        undefined,
-        'label'
-      );
-    }
-  );
-
-  it.each(['direct_message'] as const)(
-    'hides all section actions for %s conversations',
+  it.each(['public', 'private', 'direct_message'] as const)(
+    'hides all label actions for %s channels even with cached membership and the flag enabled',
     (channelType) => {
       setEnabled(true);
       const channel: ChannelEntity = {
@@ -173,9 +174,10 @@ describe('channel tag flag in rail menus', () => {
       const view = render(() => <ChannelLabelMenuItems channel={channel} />);
 
       expect(view.container.textContent).toBe('');
-      expect(screen.queryByText('Add to section')).toBeNull();
-      expect(screen.queryByText('New section')).toBeNull();
-      expect(screen.queryByText('Remove from “Cached label”')).toBeNull();
+      expect(screen.queryByText('Move to label')).toBeNull();
+      expect(screen.queryByText('Add to label')).toBeNull();
+      expect(screen.queryByText('New label…')).toBeNull();
+      expect(screen.queryByText('Ungroup from “Cached label”')).toBeNull();
       expect(rail.setChannelLabel).not.toHaveBeenCalled();
     }
   );

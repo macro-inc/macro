@@ -24,9 +24,9 @@ import {
   filterChannelLabelMembers,
 } from '../../../core/channel-label-eligibility';
 import type { ChannelsRailSection } from '../../../types';
-import { promptLabelName } from '../legacy/ChannelLabelNameDialog';
-import { promptSmartTag } from '../legacy/SmartTagDialog';
-import { promptSection, type SectionDialogValue } from '../SectionDialog';
+import { promptLabelName } from '../ChannelLabelNameDialog';
+import { promptSection, type SectionDialogValue } from '../next/SectionDialog';
+import { promptSmartTag } from '../SmartTagDialog';
 
 type ChannelLabelActionsOptions = {
   sectionsEnabled: Accessor<boolean>;

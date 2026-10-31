@@ -5,8 +5,8 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import { Dropdown, ToggleSwitch } from '@ui';
 import { For, type JSX } from 'solid-js';
-import type { ChannelSectionKey } from '../../types';
-import { useChannelsRail } from './ChannelsRailContext';
+import type { ChannelSectionKey } from '../../../types';
+import { useChannelsRail } from '../ChannelsRailContext';
 
 export function ChannelSectionDropdown(props: {
   section: ChannelSectionKey;

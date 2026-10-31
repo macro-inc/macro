@@ -76,14 +76,9 @@ import type {
   ChannelsTab,
 } from '../../types';
 import {
-  buildChannelRailRows,
-  buildChannelSectionRows,
-  getChannelRailPaginationScope,
+  buildChannelRailRows as buildOriginalChannelRailRows,
+  buildChannelSectionRows as buildOriginalChannelSectionRows,
 } from './build-channel-rail-rows';
-import {
-  buildLegacyChannelRailRows,
-  buildLegacyChannelSectionRows,
-} from './build-legacy-channel-rail-rows';
 import {
   type ChannelLabelDragData,
   type ChannelLabelDropData,
@@ -99,9 +94,14 @@ import {
   rowKeyForSection,
 } from './ChannelsRailContext';
 import { ExpandedChannelsRail } from './ExpandedChannelsRail';
-import { LegacyChannelsRail } from './LegacyChannelsRail';
+import {
+  buildChannelRailRows,
+  buildChannelSectionRows,
+  getChannelRailPaginationScope,
+} from './next/build-channel-rail-rows';
+import { ExpandedChannelsRail as NextChannelsRail } from './next/ExpandedChannelsRail';
 
-export { buildChannelRailRows } from './build-channel-rail-rows';
+export { buildChannelRailRows } from './next/build-channel-rail-rows';
 
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useChannelCalls } from './hooks/useChannelCalls';
@@ -444,7 +444,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelSectionRows = createMemo(() => {
     const build = sectionsEnabled()
       ? buildChannelSectionRows
-      : buildLegacyChannelSectionRows;
+      : buildOriginalChannelSectionRows;
     return build({
       labels: labels(),
       channels: deduplicateChannels([
@@ -485,7 +485,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       threads: props.sources.threads.items(),
     };
     if (!sectionsEnabled()) {
-      return buildLegacyChannelRailRows(
+      return buildOriginalChannelRailRows(
         tab(),
         state.expandedGroups,
         items,
@@ -1180,9 +1180,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
       >
         <Show
           when={sectionsEnabled()}
-          fallback={<LegacyChannelsRail search={search} />}
+          fallback={<ExpandedChannelsRail search={search} />}
         >
-          <ExpandedChannelsRail search={search} />
+          <NextChannelsRail search={search} />
         </Show>
       </aside>
     </ChannelsRailProvider>

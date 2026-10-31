@@ -7,7 +7,6 @@ import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretUpIcon from '@icon/system/regular/caret-up.svg';
-import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
@@ -28,51 +27,6 @@ const LOADING_SKELETON_ROWS = [0, 1, 2];
 /** Height a collapsed section keeps: its header row, in px. */
 export const COLLAPSED_SECTION_HEIGHT = 32;
 const SectionContainerContext = createContext<() => HTMLElement | undefined>();
-
-/** Shared heading for built-in and custom Chat sections. */
-export function ChannelSectionHeading(props: {
-  id: string;
-  label: string;
-  title?: string;
-  open: boolean;
-  focused: boolean;
-  unreadCount: number;
-  onToggle: () => void;
-  icon?: JSX.Element;
-  badge?: JSX.Element;
-  children?: JSX.Element;
-}) {
-  return (
-    <WorkspaceSection.Root
-      open={props.open}
-      onOpenChange={props.onToggle}
-      class="pt-2"
-    >
-      <WorkspaceSection.Header
-        class={cn('rounded-lg pr-0', props.focused && 'bg-hover text-ink')}
-      >
-        <WorkspaceSection.Trigger
-          id={props.id}
-          role="treeitem"
-          tabIndex={-1}
-          title={props.title}
-          class={cn('flex-1', props.focused && 'text-ink')}
-        >
-          {props.icon ?? (
-            <FolderIcon aria-hidden="true" class="size-3.5 shrink-0" />
-          )}
-          <span class="min-w-0 truncate">{props.label}</span>
-          {props.badge}
-          <WorkspaceSection.Indicator />
-          <Show when={props.unreadCount > 0}>
-            <span class="text-xs text-accent">{props.unreadCount}</span>
-          </Show>
-        </WorkspaceSection.Trigger>
-        <div class="flex shrink-0 items-center">{props.children}</div>
-      </WorkspaceSection.Header>
-    </WorkspaceSection.Root>
-  );
-}
 
 function SectionScrollArea(props: {
   contentRef: (element: HTMLDivElement) => void;

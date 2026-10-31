@@ -4,12 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildChannelRailRows,
   buildChannelSectionRows,
-  getChannelRailPaginationScope,
 } from './build-channel-rail-rows';
-import {
-  buildLegacyChannelRailRows,
-  buildLegacyChannelSectionRows,
-} from './build-legacy-channel-rail-rows';
 
 function channel(
   id: string,
@@ -128,7 +123,7 @@ describe('buildChannelSectionRows', () => {
   });
 
   it.each([true, false])(
-    'keeps non-team channels in the plain list when labels are open=%s, ignoring cached memberships',
+    'excludes non-team channels from team sections when labels are open=%s',
     (isOpen) => {
       const publicChannel = channel('public', 'Public', 'public');
       const privateChannel = channel('private', 'Private', 'private');
@@ -156,10 +151,7 @@ describe('buildChannelSectionRows', () => {
 
       expect(
         rows.filter((row) => row.kind === 'conversation' && !row.labelId)
-      ).toEqual([
-        { kind: 'conversation', channel: publicChannel },
-        { kind: 'conversation', channel: privateChannel },
-      ]);
+      ).toEqual([]);
       expect(
         rows.filter((row) => row.kind === 'conversation' && row.labelId)
       ).toEqual(
@@ -182,74 +174,6 @@ describe('buildChannelRailRows', () => {
     direct_messages: true,
   };
 
-  it('pages from the last ungrouped row when the source tail belongs to a section', () => {
-    const sections = buildChannelSectionRows({
-      labels: [label('custom', 'Custom', ['zeta'])],
-      channels: [acme, zeta],
-      channelsById: byId,
-      isLabelOpen: () => true,
-    });
-    const rows = buildChannelRailRows(
-      'browse',
-      expanded,
-      {
-        favorites: [],
-        team_channels: [acme, zeta],
-        channels: [],
-        direct_messages: [],
-        recents: [],
-        threads: [],
-      },
-      sections
-    );
-    const plain = rows.find(
-      (row) => row.kind === 'conversation' && row.channel.id === 'acme'
-    )!;
-    const grouped = rows.find(
-      (row) => row.kind === 'conversation' && row.labelId === 'custom'
-    )!;
-    expect(getChannelRailPaginationScope(plain, rows, expanded)).toBe(
-      'team_channels'
-    );
-    expect(
-      getChannelRailPaginationScope(grouped, rows, expanded)
-    ).toBeUndefined();
-  });
-
-  it('pages an expanded section with no ungrouped rows but leaves collapsed sections alone', () => {
-    const sections = buildChannelSectionRows({
-      labels: [label('custom', 'Custom', ['zeta'])],
-      channels: [zeta],
-      channelsById: byId,
-      isLabelOpen: () => true,
-    });
-    const rows = buildChannelRailRows(
-      'browse',
-      expanded,
-      {
-        favorites: [],
-        team_channels: [zeta],
-        channels: [],
-        direct_messages: [],
-        recents: [],
-        threads: [],
-      },
-      sections
-    );
-    const heading = rows.find(
-      (row) => row.kind === 'section' && row.group === 'team_channels'
-    )!;
-    expect(getChannelRailPaginationScope(heading, rows, expanded)).toBe(
-      'team_channels'
-    );
-    expect(
-      getChannelRailPaginationScope(heading, rows, {
-        ...expanded,
-        team_channels: false,
-      })
-    ).toBeUndefined();
-  });
-
   it('lists channels once in their section and source order', () => {
     const rows = buildChannelRailRows(
       'browse',
@@ -271,16 +195,15 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
-      'section:favorites',
       'section:team_channels',
       'channel:acme',
       'channel:zeta',
-      'status:team_channels',
+      'section:channels',
       'section:direct_messages',
     ]);
   });
 
-  it('places custom sections after primary channels and before sticky DMs', () => {
+  it('orders Team channels, Channels, then DMs, with labels only under Team channels', () => {
     const privateChannel = channel('private', 'private', 'private');
     const dm = channel('dm', 'Bob', 'direct_message');
     const rows = buildChannelRailRows(
@@ -303,22 +226,19 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
-      'section:favorites',
       'section:team_channels',
-      'channel:deals',
-      'status:team_channels',
-      'section:channels',
-      'channel:private',
-      'status:channels',
       'label:l1',
       'channel:acme:label:l1',
+      'channel:deals',
+      'section:channels',
+      'channel:private',
       'section:direct_messages',
       'channel:dm',
     ]);
     expect(rows[5]).toMatchObject({
       group: 'channels',
       scope: 'channels',
-      localIndex: 5,
+      localIndex: 0,
     });
   });
 
@@ -344,16 +264,14 @@ describe('buildChannelRailRows', () => {
     );
 
     expect(rows.map((row) => row.id)).toEqual([
-      'section:favorites',
       'section:team_channels',
       'section:channels',
       'channel:private',
-      'status:channels',
       'section:direct_messages',
     ]);
   });
 
-  it('uses shared-scroll indexes for custom sections and their channels', () => {
+  it('gives label headings and nested channels indexes into the rendered section', () => {
     const sectionRows = buildChannelSectionRows({
       labels: [label('l1', 'Enterprise', ['acme'])],
       channels: [deals],
@@ -374,21 +292,20 @@ describe('buildChannelRailRows', () => {
       sectionRows
     );
 
-    expect(
-      rows.filter((row) => row.kind === 'conversation' || row.kind === 'label')
-    ).toEqual([
+    expect(rows.slice(1, 4)).toEqual([
+      expect.objectContaining({ kind: 'label', id: 'label:l1', localIndex: 0 }),
+      expect.objectContaining({
+        kind: 'conversation',
+        id: 'channel:acme:label:l1',
+        localIndex: 1,
+        labelId: 'l1',
+        scope: 'team_channels',
+      }),
       expect.objectContaining({
         kind: 'conversation',
         id: 'channel:deals',
         localIndex: 2,
-      }),
-      expect.objectContaining({ kind: 'label', id: 'label:l1', localIndex: 4 }),
-      expect.objectContaining({
-        kind: 'conversation',
-        id: 'channel:acme:label:l1',
-        localIndex: 5,
-        labelId: 'l1',
-        scope: 'team_channels',
+        labelId: undefined,
       }),
     ]);
   });
@@ -499,231 +416,4 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   expect(collapsed.filter((row) => row.kind === 'conversation')).toEqual([
     { kind: 'conversation', channel: deals },
   ]);
-});
-
-describe('section preferences', () => {
-  it('filters one section without leaking its read members or filtering another section', () => {
-    const read = channel('read');
-    const unread = channel('unread');
-    const plain = channel('plain');
-    const dmRead = channel('dm-read', 'Read DM', 'direct_message');
-    const dmUnread = channel('dm-unread', 'Unread DM', 'direct_message');
-    const channelsById = new Map(
-      [read, unread, plain, dmRead, dmUnread].map((item) => [item.id, item])
-    );
-    const sections = buildChannelSectionRows({
-      labels: [
-        label('filtered', 'Filtered', ['read', 'unread']),
-        label('all', 'All', ['read', 'unread']),
-      ],
-      channels: [read, unread, plain],
-      channelsById,
-      isLabelOpen: () => true,
-    });
-    const rows = buildChannelRailRows(
-      'browse',
-      {
-        favorites: true,
-        team_channels: true,
-        channels: true,
-        direct_messages: true,
-      },
-      {
-        favorites: [],
-        team_channels: [read, unread, plain],
-        channels: [],
-        direct_messages: [dmRead, dmUnread],
-        recents: [],
-        threads: [],
-      },
-      sections,
-      {
-        preferences: {
-          'label:filtered': { unreadOnly: true },
-          direct_messages: { unreadOnly: true },
-        },
-        channelById: (id) => channelsById.get(id),
-        unreadChannelIds: new Set(['unread', 'dm-unread']),
-      }
-    );
-    expect(rows.map((row) => row.id)).toEqual([
-      'section:favorites',
-      'section:team_channels',
-      'channel:plain',
-      'status:team_channels',
-      'label:filtered',
-      'channel:unread:label:filtered',
-      'label:all',
-      'channel:read:label:all',
-      'channel:unread:label:all',
-      'section:direct_messages',
-      'channel:dm-unread',
-    ]);
-    expect(rows.at(-1)).toMatchObject({ localIndex: 0 });
-    expect(rows[5]).toMatchObject({ localIndex: 5 });
-  });
-
-  it('sorts overlapping sections independently and keeps empty filtered headings pageable', () => {
-    const older = { ...channel('older', 'Alpha'), createdAt: '2026-01-01' };
-    const newer = { ...channel('newer', 'Zeta'), createdAt: '2026-02-01' };
-    const channelsById = new Map([older, newer].map((item) => [item.id, item]));
-    const sections = buildChannelSectionRows({
-      labels: [
-        label('recent', 'Recent', ['older', 'newer']),
-        label('alphabetical', 'Alphabetical', ['older', 'newer']),
-      ],
-      channels: [older, newer],
-      channelsById,
-      isLabelOpen: () => true,
-    });
-    const expanded = {
-      favorites: true,
-      team_channels: true,
-      channels: true,
-      direct_messages: true,
-    };
-    const rows = buildChannelRailRows(
-      'browse',
-      expanded,
-      {
-        favorites: [],
-        team_channels: [older, newer],
-        channels: [],
-        direct_messages: [],
-        recents: [],
-        threads: [],
-      },
-      sections,
-      {
-        preferences: {
-          'label:recent': { sort: 'created_at' },
-          team_channels: { unreadOnly: true },
-        },
-        channelById: (id) => channelsById.get(id),
-        unreadChannelIds: new Set(),
-      }
-    );
-    expect(
-      rows.filter((row) => row.kind === 'conversation').map((row) => row.id)
-    ).toEqual([
-      'channel:newer:label:recent',
-      'channel:older:label:recent',
-      'channel:older:label:alphabetical',
-      'channel:newer:label:alphabetical',
-    ]);
-    const heading = rows.find((row) => row.id === 'section:team_channels')!;
-    expect(getChannelRailPaginationScope(heading, rows, expanded)).toBe(
-      'team_channels'
-    );
-  });
-});
-
-describe('legacy Chat rollout row ordering', () => {
-  const open = {
-    favorites: true,
-    team_channels: true,
-    channels: true,
-    direct_messages: true,
-  };
-
-  it('keeps labels inside Team channels with independent virtualizer indexes', () => {
-    const teamChannel = channel('team');
-    const privateChannel = channel('private', 'Private', 'private');
-    const direct = channel('direct', 'Direct', 'direct_message');
-    const sectionRows = buildLegacyChannelSectionRows({
-      labels: [label('work', 'Work', ['team'])],
-      channels: [teamChannel],
-      channelsById: new Map([[teamChannel.id, teamChannel]]),
-      isLabelOpen: () => true,
-    });
-    const rows = buildLegacyChannelRailRows(
-      'browse',
-      open,
-      {
-        favorites: [],
-        team_channels: [teamChannel],
-        channels: [privateChannel],
-        direct_messages: [direct],
-        recents: [],
-        threads: [],
-      },
-      sectionRows
-    );
-    expect(rows.map((row) => row.id)).toEqual([
-      'section:team_channels',
-      'label:work',
-      'channel:team:label:work',
-      'section:channels',
-      'channel:private',
-      'section:direct_messages',
-      'channel:direct',
-    ]);
-    expect(
-      rows
-        .filter((row) => row.kind === 'conversation')
-        .map((row) => row.localIndex)
-    ).toEqual([1, 0, 0]);
-
-    const collapsed = buildLegacyChannelRailRows(
-      'browse',
-      { ...open, team_channels: false },
-      {
-        favorites: [],
-        team_channels: [teamChannel],
-        channels: [privateChannel],
-        direct_messages: [direct],
-        recents: [],
-        threads: [],
-      },
-      sectionRows
-    );
-    expect(collapsed.map((row) => row.id)).toEqual([
-      'section:team_channels',
-      'section:channels',
-      'channel:private',
-      'section:direct_messages',
-      'channel:direct',
-    ]);
-  });
-
-  it('keeps non-team channels out of legacy labels and in the ordinary channel list', () => {
-    const teamChannel = channel('team');
-    const privateChannel = channel('private', 'Private', 'private');
-    const privateLabel = {
-      ...label('personal', 'Personal', ['team', 'private']),
-      teamId: undefined,
-    };
-    const sectionRows = buildLegacyChannelSectionRows({
-      labels: [privateLabel],
-      channels: [teamChannel, privateChannel],
-      channelsById: new Map([
-        [teamChannel.id, teamChannel],
-        [privateChannel.id, privateChannel],
-      ]),
-      isLabelOpen: () => true,
-    });
-    expect(
-      sectionRows
-        .filter((row) => row.kind === 'conversation')
-        .map((row) => row.channel.id)
-    ).toEqual(['team']);
-    const rows = buildLegacyChannelRailRows(
-      'browse',
-      open,
-      {
-        favorites: [],
-        team_channels: [teamChannel],
-        channels: [privateChannel],
-        direct_messages: [],
-        recents: [],
-        threads: [],
-      },
-      sectionRows
-    );
-    expect(rows.find((row) => row.id === 'channel:private')).toMatchObject({
-      group: 'channels',
-      scope: 'channels',
-      localIndex: 0,
-    });
-  });
 });

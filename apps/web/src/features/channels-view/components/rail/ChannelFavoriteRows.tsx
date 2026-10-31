@@ -8,7 +8,6 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
-import { ChannelLabelMenuItems } from './ChannelLabelRows';
 import {
   ChannelAvatar,
   ChannelRailItemContextMenu,
@@ -20,6 +19,7 @@ import {
   useChannelRailFavoriteItemState,
   useChannelRailFavoritesState,
 } from './hooks/useChannelRailState';
+import { ChannelLabelMenuItems } from './next/ChannelLabelRows';
 
 /**
  * A favorite row in the Chat sidebar. The rail only favorites channels, so the

@@ -185,17 +185,17 @@ vi.mock('../../queries', () => ({
   // What the real helper answers for the disabled lookup above.
   resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
-vi.mock('./SectionDialog', () => ({ promptSection: vi.fn() }));
-vi.mock('./legacy/ChannelLabelNameDialog', () => ({
+vi.mock('./next/SectionDialog', () => ({ promptSection: vi.fn() }));
+vi.mock('./ChannelLabelNameDialog', () => ({
   promptLabelName: vi.fn(),
 }));
-vi.mock('./legacy/SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
-vi.mock('./LegacyChannelsRail', () => ({ LegacyChannelsRail: () => null }));
+vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
+vi.mock('./ExpandedChannelsRail', () => ({ ExpandedChannelsRail: () => null }));
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: () => ({ unreadChannelIds: () => new Set<string>() }),
 }));
-vi.mock('./ExpandedChannelsRail', async () => {
+vi.mock('./next/ExpandedChannelsRail', async () => {
   const { useChannelsRail } = await import('./ChannelsRailContext');
   return {
     ExpandedChannelsRail: () => {

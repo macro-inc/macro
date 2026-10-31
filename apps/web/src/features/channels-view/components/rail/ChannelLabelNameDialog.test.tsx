@@ -8,7 +8,7 @@ import {
 } from '@solidjs/testing-library';
 import type { ComponentProps, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { promptSection } from './SectionDialog';
+import { promptLabelName } from './ChannelLabelNameDialog';
 
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@ui', async () => ({
@@ -17,8 +17,6 @@ vi.mock('@ui', async () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
   Surface: (props: ParentProps) => <div>{props.children}</div>,
-  ToggleSwitch: (await import('@app/components/ui/components/ToggleSwitch'))
-    .ToggleSwitch,
   Input: (props: ComponentProps<'input'>) => <input {...props} />,
   Button: (props: ComponentProps<'button'>) => (
     <button type={props.type} disabled={props.disabled} onClick={props.onClick}>
@@ -45,12 +43,14 @@ describe('label naming', () => {
             finish = resolve;
           })
       );
-    const result = promptSection({
-      canShare: false,
+    const result = promptLabelName({
+      title: 'New label',
+      body: 'Private',
+      confirmLabel: 'Create label',
       onConfirm,
     });
     const input = screen.getByRole('textbox', {
-      name: 'Section name',
+      name: 'Label name',
     }) as HTMLInputElement;
     fireEvent.input(input, { target: { value: '  My group  ' } });
     fireEvent.submit(input.closest('form')!);
@@ -58,28 +58,13 @@ describe('label naming', () => {
       expect(screen.getByRole('alert').textContent).toContain('already exists')
     );
     expect(input.value).toBe('  My group  ');
-    expect(onConfirm).toHaveBeenCalledWith({
-      name: 'My group',
-      scope: 'personal',
-    });
     fireEvent.input(input, { target: { value: 'New name' } });
     fireEvent.submit(input.closest('form')!);
     fireEvent.submit(input.closest('form')!);
     expect(onConfirm).toHaveBeenCalledTimes(2);
-    expect(
-      screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')
-    ).toBe(true);
-    expect(
-      screen.queryByRole('switch', { name: 'Shared with team' })
-    ).toBeNull();
-    expect(
-      screen
-        .getByRole('switch', { name: 'Smart section' })
-        .hasAttribute('disabled')
-    ).toBe(true);
-    expect(screen.getByRole('dialog', { name: 'New section' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'New label' })).toBeTruthy();
     finish();
-    await result;
+    expect(await result).toBe('New name');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -87,60 +72,23 @@ describe('label naming', () => {
     render(() => <ImperativeDialogHost />);
     const onConfirm = vi.fn(async () => {});
     const props = {
-      canShare: false,
+      title: 'New label',
+      body: 'Private',
+      confirmLabel: 'Create label',
       onConfirm,
     };
-    const first = promptSection(props);
+    const first = promptLabelName(props);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    await first;
+    expect(await first).toBeUndefined();
     expect(onConfirm).not.toHaveBeenCalled();
-    const next = promptSection(props);
+    const next = promptLabelName(props);
     const input = screen.getByRole('textbox', {
-      name: 'Section name',
+      name: 'Label name',
     }) as HTMLInputElement;
     expect(input.value).toBe('');
     fireEvent.input(input, { target: { value: 'Second group' } });
     fireEvent.submit(input.closest('form')!);
-    await next;
-    expect(onConfirm).toHaveBeenCalledWith({
-      name: 'Second group',
-      scope: 'personal',
-    });
-  });
-
-  it('creates a shared manual section and keeps visibility and kind fixed when editing', async () => {
-    render(() => <ImperativeDialogHost />);
-    const onConfirm = vi.fn(async () => {});
-    const create = promptSection({ canShare: true, onConfirm });
-    fireEvent.click(screen.getByRole('switch', { name: 'Shared with team' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Section name' }), {
-      target: { value: 'Team updates' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Create section' }));
-    await create;
-    expect(onConfirm).toHaveBeenCalledWith({
-      name: 'Team updates',
-      scope: 'team',
-    });
-
-    const edit = promptSection({
-      canShare: true,
-      scope: 'team',
-      initial: { name: 'Team updates' },
-      onConfirm,
-    });
-    expect(
-      screen.queryByRole('switch', { name: 'Shared with team' })
-    ).toBeNull();
-    expect(screen.queryByRole('switch', { name: 'Smart section' })).toBeNull();
-    fireEvent.input(screen.getByRole('textbox', { name: 'Section name' }), {
-      target: { value: 'Project updates' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save section' }));
-    await edit;
-    expect(onConfirm).toHaveBeenLastCalledWith({
-      name: 'Project updates',
-      scope: 'team',
-    });
+    expect(await next).toBe('Second group');
+    expect(onConfirm).toHaveBeenCalledWith('Second group');
   });
 });

@@ -13,7 +13,6 @@ import { Show } from 'solid-js';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
 import { CHANNELS_TOUR } from '../../tour';
 import { formatDetailedTimestamp } from '../../utils';
-import { ChannelLabelMenuItems } from './ChannelLabelRows';
 import {
   ChannelAvatar,
   ChannelCallIndicator,
@@ -29,6 +28,7 @@ import {
   useChannelsRail,
 } from './ChannelsRailContext';
 import { useChannelRailItemState } from './hooks/useChannelRailState';
+import { ChannelLabelMenuItems } from './next/ChannelLabelRows';
 
 /**
  * Drag a channel between labels. Registered once per Channels-section row: a

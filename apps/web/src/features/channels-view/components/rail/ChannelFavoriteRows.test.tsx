@@ -58,7 +58,7 @@ vi.mock('./ChannelRailItems', () => ({
     </div>
   ),
 }));
-vi.mock('./ChannelLabelRows', () => ({
+vi.mock('./next/ChannelLabelRows', () => ({
   ChannelLabelMenuItems: (props: { channel: ChannelEntity }) => (
     <span data-testid="label-actions" data-channel={props.channel.id} />
   ),
