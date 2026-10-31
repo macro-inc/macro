@@ -149,8 +149,7 @@ changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
-desktop Inbox tabs (with an `Experimental` badge beside them while it is open)
-and the mobile pills (`Focus · Experimental`). It lists signal
+desktop Inbox tabs and the mobile pills. It lists signal
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
 linked to the account, by priority: the importance score halved for every 2 days

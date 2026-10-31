@@ -12,12 +12,11 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { Badge, Tabs } from '@ui';
+import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, Show } from 'solid-js';
 import { composeEmail } from '../compose-email';
 import {
-  EMAIL_FOCUS_TAB,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_LABELS,
   EMAIL_TABS,
@@ -165,11 +164,6 @@ export function EmailHeader(props: EmailHeaderProps) {
               value={state.tab}
               onChange={setTab}
             />
-          </Show>
-          <Show when={state.tab === 'focus'}>
-            <Badge variant="outline" size="xs" class="shrink-0">
-              {EMAIL_FOCUS_TAB.badge}
-            </Badge>
           </Show>
         </div>
       }
