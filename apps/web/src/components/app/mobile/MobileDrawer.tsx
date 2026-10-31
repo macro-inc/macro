@@ -305,16 +305,22 @@ function swallowRestOfTap() {
  * on iOS. That ringed the first row of every sheet of rows.
  *
  * A text field keeps the focus: a sheet that opens for a search or a name is
- * opened to type in. The content element carries `tabindex="-1"`, so the
- * trap, Escape and the sheet's own announcement all still work when the sheet
- * holds focus itself. Sheets that want another control focused name it with
- * `initialFocusEl` or their own `onInitialFocus`, as the comment composer and
- * the model picker do.
+ * opened to type in. So does whatever the sheet focused itself while opening,
+ * such as the heading Settings announces when it drills in. The content
+ * element carries `tabindex="-1"`, so the trap, Escape and the sheet's own
+ * announcement all still work when the sheet holds focus itself. Sheets that
+ * want another control focused name it with `initialFocusEl` or their own
+ * `onInitialFocus`, as the comment composer and the model picker do.
  */
 function focusSheetOverItsFirstRow(event: Event) {
   const sheet = event.target as HTMLElement | null;
-  if (!sheet || isEditableInput(sheet.querySelector(FOCUSABLE_SELECTOR)))
+  if (!sheet) return;
+  if (sheet.contains(document.activeElement)) {
+    // Corvu would move this to the first tab stop; the sheet chose it.
+    event.preventDefault();
     return;
+  }
+  if (isEditableInput(sheet.querySelector(FOCUSABLE_SELECTOR))) return;
   event.preventDefault();
   sheet.focus();
 }

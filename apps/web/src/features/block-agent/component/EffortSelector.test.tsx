@@ -112,7 +112,9 @@ it('returns focus to the composer when the mobile chooser closes', async () => {
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Effort: Low' }));
   const low = await screen.findByRole('button', { name: 'Low' });
-  await waitFor(() => expect(document.activeElement).toBe(low));
+  // The sheet takes focus, not its first row, so no row opens ringed.
+  const sheet = low.closest('[data-corvu-drawer-content]');
+  await waitFor(() => expect(document.activeElement).toBe(sheet));
   fireEvent.keyDown(low, { key: 'Escape' });
   await waitFor(() => expect(document.activeElement).toBe(input));
 });
