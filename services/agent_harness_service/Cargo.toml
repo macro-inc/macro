@@ -168,6 +168,7 @@ reqwest = { workspace = true }
 rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
 roles_and_permissions = { path = "../../crates/roles_and_permissions", default-features = false, features = ["outbound"] }
 rootcause = { workspace = true }
+routine_program = { path = "../../crates/routine_program" }
 scheduled_action = { path = "../../crates/scheduled_action" }
 schemars = { workspace = true }
 search_service_client = { path = "../../crates/search_service_client" }
@@ -215,7 +216,6 @@ harnesses = { path = "../../crates/harnesses", default-features = false, feature
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 mcp_select = { path = "../../crates/mcp_select" }
-routine_program = { path = "../../crates/routine_program" }
 schemars = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 

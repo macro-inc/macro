@@ -3,10 +3,9 @@
 use std::time::Duration;
 
 use agent_session::domain::routines::{
-    CallRoutineTool, PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession,
-    RoutineActionStatus, RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError,
-    RoutineSessions, RoutineToolOutcome, RoutineTools, ValidateRoutineSession,
-    ValidatedRoutineSession,
+    PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
+    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
+    ValidateRoutineSession, ValidatedRoutineSession,
 };
 use anyhow::{Context, Result};
 use macro_authorization::INTERNAL_API_KEY_HEADER;
@@ -25,7 +24,6 @@ enum Operation {
     Prompt,
     Status,
     Cancel,
-    Tool,
 }
 
 impl Operation {
@@ -36,7 +34,6 @@ impl Operation {
             Self::Prompt => "internal/routine-sessions/prompt",
             Self::Status => "internal/routine-sessions/status",
             Self::Cancel => "internal/routine-sessions/cancel",
-            Self::Tool => "internal/routine-sessions/tool",
         }
     }
 
@@ -182,16 +179,6 @@ async fn bounded_body(mut response: Response) -> Result<Vec<u8>, RoutineSessionE
         body.extend_from_slice(&chunk);
     }
     Ok(body)
-}
-
-/// Tool calls are not idempotent: an ambiguous failure is reported, never retried.
-impl RoutineTools for AgentSessionClient {
-    async fn call_tool(
-        &self,
-        command: CallRoutineTool,
-    ) -> Result<RoutineToolOutcome, RoutineSessionError> {
-        self.command(Operation::Tool, &command).await
-    }
 }
 
 impl RoutineSessions for AgentSessionClient {

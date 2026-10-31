@@ -89,6 +89,7 @@ pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
+    tools: crate::routine_tools::CatalogRoutineTools,
     ready: tokio::sync::watch::Receiver<bool>,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
@@ -157,9 +158,11 @@ pub async fn build(
         Arc::clone(&access),
         &config,
     )?);
+    // Tool steps run the harness's own catalog in this process; agent steps
+    // still go through the routine-session operations.
     let runner = Arc::new(ProgramRunner::new(
         Arc::new(TargetRunner::new(Arc::clone(&sessions))),
-        Arc::clone(&sessions),
+        Arc::new(tools),
         Arc::clone(&event_content),
         classifier.clone(),
     ));

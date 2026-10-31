@@ -15,7 +15,8 @@ each run.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
 - `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`):
-  one classifier call for its decisions, tool steps through the harness, and
+  one classifier call for its decisions, tool steps through the `RoutineTools`
+  port (the harness's catalog, in process, limited to `RoutineTool`), and
   at most one agent step through `target_runner.rs`. An old single-agent task
   runs as one agent step.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the

@@ -372,6 +372,36 @@ pub trait RoutineAgents: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// Runs a routine's tool steps: one allowlisted catalog tool at a time, as
+/// the routine's owner, outside any agent session. Implemented in the process
+/// that holds the tool catalog; never replay a call after an ambiguous
+/// failure, since tools are not idempotent.
+pub trait RoutineTools: Send + Sync + 'static {
+    /// Call `tool` with `arguments` as `owner`. A tool that refuses or fails
+    /// answers [`RoutineToolOutcome::Failed`] with its reason for the owner.
+    fn call(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        tool: routine_program::RoutineTool,
+        arguments: serde_json::Map<String, serde_json::Value>,
+    ) -> impl Future<Output = RoutineToolOutcome> + Send;
+}
+
+/// What a routine's tool call did.
+#[derive(Debug, Clone, PartialEq)]
+pub enum RoutineToolOutcome {
+    /// The tool ran; its output, or null when too large to keep.
+    Completed {
+        /// The tool's JSON output, available to later steps' templates.
+        output: serde_json::Value,
+    },
+    /// The tool refused or failed, in words written for the routine's owner.
+    Failed {
+        /// Why, kept in the run's history.
+        message: String,
+    },
+}
+
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {
     fn publish_update(&self, update: ScheduledActionUpdate) -> impl Future<Output = ()> + Send;
 }

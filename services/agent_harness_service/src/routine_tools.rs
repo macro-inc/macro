@@ -1,25 +1,25 @@
 //! Run catalog tools for routine steps in-process, as the routine owner.
 //!
 //! The same tools, contexts and side effects (Gmail operations, events,
-//! notifications) the in-process agent uses. The scheduler decides which tools
-//! a routine may call; this adapter only runs them.
+//! notifications) the in-process agent uses. The scheduler's program decides
+//! which step runs; only the tools a routine step may name can be called here.
 
 use std::sync::Arc;
 
-use agent_session::domain::routines::{RoutineSessionError, RoutineToolOutcome, RoutineToolRunner};
 use ai_tools::{AiHost, AiToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{RequestContext, ToolSet, ToolSetError};
 use macro_user_id::user_id::MacroUserIdStr;
+use routine_program::RoutineTool;
+use scheduled_action::domain::ports::{RoutineToolOutcome, RoutineTools};
 use serde_json::{Map, Value};
 
 #[cfg(test)]
 mod test;
 
-/// Largest output returned to the scheduler. Routine tools are writes with
-/// small outputs; anything larger is dropped rather than truncated into
-/// invalid JSON.
+/// Largest output kept for later steps. Routine tools are writes with small
+/// outputs; anything larger is dropped rather than truncated into invalid JSON.
 const MAX_OUTPUT_BYTES: usize = 32 * 1024;
-/// Longest failure message returned to the scheduler.
+/// Longest failure message kept in the run's history.
 const MAX_MESSAGE_CHARS: usize = 500;
 
 /// The MCP host's catalog: it has no tools that wait for a person to confirm.
@@ -38,28 +38,25 @@ impl CatalogRoutineTools {
     }
 }
 
-impl RoutineToolRunner for CatalogRoutineTools {
-    #[tracing::instrument(name = "routine.tool", skip_all, fields(tool), err)]
-    async fn run(
+impl RoutineTools for CatalogRoutineTools {
+    #[tracing::instrument(name = "routine.tool", skip_all, fields(tool = %tool.name()))]
+    async fn call(
         &self,
         owner: &MacroUserIdStr<'static>,
-        tool: &str,
+        tool: RoutineTool,
         arguments: Map<String, Value>,
-    ) -> Result<RoutineToolOutcome, RoutineSessionError> {
+    ) -> RoutineToolOutcome {
         let mut context = self.context.clone();
         context.usage_context =
             ai_usage::UsageContext::new(ai_usage::AiFeature::Automation, owner.clone());
-        let arguments = Value::Object(arguments);
+        // Arguments and results are the owner's content (email text, messages):
+        // no GenAI capture of them, and the run's history keeps the outcome.
+        let request = RequestContext::new(owner.clone()).with_genai_telemetry(false);
         let result = self
             .toolset
-            .try_tool_call(
-                context,
-                RequestContext::new(owner.clone()),
-                tool,
-                &arguments,
-            )
+            .try_tool_call(context, request, tool.name(), &Value::Object(arguments))
             .await;
-        Ok(outcome(tool, result))
+        outcome(tool.name(), result)
     }
 }
 
@@ -76,7 +73,8 @@ fn outcome(
             },
         },
         Ok(Err(error)) => {
-            tracing::warn!(tool, error = ?error.internal_error, "routine tool failed");
+            // The description can quote the owner's data; it stays in history.
+            tracing::warn!(tool, "routine tool refused or failed");
             failed(error.description)
         }
         Err(ToolSetError::Deserialization(error)) => {
