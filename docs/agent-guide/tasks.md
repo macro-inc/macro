@@ -92,7 +92,14 @@ and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
 The project pill beneath a task title shows the project icon and name without
-a `Project:` prefix.
+a `Project:` prefix. It and the Project row in the Properties side panel split in
+two once a project is set: the name opens the project (shift-click for a new
+split, and an already open project is focused instead of opened again), and the
+caret changes the project. Hovering the name turns its icon into an arrow. People
+who can't edit the task get the name alone, so they can still open the project.
+An empty or unavailable project keeps the plain pill, and composers never split it.
+Enter activates a pill or any other document control reached by keyboard. After a
+mouse click, Enter still moves to the editor.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,

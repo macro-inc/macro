@@ -155,8 +155,8 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `CalendarSnapshotImporter::import_snapshot`, fed an `EventSnapshot` that
   `crates/email`'s `invitation_import` builds from the email's saved snapshot.
   Only the channel-share path strips the Macro call
-  (`EventSnapshot::without_macro_call`); a forwarded file keeps the join link
-  it carries.
+  (`content_without_macro_call`, behind `EventSnapshot::without_macro_call`);
+  a forwarded file keeps the join link it carries.
   The other direction, a guest forwarding their copy of an event, renders it
   through `CalendarEventForwardSource::event_forward`, which also names the
   inbox holding that copy (`meeting_copies`), and is `None` for a channel
@@ -190,7 +190,14 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `calendar`), but `ReadContent` and `ReadMetadata` need document access, which
   a channel-shared event never grants. The agent reads a mentioned event with
   `ReadCalendarEvent` (`src/inbound/toolset/read_calendar_event.rs`), which goes
-  through `mention_previews`: the hover card's visibility and fields.
+  through `mention_previews`: the hover card's visibility and fields. A preview
+  that falls back to a channel share loses its Macro call there, in the
+  repository so that meeting-note references (`reference_previews`) get the
+  same, and before the description cap, since the join line closes the
+  description. Whoever resolves to their own copy keeps it: the card's Join
+  button reads the link from the preview. Only the generated Macro call goes;
+  join text a provider wrote into the body, as a Teams invitation's, stays, as
+  it does in a snapshot.
 - Google names the calendar an event was made on as its organizer, so an
   event on a secondary calendar has that calendar's id
   (`…@group.calendar.google.com`) as `organizer_email`; Google's

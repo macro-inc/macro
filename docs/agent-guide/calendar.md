@@ -473,6 +473,8 @@ month arrows, the month picker, and keyboard focus changes do not move the main
 calendar. Selecting a day navigates the main calendar without closing the narrow
 layout's navigation overlay. Main calendar navigation updates the mini calendar's
 selected day and week highlight without resetting the month being browsed.
+When browsing from a month's last day to a shorter month, keyboard focus stays
+on the shorter month's last day so Tab and arrow-key navigation remain usable.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
@@ -889,7 +891,10 @@ it by posting the chip. It asks whether to share with the channel, and a yes in 
 writes the same channel grant. Private and confidential events are never shared this way.
 Every calendar mention's hover card shows the schedule, location, organizer and attendee
 count, plus the first lines of the event description (its links open), and no last-updated
-byline. A mention of a meeting that was deleted or cancelled reads `Deleted`; clicking it (a tap
+byline. A Macro call's generated `Join Macro call` line and a location that is only its link are
+left out, as in event details, and a viewer holding the meeting gets one `Join Macro call` button
+below the schedule, which closes the phone sheet as it joins. A read-only channel share gets no
+join button, since a share never carries the join link. A mention of a meeting that was deleted or cancelled reads `Deleted`; clicking it (a tap
 on a phone, which opens a sheet) shows `This event was deleted or cancelled.`, like a shared
 event's card, instead of doing nothing. When the mention names someone else's copy of a meeting the viewer also holds (a shared
 event they added or were invited to, or a meeting someone else mentioned), the card says how:

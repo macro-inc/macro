@@ -43,7 +43,10 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableDatabases } from '@core/constant/featureFlags';
+import {
+  enableDatabases,
+  enableWhatsappLinked,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -95,6 +98,11 @@ const StarterDatabase = lazy(async () => {
 const Paywall = lazyNamed(
   () => import('@app/features/paywall/Paywall'),
   'Paywall'
+);
+const WhatsAppHistoryImportPrompt = lazyNamed(
+  () =>
+    import('@app/features/whatsapp-linked/components/history-import-prompt'),
+  'WhatsAppHistoryImportPrompt'
 );
 const LocalRuntimeHost = lazyNamed(
   () => import('@app/features/local-runtime/local-runtime-host'),
@@ -273,6 +281,11 @@ export function AppChrome(props: ParentProps) {
           <GithubReauthenticationPrompt />
           <GmailReauthenticationPrompt />
           <CalendarPermissionPrompt />
+          <ShowFeatureFlag flag={enableWhatsappLinked}>
+            <Suspense>
+              <WhatsAppHistoryImportPrompt />
+            </Suspense>
+          </ShowFeatureFlag>
           <GlobalShortcuts />
           <Show when={!isTouchDevice()}>
             <GoToHotkeys />
