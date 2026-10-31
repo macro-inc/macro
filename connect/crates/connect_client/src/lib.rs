@@ -129,6 +129,30 @@ impl ConnectClient {
         self.request(Method::GET, &["v1", "catalog"], None).await
     }
 
+    /// Fetch an official SVG icon from Connect's public catalog.
+    pub async fn catalog_icon(&self, app_id: &str) -> Result<Vec<u8>, Error> {
+        let mut headers = HeaderMap::new();
+        inject_trace_headers(&mut headers);
+        let response = self
+            .http
+            .get(self.route(&["v1", "catalog", app_id, "icon.svg"]))
+            .headers(headers)
+            .send()
+            .await
+            .map_err(|_| Error::Unavailable)?;
+        if !response.status().is_success() {
+            return Err(Error::Api {
+                status: response.status(),
+                message: "catalog icon unavailable".to_owned(),
+            });
+        }
+        response
+            .bytes()
+            .await
+            .map(|bytes| bytes.to_vec())
+            .map_err(|_| Error::Unavailable)
+    }
+
     /// Create a browser session for connecting a user's app.
     #[tracing::instrument(name = "connect.client.create_connect_session", skip_all, fields(app_id = %app_id, outcome), err)]
     pub async fn create_connect_session(

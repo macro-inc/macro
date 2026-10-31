@@ -11,7 +11,7 @@ From the repository root, start PostgreSQL 17 and the API, then create a
 customer with a localhost redirect origin:
 
 ```sh
-docker compose -f connect/docker-compose.yml up -d --build && docker compose -f connect/docker-compose.yml run --rm api create-customer local --redirect-origin http://localhost:3000
+docker compose -f connect/docker-compose.yml up -d --build db api && docker compose -f connect/docker-compose.yml run --rm api create-customer local --redirect-origin http://localhost:3000
 ```
 
 The CLI prints the customer key once. Store it locally; do not put it in a
@@ -72,6 +72,28 @@ The `prod` stack uses PostgreSQL 17 on `db.t4g.small`, 14-day backups, RDS
 deletion protection, and Pulumi protection. Its public hostname is deliberately
 unset until the product owner chooses it; set `publicHost` before previewing
 production.
+
+## Demo
+
+For a local demo, create a separate customer with a localhost redirect origin.
+The CLI prints its key once; pass it to Compose from the process environment:
+
+```sh
+docker compose -f connect/docker-compose.yml run --rm api create-customer demo --redirect-origin http://localhost:3000
+CONNECT_DEMO_CUSTOMER_KEY=<local-demo-key> docker compose -f connect/docker-compose.yml up -d --build demo
+curl --fail http://localhost:3000/demo/health
+```
+
+For dev, create another demo customer with redirect origin
+`https://connect-dev.macro.com` (the origin, without `/demo`). Run
+`connect_api create-customer demo --redirect-origin
+https://connect-dev.macro.com` against the dev database using the approved
+operations path. Store its key with `pulumi config set --secret demoCustomerKey
+<dev-demo-key>` in `connect/infra`, then review the Pulumi preview and deploy
+with human approval. Setting the encrypted key creates the demo image, service,
+secret, and `/demo` listener rule; leaving it unset creates none of them.
+After deployment, open `https://connect-dev.macro.com/demo`. The demo uses its
+own customer key and keeps browser identities in secure cookies.
 
 ## Verify
 

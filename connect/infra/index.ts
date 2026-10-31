@@ -35,6 +35,7 @@ type OwnAppCredentials = Record<
 >;
 const ownAppCredentials =
   config.getSecretObject<OwnAppCredentials>('ownAppCredentials');
+const demoCustomerKey = config.getSecret('demoCustomerKey');
 if (liveOwnApps.length > 0 && !ownAppCredentials) {
   throw new Error(
     'Live own-app entries require encrypted ownAppCredentials config',
@@ -427,6 +428,158 @@ const service = new aws.ecs.Service(
   },
   { dependsOn: [https, runtimeSecretVersion] },
 );
+
+if (demoCustomerKey) {
+  const demoName = `${name}-demo`;
+  const demoRepository = new aws.ecr.Repository(`${demoName}-repo`, {
+    name: demoName,
+    imageScanningConfiguration: { scanOnPush: true },
+    tags,
+  });
+  const demoImage = new awsx.ecr.Image(`${demoName}-image`, {
+    repositoryUrl: demoRepository.repositoryUrl,
+    context: '../..',
+    dockerfile: '../../connect/services/connect_demo/Dockerfile',
+    platform: 'linux/amd64',
+  });
+  const demoLogs = new aws.cloudwatch.LogGroup(`${demoName}-logs`, {
+    name: `/ecs/${demoName}`,
+    retentionInDays: stack === 'prod' ? 30 : 7,
+    tags,
+  });
+  const demoSg = new aws.ec2.SecurityGroup(`${demoName}-sg`, {
+    vpcId: vpc.id,
+    egress: [],
+    tags,
+  });
+  new aws.vpc.SecurityGroupEgressRule(`${name}-alb-to-demo`, {
+    securityGroupId: albSg.id,
+    ipProtocol: 'tcp',
+    fromPort: 3000,
+    toPort: 3000,
+    referencedSecurityGroupId: demoSg.id,
+    tags,
+  });
+  new aws.vpc.SecurityGroupIngressRule(`${demoName}-from-alb`, {
+    securityGroupId: demoSg.id,
+    ipProtocol: 'tcp',
+    fromPort: 3000,
+    toPort: 3000,
+    referencedSecurityGroupId: albSg.id,
+    tags,
+  });
+  new aws.vpc.SecurityGroupEgressRule(`${demoName}-out`, {
+    securityGroupId: demoSg.id,
+    ipProtocol: '-1',
+    cidrIpv4: '0.0.0.0/0',
+    tags,
+  });
+  const demoSecret = new aws.secretsmanager.Secret(`${demoName}-runtime`, {
+    name: `${demoName}-runtime`,
+    tags,
+  });
+  const demoSecretVersion = new aws.secretsmanager.SecretVersion(
+    `${demoName}-runtime-version`,
+    {
+      secretId: demoSecret.id,
+      secretString: pulumi.secret(
+        demoCustomerKey.apply((key) =>
+          JSON.stringify({
+            CONNECT_BASE_URL: publicUrl,
+            CONNECT_DEMO_PUBLIC_URL: `${publicUrl}/demo`,
+            CONNECT_DEMO_CUSTOMER_KEY: key,
+          }),
+        ),
+      ),
+    },
+  );
+  new aws.iam.RolePolicy(`${demoName}-execution-secret`, {
+    role: executionRole.name,
+    policy: pulumi.jsonStringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: 'secretsmanager:GetSecretValue',
+          Resource: demoSecret.arn,
+        },
+      ],
+    }),
+  });
+  const demoTarget = new aws.lb.TargetGroup(`${demoName}-target`, {
+    // Target group names are limited to 32 characters.
+    namePrefix: 'demo-',
+    port: 3000,
+    protocol: 'HTTP',
+    targetType: 'ip',
+    vpcId: vpc.id,
+    healthCheck: { path: '/demo/health', protocol: 'HTTP', matcher: '200' },
+    tags,
+  });
+  const demoRule = new aws.lb.ListenerRule(`${demoName}-rule`, {
+    listenerArn: https.arn,
+    priority: 100,
+    conditions: [{ pathPattern: { values: ['/demo', '/demo/*'] } }],
+    actions: [{ type: 'forward', targetGroupArn: demoTarget.arn }],
+    tags,
+  });
+  const demoTask = new aws.ecs.TaskDefinition(`${demoName}-task`, {
+    family: demoName,
+    cpu: '256',
+    memory: '512',
+    networkMode: 'awsvpc',
+    requiresCompatibilities: ['FARGATE'],
+    taskRoleArn: taskRole.arn,
+    executionRoleArn: executionRole.arn,
+    containerDefinitions: pulumi.jsonStringify([
+      {
+        name: 'connect_demo',
+        image: demoImage.imageUri,
+        essential: true,
+        portMappings: [{ containerPort: 3000, protocol: 'tcp' }],
+        secrets: [
+          {
+            name: 'APP_SECRETS_JSON',
+            valueFrom: pulumi.interpolate`${demoSecret.arn}:::${demoSecretVersion.versionId}`,
+          },
+        ],
+        logConfiguration: {
+          logDriver: 'awslogs',
+          options: {
+            'awslogs-group': demoLogs.name,
+            'awslogs-region': aws.config.region ?? 'us-east-1',
+            'awslogs-stream-prefix': 'connect_demo',
+          },
+        },
+      },
+    ]),
+    tags,
+  });
+  new aws.ecs.Service(
+    `${demoName}-service`,
+    {
+      cluster: cluster.arn,
+      taskDefinition: demoTask.arn,
+      desiredCount: 1,
+      launchType: 'FARGATE',
+      deploymentCircuitBreaker: { enable: true, rollback: true },
+      networkConfiguration: {
+        subnets: privateSubnetIds,
+        securityGroups: [demoSg.id],
+        assignPublicIp: false,
+      },
+      loadBalancers: [
+        {
+          targetGroupArn: demoTarget.arn,
+          containerName: 'connect_demo',
+          containerPort: 3000,
+        },
+      ],
+      tags,
+    },
+    { dependsOn: [demoRule, demoSecretVersion] },
+  );
+}
 
 export const connectUrl = publicUrl;
 export const clusterArn = cluster.arn;
