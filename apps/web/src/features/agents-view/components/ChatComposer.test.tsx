@@ -14,7 +14,7 @@ import {
   createEditor,
   type LexicalEditor,
 } from 'lexical';
-import { createSignal } from 'solid-js';
+import { createSignal, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryPicker } from '../views/RepositoryPicker';
@@ -55,6 +55,8 @@ const editor = vi.hoisted(() => ({
     | undefined,
   text: '',
   readMarkdown: (): string => '',
+  /** Applies MarkdownShell's initial value when the editor connects. */
+  connect: undefined as ((markdown: string) => void) | undefined,
 }));
 
 vi.mock(
@@ -103,15 +105,26 @@ vi.mock(
 );
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: (props: { placeholder?: string }) => (
-    <div data-testid="editor">
-      {props.placeholder}
-      {/* Decorators portal their popups (the paste viewer) out of the editor. */}
-      <Portal>
-        <pre data-testid="portaled-text">Pasted text</pre>
-      </Portal>
-    </div>
-  ),
+  MarkdownShell: (props: {
+    placeholder?: string;
+    initialValue?: string;
+    onConnect?: () => void;
+  }) => {
+    // Like the real shell: apply the initial value once connected, then report it.
+    onMount(() => {
+      if (props.initialValue) editor.connect?.(props.initialValue);
+      props.onConnect?.();
+    });
+    return (
+      <div data-testid="editor">
+        {props.placeholder}
+        {/* Decorators portal their popups (the paste viewer) out of the editor. */}
+        <Portal>
+          <pre data-testid="portaled-text">Pasted text</pre>
+        </Portal>
+      </div>
+    );
+  },
 }));
 
 vi.mock('@channel/Input/Input', () => ({
@@ -165,7 +178,29 @@ beforeEach(() => {
   editor.readMarkdown = () => editor.text;
   editor.enter = undefined;
   editor.change = undefined;
+  editor.connect = undefined;
 });
+
+/** Replace the editor contents with the selection at the start, as Lexical's markdown import does. */
+function importAtStart(markdown: string) {
+  editor.lexical?.update(
+    () => {
+      const paragraph = $createParagraphNode().append(
+        $createTextNode(markdown)
+      );
+      $getRoot().clear().append(paragraph);
+      paragraph.selectStart();
+    },
+    { discrete: true }
+  );
+}
+
+function caretOffset() {
+  return editor.lexical?.read(() => {
+    const selection = $getSelection();
+    return $isRangeSelection(selection) ? selection.anchor.offset : undefined;
+  });
+}
 
 function type(text: string) {
   editor.text = text;
@@ -257,29 +292,26 @@ describe('Chat session input', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('leaves the caret after a seeded draft', () => {
-    // Markdown import puts the selection at the start, as Lexical's does.
-    editor.setMarkdown.mockImplementationOnce((markdown: string) =>
-      editor.lexical?.update(
-        () => {
-          const paragraph = $createParagraphNode().append(
-            $createTextNode(markdown)
-          );
-          $getRoot().clear().append(paragraph);
-          paragraph.selectStart();
-        },
-        { discrete: true }
-      )
-    );
+  it('leaves the caret after a draft seeded when the editor connects', () => {
+    editor.connect = importAtStart;
     render(() => (
       <ChatSessionInput initialInput="Ask about @Routine" onSend={vi.fn()} />
     ));
-    editor.lexical?.read(() => {
-      const selection = $getSelection();
-      expect($isRangeSelection(selection) && selection.anchor.offset).toBe(
-        'Ask about @Routine'.length
-      );
-    });
+    expect(caretOffset()).toBe('Ask about @Routine'.length);
+  });
+
+  it('leaves the caret after a draft the host applies to an open editor', () => {
+    editor.setMarkdown.mockImplementation(importAtStart);
+    const [draft, setDraft] = createSignal('');
+    render(() => (
+      <ChatSessionInput
+        draft={draft()}
+        onDraftChange={setDraft}
+        onSend={vi.fn()}
+      />
+    ));
+    setDraft('Ask about @Routine');
+    expect(caretOffset()).toBe('Ask about @Routine'.length);
   });
 
   it('shows only the model control and submits a trimmed follow-up', () => {

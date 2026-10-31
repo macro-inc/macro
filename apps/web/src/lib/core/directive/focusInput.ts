@@ -26,21 +26,11 @@ declare module 'solid-js' {
  */
 export function triggerFocusInput(
   getTarget: () => HTMLElement | null | undefined,
-  anchor?: HTMLElement,
-  /** Put the caret after text already in the target, e.g. a seeded draft. */
-  options?: { caretAtEnd?: boolean }
+  anchor?: HTMLElement
 ) {
-  const focus = (el: HTMLElement) => {
-    el.focus();
-    if (options?.caretAtEnd && el.isContentEditable) {
-      const selection = window.getSelection();
-      selection?.selectAllChildren(el);
-      selection?.collapseToEnd();
-    }
-  };
   const target = getTarget();
   if (target && isVisible(target)) {
-    focus(target);
+    target.focus();
     return;
   }
 
@@ -63,7 +53,7 @@ export function triggerFocusInput(
     // before focus transfers, and each focus forces synchronous WebKit layout.
     observer?.disconnect();
     focusTimeoutId = setTimeout(() => {
-      focus(el);
+      el.focus();
       cleanup();
     }, 0);
   }

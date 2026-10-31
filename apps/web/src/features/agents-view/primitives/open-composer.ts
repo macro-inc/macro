@@ -54,9 +54,6 @@ export function openAgentComposer(
         document.querySelectorAll<HTMLElement>('[data-agents-workspace]')
       )
         .find((element) => element.dataset.agentsWorkspace === split.id)
-        ?.querySelector<HTMLElement>('.newchat [contenteditable="true"]'),
-    undefined,
-    // Typing continues after a seeded draft, such as the mentions Ask AI adds.
-    { caretAtEnd: seed?.draft !== undefined }
+        ?.querySelector<HTMLElement>('.newchat [contenteditable="true"]')
   );
 }

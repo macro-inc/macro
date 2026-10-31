@@ -179,6 +179,19 @@ export function ChatComposer(props: {
           : 'auto',
   });
 
+  // Markdown import leaves the selection at the start, and programmatic focus
+  // restores it there (restoreFocusPlugin). Keep it after a seeded draft (Ask
+  // AI's mentions) so typing continues the draft, without taking focus.
+  const selectDraftEnd = () => {
+    const focused = editor.lexical
+      .getRootElement()
+      ?.contains(document.activeElement);
+    editor.lexical.update(() => {
+      if (!focused) $addUpdateTag(SKIP_DOM_SELECTION_TAG);
+      $getRoot().selectEnd();
+    });
+  };
+
   // Only host draft changes should replace the editor contents.
   createEffect(
     on(
@@ -186,16 +199,7 @@ export function ChatComposer(props: {
       (draft) => {
         if (draft === editor.controls.getMarkdown()) return;
         editor.controls.setMarkdown(draft);
-        // Markdown import leaves the selection at the start, and focusing the
-        // editor later restores it there. Keep it after a seeded draft (Ask
-        // AI's mentions) so typing continues it, without taking focus.
-        const focused = editor.lexical
-          .getRootElement()
-          ?.contains(document.activeElement);
-        editor.lexical.update(() => {
-          if (!focused) $addUpdateTag(SKIP_DOM_SELECTION_TAG);
-          $getRoot().selectEnd();
-        });
+        selectDraftEnd();
       }
     )
   );
@@ -301,6 +305,9 @@ export function ChatComposer(props: {
         class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p:first-child]:mt-0 [&_[data-markdown-editable]>.md-p:last-child]:mb-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
         config={editor}
         initialValue={props.draft}
+        onConnect={() => {
+          if (props.draft) selectDraftEnd();
+        }}
         placeholder={
           isTouchDevice()
             ? // Phones are too narrow for the full mention and skills hint.
