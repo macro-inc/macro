@@ -400,8 +400,8 @@ pub struct ToolCalendarEvent {
     /// calendar it is.
     pub inbox: Option<String>,
     /// Whether the user organizes this event or is a guest on it, through
-    /// that inbox; absent when they are neither, or can only write that
-    /// calendar.
+    /// that inbox; absent when they are neither, can only write that
+    /// calendar, or a read-only calendar names them organizer.
     pub my_role: Option<ToolEventRole>,
 }
 
@@ -410,8 +410,9 @@ pub struct ToolCalendarEvent {
 #[serde(rename_all = "snake_case")]
 pub enum ToolEventRole {
     /// The inbox organizes the event, or the event has no guests and is the
-    /// user's own. Being able to write someone else's calendar is not this;
-    /// `viewerCan` says what the user may do there.
+    /// user's own. Being able to write someone else's calendar is not this,
+    /// nor is a read-only calendar naming them organizer; `viewerCan` says
+    /// what the user may do there.
     Organizer,
     /// The inbox is invited to the event.
     Guest,
@@ -419,14 +420,16 @@ pub enum ToolEventRole {
 
 impl ToolEventRole {
     /// The role of the copy's inbox, read the way clients read it: only the
-    /// copy's own inbox row is `is_self`. `organize` says they may act as
-    /// organizer, which writing someone else's calendar grants too, so it
-    /// counts only on a calendar of their own schedule with no other
-    /// organizer listed.
+    /// copy's own inbox row is `is_self`. That row marked organizer counts
+    /// only on a copy the user can change, since Microsoft Graph names the
+    /// mailbox owner as organizer on every event of a read-only calendar.
+    /// `organize` says they may act as organizer, which writing someone
+    /// else's calendar grants too, so it counts only on a calendar of their
+    /// own schedule with no other organizer listed.
     fn of(event: &CalendarEvent, labels: &CalendarLabels) -> Option<Self> {
         let own_row = event.attendees.iter().find(|attendee| attendee.is_self);
         if own_row.is_some_and(|attendee| attendee.is_organizer) {
-            return Some(Self::Organizer);
+            return (!event.is_read_only).then_some(Self::Organizer);
         }
         let other_organizer = event.attendees.iter().any(|attendee| attendee.is_organizer);
         if event.viewer_can.organize

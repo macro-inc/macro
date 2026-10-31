@@ -299,8 +299,16 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   capability, since writing a calendar lets the user act as its organizer, so
   `ToolEventRole::of` and the SDK's `eventRole` count it only on such a
   calendar, and `ReadCalendarEvent` reports anything else as
-  `on_visible_calendar`. The calendar's name is what tells an agent whose it
-  is: Google names a person's primary calendar after them or their address.
+  `on_visible_calendar`. Microsoft Graph names the mailbox owner as organizer
+  on every event of a read-only calendar such as Outlook's holidays, and the
+  normalizer turns that into an own attendee row, so both role readers give no
+  role (not `guest`) for that row on a read-only event. Gate it on
+  `is_read_only`, never on availability: the copy rules read the role of the
+  copy the user organizes, which may be off availability. The entity carries
+  its canonical copy's flag, and a writable copy outranks a read-only one, so
+  a meeting the user organizes keeps its role when a read-only calendar shows
+  it too. The calendar's name is what tells an agent whose it is: Google names
+  a person's primary calendar after them or their address.
 - Copies of one meeting pair by `calendar_meeting_uid(ical_uid)`, not the raw
   UID: Exchange gives a meeting it imports from an invitation its own UID that
   wraps the original after `vCal-Uid`, and the SQL function unwraps it, so an
