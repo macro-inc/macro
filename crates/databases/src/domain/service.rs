@@ -437,6 +437,27 @@ where
         Ok((database, tables))
     }
 
+    /// The receipt's database, when it is live and holds `table_id`.
+    async fn live_table<T: RequiredPermission>(
+        &self,
+        receipt: &EntityAccessReceipt<T>,
+        table_id: TableId,
+    ) -> Result<DatabaseId, DatabaseError> {
+        let database_id = receipt_database_id(receipt)?;
+        let held = self
+            .repository
+            .get_database(database_id)
+            .await
+            .map_err(repository_error)?
+            .is_some_and(|(database, tables)| {
+                database.trashed_at.is_none() && tables.iter().any(|table| table.id == table_id)
+            });
+        if !held {
+            return Err(DatabaseError::NotFound);
+        }
+        Ok(database_id)
+    }
+
     /// One column as the client sees it.
     async fn column_detail(
         &self,
@@ -824,18 +845,7 @@ where
         table_id: TableId,
         since: TableVersion,
     ) -> Result<crate::domain::journal::TableChanges, DatabaseError> {
-        let database_id = receipt_database_id(&receipt)?;
-        let held = self
-            .repository
-            .get_database(database_id)
-            .await
-            .map_err(repository_error)?
-            .filter(|(database, tables)| {
-                database.trashed_at.is_none() && tables.iter().any(|table| table.id == table_id)
-            });
-        if held.is_none() {
-            return Err(DatabaseError::NotFound);
-        }
+        self.live_table(&receipt, table_id).await?;
         let touches = self
             .repository
             .touches_after(table_id, since)

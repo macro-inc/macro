@@ -504,6 +504,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::history::row_history_handler,
         databases::inbound::axum_router::history::undo_change_handler,
         databases::inbound::axum_router::history::table_changes_handler,
+        databases::inbound::axum_router::rows::table_rows_handler,
         databases::inbound::axum_router::transfer::import_table_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
