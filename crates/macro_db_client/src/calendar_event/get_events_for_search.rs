@@ -69,11 +69,11 @@ pub struct CalendarEventSearchInfo {
 /// during enrichment.
 ///
 /// A row can be the sharer's copy of a meeting the requester also holds: an
-/// id named in the own scope reaches it, and the shared scope does when the
-/// copies' raw UIDs differ. `holds_meeting` therefore pairs copies the way the
-/// mention preview does, by `calendar_meeting_uid`, except that a preview
-/// resolves to the requester's own copy while a search row stays on the hit,
-/// so a snapshot, which never had the link, must not unlock the sharer's.
+/// id named in the own scope reaches it. `holds_meeting` therefore pairs
+/// copies the way the mention preview does, by `calendar_meeting_uid`, except
+/// that a preview resolves to the requester's own copy while a search row
+/// stays on the hit, so a snapshot, which never had the link, must not unlock
+/// the sharer's.
 ///
 /// A recurring series is indexed once, as its master, so the instance a row
 /// should display is decided here rather than baked into the index. The
@@ -246,7 +246,14 @@ pub async fn get_calendar_events_for_search(
 /// A grant counts only under the event's access check (live, neither private
 /// nor confidential). A meeting the requester also holds, owned or through a
 /// delegated inbox, is left out: a mention of it resolves to their own copy,
-/// which their own scope already finds.
+/// which their own scope finds under the title that copy carries. This runs
+/// before the search matches titles, so a held copy titled differently keeps
+/// the share out of a search for the share's title.
+///
+/// Copies pair by `calendar_meeting_uid`, as `holds_meeting` does, but this
+/// asks which row to list rather than who may read the link, so a snapshot
+/// counts: it is a row of their own scope, though not a seat. A cancelled copy
+/// does not, since the share is then the only row that still opens.
 #[tracing::instrument(skip(db, requester_id), fields(shared_event_count), err)]
 pub async fn get_channel_shared_calendar_event_ids(
     db: &Pool<Postgres>,
@@ -268,7 +275,8 @@ pub async fn get_channel_shared_calendar_event_ids(
           AND NOT EXISTS (
                 SELECT 1
                 FROM calendar_events held
-                WHERE held.ical_uid = event.ical_uid
+                WHERE calendar_meeting_uid(held.ical_uid)
+                    = calendar_meeting_uid(event.ical_uid)
                   AND held.status <> 'cancelled'
                   AND (
                         held.owner_id = $1

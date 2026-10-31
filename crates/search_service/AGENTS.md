@@ -61,13 +61,16 @@ per-entity-type search plus a unified search across them — mounted into
   request): `own` matches the caller's own and delegated calendars by
   owner and inbox link; `shared_with_you` resolves the events shared with the
   caller's channels in Postgres and searches by id, leaving out meetings the
-  caller holds a copy of. Enrichment re-checks every hit against the event's
-  access rule. A caller who does not hold the meeting gets no conference link,
-  and `calendar_events`' `content_without_macro_call` takes the Macro call out
-  of the description; a provider's own join text in the body stays, as it does
-  in a mention preview. Enrichment is the only gate: an id named in the `own`
-  scope reaches a share as well. The index stores titles, never the description
-  or location, so hits and highlights cannot carry the link.
+  caller holds a live copy of, paired by `calendar_meeting_uid`. A snapshot
+  counts there, since the `own` scope lists it, though it never counts as
+  holding the meeting for the conference link. Enrichment re-checks every hit
+  against the event's access rule. A caller who does not hold the meeting gets
+  no conference link, and `calendar_events`' `content_without_macro_call` takes
+  the Macro call out of the description; a provider's own join text in the body
+  stays, as it does in a mention preview. Enrichment is the only gate: an id
+  named in the `own` scope reaches a share as well. The index stores titles,
+  never the description or location, so hits and highlights cannot carry the
+  link.
 
 ## Related
 

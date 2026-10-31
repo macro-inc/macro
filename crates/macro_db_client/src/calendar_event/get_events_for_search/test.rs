@@ -179,6 +179,81 @@ fn exchange_uid(uid: &str) -> String {
 }
 
 #[sqlx::test]
+async fn shared_ids_leave_out_a_meeting_held_under_a_wrapped_uid(pool: Pool<Postgres>) {
+    const MEETING: &str = "shared@example.com";
+    const OUTLOOK_MEETING: &str = "outlook@example.com";
+    let shared = insert_event(&pool, OWNER, MEETING, "default").await;
+    let shared_from_outlook =
+        insert_event(&pool, OWNER, &exchange_uid(OUTLOOK_MEETING), "default").await;
+    let channel_id = insert_channel(&pool).await;
+    share_with_channel(&pool, shared, channel_id).await;
+    share_with_channel(&pool, shared_from_outlook, channel_id).await;
+    let read = |user: &'static str| {
+        let pool = pool.clone();
+        async move {
+            let mut ids = get_channel_shared_calendar_event_ids(&pool, user)
+                .await
+                .unwrap();
+            ids.sort();
+            ids
+        }
+    };
+
+    // Exchange wraps the UID, but both copies are the one meeting, which the
+    // holder's own scope already lists.
+    let held = insert_event(&pool, ATTENDEE, &exchange_uid(MEETING), "default").await;
+    insert_event(&pool, ATTENDEE, OUTLOOK_MEETING, "default").await;
+    assert!(
+        read(ATTENDEE).await.is_empty(),
+        "a holder sees each meeting once, whichever copy wraps the UID"
+    );
+    assert_eq!(
+        read(MEMBER).await,
+        vec![shared, shared_from_outlook],
+        "a member who holds no copy keeps both shares"
+    );
+
+    // A wrapped UID of some other meeting is not a copy of this one.
+    sqlx::query("UPDATE calendar_events SET ical_uid = $2 WHERE id = $1")
+        .bind(held)
+        .bind(exchange_uid("other@example.com"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        read(ATTENDEE).await,
+        vec![shared],
+        "another meeting hides nothing"
+    );
+
+    // A snapshot is no seat, but it is a row of the holder's own scope.
+    sqlx::query("UPDATE calendar_events SET ical_uid = $2, is_snapshot = true WHERE id = $1")
+        .bind(held)
+        .bind(exchange_uid(MEETING))
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        read(ATTENDEE).await.is_empty(),
+        "a snapshot already lists the meeting"
+    );
+
+    // A cancelled copy leaves the share as the only row that still opens.
+    sqlx::query(
+        "UPDATE calendar_events SET is_snapshot = false, status = 'cancelled' WHERE id = $1",
+    )
+    .bind(held)
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        read(ATTENDEE).await,
+        vec![shared],
+        "a cancelled copy leaves the share listed"
+    );
+}
+
+#[sqlx::test]
 async fn only_a_seat_on_the_meeting_keeps_a_shared_row_join_link(pool: Pool<Postgres>) {
     const MEETING: &str = "shared@example.com";
     let shared = insert_event(&pool, OWNER, MEETING, "default").await;
