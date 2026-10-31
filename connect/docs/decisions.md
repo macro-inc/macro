@@ -2,6 +2,17 @@
 
 Newest first. Each entry: date, decision, reason, who decided.
 
+## 2026-10-31
+
+- **Test consents use separate free workspaces, never Macro's.** Vendors offer
+  to join Macro's workspaces because the test account is on `macro.com`;
+  joining adds seats and exposes company data
+  ([test accounts](test-accounts.md)). (Claude)
+- **The demo is a separate Connect customer at `/demo` on the dev host.** It
+  uses only `connect_client` and its own customer key, as Macro will, and is
+  optional in the stack (`demoCustomerKey`). (Eric asked for a working demo;
+  Claude chose the shape)
+
 ## 2026-10-30
 
 - **First pass: an entirely independent backend, not wired to Macro.** Connect

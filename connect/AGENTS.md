@@ -26,7 +26,7 @@ roles are in [`docs/building.md`](docs/building.md).
 | `infra/` | Standalone Pulumi project for Connect's ECS, ALB, database, KMS key, and runtime secret. |
 | `docker-compose.yml` | Local Connect API, demo, and PostgreSQL 17. |
 | `packages/` | TypeScript packages; `@macro-connect/sdk` is the public web SDK. |
-| `docs/` | Plan, decisions, catalog spec, probing, submissions, research, and deployment runbooks. |
+| `docs/` | Plan, decisions, catalog spec, probing, submissions, [test accounts](docs/test-accounts.md), research, and deployment runbooks. |
 | `tasks/` | One spec per builder task, with its Result; process in [`docs/building.md`](docs/building.md). |
 | `tooling/` | `dispatch.sh` runs a builder on a task spec; `builder-brief.md` is its shared prompt. |
 | `.agents/skills/` | Workflows: `connect-pm`, `connect-add-app`, `connect-submission`. `.claude/skills` symlinks here. |
