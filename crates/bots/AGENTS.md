@@ -49,3 +49,5 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/observability.md`
+- Docs: [`docs/guides/bots.md`](../../docs/guides/bots.md) (building a bot:
+  ownership, tokens, webhook vs entity message API, acting as a user)
