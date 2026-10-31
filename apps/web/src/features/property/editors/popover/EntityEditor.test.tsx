@@ -273,13 +273,17 @@ describe('people in a picker sheet', () => {
     fireEvent.click(screen.getByText('Research assistant'));
     fireEvent.click(screen.getByText('Done'));
     await waitFor(() =>
-      expect(onSave).toHaveBeenCalledExactlyOnceWith(property, {
-        valueType: 'ENTITY',
-        refs: [
-          { entity_id: userId, entity_type: 'USER' },
-          { entity_id: agentId, entity_type: 'USER' },
-        ],
-      })
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        property,
+        {
+          valueType: 'ENTITY',
+          refs: [
+            { entity_id: userId, entity_type: 'USER' },
+            { entity_id: agentId, entity_type: 'USER' },
+          ],
+        },
+        new Map([[agentId, 'Research assistant']])
+      )
     );
   });
 });

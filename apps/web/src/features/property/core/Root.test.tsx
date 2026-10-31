@@ -2,7 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { SelectProperty } from '../types';
+import type { EntityProperty, SelectProperty } from '../types';
 import { getSelectValues } from '../utils/typeGuards';
 import { useProperty } from './context';
 import { Root } from './Root';
@@ -121,6 +121,100 @@ it('keeps a saving pick through ID assignment but not on another property', () =
     value: ['todo'],
   });
   expect(shown()).toBe('todo');
+});
+
+const project: EntityProperty = {
+  propertyId: 'project-assignment',
+  propertyDefinitionId: 'project-definition',
+  displayName: 'Project',
+  isMultiSelect: false,
+  owner: { scope: 'system' },
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  valueType: 'ENTITY',
+  specificEntityType: 'INITIATIVE',
+  value: [{ entity_id: 'launch', entity_type: 'INITIATIVE' }],
+};
+
+function PickProject() {
+  const ctx = useProperty();
+  const pick = async () => {
+    try {
+      await ctx.onSave?.(
+        ctx.property(),
+        {
+          valueType: 'ENTITY',
+          refs: [{ entity_id: 'redesign', entity_type: 'INITIATIVE' }],
+        },
+        new Map([['redesign', 'Website redesign']])
+      );
+    } catch {
+      // Each test settles its saves.
+    }
+  };
+  return (
+    <>
+      <output>{ctx.pickedEntityName('redesign')}</output>
+      <button onClick={() => fireAndForget(pick(), 'property-root-test')}>
+        Pick redesign
+      </button>
+    </>
+  );
+}
+
+it('names a picked entity until its own read can answer, on its property only', async () => {
+  const [source, setSource] = createSignal<EntityProperty>(project);
+  const saves: PromiseWithResolvers<void>[] = [];
+  const onSave = vi.fn(() => {
+    const save = Promise.withResolvers<void>();
+    saves.push(save);
+    return save.promise;
+  });
+  render(() => (
+    <Root property={source()} canEdit onSave={onSave}>
+      <PickProject />
+    </Root>
+  ));
+  const pickedName = () => screen.getByRole('status').textContent;
+
+  fireEvent.click(screen.getByText('Pick redesign'));
+  expect(pickedName()).toBe('Website redesign');
+  expect(onSave).toHaveBeenCalledExactlyOnceWith(project, {
+    valueType: 'ENTITY',
+    refs: [{ entity_id: 'redesign', entity_type: 'INITIATIVE' }],
+  });
+
+  saves[0].resolve();
+  await saves[0].promise;
+  // The source can show the pick before the chip's own read answers.
+  setSource({
+    ...project,
+    value: [{ entity_id: 'redesign', entity_type: 'INITIATIVE' }],
+  });
+  expect(pickedName()).toBe('Website redesign');
+
+  setSource({
+    ...project,
+    propertyId: 'status-assignment',
+    propertyDefinitionId: 'status-definition',
+  });
+  expect(pickedName()).toBe('');
+});
+
+it('drops the picked names when their save fails', async () => {
+  const save = Promise.withResolvers<void>();
+  render(() => (
+    <Root property={project} canEdit onSave={() => save.promise}>
+      <PickProject />
+    </Root>
+  ));
+
+  fireEvent.click(screen.getByText('Pick redesign'));
+  expect(screen.getByRole('status').textContent).toBe('Website redesign');
+
+  save.reject(new Error('rejected'));
+  await expect(save.promise).rejects.toThrow('rejected');
+  expect(screen.getByRole('status').textContent).toBe('');
 });
 
 function EditorToggle() {
