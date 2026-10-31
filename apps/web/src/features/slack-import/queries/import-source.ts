@@ -258,6 +258,8 @@ export function createImportSource(
             return result.value;
           } finally {
             activeUploads.delete(controller);
+            // Releases the combined signal's listener on options.signal.
+            controller.abort();
           }
         },
       }));

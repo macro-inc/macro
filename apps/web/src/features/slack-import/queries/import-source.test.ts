@@ -671,14 +671,14 @@ describe('import commands', () => {
       ]);
       h.upload.mockResolvedValue(ok('uploaded'));
       const caller = new AbortController();
+      const listen = vi.spyOn(caller.signal, 'addEventListener');
 
       expect(
         await capability.put(new Blob(['{}']), { signal: caller.signal })
       ).toBe('uploaded');
-      const signal: AbortSignal | undefined =
-        h.upload.mock.calls[0]?.[2]?.signal;
-      caller.abort();
-      expect(signal?.aborted).toBe(true);
+      // A finished upload stops listening to the long-lived caller signal.
+      const options = listen.mock.calls[0]?.[2];
+      expect(typeof options === 'object' && options.signal?.aborted).toBe(true);
     } finally {
       Object.assign(AbortSignal, { any });
     }
