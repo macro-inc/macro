@@ -14,10 +14,10 @@ List selection checkmarks update without animation. Selection subscriptions noti
 only changed rows; task and project focus subscriptions update the old and new
 rows without invalidating every visible row.
 
-Task list status and priority editing use `extractors-property/task-property-control.tsx`
-in the leading icon slots before the title. Status glyphs use 18px on desktop
+Task list priority and status editing use `extractors-property/task-property-control.tsx`
+in that order before the title. Status glyphs use 18px on desktop
 and phones; priority glyphs use 16px on desktop and 20px on phones and never
-flex-shrink. Hit targets stay unchanged. Priority stays directly before the title.
+flex-shrink. Hit targets stay unchanged. Status stays directly before the title.
 The controls share the property editor and mutation path across wide task rows and narrow entity rows,
 including optimistic values and rollback. Dedicated task rows omit duplicate trailing
 Status and Priority properties and their separate columns. Mixed search rows retain a

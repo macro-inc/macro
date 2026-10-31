@@ -148,7 +148,7 @@ selection behavior remain available.
 Click or tap the leading status or priority icon to edit without opening the task.
 Status icons are 18px on desktop and phones; priority icons are 16px on desktop
 and 20px on phones and never flex-shrink. Phone tap targets sit edge-to-edge.
-Priority sits directly beside the title; the shared badge follows the title with
+Priority comes first, then Status directly beside the title. The shared badge follows with
 4px of layout spacing and its existing internal padding. Their pickers replace
 the separate Status/Priority columns and duplicate trailing mobile pills; Project
 and Assignees stay on the right, with 20px phone icons. Empty assignees use a filled

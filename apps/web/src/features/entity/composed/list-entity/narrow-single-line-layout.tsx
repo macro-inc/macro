@@ -58,6 +58,11 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
         placement="title"
         class="ph-no-capture flex min-w-0 items-center gap-2 truncate"
       >
+        <Show when={isTaskEntity(props.entity) && props.entity}>
+          {(task) => (
+            <TaskPropertyControl entity={task()} property="priority" />
+          )}
+        </Show>
         <div class="size-4 shrink-0">
           <Show
             when={props.icon}
@@ -71,11 +76,6 @@ export function NarrowSingleLineLayout(props: LayoutProps) {
             {props.icon}
           </Show>
         </div>
-        <Show when={isTaskEntity(props.entity) && props.entity}>
-          {(task) => (
-            <TaskPropertyControl entity={task()} property="priority" />
-          )}
-        </Show>
         <Switch>
           <Match when={isEmailEntity(props.entity) && props.entity}>
             {(entity) => (

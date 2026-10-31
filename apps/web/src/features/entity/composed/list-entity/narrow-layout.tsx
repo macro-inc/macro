@@ -91,7 +91,9 @@ export function NarrowLayout(props: LayoutProps) {
             </div>
           }
         >
-          {(task) => <TaskPropertyControl entity={task()} property="status" />}
+          {(task) => (
+            <TaskPropertyControl entity={task()} property="priority" />
+          )}
         </Show>
         <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
           {(task) => (
@@ -101,7 +103,7 @@ export function NarrowLayout(props: LayoutProps) {
                 compactTask() ? '-ml-1' : 'touch:-mr-2'
               )}
             >
-              <TaskPropertyControl entity={task()} property="priority" />
+              <TaskPropertyControl entity={task()} property="status" />
             </div>
           )}
         </Show>
