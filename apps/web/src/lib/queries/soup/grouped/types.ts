@@ -1,4 +1,5 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
+import type { ApiGroupByField } from '@service-storage/generated/schemas/apiGroupByField';
 
 /**
  * Empty group key emitted by the backend
@@ -6,6 +7,18 @@ import type { SoupApiItem } from '@service-storage/generated/schemas';
  * for items missing a value for the grouped property.
  */
 export const NOT_SET_GROUP_KEY = '';
+
+type ApiDatePropertyBucketing = NonNullable<
+  Extract<ApiGroupByField, { property: unknown }>['property']['bucketing']
+>;
+
+/** Date ranges belong to a view, not to a property definition. */
+export type DatePropertyBucketing = Omit<
+  ApiDatePropertyBucketing,
+  'missing_value_bucket_key'
+> & {
+  missingValueBucketKey: ApiDatePropertyBucketing['missing_value_bucket_key'];
+};
 
 export type GroupByField =
   | { type: 'date' }
@@ -15,6 +28,7 @@ export type GroupByField =
       type: 'property';
       propertyDefinitionId: string;
       entityType?: PropertyEntityType;
+      bucketing?: DatePropertyBucketing;
     };
 
 export const GROUP_BY_TYPES: readonly GroupByField['type'][] = [

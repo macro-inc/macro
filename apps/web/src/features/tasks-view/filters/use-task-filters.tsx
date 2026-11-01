@@ -10,8 +10,13 @@ import { PropertyValueIcon } from '@property/component/propertyValue';
 import { useTagFilterGroup } from '@property/tags/use-tag-filter-group';
 import { useContacts } from '@queries/contacts/contacts';
 import { Tooltip } from '@ui';
-import { batch, createMemo } from 'solid-js';
+import { batch, createMemo, createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
+import type { TaskDateRangeDraft } from '../components/task-due-date-range-dialog';
+import {
+  isTaskDueDateBucket,
+  TASK_DUE_DATE_BUCKETS,
+} from '../core/task-due-date';
 import { requestAiTaskFilterPlan } from '../queries/ai-task-filter-plan';
 import { useTasksView } from '../tasks-view-context';
 import type { AiTaskFilterCatalog } from './ai-task-filter';
@@ -33,13 +38,15 @@ export type TaskFilterGroupId =
   | 'priority'
   | 'assignees'
   | 'created-by'
-  | 'tags';
+  | 'tags'
+  | 'due_date';
 
 export function useTaskFilters() {
   const { state, setFacets, setState, savedViews } = useTasksView();
   const contacts = useContacts();
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
+  const [customRange, setCustomRange] = createSignal<TaskDateRangeDraft>();
 
   const peopleOptions = createMemo(() => {
     const me = currentUserId();
@@ -141,6 +148,24 @@ export function useTaskFilters() {
         ),
       },
       {
+        id: 'due_date',
+        label: 'Due date',
+        selectionMode: 'single',
+        defaultOptionId: 'any',
+        options: [
+          { id: 'any', label: 'Any due date' },
+          ...TASK_DUE_DATE_BUCKETS,
+          { id: 'has_due_date', label: 'Has due date' },
+          {
+            id: 'range',
+            label:
+              state.dueDate?.type === 'range'
+                ? `Custom range (${state.dueDate.start ?? 'Any'} – ${state.dueDate.end ?? 'Any'})`
+                : 'Custom range…',
+          },
+        ],
+      },
+      {
         id: 'assignees',
         label: 'Assignee',
         searchPlaceholder: 'Search assignees...',
@@ -164,13 +189,29 @@ export function useTaskFilters() {
   );
 
   const isSelected = (groupId: TaskFilterGroupId, optionId: string) =>
-    (state.facets[groupId] ?? []).includes(optionId);
+    groupId === 'due_date'
+      ? (state.dueDate?.type ?? 'any') === optionId
+      : (state.facets[groupId] ?? []).includes(optionId);
 
   const setSelected = (
     groupId: TaskFilterGroupId,
     optionId: string,
     selected: boolean
   ) => {
+    if (groupId === 'due_date') {
+      if (optionId === 'range') {
+        const current = state.dueDate;
+        setCustomRange({
+          start: current?.type === 'range' ? (current.start ?? '') : '',
+          end: current?.type === 'range' ? (current.end ?? '') : '',
+        });
+      } else if (!selected || optionId === 'any') {
+        setState('dueDate', undefined);
+      } else if (isTaskDueDateBucket(optionId) || optionId === 'has_due_date') {
+        setState('dueDate', { type: optionId });
+      }
+      return;
+    }
     const update = selected ? addUnique(optionId) : removeValue(optionId);
     setFacets({
       ...state.facets,
@@ -181,7 +222,7 @@ export function useTaskFilters() {
   const activeCount = () =>
     Object.values(state.facets).reduce(
       (count, optionIds) => count + optionIds.length,
-      0
+      state.dueDate ? 1 : 0
     );
 
   const aiCatalog = (): AiTaskFilterCatalog => ({
@@ -217,7 +258,28 @@ export function useTaskFilters() {
   return {
     activeCount,
     applyDescription,
-    clear: () => setFacets({}),
+    clear: () =>
+      batch(() => {
+        setFacets({});
+        setState('dueDate', undefined);
+      }),
+    customRange,
+    setCustomRange,
+    applyCustomRange: () => {
+      const range = customRange();
+      if (
+        !range ||
+        !(range.start || range.end) ||
+        (range.start && range.end && range.start > range.end)
+      )
+        return;
+      setState('dueDate', {
+        type: 'range',
+        start: range.start || undefined,
+        end: range.end || undefined,
+      });
+      setCustomRange(undefined);
+    },
     groups,
     isSelected,
     selectedIds: (groupId: TaskFilterGroupId) => state.facets[groupId] ?? [],

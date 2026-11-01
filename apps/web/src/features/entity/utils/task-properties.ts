@@ -1,6 +1,18 @@
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { TaskEntityWithProperties } from '../types/entity';
 
+/** The stored due-date instant; absent and cleared DATE values are undated. */
+export function getTaskDueDate(
+  entity: TaskEntityWithProperties
+): string | undefined {
+  const value = entity.properties?.find(
+    (property) => property.definition.id === SYSTEM_PROPERTY_IDS.DUE_DATE
+  )?.value;
+  return value?.type === 'Date' && typeof value.value === 'string'
+    ? value.value
+    : undefined;
+}
+
 export const TASK_STATUS_OPTIONS = [
   { value: PROPERTY_OPTION_IDS.STATUS.NOT_STARTED, label: 'Not Started' },
   { value: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS, label: 'In Progress' },

@@ -74,6 +74,7 @@ export {
   COMPANY_STAGE_OPTIONS,
   getPropertyOptionLabel,
   getTaskAssigneeIds,
+  getTaskDueDate,
   getTaskPriorityOptionId,
   getTaskReferencedEntityIds,
   getTaskStatusOptionId,

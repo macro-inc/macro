@@ -38,6 +38,10 @@ soup, ai_tools, memory, channels, email, scheduled actions): frecency
 - `cargo test -p frecency --all-features` (`SQLX_OFFLINE` unset).
 - `just integration_test` (DynamoDB-backed cases, from this directory).
 
+## Gotchas
+
+- Treat DATE property literals as non-matches; keep DATE filtering on Soup or OpenSearch instead of frecency.
+
 ## Related
 
 - Rules: `.agents/rules/rust/db.md`

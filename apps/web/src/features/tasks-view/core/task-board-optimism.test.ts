@@ -1,3 +1,4 @@
+import { PROPERTY_OPTION_IDS } from '@property/identifiers';
 import { describe, expect, it } from 'vitest';
 import type { TaskBoardColumn, TaskBoardTask } from './task-board';
 import {
@@ -47,6 +48,48 @@ describe('optimistic task placements', () => {
     }
   );
 
+  it('keeps a task neutral immediately when moved into a closed status', () => {
+    for (const status of [
+      PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+      PROPERTY_OPTION_IDS.STATUS.CANCELED,
+    ]) {
+      expect(
+        movedTask(task, 'status', {
+          id: task.id,
+          fromLane: 'todo',
+          toLane: status,
+        }).closed
+      ).toBe(true);
+    }
+  });
+
+  it('removes urgency when reopening a status-only closed task, but retains subtype completion', () => {
+    const move = {
+      id: task.id,
+      fromLane: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+      toLane: 'todo',
+    };
+    expect(
+      movedTask(
+        { ...task, closed: true, statusId: move.fromLane },
+        'status',
+        move
+      ).closed
+    ).toBe(false);
+    expect(
+      movedTask(
+        {
+          ...task,
+          closed: true,
+          subtypeCompleted: true,
+          statusId: move.fromLane,
+        },
+        'status',
+        move
+      ).closed
+    ).toBe(true);
+  });
+
   it('preserves other assignees, deduplicates destinations, and adjusts loaded counts once', () => {
     const placement = {
       task: movedTask(task, 'assignee', {
@@ -87,7 +130,7 @@ describe('optimistic task placements', () => {
     const result = projectTaskBoardPlacements(
       [column('todo', [task]), column('done', [earlier, later])],
       [placement],
-      (left, right) => rank.indexOf(left) - rank.indexOf(right)
+      (left, right) => rank.indexOf(left.id) - rank.indexOf(right.id)
     );
     expect(result[1].tasks.map((task) => task.id)).toEqual(rank);
     const hidden = projectTaskBoardPlacements(

@@ -21,8 +21,10 @@
             ARRAY[]::uuid[] as "status_option_ids",
             NULL::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
+            t.sort_key as "sort_key",
             NULL as "is_completed",
             NULL::timestamptz as "deleted_at",
+            NULL::jsonb as "calendar_event",
             jsonb_build_object(
                 'tableId', r.table_id,
                 'databaseId', row_table.database_id,

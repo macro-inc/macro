@@ -38,6 +38,7 @@ import {
   SavedViewDialog,
 } from '../../saved-views/views/saved-view-dialogs';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
+import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
 import {
   decodeTaskSavedView,
   materializeTaskSavedView,
@@ -60,6 +61,15 @@ function TaskSavedViewSummary(props: {
   const { state } = useTasksView();
   const filters = useTaskFilters();
   const selection = () => materializeTaskSavedView(props.config);
+  const dueDateLabel = () => {
+    const filter = props.config.dueDate;
+    if (!filter) return;
+    if (filter.type === 'range')
+      return `Custom range (${filter.start ?? 'Any'} – ${filter.end ?? 'Any'})`;
+    if (filter.type === 'has_due_date') return 'Has due date';
+    return TASK_DUE_DATE_BUCKETS.find((bucket) => bucket.id === filter.type)
+      ?.label;
+  };
   return (
     <>
       <Show when={props.omittedFilters?.length}>
@@ -85,6 +95,7 @@ function TaskSavedViewSummary(props: {
           </Show>
         )}
       </For>
+      <Show when={dueDateLabel()}>{(label) => <p>Due date: {label()}</p>}</Show>
       <p>Layout: {LAYOUT_LABELS[props.config.layout]}</p>
       <p>
         Group by:{' '}
@@ -99,7 +110,7 @@ function TaskSavedViewSummary(props: {
         {props.config.sort
           .map(
             (sort) =>
-              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sort.reversed ? 'oldest first' : 'newest first'})`
+              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sort.id.startsWith('due_date_') ? 'missing last' : sort.id === 'status' || sort.id === 'priority' ? (sort.reversed ? 'reverse order' : 'option order') : sort.reversed ? 'oldest first' : 'newest first'})`
           )
           .join(', ') || 'Default'}
       </p>
@@ -208,6 +219,7 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
                 layout: restored.layout,
                 groupBy: restored.groupBy,
                 sort: restored.sort,
+                dueDate: restored.dueDate,
               });
             }
             selectCreatedSavedView(created.id);

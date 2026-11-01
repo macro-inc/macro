@@ -4,6 +4,17 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import { TASK_DEFAULT_GROUP_BY } from '../constants';
 import { DEFAULT_TASK_FACET_SELECTION } from '../filters/task-facets';
+import {
+  captureTaskSavedView,
+  decodeTaskSavedView,
+  materializeTaskSavedView,
+  readTaskSavedView,
+  taskSavedViewsEqual,
+} from '../filters/task-saved-view';
+import {
+  createTasksViewPersistence,
+  TASKS_ENTRY_STATE_KEY,
+} from '../persistence';
 import type { TasksTabSearchParams } from '../tasks-tab-search';
 import type { TasksTab, TasksViewState } from '../types';
 import { createTaskSavedViewDraft } from './create-task-saved-view-draft';
@@ -224,6 +235,69 @@ it('falls back from restored board entries and from desktop boards when mobile a
   expect(desktop.state.layout).toBe('board');
 });
 
+it('restores the original date filter when URL controls disappear', () => {
+  const view = setup({
+    state: {
+      dueDate: { type: 'range', start: '2026-10-21', end: '2026-10-28' },
+    },
+  });
+  view.setState('dueDate', { type: 'overdue' });
+  view.setSearch({
+    dueDate: undefined,
+    dueStart: undefined,
+    dueEnd: undefined,
+  });
+  expect(view.state.dueDate).toEqual({
+    type: 'range',
+    start: '2026-10-21',
+    end: '2026-10-28',
+  });
+
+  view.setSearch('dueDate', 'any');
+  expect(view.state.dueDate).toBeUndefined();
+  view.setSearch('dueDate', 'range');
+  expect(view.state.dueDate).toBeUndefined();
+  view.setSearch({
+    dueDate: 'range',
+    dueStart: '2026-10-28',
+    dueEnd: '2026-10-21',
+  });
+  expect(view.state.dueDate).toBeUndefined();
+});
+
+it('round-trips custom date ranges and due sorts without reversed null placement', () => {
+  const view = setup({
+    search: {
+      dueDate: 'range',
+      dueStart: '2026-10-21',
+      dueEnd: '2026-10-28',
+      sort: 'due_date_earliest',
+      sortReversed: 'true',
+    },
+  });
+  expect(view.state.dueDate).toEqual({
+    type: 'range',
+    start: '2026-10-21',
+    end: '2026-10-28',
+  });
+  expect(view.state.sort).toEqual([
+    { id: 'due_date_earliest', reversed: false },
+  ]);
+  view.setState('dueDate', { type: 'overdue' });
+  expect(view.search.dueDate).toBe('overdue');
+  expect(view.search.dueStart).toBeUndefined();
+  view.setState('dueDate', undefined);
+  expect(view.search.dueDate).toBe('any');
+  view.setPrimarySort('due_date_latest');
+  view.setPrimarySort('due_date_latest');
+  expect(view.state.sort).toEqual([{ id: 'due_date_latest', reversed: false }]);
+  view.setSearch({
+    dueDate: 'range',
+    dueStart: '2026-10-28',
+    dueEnd: '2026-10-21',
+  });
+  expect(view.state.dueDate).toBeUndefined();
+});
 it.each(['board', 'gantt'] as const)(
   'keeps saved %s layout in raw state and URL during mobile fallback',
   (layout) => {
@@ -323,6 +397,7 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
         version: 1,
         layout: 'list',
         sort: [{ id: 'updated_at', reversed: false }],
+        dueDate: { type: 'overdue' },
         filters: {
           statusOptionIds: [],
           priorityOptionIds: [],
@@ -360,11 +435,14 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
     });
     return { state, setState, draft, record, setSource };
   });
+  expect(fixture.state.dueDate).toEqual({ type: 'overdue' });
+  fixture.setState('dueDate', { type: 'range', start: '2026-10-21' });
   fixture.setState('layout', 'board');
   fixture.setState('groupBy', 'assignee');
   const submitted = fixture.draft.capture();
   if (submitted.isErr()) throw new Error(submitted.error);
   const release = fixture.draft.retain();
+  fixture.setState('dueDate', { type: 'today' });
   fixture.setState('layout', 'list');
   fixture.setState('groupBy', 'priority');
   const confirmed = { ...fixture.record, revision: 2, config: submitted.value };
@@ -378,6 +456,7 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
   fixture.draft.reset();
   expect(fixture.state.layout).toBe('board');
   expect(fixture.state.groupBy).toBe('assignee');
+  expect(fixture.state.dueDate).toEqual({ type: 'range', start: '2026-10-21' });
   expect(fixture.draft.view()).toMatchObject({ kind: 'saved', dirty: false });
 });
 
@@ -422,7 +501,108 @@ it.each(['my-tasks', 'created-by-me', 'team-tasks'] as const)(
     expect(fixture.draft.view()).toEqual({ kind: 'default', changed: true });
     fixture.setState('sort', [{ id: 'updated_at' }]);
     expect(fixture.draft.view()).toEqual({ kind: 'default', changed: false });
+    fixture.setState('dueDate', { type: 'tomorrow' });
+    expect(fixture.draft.view()).toEqual({ kind: 'default', changed: true });
+    fixture.setState('dueDate', undefined);
+    expect(fixture.draft.view()).toEqual({ kind: 'default', changed: false });
     fixture.setState('layout', 'board');
     expect(fixture.draft.view()).toEqual({ kind: 'default', changed: true });
   }
 );
+
+it('captures relative due dates and property sorts without losing the saved definition', () => {
+  const captured = captureTaskSavedView({
+    tab: 'my-tasks',
+    facets: { status: ['not-started'] },
+    dueDate: { type: 'overdue' },
+    groupBy: 'due_date',
+    sort: [{ id: 'due_date_earliest' }, { id: 'priority', reversed: true }],
+    context: { tagPropertyDefinitionByOptionId: new Map() },
+  });
+  expect(captured.isOk()).toBe(true);
+  if (captured.isErr()) return;
+  const restored = materializeTaskSavedView(captured.value);
+  expect(restored.dueDate).toEqual({ type: 'overdue' });
+  expect(restored.groupBy).toBe('due_date');
+  expect(restored.sort).toEqual([
+    { id: 'due_date_earliest', reversed: false },
+    { id: 'priority', reversed: true },
+  ]);
+  expect(restored.facets.assignees).toEqual(['@viewer']);
+  expect(readTaskSavedView(captured.value).issues).toEqual([]);
+  const decoded = decodeTaskSavedView(captured.value);
+  expect(decoded.isOk()).toBe(true);
+  if (decoded.isOk())
+    expect(taskSavedViewsEqual(captured.value, decoded.value)).toBe(true);
+});
+
+it('rejects invalid saved ranges but keeps other supported settings on read', () => {
+  const captured = captureTaskSavedView({
+    tab: 'team-tasks',
+    facets: {},
+    dueDate: { type: 'range', start: '2026-11-02', end: '2026-11-01' },
+    context: { tagPropertyDefinitionByOptionId: new Map() },
+  });
+  expect(captured.isErr()).toBe(true);
+  const valid = captureTaskSavedView({
+    tab: 'team-tasks',
+    facets: {},
+    dueDate: { type: 'range', start: '2026-10-21', end: '2026-10-28' },
+    context: { tagPropertyDefinitionByOptionId: new Map() },
+  });
+  expect(valid.isOk()).toBe(true);
+  if (valid.isErr()) return;
+  expect(materializeTaskSavedView(valid.value).dueDate).toEqual({
+    type: 'range',
+    start: '2026-10-21',
+    end: '2026-10-28',
+  });
+  const { config, issues } = readTaskSavedView({
+    ...valid.value,
+    dueDate: { type: 'range', start: 'invalid', end: '2026-10-28' },
+    groupBy: 'due_date',
+    sort: [{ id: 'status', reversed: true }],
+  });
+  expect(issues.map(({ path }) => path.join('.'))).toContain('dueDate');
+  expect(materializeTaskSavedView(config)).toMatchObject({
+    dueDate: undefined,
+    groupBy: 'due_date',
+    sort: [{ id: 'status', reversed: true }],
+  });
+  expect(
+    decodeTaskSavedView({ ...valid.value, dueDate: undefined }).isOk()
+  ).toBe(true);
+  expect(taskSavedViewsEqual(valid.value, config)).toBe(false);
+});
+
+it('keeps saved-view date filters out of built-in entry snapshots', () => {
+  const { state, setState } = setup({
+    state: { savedViewActive: true, dueDate: { type: 'overdue' } },
+  });
+  const captors = new Map<string, () => unknown>();
+  const persistence = createTasksViewPersistence({
+    handle: {
+      currentEntryState: () => undefined,
+      registerEntryStateCaptor: (key, capture) => {
+        captors.set(key, capture);
+        return () => captors.delete(key);
+      },
+    },
+    userId: () => undefined,
+  });
+  const storages = Array.isArray(persistence.storages)
+    ? persistence.storages
+    : [persistence.storages];
+  for (const storage of storages) storage.write(state);
+  expect(captors.get(TASKS_ENTRY_STATE_KEY)?.()).toMatchObject({
+    tab: 'my-tasks',
+    dueDate: undefined,
+  });
+
+  setState('savedViewActive', false);
+  for (const storage of storages) storage.write(state);
+  expect(captors.get(TASKS_ENTRY_STATE_KEY)?.()).toMatchObject({
+    dueDate: { type: 'overdue' },
+  });
+  for (const storage of storages) storage.dispose?.();
+});

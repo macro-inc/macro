@@ -256,6 +256,7 @@ describe('the GraphQL row source', () => {
           bins: [
             {
               key: WON,
+              displayOrder: null,
               label: null,
               totalCount: 2,
               nextCursor: null,
@@ -263,6 +264,7 @@ describe('the GraphQL row source', () => {
             },
             {
               key: LEAD,
+              displayOrder: null,
               label: null,
               totalCount: 1,
               nextCursor: null,
@@ -270,6 +272,7 @@ describe('the GraphQL row source', () => {
             },
             {
               key: '',
+              displayOrder: null,
               label: null,
               totalCount: 4,
               nextCursor: null,

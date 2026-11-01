@@ -94,6 +94,7 @@ Module layout, layering, and TypeScript conventions.
 - Name module-level value constants in `SCREAMING_SNAKE_CASE`, except schema definitions; keep functions and local variables in `camelCase`.
 - For exhaustive matching use `match(...).exhaustive()` from `ts-pattern`, never
   a hand-written `switch`.
+- Use early returns or named variables instead of nested ternaries.
 - **FE-47** Blocks are a legacy integration pattern we live with, not an
   architecture to build on. Keep `definition.ts` to registration and lazy
   loading, and the `<name>-block.tsx` adapter to translating block state once;

@@ -4,6 +4,7 @@ import type {
   InspectQueryVariantsArgs,
 } from '@graphql-cache/host/types';
 import {
+  type GroupedSoupInitialInput,
   GroupSoupDocument,
   SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
@@ -15,12 +16,16 @@ import {
   createGroupedPropertyPreparation,
 } from './graphql-optimistic';
 
-function initialInput(propertyDefinitionId: string) {
+function initialInput(
+  propertyDefinitionId: string,
+  bucketing?: GroupedSoupInitialInput['groupBy']['bucketing']
+) {
   return {
     initial: {
       groupBy: {
         field: 'PROPERTY' as const,
         propertyDefinitionId,
+        ...(bucketing && { bucketing }),
       },
       limit: 20,
     },
@@ -58,6 +63,7 @@ function host(args?: {
   entityIds?: string[];
   typename?: 'GraphqlSoupCall' | 'GraphqlSoupDocument';
   unrelatedPropertyDefinitionIds?: readonly string[];
+  bucketing?: GroupedSoupInitialInput['groupBy']['bucketing'];
 }): CacheHost {
   const value = (containsItem: boolean) => ({
     bins: [
@@ -86,7 +92,10 @@ function host(args?: {
   });
   const relevantPropertyDefinitionId =
     args?.relevantPropertyDefinitionId ?? 'status-def';
-  const relevantInput = initialInput(relevantPropertyDefinitionId);
+  const relevantInput = initialInput(
+    relevantPropertyDefinitionId,
+    args?.bucketing
+  );
   const relevantContinuation = continuationInput(relevantPropertyDefinitionId);
   const instances: Array<{
     variables: {
@@ -155,6 +164,39 @@ function host(args?: {
 }
 
 describe('buildOptimisticGroupedPropertyUpdates', () => {
+  it("moves a date property across each mounted query's range boundary before refetch", async () => {
+    const result = await buildOptimisticGroupedPropertyUpdates({
+      host: host({
+        bucketing: {
+          type: 'DATE_RANGES',
+          ranges: [
+            { key: 'in-progress', start: null, end: '2026-11-01T00:00:00Z' },
+            { key: 'completed', start: '2026-11-01T00:00:00Z', end: null },
+          ],
+          missingValueBucketKey: 'no-date',
+        },
+      }),
+      entityId: 'task-1',
+      propertyDefinitionId: 'status-def',
+      oldGroupKeys: [],
+      newGroupKeys: [],
+      revalidateOnly: true,
+      dateChange: {
+        from: new Date('2026-10-31T23:59:59Z'),
+        to: new Date('2026-11-01T00:00:00Z'),
+      },
+    });
+    expect(result.updates).toHaveLength(2);
+    expect(result.updates[0].operation).toMatchObject({
+      kind: 'removeEmbeddedLink',
+      listItem: { equals: 'in-progress' },
+    });
+    expect(result.updates[1].operation).toMatchObject({
+      kind: 'upsertEmbeddedLink',
+      listItem: { equals: 'completed' },
+    });
+    expect(result.revalidations).toHaveLength(1);
+  });
   it('builds source removal then destination prepend for a status move', async () => {
     const onInspect = vi.fn();
     const onRead = vi.fn();

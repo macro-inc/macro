@@ -58,6 +58,7 @@ describe('loaded grouped pages', () => {
           bins: [
             {
               key: 'todo',
+              displayOrder: null,
               label: null,
               totalCount: 300 - index * 10,
               nextCursor: `page-${index + 1}`,
@@ -74,6 +75,7 @@ describe('loaded grouped pages', () => {
           bins: [
             {
               key: 'todo',
+              displayOrder: null,
               label: null,
               totalCount: 0,
               nextCursor: null,
@@ -96,6 +98,96 @@ describe('loaded grouped pages', () => {
 });
 
 describe('local grouped Soup projection', () => {
+  it('moves loaded date values between half-open ranges while preserving unloaded counts', () => {
+    const dateInput: GroupedSoupInitialInput = {
+      groupBy: {
+        field: 'PROPERTY',
+        propertyDefinitionId: 'review-date',
+        bucketing: {
+          type: 'DATE_RANGES',
+          ranges: [
+            { key: 'review_soon', start: null, end: '2026-11-01T00:00:00Z' },
+            { key: 'review_later', start: '2026-11-01T00:00:00Z', end: null },
+          ],
+          missingValueBucketKey: 'no_review_date',
+        },
+      },
+      sortMethod: 'UPDATED_AT',
+    };
+    const a = groupedDocument('a');
+    a.properties[0] = {
+      ...a.properties[0],
+      propertyDefinitionId: 'review-date',
+      dataType: 'DATE',
+      isMultiSelect: false,
+      value: {
+        __typename: 'GraphqlDatePropertyValue',
+        dateValue: '2026-10-31T23:59:59Z',
+      },
+    };
+    const b = { ...a, id: 'b' };
+    const moved = {
+      ...a,
+      properties: [
+        {
+          ...a.properties[0],
+          value: {
+            __typename: 'GraphqlDatePropertyValue' as const,
+            dateValue: '2026-11-01T00:00:00Z',
+          },
+        },
+      ],
+    };
+    expect(localSoupGroupKeys(a, dateInput, now)).toEqual(['review_soon']);
+    expect(localSoupGroupKeys(moved, dateInput, now)).toEqual(['review_later']);
+    expect(
+      localSoupGroupKeys({ ...a, properties: [] }, dateInput, now)
+    ).toEqual(['no_review_date']);
+    expect(
+      projectLocalGroupedSoup(
+        [
+          {
+            key: 'review_soon',
+            items: [a, b],
+            displayOrder: null,
+            label: null,
+            totalCount: 30,
+            nextCursor: 'more',
+          },
+          {
+            key: 'review_later',
+            items: [],
+            displayOrder: null,
+            label: null,
+            totalCount: 4,
+            nextCursor: 'later',
+          },
+        ],
+        new Map(),
+        snapshot([moved, b]),
+        dateInput,
+        now
+      )
+    ).toEqual([
+      {
+        key: 'review_soon',
+        items: [b],
+        displayOrder: null,
+        label: null,
+        totalCount: 29,
+        nextCursor: 'more',
+      },
+      {
+        key: 'review_later',
+        items: [moved],
+        displayOrder: null,
+        label: null,
+        totalCount: 5,
+        nextCursor: 'later',
+      },
+    ]);
+  });
+
   it('retains server membership for an unfamiliar grouping while refreshing rows', () => {
     const before = groupedDocument('a');
     const next = { ...groupedDocument('a', ['done']), displayName: 'Updated' };
@@ -108,6 +200,7 @@ describe('local grouped Soup projection', () => {
             key: 'server-group',
             label: null,
             items: [before],
+            displayOrder: null,
             totalCount: 30,
             nextCursor: 'more',
           },
@@ -122,6 +215,7 @@ describe('local grouped Soup projection', () => {
         key: 'server-group',
         label: null,
         items: [next],
+        displayOrder: null,
         totalCount: 30,
         nextCursor: 'more',
       },
@@ -137,6 +231,7 @@ describe('local grouped Soup projection', () => {
         key: 'todo',
         label: null,
         items: [a, b, unknown],
+        displayOrder: null,
         totalCount: 30,
         nextCursor: 'more',
       },
@@ -153,6 +248,7 @@ describe('local grouped Soup projection', () => {
       {
         key: 'todo',
         items: [unknown],
+        displayOrder: null,
         label: null,
         totalCount: 28,
         nextCursor: 'more',
@@ -160,6 +256,7 @@ describe('local grouped Soup projection', () => {
       {
         key: 'done',
         items: [next],
+        displayOrder: null,
         label: null,
         totalCount: 1,
         nextCursor: null,
@@ -194,6 +291,7 @@ describe('local grouped Soup projection', () => {
             key: 'todo',
             label: null,
             items: [selectedBefore, retained, missing, excluded],
+            displayOrder: null,
             totalCount: 30,
             nextCursor: 'more',
           },
@@ -208,6 +306,7 @@ describe('local grouped Soup projection', () => {
         key: 'todo',
         label: null,
         items: [selected, current, missing],
+        displayOrder: null,
         totalCount: 29,
         nextCursor: 'more',
       },
@@ -224,12 +323,14 @@ describe('local grouped Soup projection', () => {
             key: 'todo',
             label: null,
             items: [before],
+            displayOrder: null,
             totalCount: 30,
             nextCursor: 'todo-more',
           },
           {
             key: 'done',
             items: [],
+            displayOrder: null,
             label: null,
             totalCount: 20,
             nextCursor: 'done-more',
@@ -244,6 +345,7 @@ describe('local grouped Soup projection', () => {
       {
         key: 'todo',
         items: [],
+        displayOrder: null,
         label: null,
         totalCount: 29,
         nextCursor: 'todo-more',
@@ -251,6 +353,7 @@ describe('local grouped Soup projection', () => {
       {
         key: 'done',
         items: [after],
+        displayOrder: null,
         label: null,
         totalCount: 20,
         nextCursor: 'done-more',
@@ -278,6 +381,7 @@ describe('local grouped Soup projection', () => {
           {
             key: 'today',
             items: [row],
+            displayOrder: null,
             label: null,
             totalCount: 8,
             nextCursor: 'more',
@@ -292,6 +396,7 @@ describe('local grouped Soup projection', () => {
       {
         key: 'today',
         items: [],
+        displayOrder: null,
         label: null,
         totalCount: 7,
         nextCursor: 'more',
@@ -299,6 +404,7 @@ describe('local grouped Soup projection', () => {
       {
         key: 'yesterday',
         items: [row],
+        displayOrder: null,
         label: null,
         totalCount: 1,
         nextCursor: null,
@@ -392,6 +498,7 @@ describe('local grouped Soup projection', () => {
           key: 'initiative-1',
           items: [task],
           label: 'Project One',
+          displayOrder: null,
           totalCount: 1,
           nextCursor: null,
         },

@@ -30,7 +30,12 @@ export function createTaskBoard(options: {
   columns: Accessor<readonly TaskBoardColumn[]>;
   task(id: string): TaskBoardTask | undefined;
   actions: TaskBoardActions;
-  compareTasks?: (left: string, right: string) => number;
+  compareTasks?: (left: TaskBoardTask, right: TaskBoardTask) => number;
+  /** Resolve a restricted date picker before changing placement or writing. */
+  prepareMove?: (
+    move: TaskBoardMove,
+    grouping: TaskBoardGrouping
+  ) => Promise<TaskBoardMove | undefined>;
 }) {
   const [pending, setPending] = createSignal<string[]>([]);
   const [error, setError] = createSignal<{ scope: string; text: string }>();
@@ -111,63 +116,59 @@ export function createTaskBoard(options: {
   };
 
   const move = async (request: TaskBoardMove): Promise<boolean> => {
-    if (!canMove(request)) {
-      return false;
-    }
-
+    if (!canMove(request)) return false;
     const grouping = options.grouping();
     const scope = options.scope();
     const task =
       currentPlacements().find((placement) => placement.task.id === request.id)
         ?.task ?? options.task(request.id);
-
-    if (!task) {
-      return false;
-    }
-
+    if (!task) return false;
     const previous = currentPlacements().find(
       (item) => item.task.id === request.id
     );
-    const placement: Placement = {
-      task: movedTask(task, grouping, request),
-      previousGroupKeys: taskBoardGroupKeys(task, grouping),
-      grouping,
-      scope,
-      confirmed: false,
-    };
-    setPlacements((items) => [
-      ...items.filter((item) => item.task.id !== request.id),
-      placement,
-    ]);
-
+    let placement: Placement | undefined;
     setPending((ids) => [...ids, request.id]);
     setError(undefined);
-
     try {
-      await options.actions.save(request, grouping);
+      const resolved = options.prepareMove
+        ? await options.prepareMove(request, grouping)
+        : request;
+      if (
+        !resolved ||
+        scope !== options.scope() ||
+        !options.actions.canEditTask(request.id) ||
+        !options.actions.canMoveTo(grouping, resolved.toLane)
+      )
+        return false;
+      placement = {
+        task: movedTask(task, grouping, resolved),
+        previousGroupKeys: taskBoardGroupKeys(task, grouping),
+        grouping,
+        scope,
+        confirmed: false,
+      };
+      const pendingPlacement = placement;
+      setPlacements((items) => [
+        ...items.filter((item) => item.task.id !== request.id),
+        pendingPlacement,
+      ]);
+      await options.actions.save(resolved, grouping);
       setPlacements((items) =>
         items.map((item) =>
-          item === placement
+          item === pendingPlacement
             ? { ...item, confirmed: true, confirmedColumns: options.columns() }
             : item
         )
       );
-
       return true;
     } catch {
-      setPlacements((items) => {
-        const retained = items.filter((item) => item !== placement);
-
-        if (previous) {
-          retained.push(previous);
-        }
-
-        return retained;
-      });
-      setError({
-        scope,
-        text: 'Could not move task. Refresh or try again.',
-      });
+      if (placement)
+        setPlacements((items) => {
+          const retained = items.filter((item) => item !== placement);
+          if (previous) retained.push(previous);
+          return retained;
+        });
+      setError({ scope, text: 'Could not move task. Refresh or try again.' });
       return false;
     } finally {
       setPending((ids) => ids.filter((id) => id !== request.id));

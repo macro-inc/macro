@@ -6,7 +6,10 @@ async fn assert_membership(pool: &Pool<Postgres>) -> anyhow::Result<()> {
         GroupedDynamicCursorArgs {
             user_id: MacroUserIdStr::parse_from_str("macro|user-1@test.com")?,
             limit: 2,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, EntityFilterAst::mock_empty()),
+            cursor: Query::Sort(
+                SimpleSortMethod::UpdatedAt.into(),
+                EntityFilterAst::mock_empty(),
+            ),
             exclude_frecency: false,
             grouping: GroupingConfig {
                 field: GroupByField::EntityType,
@@ -97,7 +100,7 @@ async fn source_membership_deduplicates_grants(pool: Pool<Postgres>) -> anyhow::
             user_id: MacroUserIdStr::parse_from_str("macro|user-1@test.com")?,
             limit: 50,
             cursor: Query::Sort(
-                SimpleSortMethod::UpdatedAt,
+                SimpleSortMethod::UpdatedAt.into(),
                 super::pagination::task_filter(),
             ),
             exclude_frecency: false,
@@ -175,7 +178,7 @@ async fn calendar_owner_or_linked_account_only(pool: Pool<Postgres>) -> anyhow::
             GroupedDynamicCursorArgs {
                 user_id: MacroUserIdStr::parse_from_str("macro|user-1@test.com")?,
                 limit: 50,
-                cursor: Query::Sort(SimpleSortMethod::ViewedAt, filter),
+                cursor: Query::Sort(SimpleSortMethod::ViewedAt.into(), filter),
                 exclude_frecency: false,
                 grouping: GroupingConfig {
                     field: GroupByField::EntityType,

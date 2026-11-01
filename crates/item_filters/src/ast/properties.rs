@@ -1,6 +1,7 @@
 use std::fmt;
 use std::str::FromStr;
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -15,6 +16,8 @@ use filter_ast::{ExpandFrame, Expr, FoldTree, TryExpandNode};
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum PropertyEntityType {
+    /// Native, archived, or imported call record.
+    CallRecord,
     /// Calendar event entity
     CalendarEvent,
     /// Channel entity
@@ -49,6 +52,7 @@ impl FromStr for PropertyEntityType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "CALENDAR_EVENT" => Ok(Self::CalendarEvent),
+            "CALL_RECORD" => Ok(Self::CallRecord),
             "CHANNEL" => Ok(Self::Channel),
             "CHAT" => Ok(Self::Chat),
             "COMPANY" => Ok(Self::Company),
@@ -68,6 +72,7 @@ impl fmt::Display for PropertyEntityType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::CalendarEvent => write!(f, "CALENDAR_EVENT"),
+            Self::CallRecord => write!(f, "CALL_RECORD"),
             Self::Channel => write!(f, "CHANNEL"),
             Self::Chat => write!(f, "CHAT"),
             Self::Company => write!(f, "COMPANY"),
@@ -129,6 +134,20 @@ impl<'de> Deserialize<'de> for EntityRefId {
     }
 }
 
+/// UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schema(as = PropertyDateFilterRange))]
+#[cfg_attr(feature = "schema", schemars(rename = "PropertyDateFilterRange"))]
+pub struct DateRange {
+    /// Inclusive UTC lower bound, omitted for an open start.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start: Option<DateTime<Utc>>,
+    /// Exclusive UTC upper bound, omitted for an open end.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end: Option<DateTime<Utc>>,
+}
+
 /// Describes how to match against a property value in the entity_properties table.
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub enum PropertyMatchValue {
@@ -138,6 +157,9 @@ pub enum PropertyMatchValue {
     /// Match an entity reference by entity_id. Uses the `@>` jsonb operator on `values->'value'`.
     #[serde(rename = "er")]
     EntityRef(EntityRefId),
+    /// Match a DATE property within a UTC interval; open bounds match any present date.
+    #[serde(rename = "dr")]
+    DateRange(DateRange),
 }
 
 /// A single property-based filter condition for the AST.
@@ -202,9 +224,37 @@ impl ExpandFrame<PropertiesLiteral> for Vec<PropertyFilter> {
                         Expr::or,
                     )?;
 
-                Ok([option_nodes, entity_ref_nodes]
-                    .into_iter()
-                    .fold_with(Expr::or))
+                let date_range_node = pf.date_range.map(|range| {
+                    Expr::val(PropertiesLiteral {
+                        property_definition_id: prop_def_id,
+                        entity_type,
+                        value: PropertyMatchValue::DateRange(range),
+                    })
+                });
+                let date_present_node = pf.has_date.map(|has_date| {
+                    let literal = Expr::val(PropertiesLiteral {
+                        property_definition_id: prop_def_id,
+                        entity_type,
+                        value: PropertyMatchValue::DateRange(DateRange {
+                            start: None,
+                            end: None,
+                        }),
+                    });
+                    if has_date {
+                        literal
+                    } else {
+                        Expr::is_not(literal)
+                    }
+                });
+                Ok([
+                    [option_nodes, entity_ref_nodes]
+                        .into_iter()
+                        .fold_with(Expr::or),
+                    date_range_node,
+                    date_present_node,
+                ]
+                .into_iter()
+                .fold_with(Expr::and))
             })
             .collect::<Result<_, ExpandErr>>()?;
 

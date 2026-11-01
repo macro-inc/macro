@@ -191,8 +191,9 @@ function page(
         bins: [
           {
             key: 'todo',
-            label: null,
             items,
+            displayOrder: null,
+            label: null,
             totalCount: 20,
             nextCursor: cursor,
           },
@@ -578,6 +579,7 @@ describe('grouped Soup live ownership', () => {
       key: 'done',
       label: null,
       items: [],
+      displayOrder: null,
       totalCount: 12,
       nextCursor: 'done-next',
     });

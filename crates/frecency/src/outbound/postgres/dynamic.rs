@@ -246,6 +246,7 @@ fn property_literal_predicate(literal: &PropertiesLiteral) -> String {
         value,
     } = literal;
     let value_predicate = match value {
+        PropertyMatchValue::DateRange(_) => return "FALSE".to_owned(),
         PropertyMatchValue::SelectOption(option_id) => {
             format!("ep_prop.values->'value' ? '{option_id}'")
         }

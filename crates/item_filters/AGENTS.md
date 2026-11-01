@@ -60,6 +60,9 @@ logically-combinable query form.
   notification states) also implicitly opts in — don't assume an empty
   `include` flag means "show everything".
 - `#![deny(missing_docs)]`: every new public field needs a doc comment.
+- Represent DATE presence as `DateRange` with both bounds open and absence as its negation; `start` is inclusive and `end` exclusive.
+- Export filter intervals as `PropertyDateFilterRange` in schemas to distinguish half-open optional bounds from stored, inclusive `models_properties::DateRange` values.
+- Keep DATE evaluation in Soup/OpenSearch; call, email, and frecency treat date literals as false and preserve ordinary boolean negation.
 
 ## Related
 

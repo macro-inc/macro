@@ -21,8 +21,10 @@
             ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
+            t.sort_key as "sort_key",
             NULL as "is_completed",
             NULL::timestamptz as "deleted_at",
+            NULL::jsonb as "calendar_event",
             NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN initiative i ON i.id::text = t.id

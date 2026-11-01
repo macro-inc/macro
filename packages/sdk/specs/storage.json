@@ -15729,16 +15729,26 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.",
+            "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
             }
           },
           {
+            "name": "sort_property_definition_id",
+            "in": "query",
+            "description": "Property definition selected for numeric property sorting.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "sort_direction",
             "in": "query",
-            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give.",
+            "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nTimestamp sorts require this parameter again on each page. Property\ncursors preserve their direction and always put missing values last.\nAscending frecency, touched-by-me, and notified-at sorts are unsupported.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSortDirection"
@@ -21091,7 +21101,7 @@
               },
               {
                 "$ref": "#/components/schemas/CrmAssociation",
-                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nthat are not expanded or not timestamp-sorted answer 400."
+                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or selected numeric property."
               }
             ]
           },
@@ -21169,6 +21179,17 @@
                 "description": "Group by a property value (e.g., status, priority, or custom properties)",
                 "required": ["property_definition_id"],
                 "properties": {
+                  "bucketing": {
+                    "oneOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "$ref": "#/components/schemas/PropertyBucketing",
+                        "description": "Caller-defined date partition; non-DATE values enter the missing bucket."
+                      }
+                    ]
+                  },
                   "entity_type": {
                     "oneOf": [
                       {
@@ -21244,6 +21265,10 @@
         "type": "string",
         "description": "Entity type for property lookups (API representation).",
         "enum": [
+          "CALL_RECORD",
+          "CALENDAR_EVENT",
+          "DATABASE_ROW",
+          "INITIATIVE",
           "CHANNEL",
           "CHAT",
           "COMPANY",
@@ -33357,6 +33382,17 @@
             "description": "Limit the number of items returned per group. Defaults to 20. Max 500.",
             "minimum": 0
           },
+          "sort_direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoupApiSortDirection",
+                "description": "Direction of property values. Defaults to descending."
+              }
+            ]
+          },
           "sort_method": {
             "oneOf": [
               {
@@ -33367,6 +33403,11 @@
                 "description": "Sort method. Defaults to viewed_updated."
               }
             ]
+          },
+          "sort_property_definition_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Property definition selected for numeric property sorting."
           }
         }
       },
@@ -33389,6 +33430,17 @@
             "description": "Limit the number of items returned. Defaults to 20. Max 500.",
             "minimum": 0
           },
+          "sort_direction": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SoupApiSortDirection",
+                "description": "Direction of property values. Defaults to descending."
+              }
+            ]
+          },
           "sort_method": {
             "oneOf": [
               {
@@ -33399,6 +33451,11 @@
                 "description": "Sort method. Defaults to viewed_updated."
               }
             ]
+          },
+          "sort_property_definition_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Property definition selected for numeric property sorting."
           }
         }
       },
@@ -33418,8 +33475,7 @@
               "$ref": "#/components/schemas/SoupApiItem"
             },
             "propertyNames": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           }
         }
@@ -33443,8 +33499,7 @@
               "$ref": "#/components/schemas/SoupApiItem"
             },
             "propertyNames": {
-              "type": "string",
-              "format": "uuid"
+              "type": "string"
             }
           }
         }
@@ -33495,7 +33550,13 @@
       "GroupedSoupSort": {
         "type": "string",
         "description": "Sort method for grouped queries (frecency not supported).",
-        "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
+        "enum": [
+          "viewed_at",
+          "created_at",
+          "updated_at",
+          "viewed_updated",
+          "property"
+        ]
       },
       "GuestChatMessage": {
         "type": "object",
@@ -36737,7 +36798,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSortDirection",
-                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give."
+                "description": "Sort direction. Options are asc, desc. Defaults to desc.\n\nTimestamp sorts require this parameter again on each page. Property\ncursors preserve their direction and always put missing values last.\nAscending frecency, touched-by-me, and notified-at sorts are unsupported."
               }
             ]
           },
@@ -36748,9 +36809,14 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at."
+                "description": "Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at."
               }
             ]
+          },
+          "sort_property_definition_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Property definition selected for numeric property sorting."
           }
         }
       },
@@ -37787,6 +37853,85 @@
           }
         }
       },
+      "PropertyBucketing": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PropertyDateRanges",
+                "description": "Caller-defined, ordered UTC date ranges and a separate missing-value key."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["date_ranges"]
+                  }
+                }
+              }
+            ],
+            "description": "Caller-defined, ordered UTC date ranges and a separate missing-value key."
+          }
+        ],
+        "description": "Optional transformation of a selected property's stored value into group keys."
+      },
+      "PropertyDateFilterRange": {
+        "type": "object",
+        "description": "UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.",
+        "properties": {
+          "end": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Exclusive UTC upper bound, omitted for an open end."
+          },
+          "start": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive UTC lower bound, omitted for an open start."
+          }
+        }
+      },
+      "PropertyDateRange": {
+        "type": "object",
+        "description": "A half-open UTC interval. An absent start or end extends to infinity.",
+        "required": ["key"],
+        "properties": {
+          "end": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Exclusive end, or positive infinity."
+          },
+          "key": {
+            "type": "string",
+            "description": "Unique caller-supplied group key."
+          },
+          "start": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Inclusive start, or negative infinity."
+          }
+        }
+      },
+      "PropertyDateRanges": {
+        "type": "object",
+        "description": "A complete partition of present dates plus one bucket for absent values.",
+        "required": ["ranges", "missing_value_bucket_key"],
+        "properties": {
+          "missing_value_bucket_key": {
+            "type": "string",
+            "description": "Caller-supplied group key for entities with no date value."
+          },
+          "ranges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PropertyDateRange"
+            },
+            "description": "Ordered, contiguous ranges covering every present date."
+          }
+        }
+      },
       "PropertyDefinition": {
         "type": "object",
         "description": "Property definition model (service representation).",
@@ -37868,6 +38013,17 @@
         "description": "A single property-based filter condition.\n\nEach filter targets a specific property definition on entities of a given type,\nmatching against select option UUIDs or entity reference IDs.\nMultiple values within a single filter are OR'd together.\nMultiple filters are AND'd together.",
         "required": ["property_definition_id"],
         "properties": {
+          "date_range": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PropertyDateFilterRange",
+                "description": "UTC range for Soup/search: inclusive start, exclusive end; both open matches any date."
+              }
+            ]
+          },
           "entity_ids": {
             "type": "array",
             "items": {
@@ -37878,6 +38034,10 @@
           "entity_type": {
             "type": ["string", "null"],
             "description": "The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types."
+          },
+          "has_date": {
+            "type": ["boolean", "null"],
+            "description": "Flat Soup/search presence filter: true expands to an open date range, false to its negation."
           },
           "option_ids": {
             "type": "array",
@@ -40117,7 +40277,8 @@
           "viewed_updated",
           "frecency",
           "touched_by_me",
-          "notified_at"
+          "notified_at",
+          "property"
         ]
       },
       "SoupApiSortDirection": {

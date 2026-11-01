@@ -1,10 +1,16 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  createDateBucketBoundaries,
+  taskDueDatePredicate,
+} from '../core/task-due-date';
 import {
   captureTaskSavedView,
   decodeTaskSavedView,
   materializeTaskSavedView,
   readTaskSavedView,
 } from '../filters/task-saved-view';
+
 import { type BuildTaskQueryOptions, buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
@@ -154,6 +160,128 @@ it('uses explicit Project property grouping for board editing and Project groupi
   });
 });
 
+const calendar = createDateBucketBoundaries(
+  new Date('2026-11-01T18:00:00Z'),
+  'America/New_York'
+);
+
+it('combines an exclusive overdue bound with status independently and freezes deadline grouping', () => {
+  const dueDate = taskDueDatePredicate({ type: 'overdue' }, calendar);
+  const query = buildTaskQuery({
+    ...options,
+    groupBy: 'due_date',
+    sort: [{ id: 'due_date_earliest' }],
+    dueDate,
+    calendar,
+  });
+  expect(query.params.sort_method).toBe('property');
+  expect(query.params.sort_direction).toBe('asc');
+  expect(query.params.sort_property_definition_id).toBe(
+    '00000001-0000-0000-0000-000000000004'
+  );
+  expect(query.groupBy).toMatchObject({
+    type: 'property',
+    propertyDefinitionId: '00000001-0000-0000-0000-000000000004',
+    bucketing: {
+      type: 'date_ranges',
+      missingValueBucketKey: 'no_due_date',
+      ranges: [
+        { key: 'overdue', start: null, end: calendar.boundaries.today },
+        {
+          key: 'today',
+          start: calendar.boundaries.today,
+          end: calendar.boundaries.tomorrow,
+        },
+        {
+          key: 'tomorrow',
+          start: calendar.boundaries.tomorrow,
+          end: calendar.boundaries.day_two,
+        },
+        {
+          key: 'next_7_days',
+          start: calendar.boundaries.day_two,
+          end: calendar.boundaries.day_eight,
+        },
+        { key: 'later', start: calendar.boundaries.day_eight, end: null },
+      ],
+    },
+  });
+  expect(JSON.stringify(query.body.propf)).toContain(
+    '2026-11-01T04:00:00.000Z'
+  );
+  expect(JSON.stringify(query.body.propf)).toContain(
+    '00000001-0000-0000-0002-000000000002'
+  );
+  expect(JSON.stringify(query.body.propf)).toContain('"end"');
+  expect(JSON.stringify(query.body.propf)).toContain('"et":"TASK"');
+  expect(JSON.stringify(query.body.propf)).not.toContain('"start"');
+});
+
+it('negates date presence and keeps due sorting out of scoped text search', () => {
+  const query = buildTaskQuery({
+    ...options,
+    facets: {},
+    dueDate: { hasDate: false },
+    sort: [{ id: 'due_date_latest' }],
+    searching: true,
+    nameContains: 'renewal',
+  });
+  expect(query.body.propf).toEqual({
+    '!': {
+      l: {
+        pd: '00000001-0000-0000-0000-000000000004',
+        et: 'TASK',
+        v: { dr: {} },
+      },
+    },
+  });
+  expect(query.params.sort_method).toBe('updated_at');
+});
+
+it.each(['due_date_earliest', 'due_date_latest'] as const)(
+  'uses the supported %s wire contract for flat and grouped task requests',
+  (sort) => {
+    for (const groupBy of ['none', 'due_date'] as const) {
+      const query = buildTaskQuery({
+        ...options,
+        groupBy,
+        calendar,
+        sort: [{ id: sort }],
+      });
+      expect(query.params).toEqual({
+        expand: true,
+        limit: 100,
+        sort_method: 'property',
+        sort_property_definition_id: '00000001-0000-0000-0000-000000000004',
+        sort_direction: sort === 'due_date_earliest' ? 'asc' : 'desc',
+      });
+      // Exclude the project entity itself, not children of a nil parent.
+      expect(query.body.pf).toEqual({
+        l: { pids: '00000000-0000-0000-0000-000000000000' },
+      });
+    }
+  }
+);
+
+it.each([
+  ['status', SYSTEM_PROPERTY_IDS.STATUS, 'asc', 'desc'],
+  ['priority', SYSTEM_PROPERTY_IDS.PRIORITY, 'desc', 'asc'],
+] as const)(
+  'uses stored option order and reversible default direction for %s',
+  (id, property, direction, reversed) => {
+    expect(buildTaskQuery({ ...options, sort: [{ id }] }).params).toMatchObject(
+      {
+        sort_method: 'property',
+        sort_property_definition_id: property,
+        sort_direction: direction,
+      }
+    );
+    expect(
+      buildTaskQuery({ ...options, sort: [{ id, reversed: true }] }).params
+        .sort_direction
+    ).toBe(reversed);
+  }
+);
 describe('saved task presentation', () => {
   it('round-trips layout, grouping, and ordered sorts through capture, read, and materialization', () => {
     const captured = captureTaskSavedView({
@@ -181,13 +309,96 @@ describe('saved task presentation', () => {
     const restored = materializeTaskSavedView(config);
     expect(restored.layout).toBe('gantt');
     expect(restored.groupBy).toBe('project');
-    expect(buildTaskQuery({ ...options, ...restored }).groupBy).toEqual({
+    expect(
+      buildTaskQuery({
+        ...options,
+        ...restored,
+        dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+      }).groupBy
+    ).toEqual({
       type: 'project',
     });
     expect(restored.sort).toEqual(config.sort);
     expect(
-      buildTaskQuery({ ...options, ...restored, groupBy: 'none' }).params
+      buildTaskQuery({
+        ...options,
+        ...restored,
+        dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        groupBy: 'none',
+      }).params
     ).toMatchObject({ sort_method: 'created_at', sort_direction: 'asc' });
+  });
+
+  it.each([
+    { type: 'overdue' as const },
+    { type: 'no_due_date' as const },
+    { type: 'range' as const, start: '2026-10-21', end: '2026-10-28' },
+  ])(
+    'restores saved due-date filter %j with due grouping and property sorts',
+    (dueDate) => {
+      const captured = captureTaskSavedView({
+        tab: 'team-tasks',
+        facets: { status: ['in-progress'] },
+        dueDate,
+        groupBy: 'due_date',
+        sort: [{ id: 'due_date_earliest' }, { id: 'priority', reversed: true }],
+        context: { tagPropertyDefinitionByOptionId: new Map() },
+      });
+      expect(captured.isOk()).toBe(true);
+      if (captured.isErr()) return;
+      const { config, issues } = readTaskSavedView(captured.value);
+      expect(issues).toEqual([]);
+      const restored = materializeTaskSavedView(config);
+      expect(restored.dueDate).toEqual(dueDate);
+      expect(restored.groupBy).toBe('due_date');
+      expect(restored.sort).toEqual([
+        { id: 'due_date_earliest', reversed: false },
+        { id: 'priority', reversed: true },
+      ]);
+      const query = buildTaskQuery({
+        ...options,
+        ...restored,
+        dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        calendar,
+      });
+      expect(query.params).toMatchObject({
+        sort_method: 'property',
+        sort_property_definition_id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+        sort_direction: 'asc',
+      });
+      expect(query.body.propf).toBeDefined();
+      expect(query.groupBy).toMatchObject({ type: 'property' });
+    }
+  );
+
+  it('skips invalid dates without dropping supported filters and presentation', () => {
+    const captured = captureTaskSavedView({
+      tab: 'team-tasks',
+      facets: {},
+      dueDate: { type: 'range', start: '2026-11-02', end: '2026-11-01' },
+      context: { tagPropertyDefinitionByOptionId: new Map() },
+    });
+    expect(captured.isErr()).toBe(true);
+    const { config, issues } = readTaskSavedView({
+      kind: 'tasks',
+      version: 1,
+      filters: {
+        statusOptionIds: [],
+        priorityOptionIds: [],
+        assignees: [],
+        creators: [],
+        tags: [],
+      },
+      dueDate: { type: 'range', start: 'invalid', end: '2026-10-28' },
+      groupBy: 'due_date',
+      sort: [{ id: 'status', reversed: true }],
+    });
+    expect(issues.map(({ path }) => path.join('.'))).toContain('dueDate');
+    expect(materializeTaskSavedView(config)).toMatchObject({
+      dueDate: undefined,
+      groupBy: 'due_date',
+      sort: [{ id: 'status', reversed: true }],
+    });
   });
 
   it('uses the first saved sort and its direction rather than later sorts', () => {
@@ -210,7 +421,12 @@ describe('saved task presentation', () => {
     const restored = materializeTaskSavedView(config);
     expect(restored.layout).toBe('board');
     expect(
-      buildTaskQuery({ ...options, ...restored, groupBy: 'none' }).params
+      buildTaskQuery({
+        ...options,
+        ...restored,
+        dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+        groupBy: 'none',
+      }).params
     ).toMatchObject({ sort_method: 'viewed_at', sort_direction: 'desc' });
   });
 
@@ -247,7 +463,12 @@ describe('saved task presentation', () => {
     expect(restored.groupBy).toBe('priority');
     expect(restored.sort).toEqual([{ id: 'created_at', reversed: true }]);
     expect(restored.facets.status).toEqual([status]);
-    const query = buildTaskQuery({ ...options, ...restored, groupBy: 'none' });
+    const query = buildTaskQuery({
+      ...options,
+      ...restored,
+      dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+      groupBy: 'none',
+    });
     expect(JSON.stringify(query.body.propf)).toContain(status);
     expect(query.params).toMatchObject({
       sort_method: 'created_at',
@@ -306,10 +527,12 @@ describe('saved task filter execution', () => {
         const query = buildTaskQuery({
           ...options,
           ...restored,
+          dueDate: taskDueDatePredicate(restored.dueDate, calendar),
           userId: viewer,
         });
         const search = buildTaskSearchRequest({
           ...restored,
+          dueDate: taskDueDatePredicate(restored.dueDate, calendar),
           query: 'review',
           matchType: 'partial',
           userId: viewer,
@@ -378,9 +601,14 @@ describe('saved task filter execution', () => {
       },
     });
     const restored = materializeTaskSavedView(config);
-    const query = buildTaskQuery({ ...options, ...restored });
+    const query = buildTaskQuery({
+      ...options,
+      ...restored,
+      dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+    });
     const search = buildTaskSearchRequest({
       ...restored,
+      dueDate: taskDueDatePredicate(restored.dueDate, calendar),
       userId: 'user',
       query: 'review',
       matchType: 'partial',
@@ -427,7 +655,11 @@ describe('saved task filter execution', () => {
     (value) => {
       const { config, issues } = readTaskSavedView(value);
       const restored = materializeTaskSavedView(config);
-      const query = buildTaskQuery({ ...options, ...restored });
+      const query = buildTaskQuery({
+        ...options,
+        ...restored,
+        dueDate: taskDueDatePredicate(restored.dueDate, calendar),
+      });
       expect(query.body.df).toEqual({ l: { dst: 'task' } });
       expect(query.body.propf).toBeUndefined();
       expect(Object.values(restored.facets).flat()).toEqual([]);

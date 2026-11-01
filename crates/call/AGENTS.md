@@ -54,6 +54,7 @@ in-call chat.
   a per-device signal.
 - The team-memory helper only compiles with the `ports` feature (#7912) — don't
   reintroduce an unconditional dependency on it.
+- Treat DATE property literals as non-matches; apply ordinary boolean negation and keep non-date call filtering unchanged.
 - RTC tokens live 6h and can't be revoked, and LiveKit recreates a deleted room
   when one connects. Only a room named after an archived `call_records` row is
   orphaned (call ids are never reused); meeting preparations and get-or-create

@@ -6,6 +6,45 @@ use serde_json::{Value, json};
 
 use super::*;
 
+#[test]
+fn open_date_ranges_materialize_without_invented_boundaries() {
+    let ast = materialize_graphql_filter(json!({"propertiesFilter": {"literal": {
+        "propertyDefinitionId": "00000001-0000-0000-0000-000000000004",
+        "value": {"dateRange": {"end": "2026-10-21T00:00:00+05:30"}}
+    }}}))
+    .unwrap();
+    assert!(
+        matches!(ast.properties_filter.as_deref(), Some(Expr::Literal(PropertiesLiteral {
+        value: PropertyMatchValue::DateRange(range), ..
+    })) if range.start.is_none() && range.end.unwrap().to_rfc3339() == "2026-10-20T18:30:00+00:00")
+    );
+    assert!(
+        materialize_graphql_filter(json!({"propertiesFilter": {"literal": {
+            "propertyDefinitionId": "00000001-0000-0000-0000-000000000004",
+            "value": {"dateRange": {"start": "invalid"}}
+        }}}))
+        .is_err()
+    );
+}
+
+#[test]
+fn document_missing_dates_preserve_negation() {
+    let ast =
+        materialize_graphql_filter(json!({"documentFilter": {"not": {"literal": {"property": {
+            "propertyDefinitionId": "00000001-0000-0000-0000-000000000004",
+            "value": {"dateRange": {}}
+        }}}}}))
+        .unwrap();
+    assert!(matches!(
+        ast.document_filter.as_deref(),
+        Some(Expr::Not(inner)) if matches!(inner.as_ref(),
+            Expr::Literal(DocumentLiteral::Property(PropertiesLiteral {
+                value: PropertyMatchValue::DateRange(item_filters::ast::properties::DateRange { start: None, end: None }), ..
+            }))
+        )
+    ));
+}
+
 fn generated_filter_fixture() -> Value {
     serde_json::from_str(include_str!("../fixtures/generated-soup-filter.json")).unwrap()
 }
@@ -122,9 +161,17 @@ fn property_entity_type_conversion_rejects_unsupported_variants() {
         })
     };
 
-    let error = materialize_graphql_filter(property_filter(json!("CALL_RECORD"))).unwrap_err();
+    let error = materialize_graphql_filter(property_filter(json!("CONTACT"))).unwrap_err();
     assert!(matches!(error, MaterializeError::Conversion(_)));
 
+    let calls = materialize_graphql_filter(property_filter(json!("CALL_RECORD"))).unwrap();
+    assert!(matches!(
+        calls.properties_filter.as_deref(),
+        Some(Expr::Literal(PropertiesLiteral {
+            entity_type: Some(PropertyEntityType::CallRecord),
+            ..
+        }))
+    ));
     let ast = materialize_graphql_filter(property_filter(Value::Null)).unwrap();
     let Some(Expr::Literal(literal)) = ast.properties_filter.as_deref() else {
         panic!("expected property literal")

@@ -3633,6 +3633,24 @@ input GraphqlDatabaseRowLiteral @oneOf {
 }
 
 """
+One named half-open UTC interval.
+"""
+input GraphqlDateBucketRange {
+	"""
+	Unique group key.
+	"""
+	key: String!
+	"""
+	Inclusive RFC 3339 UTC start; null means negative infinity.
+	"""
+	start: String
+	"""
+	Exclusive RFC 3339 UTC end; null means positive infinity.
+	"""
+	end: String
+}
+
+"""
 GraphQL input representing the date literal.
 """
 input GraphqlDateLiteral @oneOf {
@@ -3791,8 +3809,8 @@ input GraphqlDocumentLiteral @oneOf {
 	emailAttachmentParticipant: GraphqlEmailValue
 	"""
 	Associated with a CRM record through its Companies or Contacts
-	property or a reference to the record. Requires an expanded,
-	timestamp-sorted query.
+	property or a reference to the record. Requires an expanded query
+	sorted by a timestamp or task due date.
 	"""
 	crmAssociated: GraphqlCrmAssociation
 	"""
@@ -4360,7 +4378,7 @@ input GraphqlEntityFilterAst {
 	"""
 	Restrict every entity type to items associated with this CRM record,
 	or to activity across visible CRM-enabled teams.
-	Requires an expanded, timestamp-sorted query.
+	Requires an expanded query sorted by a timestamp or selected property.
 	"""
 	crmAssociation: GraphqlCrmAssociation
 	"""
@@ -4778,6 +4796,10 @@ input GraphqlFilterPropertyMatchValue @oneOf {
 	Entity reference id to match.
 	"""
 	entityRef: ID
+	"""
+	Match a DATE property in a UTC range.
+	"""
+	dateRange: GraphqlPropertyDateRange
 }
 
 """
@@ -5514,6 +5536,10 @@ input GraphqlGroupByInput {
 	Optional property entity type restriction.
 	"""
 	entityType: GraphqlPropertyEntityType
+	"""
+	Optional caller-defined date ranges; requires PROPERTY grouping.
+	"""
+	bucketing: GraphqlPropertyBucketing
 }
 
 """
@@ -6228,6 +6254,35 @@ type GraphqlProperty {
 }
 
 """
+Transform the selected DATE property into caller-defined ranges.
+Non-DATE values use the missing-value bucket.
+"""
+input GraphqlPropertyBucketing {
+	"""
+	Bucketing transformation.
+	"""
+	type: GraphqlPropertyBucketingType!
+	"""
+	Ordered, contiguous UTC ranges covering every present date.
+	"""
+	ranges: [GraphqlDateBucketRange!]!
+	"""
+	Key for entities whose selected property is absent or cleared.
+	"""
+	missingValueBucketKey: String!
+}
+
+"""
+Supported property-value transformations.
+"""
+enum GraphqlPropertyBucketingType {
+	"""
+	Caller-defined half-open UTC date ranges.
+	"""
+	DATE_RANGES
+}
+
+"""
 A property definition's supported value type.
 """
 enum GraphqlPropertyDataType {
@@ -6271,6 +6326,20 @@ enum GraphqlPropertyDataType {
 	URL values.
 	"""
 	LINK
+}
+
+"""
+Explicit UTC bounds for a DATE property.
+"""
+input GraphqlPropertyDateRange {
+	"""
+	Inclusive UTC start, or no lower bound.
+	"""
+	start: String
+	"""
+	Exclusive UTC end, or no upper bound.
+	"""
+	end: String
 }
 
 """
@@ -7115,7 +7184,7 @@ enum GraphqlSharedEmailFilter {
 }
 
 """
-GraphQL representation of supported Soup sorts.
+GraphQL representation of Soup timestamp, notification, and selected-property sorts.
 """
 enum GraphqlSimpleSortMethod {
 	"""
@@ -7139,6 +7208,12 @@ enum GraphqlSimpleSortMethod {
 	notified first. Descending `soup` only; not supported by `groupSoup`.
 	"""
 	NOTIFIED_AT
+	"""
+	Sort by the selected property key, missing last, then newest update and ID.
+	Missing definitions and unsupported types use update-time ordering.
+	Email, channels, calls, companies, and agent sessions never appear.
+	"""
+	PROPERTY
 }
 
 """
@@ -7340,6 +7415,10 @@ type GraphqlSoupBin {
 	Total number of items in this group across all pages.
 	"""
 	totalCount: Int!
+	"""
+	Stored option order or calendar bucket order, when available.
+	"""
+	displayOrder: Int
 	"""
 	Opaque cursor for the next page in this bin, if one exists.
 	"""
@@ -9742,8 +9821,17 @@ input GroupedSoupInitialInput {
 	limit: Int
 	"""
 	Sort order within each bin. Defaults to `VIEWED_UPDATED`.
+	Grouped PROPERTY reads retain calendar events; flat PROPERTY reads do not.
 	"""
 	sortMethod: GraphqlSimpleSortMethod
+	"""
+	Property definition selected for numeric property sorting.
+	"""
+	sortPropertyDefinitionId: ID
+	"""
+	Direction of property values. Defaults to DESC.
+	"""
+	sortDirection: GraphqlSortDirection
 	"""
 	AST-shaped filters applied to each Soup entity type.
 	"""
@@ -10577,10 +10665,15 @@ input SoupInitialInput {
 	"""
 	expand: Boolean
 	"""
-	Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
-	not supported by this initial GraphQL adapter.
+	Timestamp or selected numeric property sort. Defaults to VIEWED_AT.
+	Frecency is not supported by this GraphQL adapter.
+	Flat PROPERTY reads omit calendar events, email, channels, calls, companies, and agent sessions.
 	"""
 	sortMethod: GraphqlSimpleSortMethod
+	"""
+	Property definition selected for numeric property sorting.
+	"""
+	sortPropertyDefinitionId: ID
 	"""
 	Email preview view used when hydrating email Soup items.
 	"""

@@ -12,7 +12,7 @@ type ActiveGraphqlSoupQuery = {
   refresh: () => Promise<void>;
   /** Only refresh this reader for its matching mutation, never for broad Soup work. */
   target?: () => GraphqlSoupRefreshTarget;
-  /** The REST-shaped filter body, for refreshes scoped to matching lists. */
+  /** REST-shaped filters with optional sort/group inputs for scoped list refreshes. */
   body?: () => unknown;
   /** The normalized cache keeps this list's rows and membership current. */
   cacheMaintained?: () => boolean;
@@ -121,7 +121,7 @@ export async function refreshActiveGraphqlSoupQueries(
   options: {
     throwOnError?: boolean;
     target?: GraphqlSoupRefreshTarget;
-    /** Only refresh list readers whose filter body matches. */
+    /** Only refresh list readers whose filters or sort/group inputs match. */
     where?: (body: unknown) => boolean;
     /** Skip lists the cache keeps current: the write already updated them. */
     unmaintainedOnly?: boolean;
