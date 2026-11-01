@@ -1,0 +1,19 @@
+# Type Alias: Attachment
+
+> **Attachment** = \{ `content_id?`: `string` \| `null`; `data_url?`: `string` \| `null`; `db_id`: `string`; `filename?`: `string` \| `null`; `mime_type?`: `string` \| `null`; `provider_id?`: `string` \| `null`; `reference_url?`: `string` \| `null`; `sfs_id?`: `string` \| `null`; `size_bytes?`: `number` \| `null`; \}
+
+Attachments of a message, as sent to us by the provider.
+
+## Properties
+
+| Property | Type | Description |
+| ------ | ------ | ------ |
+| <a id="property-content_id"></a> `content_id?` | `string` \| `null` | - |
+| <a id="property-data_url"></a> `data_url?` | `string` \| `null` | - |
+| <a id="property-db_id"></a> `db_id` | `string` | - |
+| <a id="property-filename"></a> `filename?` | `string` \| `null` | - |
+| <a id="property-mime_type"></a> `mime_type?` | `string` \| `null` | - |
+| <a id="property-provider_id"></a> `provider_id?` | `string` \| `null` | - |
+| <a id="property-reference_url"></a> `reference_url?` | `string` \| `null` | Cloud reference: open this provider page instead of downloading bytes. |
+| <a id="property-sfs_id"></a> `sfs_id?` | `string` \| `null` | - |
+| <a id="property-size_bytes"></a> `size_bytes?` | `number` \| `null` | - |

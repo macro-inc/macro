@@ -1,49 +1,56 @@
+import type { ComposeTaskSuccess } from '@app/features/task-composer/core/types';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
+import { toast } from '@core/component/Toast/Toast';
 import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
 import { trackMention } from '@core/signal/mention';
+import CheckSquare from '@icon/system/regular/check-square.svg';
+import CodeBlock from '@icon/system/regular/code-block.svg';
+import FileText from '@icon/system/regular/file-text.svg';
+import VideoIcon from '@icon/system/regular/file-video.svg';
+import MathIcon from '@icon/system/regular/function.svg';
+import TableIcon from '@icon/system/regular/grid-four.svg';
+import ImageIcon from '@icon/system/regular/image.svg';
+import LightningIcon from '@icon/system/regular/lightning.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import ListBullets from '@icon/system/regular/list-bullets.svg';
+import ListChecks from '@icon/system/regular/list-checks.svg';
+import ListNumbers from '@icon/system/regular/list-numbers.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import Quote from '@icon/system/regular/quotes.svg';
+import TextH1 from '@icon/system/regular/text-h-one.svg';
+import TextH3 from '@icon/system/regular/text-h-three.svg';
+import TextH2 from '@icon/system/regular/text-h-two.svg';
+import TextT from '@icon/system/regular/text-t.svg';
 import { LinkNode } from '@lexical/link';
 import { ListNode } from '@lexical/list';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { INSERT_TABLE_COMMAND, TableNode } from '@lexical/table';
 import {
+  $createAwaitNode,
   $createDatabaseQueryNode,
   $createDocumentMentionNode,
+  $isAwaitNode,
   AwaitNode,
   CustomCodeNode,
   DatabaseQueryNode,
+  DocumentCardNode,
   DocumentMentionNode,
   EquationNode,
   HorizontalRuleNode,
   ImageNode,
   VideoNode,
 } from '@macro-inc/lexical-core';
-import CheckSquare from '@phosphor/check-square.svg';
-import CodeBlock from '@phosphor/code-block.svg';
-import FileText from '@phosphor/file-text.svg';
-import VideoIcon from '@phosphor/file-video.svg';
-import MathIcon from '@phosphor/function.svg';
-import TableIcon from '@phosphor/grid-four.svg';
-import ImageIcon from '@phosphor/image.svg';
-import LightningIcon from '@phosphor/lightning.svg';
-import LinkIcon from '@phosphor/link.svg';
-import ListBullets from '@phosphor/list-bullets.svg';
-import ListChecks from '@phosphor/list-checks.svg';
-import ListNumbers from '@phosphor/list-numbers.svg';
-import Minus from '@phosphor/minus.svg';
-import Quote from '@phosphor/quotes.svg';
-import TextH1 from '@phosphor/text-h-one.svg';
-import TextH3 from '@phosphor/text-h-three.svg';
-import TextH2 from '@phosphor/text-h-two.svg';
-import TextT from '@phosphor/text-t.svg';
-import type { LexicalEditor } from 'lexical';
-import { $insertNodes } from 'lexical';
+import { Telemetry } from '@macro-inc/observability';
+import GifIcon from '@phosphor/gif.svg';
+import type { LexicalEditor, NodeKey } from 'lexical';
+import { $getNodeByKey, $insertNodes } from 'lexical';
 import { nanoid } from 'nanoid';
 import { INSERT_HORIZONTAL_RULE_COMMAND } from '..';
 import {
   INSERT_AWAIT_NODE_COMMAND,
   REPLACE_AWAIT_NODE_COMMAND,
 } from '../await';
+import { TRY_INSERT_GIF_COMMAND } from '../gif';
 import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
 import { TRY_INSERT_LINK_COMMAND } from '../links';
 import { TRY_INSERT_MEDIA_UPLOAD_COMMAND } from '../media';
@@ -266,6 +273,19 @@ export const ACTIONS: Action[] = [
     dependencies: [ImageNode, VideoNode],
   },
   {
+    id: 'gif',
+    name: 'GIF',
+    keywords: ['gif', 'giphy', 'tenor', 'animated', 'meme', 'reaction'],
+    category: ActionCategory.MEDIA,
+    icon: GifIcon,
+    action: (editor: LexicalEditor) => {
+      queueMicrotask(() => {
+        editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
+      });
+    },
+    dependencies: [ImageNode],
+  },
+  {
     id: 'video',
     name: 'Video',
     keywords: ['video', 'movie', 'film', 'upload'],
@@ -341,16 +361,8 @@ export const ACTIONS: Action[] = [
   },
   {
     id: 'database-query',
-    name: 'Database',
-    keywords: [
-      'query',
-      'query-database',
-      'ask',
-      'database',
-      'live',
-      'answer',
-      'sql',
-    ],
+    name: 'Query',
+    keywords: ['query', 'query-database', 'ask', 'live', 'answer', 'sql'],
     category: ActionCategory.MEDIA,
     icon: LightningIcon,
     dependencies: [DatabaseQueryNode],
@@ -367,6 +379,46 @@ export const ACTIONS: Action[] = [
           ]);
         })
       );
+    },
+  },
+  {
+    id: 'database',
+    name: 'Database',
+    keywords: ['database', 'new database', 'editable', 'records'],
+    category: ActionCategory.MEDIA,
+    icon: TableIcon,
+    dependencies: [AwaitNode, DocumentMentionNode, DocumentCardNode],
+    action: (editor, context) => {
+      if (!isFeatureEnabled(enableDatabases)) return;
+      queueMicrotask(async () => {
+        let placeholderKey: NodeKey | undefined;
+        try {
+          if (!editor.isEditable()) return;
+          // Anchor and show feedback before the creation module downloads.
+          editor.update(
+            () => {
+              const placeholder = $createAwaitNode({
+                awaitId: nanoid(),
+                text: 'Creating database…',
+              });
+              $insertNodes([placeholder]);
+              placeholderKey = placeholder.getKey();
+            },
+            { discrete: true }
+          );
+          const { insertNewDatabase } = await import('./insert-database');
+          await insertNewDatabase(editor, context, placeholderKey);
+        } catch (error: unknown) {
+          editor.update(() => {
+            const placeholder = placeholderKey
+              ? $getNodeByKey(placeholderKey)
+              : null;
+            if ($isAwaitNode(placeholder)) placeholder.remove();
+          });
+          Telemetry.error('database.insert.failed', { error: String(error) });
+          toast.failure('The database could not be inserted. Try again.');
+        }
+      });
     },
   },
 ];

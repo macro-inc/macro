@@ -1,7 +1,53 @@
+import { makePersistedState } from '@app/lib/persistence';
 import type { PropertyApiValues } from '@property/types';
 import type { SerializedEditorState } from 'lexical';
+import { createSignal } from 'solid-js';
+import { z } from 'zod';
+import { taskComposerDraftSchema } from './taskComposerDraftSchema';
+
+const storedDraftSchema = taskComposerDraftSchema.extend({
+  timestamp: z.number(),
+});
 
 const STORAGE_KEY = 'task-composer-draft';
+
+/** Recovered submissions keep their sharing choice separate from new-task defaults. */
+export function createTaskComposerSharing(recoveredShare?: boolean) {
+  if (recoveredShare !== undefined) return createSignal(recoveredShare);
+  return makePersistedState(createSignal(true), {
+    storages: {
+      restore: () => {
+        const stored = localStorage.getItem('task-composer-share-with-team');
+        return stored === 'true'
+          ? true
+          : stored === 'false'
+            ? false
+            : undefined;
+      },
+      write: (value) =>
+        localStorage.setItem('task-composer-share-with-team', String(value)),
+    },
+  });
+}
+
+/** Whether tasks link back into the document they were composed from. */
+export function createTaskComposerLinkInSource() {
+  return makePersistedState(createSignal(false), {
+    storages: {
+      restore: () =>
+        localStorage.getItem('task-composer-link-in-source') === 'true',
+      write: (value) =>
+        localStorage.setItem('task-composer-link-in-source', String(value)),
+    },
+  });
+}
+
+/** Context drafts use their own key; the global composer retains its original key. */
+export function taskComposerContextStorage(
+  key: string
+): TaskComposerDraftStorage {
+  return { storageKey: `${STORAGE_KEY}:${key}` };
+}
 const EXPIRY_TIME_MS = 2 * 60 * 1000; // 2 minutes
 
 /**
@@ -23,6 +69,7 @@ export interface TaskComposerDraft {
   /** Markdown text fallback (used by older drafts and for the createTask API) */
   content: string;
   propertyValues: Record<string, PropertyApiValues>;
+  visiblePropertyIds?: string[];
   timestamp: number;
 }
 
@@ -57,7 +104,7 @@ export function loadTaskComposerDraft(
     const stored = localStorage.getItem(storage?.storageKey ?? STORAGE_KEY);
     if (!stored) return null;
 
-    const draft: TaskComposerDraft = JSON.parse(stored);
+    const draft = storedDraftSchema.parse(JSON.parse(stored));
     const expiryMs =
       storage?.expiryMs === undefined ? EXPIRY_TIME_MS : storage.expiryMs;
     const elapsed = Date.now() - draft.timestamp;
@@ -68,34 +115,12 @@ export function loadTaskComposerDraft(
       return null;
     }
 
-    draft.propertyValues = rehydratePropertyValues(draft.propertyValues);
     return draft;
   } catch (error) {
     console.warn('Failed to load task composer draft:', error);
     clearTaskComposerDraft(storage);
     return null;
   }
-}
-
-// JSON.stringify serializes Date as an ISO string, and JSON.parse won't turn
-// it back into a Date. propertyApiValuesToNormalized requires `value instanceof
-// Date`, so without this step DATE properties round-trip as EMPTY.
-function rehydratePropertyValues(
-  values: Record<string, PropertyApiValues>
-): Record<string, PropertyApiValues> {
-  const result: Record<string, PropertyApiValues> = {};
-  for (const [key, value] of Object.entries(values)) {
-    if (value.valueType === 'DATE') {
-      const raw = (value as { value: unknown }).value;
-      result[key] = {
-        valueType: 'DATE',
-        value: typeof raw === 'string' ? new Date(raw) : (raw as Date | null),
-      };
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
 }
 
 /**

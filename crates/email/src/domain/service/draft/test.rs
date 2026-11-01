@@ -3,6 +3,9 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
 fn input_with_body_html(html: &str) -> CreateDraftInput {
     CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: 0,
+        sender_email: None,
         db_id: None,
         provider_id: None,
         replying_to_id: None,
@@ -158,6 +161,7 @@ fn thread_row(link_id: Uuid, provider_id: Option<&str>) -> ThreadRow {
         link_id,
         inbox_visible: true,
         is_read: true,
+        has_received_mail: true,
         latest_inbound_message_ts: None,
         latest_outbound_message_ts: None,
         latest_non_spam_message_ts: None,

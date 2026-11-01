@@ -42,9 +42,15 @@ const DEPRIORITY_LABELS = [
   },
 ];
 
-const getLabelTokens = (
-  labels?: Array<{ id?: string; providerLabelId?: string; name?: string }>
-): string[] => {
+type SignalEmail = {
+  labels?: readonly {
+    id?: string;
+    providerLabelId?: string | null;
+    name?: string | null;
+  }[];
+};
+
+const getLabelTokens = (labels?: SignalEmail['labels']): string[] => {
   if (!labels?.length) return [];
 
   const tokens: string[] = [];
@@ -59,7 +65,7 @@ const getLabelTokens = (
 
 type EmailEntity = Extract<EntityData, { type: 'email' }>;
 
-function getEmailSignalInfo(entity: EmailEntity): {
+function getEmailSignalInfo(entity: SignalEmail): {
   hasPriority: boolean;
   hasDepriority: boolean;
 } {
@@ -81,7 +87,7 @@ function getEmailSignalInfo(entity: EmailEntity): {
 }
 
 /** Check if email is signal (important) */
-function isSignalEmail(entity: EmailEntity): boolean {
+export function isSignalEmail(entity: SignalEmail): boolean {
   const { hasPriority, hasDepriority } = getEmailSignalInfo(entity);
   // Signal = has priority indicators OR no depriority indicators
   return hasPriority || !hasDepriority;

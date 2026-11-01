@@ -91,11 +91,18 @@ const triggerPerson = z.object({
   email: z.string().optional(),
 });
 
+const triggerAttachment = z.object({
+  entity_type: z.string().min(1),
+  entity_id: z.string().min(1),
+  url: z.string().optional(),
+});
+
 const triggerMessage = z.object({
   id: z.string().min(1),
   author: triggerPerson,
   content: z.string(),
   posted_at: z.string().min(1),
+  attachments: z.array(triggerAttachment).optional(),
 });
 
 const triggerThread = z.object({
@@ -177,6 +184,12 @@ const discussionContext = z.object({
   surface: discussionSurface,
   prompt_message_id: z.string().min(1),
   sender: triggerPerson,
+  agent_request: z
+    .object({
+      on_behalf_of: triggerPerson,
+      hops: z.number().int().nonnegative(),
+    })
+    .optional(),
   reply_target: triggerReplyTarget,
   thread: triggerThread.optional(),
   channel: z.array(triggerThread).optional(),
@@ -185,6 +198,11 @@ const discussionContext = z.object({
 const projectRef = z.object({
   id: z.string().min(1),
   name: z.string(),
+});
+
+const pullRequestChange = z.object({
+  url: z.string(),
+  github_login: z.string(),
 });
 
 const taskSnapshot = z.object({
@@ -214,6 +232,37 @@ const emailSnapshot = z.object({
   body: z.string(),
 });
 
+const callStartedSnapshot = z.object({
+  id: z.string().min(1),
+  title: z.string().optional(),
+  channel_id: z.string().min(1).optional(),
+  channel_name: z.string().optional(),
+  started_at: z.string().min(1),
+  started_by: triggerPerson,
+  participants: z.array(triggerPerson),
+});
+
+const callSnapshot = z.object({
+  id: z.string().min(1),
+  title: z.string().optional(),
+  channel_id: z.string().min(1).optional(),
+  channel_name: z.string().optional(),
+  started_at: z.string().min(1),
+  ended_at: z.string().min(1),
+  participants: z.array(triggerPerson),
+  summary: z.string().optional(),
+  transcript: z
+    .array(
+      z.object({
+        speaker: z.string(),
+        text: z.string(),
+        at: z.string().min(1),
+      })
+    )
+    .optional(),
+  transcript_omitted: z.boolean(),
+});
+
 const routineEvent = z.discriminatedUnion('event', [
   z.object({
     event: z.literal('document_created'),
@@ -229,7 +278,11 @@ const routineEvent = z.discriminatedUnion('event', [
     name: z.string(),
   }),
   z.object({ event: z.literal('task_created'), task: taskSnapshot }),
-  z.object({ event: z.literal('task_status_changed'), task: taskSnapshot }),
+  z.object({
+    event: z.literal('task_status_changed'),
+    task: taskSnapshot,
+    pull_request: pullRequestChange.optional(),
+  }),
   z.object({ event: z.literal('task_priority_changed'), task: taskSnapshot }),
   z.object({ event: z.literal('task_property_changed'), task: taskSnapshot }),
   z.object({ event: z.literal('email_received'), email: emailSnapshot }),
@@ -255,6 +308,18 @@ const routineEvent = z.discriminatedUnion('event', [
     discussion: discussionContext,
     entity_type: z.string().min(1),
     entity_id: z.string().min(1),
+  }),
+  z.object({ event: z.literal('call_started'), call: callStartedSnapshot }),
+  z.object({ event: z.literal('call_ended'), call: callSnapshot }),
+  z.object({
+    event: z.literal('github'),
+    delivery: z.object({
+      event: z.string().min(1),
+      action: z.string().min(1).optional(),
+      repository: z.string().min(1).optional(),
+      sender: z.string().min(1).optional(),
+      payload: z.unknown().optional(),
+    }),
   }),
 ]);
 
@@ -285,12 +350,22 @@ const routineTrigger = z.discriminatedUnion('type', [
     type: z.literal('events'),
     events: z.array(z.string().min(1)),
     entity_ids: z.array(z.string().min(1)).optional(),
+    github: z
+      .object({
+        events: z.array(z.string().min(1)).optional(),
+        actions: z.array(z.string().min(1)).optional(),
+        repositories: z.array(z.string().min(1)).optional(),
+        include_bots: z.boolean(),
+      })
+      .optional(),
+    payload_match: z.array(z.string().min(1)).optional(),
     condition: z.string().optional(),
   }),
 ]);
 
 const triggerContextSchema = z.discriminatedUnion('kind', [
   discussionContext.extend({ kind: z.literal('mentioned') }),
+  discussionContext.extend({ kind: z.literal('conversation') }),
   z.object({
     kind: z.literal('follow_up'),
     addressed_by: z.enum(['mention', 'explicit_reply', 'inferred']),

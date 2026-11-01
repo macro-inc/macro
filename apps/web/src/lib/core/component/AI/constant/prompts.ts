@@ -1,5 +1,4 @@
 import { useUserContext } from '@core/context/user';
-import { useInstructionsMdTextQuery } from '@queries/storage/instructions-md';
 import { authServiceClient } from '@service-auth/client';
 import { createResource } from 'solid-js';
 import { getOpenEntitiesPrompt } from './openEntitiesPrompt';
@@ -28,7 +27,6 @@ Internal terminology and knowledge
 `;
 
 export function useAdditionalInstructions() {
-  const userInstructionsQuery = useInstructionsMdTextQuery();
   const { email } = useUserContext();
   const [userName] = createResource(async () => {
     const response = await authServiceClient.getUserName();
@@ -46,13 +44,6 @@ export function useAdditionalInstructions() {
       if (email()) {
         prompt += `\nEmail: ${email()}`;
       }
-    }
-    const userInstructions =
-      userInstructionsQuery.isSuccess && userInstructionsQuery.data;
-    if (userInstructions) {
-      prompt +=
-        '\nThese are system instructions provided by the user. Follow them\n';
-      prompt += userInstructions;
     }
     const openEntities = getOpenEntitiesPrompt(currentChatId);
     if (openEntities) {

@@ -70,6 +70,11 @@ const NOTIFICATION_CONTENT_FIELD: Partial<
 };
 
 function notificationContent(notification: Notification): string | undefined {
+  const metadata = notification.notification_metadata;
+  if (metadata.tag === 'entity_access_requested')
+    return `Requested ${metadata.content.accessLevel} access`;
+  if (metadata.tag === 'entity_access_granted')
+    return `Granted you ${metadata.content.accessLevel} access`;
   const field =
     NOTIFICATION_CONTENT_FIELD[notification.notification_metadata.tag];
   if (!field) return undefined;

@@ -1,5 +1,5 @@
 import type { ItemLike } from '@core/constant/allBlocks';
-
+import { fireAndForget } from '@core/util/fireAndForget';
 import { storageServiceClient } from '@service-storage/client';
 import { AsyncBatcher } from '@tanstack/pacer';
 import type { PreviewItem } from './types';
@@ -62,7 +62,7 @@ function enqueueDocumentIdWakeup(documentId: string) {
 
   recentWakeups.set(documentId, now);
   cleanupRecentWakeups(now);
-  documentWakeupBatcher.addItem(documentId);
+  fireAndForget(documentWakeupBatcher.addItem(documentId), 'document-wakeup');
 }
 
 type WakeableDocument = ItemLike & {

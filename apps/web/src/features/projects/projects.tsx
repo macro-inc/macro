@@ -3,15 +3,20 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
+import { TasksCreateAction } from '@app/features/tasks-view/tasks-create-action';
 import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { createSearchParams } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { enableProjects } from '@core/constant/featureFlags';
+import { enableGantt, enableProjects } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { queryClient } from '@queries/client';
 import {
   getGraphqlSoupCacheHost,
@@ -20,8 +25,11 @@ import {
 import { initiativeClient } from '@service-storage/initiative';
 import { Button } from '@ui';
 import {
+  createEffect,
   createSignal,
   ErrorBoundary,
+  type JSX,
+  on,
   onCleanup,
   type ParentProps,
   Show,
@@ -31,20 +39,17 @@ import {
   ProjectsProvider,
   useProjectsContext,
 } from './context/projects-context';
-import { projectRouteId } from './core/route';
+import type { ProjectScope } from './core/project';
 import {
   createProjectCollection,
   type ProjectListActivation,
 } from './primitives/project-collection';
 import { createProjectCollectionPersistence } from './project-collection-persistence';
+import { projectCollectionSearch } from './project-collection-search';
 import { ProjectShareLauncher } from './project-share';
 import { createProjectSources } from './queries/project-sources';
 import { ProjectAssignment } from './views/project-assignment';
 import { ProjectsCollection } from './views/projects-collection';
-import {
-  ProjectsSidebar,
-  type ProjectsSidebarProps,
-} from './views/projects-sidebar';
 
 function createProjectReadGate() {
   // Each source invokes this under its own owner, which can outlive this view.
@@ -77,7 +82,10 @@ function ProjectsContent(props: ParentProps) {
     <ErrorBoundary
       fallback={(_, reset) => (
         <div role="alert" class="p-4">
-          Could not load projects. <Button onClick={reset}>Try again</Button>
+          Could not load projects.{' '}
+          <Button variant="ghost" onClick={reset}>
+            Try again
+          </Button>
         </div>
       )}
     >
@@ -94,9 +102,15 @@ function ProjectsContent(props: ParentProps) {
   );
 }
 
-export function ProjectsTab(props: {
+type ProjectsTabProps = {
   onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
-}) {
+  search?: Parameters<typeof createProjectCollection>[0]['search'];
+  scope?: () => ProjectScope;
+  title?: string;
+  mobileNavigation?: JSX.Element;
+};
+
+export function ProjectsTab(props: ProjectsTabProps) {
   return (
     <Projects>
       <ProjectsCollectionHost {...props} />
@@ -104,20 +118,12 @@ export function ProjectsTab(props: {
   );
 }
 
-export function ProjectsSidebarSection(props: ProjectsSidebarProps) {
-  return (
-    <Projects>
-      <ProjectsSidebar {...props} />
-    </Projects>
-  );
-}
-
-function ProjectsCollectionHost(props: {
-  onOpen: (id: string, event?: MouseEvent, newSplit?: boolean) => void;
-}) {
+function ProjectsCollectionHost(props: ProjectsTabProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const context = useProjectsContext();
+  const ganttFlag = useFeatureFlag(enableGantt);
+  const [search, setSearch] = createSearchParams(projectCollectionSearch);
   const activation = withSplitPanelOwner(
     listOwnedSlotName('initiatives:activation'),
     () => ({
@@ -138,20 +144,51 @@ function ProjectsCollectionHost(props: {
       createProjectCollection({
         ...createProjectCollectionPersistence(panel.handle),
         createSource: context.createCollectionSource,
+        search: props.search,
+        scope: () => props.scope?.() ?? 'all',
         userId: context.userId,
         onOpen: (id, metadata) => activation.current?.(id, metadata),
       })
   );
+  // URL history restores the entry snapshot, not the latest layout selection.
+  const entryLayout = collection.layout();
+  createEffect(
+    on(
+      () => search.layout,
+      (layout) => collection.setLayout(layout ?? entryLayout)
+    )
+  );
+  const displayCollection = {
+    ...collection,
+    setLayout: (layout: 'list' | 'gantt') => {
+      const selected = collection.setLayout(layout);
+      setSearch({ layout: selected });
+      return selected;
+    },
+  };
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
   const [sharing, setSharing] = createSignal<string>();
   return (
     <>
       <ProjectsCollection
+        createAction={
+          <Show when={!isTouchDevice()}>
+            <TasksCreateAction presentation="toolbar" projectsEnabled />
+          </Show>
+        }
         onOpen={open}
-        collection={collection}
-        onCreate={() =>
-          layout.popoverSplit({ type: 'component', id: 'project-compose' })
+        collection={displayCollection}
+        title={props.title}
+        mobileNavigation={props.mobileNavigation}
+        ganttEnabled={ganttFlag().enabled}
+        createAssigneeName={(id) => usePropertyUserDisplay(id).name}
+        onCreate={(initialDraft) =>
+          layout.popoverSplit({
+            type: 'component',
+            id: 'project-compose',
+            params: initialDraft ? { initialDraft } : undefined,
+          })
         }
         scopeId={panel.splitHotkeyScope}
         isActive={panel.isPanelActive}
@@ -159,12 +196,9 @@ function ProjectsCollectionHost(props: {
           globalSplitManager()?.canAppendSplit() ?? false
         }
         onCopyLink={(id) =>
-          void copyLink.executeByBlock(
-            projectRouteId({ id, section: 'overview' }),
-            'component'
-          )
+          fireAndForget(copyLink.executeByBlock(id, 'initiative'), 'projects')
         }
-        onCopyId={(id) => void copyId.executeById(id)}
+        onCopyId={(id) => fireAndForget(copyId.executeById(id), 'projects')}
         onShare={(projectId) => setSharing(projectId)}
       />
       <Show when={sharing()} keyed>

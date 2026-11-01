@@ -3,7 +3,9 @@ export type MarginItem = { id: string; top: number };
 /**
  * Stack margin cards beside their anchors without overlap. The active card
  * sits exactly at its anchor; cards above it are pushed up and cards below
- * are pushed down, the way a word processor's markup area behaves.
+ * are pushed down, the way a word processor's markup area behaves. No card
+ * starts above the top of the margin, where it could not be scrolled to:
+ * when the cards above the active one do not fit, the stack is pushed down.
  */
 export function layoutMarginCards(
   items: readonly MarginItem[],
@@ -39,6 +41,13 @@ export function layoutMarginCards(
     const top = Math.min(item.top, ceiling - gap - height(item.id));
     placed.set(item.id, top);
     ceiling = top;
+  }
+  if (ceiling >= 0) return placed;
+  let floor = 0;
+  for (const item of sorted) {
+    const top = Math.max(placed.get(item.id) ?? item.top, floor);
+    placed.set(item.id, top);
+    floor = top + height(item.id) + gap;
   }
   return placed;
 }

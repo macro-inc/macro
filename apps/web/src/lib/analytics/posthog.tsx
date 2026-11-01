@@ -1,6 +1,7 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { RemoteFlag } from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { Telemetry } from '@macro-inc/observability';
 import type { JsonType } from 'posthog-js';
 import {
   type Accessor,
@@ -31,6 +32,9 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
     // RedirectSplit) must not fire before the answer arrives. Set even on
     // errorsLoading so a PostHog outage degrades to flags-off, not a hang.
     const [flagsLoaded, setFlagsLoaded] = createSignal(cachedFlags.length > 0);
+    // Whether the last fetch got no answer at all (blocked, offline, PostHog
+    // down), as opposed to an answer that says a flag is off.
+    const [flagsUnreachable, setFlagsUnreachable] = createSignal(false);
 
     const unsub = analytics.posthog.onFeatureFlags((flags, _, ctx) => {
       // Flags usually arrive after first paint and swap flagged subtrees,
@@ -43,13 +47,19 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
         if (!ctx?.errorsLoading) {
           setFeatureFlags(flags);
         }
+        setFlagsUnreachable(ctx?.errorsLoading === true);
         setFlagsLoaded(true);
-      });
+      }).catch((error) => Telemetry.error(error, { surface: 'feature-flags' }));
     });
 
     onCleanup(unsub);
 
-    return { instance: analytics.posthog, featureFlags, flagsLoaded };
+    return {
+      instance: analytics.posthog,
+      featureFlags,
+      flagsLoaded,
+      flagsUnreachable,
+    };
   }
 );
 
@@ -62,6 +72,12 @@ type FeatureFlagResult<T> = {
 type FeatureFlagOpts<T> = {
   fallbackPayload?: T;
   enabledOverride?: boolean;
+  /**
+   * Treat the flag as on when PostHog could not be reached and holds no
+   * earlier answer for it; an answer of "off" still wins. For pages anonymous
+   * visitors depend on, which a blocked flag request must not take down.
+   */
+  enabledWhenUnreachable?: boolean;
 };
 
 function readFeatureFlag<T extends JsonType>(
@@ -89,9 +105,11 @@ function readFeatureFlag<T extends JsonType>(
       // payload changes that leave the enabled flag list unchanged.
       posthog.featureFlags();
       const result = posthog.instance.getFeatureFlagResult(key);
+      const unreachableDefault =
+        opts?.enabledWhenUnreachable === true && posthog.flagsUnreachable();
 
       return {
-        enabled: result?.enabled ?? false,
+        enabled: result?.enabled ?? unreachableDefault,
         payload: (result?.payload as T) ?? fallbackPayload,
         loading: false,
       };
@@ -108,7 +126,7 @@ function readFeatureFlag<T extends JsonType>(
 
 export function useFeatureFlag<T extends JsonType>(
   flag: RemoteFlag,
-  opts?: { fallbackPayload?: T }
+  opts?: Pick<FeatureFlagOpts<T>, 'fallbackPayload' | 'enabledWhenUnreachable'>
 ): Accessor<FeatureFlagResult<T | undefined>>;
 export function useFeatureFlag<T extends JsonType>(
   key: string,

@@ -1,0 +1,7 @@
+GET /soup/graphql/ws HTTP/1.1
+Host: {address}
+Connection: Upgrade
+Upgrade: websocket
+Sec-WebSocket-Version: 13
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Protocol: {protocol}

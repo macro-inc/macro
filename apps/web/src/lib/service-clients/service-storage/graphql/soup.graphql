@@ -61,7 +61,10 @@ query SoupSharedMailBackfill($input: SoupInput!) {
 query MailAccounts {
 	user {
 		id
-		emailLinks { ...MailAccountFields }
+		emailLinks {
+			...MailAccountFields
+			sendAs { emailAddress displayName }
+		}
 	}
 }
 
@@ -73,6 +76,25 @@ fragment MailPreviewFields on GraphqlMailPreviewMessage {
 	senderEmail
 	senderName
 	senderPhotoUrl
+}
+
+# Independent selections keep known flags live even on a partial thread.
+fragment MailReadStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	isRead
+}
+
+fragment MailInboxStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	inboxVisible
+}
+
+fragment MailSignalStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	isSignal
 }
 
 # Local-only selection: materialize canonical preview references instead of the
@@ -97,33 +119,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 	__typename
 	cacheProjection @cacheOnly
 	...SoupEntityIdentityFields
-	... on GraphqlSoupAgentSession {
-		sessionName: name
-		isArchived
-		ownerId
-		botId
-		harness
-		repoUrl
-		repoBranch
-		pullRequestUrl
-		workingBranch
-		pullRequestState
-		pullRequestId
-		turnState
-		bot {
-			id
-			name
-			avatarUrl
-		}
-		threadId
-		status
-		createdAt
-		updatedAt
-		viewedAt
-		properties {
-			...SoupPropertyFields
-		}
-	}
+	...SoupAgentSessionFields
 	frecencyScore
 	... on GraphqlSoupDatabaseRow {
 		tableId
@@ -192,8 +188,11 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		providerId
 		ownerId
 		inboxVisible
+		hasReceivedMail
 		linkId
 		latestInboundMessageTs
+		latestOutboundMessageTs
+		latestNonSpamMessageTs
 		reminderReturnedAt
 		mailDraftState @cacheOnly { ...EmailDraftStateFields }
         mailAllPreview @cacheOnly { ...MailPreviewFields }
@@ -209,12 +208,11 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		isImportant
 		isSignal
 		projectId
-		sortTs
 		createdAt
 		updatedAt
 		viewedAt
-		participants {
-			id
+		participants: senders {
+			contactId
 			linkId
 			name
 			email
@@ -350,6 +348,38 @@ fragment SoupEntityCoreFields on GraphqlSoupEntity {
 	notifications { ...SoupNotificationFields }
 }
 
+# An agent session's list fields. Also re-read alone, from the primary, when
+# the session reports a committed change: see AgentSessionRow.
+fragment SoupAgentSessionFields on GraphqlSoupAgentSession {
+	sessionName: name
+	isArchived
+	ownerId
+	botId
+	harness
+	repoUrl
+	repoBranch
+	pullRequestUrl
+	workingBranch
+	pullRequestState
+	pullRequestId
+	turnState
+	bot {
+		id
+		name
+		avatarUrl
+	}
+	threadId
+	source
+	visibility
+	status
+	createdAt
+	updatedAt
+	viewedAt
+	properties {
+		...SoupPropertyFields
+	}
+}
+
 fragment SoupEntityIdentityFields on GraphqlSoupEntity {
 	id
 	entityType
@@ -382,6 +412,10 @@ fragment SoupPropertyValueFields on GraphqlPropertyValue {
 	}
 	... on GraphqlDatePropertyValue {
 		dateValue: value
+	}
+	... on GraphqlDateRangePropertyValue {
+		rangeStart: start
+		rangeEnd: end
 	}
 	... on GraphqlSelectOptionPropertyValue {
 		optionIds
@@ -419,7 +453,10 @@ fragment SoupNotificationStateFields on GraphqlNotification {
 	__typename
 	id
 	eventType
+	# The Soup cache reads `entityType` by its schema name; never alias it.
 	entityType
+	# The canonical type also covers entities outside Soup (external chats).
+	targetEntityType
 	entityId
 	sent
 	state
@@ -456,6 +493,11 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 # REST metadata (including mention/reply content) remains available to consumers.
 fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 	__typename
+	... on GraphqlExternalChatMessageMetadata {
+		externalChatProvider: provider
+		externalChatName: chatName
+		externalChatMessageId: messageId
+	}
 	... on GraphqlChannelMentionMetadata {
 		channelMentionMessageId: messageId
 		channelMentionMessageContent: messageContent
@@ -498,6 +540,20 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		repliedToDocumentCommentThreadText: text
 		repliedToDocumentCommentThreadSenderProfilePictureUrl: senderProfilePictureUrl
 		repliedToDocumentCommentThreadSenderDisplayName: senderDisplayName
+	}
+	... on GraphqlEntityAccessRequestedMetadata {
+		entityAccessRequestedRequestId: requestId
+		entityAccessRequestedRevision: revision
+		entityAccessRequestedEntityName: entityName
+		entityAccessRequestedFileType: fileType
+		entityAccessRequestedAccessLevel: accessLevel
+	}
+	... on GraphqlEntityAccessGrantedMetadata {
+		entityAccessGrantedRequestId: requestId
+		entityAccessGrantedRevision: revision
+		entityAccessGrantedEntityName: entityName
+		entityAccessGrantedFileType: fileType
+		entityAccessGrantedAccessLevel: accessLevel
 	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
@@ -600,6 +656,11 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		calendarEventReminderStartDate: startDate
 		calendarEventReminderTimeZone: timeZone
 		calendarEventReminderMinutesBefore: minutesBefore
+	}
+	... on GraphqlCalendarEventJoinRequestMetadata {
+		calendarEventJoinRequestRequestId: requestId
+		calendarEventJoinRequestEventId: eventId
+		calendarEventJoinRequestTitle: title
 	}
 	... on GraphqlAiResponseMetadata {
 		aiResponseSummary: summary
@@ -756,6 +817,7 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 fragment MailAccountFields on GraphqlEmailLink {
   id
   macroId
+  provider
   emailAddress
   photoUrl
   isPrimary

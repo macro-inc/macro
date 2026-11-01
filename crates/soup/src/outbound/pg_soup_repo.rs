@@ -1,10 +1,10 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, GroupedSortRequest, NotifiedEntity, NotifiedSoupRequest,
-            SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration, SoupPropertiesField,
-            TouchedEntity, TouchedSoupRequest, WorkFeedCandidate, WorkFeedCandidateRequest,
-            grouping::ItemGroupingInfo,
+            AdvancedSortParams, CrmPropertyEdge, GroupedSortRequest, NotifiedEntity,
+            NotifiedSoupRequest, SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration,
+            SoupPropertiesField, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
+            WorkFeedCandidateRequest, grouping::ItemGroupingInfo,
         },
         ports::SoupRepo,
     },
@@ -23,6 +23,7 @@ use system_properties::SystemPropertyKey;
 mod agent_session;
 mod calendar_event;
 mod candidate_gates;
+mod crm_association;
 mod database_row;
 mod expanded;
 pub mod grouping;
@@ -304,6 +305,14 @@ impl SoupRepo for PgSoupRepo {
             },
         )
         .await
+    }
+
+    async fn crm_property_edges<'a>(
+        &self,
+        company_ids: &'a [uuid::Uuid],
+        contact_ids: &'a [uuid::Uuid],
+    ) -> Result<Vec<CrmPropertyEdge>, Self::Err> {
+        crm_association::property_edges(&self.pool.0, company_ids, contact_ids).await
     }
 
     async fn touched_soup_page<'a>(

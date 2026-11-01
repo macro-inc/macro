@@ -2,7 +2,7 @@
 
 Used to populate your local environment with sample data.
 
-Please ensure you have read [RUNNING\_LOCALLY](../../docs/RUNNING_LOCALLY.md) and
+Please ensure you have read [RUNNING\_LOCALLY](../../docs/development/running-locally.md) and
 have your local environment setup.
 
 ## Usage

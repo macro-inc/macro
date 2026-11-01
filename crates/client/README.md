@@ -31,7 +31,8 @@ intermediate JSON asset. Browser workers configure SDL through
 Native startup calls `graphql_cache_init_with_schema`. This requires one native
 release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that
 command. Older native binaries cannot accept runtime SDL. The frontend does
-not fall back to the old initialization command.
+not fall back to the old initialization command; it runs uncached and asks for
+an app update instead.
 
 An engine owns a validated schema snapshot; there is no mutable global schema.
 Compatible additions are merged under the native engine lock, including when an
@@ -60,6 +61,29 @@ that need a full scan. Keep it off startup and foreground-read paths; it is not
 scheduled automatically in the background. Failures latch the existing storage
 health state without deleting records or pending mutations. Recovery/reset remains
 an explicit caller decision after closing the storage.
+
+## Record encoding
+
+`records.value` is postcard behind a one-byte tag: payloads of 256 bytes or more are
+deflated (`miniz_oxide`, level 3) when that is smaller, and everything else stays
+raw. Large text records — foreign-entity source metadata and email bodies —
+dominate the database and shrink about 3×; a real 155 MB record payload became
+48 MB. Level 3 keeps that size win with markedly less CPU in the slowest batches
+than level 6, which matters because deflate runs while the engine lock is held.
+Decompression is bounded per record. Queued mutations, optimistic layers, and
+projections keep their unframed postcard encoding, so a format upgrade never
+re-encodes them.
+
+Only the immediately prior cache format version is migratable
+(`MIGRATABLE_CACHE_FORMAT_VERSIONS`). Opening one drops records, search
+projections, index facts, and calendar ranges — all refetchable — and keeps
+queued mutations, optimistic layers, and their projections, then rewrites the
+namespace in the same transaction. An interrupted migration therefore retries on
+the next open. Native owners then `VACUUM INTO` a fresh file and swap it in, so an
+upgrade also releases the space the dropped records occupied instead of leaving
+free pages in the old file. The browser's physical database name embeds the format
+version, so a browser upgrade starts a new file instead of migrating; the previous
+file is left for any tab still running the older bundle.
 
 ## Network refreshes
 

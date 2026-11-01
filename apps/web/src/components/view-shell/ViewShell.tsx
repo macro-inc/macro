@@ -10,7 +10,8 @@ import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -31,11 +32,10 @@ import {
   Show,
   Switch,
   splitProps,
+  untrack,
   useContext,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import { createSidebarMotion } from './create-sidebar-motion';
-import { ViewNavigationSlotContext } from './navigation-slot';
 import { VIEW_SHELL_TOUR } from './tour';
 import {
   type AsideLayout,
@@ -131,7 +131,10 @@ export type ViewShellRootProps = Omit<
   resizable?: boolean;
   /** Set to false when the workspace has no navigation region. */
   aside?: false | Partial<AsideLayout>;
-  /** Sticky navigation visibility, scoped to this app type rather than an entry. */
+  /**
+   * Sticky navigation visibility, scoped to this app type rather than an entry.
+   * Only the first split uses it; other splits start collapsed.
+   */
   asidePreferenceKey?: string;
   /**
    * Keep navigation open while true, e.g. while Main has nothing selected and
@@ -140,6 +143,13 @@ export type ViewShellRootProps = Omit<
    * open the overlay, which stays dismissible.
    */
   asideRequired?: boolean;
+  /**
+   * Keep navigation docked in wide layouts, for views that are unusable
+   * without it. Like `asideRequired`, it withholds the collapse control and
+   * ignores the saved preference there; narrow layouts still start with the
+   * overlay closed.
+   */
+  asidePinned?: boolean;
   main?: Partial<MainLayout>;
   detail?: Partial<DetailLayout>;
   /** Controlled detail open state. Omit for uncontrolled. */
@@ -164,6 +174,7 @@ function Root(props: ViewShellRootProps) {
     'aside',
     'asidePreferenceKey',
     'asideRequired',
+    'asidePinned',
     'main',
     'detail',
     'detailOpen',
@@ -171,12 +182,22 @@ function Root(props: ViewShellRootProps) {
     'onDetailOpenChange',
   ]);
 
-  const [wideAsideCollapsed, setWideAsideCollapsed] = local.asidePreferenceKey
-    ? usePreference(
-        `macro:pref:view-sidebar:collapsed:${local.asidePreferenceKey}`,
-        { default: false }
-      )
-    : createSignal(false);
+  const panel = useContext(SplitPanelContext);
+  // A view opened beside another split starts without navigation, then keeps
+  // that split's choice as the split moves between views; only the primary
+  // split follows, and writes, the saved preference.
+  const secondarySplit =
+    local.asidePreferenceKey !== undefined &&
+    panel !== undefined &&
+    !untrack(panel.handle.isFirst);
+  const [wideAsideCollapsed, setWideAsideCollapsed] = secondarySplit
+    ? (panel?.navigationCollapsed ?? createSignal(true))
+    : local.asidePreferenceKey
+      ? usePreference(
+          `macro:pref:view-sidebar:collapsed:${local.asidePreferenceKey}`,
+          { default: false }
+        )
+      : createSignal(false);
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
   const animateSidebar = createSidebarMotion(root);
@@ -240,7 +261,8 @@ function Root(props: ViewShellRootProps) {
   );
   // Only a docked aside can be pinned open: a pinned overlay would hide Main
   // behind a backdrop with no way to dismiss it.
-  const asidePinned = () => asideRequired() && !atLayoutBreakpoint();
+  const asidePinned = () =>
+    (asideRequired() || (local.asidePinned ?? false)) && !atLayoutBreakpoint();
 
   const asideMode = (): AsideMode =>
     local.aside === false ||
@@ -326,8 +348,6 @@ function Root(props: ViewShellRootProps) {
     },
   };
 
-  const panel = useContext(SplitPanelContext);
-  const navigationSlot = useContext(ViewNavigationSlotContext);
   if (panel) {
     registerHotkey({
       hotkey: 'cmd+.',
@@ -345,29 +365,6 @@ function Root(props: ViewShellRootProps) {
 
   return (
     <ViewShellContext.Provider value={value}>
-      <Show
-        when={
-          navigationSlot?.() &&
-          panel?.isPanelActive() &&
-          value.aside.canCollapse()
-        }
-      >
-        <Portal mount={navigationSlot?.()}>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            label={
-              value.aside.isCollapsed() ? 'Show navigation' : 'Hide navigation'
-            }
-            hotkey={TOKENS.workspace.toggleNavigation}
-            aria-expanded={!value.aside.isCollapsed()}
-            ref={tourTarget(VIEW_SHELL_TOUR.sidebarToggle)}
-            onClick={value.aside.toggle}
-          >
-            <SidebarIcon class="size-4" />
-          </Button>
-        </Portal>
-      </Show>
       <div
         {...rest}
         ref={setRoot}
@@ -509,7 +506,15 @@ function Aside(props: ViewShellAsideProps) {
         <div
           class="absolute inset-0 z-20"
           onKeyDown={(event) => {
-            if (event.key === 'Escape') {
+            // Portaled menus own Escape even though Solid bubbles through here.
+            if (
+              event.key === 'Escape' &&
+              !event.defaultPrevented &&
+              event.currentTarget.contains(event.target as Node) &&
+              !(event.target as Element).closest(
+                '[aria-haspopup][aria-expanded="true"]'
+              )
+            ) {
               event.stopPropagation();
               ws.aside.collapse();
             }
@@ -545,37 +550,43 @@ function Aside(props: ViewShellAsideProps) {
   );
 }
 
-/** A navigation overlay must not offer an action that closes its owning split. */
+/** Keep split close available in both docked and overlay navigation. */
 export function ViewSidebarCloseButton(
   props: ComponentProps<typeof SplitPanel.CloseButton>
 ) {
-  const ws = useContext(ViewShellContext);
+  const [local, rest] = splitProps(props, ['children', 'size']);
   return (
-    <Show when={!ws?.atLayoutBreakpoint()}>
-      <SplitPanel.CloseButton {...props} />
-    </Show>
+    <SplitPanel.CloseButton {...rest} size={local.size ?? 'icon-xs'}>
+      {local.children ?? <CloseIcon class="size-4" />}
+    </SplitPanel.CloseButton>
   );
 }
 
 /** Safe outside a shell so block preview headers can share this control. */
 export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
   const ws = useContext(ViewShellContext);
-  const navigationSlot = useContext(ViewNavigationSlotContext);
-  const panel = useContext(SplitPanelContext);
   // A conditional expression as `ref` is dropped by the Solid compiler, so
   // only the expand toggle registers, from inside the callback.
   const toggleTarget = tourTarget(VIEW_SHELL_TOUR.sidebarToggle);
   const visible = () =>
-    !(navigationSlot?.() && panel) &&
     ws?.aside.canCollapse() &&
     (props.action === 'expand'
       ? ws.aside.isCollapsed() || ws.aside.isOverlay()
       : !ws.aside.isCollapsed());
+  // Show and Hide are separate actions, not a persistently pressed toggle.
   return (
     <Show when={visible()}>
       <Button
+        aria-label={
+          props.action === 'expand' ? 'Show navigation' : 'Hide navigation'
+        }
+        tooltip={{
+          content:
+            props.action === 'expand' ? 'Show navigation' : 'Hide navigation',
+          hotkey: TOKENS.workspace.toggleNavigation,
+        }}
         variant="ghost"
-        size="icon-sm"
+        size="icon-xs"
         class={cn(
           'shrink-0 touch:hidden',
           props.action === 'collapse' && 'ml-auto',
@@ -583,11 +594,6 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
             ws?.aside.isOverlay() &&
             'motion-safe:animate-[dialog-overlay-open_60ms_ease-out_80ms_both]'
         )}
-        label={
-          props.action === 'expand' ? 'Show navigation' : 'Hide navigation'
-        }
-        hotkey={TOKENS.workspace.toggleNavigation}
-        aria-expanded={props.action !== 'expand'}
         ref={(element) => {
           if (props.action === 'expand') toggleTarget(element);
         }}
@@ -628,8 +634,18 @@ export function ViewNavigationControls() {
   );
 }
 
-function Main(props: JSX.HTMLAttributes<HTMLElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
+type ViewShellMainProps = JSX.HTMLAttributes<HTMLElement> & {
+  /** Called with the solved width after a drag beside an inline detail. */
+  onWidthChangeEnd?: (width: number) => void;
+};
+
+function Main(props: ViewShellMainProps) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'ref',
+    'onWidthChangeEnd',
+  ]);
   const ws = useViewShellInternal();
   const layout = ws.main.layout;
   const target = () => {
@@ -647,6 +663,7 @@ function Main(props: JSX.HTMLAttributes<HTMLElement>) {
       minSize={layout().min}
       maxSize={ws.detail.placement() === 'inline' ? layout().max : undefined}
       target={target()}
+      onSizeChangeEnd={local.onWidthChangeEnd}
     >
       <main
         {...rest}
@@ -668,7 +685,7 @@ function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
         {...rest}
         ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
         class={cn(
-          '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:pl-[13px] touch:hidden',
+          '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden',
           local.class
         )}
         data-view-shell-top-bar=""
@@ -686,7 +703,7 @@ function Header(props: JSX.HTMLAttributes<HTMLElement>) {
     <header
       {...rest}
       class={cn(
-        'shrink-0 px-4 py-4 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
+        'shrink-0 px-4 py-4 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)]',
         local.class
       )}
       data-view-shell-header=""

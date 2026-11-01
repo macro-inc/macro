@@ -1,3 +1,4 @@
+import { $createImageNode } from '@macro-inc/lexical-core';
 import { $getRoot } from 'lexical';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
@@ -17,51 +18,16 @@ const response: PersistedEmailIdentity = {
   threadId: 'thread',
   inboxId: 'inbox',
 };
+const providers = ['GMAIL', 'OUTLOOK'] as const;
+function providerContext(provider: (typeof providers)[number]) {
+  const composeContext = createComposeContext();
+  composeContext.accounts.inboxes = () => [
+    { id: 'inbox', email_address: 'me@example.com', settings: {}, provider },
+  ];
+  return composeContext;
+}
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
-
-it.each(['standalone', 'reply'] as const)(
-  'does not acknowledge the %s pre-send save, including after failed delivery',
-  async (surface) => {
-    const context = createComposeContext();
-    context.drafts.saveLocalDraft = vi.fn(async (input) =>
-      localSnapshot(input)
-    );
-    const delivery = Promise.withResolvers<PersistedEmailIdentity>();
-    vi.mocked(context.delivery.sendMessage).mockReturnValueOnce(
-      delivery.promise
-    );
-    const root =
-      surface === 'standalone'
-        ? mountEmailComposer(context)
-        : mountReplyComposer(context);
-    const state = 'state' in root ? root.state : root;
-    try {
-      root.edit('Send without flashing Draft saved');
-      await vi.advanceTimersByTimeAsync(0);
-      if ('state' in root) root.state.context.onSend();
-      else void root.sendEmail();
-      expect(state.acknowledgeSaved()).toBe(false);
-      await vi.advanceTimersByTimeAsync(0);
-      expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
-      expect(state.localSaveState()).toBe('saved');
-      expect(state.acknowledgeSaved()).toBe(false);
-      delivery.reject(new Error('Delivery failed'));
-      await vi.advanceTimersByTimeAsync(0);
-      expect(state.acknowledgeSaved()).toBe(false);
-      root.edit('Keep editing after failure');
-      await vi.advanceTimersByTimeAsync(500);
-      expect(state.acknowledgeSaved()).toBe(true);
-    } finally {
-      delivery.resolve({
-        draftId: 'sent',
-        threadId: 'thread',
-        inboxId: 'inbox',
-      });
-      root.dispose();
-    }
-  }
-);
 
 it('flushes the latest pending body and envelope exactly once on disposal', async () => {
   const composeContext = createComposeContext();
@@ -120,27 +86,127 @@ it('discard cancels an unsaved debounce without creating a draft', async () => {
   expect(composeContext.drafts.saveDraft).not.toHaveBeenCalled();
   expect(composeContext.drafts.deleteDraft).not.toHaveBeenCalled();
 });
-it('discard waits for an in-flight first save and deletes its returned draft', async () => {
-  const pending = Promise.withResolvers<PersistedEmailIdentity>();
+it.each(providers)(
+  'Delete leaves a %s draft at once and deletes the ID its in-flight first save returns',
+  async (provider) => {
+    const pending = Promise.withResolvers<PersistedEmailIdentity>();
+    const composeContext = providerContext(provider);
+    vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(
+      pending.promise
+    );
+    const goBack = vi.fn(() => root.dispose());
+    const root = mountEmailComposer(composeContext, { goBack });
+    root.edit('First');
+    await vi.advanceTimersByTimeAsync(600);
+    root.edit('Discard these changes too');
+    const discard = root.state.deleteDraftAndReset();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(goBack).toHaveBeenCalledOnce();
+    pending.resolve(response);
+    await discard;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'saved-id' })
+    );
+  }
+);
+it.each(providers)(
+  'Delete leaves a %s draft whose send waits on a pasted image while its save is on the wire',
+  async (provider) => {
+    const composeContext = providerContext(provider);
+    const goBack = vi.fn(() => root.dispose());
+    const root = mountEmailComposer(composeContext, { goBack });
+    root.edit('Body');
+    await vi.advanceTimersByTimeAsync(600);
+    const saving = Promise.withResolvers<PersistedEmailIdentity>();
+    vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(
+      saving.promise
+    );
+    root.editor.update(
+      () =>
+        $getRoot().append(
+          $createImageNode({
+            srcType: 'local',
+            url: 'blob:http://localhost/pasted',
+            alt: 'pasted',
+          })
+        ),
+      { discrete: true }
+    );
+    root.state.context.onContentChange('Body');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
+    root.state.context.onSend();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
+
+    root.state.context.onDelete?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(goBack).toHaveBeenCalledOnce();
+    saving.resolve({ draftId: 'draft', threadId: 'thread', inboxId: 'inbox' });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'draft' })
+    );
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
+  }
+);
+it('discards a standalone draft at its server generation', async () => {
   const composeContext = createComposeContext();
-  vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(
-    pending.promise
-  );
-  const root = mountEmailComposer(composeContext);
-  root.edit('First');
-  await vi.advanceTimersByTimeAsync(600);
-  root.edit('Discard these changes too');
-  const discard = root.state.deleteDraftAndReset();
+  // Each send that Undo cancels advances the server's generation twice.
+  const root = mountEmailComposer(composeContext, undefined, {
+    draft: message('restored', {
+      is_draft: true,
+      thread_db_id: 'thread',
+      draft_generation: 4,
+    }),
+  });
+  await root.state.deleteDraftAndReset();
   root.dispose();
-  pending.resolve(response);
-  await discard;
-  await vi.advanceTimersByTimeAsync(1000);
-  expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
   expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
-    expect.objectContaining({ draftId: 'saved-id' })
+    expect.objectContaining({ draftId: 'restored', draftGeneration: 4 })
   );
 });
-it('keeps the draft editable after failed deletion and saves later edits', async () => {
+
+it('discards a reply draft at its server generation', async () => {
+  const composeContext = createComposeContext();
+  const root = mountReplyComposer(composeContext, () => message('parent'), {
+    draft: message('restored', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      thread_db_id: 'thread',
+      draft_generation: 4,
+    }),
+  });
+  await root.deleteDraftAndReset();
+  root.dispose();
+  expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+    expect.objectContaining({ draftId: 'restored', draftGeneration: 4 })
+  );
+});
+
+it('sends a reloaded reply without appending its quoted thread again', async () => {
+  const composeContext = createComposeContext();
+  // The server keeps the quote's class but strips the editor's markers.
+  const root = mountReplyComposer(composeContext, () => message('parent'), {
+    draft: message('draft', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      thread_db_id: 'thread',
+      body_html_sanitized:
+        '<p>Reply</p><div class="macro_quote gmail_quote"><blockquote>Earlier</blockquote></div>',
+    }),
+  });
+  await root.sendEmail();
+  root.dispose();
+  const sent = vi.mocked(composeContext.delivery.sendMessage).mock.calls[0][0];
+  expect(decodeBase64Utf8(sent.message.body_html ?? '')).not.toContain(
+    'macro_quote'
+  );
+});
+
+it('reports a failed deletion and keeps a draft its host still shows editable', async () => {
   const composeContext = createComposeContext();
   const goBack = vi.fn();
   const root = mountEmailComposer(composeContext, { goBack });
@@ -150,35 +216,90 @@ it('keeps the draft editable after failed deletion and saves later edits', async
     new Error('offline')
   );
   await expect(root.state.deleteDraftAndReset()).rejects.toThrow('offline');
-  expect(goBack).not.toHaveBeenCalled();
+  expect(goBack).toHaveBeenCalledOnce();
+  expect(composeContext.notices.feedback.failure).toHaveBeenCalledWith(
+    'Failed to delete draft'
+  );
   root.edit('Still here');
   await vi.advanceTimersByTimeAsync(600);
   root.dispose();
   expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
 });
-
-it('toolbar discard returns to the list after deletion without recreating the draft on disposal', async () => {
+it('reports a failed deletion after the composer has left without saving the draft again', async () => {
   const composeContext = createComposeContext();
-  const pending = Promise.withResolvers<void>();
   const goBack = vi.fn(() => root.dispose());
   const root = mountEmailComposer(composeContext, { goBack });
-  root.edit('Discard this standalone thread');
+  root.edit('Saved');
   await vi.advanceTimersByTimeAsync(600);
-  vi.mocked(composeContext.drafts.deleteDraft).mockReturnValueOnce(
-    pending.promise
+  vi.mocked(composeContext.drafts.deleteDraft).mockRejectedValueOnce(
+    new Error('offline')
   );
-
-  root.state.context.onDelete?.();
-  await vi.advanceTimersByTimeAsync(0);
-  expect(composeContext.drafts.deleteDraft).toHaveBeenCalledOnce();
-  expect(goBack).not.toHaveBeenCalled();
-  pending.resolve();
+  await expect(root.state.deleteDraftAndReset()).rejects.toThrow('offline');
   await vi.advanceTimersByTimeAsync(1000);
-
   expect(goBack).toHaveBeenCalledOnce();
-  expect(root.state.context.hasDraft()).toBe(false);
+  expect(composeContext.notices.feedback.failure).toHaveBeenCalledWith(
+    'Failed to delete draft'
+  );
   expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
 });
+
+it.each(providers)(
+  'toolbar discard leaves a %s draft before deleting it and does not recreate it on disposal',
+  async (provider) => {
+    const composeContext = providerContext(provider);
+    const pending = Promise.withResolvers<void>();
+    const goBack = vi.fn(() => root.dispose());
+    const root = mountEmailComposer(composeContext, { goBack });
+    root.edit('Discard this standalone thread');
+    await vi.advanceTimersByTimeAsync(600);
+    // Deleting a draft-only thread empties the open thread as soon as the
+    // delete starts, so the composer has to be gone by then.
+    let leftBeforeDelete = false;
+    vi.mocked(composeContext.drafts.deleteDraft).mockImplementationOnce(() => {
+      leftBeforeDelete = goBack.mock.calls.length > 0;
+      return pending.promise;
+    });
+
+    root.state.context.onDelete?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(goBack).toHaveBeenCalledOnce();
+    expect(leftBeforeDelete).toBe(true);
+    pending.resolve();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'draft' })
+    );
+    expect(root.state.context.hasDraft()).toBe(false);
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
+  }
+);
+it.each(providers)(
+  'Delete still deletes a %s draft and frees the composer when its host cannot leave',
+  async (provider) => {
+    const composeContext = providerContext(provider);
+    const navigation = new Error('navigation failed');
+    const goBack = vi.fn(() => {
+      throw navigation;
+    });
+    const root = mountEmailComposer(composeContext, { goBack });
+    root.edit('Discard this draft');
+    await vi.advanceTimersByTimeAsync(600);
+
+    root.state.context.onDelete?.();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: 'draft' })
+    );
+    expect(root.state.context.disabled()).toBe(false);
+    expect(goBack).toHaveBeenCalledOnce();
+    expect(composeContext.notices.reportError).toHaveBeenCalledWith(navigation);
+    root.dispose();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(composeContext.drafts.saveDraft).toHaveBeenCalledOnce();
+  }
+);
 it('waits for the saved draft ID, prevents duplicate sends, and does not recreate the sent draft on disposal', async () => {
   const pending = Promise.withResolvers<PersistedEmailIdentity>();
   const composeContext = createComposeContext();
@@ -275,10 +396,7 @@ it('waits for an existing attachment upload before flushing newer body edits', a
   const root = mountEmailComposer(composeContext);
   root.edit('With attachment');
   root.state.context.onAddAttachments([
-    {
-      type: 'local',
-      file: new File(['notes'], 'notes.txt', { type: 'text/plain' }),
-    },
+    new File(['notes'], 'notes.txt', { type: 'text/plain' }),
   ]);
   await vi.advanceTimersByTimeAsync(600);
   root.edit('Final attachment note');
@@ -304,7 +422,7 @@ it('rejects sender/schedule changes and repeated discard while a deletion is pen
   );
   const discard = root.state.deleteDraftAndReset();
   expect(await root.state.deleteDraftAndReset()).toBe(false);
-  expect(goBack).not.toHaveBeenCalled();
+  expect(goBack).toHaveBeenCalledOnce();
   root.state.context.onSelectInbox?.('other-inbox');
   root.state.context.schedule.onSelect(new Date('2026-12-01T12:00:00Z'));
   expect(root.state.context.selectedInboxId?.()).toBe('inbox');
@@ -351,9 +469,7 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
   );
   const root = mountEmailComposer(composeContext);
   root.edit('With files');
-  root.state.context.onAddAttachments([
-    { type: 'local', file: new File(['notes'], 'notes.txt') },
-  ]);
+  root.state.context.onAddAttachments([new File(['notes'], 'notes.txt')]);
   await vi.advanceTimersByTimeAsync(600);
   root.state.context.onSelectInbox?.('other');
   pending.resolve(response);
@@ -364,7 +480,13 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
   ).toBe('inbox');
   expect(
     vi.mocked(composeContext.drafts.saveDraft).mock.calls[1][0].inboxId
-  ).toBe('other');
+  ).toBe('inbox');
+  expect(composeContext.drafts.transferDraft).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sourceInboxId: 'inbox',
+      destinationInboxId: 'other',
+    })
+  );
   root.dispose();
 });
 
@@ -408,6 +530,7 @@ it('only commits a selected time through the primary action', async () => {
   expect(composeContext.delivery.sendMessage).not.toHaveBeenCalled();
   expect(composeContext.delivery.schedule).toHaveBeenCalledExactlyOnceWith(
     {
+      draftGeneration: 0,
       draftId: 'draft',
       threadId: 'thread',
       sendTime: firstTime.toISOString(),
@@ -451,6 +574,7 @@ it('only commits a selected time through the primary action', async () => {
   await vi.advanceTimersByTimeAsync(1);
   threadView.dispose();
   expect(composeContext.delivery.unschedule).toHaveBeenCalledExactlyOnceWith({
+    draftGeneration: 0,
     draftId: 'draft',
     threadId: 'thread',
     inboxId: 'inbox',
@@ -673,8 +797,10 @@ it('does not mistake its own in-flight send for a delivery elsewhere', async () 
   expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
   expect(composeContext.drafts.saveDraft).toHaveBeenCalledTimes(2);
   expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
-    'Email sent',
-    expect.anything()
+    expect.any(String),
+    expect.objectContaining({
+      actions: [expect.objectContaining({ label: 'Undo' })],
+    })
   );
   root.dispose();
 });
@@ -707,8 +833,10 @@ it('does not announce a plain send as a scheduled one', async () => {
   );
   expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
   expect(composeContext.notices.feedback.success).toHaveBeenCalledWith(
-    'Email sent',
-    expect.anything()
+    expect.any(String),
+    expect.objectContaining({
+      actions: [expect.objectContaining({ label: 'Undo' })],
+    })
   );
   root.dispose();
 });
@@ -934,24 +1062,22 @@ it('recovers local and forwarded attachments without retaining remote-only attac
   const root = mountEmailComposer(context);
   const file = new File(['notes'], 'notes.txt');
   root.edit('Saved with files');
-  root.state.context.onAddAttachments([
-    { type: 'local', file },
-    {
-      type: 'remote',
-      attachmentId: 'remote',
-      url: 'https://example.com/file',
-      fileName: 'remote.txt',
-      contentType: 'text/plain',
-      fileSize: 10,
-    },
-    {
-      type: 'forwarded',
-      attachmentId: 'original-file',
-      fileName: 'forward.txt',
-      mimeType: 'text/plain',
-      fileSize: 10,
-    },
-  ]);
+  await root.state.context.onAddAttachments([file]);
+  root.state.form.attachments.add({
+    type: 'remote',
+    attachmentId: 'remote',
+    url: 'https://example.com/file',
+    fileName: 'remote.txt',
+    contentType: 'text/plain',
+    fileSize: 10,
+  });
+  root.state.form.attachments.add({
+    type: 'forwarded',
+    attachmentId: 'original-file',
+    fileName: 'forward.txt',
+    mimeType: 'text/plain',
+    fileSize: 10,
+  });
   await vi.advanceTimersByTimeAsync(600);
   vi.mocked(context.drafts.saveDraft).mockResolvedValue({
     ...response,
@@ -1133,11 +1259,7 @@ it.each(['standalone', 'reply'] as const)(
         code: 'DRAFT_ALREADY_SENT',
       });
       await vi.advanceTimersByTimeAsync(1000);
-      expect(context.notices.feedback.alert).toHaveBeenCalledExactlyOnceWith(
-        surface === 'standalone'
-          ? 'This email was already sent'
-          : 'This reply was already sent'
-      );
+      expect(context.notices.feedback.alert).not.toHaveBeenCalled();
       expect(context.notices.feedback.failure).not.toHaveBeenCalled();
       expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
       expect(context.delivery.sendMessage).not.toHaveBeenCalled();
@@ -1175,7 +1297,7 @@ function localSnapshot(
 }
 
 it.each(['standalone', 'reply'] as const)(
-  'keeps one %s local-save warning until recovery or disposal',
+  'keeps one %s local-save warning until recovery and briefly warns when the write on close fails',
   async (surface) => {
     const context = createComposeContext();
     let diskFailed = true;
@@ -1217,7 +1339,50 @@ it.each(['standalone', 'reply'] as const)(
     } finally {
       root.dispose();
     }
+    await vi.advanceTimersByTimeAsync(0);
+    const closing = vi.mocked(context.drafts.saveLocalDraft!).mock.lastCall;
+    expect(decodeBase64Utf8(closing?.[0].draft.body_html ?? '')).toContain(
+      'Another failure'
+    );
     expect(context.notices.feedback.dismiss).toHaveBeenLastCalledWith(8);
+    expect(context.notices.feedback.failure).toHaveBeenCalledTimes(3);
+    expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+      'Draft could not be saved on this device',
+      { subtext: 'Error: Disk full', persistent: false }
+    );
+  }
+);
+
+it.each(['standalone', 'reply'] as const)(
+  'writes the unsaved %s edit once more on close',
+  async (surface) => {
+    const context = createComposeContext();
+    let diskFailed = true;
+    context.drafts.saveLocalDraft = vi.fn(async (input) => {
+      if (diskFailed) throw new Error('Draft storage transaction aborted');
+      return localSnapshot(input);
+    });
+    vi.mocked(context.notices.feedback.failure).mockReturnValueOnce(7);
+    const root =
+      surface === 'standalone'
+        ? mountEmailComposer(context)
+        : mountReplyComposer(context);
+    try {
+      root.edit('Typed before backgrounding');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(context.drafts.saveDraft).not.toHaveBeenCalled();
+    } finally {
+      diskFailed = false;
+      root.dispose();
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+    const closing = vi.mocked(context.drafts.saveLocalDraft!).mock.lastCall;
+    expect(decodeBase64Utf8(closing?.[0].draft.body_html ?? '')).toContain(
+      'Typed before backgrounding'
+    );
+    expect(context.notices.feedback.dismiss).toHaveBeenCalledExactlyOnceWith(7);
+    expect(context.notices.feedback.failure).toHaveBeenCalledOnce();
+    expect(context.drafts.saveDraft).toHaveBeenCalledOnce();
   }
 );
 

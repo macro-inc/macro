@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT COALESCE((\n                SELECT jsonb_agg(entry ORDER BY position)\n                FROM jsonb_array_elements(entries) WITH ORDINALITY AS queued(entry, position)\n                WHERE entry->'action'->>'privateContext' IS NULL\n            ), '[]'::jsonb) AS \"entries!: Json<Vec<StoredQueuedAction>>\"\n            FROM agent_session_queue\n            WHERE agent_session_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entries!: Json<Vec<StoredQueuedAction>>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c817edd00b6d1e130a571b7a3e25f3a7d56fb8c7dc7543716ec5420408e1c859"
+}

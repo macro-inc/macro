@@ -67,16 +67,24 @@ function createDefaultBrowserInterface(
         return 'not-granted';
       }
 
-      return createBrowserNotication(data);
+      return createBrowserNotification(data);
     },
     unregisterNotifications,
   };
 }
 
-function createBrowserNotication(
+export function createBrowserNotification(
   data: PlatformNotificationData
-): PlatformNotificationHandle {
-  const notif = new Notification(data.title, data.options);
+): PlatformNotificationHandle | NotGranted {
+  let notif: Notification;
+  try {
+    notif = new Notification(data.title, data.options);
+  } catch (error) {
+    // Chrome on Android only shows notifications through a service worker,
+    // which this app does not register.
+    if (error instanceof TypeError) return 'not-granted';
+    throw error;
+  }
 
   return {
     onClick: (cb) => {

@@ -37,10 +37,8 @@ describe('login display-intent lifetime', () => {
     const identity = { userId: 'old-viewer', authenticated: true };
     queryClient.setQueryData(authKeys.userInfo.queryKey, identity);
     const teamKeys = [
-      calendarTeamKeys.events(
-        { userId: 'old-viewer', teamId: 'old-team' },
-        undefined
-      ).queryKey,
+      calendarTeamKeys.sharing({ userId: 'old-viewer', teamId: 'old-team' })
+        .queryKey,
       calendarKeys.teamOutOfOffice('old-viewer', undefined, 'old-team')
         .queryKey,
     ];

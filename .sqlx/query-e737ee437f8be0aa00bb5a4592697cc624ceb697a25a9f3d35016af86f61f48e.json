@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_conversation_turns SET action_id = $4, state = 'queued', in_flight = NULL, outcome = NULL, reply_segments = NULL, reply_finalized = FALSE, updated_at = now() WHERE source_message_id = $1 AND bot_id = $2 AND action_id = $3 AND state IN ('failed', 'stopped', 'interrupted') AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e737ee437f8be0aa00bb5a4592697cc624ceb697a25a9f3d35016af86f61f48e"
+}

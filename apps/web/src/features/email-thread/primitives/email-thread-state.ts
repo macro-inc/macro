@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor } from 'solid-js';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -37,6 +38,7 @@ export type EmailThreadState = {
   drafts: {
     getDraftForMessage: (messageDbId: string) => EmailMessage | undefined;
     deleteDraftForMessage: (messageDbId: string) => void;
+    restoreDraftForMessage: (draft: EmailMessage) => void;
     initialDraftsSettled: Accessor<boolean>;
   };
 
@@ -87,6 +89,10 @@ export type EmailThreadState = {
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
+  /** Closes an embedded thread back to its list, when the host has one. */
+  returnToList?: () => void;
+  /** Marks the thread done and opens the next one in the host's list. */
+  archiveThreadAndAdvance: (opts?: ArchiveThreadOptions) => boolean;
   /** True when the thread is archived, i.e. currently marked done. */
   isThreadDone: Accessor<boolean>;
   /** True when the done state can actually be reversed — see
@@ -97,10 +103,16 @@ export type EmailThreadState = {
   /** True when the user marked the open thread unread. Resets to false per
    *  thread — viewing marks it read, so the toggle starts at Mark Unread. */
   isThreadMarkedUnread: Accessor<boolean>;
+  /** True when the user re-marked the open thread read, as opposed to the
+   *  mark-as-read that viewing it queues. Resets to false per thread. */
+  isThreadMarkedRead: Accessor<boolean>;
   /** Marks the open thread unread; the toggle then offers Mark Read. */
   markThreadUnread: () => boolean;
   /** Re-marks the thread read after a mark-unread. */
   markThreadRead: () => boolean;
+  /** True when a sender other than the viewer exists for the sender actions
+   *  to target. False on a thread the viewer sent alone. */
+  canActOnSender: Accessor<boolean>;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;
@@ -241,13 +253,40 @@ export function createEmailThreadState(
     );
   };
 
+  const commands = threadContext.createCommands(threadSnapshot);
+  const archiveUnlessCancelled = (opts?: ArchiveThreadOptions) =>
+    !opts?.cancelled?.() && commands.archiveThread(opts);
+  // A send resolves after a round trip; by then the user may have moved on.
+  // The host advances only from this thread; otherwise it is marked done
+  // where it is.
+  const advanceFrom = async (
+    navigation: NonNullable<typeof host.listNavigation>,
+    threadId: string,
+    opts?: ArchiveThreadOptions
+  ) => {
+    const archived = await navigation.markDone(
+      (step) => archiveUnlessCancelled({ ...opts, ...step }),
+      threadId
+    );
+    if (!archived) archiveUnlessCancelled({ ...opts, navigate: false });
+  };
+  const archiveThreadAndAdvance = (opts?: ArchiveThreadOptions) => {
+    const navigation = host.listNavigation;
+    const threadId = threadContext.source.id();
+    if (!navigation || !threadId) return archiveUnlessCancelled(opts);
+    fireAndForget(advanceFrom(navigation, threadId, opts), 'email-thread');
+    return true;
+  };
+
   return {
     registerMessagesList: setMessagesListRef,
     registerMessagesContainer: setMessagesContainerRef,
     thread: selected,
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
-    ...threadContext.createCommands(threadSnapshot),
+    ...commands,
+    returnToList: host.returnToList,
+    archiveThreadAndAdvance,
     messagesContainerRef,
     messagesListRef,
     query: {

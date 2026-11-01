@@ -4,7 +4,10 @@
  * unfurl_service
  * OpenAPI spec version: 0.1.0
  */
+
+import type { UnfurlEmbedType } from './unfurlEmbedType';
 import type { VecItemOneOfDescription } from './vecItemOneOfDescription';
+import type { VecItemOneOfEmbedUrl } from './vecItemOneOfEmbedUrl';
 import type { VecItemOneOfFaviconUrl } from './vecItemOneOfFaviconUrl';
 import type { VecItemOneOfImageUrl } from './vecItemOneOfImageUrl';
 
@@ -16,6 +19,10 @@ favicon).
 export type VecItemOneOf = {
   /** The page description (from `og:description`), if any. */
   description?: VecItemOneOfDescription;
+  /** The type of embeddable content, if the URL supports iframe embedding. */
+  embed_type?: UnfurlEmbedType;
+  /** The iframe-embeddable URL for services like Loom or Supercut. */
+  embed_url?: VecItemOneOfEmbedUrl;
   /** The page's favicon URL, if any. */
   favicon_url?: VecItemOneOfFaviconUrl;
   /** The page's preview image URL (from `og:image`), if any. */

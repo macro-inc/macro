@@ -7,13 +7,13 @@ import IconGithub from '../../../assets/icons/icon-github.svg';
 import markDesyncPlaceholder from '../../../assets/mark-desync-placeholder.jpg';
 import placeholderChannelsUrl from '../../../assets/placeholderchannels.webp';
 import teamVideoUrl from '../../../assets/team-russell-boswell.mp4';
-import { buildCalLinkWithAttribution } from '../../utils/utilAnalytic';
 import { APP_BASE_URL } from '../../utils/utilBaseUrl';
 import { breakpoint, viewportWidth } from '../../utils/utilBreakpoint';
 import {
   CtaIcon,
   ctaHref,
   ctaLabel,
+  demoHref,
   handleCtaClick,
 } from '../../utils/utilCta';
 import {
@@ -2024,9 +2024,7 @@ export function SectionFeatureGrid(
               </Show>
             </div>
             <a
-              href={buildCalLinkWithAttribution(
-                'https://cal.com/team/macro/macro-demo-call'
-              )}
+              href={demoHref()}
               target="_blank"
               rel="noopener noreferrer"
               class="hover-color"

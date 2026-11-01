@@ -17,14 +17,17 @@ export const sleep = (millis) => new Promise(resolve => setTimeout(resolve, mill
 
 async function migrateDatabase(mf: Miniflare) {
   const db = await mf.getD1Database("USER_PEER_MAPPING");
-  const migration = fs.readFileSync("database/user-peer-mapping/migrations/0001_add_users.sql", "utf8");
-  const statements = migration
-    .split(";")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
+  const migrationsDir = "database/user-peer-mapping/migrations";
+  for (const file of fs.readdirSync(migrationsDir).sort()) {
+    const migration = fs.readFileSync(`${migrationsDir}/${file}`, "utf8");
+    const statements = migration
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0);
 
-  for (const statement of statements) {
-    await db.prepare(statement).run();
+    for (const statement of statements) {
+      await db.prepare(statement).run();
+    }
   }
 }
 

@@ -26,6 +26,7 @@ use entity_access::{
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use serde::Deserialize;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -79,6 +80,10 @@ where
         .route("/{id}/ops", post(apply_ops::<P, E, A>))
         .route("/{id}/name", put(rename::<P, E, A>))
         .route("/{id}/sharing", put(share::<P, E, A>))
+        .route(
+            "/{id}/permissions",
+            get(permissions::<P, E, A>).patch(update_permissions::<P, E, A>),
+        )
         .route("/{id}/trash", put(trash::<P, E, A>))
         .with_state(state)
 }
@@ -231,6 +236,7 @@ pub async fn apply_ops<P: PipelineService, E: EntityAccessService, A: MacroAutho
             .service
             .apply_ops(
                 receipt::<EditAccessLevel, _, _>(&*state.access, auth, id).await?,
+                None,
                 batch,
             )
             .await?,
@@ -294,6 +300,50 @@ pub async fn share<P: PipelineService, E: EntityAccessService, A: MacroAuthoriza
         )
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+/// Read the owner, team grant and channel recipients of a pipeline the caller can edit.
+#[utoipa::path(get, path = "/crm/pipelines/{id}/permissions", operation_id = "get_crm_pipeline_permissions",
+    params(("id" = Uuid, Path)), responses((status = 200, body = SharePermissionV2)))]
+pub async fn permissions<
+    P: PipelineService,
+    E: EntityAccessService,
+    A: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<PipelineRouterState<P, E, A>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<SharePermissionV2>, PipelineError> {
+    Ok(Json(
+        state
+            .service
+            .share_permissions(receipt::<EditAccessLevel, _, _>(&*state.access, auth, id).await?)
+            .await?,
+    ))
+}
+/// Share a pipeline the caller can edit with channels, or change or remove
+/// their access. Team access changes through `/sharing`; there is no share link.
+#[utoipa::path(patch, path = "/crm/pipelines/{id}/permissions", operation_id = "update_crm_pipeline_permissions",
+    request_body = UpdateSharePermissionRequestV2, params(("id" = Uuid, Path)),
+    responses((status = 200, body = SharePermissionV2)))]
+pub async fn update_permissions<
+    P: PipelineService,
+    E: EntityAccessService,
+    A: MacroAuthorizationService,
+>(
+    auth: MacroAuthorizationExtractor<A, UserOrInternal>,
+    State(state): State<PipelineRouterState<P, E, A>>,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateSharePermissionRequestV2>,
+) -> Result<Json<SharePermissionV2>, PipelineError> {
+    Ok(Json(
+        state
+            .service
+            .update_share_permissions(
+                receipt::<EditAccessLevel, _, _>(&*state.access, auth, id).await?,
+                request,
+            )
+            .await?,
+    ))
 }
 /// Trash or restore a pipeline.
 #[utoipa::path(put, path = "/crm/pipelines/{id}/trash", operation_id = "trash_crm_pipeline", request_body = TrashPipeline,

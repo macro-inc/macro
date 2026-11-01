@@ -37,6 +37,7 @@ fn actor() -> MacroUserIdStr<'static> {
 }
 fn origin() -> AnnounceOrigin {
     AnnounceOrigin {
+        reply_placement: Default::default(),
         reuse_origin_message: false,
         parent: MessageParent::parse("document", "doc").unwrap(),
         thread_id: Uuid::from_u128(1),
@@ -63,9 +64,11 @@ fn posted(
         sender_id: channel_sender::ChannelSender::new_from_user(
             MacroUserIdStr::try_from_email(email).unwrap(),
         ),
+        triggered_via: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
+        guest_name: None,
         imported_author: None,
         content: content.into(),
         created_at: at(minute),
@@ -164,6 +167,53 @@ async fn a_claimed_root_or_parent_cannot_link_an_unrelated_session() {
             Arc::new(source),
             Arc::new(Authorizer { allowed: true }),
         );
-        assert!(adapter.authorize_origin(&actor(), &origin()).await.is_err());
+        assert!(matches!(
+            adapter.authorize_origin(&actor(), &origin()).await,
+            Err(HarnessError::InvalidOrigin(_))
+        ));
     }
+}
+
+/// Only a message that is gone or out of reach makes its origin invalid for
+/// good; a read that failed may be asked again.
+#[tokio::test]
+async fn a_failed_read_is_not_mistaken_for_a_gone_message() {
+    for (failure, gone) in [
+        (MessageError::NotFound, true),
+        (MessageError::Forbidden, true),
+        (
+            MessageError::Repository(rootcause::report!("connection reset")),
+            false,
+        ),
+    ] {
+        let mut source = MockMessageReader::new();
+        source
+            .expect_get()
+            .once()
+            .return_once(move |_, _| Err(failure));
+        let adapter = MessagePromptContextAdapter::new(
+            Arc::new(source),
+            Arc::new(Authorizer { allowed: true }),
+        );
+        let result = adapter.authorize_origin(&actor(), &origin()).await;
+        if gone {
+            assert!(matches!(result, Err(HarnessError::InvalidOrigin(_))));
+        } else {
+            assert!(matches!(result, Err(HarnessError::PromptContext(_))));
+        }
+    }
+}
+
+#[test]
+fn an_access_check_that_could_not_answer_is_not_a_refusal() {
+    assert!(matches!(
+        access_refused(AccessError::Unauthorized),
+        HarnessError::InvalidOrigin(_)
+    ));
+    assert!(matches!(
+        access_refused(AccessError::Unavailable(rootcause::report!(
+            "pool timed out"
+        ))),
+        HarnessError::PromptContext(_)
+    ));
 }

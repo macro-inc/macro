@@ -72,7 +72,9 @@ export function moveTaskAssignees(
 
   const remaining = ids.filter((id) => id !== from);
 
-  return [...new Set([...remaining, to])];
+  return [...remaining, to].filter(
+    (id, index, values) => values.indexOf(id) === index
+  );
 }
 
 export function isTaskBoardMove(

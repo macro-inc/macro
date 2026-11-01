@@ -104,6 +104,13 @@ impl ProjectService for FakeProjectService {
         Ok(vec![project()])
     }
 
+    async fn list_accessible_projects(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Project>, ProjectError> {
+        Ok(vec![project()])
+    }
+
     async fn list_pending_projects(
         &self,
         _user_id: MacroUserIdStr<'static>,
@@ -126,6 +133,14 @@ impl ProjectService for FakeProjectService {
         _receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
     ) -> Result<Vec<ItemWithUserAccessLevel>, ProjectError> {
         Ok(Vec::new())
+    }
+
+    async fn get_project_tree(
+        &self,
+        _receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        _limit: usize,
+    ) -> Result<crate::domain::models::ProjectTree, ProjectError> {
+        unreachable!("no HTTP route loads a project tree")
     }
 
     async fn get_project_permissions(
@@ -156,6 +171,14 @@ impl ProjectService for FakeProjectService {
             .expect("create principal lock poisoned")
             .push(principal.clone());
         Ok(project())
+    }
+
+    async fn create_project_dated_by_contents(
+        &self,
+        _principal: &CreationPrincipal,
+        _args: CreateProjectRequest,
+    ) -> Result<Project, ProjectError> {
+        panic!("dated projects are not created by these tests")
     }
 
     async fn edit_project(
@@ -396,6 +419,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         Ok(user_context(USER_ID))
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -424,6 +456,8 @@ impl MacroAuthorizationService for FakeAuthorizationService {
             acting_user: acting_user
                 .and_then(|claims| claims.user_id)
                 .map(|user_id| MacroUserAuthentication {
+                    origin: macro_authorization::CredentialOrigin::Bot,
+                    agent_id: None,
                     macro_user_id: user(&user_id),
                     user_context: user_context(&user_id),
                 }),

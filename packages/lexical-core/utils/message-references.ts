@@ -6,6 +6,7 @@ export type MessageReferenceKind =
   | 'bot'
   | 'document'
   | 'form'
+  | 'database'
   | 'channel'
   | 'thread'
   | 'call'
@@ -18,7 +19,8 @@ export type MessageReferenceKind =
   | 'group'
   | 'automation'
   | 'crm_company'
-  | 'crm_contact';
+  | 'crm_contact'
+  | 'external_chat';
 export type AuthoredMessageReference = {
   entityType: MessageReferenceKind;
   entityId: string;
@@ -38,6 +40,7 @@ export function messageReference(
         'bot',
         'document',
         'form',
+        'database',
         'channel',
         'thread',
         'call',
@@ -50,7 +53,9 @@ export function messageReference(
         'group',
         'automation',
         'crm_company',
-        'crm_contact'
+        'crm_contact',
+        // Mentioning an external chat in a channel shares it with the members.
+        'external_chat'
       ),
       (entityType) => ({ entityType, entityId: id })
     )

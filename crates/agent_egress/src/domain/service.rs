@@ -40,12 +40,13 @@ pub trait EgressService: Send + Sync {
 /// Held tool calls are refused until [`Self::with_owner_approvals`] says how
 /// to ask the owner, so a proxy wired without approvals fails closed.
 pub struct EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals = RefuseHeldCalls> {
-    sessions: Sessions,
+    sessions: Arc<Sessions>,
     credentials: Credentials,
     tokens: Tokens,
     forward: Arc<Forward>,
     preview_mcp: Option<(url::Url, bool)>,
     approvals: Approvals,
+    actor_mcp: Option<Arc<dyn crate::domain::ports::ActorMcpTransport>>,
 }
 
 impl<Sessions, Credentials, Tokens, Forward>
@@ -80,12 +81,13 @@ where
         forward: Forward,
     ) -> Self {
         Self {
-            sessions,
+            sessions: Arc::new(sessions),
             credentials,
             tokens,
             forward: Arc::new(forward),
             preview_mcp: None,
             approvals: RefuseHeldCalls,
+            actor_mcp: None,
         }
     }
 }
@@ -93,6 +95,15 @@ where
 impl<Sessions, Credentials, Tokens, Forward, Approvals>
     EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
 {
+    /// Enable explicit actor selection for model-facing MCP tools.
+    pub fn with_actor_mcp(
+        mut self,
+        transport: Arc<dyn crate::domain::ports::ActorMcpTransport>,
+    ) -> Self {
+        self.actor_mcp = Some(transport);
+        self
+    }
+
     /// Hold the tool calls of turns somebody other than the owner prompted
     /// with `approvals`.
     pub fn with_owner_approvals<Next>(
@@ -106,6 +117,7 @@ impl<Sessions, Credentials, Tokens, Forward, Approvals>
             forward: self.forward,
             preview_mcp: self.preview_mcp,
             approvals,
+            actor_mcp: self.actor_mcp,
         }
     }
 }
@@ -113,13 +125,13 @@ impl<Sessions, Credentials, Tokens, Forward, Approvals>
 impl<Sessions, Credentials, Tokens, Forward, Approvals> EgressService
     for EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
 where
-    Sessions: SessionAuthority,
+    Sessions: SessionAuthority + 'static,
     Credentials: McpCredentials,
     Tokens: GithubTokens,
     Forward: Forwarder + 'static,
     Approvals: OwnerApprovals,
 {
-    #[tracing::instrument(skip_all, err, fields(
+    #[tracing::instrument(skip_all, fields(
         destination = ?target,
         method = %request.method(),
         session = tracing::field::Empty,
@@ -127,6 +139,27 @@ where
         upstream_status = tracing::field::Empty,
     ))]
     async fn proxy(
+        &self,
+        token: &SessionToken,
+        target: EgressTarget,
+        request: ProxyRequest,
+    ) -> Result<ProxyResponse, EgressError> {
+        self.authorize_and_forward(token, target, request)
+            .await
+            .inspect_err(log_proxy_error)
+    }
+}
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
+where
+    Sessions: SessionAuthority + 'static,
+    Credentials: McpCredentials,
+    Tokens: GithubTokens,
+    Forward: Forwarder + 'static,
+    Approvals: OwnerApprovals,
+{
+    async fn authorize_and_forward(
         &self,
         token: &SessionToken,
         target: EgressTarget,
@@ -141,6 +174,52 @@ where
         let span = tracing::Span::current();
         span.record("session", tracing::field::display(&grant.session));
         span.record("owner", tracing::field::display(&grant.owner));
+
+        if self.actor_mcp.is_some()
+            && matches!(&target, EgressTarget::McpServer(destination) if !matches!(destination, McpDestination::Preview))
+            && *request.method() == Method::POST
+        {
+            let (mut parts, bytes) = read_mcp_body(request).await?;
+            let mut body = bytes.clone();
+            if let Some(rpc) = peek_json_rpc(&bytes)
+                && matches!(rpc.method.as_str(), "tools/list" | "tools/call")
+                && let EgressTarget::McpServer(destination) = &target
+            {
+                let mut value: serde_json::Value = serde_json::from_slice(&bytes)
+                    .map_err(|error| EgressError::Internal(rootcause::report!(error).into()))?;
+                let public = matches!(destination, McpDestination::Macro)
+                    && rpc.method == "tools/call"
+                    && !spends_owner_access(
+                        MACRO_SERVER_SLUG,
+                        value["params"]["name"].as_str().unwrap_or_default(),
+                    );
+                if public {
+                    if let Some(arguments) = value["params"]["arguments"].as_object_mut() {
+                        arguments.remove(ai_toolset::actor::ACTING_AS);
+                    }
+                } else if rpc.method == "tools/list" {
+                    return self.actor_exchange(token, &grant, destination, value).await;
+                } else {
+                    match actor::owner_call_arguments(&grant, &value) {
+                        Ok(Some(arguments)) => value["params"]["arguments"] = arguments,
+                        Ok(None) => {
+                            return self.actor_exchange(token, &grant, destination, value).await;
+                        }
+                        Err(error) => {
+                            return Ok(crate::domain::model::tool_result_response(
+                                rpc.id,
+                                error.to_string(),
+                            ));
+                        }
+                    }
+                }
+                body = serde_json::to_vec(&value)
+                    .map_err(|error| EgressError::Internal(rootcause::report!(error).into()))?
+                    .into();
+                parts.headers.remove(http::header::CONTENT_LENGTH);
+            }
+            request = ProxyRequest::from_parts(parts, full_body(body));
+        }
 
         let call = match &target {
             EgressTarget::McpServer(McpDestination::Preview) => {
@@ -167,7 +246,7 @@ where
             ) => {
                 let (call, answer): (UpstreamCall, Option<Answer>) = match self
                     .credentials
-                    .resolve(&grant.owner, destination)
+                    .resolve(&grant.owner, grant.agent, destination)
                     .await?
                 {
                     McpResolution::Connected(call) => (call, None),
@@ -302,6 +381,10 @@ where
                 .filter(|call| spends_owner_access(&server_slug, &call.name))
             {
                 let forward = Arc::clone(&self.forward);
+                let sessions = Arc::clone(&self.sessions);
+                let token = SessionToken::new(token.as_str());
+                let original_turn = grant.prompter.clone();
+                let request_id = call.id.clone();
                 return self
                     .approvals
                     .hold(HeldCall {
@@ -314,6 +397,13 @@ where
                         request: ProxyRequest::from_parts(parts, full_body(bytes)),
                         forward: Box::new(move |request| {
                             Box::pin(async move {
+                                let current = sessions.authorize(&token).await?;
+                                if current.prompter != original_turn {
+                                    return Ok(crate::domain::model::tool_result_response(
+                                        request_id,
+                                        "The original turn ended; this tool did not run.".into(),
+                                    ));
+                                }
                                 let mut response = forward.forward(request).await?;
                                 sanitize_response_headers(response.headers_mut());
                                 Ok(response)
@@ -375,6 +465,19 @@ where
         }
 
         Ok(response)
+    }
+}
+
+/// Logs a failed proxy call in the current span.
+///
+/// Unlike `#[instrument(err)]`, whose level is fixed, this keeps a closed
+/// session at INFO: ending a session revokes its egress, and the session's MCP
+/// clients still make a last reconnect or `DELETE` after it closes. Every other
+/// refusal or failure stays at ERROR.
+fn log_proxy_error(error: &EgressError) {
+    match error {
+        EgressError::SessionClosed => tracing::info!(error = %error),
+        _ => tracing::error!(error = %error),
     }
 }
 
@@ -467,3 +570,5 @@ fn cancelled_request_id(body: &[u8]) -> Option<serde_json::Value> {
         .filter(|id| !id.is_null())
         .cloned()
 }
+
+mod actor;

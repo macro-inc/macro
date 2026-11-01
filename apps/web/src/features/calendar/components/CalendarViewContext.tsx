@@ -1,3 +1,4 @@
+import { useCalendarFocus } from '@app/features/calendar-view/calendar-focus-target';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { subscribeToTeamCalendarReset } from '@queries/calendar/team-cache';
 import {
@@ -24,7 +25,6 @@ interface CalendarDisplaySettings {
   readonly showWeekends: boolean;
   readonly weekStartsOn: CalendarWeekStart;
   readonly timeFormat: CalendarTimeFormat;
-  readonly showTeamCalendars: boolean;
 }
 
 type CalendarViewContextProps = ParentProps<{
@@ -34,7 +34,7 @@ type CalendarViewContextProps = ParentProps<{
   onFocusedEventIdChange?: (eventId: string | undefined) => void;
 }>;
 
-function createCalendarEventSelection(
+export function createCalendarEventSelection(
   onFocusedEventIdChange?: (eventId: string | undefined) => void
 ) {
   const [event, setEvent] = createSignal<CalendarEvent>();
@@ -67,8 +67,13 @@ function createCalendarEventSelection(
   const refresh = (nextEvent: CalendarEvent) => {
     if (event()?.id === nextEvent.id) setEvent(nextEvent);
   };
+  // A grid selection follows its chip when the grid replaces it. A list
+  // selection stays on its row, so a chip mounting late never moves it.
+  const reanchor = (nextEvent: CalendarEvent, nextAnchor: HTMLElement) => {
+    if (origin() === 'grid') select(nextEvent, nextAnchor);
+  };
 
-  return { anchor, close, event, origin, refresh, select };
+  return { anchor, close, event, origin, reanchor, refresh, select };
 }
 
 export const [CalendarViewContextProvider, useCalendarView] =
@@ -89,9 +94,16 @@ export const [CalendarViewContextProvider, useCalendarView] =
       const selection = createCalendarEventSelection(
         props.onFocusedEventIdChange
       );
+      const calendarFocus = useCalendarFocus();
+      // A selection made while a row waits for its chip wins over that row.
+      const selectEvent: typeof selection.select = (...args) => {
+        calendarFocus.cancelOccurrence();
+        selection.select(...args);
+      };
       // A revoked OOO agenda entry can lie outside every mounted viewport.
       // Close detached selections synchronously when authorization resets data.
       const unsubscribeTeamReset = subscribeToTeamCalendarReset(() => {
+        calendarFocus.cancelOccurrence();
         const selected = selection.event();
         if (
           selected?.teamProjection ||
@@ -139,9 +151,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
         },
         get timeFormat() {
           return preferences.timeFormat;
-        },
-        get showTeamCalendars() {
-          return preferences.showTeamCalendars;
         },
       };
 
@@ -216,13 +225,9 @@ export const [CalendarViewContextProvider, useCalendarView] =
           setPreferences('weekStartsOn', weekStartsOn),
         setTimeFormat: (timeFormat: CalendarTimeFormat) =>
           setPreferences('timeFormat', timeFormat),
-        setShowTeamCalendars: (visible: boolean) => {
-          setPreferences('showTeamCalendars', visible);
-          if (!visible && selection.event()?.teamProjection)
-            closeEventDetails();
-        },
         closeEventDetails,
-        selectEvent: selection.select,
+        selectEvent,
+        reanchorSelectedEvent: selection.reanchor,
         refreshSelectedEvent: selection.refresh,
         refreshSelectedEventFromPage,
       };

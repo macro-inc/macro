@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-clear-pending-notification"
+description = "Enables the clear_pending_notification command without any pre-configured scope."
+commands.allow = ["clear_pending_notification"]
+
+[[permission]]
+identifier = "deny-clear-pending-notification"
+description = "Denies the clear_pending_notification command without any pre-configured scope."
+commands.deny = ["clear_pending_notification"]

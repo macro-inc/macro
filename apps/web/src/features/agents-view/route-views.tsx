@@ -7,6 +7,7 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -25,8 +26,8 @@ const AgentsView = lazy(async () => ({
 const RoutinesPage = lazy(async () => ({
   default: (await import('../routines/routines-page')).RoutinesPage,
 }));
-const McpConnections = lazy(async () => ({
-  default: (await import('../settings/McpConnections')).McpConnections,
+const IntegrationsPage = lazy(async () => ({
+  default: (await import('../settings/IntegrationsPage')).IntegrationsPage,
 }));
 
 function LegacyAgentsView() {
@@ -85,6 +86,7 @@ function LegacyAgentsView() {
 
 export const AgentsRouteView = withAuth(() => {
   const panel = useSplitPanelOrThrow();
+  useViewRestoration();
   const route = () => {
     const content = panel.handle.content();
     if (content.type === 'component' && content.id === 'routines') return;
@@ -154,13 +156,13 @@ export const AgentsRouteView = withAuth(() => {
               </Show>
             }
           >
-            <McpConnections />
+            <IntegrationsPage />
           </Show>
         }
       >
         <Show
           when={isTouchDevice() && route()}
-          fallback={<AgentsView initialRoute={route()} />}
+          fallback={<AgentsView route={route()} />}
         >
           {(current) => (
             <RedirectSplit

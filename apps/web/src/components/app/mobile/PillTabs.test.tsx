@@ -1,3 +1,4 @@
+import { hapticImpact } from '@core/mobile/haptics';
 import {
   cleanup,
   fireEvent,
@@ -24,6 +25,7 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 
 let drawerStyles: HTMLStyleElement;
 beforeEach(() => {
+  vi.clearAllMocks();
   // Supply browser motion defaults missing in jsdom for Corvu's presence tracking.
   drawerStyles = document.createElement('style');
   drawerStyles.textContent =
@@ -101,6 +103,7 @@ describe('pill overflow drawer', () => {
       fireEvent.click(within(drawer).getByRole('button', { name }));
       expect(onChange).toHaveBeenCalledExactlyOnceWith(selectedValue);
       expect(value()).toBe(selectedValue);
+      expect(hapticImpact).not.toHaveBeenCalled();
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
       expect(screen.getByRole('button', { name, pressed: true })).toBeTruthy();
       fireEvent.click(trigger, { detail: 0 });

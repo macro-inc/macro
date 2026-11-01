@@ -35,7 +35,7 @@ export function SavedFormDetails(props: { saved: SavedForm }) {
                 (section.kind === 'questions'
                   ? 'Questions'
                   : section.kind === 'gate'
-                    ? 'Screener'
+                    ? 'Gate'
                     : 'Booking')}
             </p>
             <Show when={section.kind === 'questions' && section}>

@@ -1,7 +1,7 @@
 use super::context::SearchToolContext;
 use super::types::{
-    PAGE_SIZE, SearchMatchType, SearchToolResponse, annotate_result_tags, resolve_tag_filters,
-    tag_filter_mode,
+    PAGE_SIZE, SearchEntityType, SearchMatchType, SearchToolResponse, annotate_result_tags,
+    resolve_tag_filters, search_filters, tag_filter_mode,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
@@ -10,21 +10,20 @@ use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::service::tag_sets::{TagFilter, TagMatch};
-use models_search::unified::{
-    UnifiedSearchIndex, UnifiedSearchRequest, entity_filters_from_include,
-};
+use models_search::unified::UnifiedSearchRequest;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use uuid::Uuid;
 
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).",
+    description = "Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; agent session messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like \"what happened today\", \"what's going on\", \"catch me up\", or \"what happened in standup today\"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For agent sessions, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).",
     title = "ContentSearch"
 )]
 pub struct ContentSearch {
     #[schemars(
-        description = "The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For chats/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a multi-word phrase in double quotes to match it as one phrase. Use matchType 'exact' for whole-token (or full email address) matching instead of prefix."
+        description = "The text to search. Pass 1-3 keywords drawn from words that would literally appear in the content, not the user's natural-language description. Whitespace-separated terms are ANDed. For documents, every term must appear somewhere in the document (different chunks/pages are fine). For emails each term is matched across subject/body/sender/recipient. For sessions/channels/calls the whole query is matched as a single adjacent phrase prefix, so long phrases will not match. Wrap a multi-word phrase in double quotes to match it as one phrase. Use matchType 'exact' for whole-token (or full email address) matching instead of prefix."
     )]
     pub query: String,
 
@@ -38,7 +37,13 @@ pub struct ContentSearch {
         description = "Which types of items to search. Leave empty (the default) to search all types — this is almost always what you want. Only set this when the user's request clearly targets one or more specific types. Examples: ['documents'], ['emails', 'documents'], ['channels'], ['call_records']. Projects and calendar events carry no indexed content, so they never match here — search those by name with NameSearch instead."
     )]
     #[serde(default)]
-    pub entity_types: Vec<UnifiedSearchIndex>,
+    pub entity_types: Vec<SearchEntityType>,
+
+    #[schemars(
+        description = "Search only the transcripts of these agent sessions, by id, and nothing else. Use it with your own session id to find the exact words of something said earlier in your conversation, including parts that were summarized to keep it within your context. Omit to search every type."
+    )]
+    #[serde(default)]
+    pub agent_session_ids: Vec<Uuid>,
 
     #[schemars(
         description = "Restrict email results to a single connected inbox, given as that inbox's email address (from ListInboxes). Omit to search every inbox the user can access. Only set this when the user scopes the request to a specific mailbox. Only affects email results."
@@ -52,7 +57,7 @@ them with tagsMatch=\"all\". Each entry names a tag by its label, matched case-i
 against the user's own tags; only set scope (\"personal\" or \"team\") when the user \
 distinguishes between their personal and team tags. An unknown label fails with the list of \
 available tags — call ListTags first when unsure what tags exist. Only taggable items \
-(documents, emails, AI chats, projects, call records) can match, so channels are dropped \
+(documents, emails, projects, call records) can match, so channels are dropped \
 while a tag filter is active.")]
     #[serde(default)]
     pub tags: Option<Vec<TagFilter>>,
@@ -64,6 +69,21 @@ exists in both the personal and team sets is ambiguous — set scope on that ent
 Ignored unless tags is set.")]
     #[serde(default)]
     pub tags_match: TagMatch,
+}
+
+/// Which items a content search reaches: the named agent sessions alone
+/// when it names any, otherwise the requested types.
+fn content_filters(
+    entity_types: &[SearchEntityType],
+    agent_session_ids: &[Uuid],
+    base: EntityFilters,
+) -> EntityFilters {
+    if agent_session_ids.is_empty() {
+        return search_filters(entity_types, base);
+    }
+    let mut filters = search_filters(&[SearchEntityType::AgentSessions], base);
+    filters.agent_session_filters.ids = agent_session_ids.iter().map(Uuid::to_string).collect();
+    filters
 }
 
 impl ToolAnnotated for ContentSearch {
@@ -138,9 +158,10 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
         let search_request = UnifiedSearchRequest {
             query: self.query.to_owned(),
             match_type: self.match_type.into(),
-            filters: entity_filters_from_include(self.entity_types.clone(), base_filters),
+            filters: content_filters(&self.entity_types, &self.agent_session_ids, base_filters),
             search_on: models_search::SearchOn::Content,
             include_crm: false,
+            calendar_event_scope: Default::default(),
             collapse: None,
         };
 

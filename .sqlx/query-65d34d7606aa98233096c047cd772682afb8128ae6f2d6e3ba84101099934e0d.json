@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_mailbox_settings_work(id,link_id,kind,resource_key,desired) VALUES($1,$2,'sender_block',$3,$4)\n        ON CONFLICT(link_id,kind,resource_key) DO UPDATE SET desired=EXCLUDED.desired,\n            revision=email_mailbox_settings_work.revision+1,next_run_at=now(),failure=NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "65d34d7606aa98233096c047cd772682afb8128ae6f2d6e3ba84101099934e0d"
+}

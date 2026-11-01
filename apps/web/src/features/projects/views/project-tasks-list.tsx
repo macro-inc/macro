@@ -5,7 +5,7 @@ import {
   type TasksViewProviderProps,
   useTasksView,
 } from '@app/features/tasks-view/tasks-view-context';
-import PlusIcon from '@phosphor/plus.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { ProjectTaskSearch } from '../components/project-task-search';
@@ -15,6 +15,7 @@ import { createProjectTasksDataSource } from '../queries/project-tasks';
 export type ProjectTasksProviderProps = ParentProps<{
   projectId: string;
   onOpenTask: NonNullable<TasksViewProviderProps['onOpenTask']>;
+  onCreateTask?: TasksViewProviderProps['onCreateTask'];
 }>;
 
 export type ProjectTasksListProps = Omit<
@@ -22,7 +23,6 @@ export type ProjectTasksListProps = Omit<
   'children'
 > & {
   projectName: string;
-  onCreateTask?: () => void;
   addTasksAction?: JSX.Element;
 };
 
@@ -38,7 +38,9 @@ export function ProjectTasksProvider(props: ProjectTasksProviderProps) {
           scopeKey={`initiative:${projectId}:tasks`}
           searchNamespace="projectTasks"
           onOpenTask={props.onOpenTask}
+          onCreateTask={props.onCreateTask}
           onCloseTask={() => {}}
+          hideTaskProject
           sourceFactory={(state, options) =>
             createProjectTasksDataSource(
               projectId,
@@ -60,6 +62,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
     <ProjectTasksProvider
       projectId={props.projectId}
       onOpenTask={props.onOpenTask}
+      onCreateTask={props.onCreateTask}
     >
       <ProjectTasksListBody {...props} />
     </ProjectTasksProvider>
@@ -67,7 +70,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 }
 
 function ProjectTasksListBody(props: ProjectTasksListProps) {
-  const { state, setState, source } = useTasksView();
+  const { state, setState } = useTasksView();
   return (
     <div class="flex size-full min-h-0 flex-col">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
@@ -80,24 +83,13 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           <TasksControls />
           {props.addTasksAction}
           <Show when={props.onCreateTask}>
-            <Button variant="outline" onClick={props.onCreateTask}>
+            <Button variant="secondary" onClick={() => props.onCreateTask?.()}>
               <PlusIcon class="size-4" />
               New task
             </Button>
           </Show>
         </div>
       </div>
-      <Show when={source.paginationError?.()}>
-        <div
-          role="alert"
-          class="flex items-center gap-3 px-3 pb-2 text-sm text-ink-muted"
-        >
-          Some tasks could not be loaded.
-          <Button size="sm" onClick={() => source.retryPagination?.()}>
-            Try again
-          </Button>
-        </div>
-      </Show>
       <TasksContent />
     </div>
   );

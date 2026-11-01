@@ -18,8 +18,8 @@ use notification::domain::models::apple::VoipPushPayload;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 
 use crate::domain::models::{
-    CallPeople, CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRepoArgs,
-    EditCallRecordRequest, EditCallTranscriptRequest,
+    CallPeople, CallRecordPage, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,
+    EditCallRecordRepoArgs, EditCallRecordRequest, EditCallTranscriptRequest,
 };
 
 use super::meetings::{
@@ -34,7 +34,8 @@ use super::models::{
     CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
     CallWebhookEvent, EgressS3Config, EnrichedCallTranscript, GetBatchCallRecordPreviewRequest,
     GetBatchCallRecordPreviewResponse, GetCallRecordsRequest, LeaveCallResponse,
-    RingStatusResponse, TranscriptSegmentRequest, VerifiedRingToken, VoipPushPayloadRequest,
+    RingStatusResponse, RtcRoom, TranscriptSegmentRequest, VerifiedRingToken,
+    VoipPushPayloadRequest,
 };
 
 /// Repository port for persisting call state to the database.
@@ -436,12 +437,14 @@ pub trait CallRepository: Send + Sync + 'static {
     /// Fetch visible active and archived records, without transcripts. Status
     /// reflects the user's participation and current channel membership.
     /// Standalone calls require an individual user grant, never a group grant.
-    /// Apply `filter`, order by start time descending, and return at most `limit`.
+    /// Apply `filter`, order descending by `page`'s sort timestamp and call id,
+    /// seek past `page.after`, and return at most `limit`.
     fn get_call_records_by_user<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
         limit: u32,
         filter: &LiteralTree<CallLiteral>,
+        page: CallRecordPage,
     ) -> impl Future<Output = Result<Vec<CallRecord>, Self::Err>> + Send;
 
     /// Resolve the display name for a single channel.
@@ -689,8 +692,11 @@ pub trait CallRtcClient: Send + Sync + 'static {
     /// Reserve an empty room for setup, expiring automatically without participants.
     fn prepare_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Delete an RTC room.
+    /// Delete an RTC room. Deleting a room that no longer exists succeeds.
     fn delete_room(&self, room_name: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
+    /// Every RTC room that currently exists.
+    fn list_rooms(&self) -> impl Future<Output = anyhow::Result<Vec<RtcRoom>>> + Send;
 
     /// Read connected identities and names without joining the room.
     fn list_meeting_participants(
@@ -883,6 +889,7 @@ pub trait CallService: Send + Sync + 'static {
     /// Backstop for missed `participant_left` webhooks: marks participants
     /// and guests no longer connected to their RTC room as left, and archives
     /// calls that leaves empty. One call's failure does not stop the rest.
+    /// Then deletes RTC rooms that stale tokens recreated for archived calls.
     fn reconcile_stale_calls(&self) -> impl Future<Output = Result<(), CallError>> + Send;
 
     /// List all active calls in channels the user is an active member of,
@@ -1070,6 +1077,19 @@ pub trait CallRecordQueryService: Send + Sync + 'static {
         &self,
         call_record_id: Uuid,
     ) -> impl Future<Output = Result<CallPeople, CallError>> + Send;
+}
+
+/// Read-only port for one call record under its reader's access, for services
+/// that react to calls rather than manage them.
+pub trait CallRecordReader: Send + Sync + 'static {
+    /// The record the receipt authorizes, with its participants, guests and
+    /// transcript, and its channel named as the receipt's user sees it. The
+    /// receipt must be for `EntityType::Call`, keyed by the call's UUID.
+    /// Returns [`CallError::NotFound`] once the record is gone.
+    fn get_call_record(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<CallRecord, CallError>> + Send;
 }
 
 /// No-op implementation of [`CallRecordQueryService`] for services

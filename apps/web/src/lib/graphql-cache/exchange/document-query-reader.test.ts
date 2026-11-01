@@ -2,7 +2,10 @@ import fc from 'fast-check';
 import { createComputed, createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { parseCacheRevision, type QueryUpdate } from '../protocol';
-import { createDocumentQueryReader } from './document-query-reader';
+import {
+  createDocumentQueryReader,
+  QueryReadInvalidatedError,
+} from './document-query-reader';
 import { LiveQuery } from './live-query';
 import { applyQueryPatches } from './query-patches';
 
@@ -200,7 +203,7 @@ describe('document query projection', () => {
     reader.clear();
     await reader.read(args);
     finish(hit({ rows: ['old-account'] }, '100'));
-    await expect(pending).rejects.toThrow('invalidated');
+    await expect(pending).rejects.toBeInstanceOf(QueryReadInvalidatedError);
     await reader.read(args);
     expect(watchQuery.mock.calls[2][0].since).toBe('0');
     reader.forget(1);

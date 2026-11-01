@@ -8,11 +8,30 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { errAsync, okAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
-import { DatabaseProvider } from '../../database/context/database';
-import type { DatabaseViewState } from '../../database/core/view-state';
+import { DatabaseEditorToolbar } from '../../database/components/database-editor-toolbar';
+import { DatabaseProvider, useDatabase } from '../../database/context/database';
+import type {
+  DatabaseViewState,
+  ViewChange,
+} from '../../database/core/view-state';
 import { DatabaseRecords } from '../../database/views/database-records';
 import type { Pipeline } from '../core/pipeline';
 import { createPipelineApi } from '../queries/pipeline-data';
+
+function FixtureToolbar(props: {
+  view: DatabaseViewState;
+  onChangeView: (change: ViewChange) => void;
+}) {
+  const database = useDatabase();
+  return (
+    <DatabaseEditorToolbar
+      columns={database.data.rows.columns()}
+      view={props.view}
+      onChangeView={props.onChangeView}
+      selection={<span>Renewals</span>}
+    />
+  );
+}
 
 const id = (n: number) =>
   `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -201,6 +220,14 @@ function Fixture() {
           <DatabaseRecords
             view={view()}
             stored={false}
+            renderToolbar={() => (
+              <FixtureToolbar
+                view={view()}
+                onChangeView={(change) =>
+                  setView((current) => ({ ...current, ...change }))
+                }
+              />
+            )}
             onViewChange={(change) =>
               setView((view) => ({ ...view, ...change }))
             }

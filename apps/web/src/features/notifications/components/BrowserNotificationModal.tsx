@@ -1,13 +1,15 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useTutorialCompleted } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
 import { isPlatform } from '@core/util/platform';
-import Bell from '@phosphor/bell.svg';
+import Bell from '@icon/system/regular/bell.svg';
 import { useIsAuthenticated } from '@queries/auth';
 import { createMemo, onMount, Show } from 'solid-js';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
 } from '../notification-settings';
+import { notificationsBlockedMessage } from '../notifications-blocked-message';
 
 export const BrowserNotificationModal = () => {
   const settings = useNotificationSettings();
@@ -32,13 +34,20 @@ export const BrowserNotificationModal = () => {
   );
 };
 
+/** Native apps ask for app notifications; only the web app uses the browser's. */
+function promptTitle() {
+  if (isPlatform('desktop')) return 'Enable Desktop Notifications';
+  if (isPlatform('android')) return 'Enable Notifications';
+  return 'Enable Browser Notifications';
+}
+
 function NotificationToastTrigger(props: {
   settings: SupportedNotificationSettings;
 }) {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: 'Enable Browser Notifications',
+        title: promptTitle(),
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (
@@ -59,6 +68,9 @@ function NotificationToastTrigger(props: {
             onClick: async () => {
               try {
                 await props.settings.toggle(true);
+                if (!props.settings.isEnabled()) {
+                  toast.failure(notificationsBlockedMessage());
+                }
               } catch (error) {
                 console.error('Failed to enable notifications:', error);
               }
@@ -67,7 +79,10 @@ function NotificationToastTrigger(props: {
           },
         ],
       },
-      { persistent: true }
+      {
+        persistent: true,
+        region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+      }
     );
   });
 

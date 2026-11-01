@@ -2,7 +2,7 @@
 //!
 //! Cursor's Cloud Agents API has a models list (`GET /v1/models`) and no
 //! skills list. The website catalog (`cursor.com/api/dashboard/get-managed-skills`)
-//! is cookie-authenticated and not callable with the `crsr_…` key this crate
+//! is cookie-authenticated and not callable with the API key this crate
 //! holds. The commands here are the cloud-usable subset of that catalog:
 //! skills Cursor's cloud runtime actually honors when `/name` arrives as
 //! ordinary prompt text.

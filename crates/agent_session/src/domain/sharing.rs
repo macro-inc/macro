@@ -45,6 +45,11 @@ pub fn originating_channel_access(bot: SessionBotOwnership) -> AccessLevel {
 
 /// Persistence capability for session sharing, independent of transport.
 pub trait SessionSharingRepo: Send + Sync + 'static {
+    /// Whether the session belongs to a private user-persona conversation.
+    fn is_private_conversation(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<bool>> + Send;
     /// Read canonical sharing settings and direct channel grants.
     fn permissions(
         &self,
@@ -141,6 +146,11 @@ impl<R: SessionSharingRepo> SessionSharing for SessionSharingService<R> {
         request: UpdateSharePermissionRequestV2,
     ) -> Result<SharePermissionV2> {
         let id = session_id(access)?;
+        if self.repo.is_private_conversation(id).await? {
+            return Err(AgentSessionError::InvalidSharing(
+                "an agent DM is private to its owner and cannot be shared",
+            ));
+        }
         validate(&request)?;
         let permissions = self.repo.permissions(id).await?;
         if access.acting_user_id().map(|user| user.as_ref()) != Some(permissions.owner.as_str()) {

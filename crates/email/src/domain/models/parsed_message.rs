@@ -15,6 +15,8 @@ pub struct ParsedLabel {
 /// A lightweight message with parsed body text, without attachments or scheduled send times.
 #[derive(Debug, Clone)]
 pub struct ParsedMessage {
+    /// Draft edit generation; changes at send and cancellation boundaries.
+    pub draft_generation: i32,
     /// Database ID of the message.
     pub db_id: Uuid,
     /// Link ID this message belongs to.
@@ -73,6 +75,7 @@ impl From<&Message> for ParsedMessage {
         );
 
         Self {
+            draft_generation: message.draft_generation,
             db_id: message.db_id,
             link_id: message.link_id,
             thread_db_id: message.thread_db_id,

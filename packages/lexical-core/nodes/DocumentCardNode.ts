@@ -337,7 +337,13 @@ export class DocumentCardNode extends DecoratorBlockNode<
 
   decorate(_: LexicalEditor, config: EditorConfig) {
     const componentProps = this.exportComponentProps();
-    const signature = JSON.stringify(componentProps);
+    // Database editors observe their node's location through the editor. A
+    // table/view change must preserve the live decorator and its focused menu.
+    const signature = JSON.stringify(
+      this.__blockName === 'database'
+        ? { ...componentProps, blockParams: undefined }
+        : componentProps
+    );
     if (
       this.__cachedDecoratorComponent &&
       this.__cachedDecoratorSignature === signature

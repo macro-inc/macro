@@ -17,6 +17,7 @@ import IconChannel from '../../../assets/icons/icon-channels.svg';
 import IconEmail from '../../../assets/icons/icon-email.svg';
 import IconTask from '../../../assets/icons/icon-tasks.svg';
 import IconArrowUp from '../../../assets/icons/phosphor/arrow-up.svg';
+import IconCalendar from '../../../assets/icons/phosphor/calendar-blank.svg';
 import IconChatTeardrop from '../../../assets/icons/phosphor/chat-teardrop.svg';
 import IconClock from '../../../assets/icons/phosphor/clock.svg';
 import IconLink from '../../../assets/icons/phosphor/link.svg';
@@ -30,6 +31,7 @@ import IconPriorityMedium from '../../../assets/icons/wide-priority-medium.svg';
 import avatarGabriel from '../../../assets/people/gabriel.webp';
 import avatarJacob from '../../../assets/people/jacob-work.webp';
 import avatarJulia from '../../../assets/people/julia.webp';
+import { DEMO_BOOKING_URL } from '../../../features/marketing/core/navigation';
 import { createVisible } from '../../utils/utilVisible';
 
 // ---------------------------------------------------------------------------
@@ -129,7 +131,7 @@ type Seg =
    * `trigger` is @ for the workspace search and ; for snippets -- the two
    * keys this editor gives you, and the reason the calendar link arrives
    * whole rather than being typed out: it is a saved fragment, inserted by
-   * name. `insert` says what lands: a chip for an object, a link for a
+   * name. `insert` says what lands: a chip for an object, a booking mention for a
    * snippet whose body is a URL.
    *
    * `above` opens the menu over the line rather than under it, which is what
@@ -161,8 +163,6 @@ type Block = {
   segs: Seg[];
 };
 
-const CAL_LINK = 'https://cal.com/jacob-beckerman-b56mrn/30min';
-
 /** What a bare @ offers before it has been narrowed: one row from every kind
     of thing in the workspace. This is the whole argument of the graphic, so
     the first mention is the one that gets to show it. */
@@ -177,7 +177,7 @@ const MENU_EVERYTHING: MenuSection[] = [
   {
     title: 'Documents, Agents, & Tasks',
     count: 10199,
-    rows: [{ icon: 'doc', label: 'Q3 launch plan' }],
+    rows: [{ icon: 'doc', label: 'Website launch plan' }],
   },
   {
     title: 'Channels',
@@ -192,12 +192,7 @@ const MENU_EVERYTHING: MenuSection[] = [
   { title: 'Dates', count: 5, rows: [{ icon: 'date', label: 'Friday' }] },
 ];
 
-/**
- * What ; offers: saved fragments, inserted by name. The calendar link in the
- * recording arrives this way rather than being typed -- which is the point,
- * because a forty-three character URL is exactly the thing nobody types
- * twice.
- */
+/** A saved scheduling URL resolves to the app’s labeled booking mention. */
 const SNIPPETS: MenuSection[] = [
   {
     title: 'Snippets',
@@ -209,7 +204,7 @@ const SNIPPETS: MenuSection[] = [
   },
 ];
 
-const DOC_TITLE = 'Q3 launch plan';
+const DOC_TITLE = 'Website launch plan';
 
 const SCRIPT: Block[] = [
   {
@@ -272,7 +267,7 @@ const SCRIPT: Block[] = [
             title: 'Documents, Agents, & Tasks',
             count: 74,
             rows: [
-              { icon: 'doc', label: 'Q3 launch notes' },
+              { icon: 'doc', label: 'Website launch notes' },
               {
                 icon: 'task',
                 label: 'Prepare the launch checklist',
@@ -303,13 +298,12 @@ const SCRIPT: Block[] = [
     kind: 'p',
     md: '',
     segs: [
-      { k: 'text', text: 'Team check-in: ' },
       {
         k: 'at',
         trigger: ';',
         insert: 'link',
         query: '',
-        label: CAL_LINK,
+        label: 'Team check-in',
         wide: SNIPPETS,
         narrow: SNIPPETS,
       },
@@ -362,7 +356,7 @@ const SCRIPT: Block[] = [
   {
     kind: 'li',
     md: '',
-    segs: [{ k: 'text', text: 'Share the plan with Dana' }],
+    segs: [{ k: 'text', text: 'Share the plan with Valentina' }],
   },
   { kind: 'h2', md: '## ', segs: [{ k: 'text', text: 'Context' }] },
   {
@@ -446,9 +440,9 @@ const SCRIPT: Block[] = [
 ];
 
 /** The run the comment lands on, and the comment itself. */
-const COMMENT_TEXT = 'Please check the date against Dana’s email.';
-/** Which block carries the highlight and the badge -- the "Agenda" heading. */
-const COMMENT_BLOCK = 4;
+const COMMENT_TEXT = 'Please check the date against Valentina’s email.';
+/** Anchor the date-check comment to the launch date, not the checklist heading. */
+const COMMENT_BLOCK = 3;
 
 // ---------------------------------------------------------------------------
 // The timeline, built rather than named
@@ -626,7 +620,7 @@ const TL = {
   commentType: [TYPED_END + 3280, TYPED_END + 4540] as const,
   send: TYPED_END + 4860,
   composerOut: [TYPED_END + 4860, TYPED_END + 5080] as const,
-  /** The heading keeps the highlight and picks up its badge. */
+  /** The commented text keeps its highlight and picks up its badge. */
   markIn: [TYPED_END + 4920, TYPED_END + 5240] as const,
   /** The pointer leaves the way it came. */
   pointerOut: [TYPED_END + 5080, TYPED_END + 5680] as const,
@@ -1415,7 +1409,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
         .mds-line.h2 { font-size: 1.2em; font-weight: 600; }
         .mds-line.row { display: flex; gap: 0.6em; }
         .mds-line.rowmid { margin-bottom: 0.36em; }
-        /* The heading row carries its comment badge at the far end. */
+        /* The commented row carries its badge at the far end. */
         .mds-h2row { align-items: center; display: flex; gap: 0.86em; justify-content: space-between; }
         .mds-run { position: relative; }
 
@@ -1468,13 +1462,10 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
           letter-spacing: -0.04em;
           line-height: 1;
         }
-        /* What a snippet leaves in the line: the URL it holds, as a link. */
-        .mds-link {
-          color: var(--a0);
-          text-decoration-color: color-mix(in srgb, var(--a0) 70%, transparent);
-          text-decoration-line: underline;
-          text-underline-offset: 0.14em;
-        }
+        /* Frozen BookingLinkMention presentation from the app. */
+        .mds-booking-link { display: inline-flex; max-width: 100%; align-items: baseline; color: var(--c1); }
+        .mds-booking-link svg { position: relative; top: .125em; width: 1em; height: 1em; flex: none; margin-inline: .25em; color: var(--a0); }
+        .mds-booking-link > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 20%, transparent); text-decoration-thickness: max(1px, .1em); text-underline-offset: 2px; }
         .mds-avatar { border-radius: 999px; display: inline-block; flex: none; object-fit: cover; vertical-align: -0.14em; }
         .mds-rowface { height: 1.2em; width: 1.2em; }
         .mds-initials { font-size: 0.55em; height: 2.18em; width: 2.18em; }
@@ -1564,7 +1555,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
            run of one: select-all is a keystroke, so it does not sweep and it
            does not need character boundaries. */
         .mds-selall { background-color: color-mix(in srgb, var(--c1) 16%, transparent); bottom: -0.12em; left: -1px; position: absolute; right: -1px; top: -0.06em; }
-        .mds-mark { background-color: color-mix(in srgb, var(--a0) 24%, transparent); border-bottom: max(1.5px, 0.11em) solid var(--a0); bottom: -0.12em; left: -1px; position: absolute; right: -1px; top: -0.06em; }
+        .mds-mark { background-color: oklch(from var(--color-yellow) l c h / .1); border-bottom: 2px solid oklch(from var(--color-yellow) l c h / .3); bottom: -0.12em; left: -1px; position: absolute; right: -1px; top: -0.06em; }
         .mds-runtext { position: relative; }
 
         .mds-bar {
@@ -1633,7 +1624,7 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
 
         .mds-badge {
           align-items: center;
-          background-color: color-mix(in srgb, var(--a0) 20%, transparent);
+          background-color: oklch(from var(--color-yellow) l c h / .1);
           border-radius: 0.36em;
           display: inline-flex;
           flex: none;
@@ -1792,7 +1783,15 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
                                       />
                                     }
                                   >
-                                    <span class="mds-link">{seg.label}</span>
+                                    <a
+                                      class="mds-booking-link"
+                                      href={DEMO_BOOKING_URL}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      <IconCalendar aria-hidden="true" />
+                                      <span>{seg.label}</span>
+                                    </a>
                                     {tail()}
                                   </Show>
                                 </span>
@@ -1901,6 +1900,9 @@ export function DocsMarkdownScene(props: { t: Accessor<number> }) {
                   <Show when={bi() === COMMENT_BLOCK && markAmt() > 0.004}>
                     <span
                       class="mds-badge"
+                      role="img"
+                      aria-label={`1 comment on the launch date: ${COMMENT_TEXT}`}
+                      title={COMMENT_TEXT}
                       style={{
                         opacity: markAmt().toFixed(3),
                         transform: `scale(${(0.86 + markAmt() * 0.14).toFixed(3)})`,

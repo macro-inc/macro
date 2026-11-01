@@ -1,0 +1,12 @@
+# Type Alias: ConfigureCodexData
+
+> **ConfigureCodexData** = \{ `body`: [`CodexConfigRequest`](CodexConfigRequest.md); `path?`: `never`; `query?`: `never`; `url`: `"/codex/config"`; \}
+
+## Properties
+
+| Property | Type |
+| ------ | ------ |
+| <a id="property-body"></a> `body` | [`CodexConfigRequest`](CodexConfigRequest.md) |
+| <a id="property-path"></a> `path?` | `never` |
+| <a id="property-query"></a> `query?` | `never` |
+| <a id="property-url"></a> `url` | `"/codex/config"` |

@@ -831,6 +831,16 @@ impl GenAiProjector {
             error = Some(format!("the command exited with code {code}"));
         }
 
+        if let Some(result) = &result {
+            let bytes = match result {
+                Value::String(text) => text.len(),
+                other => other.to_string().len(),
+            };
+            tool.span.set_u64(
+                attr::MACRO_TOOL_RESULT_BYTES,
+                u64::try_from(bytes).unwrap_or(u64::MAX),
+            );
+        }
         if self.policy.capture {
             if let Some(arguments) = &tool.arguments {
                 let (json, truncated) = bounded_json_string(arguments, &self.policy.limits);

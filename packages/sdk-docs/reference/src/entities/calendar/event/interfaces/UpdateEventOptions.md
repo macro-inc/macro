@@ -1,0 +1,24 @@
+# Interface: UpdateEventOptions
+
+Fields to change on an event; omitted fields are left untouched.
+
+## Properties
+
+| Property | Type | Description |
+| ------ | ------ | ------ |
+| <a id="property-attendees"></a> `attendees?` | [`CalendarAttendeeInputBody`](../../../../../generated/calendar/types.gen/type-aliases/CalendarAttendeeInputBody.md)[] | Replacement attendee list. |
+| <a id="property-calendar"></a> `calendar?` | [`Calendar`](../../calendar/classes/Calendar.md) | Calendar whose copy of the event is patched, for a multi-calendar event. Omit to patch the canonical copy. |
+| <a id="property-conference"></a> `conference?` | [`ConferenceChange`](../../../../../generated/calendar/types.gen/type-aliases/ConferenceChange.md) | Provider conference change; omit to retain it. Outlook removal requires a separately confirmed replacement via prepareReplacement(). |
+| <a id="property-description"></a> `description?` | `string` | Replacement description; an empty string clears it. |
+| <a id="property-guestpolicy"></a> `guestPolicy?` | [`GuestPolicy`](../../../../../generated/calendar/types.gen/type-aliases/GuestPolicy.md) | Replacement guest policy; only the organizer of a Google event may change it (`viewerCan.setGuestPolicy`). It applies to the whole series, so an update scoped to one occurrence (`scope: 'this_event'`, or a `recurrenceId`) that changes it is rejected; use scope `'all'`. |
+| <a id="property-inbox"></a> `inbox?` | `string` | Address of the inbox holding the copy this call changes (an occurrence listing's `inbox`). When the meeting is on more than one of the user's inboxes, an agent must name it: the call is refused with `copy_choice_required`, listing each copy's inbox, role and event, until it does. It must be the inbox holding this copy. |
+| <a id="property-location"></a> `location?` | `string` | Replacement location; an empty string clears it. |
+| <a id="property-outofoffice"></a> `outOfOffice?` | [`OutOfOfficeProperties`](../../../../../generated/calendar/types.gen/type-aliases/OutOfOfficeProperties.md) | Replacement out-of-office properties, applied only to an event that is already out-of-office. |
+| <a id="property-recurrenceid"></a> `recurrenceId?` | `string` | Original-start key of the occurrence the update targets. |
+| <a id="property-recurrencelines"></a> `recurrenceLines?` | `string`[] | Replacement recurrence properties; an empty list clears them. |
+| <a id="property-reminders"></a> `reminders?` | [`EventReminders`](../../../../../generated/calendar/types.gen/type-aliases/EventReminders.md) | Replacement reminder configuration. |
+| <a id="property-scope"></a> `scope?` | [`CalendarUpdateScopeParam`](../../../../../generated/calendar/types.gen/type-aliases/CalendarUpdateScopeParam.md) | How much of a recurring series the update covers. Omit to let `recurrenceId` decide. |
+| <a id="property-time"></a> `time?` | [`EventTime`](../../../../../generated/calendar/types.gen/type-aliases/EventTime.md) | Replacement time. |
+| <a id="property-title"></a> `title?` | `string` | Replacement title; an empty string clears it. |
+| <a id="property-transparency"></a> `transparency?` | [`EventTransparency`](../../../../../generated/calendar/types.gen/type-aliases/EventTransparency.md) | Replacement availability behavior. |
+| <a id="property-visibility"></a> `visibility?` | [`EventVisibility`](../../../../../generated/calendar/types.gen/type-aliases/EventVisibility.md) | Replacement visibility. |

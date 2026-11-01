@@ -17,8 +17,9 @@ type FormMobileSignupProps = {
   /**
    * `stacked` — field then full-width CTA (hero).
    * `inline` — CTA nested inside the field (compact header).
+   * `card` — the phone signup page, styled by RouteMobileSignup.css.
    */
-  variant?: 'stacked' | 'inline';
+  variant?: 'stacked' | 'inline' | 'card';
 };
 
 /**
@@ -34,6 +35,7 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const inline = () => props.variant === 'inline';
+  const card = () => props.variant === 'card';
   let inputRef: HTMLInputElement | undefined;
 
   const focusEmail = () => {
@@ -93,7 +95,7 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
           : {
               'box-sizing': 'border-box',
               display: 'grid',
-              gap: '10px',
+              gap: card() ? '12px' : '10px',
               'max-width': '420px',
               width: '100%',
             }
@@ -156,14 +158,18 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
               }
             : {
                 display: 'grid',
-                gap: '10px',
+                gap: card() ? '12px' : '10px',
                 width: '100%',
               }
         }
       >
         <input
           ref={inputRef}
-          class={`mobile-signup-field${inline() ? ' mobile-signup-field--inline' : ''}`}
+          class={
+            card()
+              ? 'mobile-signup-card-field'
+              : `mobile-signup-field${inline() ? ' mobile-signup-field--inline' : ''}`
+          }
           type="email"
           name="email"
           autocomplete="email"
@@ -172,70 +178,81 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
           spellcheck={false}
           aria-label="Email address"
           aria-invalid={error() ? 'true' : undefined}
-          placeholder={props.placeholder ?? 'Your work email'}
+          placeholder={props.placeholder ?? 'Your work email or Gmail'}
           value={email()}
           onInput={(event) => {
             setEmail(event.currentTarget.value);
             if (error()) setError(null);
           }}
-          style={{
-            'background-color':
-              'color-mix(in srgb, var(--b1) 88%, transparent)',
-            border: '1px solid color-mix(in srgb, var(--b4) 46%, transparent)',
-            'border-radius': '999px',
-            'box-sizing': 'border-box',
-            color: 'var(--c0)',
-            'font-family': 'body',
-            // 16px minimum: iOS Safari zooms the page when focusing a smaller field.
-            'font-size': '16px',
-            height: inline() ? '32px' : '46px',
-            outline: 'none',
-            padding: inline() ? '0 96px 0 14px' : '0 18px',
-            transition: 'border-color 160ms ease',
-            width: '100%',
-          }}
+          style={
+            card()
+              ? undefined
+              : {
+                  'background-color':
+                    'color-mix(in srgb, var(--b1) 88%, transparent)',
+                  border:
+                    '1px solid color-mix(in srgb, var(--b4) 46%, transparent)',
+                  'border-radius': '999px',
+                  'box-sizing': 'border-box',
+                  color: 'var(--c0)',
+                  'font-family': 'body',
+                  // 16px minimum: iOS Safari zooms the page when focusing a smaller field.
+                  'font-size': '16px',
+                  height: inline() ? '32px' : '46px',
+                  outline: 'none',
+                  padding: inline() ? '0 96px 0 14px' : '0 18px',
+                  transition: 'border-color 160ms ease',
+                  width: '100%',
+                }
+          }
         />
 
         <button
           class={
-            inline()
-              ? 'mobile-signup-submit mobile-signup-submit--inline'
-              : 'mobile-signup-submit'
+            card()
+              ? 'mobile-signup-card-pill'
+              : inline()
+                ? 'mobile-signup-submit mobile-signup-submit--inline'
+                : 'mobile-signup-submit'
           }
           type="submit"
           disabled={pending()}
-          style={{
-            'align-items': 'center',
-            'background-color': 'var(--c1)',
-            border: '1px solid transparent',
-            'border-radius': '999px',
-            'box-sizing': 'border-box',
-            color: 'var(--b0)',
-            cursor: 'default',
-            display: 'inline-flex',
-            'font-family': 'body',
-            'font-size': inline() ? '13px' : '16px',
-            'font-weight': '700',
-            ...(inline()
-              ? {
-                  bottom: 'auto',
-                  height: '26px',
-                  padding: '0 12px',
-                  position: 'absolute',
-                  right: '3px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                }
+          style={
+            card()
+              ? undefined
               : {
-                  height: '46px',
-                  padding: '0 22px',
-                  width: '100%',
-                }),
-            'justify-content': 'center',
-            'letter-spacing': '0.01em',
-            'line-height': 1,
-            'white-space': 'nowrap',
-          }}
+                  'align-items': 'center',
+                  'background-color': 'var(--c1)',
+                  border: '1px solid transparent',
+                  'border-radius': '999px',
+                  'box-sizing': 'border-box',
+                  color: 'var(--b0)',
+                  cursor: 'default',
+                  display: 'inline-flex',
+                  'font-family': 'body',
+                  'font-size': inline() ? '13px' : '16px',
+                  'font-weight': '700',
+                  ...(inline()
+                    ? {
+                        bottom: 'auto',
+                        height: '26px',
+                        padding: '0 12px',
+                        position: 'absolute',
+                        right: '3px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                      }
+                    : {
+                        height: '46px',
+                        padding: '0 22px',
+                        width: '100%',
+                      }),
+                  'justify-content': 'center',
+                  'letter-spacing': '0.01em',
+                  'line-height': 1,
+                  'white-space': 'nowrap',
+                }
+          }
         >
           {buttonLabel()}
         </button>
@@ -250,7 +267,7 @@ export function FormMobileSignup(props: FormMobileSignupProps) {
             'font-size': '13px',
             'line-height': 1.4,
             margin: '0',
-            'padding-left': '18px',
+            'padding-left': card() ? '0' : '18px',
           }}
         >
           {error()}

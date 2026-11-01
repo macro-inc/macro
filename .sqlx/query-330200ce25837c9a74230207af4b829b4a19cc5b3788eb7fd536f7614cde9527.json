@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM agent_preview_lease WHERE expires_at < now() - interval '5 minutes'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "330200ce25837c9a74230207af4b829b4a19cc5b3788eb7fd536f7614cde9527"
+}

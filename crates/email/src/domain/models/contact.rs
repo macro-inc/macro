@@ -13,7 +13,7 @@ pub struct Contact {
 }
 
 /// Contact information for a message sender or recipient.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ContactInfo {
     /// Email address of the contact.
     pub email: String,

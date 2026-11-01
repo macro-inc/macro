@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ApiEntityFilterAstCrma } from './apiEntityFilterAstCrma';
 import type { ApiEntityFilterAstFavoritesOnly } from './apiEntityFilterAstFavoritesOnly';
 
 /**
@@ -25,6 +26,7 @@ Empty/omitted = team's full visible list. */
   cf?: unknown;
   /** the filters that should be applied to the channel entity */
   chanf?: unknown;
+  crma?: ApiEntityFilterAstCrma;
   /** Opt-in filters for viewer-accessible CRM contacts (wire key `crmf`). */
   crmf?: unknown;
   /** the filters that should be applied to the channel-thread entity */
@@ -52,6 +54,10 @@ unlike the materialized [`EntityFilterAst`] used for cursors. */
   fef?: unknown;
   /** the filters that should be applied to GitHub pull request records, on top of `fef` */
   ghprf?: unknown;
+  /** Filters applied to initiatives (wire key `if`). Opt-in like agent
+sessions: an omitted filter returns no initiatives, and any literal,
+a notification state included, opts them in. */
+  if?: unknown;
   /** the filters that should be applied to the project entity */
   pf?: unknown;
   /** the filters that should be applied based on entity properties */

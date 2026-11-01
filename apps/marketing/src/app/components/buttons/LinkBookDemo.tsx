@@ -2,7 +2,7 @@ import { demoHref, handleDemoClick } from '../../utils/utilCta';
 
 /**
  * Quiet "Book a live demo →" text link for phones, shown under the email
- * capture form where desktop shows the "Book demo" pill. Same cal.com
+ * capture form where desktop shows the "Book demo" pill. Same booking
  * destination and `demo_booking_open` tracking as the desktop button.
  */
 export function LinkBookDemo(props: { buttonName: string }) {

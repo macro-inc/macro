@@ -17,7 +17,7 @@ import { type TextGeometry, type TextMeasurer, textDefinition } from './text';
 /** A shape-owned annotation, not an independently selectable scene node. */
 export type ShapeLabel = Pick<
   TextGeometry,
-  'content' | 'fontSize' | 'fontFamily' | 'height'
+  'content' | 'fontSize' | 'fontFamily' | 'height' | 'fitText'
 > &
   Readonly<{
     /** Measured text width for connectors; box labels use the interior. */

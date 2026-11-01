@@ -4,7 +4,7 @@ import { MacroApplicationLoadBalancer } from '../../packages/resources';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'gateway',
 };
 

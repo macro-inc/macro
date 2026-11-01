@@ -1,3 +1,7 @@
+import {
+  resolveStructuredReferences,
+  type WorkbookTable,
+} from '@macro-inc/spreadsheet/structured-references';
 import { describe, expect, it } from 'vitest';
 import {
   addFunctionPrefixes,
@@ -8,10 +12,8 @@ import {
   importSingleFunction,
   markImplicitIntersections,
   normalizeReferences,
-  resolveStructuredReferences,
   stripFunctionPrefixes,
   translateFormula,
-  type WorkbookTable,
 } from './xlsx-formula';
 
 describe('translateFormula', () => {

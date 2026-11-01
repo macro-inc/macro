@@ -330,6 +330,7 @@ export class Form extends MacroEntity<FormDetail> {
                       'text',
                       'number',
                       'date',
+                      'dateRange',
                       'checkbox',
                     ),
                   },
@@ -416,7 +417,15 @@ export class Form extends MacroEntity<FormDetail> {
         }))
         .with(
           {
-            type: P.union('text', 'number', 'boolean', 'date', 'link', 'clear'),
+            type: P.union(
+              'text',
+              'number',
+              'boolean',
+              'date',
+              'date_range',
+              'link',
+              'clear',
+            ),
           },
           (answer) => answer,
         )
@@ -535,13 +544,18 @@ export class Form extends MacroEntity<FormDetail> {
                 'number',
                 'boolean',
                 'date',
+                'date_range',
                 'link',
                 'clear',
               ),
             },
             (cell) => cell,
           )
-          .exhaustive();
+          .exhaustive(() => {
+            throw new MacroError(
+              `answer to question ${question.id} has a type this SDK doesn't know`,
+            );
+          });
         return { question, value };
       }),
     );
@@ -594,16 +608,25 @@ export class Form extends MacroEntity<FormDetail> {
       return {
         question,
         responses: entry.responses,
-        buckets: entry.buckets.map((bucket) => ({
-          count: bucket.count,
-          value: match(bucket.value)
-            .with({ kind: 'option' }, (value) => ({
-              kind: 'option' as const,
-              option: FormOption.byId(question, value.option),
-            }))
-            .with({ kind: 'checkbox' }, (value) => value)
-            .exhaustive(),
-        })),
+        buckets: entry.buckets.flatMap((bucket): FormQuestionTally['buckets'] =>
+          match(bucket.value)
+            .with({ kind: 'option' }, (value) => [
+              {
+                count: bucket.count,
+                value: {
+                  kind: 'option' as const,
+                  option: FormOption.byId(question, value.option),
+                },
+              },
+            ])
+            .with({ kind: 'checkbox' }, (value) => [
+              { count: bucket.count, value },
+            ])
+            .exhaustive((unknown) => {
+              console.warn('macro sdk: unknown form tally bucket', unknown);
+              return [];
+            }),
+        ),
       };
     });
   }

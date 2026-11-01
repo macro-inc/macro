@@ -45,6 +45,7 @@ use uuid::Uuid;
 use super::*;
 
 mod agent_metadata;
+mod crm_association;
 mod exclusions;
 mod favorites;
 mod work_feed;
@@ -89,6 +90,13 @@ impl ChannelListService for NoopCommsService {
         &self,
         _req: GetThreadReplyRowsRequest,
     ) -> Result<Vec<ChannelMessage>, Report> {
+        Ok(Vec::new())
+    }
+
+    async fn get_reference_sources(
+        &self,
+        _targets: &[channels::domain::models::ReferenceTarget],
+    ) -> Result<Vec<channels::domain::models::ReferenceSource>, Report> {
         Ok(Vec::new())
     }
 
@@ -163,6 +171,13 @@ impl ChannelListService for RecordingCommsService {
         Ok(self.rows.clone())
     }
 
+    async fn get_reference_sources(
+        &self,
+        _targets: &[channels::domain::models::ReferenceTarget],
+    ) -> Result<Vec<channels::domain::models::ReferenceSource>, Report> {
+        Ok(Vec::new())
+    }
+
     async fn get_names(
         &self,
         _names: std::collections::HashSet<MacroUserIdStr<'_>>,
@@ -234,7 +249,7 @@ fn call_record(
     call::domain::models::CallRecord {
         call_id,
         channel_id: Some(channel_id),
-        room_name: String::new(),
+        room_name: None,
         created_by: created_by.to_string(),
         started_at,
         ended_at: None,
@@ -257,6 +272,7 @@ fn call_record(
         participants: Vec::new(),
         guests: Vec::new(),
         transcript: Vec::new(),
+        source: None,
     }
 }
 
@@ -2872,10 +2888,13 @@ async fn touched_soup_full_page_builds_keyset_cursor() {
     assert_eq!(decoded.val.last_val, last_touch);
 }
 
+/// One email hydration request: the view, the thread ids and the limit.
+type EmailPreviewRequest = (PreviewView, Vec<Uuid>, Option<u32>);
+
 /// Records each email hydration request and returns no threads.
 #[derive(Clone, Default)]
 struct RecordingEmailPreviewService {
-    requests: Arc<Mutex<Vec<(PreviewView, Vec<Uuid>, Option<u32>)>>>,
+    requests: Arc<Mutex<Vec<EmailPreviewRequest>>>,
     filters: Arc<Mutex<Vec<String>>>,
 }
 

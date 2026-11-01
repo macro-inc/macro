@@ -5,7 +5,7 @@
 //! (config: `sgconfig.yml` at the repo root). The scan fails only on
 //! `severity: error` findings; `warning`/`hint` rules surface through
 //! CodeRabbit's ast-grep integration on changed code instead. The rules encode
-//! conventions from `docs/STYLE_GUIDE.md` at the repo root.
+//! conventions from `docs/development/style-guide.md` at the repo root.
 
 use gh_workflow::{
     Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,

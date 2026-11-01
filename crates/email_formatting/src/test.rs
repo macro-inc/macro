@@ -17,6 +17,28 @@ fn unsubscribe_url_keeps_gateway_prefix() {
 }
 
 #[test]
+fn digest_logo_keeps_the_png_aspect_ratio() {
+    let unsubscribe_url = SignedUrl::new(
+        NotificationServiceUrl::default_for_environment(Environment::Production)
+            .parse_url()
+            .unwrap(),
+        Hmac::<Sha256>::new_from_slice(b"test-secret").unwrap(),
+    );
+    let html = DigestTemplate {
+        notifs: Vec::new(),
+        num_truncated: 0,
+        total_count: 0,
+        unsubscribe_url,
+    }
+    .render()
+    .unwrap();
+    let html = html.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(html.contains(
+        r#"src="https://static-file-service.macro.com/file/b911aba9-94a6-435c-aa16-8404739f13b0" width="54" height="36""#
+    ));
+}
+
+#[test]
 fn signed_unsubscribe_roundtrips_against_request_url() {
     let secret = Hmac::<Sha256>::new_from_slice(b"test-secret").unwrap();
     let mut unsigned = signing::append_path(

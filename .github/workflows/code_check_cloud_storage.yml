@@ -23,6 +23,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       doppler_candidates: ${{ steps.filter.outputs.doppler_candidates }}
+      graphql_schema: ${{ steps.filter.outputs.graphql_schema }}
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
       skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
     steps:
@@ -71,6 +72,10 @@ jobs:
             - '**/src/doppler_config.rs'
             - '**/Cargo.toml'
             - 'tooling/xtask/crates/xtask_doppler_bins/**'
+            - .github/workflows/code_check_cloud_storage.yml
+          graphql_schema:
+            - 'static_assets/schema.graphql'
+            - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
             - .github/workflows/code_check_cloud_storage.yml
     - name: compute changed files
       if: steps.filter.outputs.should_run == 'true'
@@ -282,6 +287,8 @@ jobs:
         else
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
+    - name: Check embedded code execution assets
+      run: nix build --no-link .#checks.x86_64-linux.code-execution-assets
     - name: fmt
       run: cargo fmt --check
     - name: clippy
@@ -300,9 +307,18 @@ jobs:
             -A clippy::collapsible_if
         }
 
+        # Most of soup's dependents build it without `outbound` (no features, or
+        # `ports` alone), where helpers only the service or the Postgres repository
+        # call are dead code that --all-features hides.
+        clippy_soup_without_outbound() {
+          cargo clippy -p soup --no-default-features
+          cargo clippy -p soup --no-default-features --features ports
+        }
+
         if [ -z "$packages" ] || [ "$packages" = "all" ]; then
           cargo clippy --workspace --all-features --exclude sync_service
           clippy_sync_service
+          clippy_soup_without_outbound
           exit 0
         fi
 
@@ -312,12 +328,16 @@ jobs:
         fi
 
         sync=false
+        soup=false
         pkg_args=()
         for p in $packages; do
           if [ "$p" = "sync_service" ]; then
             sync=true
           else
             pkg_args+=(-p "$p")
+          fi
+          if [ "$p" = "soup" ]; then
+            soup=true
           fi
         done
 
@@ -327,6 +347,10 @@ jobs:
 
         if [ "$sync" = true ]; then
           clippy_sync_service
+        fi
+
+        if [ "$soup" = true ]; then
+          clippy_soup_without_outbound
         fi
       env:
         RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
@@ -499,6 +523,7 @@ jobs:
     env:
       RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
+      CARGO_BUILD_JOBS: '2'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
       SCCACHE_IDLE_TIMEOUT: '0'
     services:
@@ -629,18 +654,48 @@ jobs:
         fi
 
         cargo nextest run "${common[@]}" "${pkg_args[@]}"
+    - name: Set up code execution runtime
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
+      uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed
+      with:
+        deno-version: '2.9.6'
+    - name: Test Deno sandbox and authenticated SDK execution
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
+      run: |-
+        cargo test --locked -p code_execution -- --ignored --test-threads=2
+        cargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
+  graphql-schema-compat:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'
+    runs-on: namespace-profile-linux-small
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        persist-credentials: 'false'
+        fetch-depth: '2'
+    - name: Setup Rust
+      uses: './.github/actions/setup-rust'
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - name: Check GraphQL schema compatibility
+      run: cargo run --locked --manifest-path tooling/xtask/Cargo.toml -- graphql-schema-compat --base HEAD^1
   status-check:
     needs:
     - path-check
     - check
     - doppler-config
     - test
+    - graphql-schema-compat
     if: always()
     name: Cloud Storage Status Check
     runs-on: namespace-profile-linux-small
@@ -651,12 +706,14 @@ jobs:
         echo "check: ${{ needs.check.result }}"
         echo "doppler-config: ${{ needs.doppler-config.result }}"
         echo "test: ${{ needs.test.result }}"
+        echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
 
         # Fail if any job failed (skipped and success are both OK)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.check.result }}" == "failure" ]] || \
            [[ "${{ needs.doppler-config.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]]; then
+           [[ "${{ needs.test.result }}" == "failure" ]] || \
+           [[ "${{ needs.graphql-schema-compat.result }}" == "failure" ]]; then
           echo "❌ One or more jobs failed"
           exit 1
         fi

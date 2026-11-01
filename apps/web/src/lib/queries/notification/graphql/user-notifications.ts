@@ -16,6 +16,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupClient,
+  hasGraphqlCacheHost,
   mapGraphqlNotification,
 } from '@service-storage/graphql-soup';
 import { executeGraphqlUpdateNotifications } from '@service-storage/graphql-update-notifications';
@@ -32,6 +33,8 @@ function normalizeLimit(limit?: number): number {
     : DEFAULT_NOTIFICATION_LIMIT;
 }
 
+// NOTIFIED_AT pages through the user's notified entities. A timestamp sort
+// would scan every accessible entity just to read a few notification edges.
 function soupInput(cursor: string | null, limit: number): SoupInput {
   return cursor
     ? { continuation: { cursor, expand: true } }
@@ -39,7 +42,7 @@ function soupInput(cursor: string | null, limit: number): SoupInput {
         initial: {
           expand: true,
           limit,
-          sortMethod: 'UPDATED_AT',
+          sortMethod: 'NOTIFIED_AT',
         },
       };
 }
@@ -121,6 +124,8 @@ export function createGraphqlNotificationsQuery(
     registerNotificationReader({
       client: getGraphqlSoupClient,
       isEnabled: () => query.isEnabled,
+      // Rows render each notification's cached state.
+      cacheMaintained: hasGraphqlCacheHost,
       refresh: () =>
         query.refetch({ requestPolicy: 'network-only', throwOnError: true }),
     })

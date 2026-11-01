@@ -83,7 +83,16 @@ pub async fn serve(
                     result = tokio::time::timeout(Duration::from_secs(15), authenticated.cancelled()) => result.is_ok(),
                 };
                 if authenticated_in_time {
-                    tokio::select! { _ = shutdown.cancelled() => {}, _ = &mut running => {} }
+                    let connected = lease.lock().expect("connection mutex").clone();
+                    if let Some(connected) = connected {
+                        // Cancellation also closes authenticated transports which
+                        // have not registered a forward yet (no Tunnel handle exists).
+                        tokio::select! {
+                            _ = shutdown.cancelled() => {},
+                            _ = connected.cancel.cancelled() => {},
+                            _ = &mut running => {},
+                        }
+                    }
                 }
                 let _ = handle
                     .disconnect(
@@ -112,7 +121,7 @@ impl Handler for Connection {
         if user.len() > 128 {
             return Ok(Auth::reject());
         }
-        match self.service.authenticate_ssh(user) {
+        match self.service.authenticate_ssh(user).await {
             Ok(lease) => {
                 *self.lease.lock().expect("connection mutex") = Some(lease);
                 self.authenticated.cancel();

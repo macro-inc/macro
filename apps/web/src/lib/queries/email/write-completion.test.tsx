@@ -1,6 +1,8 @@
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { useSaveDraftMutation } from './draft';
+import { clearSavedDraftThreadCache } from './draft-cache';
+import { emailKeys } from './keys';
 import { mountEmailMutation } from './tests/mutation';
 import { useSendMessageMutation, useUnscheduleMessageMutation } from './thread';
 
@@ -9,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   send: vi.fn(),
   unschedule: vi.fn(),
   invalidate: vi.fn(),
+  remove: vi.fn(),
   refetch: vi.fn(),
   track: vi.fn(),
   report: vi.fn(),
@@ -22,7 +25,10 @@ vi.mock('@service-email/client', () => ({
   },
 }));
 vi.mock('../client', () => ({
-  queryClient: { invalidateQueries: mocks.invalidate },
+  queryClient: {
+    invalidateQueries: mocks.invalidate,
+    removeQueries: mocks.remove,
+  },
 }));
 vi.mock('../soup/cache', () => ({
   refetchSoupEntity: mocks.refetch,
@@ -70,6 +76,31 @@ it('returns the saved identity when a subsequent cache refresh rejects', async (
     undefined
   );
   expect(mocks.save.mock.calls[0][0]).not.toHaveProperty('send_time');
+});
+
+it('defers saved thread message eviction until leaving the thread', async () => {
+  mocks.save.mockResolvedValue(
+    ok({
+      draft: { db_id: 'draft', thread_db_id: 'saved-thread', link_id: 'inbox' },
+    })
+  );
+  const mutation = mountEmailMutation(useSaveDraftMutation);
+  await mutation.mutateAsync({ draft: { subject: 'Saved' } });
+  expect(mocks.invalidate).toHaveBeenCalledExactlyOnceWith({
+    queryKey: emailKeys.previews._def,
+  });
+  expect(mocks.refetch).toHaveBeenCalledWith('saved-thread', 'emailThread');
+  expect(mocks.remove).toHaveBeenCalledExactlyOnceWith({
+    queryKey: emailKeys.threadMessages('saved-thread').queryKey,
+    type: 'inactive',
+  });
+  mocks.remove.mockClear();
+  clearSavedDraftThreadCache('saved-thread');
+  expect(mocks.remove).toHaveBeenCalledExactlyOnceWith({
+    queryKey: emailKeys.threadMessages('saved-thread').queryKey,
+  });
+  clearSavedDraftThreadCache('saved-thread');
+  expect(mocks.remove).toHaveBeenCalledOnce();
 });
 
 it('keeps send successful and reconciles caches when analytics throws', async () => {

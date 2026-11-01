@@ -4,9 +4,9 @@ use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use model_owner::Owner;
 
 use super::status::action_status;
-use super::{RoutineSessions, models::*};
+use super::{ConnectedApps, RoutineSessions, models::*};
 use crate::domain::error::AgentSessionError;
-use crate::domain::model::{AgentSession, AgentSessionId};
+use crate::domain::model::{AgentMcpServer, AgentMcpServers, AgentSession, AgentSessionId};
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, ControlDisposition, ControlEvent,
     ExternalSessionRequester, ManagedPersonaError, OpenManagedSession, RequestedExternalSession,
@@ -16,16 +16,17 @@ use crate::domain::service::AgentSessionService;
 
 /// Domain orchestration using the same provisioning and controls as interactive sessions.
 #[derive(Clone)]
-pub struct RoutineSessionsService<Bots, Opener, External, Sessions, Controls> {
+pub struct RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps> {
     bots: Bots,
     opener: Opener,
     external: External,
     sessions: Sessions,
     controls: Controls,
+    apps: Apps,
 }
 
-impl<Bots, Opener, External, Sessions, Controls>
-    RoutineSessionsService<Bots, Opener, External, Sessions, Controls>
+impl<Bots, Opener, External, Sessions, Controls, Apps>
+    RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps>
 {
     /// Compose existing capabilities; no new runtime or persistence implementation.
     pub fn new(
@@ -34,6 +35,7 @@ impl<Bots, Opener, External, Sessions, Controls>
         external: External,
         sessions: Sessions,
         controls: Controls,
+        apps: Apps,
     ) -> Self {
         Self {
             bots,
@@ -41,15 +43,17 @@ impl<Bots, Opener, External, Sessions, Controls>
             external,
             sessions,
             controls,
+            apps,
         }
     }
 }
 
-impl<Bots, Opener, External, Sessions, Controls>
-    RoutineSessionsService<Bots, Opener, External, Sessions, Controls>
+impl<Bots, Opener, External, Sessions, Controls, Apps>
+    RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps>
 where
     Bots: BotDirectory,
     Sessions: AgentSessionService,
+    Apps: ConnectedApps,
 {
     async fn select(
         &self,
@@ -62,7 +66,7 @@ where
         {
             return Err(RoutineSessionError::InvalidCommand);
         }
-        persona_for_owner(
+        let persona = persona_for_owner(
             &self.bots,
             selection.bot_id,
             &Owner::User(selection.owner.clone()),
@@ -76,7 +80,41 @@ where
             ManagedPersonaError::Unknown
             | ManagedPersonaError::NotAgent
             | ManagedPersonaError::UnmanagedSystemBot => RoutineSessionError::PersonaUnavailable,
-        })
+        })?;
+        self.require_apps(selection, &persona).await?;
+        Ok(persona)
+    }
+
+    /// Checked on save and again before every run, so an app disconnected
+    /// since fails the run instead of leaving the agent without it.
+    async fn require_apps(
+        &self,
+        selection: &ValidateRoutineSession,
+        persona: &SelectedPersona,
+    ) -> Result<(), RoutineSessionError> {
+        if selection.mcp_servers.is_empty() {
+            return Ok(());
+        }
+        if matches!(persona, SelectedPersona::External { .. }) {
+            return Err(RoutineSessionError::AppsUnsupported);
+        }
+        let connected = self
+            .apps
+            .connected_app_slugs(&selection.owner)
+            .await
+            .map_err(|error| {
+                tracing::warn!(error = ?error, "could not list a routine owner's connected apps");
+                RoutineSessionError::OperationFailed
+            })?;
+        if selection
+            .mcp_servers
+            .iter()
+            .all(|server| connected.contains(&server.app_slug))
+        {
+            Ok(())
+        } else {
+            Err(RoutineSessionError::AppNotConnected)
+        }
     }
 
     async fn owned_session(
@@ -102,14 +140,15 @@ where
     }
 }
 
-impl<Bots, Opener, External, Sessions, Controls> RoutineSessions
-    for RoutineSessionsService<Bots, Opener, External, Sessions, Controls>
+impl<Bots, Opener, External, Sessions, Controls, Apps> RoutineSessions
+    for RoutineSessionsService<Bots, Opener, External, Sessions, Controls, Apps>
 where
     Bots: BotDirectory,
     Opener: SessionOpener,
     External: ExternalSessionRequester,
     Sessions: AgentSessionService,
     Controls: AgentSessionNotificationRecipient,
+    Apps: ConnectedApps,
 {
     async fn validate(
         &self,
@@ -130,7 +169,10 @@ where
         let selection = command.selection;
         let owner = Owner::User(selection.owner.clone());
         let session = match persona {
-            SelectedPersona::Managed(profile) => {
+            SelectedPersona::Managed(mut profile) => {
+                if let Some(managed) = &mut profile.profile {
+                    add_routine_apps(&mut managed.mcp_servers, &selection.mcp_servers);
+                }
                 self.opener
                     .open_managed_session(OpenManagedSession {
                         id: Some(command.session_id),
@@ -141,6 +183,8 @@ where
                         profile: Some(profile),
                         instructions: None,
                         model: selection.model.clone(),
+                        source: command.source,
+                        visibility: command.visibility,
                     })
                     .await
             }
@@ -152,6 +196,8 @@ where
                         owner: selection.owner,
                         repo_url: None,
                         model: selection.model.clone(),
+                        source: command.source,
+                        visibility: command.visibility,
                     })
                     .await
             }
@@ -264,6 +310,19 @@ where
             .await
             .map_err(session_error)?;
         Ok(())
+    }
+}
+
+/// An agent limited to selected apps also gets the routine's. One that uses
+/// every app its runner connected already has them: they are required to be
+/// connected.
+fn add_routine_apps(servers: &mut AgentMcpServers, required: &[AgentMcpServer]) {
+    if let AgentMcpServers::Selected { servers } = servers {
+        for app in required {
+            if !servers.iter().any(|server| server.app_slug == app.app_slug) {
+                servers.push(app.clone());
+            }
+        }
     }
 }
 

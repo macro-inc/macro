@@ -9,12 +9,13 @@ import type {
   ShapeOutline,
   SlideOutline,
 } from '@core/pptx-engine/types';
-import ArrowDown from '@phosphor/arrow-down.svg';
-import ArrowUp from '@phosphor/arrow-up.svg';
-import Clock from '@phosphor/clock.svg';
-import Play from '@phosphor/play.svg';
-import Trash from '@phosphor/trash.svg';
-import X from '@phosphor/x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowUp from '@icon/system/regular/arrow-up.svg';
+import Clock from '@icon/system/regular/clock.svg';
+import Play from '@icon/system/regular/play.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import X from '@icon/system/regular/x.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import type { PresentationEngine } from '../context/pptx-editor-context';
@@ -70,44 +71,48 @@ export function AnimationPane(props: {
       <div class="flex h-9 items-center justify-between border-edge-muted border-b px-3">
         <span class="font-semibold text-ink text-sm">Animation Pane</span>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="flex items-center gap-1 border-edge-muted border-b px-2 py-1.5">
         <Button
           size="sm"
-          variant="outline"
+          variant="secondary"
           data-testid="pptx-animation-play"
           disabled={animations().length === 0}
           onClick={anim.preview}
         >
-          <Play />
+          <Play class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Play All
         </Button>
         <div class="flex-1" />
         <Button
+          aria-label="Move earlier"
           size="icon-sm"
           variant="ghost"
-          label="Move earlier"
           tooltip="Move Earlier"
           disabled={ro() || (anim.picked() ?? 0) === 0}
           onClick={() => {
             const i = anim.picked();
             if (i !== undefined)
-              void c.moveAnimation(i, -1).then(() => anim.pick(i - 1));
+              fireAndForget(
+                c.moveAnimation(i, -1).then(() => anim.pick(i - 1)),
+                'pptx-editor'
+              );
           }}
         >
-          <ArrowUp />
+          <ArrowUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Move later"
           size="icon-sm"
           variant="ghost"
-          label="Move later"
           tooltip="Move Later"
           disabled={
             ro() ||
@@ -117,10 +122,13 @@ export function AnimationPane(props: {
           onClick={() => {
             const i = anim.picked();
             if (i !== undefined)
-              void c.moveAnimation(i, 1).then(() => anim.pick(i + 1));
+              fireAndForget(
+                c.moveAnimation(i, 1).then(() => anim.pick(i + 1)),
+                'pptx-editor'
+              );
           }}
         >
-          <ArrowDown />
+          <ArrowDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="min-h-0 flex-1 overflow-y-auto p-1" role="listbox">
@@ -149,7 +157,10 @@ export function AnimationPane(props: {
                 }}
                 onKeyDown={(e) => {
                   if ((e.key === 'Delete' || e.key === 'Backspace') && !ro())
-                    void c.removeAnimations([i()]).then(() => anim.pick());
+                    fireAndForget(
+                      c.removeAnimations([i()]).then(() => anim.pick()),
+                      'pptx-editor'
+                    );
                 }}
               >
                 <span class="w-4 shrink-0 text-right text-ink-muted tabular-nums">
@@ -173,7 +184,10 @@ export function AnimationPane(props: {
                     data-testid="pptx-animation-remove"
                     onClick={(e) => {
                       e.stopPropagation();
-                      void c.removeAnimations([i()]).then(() => anim.pick());
+                      fireAndForget(
+                        c.removeAnimations([i()]).then(() => anim.pick()),
+                        'pptx-editor'
+                      );
                     }}
                   >
                     <Trash class="size-3" />

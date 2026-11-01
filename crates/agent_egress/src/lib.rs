@@ -39,9 +39,10 @@
 //!
 //! The sandbox never names a destination, and that is the property everything
 //! else rests on. For MCP it names an app slug, which resolves only through
-//! the owner's own rows, so it cannot ask to act as anyone its owner is not -
-//! which matters doubly here, because the Pipedream bearer alone could act as
-//! anyone, and the header saying *who* is stamped from the session's grant.
+//! the explicitly selected requester or owner's rows. Those identities come
+//! only from authenticated session/turn facts; cross-account tool calls wait
+//! for the selected account's approval. The Pipedream scope headers are stamped
+//! by the proxy and never accepted from generated code.
 //! For a custom server it names a digest of the server's URL, which likewise
 //! resolves only through the owner's own rows: the URL and the grant stay
 //! here, and the sandbox cannot point the proxy at a URL of its choosing.

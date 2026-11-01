@@ -2,7 +2,14 @@
 
 The browser editor and the deterministic spreadsheet worker use this package's
 Loro model, sheet identity/reference rules, formula copying and IronCalc
-calculation (vendored in `vendor/ironcalc`). Browser feature paths re-export the model for compatibility. WASM
+calculation (vendored in `vendor/ironcalc`). Named tables (`sheet-tables.ts`,
+with `table-columns.ts`, `table-filters.ts`, `table-groups.ts`,
+`table-styles.ts` and `table-edits.ts`) are stored one per entry of the
+`spreadsheetTables` root map (`table-storage.ts`) and read into sheet metadata,
+and `structured-references.ts` resolves references such as `Sales[Amount]` to
+cell ranges before calculation; the editor's
+[README](../../apps/web/src/features/block-spreadsheet/README.md#tables)
+describes their behavior. Browser feature paths re-export the model for compatibility. WASM
 loading stays at the boundary: Vite loads a URL in the browser; Cloudflare imports
 a precompiled module and calls `initSync`.
 
@@ -16,6 +23,8 @@ a precompiled module and calls `initSync`.
   absolute references, Unicode names and whole columns/rows. Each formula uses
   a separate private sheet, so scratch results cannot overwrite or accidentally
   become inputs to a source formula.
+- `readSpreadsheetForAi` also lists each sheet's tables with their columns,
+  total row, filtered columns and column types.
 - `prepareSpreadsheetEdit`: validate and apply a bounded operation batch to a
   disposable fork, calculate the result, then return its CRDT delta. A failed
   operation discards the whole batch. The caller must commit the delta through

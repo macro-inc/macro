@@ -1,6 +1,7 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
+import type { CreatedCalendarEvent } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { HomeRouteView } from '@app/features/home/route-views';
 import { parseProjectRoute } from '@app/features/projects/core/route';
@@ -44,6 +45,10 @@ const AgentsRouteView = lazyNamed(
 const CalendarRouteView = lazyNamed(
   () => import('@app/features/calendar-view/route-views'),
   'CalendarRouteView'
+);
+const BookingLinksRouteView = lazyNamed(
+  () => import('@app/features/scheduling/route-views'),
+  'BookingLinksRouteView'
 );
 const ChannelsRouteView = lazyNamed(
   () => import('@app/features/channels-view/route-views'),
@@ -97,6 +102,10 @@ const ProjectView = lazyNamed(
   () => import('@app/features/projects/project-view'),
   'ProjectView'
 );
+const ExternalRouteView = lazyNamed(
+  () => import('@app/features/external-view/route-views'),
+  'ExternalRouteView'
+);
 const ReviewsRouteView = lazyNamed(
   () => import('@app/features/reviews-view/route-views'),
   'ReviewsRouteView'
@@ -126,7 +135,7 @@ const ComposeSkill = lazyNamed(
   'ComposeSkill'
 );
 const ComposeTask = lazyNamed(
-  () => import('@block-md/component/ComposeTask'),
+  () => import('@app/features/task-composer/compose-task'),
   'ComposeTask'
 );
 const ComposeDocument = lazyNamed(
@@ -334,7 +343,11 @@ registerComponent(
   () => <DriveRouteView />,
   () => composableLayout(true)
 );
-registerComponent('reviews', () => <ReviewsRouteView />);
+registerComponent(
+  'reviews',
+  () => <ReviewsRouteView />,
+  () => composableLayout(true)
+);
 registerComponent(
   'tasks',
   () => <TasksRouteView />,
@@ -396,11 +409,27 @@ registerComponent('email-compose', (params) => {
     typeof params.initialInboxId === 'string'
       ? params.initialInboxId
       : undefined;
+  const initialSubject =
+    typeof params.initialSubject === 'string'
+      ? params.initialSubject
+      : undefined;
+  const initialBodyText =
+    typeof params.initialBodyText === 'string'
+      ? params.initialBodyText
+      : undefined;
+  const initialAttachments = Array.isArray(params.initialAttachments)
+    ? params.initialAttachments.filter(
+        (value): value is File => value instanceof File
+      )
+    : undefined;
   return (
     <EmailCompose
       draftId={draftID}
       initialTo={initialTo}
       initialInboxId={initialInboxId}
+      initialSubject={initialSubject}
+      initialBodyText={initialBodyText}
+      initialAttachments={initialAttachments}
     />
   );
 });
@@ -443,6 +472,11 @@ registerComponent('calendar-event-compose', (params) => {
         params?.onDirtyChange as ((dirty: boolean) => void) | undefined
       }
       onSaveSuccess={params?.onSaveSuccess as (() => void) | undefined}
+      onCreated={
+        params?.onCreated as
+          | ((created: CreatedCalendarEvent) => void)
+          | undefined
+      }
     />
   );
 });
@@ -458,6 +492,16 @@ registerComponent(
 registerComponent(
   'settings',
   () => <SettingsRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'booking-links',
+  () => <BookingLinksRouteView />,
+  () => composableLayout()
+);
+registerComponent(
+  'external',
+  () => <ExternalRouteView />,
   () => composableLayout()
 );
 

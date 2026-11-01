@@ -5,12 +5,38 @@ language: typescript
 severity: warning
 message: Feature queries/ and primitives/ never import components, views, or UI primitives. They produce data and view-state; views render it.
 note: |-
-  Rule FE-33 in docs/STYLE_GUIDE.md. `queries/` adapts wire types and
+  Rule FE-33 in docs/development/style-guide.md. `queries/` adapts wire types and
   builds query factories; `primitives/` consumes feature-owned capabilities
   to produce state and actions with Solid primitives but no JSX. Test adapters
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/command/queries/**
+  - apps/web/src/features/document-composer/queries/**
+  - apps/web/src/features/task-composer/queries/**
+  - apps/web/src/features/command/primitives/**
+  - apps/web/src/features/document-composer/primitives/**
+  - apps/web/src/features/task-composer/primitives/**
+  - apps/web/src/features/universal-input/core/**
+  - apps/web/src/features/universal-input/queries/**
+  - apps/web/src/features/universal-input/primitives/**
+  - apps/web/src/features/universal-input/context/**
+  - apps/web/src/features/saved-views/queries/**
+  - apps/web/src/features/saved-views/primitives/**
+  - apps/web/src/features/calendar-notes/queries/**
+  - apps/web/src/features/calendar-notes/primitives/**
+  - apps/web/src/features/access-requests/queries/**
+  - apps/web/src/features/access-requests/primitives/**
+  - apps/web/src/features/agent-activity/queries/**
+  - apps/web/src/features/agent-dms/queries/**
+  - apps/web/src/features/agent-conversations/queries/**
+  - apps/web/src/features/local-runtime/queries/**
+  - apps/web/src/features/agent-activity/primitives/**
+  - apps/web/src/features/agent-dms/primitives/**
+  - apps/web/src/features/agent-conversations/primitives/**
+  - apps/web/src/features/local-runtime/primitives/**
+  - apps/web/src/features/agent-interactions/queries/**
+  - apps/web/src/features/agent-interactions/primitives/**
   - apps/web/src/features/billing-lab/queries/**
   - apps/web/src/features/billing-lab/primitives/**
   - apps/web/src/features/calendar-team/queries/**
@@ -49,7 +75,6 @@ files:
   - apps/web/src/features/block-spreadsheet/primitives/**
   - apps/web/src/features/property/tags/queries/**
   - apps/web/src/features/property/tags/primitives/**
-  - apps/web/src/features/claude-connection/primitives/**
   - apps/web/src/features/activity/queries/**
   - apps/web/src/features/drive-view/queries/**
   - apps/web/src/features/activity/primitives/**

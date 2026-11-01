@@ -71,10 +71,12 @@ pub enum PushType {
 }
 
 /// A device endpoint for push notifications.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeviceEndpoint {
-    /// Android device endpoint (FCM).
+    /// Android FCM endpoint without native call support (including older APKs).
     Android(String),
+    /// Android endpoint registered by a binary with native Telecom call support.
+    AndroidNativeCall(String),
     /// iOS device endpoint (APNS).
     Ios(String),
     /// iOS VoIP device endpoint (APNS_VOIP / PushKit).

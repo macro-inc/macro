@@ -1,5 +1,5 @@
-import Circle from '@phosphor/circle.svg';
-import CheckCircle from '@phosphor-fill/check-circle-fill.svg';
+import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
+import Circle from '@icon/system/regular/circle.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
 import { For, Show } from 'solid-js';
@@ -92,11 +92,13 @@ export function PollBars(props: {
                 }}
               >
                 <Show when={props.showResults}>
+                  {/* accent-bg is the voted button fill; active is 6% ink.
+                      Matching those made the bar invisible. */}
                   <span
                     aria-hidden="true"
                     class={cn(
                       'absolute inset-y-0 left-0 transition-[width] duration-300 motion-reduce:transition-none',
-                      bar().mine ? 'bg-accent-bg' : 'bg-active'
+                      bar().mine ? 'bg-accent/20' : 'bg-ink/10'
                     )}
                     style={{ width: `${bar().percent}%` }}
                   />
@@ -124,7 +126,12 @@ export function PollBars(props: {
                     <span class="sr-only">
                       {bar().count === 1 ? ' vote' : ' votes'}
                     </span>
-                    <span aria-hidden="true" class="w-8 text-right font-medium">
+                    {/* w-8 (32px) is narrower than tabular "100%" (~35px),
+                        and some engines break before "%". */}
+                    <span
+                      aria-hidden="true"
+                      class="w-10 shrink-0 text-right font-medium whitespace-nowrap"
+                    >
                       {bar().percent}%
                     </span>
                   </span>

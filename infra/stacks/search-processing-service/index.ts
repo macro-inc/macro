@@ -11,7 +11,7 @@ import { SearchProcessingService } from './service';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'cloud-storage-search',
 };
 

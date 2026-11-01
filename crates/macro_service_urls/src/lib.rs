@@ -538,7 +538,7 @@ service_url! {
         },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
-            local: "http://localhost:8085",
+            local: "http://localhost:8101/cognition",
             dev: "https://dev-gateway.macro.com/cognition",
             prod: "https://gateway.macro.com/cognition",
         },
@@ -572,7 +572,7 @@ service_url! {
         },
         /// Scheduled action service API URL.
         pub ScheduledActionServiceUrl {
-            local: "http://localhost:8099",
+            local: "http://localhost:8101/scheduled-action",
             dev: "https://dev-gateway.macro.com/scheduled-action",
             prod: "https://gateway.macro.com/scheduled-action",
         },
@@ -586,9 +586,21 @@ service_url! {
         },
         /// Macro MCP service base URL. Append `/mcp` for its transport endpoint.
         pub McpServiceUrl {
-            local: "http://localhost:8080",
+            local: "http://localhost:8101",
             dev: "https://dev-gateway.macro.com/mcp",
             prod: "https://gateway.macro.com/mcp",
+        },
+        /// Public MCP OAuth issuer and callback base, distinct from gateway transport routing.
+        pub McpPublicUrl {
+            local: "http://localhost:8101",
+            dev: "https://mcp-server-dev.macro.com",
+            prod: "https://mcp-server.macro.com",
+        },
+        /// Public integration callback base, preserving registered OAuth redirect URIs.
+        pub CognitionPublicUrl {
+            local: "http://localhost:8101/cognition",
+            dev: "https://document-cognition-dev.macro.com",
+            prod: "https://document-cognition.macro.com",
         },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
@@ -646,7 +658,7 @@ service_url! {
 service_url! {
     /// Control and internal MCP surface of the live preview service.
     pub struct PreviewGatewayUrl {
-        local: "http://localhost:8110",
+        local: "http://localhost:8101/preview",
         dev: "https://dev-gateway.macro.com/preview",
         prod: "https://gateway.macro.com/preview",
     }

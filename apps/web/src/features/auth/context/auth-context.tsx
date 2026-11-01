@@ -30,6 +30,8 @@ export type SendCodeResult =
 export type VerifyCodeResult =
   | { t: 'verified' }
   | { t: 'invalid-code' }
+  /** Too many attempts for this address; the code itself may be right. */
+  | { t: 'rate-limited' }
   | { t: 'failed' };
 
 type AuthEventName =

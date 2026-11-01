@@ -32,7 +32,7 @@ export function createTaskBoard(options: {
   actions: TaskBoardActions;
   compareTasks?: (left: string, right: string) => number;
 }) {
-  const [pending, setPending] = createSignal<ReadonlySet<string>>(new Set());
+  const [pending, setPending] = createSignal<string[]>([]);
   const [error, setError] = createSignal<{ scope: string; text: string }>();
   const [placements, setPlacements] = createSignal<readonly Placement[]>([]);
   const currentPlacements = createMemo(() =>
@@ -86,7 +86,7 @@ export function createTaskBoard(options: {
   });
 
   const canMove = (move: TaskBoardMove) => {
-    if (pending().has(move.id) || !options.actions.canEditTask(move.id)) {
+    if (pending().includes(move.id) || !options.actions.canEditTask(move.id)) {
       return false;
     }
 
@@ -140,7 +140,7 @@ export function createTaskBoard(options: {
       placement,
     ]);
 
-    setPending((ids) => new Set([...ids, request.id]));
+    setPending((ids) => [...ids, request.id]);
     setError(undefined);
 
     try {
@@ -170,7 +170,7 @@ export function createTaskBoard(options: {
       });
       return false;
     } finally {
-      setPending((ids) => new Set([...ids].filter((id) => id !== request.id)));
+      setPending((ids) => ids.filter((id) => id !== request.id));
     }
   };
 
@@ -188,7 +188,7 @@ export function createTaskBoard(options: {
     columns,
     canMove,
     move,
-    pending: (id: string) => pending().has(id),
+    pending: (id: string) => pending().includes(id),
     error: currentError,
   };
 }

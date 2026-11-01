@@ -44,7 +44,9 @@ import {
 import {
   type AnyVariables,
   type Client,
+  createRequest,
   type DocumentInput,
+  getOperationName,
   type RequestPolicy,
   stringifyDocument,
 } from '@urql/core';
@@ -65,6 +67,8 @@ interface GraphqlRowSourceCapabilities {
   /** The statement's catalog, for the value kinds of grouped columns. */
   catalog: Catalog;
   requestPolicy: RequestPolicy;
+  /** Probe the cache without subscribing to a shared urql operation. */
+  cache?: Pick<CacheHost, 'readQuery'>;
   /** Everyone the viewer can see. */
   people: () => Promise<Person[]>;
   /**
@@ -124,29 +128,63 @@ function graphqlQuery<Data, Variables extends AnyVariables>(
   variables: Variables,
   requestPolicy: RequestPolicy,
   name: string,
-  step: DatabaseSqlStepTrace
+  step: DatabaseSqlStepTrace,
+  cache?: Pick<CacheHost, 'readQuery'>
 ): ResultAsync<Data, DatabaseSqlFetchFailure> {
   step.request(stringifyDocument(document), variables);
-  return ResultAsync.fromPromise(
-    client
-      .query(document, variables, {
-        requestPolicy,
-        fetchOptions: { headers: step.headers() },
-      })
-      .toPromise(),
-    thrownFetchFailure
-  ).andThen((result): Result<Data, DatabaseSqlFetchFailure> => {
-    if (result.error) return err(fetchFailure(result.error.message));
-    if (!result.data)
-      return err(fetchFailure(`the ${name} query returned no data`));
-    return ok(result.data);
-  });
+  const network = () =>
+    ResultAsync.fromPromise(
+      client
+        .query(document, variables, {
+          requestPolicy:
+            cache && requestPolicy === 'cache-first'
+              ? 'network-only'
+              : requestPolicy,
+          fetchOptions: { headers: step.headers() },
+        })
+        .toPromise(),
+      thrownFetchFailure
+    ).andThen((result): Result<Data, DatabaseSqlFetchFailure> => {
+      if (!result)
+        return err(fetchFailure(`the ${name} query ended without data`));
+      if (result.error) return err(fetchFailure(result.error.message));
+      if (!result.data)
+        return err(fetchFailure(`the ${name} query returned no data`));
+      return ok(result.data);
+    });
+  // Cache probes must not register an urql operation: a simultaneous refresh
+  // with the same key would join that probe and never send a network request.
+  if (
+    cache &&
+    (requestPolicy === 'cache-only' || requestPolicy === 'cache-first')
+  ) {
+    return ResultAsync.fromPromise(
+      cache.readQuery({
+        query: stringifyDocument(document),
+        operationName: getOperationName(
+          createRequest(document, variables).query
+        ),
+        variables: variables || undefined,
+      }),
+      thrownFetchFailure
+    )
+      .orElse(() => okAsync({ kind: 'miss' as const }))
+      .andThen((result) =>
+        result.kind === 'hit'
+          ? okAsync(result.data as Data)
+          : requestPolicy === 'cache-only'
+            ? errAsync(fetchFailure(`the ${name} query returned no data`))
+            : network()
+      );
+  }
+  return network();
 }
 
 export function createGraphqlRowSource({
   client,
   catalog,
   requestPolicy,
+  cache,
   people,
   membership,
 }: GraphqlRowSourceCapabilities): RowSource {
@@ -156,24 +194,28 @@ export function createGraphqlRowSource({
         .returnType<ResultAsync<Page, DatabaseSqlFetchFailure>>()
         .with({ type: 'soup' }, (soup) =>
           soupInput(soup, cursor, limit).asyncAndThen((input) =>
-            soupPage(client, requestPolicy, input, membership, step)
+            soupPage(client, requestPolicy, input, membership, step, cache)
           )
         )
         .with({ type: 'people' }, ({ ids }) => peoplePage(catalog, people, ids))
         .with({ type: 'groupSoup' }, () =>
           errAsync(fetchFailure('a grouped query is read as bins, not pages'))
         )
-        .exhaustive(),
+        .exhaustive(() =>
+          errAsync(fetchFailure('an unknown query has no pages'))
+        ),
     bins: (query, step) =>
       match(query)
         .returnType<ResultAsync<Bin[], DatabaseSqlFetchFailure>>()
         .with({ type: 'groupSoup' }, (grouped) =>
-          groupBins(client, requestPolicy, catalog, grouped, step)
+          groupBins(client, requestPolicy, catalog, grouped, step, cache)
         )
         .with({ type: P.union('soup', 'people') }, () =>
           errAsync(fetchFailure('only a grouped query has bins'))
         )
-        .exhaustive(),
+        .exhaustive(() =>
+          errAsync(fetchFailure('only a grouped query has bins'))
+        ),
   };
 }
 
@@ -250,10 +292,15 @@ function propertiesExpression(propf: Propf): GraphqlFilterPropertiesExpr {
         value: match(v)
           .with({ so: P.string }, ({ so }) => ({ selectOption: so }))
           .with({ er: P.string }, ({ er }) => ({ entityRef: er }))
-          .exhaustive(),
+          .exhaustive(() => ({ entityRef: NIL_UUID })),
       },
     }))
-    .exhaustive();
+    .exhaustive(() => ({
+      literal: {
+        propertyDefinitionId: NIL_UUID,
+        value: { entityRef: NIL_UUID },
+      },
+    }));
 }
 
 /** A balanced OR keeps a long list inside the filter depth limit. */
@@ -323,12 +370,13 @@ function soupPage(
   requestPolicy: RequestPolicy,
   input: SoupInput,
   membership: LocalMembership | undefined,
-  step: DatabaseSqlStepTrace
+  step: DatabaseSqlStepTrace,
+  cache?: Pick<CacheHost, 'readQuery'>
 ): ResultAsync<Page, DatabaseSqlFetchFailure> {
   const evidence = input.initial ? JSON.stringify(input) : undefined;
   const local: ResultAsync<Page | undefined, DatabaseSqlFetchFailure> =
     evidence && membership?.reconcile
-      ? reconciledPage(input, evidence, membership)
+      ? reconciledPage(input, evidence, membership, step)
       : okAsync(undefined);
   return local.andThen((page) =>
     page
@@ -339,7 +387,8 @@ function soupPage(
           { input },
           requestPolicy,
           'database rows',
-          step
+          step,
+          cache
         ).andThen((data) => {
           const { items, nextCursor } = data.user.soup;
           if (evidence && membership && isNetworkRead(requestPolicy)) {
@@ -348,7 +397,10 @@ function soupPage(
               complete: nextCursor === null,
             });
           }
-          return tableRows(items).map((rows) => ({ rows, next: nextCursor }));
+          return tableRows(items, step).map((rows) => ({
+            rows,
+            next: nextCursor,
+          }));
         })
   );
 }
@@ -367,7 +419,8 @@ function isNetworkRead(requestPolicy: RequestPolicy): boolean {
 function reconciledPage(
   input: SoupInput,
   evidence: string,
-  { host, baselines }: LocalMembership
+  { host, baselines }: LocalMembership,
+  step: DatabaseSqlStepTrace
 ): ResultAsync<Page | undefined, DatabaseSqlFetchFailure> {
   const initial = input.initial;
   const baseline = baselines.get(evidence);
@@ -399,7 +452,8 @@ function reconciledPage(
         thrownFetchFailure
       ).andThen(({ records }) =>
         tableRows(
-          materializeReconciledSoup(result.keys, records, baseline.items)
+          materializeReconciledSoup(result.keys, records, baseline.items),
+          step
         ).map((rows) => ({ rows, next: null }))
       );
     }
@@ -407,13 +461,16 @@ function reconciledPage(
 }
 
 function tableRows(
-  items: readonly DatabaseRowFieldsFragment[]
+  items: readonly DatabaseRowFieldsFragment[],
+  step: DatabaseSqlStepTrace
 ): Result<Row[], DatabaseSqlFetchFailure> {
-  return Result.combine(
-    items.map((item) =>
-      item.__typename === 'GraphqlSoupDatabaseRow'
-        ? ok({ id: item.id, position: item.position, cells: rowCells(item) })
-        : err(fetchFailure(`a table query returned a ${item.__typename}`))
+  return step.decode(items.length, () =>
+    Result.combine(
+      items.map((item) =>
+        item.__typename === 'GraphqlSoupDatabaseRow'
+          ? ok({ id: item.id, position: item.position, cells: rowCells(item) })
+          : err(fetchFailure(`a table query returned a ${item.__typename}`))
+      )
     )
   );
 }
@@ -434,7 +491,7 @@ function cell(
 ): Cell | undefined {
   if (!value) return undefined;
   return match(value)
-    .returnType<Cell>()
+    .returnType<Cell | undefined>()
     .with({ __typename: 'GraphqlBooleanPropertyValue' }, ({ boolValue }) => ({
       type: 'bool',
       value: boolValue,
@@ -451,6 +508,13 @@ function cell(
       type: 'date',
       value: dateValue,
     }))
+    .with(
+      { __typename: 'GraphqlDateRangePropertyValue' },
+      ({ rangeStart, rangeEnd }) => ({
+        type: 'dateRange',
+        value: { start: rangeStart, end: rangeEnd },
+      })
+    )
     .with(
       { __typename: 'GraphqlSelectOptionPropertyValue' },
       ({ optionIds }) => ({
@@ -469,7 +533,7 @@ function cell(
       type: 'text',
       value: urls.join(' '),
     }))
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function groupBins(
@@ -477,7 +541,8 @@ function groupBins(
   requestPolicy: RequestPolicy,
   catalog: Catalog,
   { table, propf, groupBy }: Extract<GqlQuery, { type: 'groupSoup' }>,
-  step: DatabaseSqlStepTrace
+  step: DatabaseSqlStepTrace,
+  cache?: Pick<CacheHost, 'readQuery'>
 ): ResultAsync<Bin[], DatabaseSqlFetchFailure> {
   const kind = catalog.tables
     .find((candidate) => candidate.id === table)
@@ -517,7 +582,8 @@ function groupBins(
         },
         requestPolicy,
         'grouped Soup',
-        step
+        step,
+        cache
       )
     )
     .andThen((data) =>

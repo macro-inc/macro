@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::model::AgentSessionId;
+use super::model::{AgentSessionId, SessionSource, SessionVisibility};
 use super::routines::{
     PrepareRoutineSession, PromptRoutineSession, RoutineSessionAction, RoutineSessionError,
     RoutineSessions, ValidateRoutineSession,
@@ -120,6 +120,12 @@ pub trait CodingAgentService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'static>,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<CodingAgent>, CodingAgentError>> + Send + '_>>;
 
+    /// Start a session with any available coding or chat persona the caller may use.
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>;
+
     /// Reauthorize a persona, create a session, and admit its initial prompt once.
     fn dispatch(
         &self,
@@ -169,6 +175,26 @@ where
         command: DispatchCodingAgentRequest,
     ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
     {
+        self.dispatch_selected(command, true)
+    }
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch_selected(command, false)
+    }
+}
+
+impl<Directory: CodingAgentDirectory, Sessions: RoutineSessions>
+    CodingAgentServiceImpl<Directory, Sessions>
+{
+    fn dispatch_selected(
+        &self,
+        command: DispatchCodingAgentRequest,
+        coding_only: bool,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
         Box::pin(async move {
             if command.prompt.trim().is_empty() {
                 return Err(CodingAgentError::InvalidPrompt);
@@ -176,9 +202,12 @@ where
             // Re-read visibility and configuration at dispatch time. A saved tool
             // result is not authority to use a removed or reconfigured persona.
             let agent = self
-                .list(command.user_id.clone())
+                .directory
+                .candidates(command.user_id.clone())
                 .await?
                 .into_iter()
+                .filter(|candidate| candidate.available && (!coding_only || candidate.is_coding))
+                .map(|candidate| candidate.agent)
                 .find(|agent| agent.id == command.agent_id)
                 .ok_or(CodingAgentError::Unavailable)?;
             let session_id = AgentSessionId::new();
@@ -194,8 +223,11 @@ where
                         owner: command.user_id.clone(),
                         bot_id,
                         model: None,
+                        mcp_servers: Vec::new(),
                     },
                     session_id,
+                    source: SessionSource::Agent,
+                    visibility: SessionVisibility::Listed,
                 })
                 .await
                 .map_err(failed)?;

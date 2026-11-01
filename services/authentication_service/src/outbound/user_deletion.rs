@@ -67,6 +67,7 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
         })
     }
 
+    #[tracing::instrument(skip(self, base, user), fields(user = %user), err)]
     async fn delete_owned(
         &self,
         base: &str,
@@ -85,9 +86,11 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionAdapter<T, O> {
             .send()
             .await
             .context_with(|| format!("failed to delete user's {resource}"))?;
-        if response.status() != reqwest::StatusCode::NO_CONTENT {
+        let status = response.status();
+        if status != reqwest::StatusCode::NO_CONTENT {
+            tracing::error!(%status, "owning service rejected user cleanup request");
             return Err(rootcause::report!("user cleanup did not complete")
-                .attach(format!("{resource}: {}", response.status())));
+                .attach(format!("{resource}: {status}")));
         }
         Ok(())
     }
@@ -104,6 +107,7 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdap
             .await
     }
 
+    #[tracing::instrument(skip(self, user), fields(user = %user), err)]
     async fn leave_teams(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.teams
             .remove_user_from_all_teams(user)
@@ -113,6 +117,7 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdap
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, user), fields(user = %user), err)]
     async fn delete_items(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.documents
             .delete_all_user_items(user.as_ref())
@@ -122,6 +127,7 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdap
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, user), fields(user = %user), err)]
     async fn delete_onboarding(&self, user: &MacroUserIdStr<'static>) -> Result<(), Report> {
         self.onboarding
             .delete_row(user)
@@ -131,17 +137,21 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdap
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, user), fields(user = %user), err)]
     async fn delete_profile(
         &self,
         user: &MacroUserIdStr<'static>,
         account: &Uuid,
     ) -> Result<(), Report> {
-        macro_db_client::user::delete_user::delete_user(&self.db, user.as_ref(), account)
-            .await
-            .context("failed to delete user profile")?;
+        let deleted =
+            macro_db_client::user::delete_user::delete_user(&self.db, user.as_ref(), account)
+                .await
+                .context("failed to delete user profile")?;
+        tracing::info!(organization_id = ?deleted.organization_id, "deleted user profile row");
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn delete_billing_customer(&self, account: &Uuid) -> Result<(), Report> {
         let customer_id =
             match macro_db_client::macro_user::get_macro_user(&self.db, &account.to_string()).await
@@ -154,12 +164,14 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdap
                         Some(sqlx::Error::RowNotFound)
                     ) =>
                 {
+                    tracing::info!("account row already gone; no billing customer to delete");
                     None
                 }
                 Err(error) => Err(error.into_rootcause())
                     .context("failed to load account for billing cleanup")?,
             };
         let Some(customer_id) = customer_id else {
+            tracing::info!("account has no billing customer; skipping customer deletion");
             return Ok(());
         };
         let customer_id: stripe::CustomerId = match customer_id.parse() {
@@ -177,12 +189,15 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdap
 
         stripe::Customer::delete(&self.stripe, &customer_id)
             .await
-            .map(drop)
+            .map(|_| {
+                tracing::info!(stripe_customer_id = %customer_id, "deleted stripe customer");
+            })
             .or_else(|error| match error {
                 // Already deleted, for example by an earlier attempt.
                 stripe::StripeError::Stripe(request)
                     if matches!(request.code, Some(stripe::ErrorCode::ResourceMissing)) =>
                 {
+                    tracing::info!(stripe_customer_id = %customer_id, "stripe customer already deleted");
                     Ok(())
                 }
                 error => Err(Report::new(error).into_dynamic()),
@@ -191,6 +206,7 @@ impl<T: TeamService, O: OnboardingRepo> UserDeletionGateway for UserDeletionAdap
         Ok(())
     }
 
+    #[tracing::instrument(skip(self), err)]
     async fn delete_account(&self, account: &Uuid) -> Result<(), Report> {
         macro_db_client::macro_user::delete_macro_user(&self.db, account)
             .await

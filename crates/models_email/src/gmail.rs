@@ -232,6 +232,16 @@ pub struct ModifyLabelsRequest {
     pub remove_label_ids: Vec<String>,
 }
 
+/// Request body for `messages.batchModify`, which accepts at most
+/// [`gmail_ops::MAX_BATCH_MODIFY_MESSAGES`] ids.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchModifyLabelsRequest {
+    pub ids: Vec<String>,
+    pub add_label_ids: Vec<String>,
+    pub remove_label_ids: Vec<String>,
+}
+
 /// Response structure for Gmail user profile data
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -249,11 +259,22 @@ pub struct ListSendAsResponse {
     pub send_as: Option<Vec<SendAsAlias>>,
 }
 
+/// Provider verification status; unknown states never authorize sending.
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum SendAsVerificationStatus {
+    Accepted,
+    Pending,
+    #[serde(other)]
+    Unknown,
+}
+
 /// A single sendAs alias from Gmail settings
 #[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SendAsAlias {
     pub send_as_email: String,
+    pub verification_status: Option<SendAsVerificationStatus>,
     pub display_name: Option<String>,
     pub signature: Option<String>,
     pub is_primary: Option<bool>,

@@ -14,6 +14,8 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { useCompose } from '../context/compose-context';
+import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
+import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
 import { ComposeBody } from './compose-body';
 import { ComposeRecipients } from './compose-recipients';
 import { ComposeSubject } from './compose-subject';
@@ -26,6 +28,38 @@ type ComposeLayoutRefs = {
   subjectInput: HTMLElement | undefined;
   messageInput: HTMLElement | undefined;
 };
+
+function ComposeSender() {
+  const ctx = useCompose();
+  return (
+    <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
+      <span class="w-14 shrink-0 text-sm text-ink-placeholder">From</span>
+      <Show
+        when={ctx.fromInboxes?.().length}
+        fallback={
+          <Show
+            when={ctx.fromAddress?.() || !ctx.inboxesLoading?.()}
+            fallback={
+              <span class="h-6 w-40 rounded-full bg-skeleton skeleton-shimmer" />
+            }
+          >
+            <span class="truncate text-sm">{ctx.fromAddress?.()}</span>
+          </Show>
+        }
+      >
+        <FromInboxSelector
+          pill
+          class="min-w-0"
+          disabled={ctx.disabled()}
+          links={ctx.fromInboxes?.() ?? []}
+          activeInboxId={ctx.selectedInboxId?.()}
+          activeEmail={ctx.fromAddress?.()}
+          onSelect={(id, email) => ctx.onSelectInbox?.(id, email)}
+        />
+      </Show>
+    </div>
+  );
+}
 
 /**
  * Pure UI layout for the email compose form.
@@ -92,42 +126,17 @@ export function ComposeLayout(props: {
     shouldReturnFocusOnClose: false,
   });
 
-  registerHotkey({
-    hotkey: 'shift+cmd+c',
+  registerCcBccHotkeys({
     scopeId: composeHotkeyScope,
-    description: 'Edit "Cc" recipients',
-    keyDownHandler: () => {
-      if (ctx.disabled()) return false;
-      if (!showCc()) {
-        setShowCc(true);
-        queueMicrotask(() => refs()?.ccRecipientsSelector?.focus());
-        return true;
-      }
-      refs()?.ccRecipientsSelector?.focus();
-      return true;
+    disabled: ctx.disabled,
+    cc: {
+      reveal: () => setShowCc(true),
+      input: () => refs().ccRecipientsSelector,
     },
-    runWithInputFocused: true,
-    hotkeyToken: TOKENS.email.compose.edit.ccRecipients,
-    shouldReturnFocusOnClose: false,
-  });
-
-  registerHotkey({
-    hotkey: 'shift+cmd+b',
-    scopeId: composeHotkeyScope,
-    description: 'Edit "Bcc" recipients',
-    keyDownHandler: () => {
-      if (ctx.disabled()) return false;
-      if (!showBcc()) {
-        setShowBcc(true);
-        queueMicrotask(() => refs()?.bccRecipientsSelector?.focus());
-        return true;
-      }
-      refs()?.bccRecipientsSelector?.focus();
-      return true;
+    bcc: {
+      reveal: () => setShowBcc(true),
+      input: () => refs().bccRecipientsSelector,
     },
-    runWithInputFocused: true,
-    hotkeyToken: TOKENS.email.compose.edit.bccRecipients,
-    shouldReturnFocusOnClose: false,
   });
 
   registerHotkey({
@@ -156,6 +165,13 @@ export function ComposeLayout(props: {
     runWithInputFocused: true,
     hotkeyToken: TOKENS.email.compose.edit.message,
     shouldReturnFocusOnClose: false,
+  });
+
+  registerDraftActionHotkeys({
+    scopeId: composeHotkeyScope,
+    disabled: ctx.disabled,
+    discard: () => ctx.onDelete?.(),
+    attach: ctx.hideAttachments ? undefined : ctx.onAddAttachments,
   });
 
   registerHotkey({
@@ -201,67 +217,28 @@ export function ComposeLayout(props: {
       )}
     >
       <div class="pb-1 w-full h-max shrink-0">
-        <div
-          class="min-h-12 flex items-center justify-between gap-2 border-b border-edge-muted"
-          classList={{ hidden: ctx.isMobile() && !props.header }}
-        >
+        <Suspense fallback={<CircleSpinner class="size-4 animate-spin" />}>
           <Show
-            when={props.header}
-            fallback={
-              <Suspense
-                fallback={
-                  <div class="flex gap-1 items-center py-3">
-                    <CircleSpinner class="size-4 animate-spin" />
-                    <span class="text-ink-placeholder text-sm">
-                      Processing...
-                    </span>
-                  </div>
-                }
-              >
-                <Show when={ctx.fromInboxes?.().length}>
-                  <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
-                    <span class="w-14 shrink-0 text-sm text-ink-placeholder">
-                      From
-                    </span>
-                    <FromInboxSelector
-                      pill
-                      class="min-w-0"
-                      disabled={ctx.disabled()}
-                      links={ctx.fromInboxes?.() ?? []}
-                      activeInboxId={ctx.selectedInboxId?.()}
-                      onSelect={(id) => ctx.onSelectInbox?.(id)}
-                    />
-                  </div>
-                </Show>
-              </Suspense>
+            when={
+              props.header ||
+              (!ctx.isMobile() &&
+                (ctx.fromInboxes?.().length ||
+                  ctx.fromAddress?.() ||
+                  ctx.inboxesLoading?.()))
             }
           >
-            {props.header}
+            <div
+              role="group"
+              aria-label="Sending inbox"
+              aria-busy={ctx.inboxesLoading?.() || undefined}
+              class="min-h-12 flex items-center gap-2 border-b border-edge-muted"
+            >
+              <Show when={props.header} fallback={<ComposeSender />}>
+                {props.header}
+              </Show>
+            </div>
           </Show>
-          <div
-            class="flex items-center ml-auto shrink-0"
-            classList={{ hidden: ctx.isMobile() }}
-          >
-            <Show when={!isCcVisible()}>
-              <Button
-                size="sm"
-                onClick={() => setShowCc(true)}
-                disabled={ctx.disabled()}
-              >
-                Cc
-              </Button>
-            </Show>
-            <Show when={!isBccVisible()}>
-              <Button
-                size="sm"
-                onClick={() => setShowBcc(true)}
-                disabled={ctx.disabled()}
-              >
-                Bcc
-              </Button>
-            </Show>
-          </div>
-        </div>
+        </Suspense>
 
         <Show when={ctx.validationError('no_link')}>
           {(error) => (
@@ -284,6 +261,32 @@ export function ComposeLayout(props: {
           showBcc={showBcc}
           setShowBcc={setShowBcc}
           onToRowFocusIn={collapseCcBccIfEmpty}
+          actions={
+            <Show when={!ctx.isMobile()}>
+              <div class="flex shrink-0 items-center">
+                <Show when={!isCcVisible()}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowCc(true)}
+                    disabled={ctx.disabled()}
+                  >
+                    Cc
+                  </Button>
+                </Show>
+                <Show when={!isBccVisible()}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowBcc(true)}
+                    disabled={ctx.disabled()}
+                  >
+                    Bcc
+                  </Button>
+                </Show>
+              </div>
+            </Show>
+          }
         />
 
         <div onFocusIn={collapseCcBccIfEmpty}>
@@ -296,11 +299,7 @@ export function ComposeLayout(props: {
           debugName={props.bodyDebugName}
           inputRef={registerRef('messageInput')}
           mobileScrollRef={() => mobileScrollRef}
-          onAddFiles={(files) => {
-            ctx.onAddAttachments(
-              files.map((file) => ({ type: 'local', file }))
-            );
-          }}
+          onAddFiles={ctx.onAddAttachments}
         />
         {props.toolbar}
       </div>

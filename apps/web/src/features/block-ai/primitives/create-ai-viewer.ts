@@ -15,6 +15,7 @@ import {
 } from '@app/features/block-fig/core/camera';
 import type { AiEngine } from '@core/ai-engine/client';
 import type { EditResult, Info, Row, Summary } from '@core/ai-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { batch, createSignal } from 'solid-js';
 import {
   contains,
@@ -191,7 +192,7 @@ export function createAiViewer(options: AiViewerOptions) {
       setSelected(unique);
       if (unique.length === 0) setInfos([]);
     });
-    void refreshInfos();
+    fireAndForget(refreshInfos(), 'ai-editor');
     setRevealSignal((n) => n + 1);
   };
 

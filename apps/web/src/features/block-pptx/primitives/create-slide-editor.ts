@@ -15,6 +15,8 @@ import type {
   TextLayoutInfo,
   TextPos,
 } from '@core/pptx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
   batch,
@@ -232,7 +234,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
         if (id === undefined) return;
         // While typing, the stage shows layers; the base catches up afterwards.
         if (untrack(editing)) return;
-        void renderBase();
+        fireAndForget(renderBase(), 'pptx-editor');
       }
     )
   );
@@ -289,7 +291,10 @@ export function createSlideEditor(options: SlideEditorOptions) {
       return;
     if (editing()) stopEditing();
     setSelectedIds(ids);
-    void loadSelectedLayout(ids.length === 1 ? ids[0] : null);
+    fireAndForget(
+      loadSelectedLayout(ids.length === 1 ? ids[0] : null),
+      'pptx-editor'
+    );
   }
 
   /** Adds a shape to the selection, or takes it out. */
@@ -318,7 +323,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
     if (!result.structureChanged && !result.changedSlides.includes(s.id))
       return;
     void renderLayers(edit.shape, true).catch(() => {});
-    void refreshEditing();
+    fireAndForget(refreshEditing(), 'pptx-editor');
   });
   onCleanup(() => unsubscribeRemote?.());
 
@@ -452,7 +457,7 @@ export function createSlideEditor(options: SlideEditorOptions) {
     const active = d.active || distance >= DRAG_THRESHOLD_PX;
     const layered = d.kind === 'move' && d.shape !== undefined;
     if (active && !d.active && layered) {
-      void renderLayers(d.shape!, true);
+      fireAndForget(renderLayers(d.shape!, true), 'pptx-editor');
     }
     let current = at;
     if (d.kind === 'move' && active) {
@@ -727,7 +732,10 @@ export function createSlideEditor(options: SlideEditorOptions) {
     editReady = (async () => {
       const [layout] = await Promise.all([
         engine.textLayout(index(), shapeId, cell?.ref).catch(() => null),
-        renderLayers(shapeId, true),
+        // Text commands wait on this; without layers the stage shows the base.
+        renderLayers(shapeId, true).catch((error: unknown) =>
+          Telemetry.error(error, { surface: 'pptx-editor' })
+        ),
       ]);
       const pos = layout && at ? positionAt(layout, at) : null;
       const selection: TextSelection = pos
@@ -755,8 +763,8 @@ export function createSlideEditor(options: SlideEditorOptions) {
     textDragAnchor = null;
     session.breakGroup();
     // The base render drops the layers when it lands.
-    void renderBase();
-    void loadSelectedLayout(selected());
+    fireAndForget(renderBase(), 'pptx-editor');
+    fireAndForget(loadSelectedLayout(selected()), 'pptx-editor');
   }
 
   // Coalesced refresh of the edited shape's layout and layer after a change.
@@ -1036,7 +1044,10 @@ export function createSlideEditor(options: SlideEditorOptions) {
         const edit = editing();
         if (edit && !kept.includes(edit.shape)) setEditing(null);
         setSelectedIds(kept);
-        void loadSelectedLayout(kept.length === 1 ? kept[0] : null);
+        fireAndForget(
+          loadSelectedLayout(kept.length === 1 ? kept[0] : null),
+          'pptx-editor'
+        );
       });
     })
   );

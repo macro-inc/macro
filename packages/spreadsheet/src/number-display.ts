@@ -1,5 +1,8 @@
 import { format as formatExcelNumber } from 'ssf';
-import type { SpreadsheetCell } from './spreadsheet-document';
+import type {
+  SpreadsheetCell,
+  SpreadsheetFormat,
+} from './spreadsheet-document';
 
 const numberFormatters = new Map<string, Intl.NumberFormat>();
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
@@ -40,6 +43,20 @@ export function displayNumber(number: number, cell?: SpreadsheetCell): string {
     );
   }
   const decimals = cell?.decimals ?? -1;
+  if (format === 'accounting') {
+    // Excel's accounting sections: the symbol stays outside the parentheses
+    // and only an exact zero shows a dash.
+    if (number === 0) return '$-';
+    const amount = numberFormatter('number', decimals).format(Math.abs(number));
+    return number < 0 ? `$(${amount})` : `$${amount}`;
+  }
+  return numberFormatter(format, decimals).format(number);
+}
+
+function numberFormatter(
+  format: SpreadsheetFormat,
+  decimals: number
+): Intl.NumberFormat {
   const key = `${format}:${decimals}`;
   let formatter = numberFormatters.get(key);
   if (!formatter) {
@@ -62,7 +79,30 @@ export function displayNumber(number: number, cell?: SpreadsheetCell): string {
     formatter = new Intl.NumberFormat('en-US', options);
     numberFormatters.set(key, formatter);
   }
-  return formatter.format(number);
+  return formatter;
+}
+
+/**
+ * An accounting display as Excel lays it out across the cell: the symbol at
+ * the left edge and the amount at the right. `padding` is hidden text after
+ * the amount that lines positives and zero's dash up with negatives' closing
+ * parenthesis. Undefined when the display does not start with a symbol, as
+ * some imported accounting formats place it after the amount.
+ */
+export function accountingParts(
+  display: string,
+  decimals = -1
+): { symbol: string; amount: string; padding: string } | undefined {
+  const match = /^\s*([^\d\s().,-]+)\s*(\S.*?)\s*$/.exec(display);
+  if (!match) return;
+  const [, symbol, amount] = match;
+  const padding =
+    amount === '-'
+      ? `${'0'.repeat(decimals < 0 ? 2 : decimals)})`
+      : amount.endsWith(')')
+        ? ''
+        : ')';
+  return { symbol, amount, padding };
 }
 
 /** A cell's number when it holds a literal one rather than a formula or text. */

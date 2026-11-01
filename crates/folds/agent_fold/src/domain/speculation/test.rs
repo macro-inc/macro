@@ -50,6 +50,7 @@ fn logged(action: &AgentAction, action_id: AgentActionId) -> AgentSessionLog {
                 .to_runtime(&SessionId::from(ACP_SESSION), action_id.to_request_id())
                 .expect("action encodes"),
         ),
+        logged_at: None,
     }
 }
 

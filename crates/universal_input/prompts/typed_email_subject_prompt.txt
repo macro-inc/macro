@@ -1,0 +1,1 @@
+A short phrase from the outgoing message suitable for its subject. It need not be labeled Subject; use the message's main topic or requested action.

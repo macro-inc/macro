@@ -338,13 +338,13 @@ async fn replacement_slots<
 >(
     State(s): State<RouterState<R, C, D, A>>,
     Path(id): Path<Uuid>,
-    Query(q): Query<ReplacementQuery>,
+    Query(q): Query<SlotQuery>,
     headers: HeaderMap,
 ) -> Result<Json<SlotsResponse>, ApiError> {
     Ok(Json(SlotsResponse {
         slots: s
             .service
-            .replacement_slots(id, booking_token(&headers)?, q.date)
+            .replacement_slots(id, booking_token(&headers)?, q.date, q.time_zone)
             .await?,
     }))
 }

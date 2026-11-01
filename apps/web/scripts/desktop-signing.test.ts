@@ -24,6 +24,8 @@ test('publication retries reuse signatures and reject changed package bytes', as
   for (const path of [bin, artifacts, published]) mkdirSync(path);
   const names = ['Macro-test.app.tar.gz', 'Macro-test.AppImage'];
   const signature = Buffer.from('previously published signature').toString('base64');
+  const signingKey = join(directory, 'expected-signing-key');
+  writeFileSync(signingKey, 'test-only-unused-key');
   for (const name of names) {
     writeFileSync(join(artifacts, name), 'immutable package');
     writeFileSync(join(published, name), 'immutable package');
@@ -34,6 +36,7 @@ test('publication retries reuse signatures and reject changed package bytes', as
   }
   const executable = (name: string, body: string) => writeFileSync(join(bin, name), `#!/usr/bin/env bash\nset -euo pipefail\n${body}\n`, { mode: 0o755 });
   executable('curl', `printf '%s' '{"TAURI_SIGNING_PRIVATE_KEY":"test-only-unused-key"}'`);
+  executable('base64', `test "$1" = --decode && printf '%s' 'decoded fixture'`);
   executable('gh', `
 if [ "$1 $2" = 'release view' ]; then
   printf '%s' '{"assets":[{"name":"Macro-test.app.tar.gz.sig"},{"name":"Macro-test.AppImage.sig"}]}'
@@ -53,6 +56,7 @@ fi`);
   // Verification is covered cryptographically by the Rust fixture tests.
   // This mock forbids signing again, the source of the publication retry bug.
   executable('nix', `
+cmp "$TAURI_SIGNING_PRIVATE_KEY_PATH" "$TEST_SIGNING_KEY" || { echo 'Signing key bytes changed' >&2; exit 1; }
 case "$*" in
   *'cargo-tauri signer sign'*) echo 'Unexpected re-signing' >&2; exit 1 ;;
   *'minisign -Vm'*) echo verified >> "$TEST_VERIFICATIONS" ;;
@@ -63,7 +67,7 @@ esac`);
     const child = spawn('bash', [script], {
       cwd: directory,
       // CI's Nix BASH_ENV resets PATH, bypassing the command fixtures.
-      env: { ...process.env, BASH_ENV: undefined, ENV: undefined, PATH: `${bin}:${process.env.PATH}`, DOPPLER_TOKEN: 'test-only', RELEASE_TAG: 'v1.0.0', RELEASE_REPOSITORY: 'test/test', TEST_PUBLISHED: published, TEST_VERIFICATIONS: join(directory, 'verified') },
+      env: { ...process.env, BASH_ENV: undefined, ENV: undefined, PATH: `${bin}:${process.env.PATH}`, DOPPLER_TOKEN: 'test-only', RELEASE_TAG: 'v1.0.0', RELEASE_REPOSITORY: 'test/test', TEST_PUBLISHED: published, TEST_SIGNING_KEY: signingKey, TEST_VERIFICATIONS: join(directory, 'verified') },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     let stderr = '';

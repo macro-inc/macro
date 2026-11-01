@@ -1,28 +1,39 @@
 import { createRoot } from 'solid-js';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createWorkspaceMode } from './workspace-mode';
 
-beforeEach(() => window.localStorage.clear());
+const flag = vi.hoisted(() => ({ autoEnabled: true }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: flag.autoEnabled, loading: false }),
+}));
+
+beforeEach(() => {
+  flag.autoEnabled = true;
+});
 
 describe('workspace mode', () => {
-  it('starts in Work and remembers Code per user', () => {
+  it('opens every composer in Auto, whatever was chosen before', () => {
     createRoot((dispose) => {
-      const workspace = createWorkspaceMode('user-a');
-      expect(workspace.mode()).toBe('chat');
+      const workspace = createWorkspaceMode();
+      expect(workspace.mode()).toBe('auto');
       workspace.setMode('code');
+      expect(workspace.mode()).toBe('code');
       dispose();
     });
     createRoot((dispose) => {
-      expect(createWorkspaceMode('user-a').mode()).toBe('code');
-      expect(createWorkspaceMode('user-b').mode()).toBe('chat');
+      expect(createWorkspaceMode().mode()).toBe('auto');
       dispose();
     });
   });
 
-  it('ignores unknown stored values', () => {
-    window.localStorage.setItem('agents-view-mode-v1:user-a', 'agents');
+  it('reads Auto as Chat without the flag and keeps an explicit Code', () => {
+    flag.autoEnabled = false;
     createRoot((dispose) => {
-      expect(createWorkspaceMode('user-a').mode()).toBe('chat');
+      const workspace = createWorkspaceMode();
+      expect(workspace.autoAvailable()).toBe(false);
+      expect(workspace.mode()).toBe('chat');
+      workspace.setMode('code');
+      expect(workspace.mode()).toBe('code');
       dispose();
     });
   });

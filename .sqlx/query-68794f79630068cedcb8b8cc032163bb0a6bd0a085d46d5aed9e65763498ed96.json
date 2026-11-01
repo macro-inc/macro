@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM team_invite_link\n        WHERE team_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68794f79630068cedcb8b8cc032163bb0a6bd0a085d46d5aed9e65763498ed96"
+}

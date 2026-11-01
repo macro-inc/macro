@@ -1,12 +1,13 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { type CrmContactEntity, Entity, type EntityData } from '@entity';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import WideStar from '@phosphor/sparkle.svg';
-import ProjectIcon from '@phosphor/stack.svg';
-import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import WideStar from '@icon/system/regular/sparkle.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
+import Terminal from '@icon/system/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
@@ -51,9 +52,10 @@ function CommandItemHotkey(props: { item: CommandMenuItem }) {
   };
 
   const hasHotkey = () =>
-    hasValidHotkey(token()) ||
-    Boolean(shortcut()) ||
-    Boolean(sequence()?.length);
+    !commandItem()?.hideHotkey &&
+    (hasValidHotkey(token()) ||
+      Boolean(shortcut()) ||
+      Boolean(sequence()?.length));
 
   const StepHotkey = (step: DisplayHotkeyStep) => (
     <div class="p-2 py-0.5 border border-edge-muted rounded-md">
@@ -86,7 +88,9 @@ function CommandItemHotkey(props: { item: CommandMenuItem }) {
                 <>
                   {StepHotkey(step)}
                   <Show when={index() < (sequence()?.length ?? 0) - 1}>
-                    <span class="text-ink-extra-muted">then</span>
+                    <span class="text-ink-extra-muted">
+                      {t('commandMenu.hotkeyThen')}
+                    </span>
                   </Show>
                 </>
               )}
@@ -111,7 +115,7 @@ function CommandDisplay(props: { item: CommandMenuItem }) {
 
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
-      <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
+      <div class="size-5 mobile:scale-150 flex items-center justify-center text-ink-muted shrink-0">
         <Show
           when={command()?.commandPaletteIcon}
           fallback={
@@ -145,7 +149,7 @@ function EntityDisplay(props: { entity: EntityData }) {
 
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
-      <div class="size-5 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
+      <div class="size-5 mobile:scale-150 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
         <Entity.Icon entity={props.entity} />
       </div>
       <Entity.Title entity={props.entity} />
@@ -159,7 +163,7 @@ function ContactDisplay(props: { contact: CrmContactEntity }) {
 
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
-      <div class="size-5 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
+      <div class="size-5 mobile:scale-150 p-0.5 flex items-center justify-center text-ink-muted shrink-0">
         <Entity.Icon entity={props.contact} />
       </div>
       <span class="truncate">
@@ -179,7 +183,7 @@ function UserDisplay(props: { item: UserItem }) {
 
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
-      <div class="size-5 flex items-center justify-center shrink-0">
+      <div class="size-5 mobile:scale-150 flex items-center justify-center shrink-0">
         <UserIcon id={props.item.id} size="sm" isDeleted={false} />
       </div>
       <span class="truncate">
@@ -195,11 +199,11 @@ function UserDisplay(props: { item: UserItem }) {
 function SearchDisplay(props: { item: SearchItem }) {
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
-      <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
+      <div class="size-5 mobile:scale-150 flex items-center justify-center text-ink-muted shrink-0">
         <SearchIcon class="size-4" />
       </div>
       <span class="truncate text-ink">
-        Search for <span class="text-ink">“{props.item.query}”</span>
+        {t('commandMenu.searchFor', { query: props.item.query })}
       </span>
     </div>
   );
@@ -208,32 +212,40 @@ function SearchDisplay(props: { item: SearchItem }) {
 function AskAiDisplay(props: { item: AskAiItem }) {
   return (
     <div class="flex items-center gap-2 flex-1 min-w-0">
-      <div class="size-5 flex items-center justify-center text-ink-muted shrink-0">
+      <div class="size-5 mobile:scale-150 flex items-center justify-center text-ink-muted shrink-0">
         <WideStar class="size-4" />
       </div>
       <span class="truncate text-ink">
-        Ask AI about <span class="text-ink">“{props.item.query}”</span>
+        {t('commandMenu.askAiAbout', { query: props.item.query })}
       </span>
     </div>
   );
 }
 
-function ItemDisplay(props: { item: CommandMenuItem }) {
+export function ItemDisplay(props: { item: CommandMenuItem }) {
   return (
     <Switch>
-      <Match when={props.item.kind === 'initiative' && props.item}>
-        {(item) => (
+      <Match
+        when={
+          isEntityItem(props.item) &&
+          props.item.data.type === 'initiative' &&
+          props.item.data
+        }
+      >
+        {(project) => (
           <div class="flex items-center gap-2 flex-1 min-w-0">
-            <ProjectIcon class="size-4 text-ink-muted shrink-0" />
-            <span class="truncate">{item().name}</span>
-            <span class="ml-auto text-xs text-ink-muted">Project</span>
+            <ProjectIcon class="size-4 mobile:scale-150 text-ink-muted shrink-0" />
+            <span class="truncate">{project().name}</span>
+            <span class="ml-auto text-xs text-ink-muted">
+              {t('commandMenu.projectBadge')}
+            </span>
           </div>
         )}
       </Match>
       <Match when={props.item.kind === 'new-project'}>
         <div class="flex items-center gap-2 flex-1 min-w-0">
-          <PlusIcon class="size-4 text-ink-muted" />
-          <span>New project</span>
+          <PlusIcon class="size-4 mobile:scale-150 text-ink-muted" />
+          <span>{t('commandMenu.newProject')}</span>
         </div>
       </Match>
       <Match when={isSearchItem(props.item) && props.item}>
@@ -268,6 +280,8 @@ export function CommandItem(props: CommandItemProps) {
   return (
     <CommandMenuListItem
       as="div"
+      role="option"
+      aria-selected={props.selected}
       selected={props.selected}
       onMouseMove={() => props.onMouseMove?.(props.index)}
       onClick={(e) => {

@@ -9,7 +9,9 @@ import {
 } from '@app/features/scheduling/public-booking';
 import { useRouteParams } from '@app/lib/split-router';
 import { publishLoginSuccess } from '@core/auth/login-events';
+import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { Button } from '@ui';
 import { lazy, onCleanup, onMount } from 'solid-js';
 import {
@@ -32,7 +34,17 @@ export function LoginPage() {
   return <Login />;
 }
 
+/**
+ * Phone browsers (including Meta's in-app browser) leave their email on the
+ * website's `/mobile-signup` and get a link to finish signing up on desktop.
+ */
 export function SignupPage() {
+  if (isMobile() && !isNativeMobilePlatform()) {
+    window.location.replace(
+      `${getWebOrigin()}/mobile-signup${window.location.search}`
+    );
+    return null;
+  }
   return <Login signupMode />;
 }
 
@@ -58,7 +70,7 @@ export function LoginPopupSuccess() {
     <div class="h-full overflow-y-hidden">
       <div class="relative flex flex-row items-center pt-4 h-full">
         <Button
-          variant="outline"
+          variant="secondary"
           onClick={() => {
             publishLoginSuccess();
             window.close();

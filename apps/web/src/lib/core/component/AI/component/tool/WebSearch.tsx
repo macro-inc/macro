@@ -1,5 +1,5 @@
 import { UnfurlLink } from '@core/component/Link';
-import Globe from '@phosphor-icons/core/regular/globe.svg';
+import Globe from '@icon/system/regular/globe.svg';
 import { createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';
@@ -47,7 +47,8 @@ const handler = createToolRenderer({
         <div class="flex min-w-0 flex-1 items-center justify-between gap-3 overflow-hidden">
           <div class="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
             <span class="min-w-0 truncate">
-              Searched for <span class="text-ink">{ctx.tool.data.input}</span>
+              {ctx.response ? 'Searched for' : 'Search for'}{' '}
+              <span class="text-ink">{ctx.tool.data.input}</span>
             </span>
           </div>
           <Tool.ResultToggle

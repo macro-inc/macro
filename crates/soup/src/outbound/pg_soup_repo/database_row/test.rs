@@ -163,12 +163,62 @@ async fn rows_stay_out_of_queries_that_name_no_table(pool: PgPool) {
         page(
             &pool,
             viewer(),
+            rows_of(Some(Expr::is_not(Expr::val(DatabaseRowLiteral::Include))))
+        )
+        .await
+        .is_empty()
+    );
+    assert!(
+        page(
+            &pool,
+            viewer(),
             rows_of(Some(Expr::is_not(Expr::val(DatabaseRowLiteral::TableId(
                 CONTACTS
             ))))),
         )
         .await
         .is_empty()
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn include_reads_all_accessible_tables_but_not_private_rows(pool: PgPool) {
+    let include = Some(Expr::val(DatabaseRowLiteral::Include));
+    assert_eq!(
+        page(&pool, viewer(), rows_of(include.clone()))
+            .await
+            .iter()
+            .map(Identify::id)
+            .collect::<Vec<_>>(),
+        vec![
+            Uuid::from_u128(0x70000000_0000_0000_0000_000000000004),
+            DEAL_3,
+            DEAL_2,
+            DEAL_1,
+        ]
+    );
+    assert_eq!(
+        page(&pool, stranger(), rows_of(include))
+            .await
+            .iter()
+            .map(Identify::id)
+            .collect::<Vec<_>>(),
+        vec![NOTE]
+    );
+    assert_eq!(
+        page(
+            &pool,
+            viewer(),
+            rows_of(Some(Expr::and(
+                Expr::val(DatabaseRowLiteral::Include),
+                Expr::is_not(Expr::val(DatabaseRowLiteral::TableId(CONTACTS))),
+            ))),
+        )
+        .await
+        .iter()
+        .map(Identify::id)
+        .collect::<Vec<_>>(),
+        vec![DEAL_3, DEAL_2, DEAL_1]
     );
 }
 

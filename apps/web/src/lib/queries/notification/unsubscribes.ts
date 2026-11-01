@@ -1,7 +1,9 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { useMutation, useQuery } from '@tanstack/solid-query';
+import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { notificationKeys } from './keys';
 
@@ -25,13 +27,17 @@ async function fetchUnsubscribes() {
   return response.value.data;
 }
 
-export function useMutedEntitiesQuery(args?: { limit?: number }) {
+export function useMutedEntitiesQuery(
+  args?: { limit?: number },
+  enabled: Accessor<boolean> = () => true
+) {
   const limit =
     args?.limit && args.limit > 0 && args.limit <= 500 ? args.limit : 20;
 
   return useQuery(() => ({
     queryKey: notificationKeys.unsubscribes.queryKey,
     queryFn: fetchUnsubscribes,
+    enabled: enabled(),
     initialPageParam: { limit },
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 10,
@@ -50,6 +56,9 @@ function invalidateUnsubscribes() {
 
 const MUTE_ITEM_MUTATION_KEY = ['notification', 'mute-item'] as const;
 const UNMUTE_ITEM_MUTATION_KEY = ['notification', 'unmute-item'] as const;
+// A paused mutation lives only in memory and replays in parallel on reconnect,
+// so an offline mute must fail and roll back instead of waiting.
+const MUTE_NETWORK_MODE = 'always';
 
 /**
  * Edit the cached list in place. Per-item edits (rather than snapshot
@@ -97,6 +106,7 @@ function cancelUnsubscribesFetch() {
 export function useMuteItemMutation() {
   return useMutation(() => ({
     mutationKey: MUTE_ITEM_MUTATION_KEY,
+    networkMode: MUTE_NETWORK_MODE,
     mutationFn: async (item: UserUnsubscribe) => {
       await throwOnErr(() => notificationServiceClient.unsubscribeItem(item));
     },
@@ -113,7 +123,10 @@ export function useMuteItemMutation() {
       else removeUnsubscribe(item);
     },
     onSettled: () => {
-      void invalidateUnsubscribesWhenIdle();
+      fireAndForget(
+        invalidateUnsubscribesWhenIdle(),
+        'notification-unsubscribes'
+      );
     },
   }));
 }
@@ -121,6 +134,7 @@ export function useMuteItemMutation() {
 export function useUnmuteItemMutation() {
   return useMutation(() => ({
     mutationKey: UNMUTE_ITEM_MUTATION_KEY,
+    networkMode: MUTE_NETWORK_MODE,
     mutationFn: async (item: UserUnsubscribe) => {
       await throwOnErr(() =>
         notificationServiceClient.removeUnsubscribeItem(item)
@@ -138,7 +152,10 @@ export function useUnmuteItemMutation() {
       if (context?.previous) addUnsubscribe(context.previous);
     },
     onSettled: () => {
-      void invalidateUnsubscribesWhenIdle();
+      fireAndForget(
+        invalidateUnsubscribesWhenIdle(),
+        'notification-unsubscribes'
+      );
     },
   }));
 }

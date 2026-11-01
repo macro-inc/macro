@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffect, Match, onCleanup, Show, Switch } from 'solid-js';
 import { BypassButton } from '../components/bypass-button';
 import {
@@ -29,6 +30,8 @@ import { ToolsStep } from './tools-step';
 export function OnboardingFlowView(props: {
   /** A deep link to land on after onboarding. */
   next: string | undefined;
+  /** Raw `?step` from the entry link. Unknown values are ignored. */
+  step?: string;
   checkoutReturn: CheckoutReturn | undefined;
   onNavigate: (target: string) => void;
   /** Leaves the app for hosted checkout. */
@@ -51,12 +54,13 @@ export function OnboardingFlowView(props: {
       const accounts = emailAccounts.accounts();
       return {
         emails_connected: accounts.t === 'ready' ? accounts.value.length : 0,
-        connectors_connected: [...(connectedTools() ?? [])],
+        connectors_connected: [...connectedTools.connected()],
       };
     },
   });
   const flow = createOnboardingFlow(context, {
     checkoutReturn: () => props.checkoutReturn,
+    requestedStep: () => props.step,
     record,
     signupMethod: () => {
       const accounts = emailAccounts.accounts();
@@ -104,7 +108,7 @@ export function OnboardingFlowView(props: {
       viewer.t === 'signed-in' &&
       viewer.viewer.licensed
     ) {
-      void finish.finishPremium();
+      fireAndForget(finish.finishPremium(), 'onboarding');
       return;
     }
     goTo(next);
@@ -137,7 +141,9 @@ export function OnboardingFlowView(props: {
           {(current) => (
             <BypassButton
               disabled={finish.finishing()}
-              onBypass={() => void finish.bypass(current())}
+              onBypass={() =>
+                fireAndForget(finish.bypass(current()), 'onboarding')
+              }
             />
           )}
         </Show>
@@ -147,10 +153,15 @@ export function OnboardingFlowView(props: {
         showPlanOffer() ? (
           <PlanComparisonView
             disabled={finish.finishing()}
-            onContinueFree={() => void finish.finishFree()}
+            onContinueFree={() =>
+              fireAndForget(finish.finishFree(), 'onboarding')
+            }
             onBackToPro={() => focusStepHeading(content, true)}
             onStartMax={() =>
-              void finish.startPremiumCheckout('max', 'standard')
+              fireAndForget(
+                finish.startPremiumCheckout('max', 'standard'),
+                'onboarding'
+              )
             }
           />
         ) : step() === 'security' ||
@@ -199,9 +210,14 @@ export function OnboardingFlowView(props: {
               checkoutReturn={props.checkoutReturn}
               finishing={finish.finishing()}
               onStartCheckout={(tier, terms) =>
-                void finish.startPremiumCheckout(tier, terms)
+                fireAndForget(
+                  finish.startPremiumCheckout(tier, terms),
+                  'onboarding'
+                )
               }
-              onContinueFree={() => void finish.finishFree()}
+              onContinueFree={() =>
+                fireAndForget(finish.finishFree(), 'onboarding')
+              }
               renderInviteOffer={props.renderInviteOffer}
               onPremiumPaid={finish.finishPremium}
             />

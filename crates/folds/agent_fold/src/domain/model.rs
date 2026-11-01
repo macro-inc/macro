@@ -13,6 +13,7 @@
 //! said, what it ran, and what it wanted permission to do.
 
 use agent_runtime_protocol::domain::action::AgentActionId;
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 use serde::Serialize;
@@ -34,6 +35,8 @@ mod permission;
 mod plan;
 /// Plain text derived from renderable messages for search.
 mod search;
+/// How a reply reads as a conversation: prose, activity, interactions.
+mod segment;
 /// Turn-level facts derived from the fold.
 mod signal;
 /// Delegated agents.
@@ -51,10 +54,16 @@ pub use elicitation::{
 };
 pub use event::{FoldEvent, OwnedFoldEvent};
 pub use interaction::{PendingInteraction, PendingPermission, PendingToolApproval};
-pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata, TurnState};
-pub use part::{Control, ControlOutcome, MessagePart, StopReason};
+pub use metadata::{
+    AvailableCommand, Harness, ModelOption, SessionMetadata, SessionNotification, TurnState,
+};
+pub use part::{Control, ControlOutcome, MessagePart, StopReason, TaskStatus};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
+pub use segment::{
+    ActivityRow, ActivityStatus, ProjectedSegment, Segment, SegmentKind, TurnPhase, phase, project,
+    prose_text, segments,
+};
 pub use signal::TurnSignal;
 pub use subagent::{SubagentResult, ToolStats};
 pub use tool::{AnsiText, FileDiff, ToolDetail, ToolName, ToolStatus};
@@ -223,9 +232,27 @@ pub struct FoldedMessage {
     /// confirmed: a prompt on the wire, a stop just pressed. Cleared when the
     /// confirmed frame folds in its place. Always false on the server's fold.
     pub pending: bool,
+    /// When the log stored the prompt this user message came from. `None` on
+    /// agent and control messages, on a prompt not stored yet, and on history
+    /// a runtime replays on load, whose frames are as old as the load.
+    pub posted_at: Option<DateTime<Utc>>,
 }
 
 impl FoldedMessage {
+    /// The last prose part, trimmed; absent when the message has no prose.
+    #[must_use]
+    pub fn last_text(&self) -> Option<String> {
+        self.parts
+            .iter()
+            .rev()
+            .find_map(|part| match part {
+                MessagePart::Text { text } => Some(text.trim()),
+                _ => None,
+            })
+            .filter(|text| !text.is_empty())
+            .map(str::to_owned)
+    }
+
     /// This message's natural key within its session.
     #[must_use]
     pub fn id(&self) -> MessageId {

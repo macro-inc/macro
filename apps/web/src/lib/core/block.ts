@@ -84,6 +84,7 @@ export const NonDocumentBlockTypes = [
   'pr',
   'agent',
   'initiative',
+  'pipeline',
 ] as const as (BlockName | BlockAlias)[];
 
 /**
@@ -150,6 +151,7 @@ const _ValidBlockCombinations: BlockCombinationRules = {
   pr: allBlockNames,
   agent: allBlockNames,
   initiative: allBlockNames,
+  pipeline: allBlockNames,
 } as const;
 
 // maps block name to valid parents
@@ -186,6 +188,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   pr: new Set([]),
   agent: new Set([]),
   initiative: new Set([]),
+  pipeline: new Set([]),
 };
 
 export const LoadErrors = {
@@ -332,7 +335,8 @@ export interface BlockComponentProps extends Record<BlockName, ObjectLike> {
 }
 
 interface BlockComponentLoadData extends Record<BlockName, ObjectLike> {
-  canvas: DocumentBlockData & DssFileData;
+  canvas: DocumentBlockData &
+    ({ shared: true; dssFile?: never } | (DssFileData & { shared?: false }));
   pdf: DocumentBlockData;
   video: DocumentBlockData;
   md: DocumentBlockData &
@@ -390,8 +394,15 @@ export type BlockDefinition<
   /** flag to indicate wether this block should enable collaborative features. */
   liveTrackingEnabled?: boolean;
 
-  /** Whether mounting this block records entity-open analytics and history. */
+  /** Whether mounting this block records an entity-open history row and page view. */
   openTrackingEnabled?: boolean;
+
+  /**
+   * Whether mounting this block sends `open_entity`. Defaults to
+   * `openTrackingEnabled`; set it on a block without a history row whose opens
+   * are still a product signal, as `block-database` does.
+   */
+  openAnalyticsEnabled?: boolean;
 
   accepted: Record<string, string>;
 

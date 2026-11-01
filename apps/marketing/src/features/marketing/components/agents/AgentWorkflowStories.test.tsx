@@ -131,10 +131,11 @@ it('shows human approval before the coding result and opens its review', () => {
   expect(view.queryByText(/build this\./)).toBeNull();
   expect(view.queryByRole('button', { name: 'Open session' })).toBeNull();
   visible();
-  vi.advanceTimersByTime(2000);
+  vi.advanceTimersByTime(7800);
+  expect(view.getByText(/Can we keep the folder structure/)).toBeTruthy();
   expect(view.getAllByText(/build this\./)).toHaveLength(1);
   expect(view.queryByRole('button', { name: 'Open session' })).toBeNull();
-  vi.advanceTimersByTime(2000);
+  vi.advanceTimersByTime(6100);
   fireEvent.click(
     view.getByRole('button', { name: /#248 · Improve the client upload flow/ })
   );
@@ -174,8 +175,14 @@ it('lets a visitor inspect the design without autoplay taking over', async () =>
 it('shows the completed collaboration without animation for reduced motion', () => {
   reduced = true;
   const view = render(() => <AgentTeamworkStory />);
-  expect(view.getAllByText(/build this\./)).toHaveLength(2);
+  expect(view.getAllByText(/build this\./)).toHaveLength(1);
   expect(view.getByRole('button', { name: 'Open session' })).toBeTruthy();
+  expect(view.container.querySelectorAll('[data-agent="cursor"]')).toHaveLength(
+    1
+  );
+  expect(
+    view.queryByText(/On it. I found the existing upload component/)
+  ).toBeNull();
   expect(
     view.queryByRole('heading', { name: 'Improve the client upload flow' })
   ).toBeNull();
@@ -233,7 +240,7 @@ it('replies to Julia before visibly writing a substantive checklist', () => {
   expect(body().textContent).toContain('Before sharing with clients');
   expect(body().textContent).toContain('Send a file');
   expect(body().textContent).not.toContain('Check that the client can see');
-  vi.advanceTimersByTime(20000);
+  vi.advanceTimersByTime(7000);
   expect(body().textContent).toContain(
     'Check that the client can see who is reviewing the file.'
   );

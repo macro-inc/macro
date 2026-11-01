@@ -3,7 +3,10 @@ import { useCallKitSetup } from '@channel/Call/use-callkit';
 import { useAndroidBack } from '@core/mobile/androidBack';
 import { useAndroidWindowInsets } from '@core/mobile/androidWindowInsets';
 import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequiredDialog';
+import { nativeUpdateRequired } from '@core/mobile/nativeUpdateRequired';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
+import { Telemetry } from '@macro-inc/observability';
 import { PlatformNotificationProvider } from '@notifications';
 import { queryPersistence } from '@queries/client';
 import type { RouteSectionProps } from '@solidjs/router';
@@ -87,6 +90,7 @@ function TauriProvider(props: { children: JSX.Element }) {
     setNativeAppUpdateRequiredDialogOpen,
   ] = createSignal(false);
   let hasShownNativeAppUpdateRequiredDialog = false;
+  let hasShownNativeUpdateReason = false;
 
   function performBundleUpdate() {
     invoke<boolean>('perform_update').catch((e) =>
@@ -95,18 +99,21 @@ function TauriProvider(props: { children: JSX.Element }) {
   }
 
   createEffect(() => {
-    if (
-      hasShownNativeAppUpdateRequiredDialog ||
-      !shouldShowNativeAppUpdateRequiredDialog(bundleUpdateStatus())
-    ) {
-      return;
-    }
+    const reason = nativeUpdateRequired();
+    // A missing cache command opens the dialog once with its reason, even
+    // after the bundle updater's request was dismissed: it replaces a toast.
+    const showReason = reason !== undefined && !hasShownNativeUpdateReason;
+    const showBundle =
+      !hasShownNativeAppUpdateRequiredDialog &&
+      shouldShowNativeAppUpdateRequiredDialog(bundleUpdateStatus());
+    if (!showReason && !showBundle) return;
 
     hasShownNativeAppUpdateRequiredDialog = true;
+    if (reason !== undefined) hasShownNativeUpdateReason = true;
     setNativeAppUpdateRequiredDialogOpen(true);
   });
 
-  if (isTauri() && isPlatform('ios')) useCallKitSetup();
+  useCallKitSetup();
 
   const value: TauriContextValue = {
     os: osType(),
@@ -132,11 +139,15 @@ function TauriProvider(props: { children: JSX.Element }) {
       );
     }
     // Fetch current status since events emitted before the listener registered are missed
-    invoke<BundleUpdateStatus>('get_bundle_update_status').then((status) => {
-      setBundleUpdateStatus(status);
-    });
+    invoke<BundleUpdateStatus>('get_bundle_update_status')
+      .then((status) => {
+        setBundleUpdateStatus(status);
+      })
+      .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
     onCleanup(() => {
-      unlistenPromise.then((unlisten) => unlisten());
+      unlistenPromise
+        .then((unlisten) => unlisten())
+        .catch((error) => Telemetry.error(error, { surface: 'bundle-update' }));
     });
 
     document.body.classList.add('tauri');
@@ -186,13 +197,14 @@ function TauriProvider(props: { children: JSX.Element }) {
         open={nativeAppUpdateRequiredDialogOpen()}
         onClose={() => setNativeAppUpdateRequiredDialogOpen(false)}
         description={
-          isPlatform('desktop') && nativeUpdates.status().status !== 'Disabled'
+          nativeUpdateRequired() ??
+          (isPlatform('desktop') && nativeUpdates.status().status !== 'Disabled'
             ? nativeUpdateDescription(nativeUpdates.status())
-            : undefined
+            : undefined)
         }
         onRestart={
           nativeUpdates.status().status === 'Ready'
-            ? () => void nativeUpdates.restart()
+            ? () => fireAndForget(nativeUpdates.restart(), 'native-updates')
             : undefined
         }
       />

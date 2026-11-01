@@ -7,8 +7,10 @@
 import type { RefreshCalendarEventOneOfThreeEvent } from './refreshCalendarEventOneOfThreeEvent';
 
 /**
- * A team entitlement changed; discard cached team projections before refetching.
+ * Team projections need refreshing after a sync or entitlement change.
  */
 export type RefreshCalendarEventOneOfThree = {
   event: RefreshCalendarEventOneOfThreeEvent;
+  /** True for sharing changes and any possibly affected OOO projection. */
+  team_ooo_changed: boolean;
 };

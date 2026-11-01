@@ -67,6 +67,35 @@ function instant(value: string): string {
 }
 
 /**
+ * A range from the grid's `start/end`, or one date for a one-day range, sent
+ * as RFC 3339 instants. A range that ends before it starts is refused, as
+ * the service would.
+ */
+function dateRange(value: string): Result<CellValue, DatabaseCellFailure> {
+  const [start, end = start, ...rest] = value
+    .split('/')
+    .map((part) => instant(part.trim()));
+  const startTime = Date.parse(start ?? '');
+  const endTime = Date.parse(end ?? '');
+  if (
+    !start ||
+    !end ||
+    rest.length ||
+    Number.isNaN(startTime) ||
+    Number.isNaN(endTime) ||
+    endTime < startTime
+  )
+    return err({ kind: 'not-a-date-range' });
+  return ok({
+    type: 'date_range',
+    value: {
+      start: new Date(startTime).toISOString(),
+      end: new Date(endTime).toISOString(),
+    },
+  });
+}
+
+/**
  * A grid value as the value a column's cell takes. An empty value clears
  * any cell but a text one, which keeps the empty text.
  */
@@ -114,6 +143,7 @@ export function cellValue(
       })
     )
     .with('DATE', () => ok({ type: 'date', value: instant(String(value)) }))
+    .with('DATE_RANGE', () => dateRange(String(value).trim()))
     .with('LINK', () => ok({ type: 'link', value: [String(value)] }))
     .with('SELECT_STRING', 'SELECT_NUMBER', 'TAG', () =>
       optionLabels([String(value)])
@@ -124,7 +154,7 @@ export function cellValue(
         value: [{ entityType, entityId: String(value) }],
       }))
     )
-    .exhaustive();
+    .exhaustive(() => err({ kind: 'read-only-column' }));
 }
 
 /**

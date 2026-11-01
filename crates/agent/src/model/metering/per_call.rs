@@ -63,7 +63,7 @@ impl PerCallUsage {
                 return Err(MeteringError::Unsupported);
             }
         };
-        if !speed.supported(&self.model) {
+        if !speed.billable(&self.model) {
             return Err(MeteringError::Unsupported);
         }
         let bare = self

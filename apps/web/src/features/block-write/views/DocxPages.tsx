@@ -5,6 +5,7 @@ import type {
   PageRect,
   Pos,
 } from '@core/docx-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Accessor,
   createEffect,
@@ -623,10 +624,10 @@ export function DocxPages(props: DocxPagesProps) {
         run(action.ops, action.group);
         break;
       case 'undo':
-        void editor.undo();
+        fireAndForget(editor.undo(), 'docx-editor');
         break;
       case 'redo':
-        void editor.redo();
+        fireAndForget(editor.redo(), 'docx-editor');
         break;
       case 'comment':
         props.onComment?.();
@@ -638,7 +639,7 @@ export function DocxPages(props: DocxPagesProps) {
         props.onFindNext?.(action.forward);
         break;
       case 'page':
-        void pageMove(action.forward, action.extend);
+        fireAndForget(pageMove(action.forward, action.extend), 'docx-editor');
         break;
       case 'tab': {
         const state = editor.state();

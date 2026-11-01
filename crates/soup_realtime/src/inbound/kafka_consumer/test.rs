@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+use call::domain::events::{CallRecordImportedMetadata, CallRecordSummarizedMetadata};
 use channels::domain::models::ChannelSender;
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
@@ -124,6 +125,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.messages",
             "macro.properties",
             "macro.initiatives",
+            "macro.calls",
         ]
     );
 }
@@ -336,6 +338,7 @@ fn task_property_updates_map_to_document_updates() {
         actor_user_id: Some(user()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),
@@ -465,6 +468,7 @@ fn a_cell_edit_updates_the_database_row() {
         actor_user_id: Some(user()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: None,
         previous_value: None,
         updated_at: Utc::now(),
@@ -1043,6 +1047,7 @@ fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
         actor_user_id: Some(user()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: project("project-to"),
         previous_value: project("project-from"),
         updated_at: Utc::now(),
@@ -1072,4 +1077,25 @@ impl PullRequestSessions for NoPullRequestSessions {
     async fn linked_sessions(&self, _: &str) -> Result<Vec<Entity<'static>>, Report> {
         Ok(Vec::new())
     }
+}
+
+#[test]
+fn imported_call_records_update_soup_and_native_call_events_are_ignored() {
+    let call_id = Uuid::now_v7();
+    let imported = CallTopicEvent::RecordImported(CallRecordImportedMetadata {
+        call_id,
+        owner: user(),
+    });
+    let patches = patches_from_call_event(&imported);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Call);
+    assert_eq!(patch_entity(&patches[0]).entity_id, call_id.to_string());
+
+    let summarized = CallTopicEvent::RecordSummarized(CallRecordSummarizedMetadata {
+        call_id,
+        channel_id: None,
+        ai_name_generated: false,
+    });
+    assert!(patches_from_call_event(&summarized).is_empty());
 }

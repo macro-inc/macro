@@ -29,7 +29,7 @@ use crate::api::wire::{
     AgentSummary, ArchiveAgentResponse, ArtifactDownloadResponse, ConversationResponse,
     CreateAgentRequest, CreateAgentResponse, CreateRunRequest, CreateRunResponse,
     ListAgentsResponse, ListArtifactsResponse, ListModelsResponse, ListRunsResponse,
-    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection,
+    McpServerSelection, MeResponse, ModelSelection, PromptBody, PromptImage, RepoSelection,
 };
 use crate::domain::artifact::{ArtifactListing, FetchedArtifact};
 use crate::domain::model::{
@@ -39,6 +39,7 @@ use crate::domain::model::{
 use crate::domain::ports::{
     ConnectedStream, CursorAgents, CursorArtifacts, RunStream, StreamConnectError,
 };
+use crate::domain::prompt_image::CursorPromptImage;
 use futures::Stream;
 use std::num::NonZeroUsize;
 
@@ -62,6 +63,19 @@ pub(crate) const MAX_SSE_PAYLOAD: NonZeroUsize = match NonZeroUsize::new(16 * 10
     Some(limit) => limit,
     None => panic!("the payload limit is a non-zero literal"),
 };
+
+fn prompt_body(text: &str, images: &[CursorPromptImage]) -> PromptBody {
+    PromptBody {
+        text: text.to_owned(),
+        images: images
+            .iter()
+            .map(|image| PromptImage {
+                data: image.data.clone(),
+                mime_type: image.mime_type.clone(),
+            })
+            .collect(),
+    }
+}
 
 /// The one real base url. A [`CursorConfig`] still names its own, because a
 /// test points at a stand-in server, but there is nothing for a deployment to
@@ -132,10 +146,14 @@ impl std::fmt::Debug for ApiKey {
     }
 }
 
+/// The prefixes a Cursor API key carries. Cursor now mints `grok_` keys, and
+/// the `crsr_` keys minted before that still authenticate.
+const CURSOR_KEY_PREFIXES: [&str; 2] = ["crsr_", "grok_"];
+
 /// Static configuration for a [`CursorClient`].
 #[derive(Debug, Clone)]
 pub struct CursorConfig {
-    /// The API key (`crsr_…`).
+    /// The API key (`grok_…`, or `crsr_…` for older keys).
     pub api_key: ApiKey,
     /// Base url, `https://api.cursor.com` outside tests.
     pub base_url: String,
@@ -157,7 +175,7 @@ pub enum CursorClientError {
     /// diagnostics that are safe to print: enough to recognize a placeholder
     /// or a stray quote, never enough to reconstruct a real key.
     #[error(
-        "not a Cursor API key (got {length} chars starting {prefix:?}, expected a \"crsr_\" prefix)"
+        "not a Cursor API key (got {length} chars starting {prefix:?}, expected a \"grok_\" or \"crsr_\" prefix)"
     )]
     MalformedKey {
         /// Length of the offending key.
@@ -297,7 +315,10 @@ impl CursorClient {
     /// picks up in transit, so what is checked here is the key itself.
     pub fn new(config: CursorConfig) -> Result<Self, CursorClientError> {
         let key = config.api_key.expose();
-        if !key.starts_with("crsr_") {
+        if !CURSOR_KEY_PREFIXES
+            .iter()
+            .any(|prefix| key.starts_with(prefix))
+        {
             return Err(CursorClientError::MalformedKey {
                 length: key.len(),
                 prefix: key.chars().take(4).collect(),
@@ -658,11 +679,10 @@ impl CursorAgents for CursorClient {
         open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
+        images: &[CursorPromptImage],
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
         let request = CreateAgentRequest {
-            prompt: PromptBody {
-                text: prompt.to_owned(),
-            },
+            prompt: prompt_body(prompt, images),
             repos: repo
                 .map(|repo| {
                     vec![RepoSelection {
@@ -726,11 +746,10 @@ impl CursorAgents for CursorClient {
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
+        images: &[CursorPromptImage],
     ) -> Result<CursorRunId, rootcause::Report> {
         let request = CreateRunRequest {
-            prompt: PromptBody {
-                text: prompt.to_owned(),
-            },
+            prompt: prompt_body(prompt, images),
             model: model.map(ModelSelection::from),
         };
         let path = format!("/v1/agents/{agent}/runs");

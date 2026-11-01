@@ -55,7 +55,7 @@ function target(
     thread_id?: string | null;
     root_id: string;
   },
-  mentions: SimpleMention[] = []
+  mentions: SimpleMention[] = [],
 ): MessageEventTarget {
   const parent = metadata.parent;
   if (parent.type === 'call') {
@@ -123,5 +123,8 @@ export function hydrateMessageEvent(client: MacroClient, event: MessageEvent) {
       target: target(client, metadata),
       actor: userFromPrincipal(client, metadata.actor),
     }))
-    .exhaustive();
+    .exhaustive((unknown) => {
+      console.warn('macro sdk: unknown message event', unknown);
+      return undefined;
+    });
 }

@@ -28,11 +28,6 @@ describe('sort panel', () => {
           },
         ]}
         view={{
-          id: 'work',
-          databaseId: 'database',
-          tableId: 'table',
-          name: 'My work',
-          position: 'a0',
           query: {
             filter: null,
             sort: [
@@ -41,8 +36,6 @@ describe('sort panel', () => {
             ],
           },
           layout: { kind: 'table', columns: [] },
-          createdAt: '2026-09-01T00:00:00Z',
-          updatedAt: '2026-09-01T00:00:00Z',
         }}
         onChange={change}
       />

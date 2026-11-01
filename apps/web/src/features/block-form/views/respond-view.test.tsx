@@ -452,6 +452,7 @@ describe('RespondView', () => {
           description: 'A short hello.',
           durationMinutes: 30,
           location: '',
+          macroCall: false,
           googleMeet: true,
           questions: [],
           requiresConfirmation: false,

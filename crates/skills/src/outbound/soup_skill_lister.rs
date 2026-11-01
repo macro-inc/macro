@@ -51,6 +51,7 @@ impl<S> Clone for SoupSkillLister<S> {
 fn skill_only_filter() -> EntityFilterAst {
     EntityFilterAst {
         favorites_only: None,
+        crm_association: None,
         document_filter: Some(Arc::new(Expr::val(DocumentLiteral::SubType(
             DocumentSubType::Skill,
         )))),

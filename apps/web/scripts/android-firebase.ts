@@ -77,7 +77,7 @@ export function fetchAndroidFirebase(pin: (typeof pins)['dev']) {
     ).trim();
   } catch {
     throw new Error(
-      `Unable to fetch Android Firebase config from Doppler ${pin.project}/${pin.config}. Install the Doppler CLI and authenticate with access to this config (CI: DOPPLER_TOKEN), or pass --firebase-config. See docs/ANDROID_DEVELOPMENT.md.`
+      `Unable to fetch Android Firebase config from Doppler ${pin.project}/${pin.config}. Install the Doppler CLI and authenticate with access to this config (CI: DOPPLER_TOKEN), or pass --firebase-config. See docs/development/android.md.`
     );
   }
   if (createHash('sha256').update(contents).digest('hex') !== pin.sha256)

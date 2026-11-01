@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 /**
  * Tasks sharing a key run one at a time, in the order they were queued;
  * tasks under different keys run independently. A key with nothing queued
@@ -29,7 +30,7 @@ export function createKeyedSerializer(): KeyedSerializer {
         }
       })();
       tails.set(key, settled);
-      void forgetWhenIdle(key, settled);
+      fireAndForget(forgetWhenIdle(key, settled), 'database');
       return result;
     },
   };

@@ -1,7 +1,7 @@
 -- Fixture for the soup work feed candidate query.
 --
 -- user-1 is the subject. Each entity exercises one rule of the merge between
--- attention (live notifications, one not done) and own work (latest non-view
+-- attention (the newest pending notification) and own work (latest non-view
 -- activity).
 -- (T = minute past 10:00 on 2024-06-01, UTC)
 --
@@ -9,6 +9,8 @@
 --             because the thread is not in the inbox     -> own        T13
 --   thread-Z  in the inbox, notified at T12               -> attention  T12
 --   channel-X user-1 messaged at T11                      -> own        T11
+--   doc-H     pending notification T6, edited T10; its
+--             newer T15 notification is done              -> own        T10
 --   doc-A     notified at T5, edited at T9                -> own        T9
 --   doc-B     notified at T8, edited at T3                -> attention  T8
 --   doc-G     notified at T8 (ties doc-B; id breaks it)   -> attention  T8
@@ -45,7 +47,8 @@ VALUES (1, '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
        (3, '11111111-cccc-cccc-cccc-cccccccccccc'),
        (5, '11111111-eeee-eeee-eeee-eeeeeeeeeeee'),
        (6, '11111111-ffff-ffff-ffff-ffffffffffff'),
-       (7, '11111111-0000-0000-0000-000000000000');
+       (7, '11111111-0000-0000-0000-000000000000'),
+       (8, '11111111-9999-9999-9999-999999999999');
 
 INSERT INTO public."Document" ("id", "name", "owner", "documentFamilyId", "fileType", "createdAt", "updatedAt", "deletedAt")
 VALUES ('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Doc A', 'macro|user-1@test.com', 1, 'md', '2023-01-05 10:00:00', '2023-01-05 10:00:00', NULL),
@@ -53,7 +56,8 @@ VALUES ('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Doc A', 'macro|user-1@test.com'
        ('11111111-cccc-cccc-cccc-cccccccccccc', 'Doc C', 'macro|user-1@test.com', 3, 'md', '2023-01-05 10:00:00', '2023-01-05 10:00:00', NULL),
        ('11111111-eeee-eeee-eeee-eeeeeeeeeeee', 'Doc E', 'macro|user-1@test.com', 5, 'md', '2023-01-05 10:00:00', '2023-01-05 10:00:00', NULL),
        ('11111111-ffff-ffff-ffff-ffffffffffff', 'Doc F', 'macro|user-1@test.com', 6, 'md', '2023-01-05 10:00:00', '2023-01-05 10:00:00', NULL),
-       ('11111111-0000-0000-0000-000000000000', 'Doc G', 'macro|user-2@test.com', 7, 'md', '2023-01-05 10:00:00', '2023-01-05 10:00:00', NULL);
+       ('11111111-0000-0000-0000-000000000000', 'Doc G', 'macro|user-2@test.com', 7, 'md', '2023-01-05 10:00:00', '2023-01-05 10:00:00', NULL),
+       ('11111111-9999-9999-9999-999999999999', 'Doc H', 'macro|user-1@test.com', 8, 'md', '2023-01-05 10:00:00', '2023-01-05 10:00:00', NULL);
 
 INSERT INTO public."Chat" ("id", "name", "userId", "projectId", "createdAt", "updatedAt")
 VALUES ('22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Chat A', 'macro|user-1@test.com', NULL, '2023-01-06 10:00:00', '2023-01-06 10:00:00');
@@ -84,6 +88,7 @@ VALUES ('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'document', 'macro|user-1@test.c
        ('11111111-eeee-eeee-eeee-eeeeeeeeeeee', 'document', 'macro|user-1@test.com', 'user', 'owner', NULL),
        ('11111111-ffff-ffff-ffff-ffffffffffff', 'document', 'macro|user-1@test.com', 'user', 'owner', NULL),
        ('11111111-0000-0000-0000-000000000000', 'document', 'macro|user-1@test.com', 'user', 'view', NULL),
+       ('11111111-9999-9999-9999-999999999999', 'document', 'macro|user-1@test.com', 'user', 'owner', NULL),
        ('22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'macro|user-1@test.com', 'user', 'owner', NULL);
 
 ---------------------------------------------------
@@ -97,6 +102,8 @@ VALUES
 ('0190b000-0000-7000-8000-000000000108', 'document_mention', '11111111-0000-0000-0000-000000000000', 'document', 'test', '2024-06-01 10:08:00', '{}', 'macro|user-2@test.com', NULL, NULL),
 ('0190b000-0000-7000-8000-000000000004', 'ai_response', '22222222-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'chat', 'test', '2024-06-01 10:04:00', '{}', NULL, NULL, NULL),
 ('0190b000-0000-7000-8000-000000000010', 'document_mention', '11111111-eeee-eeee-eeee-eeeeeeeeeeee', 'document', 'test', '2024-06-01 10:10:00', '{}', 'macro|user-2@test.com', NULL, NULL),
+('0190b000-0000-7000-8000-000000000006', 'document_mention', '11111111-9999-9999-9999-999999999999', 'document', 'test', '2024-06-01 10:06:00', '{}', 'macro|user-2@test.com', NULL, NULL),
+('0190b000-0000-7000-8000-000000000015', 'document_mention', '11111111-9999-9999-9999-999999999999', 'document', 'test', '2024-06-01 10:15:00', '{}', 'macro|user-2@test.com', NULL, NULL),
 ('0190b000-0000-7000-8000-000000000001', 'channel_mention', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', 'test', '2024-06-01 10:01:00', '{"messageId": "99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}', 'macro|user-2@test.com', '99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel_message'),
 ('0190b000-0000-7000-8000-000000000012', 'new_email', '44444444-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'email_thread', 'test', '2024-06-01 10:12:00', '{}', NULL, NULL, NULL),
 ('0190b000-0000-7000-8000-000000000000', 'new_email', '44444444-5555-5555-5555-555555555555', 'email_thread', 'test', '2024-06-01 10:00:00', '{}', NULL, NULL, NULL),
@@ -109,6 +116,8 @@ VALUES
 ('macro|user-1@test.com', '0190b000-0000-7000-8000-000000000108', '2024-06-01 10:08:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190b000-0000-7000-8000-000000000004', '2024-06-01 10:04:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190b000-0000-7000-8000-000000000010', '2024-06-01 10:10:00', TRUE, NULL, NULL, 'done', FALSE),
+('macro|user-1@test.com', '0190b000-0000-7000-8000-000000000006', '2024-06-01 10:06:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190b000-0000-7000-8000-000000000015', '2024-06-01 10:15:00', TRUE, NULL, NULL, 'done', FALSE),
 ('macro|user-1@test.com', '0190b000-0000-7000-8000-000000000001', '2024-06-01 10:01:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190b000-0000-7000-8000-000000000012', '2024-06-01 10:12:00', TRUE, NULL, NULL, 'unseen', FALSE),
 ('macro|user-1@test.com', '0190b000-0000-7000-8000-000000000000', '2024-06-01 10:00:00', TRUE, NULL, NULL, 'unseen', FALSE),
@@ -126,6 +135,7 @@ VALUES
 ('0190c000-0000-7000-8000-000000000002', 'macro|user-1@test.com', 'macro|user-1@test.com', 'created', NULL, 'document', '11111111-eeee-eeee-eeee-eeeeeeeeeeee', '2024-06-01 10:02:00+00'),
 ('0190c000-0000-7000-8000-000000000015', 'macro|user-1@test.com', 'macro|user-1@test.com', 'opened', NULL, 'document', '11111111-ffff-ffff-ffff-ffffffffffff', '2024-06-01 10:15:00+00'),
 ('0190c000-0000-7000-8000-000000000011', 'macro|user-1@test.com', 'macro|user-1@test.com', 'messaged', NULL, 'channel', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-06-01 10:11:00+00'),
+('0190c000-0000-7000-8000-000000000010', 'macro|user-1@test.com', 'macro|user-1@test.com', 'edited', NULL, 'document', '11111111-9999-9999-9999-999999999999', '2024-06-01 10:10:00+00'),
 ('0190c000-0000-7000-8000-000000000013', 'macro|user-1@test.com', 'macro|user-1@test.com', 'sent', NULL, 'email_thread', '44444444-5555-5555-5555-555555555555', '2024-06-01 10:13:00+00'),
 -- Opening doc-A after editing it must not move it.
 ('0190c000-0000-7000-8000-000000000016', 'macro|user-1@test.com', 'macro|user-1@test.com', 'opened', NULL, 'document', '11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2024-06-01 10:16:00+00'),
@@ -135,5 +145,10 @@ VALUES
 ('0190c000-0000-7000-8000-000000000017', 'macro|user-1@test.com', 'macro|user-1@test.com', 'edited', NULL, 'email_thread', '44444444-0000-0000-0000-000000000000', '2024-06-01 10:17:00+00'),
 -- Archiving thread-S after sending must not move it from its send.
 ('0190c000-0000-7000-8000-000000000018', 'macro|user-1@test.com', 'macro|user-1@test.com', 'edited', NULL, 'email_thread', '44444444-5555-5555-5555-555555555555', '2024-06-01 10:18:00+00');
+
+-- doc-B (attention) and doc-C (own work) are tasks.
+INSERT INTO document_sub_type (document_id, sub_type)
+VALUES ('11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'task'),
+       ('11111111-cccc-cccc-cccc-cccccccccccc', 'task');
 
 SET session_replication_role = 'origin';

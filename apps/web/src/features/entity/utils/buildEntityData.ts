@@ -188,10 +188,11 @@ export function buildEntityData(
       })
       // The singleton calendar block has no entity-shaped block id.
       .with('calendar', (): undefined => undefined)
-      // Databases and forms use REST; CRM records and initiatives come from Soup.
+      // Databases, forms and pipelines use REST; CRM records and initiatives come from Soup.
       .with(
         'database',
         'form',
+        'pipeline',
         'company',
         'contact',
         'initiative',

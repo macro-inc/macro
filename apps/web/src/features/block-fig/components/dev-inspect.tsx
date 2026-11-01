@@ -9,8 +9,8 @@
 import type { DesignInfo } from '@core/fig-engine/design-types';
 import type { Exportable, ExportSetting } from '@core/fig-engine/handoff-types';
 import type { NodeInfo, PaintInfo } from '@core/fig-engine/types';
-import Copy from '@phosphor/copy.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import {
   CODE_LANGUAGES,

@@ -17,7 +17,8 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use super::models::{
-    ActorInboxes, CalendarEvent, CalendarOccurrence, OccurrenceException, VisibleCalendar,
+    ActorInboxes, CalendarEvent, CalendarOccurrence, OccurrenceException, OwnedInbox,
+    VisibleCalendar,
 };
 
 #[cfg(test)]
@@ -207,11 +208,11 @@ pub trait CalendarChangeRepository: Send + Sync + 'static {
         calendar_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<VisibleCalendar>, Report>> + Send;
 
-    /// Addresses of every connected inbox the viewer owns.
-    fn owned_inbox_emails(
+    /// Every connected inbox the viewer owns.
+    fn owned_inboxes(
         &self,
         viewer: &str,
-    ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<OwnedInbox>, Report>> + Send;
 }
 
 /// Persistence port for change-log retention.
@@ -346,11 +347,10 @@ impl<R: CalendarChangeRepository> CalendarChangeService<R> {
                 CalendarChangeOp::DeleteCalendar(id) => page.deleted_calendar_ids.push(id),
             }
         }
-        if let Some(viewer) =
-            ActorInboxes::from_owned(self.repository.owned_inbox_emails(viewer).await?)
+        if let Some(viewer) = ActorInboxes::from_owned(self.repository.owned_inboxes(viewer).await?)
         {
             for change in &mut page.events {
-                mark_viewer_attendees(&viewer, change);
+                mark_viewer(&viewer, change);
             }
         }
         Ok(page)
@@ -373,20 +373,19 @@ impl<R: CalendarChangeRepository> CalendarChangeService<R> {
         else {
             return Ok(None);
         };
-        if let Some(viewer) =
-            ActorInboxes::from_owned(self.repository.owned_inbox_emails(viewer).await?)
+        if let Some(viewer) = ActorInboxes::from_owned(self.repository.owned_inboxes(viewer).await?)
         {
-            mark_viewer_attendees(&viewer, &mut change);
+            mark_viewer(&viewer, &mut change);
         }
         Ok(Some(change))
     }
 }
 
-fn mark_viewer_attendees(viewer: &ActorInboxes, change: &mut CalendarEventChange) {
-    viewer.mark_attendees(&mut change.event.attendees);
+fn mark_viewer(viewer: &ActorInboxes, change: &mut CalendarEventChange) {
+    viewer.mark_event(&mut change.event, change.link_id);
     for instance in &mut change.occurrences {
         if let Some(attendees) = &mut instance.exception.attendees {
-            viewer.mark_attendees(attendees);
+            viewer.mark_attendees(attendees, change.link_id);
         }
     }
 }

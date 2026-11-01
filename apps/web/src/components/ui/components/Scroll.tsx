@@ -33,6 +33,8 @@ type ScrollProps = JSX.HTMLAttributes<HTMLDivElement> & {
   orientation?: Axis | 'both';
   /** Which custom scrollbars to show when their content overflows. */
   scrollbars?: Axis | 'both' | 'none';
+  /** Reserve space above the vertical scrollbar without changing the scroll viewport. */
+  verticalScrollbarInset?: number;
   autoHide?: boolean;
   autoHideDelay?: number;
   /** Opt in to hover-only reveal instead of revealing on scrolling and mount. */
@@ -75,6 +77,7 @@ export function Scroll(props: ScrollProps) {
     'orientation',
     'scrollbars',
     'autoHide',
+    'verticalScrollbarInset',
     'autoHideDelay',
     'revealOn',
     'hovered',
@@ -105,6 +108,15 @@ export function Scroll(props: ScrollProps) {
     return enabled(axis) && (visibility === 'both' || visibility === axis);
   };
 
+  const verticalInset = (corner: number) => {
+    const inset = local.verticalScrollbarInset ?? 0;
+    return Number.isFinite(inset)
+      ? Math.min(
+          Math.max(0, inset),
+          Math.max(0, (viewport?.clientHeight ?? 0) - corner)
+        )
+      : 0;
+  };
   function configure() {
     if (!viewport) {
       return;
@@ -120,7 +132,8 @@ export function Scroll(props: ScrollProps) {
       const overflow = horizontal ? x : y;
       const otherOverflow = horizontal ? y : x;
       const corner = shown(other) && otherOverflow > 0 ? GUTTER : 0;
-      const track = Math.max(0, length - corner - INSET * 2);
+      const inset = horizontal ? 0 : verticalInset(corner);
+      const track = Math.max(0, length - corner - inset - INSET * 2);
       const size = Math.min(
         track,
         Math.max(MIN_THUMB, total ? (track * length) / total : track)
@@ -187,6 +200,7 @@ export function Scroll(props: ScrollProps) {
   createEffect(() => {
     local.orientation;
     local.scrollbars;
+    local.verticalScrollbarInset;
     local.autoHide;
     local.autoHideDelay;
     configure();
@@ -391,7 +405,7 @@ export function Scroll(props: ScrollProps) {
                   right: horizontal ? `${corner()}px` : '0',
                   bottom: horizontal ? '0' : `${corner()}px`,
                   left: horizontal ? '0' : undefined,
-                  top: horizontal ? undefined : '0',
+                  top: horizontal ? undefined : `${verticalInset(corner())}px`,
                   width: horizontal ? undefined : `${GUTTER}px`,
                   height: horizontal ? `${GUTTER}px` : undefined,
                   'touch-action': 'none',

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 /**
  * Runs async work one piece at a time, in the order it was queued: the
  * editor's edits, other people's changes, and saves must not interleave.
@@ -39,7 +40,7 @@ export function createSerialQueue(
             resolve(undefined);
           }
         });
-        void drain();
+        fireAndForget(drain(), 'psd-editor');
       });
     },
     idle() {

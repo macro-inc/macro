@@ -4,9 +4,11 @@ use super::*;
 fn premium_speeds_are_model_specific() {
     assert!(ModelSpeed::Ultrafast.supported("openai/gpt-6-astra"));
     assert!(ModelSpeed::Ultrafast.supported("openai/gpt-6.1-sol"));
-    assert!(ModelSpeed::Fast.supported("anthropic/claude-opus-5-5"));
+    assert!(!ModelSpeed::Fast.supported("anthropic/claude-opus-5-5"));
+    assert!(ModelSpeed::Fast.billable("anthropic/claude-opus-5-5"));
     for model in [
         "openai/gpt-6-sol",
+        "anthropic/claude-opus-5-5",
         "anthropic/claude-sonnet-5-5",
         "google/gemini-3.8-flash",
     ] {
@@ -24,4 +26,7 @@ fn speed_preserves_reasoning_parameters() {
     assert_eq!(params["service_tier"], "ultrafast");
     ModelSpeed::Standard.apply("openai/gpt-6-astra", &mut params);
     assert_eq!(params["service_tier"], "default");
+    let mut withheld = serde_json::json!({});
+    ModelSpeed::Fast.apply("anthropic/claude-opus-5-5", &mut withheld);
+    assert!(withheld.get("speed").is_none());
 }

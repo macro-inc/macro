@@ -23,7 +23,7 @@ use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionServic
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},
-    loaders::{AgentSessionEntityLoader, SoupItemDataLoader},
+    loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
         GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GroupedSoup,
         SoupEntityEdges, SoupPage, SoupPatch,
@@ -46,7 +46,9 @@ where
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
     let mut receiver = service.subscribe(macro_user_id.clone());
-    let loader = ctx.data_opt::<SoupItemDataLoader>().cloned();
+    let loader = ctx
+        .data_opt::<PrimarySoupItemLoader>()
+        .map(|loader| loader.0.clone());
     const BUFFER_SIZE: usize = 10;
     let mut buf = Vec::with_capacity(BUFFER_SIZE);
 
@@ -89,20 +91,37 @@ where
     Edges: SoupEntityEdges,
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
+    let viewer = macro_user_id.clone();
     let request = input.into_request(macro_user_id)?;
     let sort_method = *request.cursor.sort_method();
     let filters = request.cursor.filter().clone();
+    let group_by = request.grouping.field.clone();
     let items = service.get_user_soup_grouped(request).await?;
     let groups: NestedSoupGroups<_, _> = items.collect();
+    let keys: Vec<String> = groups
+        .keys()
+        .filter(|key| !key.is_empty())
+        .cloned()
+        .collect();
+    let labels = service.group_labels(viewer, &group_by, &keys).await?;
     Ok(GroupedSoup::new(
         groups.with_next_cursors(sort_method, filters),
+        &labels,
     ))
 }
 
-/// Resolve one email thread through the existing user-scoped Soup item loader.
+/// Resolve one email thread through the Soup item loader, whose email
+/// hydration settles access with entity access receipts: the rule the REST
+/// thread route applies, so a thread reached through a team's CRM, a project,
+/// or a share opens even though it lives in a teammate's inbox.
 ///
-/// A missing or inaccessible thread is represented as `None` by the loader's
-/// filtered Soup request.
+/// A missing or inaccessible thread is represented as `None`.
+#[tracing::instrument(
+    name = "soup.resolve_email_thread",
+    skip_all,
+    fields(thread_id = %thread_id),
+    err(Debug)
+)]
 pub async fn resolve_soup_email_thread<Edges>(
     ctx: &Context<'_>,
     user_id: MacroUserIdStr<'static>,
@@ -123,6 +142,39 @@ where
             "Soup returned a non-email entity for an email-thread request",
         )),
     }
+}
+
+/// Resolve email threads, in the given order, through the user-scoped Soup
+/// item loader. Missing or inaccessible threads are left out.
+pub async fn resolve_soup_email_threads<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    thread_ids: Vec<uuid::Uuid>,
+) -> async_graphql::Result<Vec<GraphqlSoupEmailThread<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = ctx.data::<SoupItemDataLoader>()?;
+    // Concurrent loads coalesce into one batched Soup request per user.
+    let items = futures::future::try_join_all(thread_ids.into_iter().map(|thread_id| {
+        loader.load_one((
+            user_id.clone(),
+            EntityType::EmailThread.with_entity_string(thread_id.to_string()),
+        ))
+    }))
+    .await?;
+    let mut threads = Vec::with_capacity(items.len());
+    for item in items.into_iter().flatten() {
+        match GraphqlSoupEntity::<Edges>::new_with_projection(item) {
+            GraphqlSoupEntity::EmailThread(thread) => threads.push(thread),
+            _ => {
+                return Err(async_graphql::Error::new(
+                    "Soup returned a non-email entity for an email-thread request",
+                ));
+            }
+        }
+    }
+    Ok(threads)
 }
 
 /// Fetch one agent session the viewer can see, through the same access
@@ -149,6 +201,22 @@ where
             "Soup returned a non-agent-session entity for an agent-session request",
         )),
     }
+}
+
+/// Fetch one Soup entity the viewer can see, through the same access filter
+/// the Soup list uses, so an inaccessible or missing entity reads as absent.
+/// Reads the primary: see [`PrimarySoupItemLoader`].
+pub async fn resolve_soup_entity<Edges>(
+    ctx: &Context<'_>,
+    user_id: MacroUserIdStr<'static>,
+    entity: model_entity::Entity<'static>,
+) -> async_graphql::Result<Option<GraphqlSoupEntity<Edges>>>
+where
+    Edges: SoupEntityEdges,
+{
+    let loader = &ctx.data::<PrimarySoupItemLoader>()?.0;
+    let item = loader.load_one((user_id, entity)).await?;
+    Ok(item.map(GraphqlSoupEntity::<Edges>::new_with_projection))
 }
 
 /// Mutation-output adapter that reloads the canonical Soup email-thread object.

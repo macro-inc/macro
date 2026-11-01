@@ -1,12 +1,4 @@
 import {
-  autoUpdate,
-  computePosition,
-  flip,
-  offset,
-  shift,
-  size,
-} from '@floating-ui/dom';
-import {
   createEffect,
   createSignal,
   createUniqueId,
@@ -23,6 +15,7 @@ import {
   argumentLabel,
   formulaFunctions,
   functionSummary,
+  type TableReferences,
 } from '../core/formula-completion';
 import type {
   FormulaReferenceSpan,
@@ -33,6 +26,7 @@ import {
   createFormulaAssistance,
 } from '../primitives/create-formula-assistance';
 import { createTouchPress } from '../primitives/create-touch-press';
+import { EditorPopup } from './EditorPopup';
 
 /** Shared cell/formula-bar input. The popup keeps focus and editing in the textarea. */
 export type FormulaInputProps = {
@@ -44,6 +38,8 @@ export type FormulaInputProps = {
   autoFocus?: boolean;
   placeholder?: string;
   complete?: CompleteFormula;
+  /** Tables whose names and columns formulas complete. */
+  tableReferences?: () => TableReferences | undefined;
   selectionRequest?: FormulaTextSelection;
   /** Spans of `value` to draw in their reference's color. */
   references?: FormulaReferenceSpan[];
@@ -105,12 +101,17 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
       input.focus({ preventScroll: true });
       input.setSelectionRange(cursor, cursor);
       update();
-    }
+    },
+    () => props.tableReferences?.()
   );
   const result = assistance.completion;
   const choices = () => {
     const value = result();
     return value?.kind === 'list' ? value.names : [];
+  };
+  const references = () => {
+    const value = result();
+    return value?.kind === 'references' ? value.items : [];
   };
   const name = () => {
     const value = result();
@@ -119,6 +120,11 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
       : choices()[assistance.selected()];
   };
   const info = () => formulaFunctions[name()];
+  const referencesVisible = () =>
+    focused() &&
+    !props.readonly &&
+    !props.pickingReference &&
+    references().length > 0;
   const popupVisible = () =>
     focused() && !props.readonly && !props.pickingReference && !!info();
   const argument = () => {
@@ -172,10 +178,12 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
         aria-label={props.label}
         aria-autocomplete="list"
         aria-controls={
-          popupVisible() && choices().length ? `${id}-list` : undefined
+          (popupVisible() && choices().length) || referencesVisible()
+            ? `${id}-list`
+            : undefined
         }
         aria-activedescendant={
-          popupVisible() && choices().length
+          (popupVisible() && choices().length) || referencesVisible()
             ? `${id}-${assistance.selected()}`
             : undefined
         }
@@ -193,7 +201,7 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
         class={`${props.class} touch:text-[max(16px,1rem)]`}
         style={
           props.references?.length
-            ? { color: 'transparent', 'caret-color': 'var(--color-ink)' }
+            ? { '-webkit-text-fill-color': 'transparent' }
             : undefined
         }
         value={props.value}
@@ -240,11 +248,65 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
           />
         )}
       </Show>
+      <Show when={referencesVisible()}>
+        <Portal>
+          <EditorPopup
+            anchor={input}
+            interactive
+            class="w-72"
+            onReady={(element) => {
+              popup = element;
+            }}
+            onOutsidePress={dismiss}
+          >
+            <div
+              id={`${id}-list`}
+              role="listbox"
+              aria-label="Formula suggestions"
+              class="min-h-0 max-h-48 shrink overflow-y-auto overscroll-contain p-1"
+            >
+              <For each={references()}>
+                {(item, index) => {
+                  const press = createTouchPress(
+                    () => assistance.accept(index()),
+                    () => props.readonly ?? false
+                  );
+                  return (
+                    <div
+                      {...press}
+                      id={`${id}-${index()}`}
+                      role="option"
+                      aria-selected={assistance.selected() === index()}
+                      class="flex items-center gap-2 rounded px-2 py-1 text-xs touch:min-h-[44px] touch:text-sm"
+                      classList={{
+                        'bg-accent-bg text-accent':
+                          assistance.selected() === index(),
+                        'text-ink hover:bg-hover':
+                          assistance.selected() !== index(),
+                      }}
+                      onPointerMove={(event) => {
+                        press.onPointerMove(event);
+                        assistance.setSelected(index());
+                      }}
+                    >
+                      <span class="font-mono font-semibold">{item.label}</span>
+                      <span class="truncate text-[11px] text-ink-muted">
+                        {item.detail}
+                      </span>
+                    </div>
+                  );
+                }}
+              </For>
+            </div>
+          </EditorPopup>
+        </Portal>
+      </Show>
       <Show when={popupVisible()}>
         <Portal>
-          <FormulaPopup
+          <EditorPopup
             anchor={input}
             interactive={choices().length > 0}
+            class="w-72"
             onReady={(element) => {
               popup = element;
             }}
@@ -325,7 +387,7 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
                 </p>
               </Show>
             </div>
-          </FormulaPopup>
+          </EditorPopup>
         </Portal>
       </Show>
     </>
@@ -334,8 +396,8 @@ function FormulaTextarea(props: FormulaInputProps & { typed?: boolean }) {
 
 /**
  * Draws the textarea's text over it, with references in their colors. A
- * textarea cannot style part of its text, so it keeps the caret and selection
- * while its own text is transparent.
+ * textarea cannot style part of its text, so it keeps the caret, selection and
+ * text color while its glyphs are transparent.
  */
 function ReferenceMirror(props: {
   input: HTMLTextAreaElement;
@@ -371,6 +433,7 @@ function ReferenceMirror(props: {
       fontSize: style.fontSize,
       fontWeight: style.fontWeight,
       fontStyle: style.fontStyle,
+      color: style.color,
       letterSpacing: style.letterSpacing,
       lineHeight: style.lineHeight,
       textAlign: style.textAlign,
@@ -404,7 +467,7 @@ function ReferenceMirror(props: {
       ref={mirror}
       aria-hidden="true"
       data-formula-mirror
-      class="pointer-events-none absolute box-border overflow-hidden whitespace-pre border-solid border-transparent text-ink"
+      class="pointer-events-none absolute box-border overflow-hidden whitespace-pre border-solid border-transparent"
     >
       <span ref={text} class="block">
         <For each={segments()}>
@@ -415,73 +478,6 @@ function ReferenceMirror(props: {
           )}
         </For>
       </span>
-    </div>
-  );
-}
-
-function FormulaPopup(props: {
-  anchor: HTMLElement;
-  interactive: boolean;
-  children: import('solid-js').JSX.Element;
-  onReady: (element: HTMLDivElement) => void;
-  onOutsidePress: () => void;
-}) {
-  let element!: HTMLDivElement;
-  onMount(() => {
-    props.onReady(element);
-    // Pressing a cell, sheet tab, or toolbar keeps the draft but closes help.
-    const press = (event: PointerEvent) => {
-      const target = event.target as Node;
-      if (!element.contains(target) && !props.anchor.contains(target))
-        props.onOutsidePress();
-    };
-    document.addEventListener('pointerdown', press, true);
-    onCleanup(() => document.removeEventListener('pointerdown', press, true));
-    let alive = true;
-    const update = async () => {
-      const position = await computePosition(props.anchor, element, {
-        strategy: 'fixed',
-        placement: 'bottom-start',
-        middleware: [
-          offset(5),
-          flip(),
-          shift({ padding: 12 }),
-          size({
-            padding: 12,
-            apply({ availableHeight, elements }) {
-              elements.floating.style.maxHeight = `${Math.max(0, availableHeight)}px`;
-            },
-          }),
-        ],
-      });
-      if (alive)
-        Object.assign(element.style, {
-          left: `${position.x}px`,
-          top: `${position.y}px`,
-          visibility: 'visible',
-        });
-    };
-    const cleanup = autoUpdate(props.anchor, element, () => {
-      void update();
-    });
-    onCleanup(() => {
-      alive = false;
-      cleanup();
-    });
-  });
-  return (
-    <div
-      ref={element}
-      style={{ visibility: 'hidden' }}
-      class="fixed z-[100] flex w-72 max-w-[calc(100vw-24px)] flex-col overflow-hidden rounded-lg border border-edge bg-panel text-ink shadow-xl"
-      classList={{ 'pointer-events-none': !props.interactive }}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-      }}
-      onMouseDown={(event) => event.preventDefault()}
-    >
-      {props.children}
     </div>
   );
 }

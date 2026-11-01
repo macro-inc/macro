@@ -33,6 +33,7 @@ export function queuedDraftSaveArgs({
     senderIsSignal: senderAccount?.draft_is_signal,
     newThreadOwnerId,
     draftId: handles.draftId,
+    draftGeneration: draft.draft_generation ?? 0,
     threadDbId: handles.threadId,
     // Persist the selected inbox itself: the primary inbox can change before replay.
     linkId: senderLinkId || undefined,
@@ -47,7 +48,7 @@ export function queuedDraftSaveArgs({
     bodyText: draft.body_text ?? undefined,
     bodyMacro: draft.body_macro ?? undefined,
     senderLinkId,
-    senderEmail,
+    senderEmail: draft.sender_email ?? senderEmail,
     // Responses carry the body unencoded; mutation input retains base64.
     optimisticBodyHtml: draft.body_html
       ? decodeBase64Utf8(draft.body_html)

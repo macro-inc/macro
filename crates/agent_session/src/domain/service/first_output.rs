@@ -1,6 +1,6 @@
 //! Which live frames should bypass the log's publication timer.
 
-use agent_fold::domain::model::{Author, Control, FoldEvent, MessagePart, OwnedFoldEvent, TurnId};
+use agent_fold::domain::model::{Author, FoldEvent, MessagePart, OwnedFoldEvent, TurnId};
 
 /// Keep the beginning of prose responsive across small provider chunks. A
 /// numbered-list marker, bold delimiter, or code-fence language can arrive
@@ -27,12 +27,7 @@ impl FirstOutput {
                         && message.parts.iter().any(|part| {
                             matches!(
                                 part,
-                                MessagePart::Text { .. }
-                                    | MessagePart::Attachment { .. }
-                                    | MessagePart::Control {
-                                        control: Control::Compact,
-                                        ..
-                                    }
+                                MessagePart::Text { .. } | MessagePart::Attachment { .. }
                             )
                         }) =>
                 {

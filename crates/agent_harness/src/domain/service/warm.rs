@@ -2,7 +2,7 @@
 use super::open::starting_branch;
 use super::*;
 use crate::domain::model::SessionRepository;
-use agent_session::domain::model::session_owner_user;
+use agent_session::domain::model::{SessionSource, SessionVisibility, session_owner_user};
 use agent_session::domain::ports::{OpenManagedSession, SelectedManagedPersona};
 use agent_session::domain::warm::WarmClaim;
 use model_owner::Owner;
@@ -52,7 +52,7 @@ where
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
-    #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = false, agent.session.warm_id_sent = tracing::field::Empty, agent.session.warm_miss_reason = tracing::field::Empty, agent.session.model = tracing::field::Empty))]
+    #[tracing::instrument(skip_all, err, fields(agent.session.id = tracing::field::Empty, agent.harness = tracing::field::Empty, agent.session.warm = warm, agent.session.warm_hit = false, agent.session.warm_id_sent = tracing::field::Empty, agent.session.warm_miss_reason = tracing::field::Empty, agent.session.model = tracing::field::Empty, agent.session.source = <&str>::from(request.source), agent.session.visibility = <&str>::from(request.visibility)))]
     pub(super) async fn open_managed_session_inner(
         &self,
         request: agent_session::domain::ports::OpenManagedSession,
@@ -159,10 +159,13 @@ where
         let claim = if warm {
             None
         } else {
+            // A warm row was created as the owner's own session, so a routine
+            // run or an agent's dispatch opens its own and stays recognizable.
             let eligible = kind == AgentKind::InMemory
                 && bot_id == bot_id::MACRO_NEW_BOT_ID
                 && matches!(mcp_servers, AgentMcpServers::OwnerConnections)
-                && request.repo_url.is_none();
+                && request.repo_url.is_none()
+                && request.source == SessionSource::User;
             let claim = match &self.warm_lifecycle {
                 Some(lifecycle) if eligible => Some(
                     lifecycle
@@ -191,11 +194,12 @@ where
                 )
                 .await;
             if let Some(prompt) = request.prompt {
+                let (id, action) = prompt.into_action();
                 self.execute(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction {
-                        id: AgentActionId::mint(),
-                        action: AgentAction::prompt(prompt),
+                        id,
+                        action,
                         actor: Some(owner_user),
                         announce: None,
                         context: None,
@@ -233,7 +237,20 @@ where
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
-                warm,
+                purpose: match (warm, request.source) {
+                    (true, _) => agent_session::domain::model::SessionPurpose::Warm,
+                    (false, SessionSource::Routine) => {
+                        agent_session::domain::model::SessionPurpose::Routine {
+                            visibility: request.visibility,
+                        }
+                    }
+                    (false, SessionSource::Agent) => {
+                        agent_session::domain::model::SessionPurpose::Dispatched
+                    }
+                    (false, SessionSource::User) => {
+                        agent_session::domain::model::SessionPurpose::Standalone
+                    }
+                },
                 repo_branch: selected_repo.as_ref().map(|(_, branch)| branch.clone()),
                 id: session_id,
                 owner_id: request.owner,
@@ -268,10 +285,10 @@ where
                 .await;
         }
 
-        let mcp_servers = if kind == AgentKind::CodexCloud {
-            Vec::new()
-        } else {
+        let mcp_servers = if kind.takes_egress_mcp_servers() {
             egress.sandbox.acp_servers()
+        } else {
+            Vec::new()
         };
         let container = match self
             .inner
@@ -345,12 +362,13 @@ where
         // Raw, through the session's own command worker: dispatch is where a
         // prompt is composed, and the worker is what serializes this first
         // prompt against any control prompt racing the session's birth.
-        if let Some(raw_prompt) = request.prompt {
+        if let Some(prompt) = request.prompt {
+            let (id, action) = prompt.into_action();
             self.execute_here(
                 session.id,
                 HarnessCommand::Deliver(DeliverAction {
-                    id: AgentActionId::mint(),
-                    action: AgentAction::prompt(raw_prompt),
+                    id,
+                    action,
                     actor: Some(owner_user),
                     announce: None,
                     context: None,
@@ -424,6 +442,8 @@ where
             }),
             instructions: None,
             model: None,
+            source: SessionSource::User,
+            visibility: SessionVisibility::Listed,
         };
         match tokio::time::timeout(
             WARM_PREPARATION_TIMEOUT,

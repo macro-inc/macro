@@ -16,7 +16,12 @@ in
 {
   imports = [
     ./dashboards.nix
+    ./ci-dashboard.nix
+    ./database-dashboard.nix
+    ./database-queries-dashboard.nix
+    ./prod-alerts-dashboard.nix
     ./alerting.nix
+    ./goalert.nix
   ];
   services.grafana = {
     enable = true;
@@ -56,9 +61,16 @@ in
     ];
   };
   systemd.services = {
+    nginx = needsSecrets // {
+      serviceConfig.LoadCredential = [ (credential "metrics.htpasswd") ];
+    };
     grafana = needsSecrets // {
       serviceConfig = {
-        EnvironmentFile = "/opt/observability/runtime.env";
+        EnvironmentFile = [
+          "/opt/observability/runtime.env"
+          # Interpolated into the GoAlert contact points by alerting provisioning.
+          "/run/macro-observability/grafana-goalert.env"
+        ];
         LoadCredential = map credential [
           "google_client_id"
           "google_client_secret"
