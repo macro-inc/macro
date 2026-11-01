@@ -6,6 +6,10 @@ import { NativeAppUpdateRequiredDialog } from '@core/mobile/NativeAppUpdateRequi
 import { nativeUpdateRequired } from '@core/mobile/nativeUpdateRequired';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform, isTauri } from '@core/util/platform';
+import {
+  hasAutomaticReloadHolds,
+  syncNativeReloadHold,
+} from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
 import { PlatformNotificationProvider } from '@notifications';
 import { queryPersistence } from '@queries/client';
@@ -138,6 +142,7 @@ function TauriProvider(props: { children: JSX.Element }) {
         console.error('[bundle-update] ack_bundle_update_reload failed', e)
       );
     }
+    fireAndForget(syncNativeReloadHold(), 'bundle-update');
     // Fetch current status since events emitted before the listener registered are missed
     invoke<BundleUpdateStatus>('get_bundle_update_status')
       .then((status) => {
@@ -157,7 +162,9 @@ function TauriProvider(props: { children: JSX.Element }) {
       // iOS gives us a short JS execution window after the app is backgrounded.
       // Use it to ask Rust to apply a completed bundle before suspension;
       // native Ready/Resumed handlers cover cases where this window is missed.
-      if (document.hidden) {
+      // Leaving the app does not mean nothing is running: switching to Gmail
+      // for a sign-in code hides the page while its auth sheet is still open.
+      if (document.hidden && !hasAutomaticReloadHolds()) {
         performBundleUpdate();
       }
     };

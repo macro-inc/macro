@@ -7,16 +7,38 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/util/platform', () => ({
   getNativeMobilePlatform: mocks.platform,
 }));
-vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke }));
+vi.mock('@tauri-apps/api/core', () => ({
+  invoke: async (command: string, args: unknown) =>
+    command === 'set_bundle_reload_hold'
+      ? undefined
+      : mocks.invoke(command, args),
+}));
 
+import {
+  hasAutomaticReloadHolds,
+  resetReloadForNewerBuildForTests,
+} from '@core/util/reloadForNewerBuild';
 import {
   createNativeAuthSession,
   DESKTOP_AUTH_CALLBACK_URL,
   openDesktopAuthSession,
 } from './native-auth';
 
+function pendingSheet() {
+  let settle: { resolve(value: unknown): void; reject(error: Error): void } = {
+    resolve: () => {},
+    reject: () => {},
+  };
+  const result = new Promise((resolve, reject) => {
+    settle = { resolve, reject };
+  });
+  mocks.invoke.mockReturnValueOnce(result);
+  return settle;
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
+  resetReloadForNewerBuildForTests();
   mocks.platform.mockReturnValue('android');
 });
 
@@ -73,6 +95,42 @@ describe('native browser authentication', () => {
       success: false,
       error: 'User canceled login',
     });
+  });
+
+  it('holds automatic reloads for as long as the sheet is open', async () => {
+    mocks.platform.mockReturnValue('ios');
+    const sheet = pendingSheet();
+
+    const signingIn = createNativeAuthSession('login').authenticate(
+      'https://gateway.macro.com/auth/login/sso'
+    );
+    await vi.waitFor(() => expect(mocks.invoke).toHaveBeenCalledOnce());
+    expect(hasAutomaticReloadHolds()).toBe(true);
+
+    sheet.resolve({ success: true, token: 'one-time-code' });
+    await expect(signingIn).resolves.toEqual({
+      success: true,
+      token: 'one-time-code',
+    });
+    expect(hasAutomaticReloadHolds()).toBe(false);
+  });
+
+  it('releases the hold when the sheet is canceled or the bridge fails', async () => {
+    const session = createNativeAuthSession('login');
+
+    const canceled = pendingSheet();
+    const canceling = session.authenticate('https://example.com');
+    await vi.waitFor(() => expect(hasAutomaticReloadHolds()).toBe(true));
+    canceled.resolve({ success: false, error: 'User canceled login' });
+    await canceling;
+    expect(hasAutomaticReloadHolds()).toBe(false);
+
+    const broken = pendingSheet();
+    const failing = session.authenticate('https://example.com');
+    await vi.waitFor(() => expect(hasAutomaticReloadHolds()).toBe(true));
+    broken.reject(new Error('bridge unavailable'));
+    await failing;
+    expect(hasAutomaticReloadHolds()).toBe(false);
   });
 
   it('hands the desktop flow to the system browser', async () => {

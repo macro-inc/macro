@@ -1,11 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const native = vi.hoisted(() => ({
+  invoke: vi.fn(),
+  mobilePlatform: vi.fn(),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { custom: vi.fn() },
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('@tauri-apps/api/core', () => ({ invoke: native.invoke }));
+vi.mock('./platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./platform')>()),
+  getNativeMobilePlatform: native.mobilePlatform,
+}));
 
 import {
+  hasAutomaticReloadHolds,
   holdAutomaticReload,
   pendingWebUpdate,
   promptReloadForFailedLoad,
@@ -14,6 +25,7 @@ import {
   recoverFromFailedLoad,
   reloadForNewerBuild,
   resetReloadForNewerBuildForTests,
+  syncNativeReloadHold,
 } from './reloadForNewerBuild';
 
 function fakePage(state: {
@@ -51,6 +63,104 @@ function fakePage(state: {
     },
   };
 }
+
+const settled = () => new Promise((resolve) => setTimeout(resolve));
+
+describe('holdAutomaticReload', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    resetReloadForNewerBuildForTests();
+  });
+
+  it('tells the mobile updater until the last hold is released', async () => {
+    native.mobilePlatform.mockReturnValue('ios');
+    native.invoke.mockResolvedValue(undefined);
+
+    const first = holdAutomaticReload();
+    const second = holdAutomaticReload();
+    first();
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledOnce());
+    await settled();
+    expect(native.invoke).toHaveBeenCalledOnce();
+
+    second();
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(2));
+    expect(native.invoke.mock.calls).toEqual([
+      ['set_bundle_reload_hold', { held: true }],
+      ['set_bundle_reload_hold', { held: false }],
+    ]);
+  });
+
+  it('sends one write at a time and finishes on the latest state', async () => {
+    native.mobilePlatform.mockReturnValue('ios');
+    let finishWrite = () => {};
+    native.invoke.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishWrite = resolve;
+        })
+    );
+    native.invoke.mockResolvedValue(undefined);
+
+    const release = holdAutomaticReload();
+    release();
+    await settled();
+    expect(native.invoke).toHaveBeenCalledOnce();
+
+    finishWrite();
+    await vi.waitFor(() => expect(native.invoke).toHaveBeenCalledTimes(2));
+    expect(native.invoke.mock.calls).toEqual([
+      ['set_bundle_reload_hold', { held: true }],
+      ['set_bundle_reload_hold', { held: false }],
+    ]);
+  });
+
+  it('can write again after a failed write', async () => {
+    native.mobilePlatform.mockReturnValue('ios');
+    native.invoke.mockRejectedValueOnce(new Error('bridge unavailable'));
+    native.invoke.mockResolvedValue(undefined);
+
+    await expect(syncNativeReloadHold()).rejects.toThrow('bridge unavailable');
+    await expect(syncNativeReloadHold()).resolves.toBeUndefined();
+
+    expect(native.invoke).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears a hold left behind when a new document has none', async () => {
+    native.mobilePlatform.mockReturnValue('android');
+    native.invoke.mockResolvedValue(undefined);
+
+    await syncNativeReloadHold();
+
+    expect(native.invoke.mock.calls).toEqual([
+      ['set_bundle_reload_hold', { held: false }],
+    ]);
+  });
+
+  it('keeps a hold taken before the document finished mounting', async () => {
+    native.mobilePlatform.mockReturnValue('ios');
+    native.invoke.mockResolvedValue(undefined);
+    holdAutomaticReload();
+    await settled();
+    native.invoke.mockClear();
+
+    await syncNativeReloadHold();
+
+    expect(native.invoke.mock.calls).toEqual([
+      ['set_bundle_reload_hold', { held: true }],
+    ]);
+  });
+
+  it('stays off the native bridge outside the mobile apps', async () => {
+    native.mobilePlatform.mockReturnValue(undefined);
+
+    holdAutomaticReload()();
+    await syncNativeReloadHold();
+
+    expect(native.invoke).not.toHaveBeenCalled();
+    expect(hasAutomaticReloadHolds()).toBe(false);
+  });
+});
 
 describe('reloadForNewerBuild', () => {
   beforeEach(() => {

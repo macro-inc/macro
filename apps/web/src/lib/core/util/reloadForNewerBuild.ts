@@ -2,9 +2,12 @@ import type { ReloadReason } from '@app/observability/generated/native-diagnosti
 import { reloadApp } from '@app/observability/reload';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { invoke } from '@tauri-apps/api/core';
 import { createSignal } from 'solid-js';
 import { deviceLooksOffline } from './connectivity';
+import { fireAndForget } from './fireAndForget';
 import { isEditableInput } from './isEditableInput';
+import { getNativeMobilePlatform } from './platform';
 
 /** What the reload decision needs from the page; replaced in tests. */
 export interface ReloadPage {
@@ -72,6 +75,7 @@ const browserPage: ReloadPage = {
 
 const holds = new Set<symbol>();
 let scheduled = false;
+let nativeHoldSyncing = false;
 
 /** Checks active calls/uploads/imports without executing unload side effects. */
 export function hasAutomaticReloadHolds(): boolean {
@@ -79,15 +83,39 @@ export function hasAutomaticReloadHolds(): boolean {
 }
 
 /**
+ * The mobile updater applies a finished bundle when the app returns to the
+ * foreground, without asking this page, so a hold has to reach it too. A new
+ * document calls this on mount, because one that died holding never released.
+ */
+export async function syncNativeReloadHold(): Promise<void> {
+  if (nativeHoldSyncing || !getNativeMobilePlatform()) return;
+  nativeHoldSyncing = true;
+  try {
+    // Native commands run as separate tasks, so overlapping writes could land
+    // out of order. Send one at a time and finish on the latest state.
+    let sent: boolean;
+    do {
+      sent = holds.size > 0;
+      await invoke('set_bundle_reload_hold', { held: sent });
+    } while (sent !== holds.size > 0);
+  } finally {
+    nativeHoldSyncing = false;
+  }
+}
+
+/**
  * Keeps this tab from reloading by itself into a newer build while work a
- * reload would cut off is running, such as a call or an upload. Returns the
- * release. The user can still reload from the prompt.
+ * reload would cut off is running, such as a call, an upload, or a native
+ * sign-in sheet. Returns the release. The user can still reload from the
+ * prompt.
  */
 export function holdAutomaticReload(): () => void {
   const hold = Symbol('automatic reload hold');
   holds.add(hold);
+  fireAndForget(syncNativeReloadHold(), 'bundle-update');
   return () => {
     holds.delete(hold);
+    fireAndForget(syncNativeReloadHold(), 'bundle-update');
   };
 }
 
@@ -207,5 +235,6 @@ export function recoverFromFailedLoad(
 /** Test seam: forget the scheduled reload and every hold. */
 export function resetReloadForNewerBuildForTests(): void {
   scheduled = false;
+  nativeHoldSyncing = false;
   holds.clear();
 }
