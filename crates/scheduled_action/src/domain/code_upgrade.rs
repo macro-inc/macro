@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use utoipa::ToSchema;
 
 use super::models::ScheduledAction;
-use super::ports::{CodeRun, CodeUpgrades, RoutineCode};
+use super::ports::{CodeRun, CodeUpgrades, RoutineCode, ScheduledActionRepo};
 
 #[cfg(test)]
 mod test;
@@ -246,7 +246,75 @@ impl CodeUpgrades for NoCodeUpgrades {
         Ok(())
     }
 
+    async fn stale_routines(
+        &self,
+        _: &SdkFingerprint,
+        _: Option<Uuid>,
+        _: u16,
+    ) -> Result<Vec<Uuid>> {
+        Ok(Vec::new())
+    }
+
     async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
         Ok(Vec::new())
     }
+}
+
+/// Routines one sweep page reads.
+const SWEEP_PAGE: u16 = 50;
+
+/// What a sweep did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Sweep {
+    /// Routines now on the current SDK, as they were or rewritten.
+    pub upgraded: usize,
+    /// Routines left for their owner or for a run already upgrading them.
+    pub waiting: usize,
+}
+
+/// Bring every enabled routine whose code was checked against an older SDK
+/// to the current one, so the first run after a release doesn't pay for
+/// it; the run-time upgrade stays the fallback. Each routine is visited
+/// once, with no trigger, so a rewrite's dry run has nothing to read.
+#[tracing::instrument(name = "routine.code_sweep", skip_all, fields(
+    upgraded = tracing::field::Empty,
+    waiting = tracing::field::Empty,
+), err)]
+pub async fn sweep(
+    code: &impl RoutineCode,
+    upgrades: &impl CodeUpgrades,
+    repo: &impl ScheduledActionRepo,
+    stop: &tokio_util::sync::CancellationToken,
+) -> Result<Sweep> {
+    let mut done = Sweep::default();
+    let Some(sdk) = code.sdk() else {
+        return Ok(done);
+    };
+    let mut after = None;
+    while !stop.is_cancelled() {
+        let page = upgrades.stale_routines(&sdk, after, SWEEP_PAGE).await?;
+        let Some(last) = page.last() else { break };
+        after = Some(*last);
+        for id in page {
+            if stop.is_cancelled() {
+                break;
+            }
+            let Some(action) = repo.get_action(&id).await? else {
+                continue;
+            };
+            let Ok(program) = RoutineProgram::from_task(&action.task) else {
+                continue;
+            };
+            let owner = action.owner_user()?.clone();
+            match current_code(code, upgrades, &owner, &action, program, None).await {
+                Ok(_) => done.upgraded += 1,
+                Err(error) if error.downcast_ref::<NeedsUpdate>().is_some() => done.waiting += 1,
+                Err(error) => return Err(error),
+            }
+        }
+    }
+    let span = tracing::Span::current();
+    span.record("upgraded", done.upgraded);
+    span.record("waiting", done.waiting);
+    Ok(done)
 }

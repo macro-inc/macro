@@ -147,3 +147,122 @@ async fn needing_an_update_pauses_the_routine_with_the_reason(pool: PgPool) {
     );
     assert_eq!(history[0].task.as_ref(), Some(&proposal));
 }
+
+/// Checks pass for every source; no runs, no rewrites.
+struct Checks;
+
+impl crate::domain::ports::RoutineCode for Checks {
+    fn sdk(&self) -> Option<SdkFingerprint> {
+        Some(sdk("0.3.0+new"))
+    }
+
+    async fn check(
+        &self,
+        _: &str,
+    ) -> std::result::Result<Vec<String>, crate::domain::ports::CodeUnavailable> {
+        Ok(Vec::new())
+    }
+
+    async fn run(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        _: crate::domain::ports::CodeRun<'_>,
+    ) -> crate::domain::ports::CodeOutcome {
+        unreachable!("checked code isn't run by a sweep")
+    }
+
+    async fn rewrite(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        _: &routine_program::CodeStep,
+        _: &[String],
+    ) -> std::result::Result<String, String> {
+        unreachable!("checked code isn't rewritten")
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPool) {
+    let repo = test_repo(pool.clone());
+    let upgrades = PgCodeUpgrades::new(pool.clone());
+    insert_user(&pool, USER_A).await;
+    let create = |task: Value, enabled: bool| {
+        let mut action = sample_action(user_owner(USER_A), "routine");
+        action.task = task;
+        action.enabled = enabled;
+        action
+    };
+    let nested = repo
+        .create_action(create(
+            json!({ "steps": [{ "type": "if", "condition": "Invoice?", "then": [
+                { "type": "code", "title": "File", "source": "old" }
+            ] }], "sdk": "0.2.0+old" }),
+            true,
+        ))
+        .await
+        .unwrap();
+    let never_checked = repo
+        .create_action(create(
+            json!({ "steps": [{ "type": "code", "title": "File", "source": "old" }] }),
+            true,
+        ))
+        .await
+        .unwrap();
+    let current = repo
+        .create_action(create(
+            json!({ "steps": [{ "type": "code", "title": "File", "source": "new" }], "sdk": "0.3.0+new" }),
+            true,
+        ))
+        .await
+        .unwrap();
+    let paused = repo
+        .create_action(create(
+            json!({ "steps": [{ "type": "code", "title": "File", "source": "old" }], "sdk": "0.2.0+old" }),
+            false,
+        ))
+        .await
+        .unwrap();
+    let no_code = repo
+        .create_action(create(
+            json!({ "steps": [{ "type": "agent", "model": "m", "instructions": "Go" }] }),
+            true,
+        ))
+        .await
+        .unwrap();
+
+    let mut stale = upgrades
+        .stale_routines(&sdk("0.3.0+new"), None, 1)
+        .await
+        .unwrap();
+    stale.extend(
+        upgrades
+            .stale_routines(&sdk("0.3.0+new"), stale.last().copied(), 10)
+            .await
+            .unwrap(),
+    );
+    let mut expected = vec![nested.id.unwrap(), never_checked.id.unwrap()];
+    expected.sort();
+    assert_eq!(stale, expected);
+
+    let swept = crate::domain::code_upgrade::sweep(
+        &Checks,
+        &upgrades,
+        &repo,
+        &tokio_util::sync::CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(swept.upgraded, 2);
+    for action in [&nested, &never_checked, &current] {
+        assert_eq!(stored(&pool, action).await.task["sdk"], "0.3.0+new");
+    }
+    assert_eq!(stored(&pool, &paused).await.task["sdk"], "0.2.0+old");
+    assert_eq!(stored(&pool, &no_code).await.task.get("sdk"), None);
+    assert!(
+        upgrades
+            .stale_routines(&sdk("0.3.0+new"), None, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

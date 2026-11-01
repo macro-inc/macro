@@ -18,6 +18,7 @@ use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 use config::Config;
+use scheduled_action::domain::code_upgrade;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
@@ -164,6 +165,25 @@ pub async fn build(
     // still go through the routine-session operations.
     let code = Arc::new(code);
     let upgrades = Arc::new(PgCodeUpgrades::new(db.clone()));
+    // After a release, bring routines' code to the new SDK before their runs
+    // need it; a run still upgrades its own code if this hasn't reached it.
+    {
+        let (code, upgrades, repo) = (Arc::clone(&code), Arc::clone(&upgrades), Arc::clone(&repo));
+        let stop = lifecycle.stop_workers.clone();
+        let mut ready = ready.clone();
+        lifecycle.workers.spawn(async move {
+            tokio::select! {
+                biased;
+                _ = stop.cancelled() => return,
+                result = ready.wait_for(|ready| *ready) => if result.is_err() { return; },
+            }
+            if let Err(error) =
+                code_upgrade::sweep(code.as_ref(), upgrades.as_ref(), repo.as_ref(), &stop).await
+            {
+                tracing::warn!(error = ?error, "routine code sweep stopped");
+            }
+        });
+    }
     let runner = Arc::new(
         ProgramRunner::new(
             Arc::new(TargetRunner::new(Arc::clone(&sessions))),

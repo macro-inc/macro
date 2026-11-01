@@ -181,6 +181,30 @@ impl CodeUpgrades for PgCodeUpgrades {
         Ok(())
     }
 
+    async fn stale_routines(
+        &self,
+        sdk: &SdkFingerprint,
+        after: Option<Uuid>,
+        limit: u16,
+    ) -> Result<Vec<Uuid>> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT id FROM scheduled_action
+            WHERE enabled
+              AND task->>'sdk' IS DISTINCT FROM $1
+              AND jsonb_path_exists(task, '$.steps.** ? (@.type == "code")')
+              AND ($2::uuid IS NULL OR id > $2)
+            ORDER BY id
+            LIMIT $3
+            "#,
+            sdk.as_str(),
+            after,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await?)
+    }
+
     async fn list_upgrades(&self, action_id: Uuid) -> Result<Vec<CodeUpgrade>> {
         let rows = sqlx::query!(
             r#"

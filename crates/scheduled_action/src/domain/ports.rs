@@ -574,6 +574,15 @@ pub trait CodeUpgrades: Send + Sync + 'static {
         proposal: Option<&serde_json::Value>,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Up to `limit` enabled routines with code steps last checked against
+    /// another SDK than `sdk`, by id after `after`.
+    fn stale_routines(
+        &self,
+        sdk: &routine_program::SdkFingerprint,
+        after: Option<Uuid>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<Uuid>>> + Send;
+
     /// The routine's upgrades, newest first.
     fn list_upgrades(
         &self,

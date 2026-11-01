@@ -136,6 +136,15 @@ impl CodeUpgrades for Upgrades {
         Ok(())
     }
 
+    async fn stale_routines(
+        &self,
+        _: &SdkFingerprint,
+        _: Option<Uuid>,
+        _: u16,
+    ) -> Result<Vec<Uuid>> {
+        Ok(Vec::new())
+    }
+
     async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
         Ok(Vec::new())
     }

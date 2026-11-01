@@ -23,6 +23,11 @@ each run.
 - `src/domain/code_check.rs`: saving a routine type-checks its changed code
   steps and stamps the task's `sdk`; unchanged code already checked against
   the current SDK isn't checked again.
+- `src/domain/code_upgrade.rs`: before a run uses code checked against an
+  older SDK, it is checked again, and rewritten by a model only if that
+  fails (once per routine and SDK, `scheduled_action_code_upgrade`); a
+  failed rewrite pauses the routine. `sweep` does the same for every
+  enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,
