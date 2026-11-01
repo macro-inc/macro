@@ -169,6 +169,38 @@ it('discards a standalone draft at its server generation', async () => {
   );
 });
 
+it.each([
+  { state: 'CONFLICT', issue: 'DRAFT_CONFLICT', discards: true },
+  { state: 'UNCERTAIN', issue: 'ATTACHMENT_UNKNOWN', discards: true },
+  { state: 'UNCERTAIN', issue: 'SEND_UNKNOWN', discards: false },
+  { state: 'SUBMITTING', issue: null, discards: false },
+] as const)(
+  'discards a draft whose $state $issue operation locks editing: $discards',
+  async ({ state, issue, discards }) => {
+    const composeContext = providerContext('OUTLOOK');
+    const goBack = vi.fn();
+    const root = mountEmailComposer(
+      composeContext,
+      { goBack },
+      {
+        draft: message('locked', {
+          is_draft: true,
+          thread_db_id: 'thread',
+          operation: { state, revision: '1', issue },
+        }),
+      }
+    );
+    expect(root.state.context.disabled()).toBe(true);
+    expect(root.state.context.deleteDisabled?.()).toBe(!discards);
+    await root.state.deleteDraftAndReset();
+    root.dispose();
+    expect(goBack).toHaveBeenCalledTimes(discards ? 1 : 0);
+    expect(composeContext.drafts.deleteDraft).toHaveBeenCalledTimes(
+      discards ? 1 : 0
+    );
+  }
+);
+
 it('discards a reply draft at its server generation', async () => {
   const composeContext = createComposeContext();
   const root = mountReplyComposer(composeContext, () => message('parent'), {

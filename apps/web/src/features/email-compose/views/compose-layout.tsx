@@ -170,6 +170,7 @@ export function ComposeLayout(props: {
   registerDraftActionHotkeys({
     scopeId: composeHotkeyScope,
     disabled: ctx.disabled,
+    discardDisabled: ctx.deleteDisabled,
     discard: () => ctx.onDelete?.(),
     attach: ctx.hideAttachments ? undefined : ctx.onAddAttachments,
   });

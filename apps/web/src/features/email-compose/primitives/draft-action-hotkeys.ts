@@ -12,6 +12,8 @@ import type { Accessor } from 'solid-js';
 export function registerDraftActionHotkeys(options: {
   scopeId: string;
   disabled: Accessor<boolean>;
+  /** Discard can outlast editing; defaults to `disabled`. */
+  discardDisabled?: Accessor<boolean>;
   discard: () => void;
   /** Omit when the composer takes no attachments. */
   attach?: (files: File[]) => void;
@@ -21,7 +23,7 @@ export function registerDraftActionHotkeys(options: {
     scopeId: options.scopeId,
     description: 'Discard draft',
     keyDownHandler: () => {
-      if (options.disabled()) return false;
+      if ((options.discardDisabled ?? options.disabled)()) return false;
       options.discard();
       return true;
     },

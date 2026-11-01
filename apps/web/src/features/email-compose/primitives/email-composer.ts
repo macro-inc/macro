@@ -25,6 +25,7 @@ import type {
   EmailMessage,
 } from '../../email-message/core/email-message';
 import {
+  operationBlocksDiscard,
   operationBlocksEditing,
   operationBlocksInboxSwitch,
   operationBlocksSending,
@@ -505,10 +506,9 @@ export function createEmailComposer(props: EmailComposerOptions) {
   const operationBlocked = () =>
     operationSource?.needsReload?.() ||
     operationBlocksEditing(currentOperation());
-  const persistencePaused = () =>
+  const composerBusy = () =>
     restoring() ||
     sendLocked() ||
-    operationBlocked() ||
     submitting() ||
     discarding() ||
     movingInbox() ||
@@ -516,6 +516,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
     completed() ||
     schedule?.pending() ||
     schedule?.state().type === 'scheduled';
+  const persistencePaused = () => operationBlocked() || composerBusy();
+  // A mailbox conflict or unconfirmed write locks editing, not discarding.
+  const discardBlocked = () =>
+    composerBusy() ||
+    !!operationSource?.needsReload?.() ||
+    operationBlocksDiscard(currentOperation());
 
   const autosave = createDraftAutosave({
     ...createDraftSaveNotice(props.notices.feedback),
@@ -1111,7 +1117,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
       );
       return false;
     }
-    if (persistencePaused() || scheduling()) return false;
+    if (discardBlocked() || scheduling()) return false;
     setDiscarding(true);
     autosave.cancel();
     // A standalone draft owns its thread, so nothing is left to show. Leave
@@ -1485,6 +1491,8 @@ export function createEmailComposer(props: EmailComposerOptions) {
       terminalState() !== undefined ||
       scheduling() ||
       schedule.state().type === 'scheduled',
+    deleteDisabled: () =>
+      discardBlocked() || hasInboxError() || terminalState() !== undefined,
     primaryActionDisabled: () =>
       sendLocked() ||
       deliveryBlocked() ||
