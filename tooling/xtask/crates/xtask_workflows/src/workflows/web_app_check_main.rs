@@ -182,6 +182,7 @@ fn biome_check() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
+        .add_step(check_browser_floor())
         .add_step(check_native_permissions())
         .add_step(steps::teardown_nix())
 }
@@ -415,6 +416,13 @@ fn run_biome() -> Step<Run> {
     Step::new("Run Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Runs the browser-floor ast-grep rules here because Conventions, which runs
+/// every ast-grep rule, is not a required check.
+fn check_browser_floor() -> Step<Run> {
+    Step::new("Check Browser Floor APIs")
+        .run("bunx --yes @ast-grep/cli@0.44.1 scan --filter '^tsx?-browser-floor-apis$'")
 }
 
 /// Checks the native bundles keep their camera and microphone permissions.
