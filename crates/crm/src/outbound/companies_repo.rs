@@ -136,6 +136,73 @@ impl CompaniesRepositoryImpl {
         Ok(row.map(|r| (r.id, r.hidden)))
     }
 
+    /// Whether `populate_contact` would leave every row as it is: a
+    /// received message from a domain with no company, or a contact whose
+    /// company, contact and source rows already cover this interaction.
+    /// A mailbox backfill enqueues a populate per message, so most repeat a
+    /// contact the CRM already has; checking before the `(team, domain)`
+    /// lock keeps them from queueing behind one another on a busy domain.
+    /// `FOR KEY SHARE` waits for a depopulate deleting the source, so a
+    /// skip can't leave a teardown standing that the locked path would
+    /// have undone.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "mirrors populate_contact's arguments"
+    )]
+    async fn populate_changes_nothing(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+        normalized_domain: &str,
+        normalized_email: &str,
+        name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
+    ) -> Result<bool, CrmError> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT
+                (NOT $8 AND NOT EXISTS (
+                    SELECT 1
+                    FROM crm_companies c
+                    JOIN crm_domains d ON d.company_id = c.id
+                    WHERE c.team_id = $1
+                      AND d.team_id = $1
+                      AND LOWER(d.domain) = $3
+                ))
+                OR EXISTS (
+                    SELECT 1
+                    FROM crm_companies c
+                    JOIN crm_domains d ON d.company_id = c.id
+                    JOIN crm_contacts ct ON ct.company_id = c.id
+                    JOIN crm_contact_sources s ON s.contact_id = ct.id
+                    WHERE c.team_id = $1
+                      AND d.team_id = $1
+                      AND LOWER(d.domain) = $3
+                      AND ct.email = $4
+                      AND s.link_id = $2
+                      AND (ct.name IS NOT NULL OR $5::text IS NULL)
+                      AND c.last_interaction >= $7
+                      AND ct.last_interaction >= $7
+                      AND (NOT $8 OR (c.first_interaction <= $6 AND ct.first_interaction <= $6))
+                    FOR KEY SHARE OF s
+                ) AS "changes_nothing!"
+            "#,
+            team_id,
+            link_id,
+            normalized_domain,
+            normalized_email,
+            name,
+            first_at,
+            last_at,
+            is_sent,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
     /// Merge an interaction range into a company row.
     /// `last_interaction` always bumps via GREATEST; `first_interaction`
     /// only LEAST-merges on `is_sent = true` — received-direction
@@ -276,7 +343,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         self.query_activity(scope).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), fields(skipped = tracing::field::Empty), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
         &self,
@@ -291,6 +358,23 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     ) -> Result<(), CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
         let normalized_email = email.to_ascii_lowercase();
+
+        let skipped = self
+            .populate_changes_nothing(
+                team_id,
+                link_id,
+                &normalized_domain,
+                &normalized_email,
+                name,
+                first_at,
+                last_at,
+                is_sent,
+            )
+            .await?;
+        tracing::Span::current().record("skipped", skipped);
+        if skipped {
+            return Ok(());
+        }
 
         let mut tx = self
             .pool
