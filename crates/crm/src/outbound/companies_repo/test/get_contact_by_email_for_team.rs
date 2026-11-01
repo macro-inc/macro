@@ -25,7 +25,7 @@ async fn get_contact_by_email_returns_team_contact_case_insensitively(
 
     assert_eq!(contact.id, contact_id);
     assert_eq!(contact.company_id, company_id);
-    assert_eq!(contact.email, "alice@acme.com");
+    assert_eq!(contact.email.as_deref(), Some("alice@acme.com"));
     Ok(())
 }
 

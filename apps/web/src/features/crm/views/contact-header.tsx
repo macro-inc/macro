@@ -19,7 +19,7 @@ function TitleEditor(props: { contact: CrmContactResponse }) {
     <InlineTitleEditor
       // Nameless contacts display their email; committing it unchanged
       // is a no-op rather than a save.
-      value={props.contact.name ?? props.contact.email}
+      value={props.contact.name ?? props.contact.email ?? ''}
       placeholder="Contact"
       ariaLabel="Contact name"
       class="w-full text-2xl"
@@ -72,9 +72,9 @@ export function ContactHeader(props: {
   // Default avatar mirrors the channel user avatar: initials on a flat circle.
   // Contacts have no photo, so initials come from the name or email.
   const initials = () => {
-    const email = props.contact?.email;
-    if (!email) return undefined;
-    return getInitialsFromName(props.contact?.name, email);
+    const contact = props.contact;
+    if (!contact?.name && !contact?.email) return undefined;
+    return getInitialsFromName(contact.name, contact.email ?? '');
   };
 
   return (
@@ -110,10 +110,14 @@ export function ContactHeader(props: {
             class="mt-3 flex flex-wrap items-center gap-2"
             aria-label="Contact details"
           >
-            <Badge variant="outline" size="sm">
-              <EnvelopeIcon class="size-3" />
-              {contact().email}
-            </Badge>
+            <Show when={contact().email}>
+              {(email) => (
+                <Badge variant="outline" size="sm">
+                  <EnvelopeIcon class="size-3" />
+                  {email()}
+                </Badge>
+              )}
+            </Show>
             <CompanyPill
               contact={contact()}
               onOpenCompany={props.onOpenCompany}

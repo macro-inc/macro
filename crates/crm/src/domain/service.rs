@@ -5,7 +5,9 @@ mod test;
 
 use crate::domain::{
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
-    companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
+    companies_repo::{
+        CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor, NewContactEmail,
+    },
     company_metadata_resolver::{CompanyMetadataResolver, DomainResolution},
     generic_email_domains::is_generic_email_domain,
     model::{
@@ -186,17 +188,19 @@ pub trait CrmService: Clone + Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<uuid::Uuid>, CrmError>> + Send;
 
     /// Manually creates a CRM company for the caller's team with a
-    /// team-scoped display `name` and a single `domain` — the
+    /// team-scoped display `name` and an optional `domain` — the
     /// user-driven counterpart of the populate flow's automatic company
     /// creation. Any team member may create (the receipt only proves
     /// membership).
     ///
     /// Validates the inputs first: `name` must be non-blank (and within
-    /// a sane length); `domain` must look like a bare domain
+    /// a sane length); a `domain`, when given, must look like a bare domain
     /// ("acme.com" — no scheme, path, `@`, or whitespace) and must not
     /// be a generic email provider domain (gmail.com etc. — a company
     /// keyed on one would swallow every contact on that provider).
-    /// Rejections surface as [`CrmError::InvalidRequest`].
+    /// Rejections surface as [`CrmError::InvalidRequest`]. A company
+    /// without a domain suits a business built around one person who
+    /// uses a personal address; it gets no directory enrichment.
     ///
     /// Like populate, ensures `crm_domain_directory` has an entry for
     /// the domain (resolving via the
@@ -216,22 +220,25 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         name: &str,
-        domain: &str,
+        domain: Option<&str>,
     ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
 
     /// Manually creates a contact under the company addressed by
-    /// `access`, with a display `name` and `email` — the user-driven
+    /// `access`, with a display `name` and an optional `email` — the user-driven
     /// counterpart of populate's automatic contact creation. Any team
     /// member who can see the company may add one; the receipt's role
     /// decides whether a hidden company is reachable (and the new
     /// contact inherits the company's `hidden`).
     ///
     /// Validates first: `name` must be non-blank (within a sane
-    /// length); `email` must be a plausible `local@domain` address.
-    /// Rejections surface as [`CrmError::InvalidRequest`]. The email's
-    /// domain must additionally be one of the company's domains —
-    /// enforced in the repository against the company's `crm_domains`
-    /// set ([`CrmError::ContactEmailDomainMismatch`] otherwise).
+    /// length); an `email`, when given, must be a plausible
+    /// `local@domain` address. Rejections surface as
+    /// [`CrmError::InvalidRequest`]. A work email's domain must
+    /// additionally be one of the company's domains — enforced in the
+    /// repository against the company's `crm_domains` set
+    /// ([`CrmError::ContactEmailDomainMismatch`] otherwise). Personal
+    /// addresses (generic provider domains like gmail.com) are accepted
+    /// at any company, since populate never files them under one.
     ///
     /// Returns [`CrmError::CrmDisabledForTeam`] when the team-level
     /// killswitch is off and
@@ -242,7 +249,7 @@ pub trait CrmService: Clone + Send + Sync + 'static {
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
         name: &str,
-        email: &str,
+        email: Option<&str>,
     ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
 
     /// Toggle `email_sync` for the company addressed by `access`. Purely
@@ -831,28 +838,34 @@ where
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
         name: &str,
-        domain: &str,
+        domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         let name = validate_display_name(name)?;
-        let domain = normalize_company_domain(domain)?;
+        let domain = domain
+            .map(str::trim)
+            .filter(|domain| !domain.is_empty())
+            .map(normalize_company_domain)
+            .transpose()?;
 
-        // Same guard populate applies: companies are keyed by domain,
-        // so a generic provider domain would swallow every contact on
-        // that provider.
-        if is_generic_email_domain(&domain) {
-            return Err(CrmError::InvalidRequest(
-                "generic email provider domains cannot be added as crm companies".into(),
-            ));
+        if let Some(domain) = &domain {
+            // Same guard populate applies: companies are keyed by domain,
+            // so a generic provider domain would swallow every contact on
+            // that provider. Personal addresses go on the contact instead.
+            if is_generic_email_domain(domain) {
+                return Err(CrmError::InvalidRequest(
+                    "personal email domains like gmail.com cannot be a company domain; leave the domain empty".into(),
+                ));
+            }
+
+            // Mirror populate: ensure the directory has an entry for the
+            // domain so icon/description enrichment resolves. The user's
+            // name never goes here — the directory is global across teams;
+            // it lands on `crm_companies.custom_name` in the repo instead.
+            self.ensure_domain_directory_entry(domain).await?;
         }
 
-        // Mirror populate: ensure the directory has an entry for the
-        // domain so icon/description enrichment resolves. The user's
-        // name never goes here — the directory is global across teams;
-        // it lands on `crm_companies.custom_name` in the repo instead.
-        self.ensure_domain_directory_entry(&domain).await?;
-
         self.companies_repository
-            .create_company_for_team(&access.team_id(), &domain, name, Utc::now())
+            .create_company_for_team(&access.team_id(), domain.as_deref(), name, Utc::now())
             .await
     }
 
@@ -861,10 +874,23 @@ where
         &self,
         access: &CrmCompanyReceipt<ViewAccessLevel>,
         name: &str,
-        email: &str,
+        email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         let name = validate_display_name(name)?;
-        let email = normalize_contact_email(email)?;
+        let email = email
+            .map(str::trim)
+            .filter(|email| !email.is_empty())
+            .map(normalize_contact_email)
+            .transpose()?;
+        let email = match &email {
+            None => NewContactEmail::None,
+            Some(email) => match email.split_once('@') {
+                Some((_, domain)) if is_generic_email_domain(domain) => {
+                    NewContactEmail::Personal(email)
+                }
+                _ => NewContactEmail::Work(email),
+            },
+        };
 
         let team_id = access.team_id();
         let company_id = access.company_id()?;
@@ -873,7 +899,7 @@ where
             .create_contact_for_company(
                 &team_id,
                 &company_id,
-                &email,
+                email,
                 name,
                 Utc::now(),
                 include_hidden,
@@ -1246,7 +1272,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
-        _domain: &str,
+        _domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         unimplemented!("NoOpCrmService.create_company")
     }
@@ -1255,7 +1281,7 @@ impl CrmService for NoOpCrmService {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
-        _email: &str,
+        _email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         unimplemented!("NoOpCrmService.create_contact")
     }

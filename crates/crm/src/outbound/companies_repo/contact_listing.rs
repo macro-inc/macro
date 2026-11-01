@@ -22,7 +22,7 @@ struct ContactRow {
     company_id: Uuid,
     team_id: Uuid,
     company_name: String,
-    email: String,
+    email: Option<String>,
     name: Option<String>,
     hidden: bool,
     first_interaction: DateTime<Utc>,

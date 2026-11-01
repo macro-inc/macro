@@ -16,7 +16,7 @@ async fn create_company_inserts_company_and_domain(pool: PgPool) -> anyhow::Resu
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let now = Utc::now();
     let record = repo
-        .create_company_for_team(&team_id, "Acme.COM", "Acme", now)
+        .create_company_for_team(&team_id, Some("Acme.COM"), "Acme", now)
         .await?;
 
     assert_eq!(record.name.as_deref(), Some("Acme"));
@@ -46,6 +46,25 @@ async fn create_company_inserts_company_and_domain(pool: PgPool) -> anyhow::Resu
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_company_without_domain(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    enable_crm_for_team(&pool, team_id).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // Several domain-less companies may share a team.
+    for name in ["Jane Doe Consulting", "John Smith Studio"] {
+        let record = repo
+            .create_company_for_team(&team_id, None, name, Utc::now())
+            .await?;
+        assert_eq!(record.name.as_deref(), Some(name));
+        assert_eq!(record.company.team_id, team_id);
+        assert!(record.company.domains.is_empty());
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_company_name_overrides_directory_name(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@test.com").await?;
@@ -65,7 +84,7 @@ async fn create_company_name_overrides_directory_name(pool: PgPool) -> anyhow::R
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let record = repo
-        .create_company_for_team(&team_id, "acme.com", "Acme (ours)", Utc::now())
+        .create_company_for_team(&team_id, Some("acme.com"), "Acme (ours)", Utc::now())
         .await?;
 
     assert_eq!(record.name.as_deref(), Some("Acme (ours)"));
@@ -87,7 +106,7 @@ async fn create_company_rejects_duplicate_domain(pool: PgPool) -> anyhow::Result
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     // Case-insensitive: "ACME.com" collides with "acme.com".
     let err = repo
-        .create_company_for_team(&team_id, "ACME.com", "Acme", Utc::now())
+        .create_company_for_team(&team_id, Some("ACME.com"), "Acme", Utc::now())
         .await
         .unwrap_err();
     assert!(matches!(err, CrmError::CompanyAlreadyExistsForTeam));
@@ -111,7 +130,7 @@ async fn create_company_allows_same_domain_on_another_team(pool: PgPool) -> anyh
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let record = repo
-        .create_company_for_team(&team_b, "acme.com", "Acme", Utc::now())
+        .create_company_for_team(&team_b, Some("acme.com"), "Acme", Utc::now())
         .await?;
     assert_eq!(record.company.team_id, team_b);
     Ok(())
@@ -125,7 +144,7 @@ async fn create_company_requires_crm_enabled(pool: PgPool) -> anyhow::Result<()>
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let err = repo
-        .create_company_for_team(&team_id, "acme.com", "Acme", Utc::now())
+        .create_company_for_team(&team_id, Some("acme.com"), "Acme", Utc::now())
         .await
         .unwrap_err();
     assert!(matches!(err, CrmError::CrmDisabledForTeam));
@@ -147,7 +166,7 @@ async fn populate_reuses_manually_created_company(pool: PgPool) -> anyhow::Resul
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let created = repo
-        .create_company_for_team(&team_id, "acme.com", "Acme", Utc::now())
+        .create_company_for_team(&team_id, Some("acme.com"), "Acme", Utc::now())
         .await?;
 
     // A later populate for the same domain attaches its contact to the
@@ -194,7 +213,7 @@ async fn soup_listing_uses_name_override(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let created = repo
-        .create_company_for_team(&team_id, "acme.com", "Acme (ours)", Utc::now())
+        .create_company_for_team(&team_id, Some("acme.com"), "Acme (ours)", Utc::now())
         .await?;
 
     let listed = repo

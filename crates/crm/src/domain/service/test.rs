@@ -20,6 +20,7 @@ struct StubRepo {
     contact_calls: Arc<Mutex<Vec<ContactListCall>>>,
     association_calls: Arc<Mutex<Vec<Option<(uuid::Uuid, bool)>>>>,
     association: Option<crate::domain::association::CrmRecordAssociation>,
+    created_contact_emails: Arc<Mutex<Vec<String>>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -95,7 +96,7 @@ impl CompaniesRepository for StubRepo {
     async fn create_company_for_team(
         &self,
         _team_id: &uuid::Uuid,
-        _domain: &str,
+        _domain: Option<&str>,
         _name: &str,
         _now: DateTime<Utc>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
@@ -106,12 +107,16 @@ impl CompaniesRepository for StubRepo {
         &self,
         _team_id: &uuid::Uuid,
         _company_id: &uuid::Uuid,
-        _email: &str,
+        email: NewContactEmail<'_>,
         _name: &str,
         _now: DateTime<Utc>,
         _include_hidden: bool,
     ) -> Result<CrmContact, CrmError> {
-        unimplemented!()
+        self.created_contact_emails
+            .lock()
+            .unwrap()
+            .push(format!("{email:?}"));
+        Err(CrmError::CompanyNotFoundForTeam)
     }
 
     async fn lookup_domain_metadata(
@@ -645,7 +650,7 @@ async fn create_company_rejects_blank_name() {
     let access = receipt_with_role(TeamRole::Member);
     for name in ["", "   ", "\t\n"] {
         let err = service()
-            .create_company(&access, name, "acme.com")
+            .create_company(&access, name, Some("acme.com"))
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
@@ -657,7 +662,7 @@ async fn create_company_rejects_overlong_name() {
     let access = receipt_with_role(TeamRole::Member);
     let name = "x".repeat(201);
     let err = service()
-        .create_company(&access, &name, "acme.com")
+        .create_company(&access, &name, Some("acme.com"))
         .await
         .unwrap_err();
     assert!(matches!(err, CrmError::InvalidRequest(_)));
@@ -667,8 +672,6 @@ async fn create_company_rejects_overlong_name() {
 async fn create_company_rejects_malformed_domains() {
     let access = receipt_with_role(TeamRole::Member);
     for domain in [
-        "",
-        "   ",
         "acme",
         ".acme.com",
         "acme..com",
@@ -679,7 +682,7 @@ async fn create_company_rejects_malformed_domains() {
         "acme .com",
     ] {
         let err = service()
-            .create_company(&access, "Acme", domain)
+            .create_company(&access, "Acme", Some(domain))
             .await
             .unwrap_err();
         assert!(
@@ -694,7 +697,7 @@ async fn create_company_rejects_generic_email_domains() {
     let access = receipt_with_role(TeamRole::Member);
     for domain in ["gmail.com", "Yahoo.com", "outlook.com"] {
         let err = service()
-            .create_company(&access, "Acme", domain)
+            .create_company(&access, "Acme", Some(domain))
             .await
             .unwrap_err();
         assert!(
@@ -757,7 +760,7 @@ async fn create_contact_rejects_blank_name() {
     let access = company_receipt();
     for name in ["", "   ", "\t\n"] {
         let err = service()
-            .create_contact(&access, name, "jane@acme.com")
+            .create_contact(&access, name, Some("jane@acme.com"))
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
@@ -765,11 +768,33 @@ async fn create_contact_rejects_blank_name() {
 }
 
 #[tokio::test]
+async fn create_contact_classifies_email() {
+    let repo = StubRepo::default();
+    let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
+    let access = company_receipt();
+    for email in [
+        Some(" Jane@Acme.com "),
+        Some("jane@GMAIL.com"),
+        Some("   "),
+        None,
+    ] {
+        let _ = service.create_contact(&access, "Jane", email).await;
+    }
+    assert_eq!(
+        *repo.created_contact_emails.lock().unwrap(),
+        [
+            r#"Work("jane@acme.com")"#,
+            r#"Personal("jane@gmail.com")"#,
+            "None",
+            "None",
+        ]
+    );
+}
+
+#[tokio::test]
 async fn create_contact_rejects_malformed_emails() {
     let access = company_receipt();
     for email in [
-        "",
-        "   ",
         "jane",
         "jane@",
         "@acme.com",
@@ -780,7 +805,7 @@ async fn create_contact_rejects_malformed_emails() {
         "jane@acme.com/path",
     ] {
         let err = service()
-            .create_contact(&access, "Jane", email)
+            .create_contact(&access, "Jane", Some(email))
             .await
             .unwrap_err();
         assert!(

@@ -141,7 +141,7 @@ function wipeCompanyEmailCache(
 
 /**
  * Manually creates a CRM company via `POST /crm/companies` (a team-scoped
- * display name + one domain). Seeds the company detail cache from the
+ * display name + an optional domain). Seeds the company detail cache from the
  * response and invalidates soup so the new company appears in the
  * Customers listings. Server-side failures worth surfacing: 409 when the
  * team already tracks the domain, 403 when CRM is disabled for the team,
@@ -150,7 +150,7 @@ function wipeCompanyEmailCache(
 export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
   return useMutation(
     () => ({
-      mutationFn: ({ name, domain }: { name: string; domain: string }) =>
+      mutationFn: ({ name, domain }: { name: string; domain?: string }) =>
         throwOnErr(() => deps.storage.createCompany({ name, domain })),
       onSuccess: (data) => {
         analytics.track('crm_company_created', { companyId: data.id });
@@ -206,7 +206,7 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
       }: {
         companyId: string;
         name: string;
-        email: string;
+        email?: string;
       }) =>
         throwOnErr(() =>
           deps.storage.createContact({ companyId, name, email })

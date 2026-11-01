@@ -79,8 +79,8 @@ export function AddPipelineRecordDialog(
     contacts
       ? contacts.contacts().map((contact) => ({
           id: contact.id,
-          name: contact.name || contact.email,
-          detail: contact.email,
+          name: contact.name || contact.email || '',
+          detail: contact.email ?? '',
         }))
       : companies.companies().map((entry) => ({
           id: entry.id,

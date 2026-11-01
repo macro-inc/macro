@@ -32,14 +32,12 @@ impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
     }
     /// Team-local name, falling back to the email address.
     pub(super) async fn display_name(&self) -> Option<String> {
-        Some(
-            self.0
-                .name
-                .as_deref()
-                .filter(|name| !name.trim().is_empty())
-                .unwrap_or(&self.0.email)
-                .to_owned(),
-        )
+        self.0
+            .name
+            .as_deref()
+            .filter(|name| !name.trim().is_empty())
+            .or(self.0.email.as_deref())
+            .map(str::to_owned)
     }
     /// Record metadata; the parent is the owning company.
     pub(super) async fn metadata(&self) -> GraphqlEntityMetadata {
@@ -68,9 +66,9 @@ impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
     pub(super) async fn company_name(&self) -> &str {
         &self.0.company_name
     }
-    /// Full email address.
-    pub(super) async fn email(&self) -> &str {
-        &self.0.email
+    /// Full email address; null for a contact added by name alone.
+    pub(super) async fn email(&self) -> Option<&str> {
+        self.0.email.as_deref()
     }
     /// Team-local display name.
     pub(super) async fn name(&self) -> Option<&str> {

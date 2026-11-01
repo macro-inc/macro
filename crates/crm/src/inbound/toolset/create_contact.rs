@@ -21,8 +21,8 @@ pub struct CreateContactResponse {
     pub contact_id: Uuid,
     /// The company the contact belongs to.
     pub company_id: Uuid,
-    /// The contact's email.
-    pub email: String,
+    /// The contact's email, if it has one.
+    pub email: Option<String>,
     /// The contact's display name.
     pub name: Option<String>,
 }
@@ -32,7 +32,7 @@ pub struct CreateContactResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateContact",
-    description = "Add a contact person to a company in the user's team CRM, as Add Contact on a company does. The email's domain must be one of the company's domains. Find the company with ListCompanies, or add it first with CreateCompany."
+    description = "Add a contact person to a company in the user's team CRM, as Add Contact on a company does. The email is optional. A work email's domain must be one of the company's domains; personal emails (gmail.com etc.) are accepted at any company. Find the company with ListCompanies, or add it first with CreateCompany."
 )]
 pub struct CreateContact {
     /// Company to add the contact to.
@@ -41,9 +41,12 @@ pub struct CreateContact {
     /// Display name.
     #[schemars(description = "The contact's name.")]
     pub name: String,
-    /// Email address.
-    #[schemars(description = "The contact's email address, e.g. \"jane@acme.com\".")]
-    pub email: String,
+    /// Email address, if known.
+    #[schemars(
+        description = "The contact's email address, e.g. \"jane@acme.com\" or \"jane@gmail.com\". Omit it to add the contact by name only."
+    )]
+    #[serde(default)]
+    pub email: Option<String>,
 }
 
 impl ToolAnnotated for CreateContact {
@@ -73,7 +76,7 @@ where
         .await?;
         let contact = service_context
             .service
-            .create_contact(&company, self.name.trim(), self.email.trim())
+            .create_contact(&company, self.name.trim(), self.email.as_deref())
             .await
             .map_err(crm_error)?;
 

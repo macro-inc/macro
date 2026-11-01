@@ -116,16 +116,20 @@ Search. New has the same options as the sidebar.
 
 People lists contacts across every CRM-enabled team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
-duplicate full email addresses (case-insensitive) to one contact. Hidden contacts
+duplicate full email addresses (case-insensitive) to one contact; contacts
+without an email never collapse. Hidden contacts
 and contacts under hidden companies are excluded. Columns are Person (name and
 email), Company and Last contacted (sortable). `Search people` matches name or
 email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
 is unchanged. The contact dialog asks for a company through a **Choose a company** pill (searchable by name
-or domain, from the up to 500 most relevant companies with a domain) and fixes
-the email to that company's primary domain; **Add contact** on a company's Team
-tab skips the company pill. The company, contact and pipeline dialogs share the
+or domain, from the up to 500 most relevant companies) and takes an optional
+full email: one at the company's domain, a personal address (gmail.com and
+other generic providers) at any company, or none to add the person by name
+alone. **Add contact** on a company's Team tab skips the company pill. The
+company dialog's domain is optional too, for a business built around one person
+who uses a personal address; personal domains cannot be company domains. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
 below, and a **Create …** button that also submits on Command-Enter.
 
@@ -216,7 +220,7 @@ fills the row beside the filter button, or the whole row without filters.
 Email importance and inbox choices open in the shared filter drawer.
 Section creation actions appear at the bottom right above the navigation dock,
 replacing the default app-wide action: Add contact, New email, New note, New task,
-New call, or New database. Existing contact-domain requirements, email-sync and
+New call, or New database. Existing contact email rules, email-sync and
 database gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.
 Keyboard focus and

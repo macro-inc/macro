@@ -6,6 +6,18 @@ use crate::domain::model::{
 };
 use chrono::{DateTime, Utc};
 
+/// The email of a manually created contact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewContactEmail<'a> {
+    /// No email: the contact is known by name only.
+    None,
+    /// A work address; its domain must be one of the company's domains.
+    Work(&'a str),
+    /// A personal-provider address (gmail.com etc.), accepted at any
+    /// company because populate never assigns those domains to one.
+    Personal(&'a str),
+}
+
 /// Sort order for [`CompaniesRepository::list_companies_for_soup`]. All
 /// variants tiebreak on `id DESC` for deterministic pagination. The two
 /// `Viewed*` variants require a `user_id` (the `UserHistory` join is
@@ -157,8 +169,12 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         is_sent: bool,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
-    /// Manually creates a company for `(team_id, domain)` with a
-    /// team-scoped display `name`, sharing the insert path
+    /// Manually creates a company for `team_id` with a team-scoped
+    /// display `name` and an optional `domain`. Without a domain (a
+    /// company built around one person, say), only the
+    /// `crm_companies` row is inserted; steps 1, 3, and the
+    /// `crm_domains` insert are skipped. With one, it shares the insert
+    /// path
     /// [`populate_contact`] uses (same per-`(team, lower(domain))`
     /// advisory lock, same `crm_companies` + `crm_domains` insert). In a
     /// single transaction:
@@ -192,13 +208,13 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     fn create_company_for_team(
         &self,
         team_id: &uuid::Uuid,
-        domain: &str,
+        domain: Option<&str>,
         name: &str,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<CrmCompanyWithContacts, CrmError>> + Send;
 
     /// Manually creates a contact under `company_id` (scoped to
-    /// `team_id`) with a display `name` and `email`. In a single
+    /// `team_id`) with a display `name` and an optional `email`. In a single
     /// transaction:
     ///
     /// 1. Reads the team killswitch; returns
@@ -208,11 +224,12 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///    Missing, cross-team, or — for `include_hidden = false`
     ///    (member) callers — hidden companies return
     ///    [`CrmError::CompanyNotFoundForTeam`].
-    /// 3. Requires the email's domain to be one of the company's
-    ///    `crm_domains` (case-insensitively); returns
-    ///    [`CrmError::ContactEmailDomainMismatch`] otherwise — a
+    /// 3. For a [`NewContactEmail::Work`] address, requires its domain
+    ///    to be one of the company's `crm_domains` (case-insensitively);
+    ///    returns [`CrmError::ContactEmailDomainMismatch`] otherwise — a
     ///    foreign-domain contact would never receive populate updates,
-    ///    since its domain resolves to a different company.
+    ///    since its domain resolves to a different company. Personal
+    ///    addresses and email-less contacts skip the check.
     /// 4. Inserts the `crm_contacts` row, inheriting the company's
     ///    current `hidden` (an admin adding a contact to a hidden
     ///    company gets a hidden contact, matching populate's
@@ -237,7 +254,7 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
-        email: &str,
+        email: NewContactEmail<'_>,
         name: &str,
         now: DateTime<Utc>,
         include_hidden: bool,

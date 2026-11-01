@@ -114,8 +114,8 @@ pub(crate) async fn records<Crm: CrmService>(
                         contact.id,
                         PipelineRecord {
                             id: contact.id,
-                            name: Some(contact.name.unwrap_or_else(|| contact.email.clone())),
-                            detail: Some(contact.email),
+                            name: contact.name.or_else(|| contact.email.clone()),
+                            detail: contact.email,
                         },
                     );
                 }

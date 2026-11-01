@@ -6,7 +6,8 @@ WITH candidates AS (
            COALESCE(co.custom_name, dd.name, primary_domain.domain, 'Unknown company') AS company_name,
            uh."updatedAt"::timestamptz AS viewed_at,
            ROW_NUMBER() OVER (
-               PARTITION BY LOWER(BTRIM(ct.email))
+               -- Email-less contacts never collapse into each other.
+               PARTITION BY COALESCE(LOWER(BTRIM(ct.email)), ct.id::text)
                ORDER BY ct.last_interaction DESC, ct.id DESC
            ) AS email_rank
     FROM crm_contacts ct

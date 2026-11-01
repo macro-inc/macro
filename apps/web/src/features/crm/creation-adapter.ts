@@ -4,7 +4,7 @@ import { createSignal } from 'solid-js';
 // App-level launchers connect global create actions to the one mounted dialog host.
 const [companyOpen, setCompanyOpen] = createSignal(false);
 type ContactCreationTarget = {
-  company?: { companyId: string; domain: string };
+  company?: { companyId: string; domain?: string };
 };
 const [contactTarget, setContactTarget] = createSignal<ContactCreationTarget>();
 const companyLock = useFocusLock('create-company');
@@ -15,7 +15,7 @@ export function openCreateCompanyModal() {
 }
 export function openCreateContactModal(company?: {
   companyId: string;
-  domain: string;
+  domain?: string;
 }) {
   contactLock.acquire();
   setContactTarget({ company });

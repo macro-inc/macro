@@ -32,7 +32,7 @@ export type ServerContactPages = {
 /** Rows answering an earlier query show only while the cache's matching
  * semantics still match them against the live query by name or email. */
 const stillMatches = (contact: CrmContactEntity, query: string) =>
-  matchesTokenSubsequences(`${contact.name} | ${contact.email}`, query);
+  matchesTokenSubsequences(`${contact.name} | ${contact.email ?? ''}`, query);
 
 const NO_ANSWER: ServerAnswer = { query: '', contacts: [] };
 

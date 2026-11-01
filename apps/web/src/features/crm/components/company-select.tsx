@@ -8,7 +8,7 @@ import { badgeTriggerClasses, Layer } from '@ui';
 import { type Accessor, createSignal, Show } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 
-export type CompanyOption = { id: string; name: string; domain: string };
+export type CompanyOption = { id: string; name: string; domain?: string };
 
 const ITEM_HEIGHT = 32;
 
@@ -72,7 +72,7 @@ export function CompanySelect(props: {
   const [search, setSearch] = createSignal('');
   const matches = (option: CompanyOption, query: string) =>
     option.name.toLowerCase().includes(query) ||
-    option.domain.toLowerCase().includes(query);
+    !!option.domain?.toLowerCase().includes(query);
   const hasMatches = () => {
     const query = search().trim().toLowerCase();
     return props.companies.some((option) => matches(option, query));
@@ -86,7 +86,7 @@ export function CompanySelect(props: {
       onInputChange={setSearch}
       onOpenChange={(open) => !open && setSearch('')}
       optionValue="id"
-      optionTextValue={(option) => `${option.name} ${option.domain}`}
+      optionTextValue={(option) => `${option.name} ${option.domain ?? ''}`}
       // The trigger shows the selection; keep the search box empty on open.
       optionLabel={() => ''}
       defaultFilter={(option, input) =>
