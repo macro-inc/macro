@@ -27,17 +27,30 @@ pub fn first_due(start: DateTime<Utc>, now: DateTime<Utc>) -> DateTime<Utc> {
     start.max(now + LEAD_TIME)
 }
 
+/// How far past its send time a step's slot can fall and still count as sent
+/// on the day it was due: the lead time plus spacing behind a batch.
+const SLIP: Duration = Duration::hours(1);
+
 /// When the step after one scheduled at `previous` comes due: that step's
-/// local date plus `delay_days`, at the enrollment's send time. A step that
-/// would be due before `now + LEAD_TIME` is due then instead.
+/// local date plus `delay_days`, at the enrollment's send time. A step due
+/// late in the evening whose slot slipped past midnight keeps its day. A step
+/// that would be due before `now + LEAD_TIME` is due then instead.
 pub fn next_due(
     previous: DateTime<Utc>,
     delay_days: u16,
     clock: SendClock,
     now: DateTime<Utc>,
 ) -> DateTime<Utc> {
-    let date = previous.with_timezone(&clock.timezone).date_naive()
-        + Duration::days(i64::from(delay_days));
+    let mut day = previous.with_timezone(&clock.timezone).date_naive();
+    if let Some(day_before) = day.pred_opt() {
+        let due_day_before = local_instant(clock.timezone, day_before.and_time(clock.send_time));
+        if local_instant(clock.timezone, day.and_time(clock.send_time)) > previous
+            && previous - due_day_before <= SLIP
+        {
+            day = day_before;
+        }
+    }
+    let date = day + Duration::days(i64::from(delay_days));
     local_instant(clock.timezone, date.and_time(clock.send_time)).max(now + LEAD_TIME)
 }
 
