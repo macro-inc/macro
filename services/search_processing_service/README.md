@@ -164,7 +164,7 @@ cargo run --features disable_processing
 1. Configure `KAFKA_BROKERS` and the required MSK read permissions, then deploy the Kafka consumer while the live SQS call producer is still enabled.
 2. On the first deployment, the new `search-processing-service` group has no committed offsets, so `auto.offset.reset=earliest` replays the retained `macro.calls` history. This replay and the temporary dual delivery from Kafka and SQS are safe: call upserts are full idempotent overwrites, and deletes are idempotent delete-by-query operations.
 3. Before disabling live SQS call publication, confirm the consumer-group lag on `macro.calls` has caught up, worker errors are healthy, and the `call_records` index is fresh. Continue monitoring lag after cutover.
-4. Watch service logs for Kafka receive/decode/commit errors, processing retry warnings, events dropped after five attempts, and consumer supervisor restarts. A commit error can result in a safe duplicate; a dropped processing event or crash in the commit-after-handoff window can require recovery.
+4. Watch service logs for Kafka receive/decode/commit errors, processing retry warnings, events dropped after three attempts, and consumer supervisor restarts. A commit error can result in a safe duplicate; a dropped processing event or crash in the commit-after-handoff window can require recovery.
 
 For the local broker, inspect group lag with:
 
