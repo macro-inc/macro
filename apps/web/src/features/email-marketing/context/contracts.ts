@@ -18,7 +18,7 @@ export interface MarketingRepository {
 }
 
 /** The server's handle for a created draft. */
-export type DraftHandle = {
+type DraftHandle = {
   id: string;
   /** Edit generation the server expects on later schedule/cancel/delete calls. */
   generation: number;
@@ -32,7 +32,7 @@ export type DraftRef = {
   threadId?: string;
 };
 
-export type DraftContent = {
+type DraftContent = {
   email: string;
   subject: string;
   body: string;

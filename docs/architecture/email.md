@@ -526,49 +526,27 @@ boundaries and exclusive all-day ends without mounting a calendar grid.
 
 ## Sequence sends
 
-Email sequences (`features/email-marketing`) send each step through the ordinary
-draft and Send Later endpoints: `POST /email/drafts`, then
-`PUT /email/drafts/scheduled/{id}` with `"source": "sequence"`, accepted for Gmail
-inboxes only. `email_scheduled_messages.source` records it. A later schedule that
-omits `source` keeps it; unscheduling deletes the row and the marker with it.
+Email sequences (`features/email-marketing`) send each step as a Gmail draft
+scheduled with `PUT /email/drafts/scheduled/{id}` and `"source": "sequence"`
+(Gmail only), recorded in `email_scheduled_messages.source`. A later schedule
+without `source` keeps it; unscheduling removes it.
 
-A pending step, a draft whose schedule has a source and is neither sent nor
-failed, is not part of the user's mail. Drafts, Important, Inbox, Other and All
-Mail (the static views and the dynamic builder that also serves GraphQL Soup),
-the thread projection (`recompute_thread_metadata`) and its importance signal,
-the GraphQL mail-cache projection, and Mail search (search indexing reads and
-thread summaries) leave it out, and so does `GET /email/drafts/scheduled`, whose
-`source=sequence` filter instead lists only sequence sends that are still unsent,
-in every delivery state. The dynamic builder applies the rule when it picks
-candidate threads, so threads holding only steps never shorten a page. The thread
-page still returns a step, with `scheduled_send_status` and
-`scheduled_send_source` (`scheduledSendSource` in GraphQL), so clients can tell
-it from the user's own draft. A failed step shows again wherever any draft would,
-so the user can fix it, and a sent step is an ordinary sent message. Writers that
-make a message a pending step or stop it being one (`change_schedule`,
-`pause_delivery`, and trashing a thread, which cancels its drafts' sends through
-`delete_scheduled_messages_batch`) recompute the thread projection.
+A pending step (source set, neither sent nor failed) is not the user's mail:
+every mail list (the static views and the dynamic builder, which checks it when
+choosing candidate threads so pages stay full), the thread projection and its
+importance, the GraphQL mail cache, search, and `GET /email/drafts/scheduled`
+leave it out; `source=sequence` lists only unsent sequence sends. Threads still
+return it, with GraphQL `scheduledSendSource`, so the web thread view can skip
+it. A failed step shows again like any draft. Writers that make a message a
+pending step or stop it being one recompute the thread.
 
-Later steps are replies. `replying_to_id` may name a draft only when that draft
-is an unsent sequence step in the same Gmail inbox; any other draft is still
-rejected with `Cannot reply to a draft`. The reply joins the step's thread, and a
-draft parent's existing reply is never continued (`get_draft_replying_to`), so
-each step stays its own draft. A step answering an already sent step passes
-`"reuse_reply_draft": false`, which always creates a new draft instead of
-continuing the user's own unsent reply to that message; in turn, a reply never
-continues an unsent sequence step. At delivery, only a sequence-step parent holds
-its reply back (`reply_threading`, `email_service` `util/gmail/send.rs`). While the
-step's delivery is `ready` the reply is deferred: the claim is released, retried
-after `PREPARATION_RETRY_SECONDS`, reads as `pending`, and logs at info, not as
-an error. The reply fails (`failed`) when the step's delivery failed or is
-unconfirmed, or the parent is a draft with no schedule (a cancelled step), so the
-enrollment surfaces for attention. A reply to any other message threads under
-whatever that message has, whatever its delivery state. Once the parent is sent,
-the reply uses the parent's Gmail thread when it has none of its own, and the
-parent's Message-ID for In-Reply-To and References: from its synced headers, else
-the `delivery_message_id` its own delivery minted. A sent draft keeps its message
-ID, so a sent step can be the next step's parent. Deleting a parent sets
-`replying_to_id` to NULL, and the reply sends unthreaded.
+Later steps are replies: `replying_to_id` may name an unsent sequence step in the
+same Gmail inbox, and `"reuse_reply_draft": false` keeps each step its own draft.
+At delivery only a sequence-step parent holds its reply (`reply_threading`): a
+`ready` parent defers it (retried, logged at info); a failed, unconfirmed or
+unscheduled one fails it. Other replies are never held. A sent parent threads the
+reply with its synced Message-ID, else the `delivery_message_id` its delivery
+minted.
 
 ## Independent send outbox
 

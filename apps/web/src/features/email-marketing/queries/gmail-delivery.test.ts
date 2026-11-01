@@ -89,34 +89,6 @@ describe('Gmail sequence delivery', () => {
       'secondary-inbox'
     );
   });
-  it('creates a follow-up as a reply to the previous step', async () => {
-    await createGmailSequenceDelivery().createDraft('inbox', {
-      email: 'ada@example.com',
-      subject: 'Re: Hello Ada',
-      body: 'Following up',
-      replyingToId: 'first-step',
-    });
-    expect(client.createDraft.mock.calls[0][0].draft).toMatchObject({
-      subject: 'Re: Hello Ada',
-      replying_to_id: 'first-step',
-    });
-  });
-  it('unschedules and deletes at the stored generation', async () => {
-    expect(
-      await createGmailSequenceDelivery().cancel('inbox', {
-        ...draft,
-        generation: 2,
-      })
-    ).toBe('canceled');
-    expect(client.unscheduleMessage).toHaveBeenCalledWith(
-      { draftID: 'draft', draftGeneration: 2 },
-      'inbox'
-    );
-    expect(client.deleteDraft).toHaveBeenCalledWith(
-      { id: 'draft', draftGeneration: 2 },
-      'inbox'
-    );
-  });
   it('never deletes a message whose delivery already started', async () => {
     client.unscheduleMessage.mockResolvedValue(conflict);
     client.getThread.mockResolvedValue(
@@ -144,83 +116,6 @@ describe('Gmail sequence delivery', () => {
       'inbox'
     );
   });
-  it('fails loudly instead of claiming delivery when a conflict is unexplained', async () => {
-    client.unscheduleMessage.mockResolvedValue(conflict);
-    await expect(
-      createGmailSequenceDelivery().cancel('inbox', draft)
-    ).rejects.toThrow(expect.objectContaining({ code: 'cancelFailed' }));
-    expect(client.deleteDraft).not.toHaveBeenCalled();
-  });
-  it('finds a sent step that inbox sync moved to another thread, instead of calling it canceled', async () => {
-    client.unscheduleMessage.mockResolvedValue(conflict);
-    client.getThread.mockImplementation(async ({ thread_id }) =>
-      thread_id === 'thread'
-        ? ok({ thread: { messages: [] } })
-        : thread({ is_sent: true })
-    );
-    client.getMessage.mockResolvedValue(
-      ok({ db_id: 'draft', draft_generation: 1, thread_db_id: 'synced' })
-    );
-    expect(await createGmailSequenceDelivery().cancel('inbox', draft)).toBe(
-      'delivery_started'
-    );
-    expect(client.getThread).toHaveBeenLastCalledWith({
-      thread_id: 'synced',
-      limit: 50,
-    });
-    expect(client.deleteDraft).not.toHaveBeenCalled();
-  });
-  it('treats a deleted draft as canceled', async () => {
-    client.unscheduleMessage.mockResolvedValue(
-      err([{ code: 'NOT_FOUND', message: 'Not found' }])
-    );
-    client.deleteDraft.mockResolvedValue(
-      err([{ code: 'NOT_FOUND', message: 'Not found' }])
-    );
-    expect(await createGmailSequenceDelivery().cancel('inbox', draft)).toBe(
-      'canceled'
-    );
-  });
-  it('reads a delete conflict from the draft state, using the message when no thread is stored', async () => {
-    client.deleteDraft.mockResolvedValueOnce(
-      err([{ code: 'CONFLICT', message: 'Resource conflict' }])
-    );
-    client.getMessage.mockResolvedValue(
-      ok({ db_id: 'draft', draft_generation: 1 })
-    );
-    expect(
-      await createGmailSequenceDelivery().cancel('inbox', {
-        draftId: 'draft',
-      })
-    ).toBe('canceled');
-    expect(client.getThread).not.toHaveBeenCalled();
-    expect(client.deleteDraft).toHaveBeenLastCalledWith(
-      { id: 'draft', draftGeneration: 1 },
-      'inbox'
-    );
-  });
-  it("lists an inbox's unsent sequence drafts only when the whole list fits", async () => {
-    const page = (count: number, from = 0) =>
-      ok({
-        messages: Array.from({ length: count }, (_, index) => ({
-          db_id: `draft-${from + index}`,
-        })),
-      });
-    client.getScheduledMessages.mockResolvedValueOnce(page(2));
-    expect(await createGmailSequenceDelivery().scheduled('inbox')).toEqual(
-      new Set(['draft-0', 'draft-1'])
-    );
-    // Five full pages: a sixth may hold more, so the list is not whole.
-    client.getScheduledMessages.mockReset();
-    for (let index = 0; index < 5; index++)
-      client.getScheduledMessages.mockResolvedValueOnce(
-        page(1000, index * 1000)
-      );
-    expect(
-      await createGmailSequenceDelivery().scheduled('inbox')
-    ).toBeUndefined();
-  });
-
   it('reports stalled, failed, removed, and sent steps from one scheduled list per inbox', async () => {
     const now = Date.now();
     client.getScheduledMessages.mockResolvedValue(

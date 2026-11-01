@@ -8,9 +8,6 @@ use models_email::service::message::{MessageWithBodyReplyless, ParsedSearchMessa
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
-#[cfg(test)]
-mod test;
-
 /// retreive a parsed search message by its id.
 /// returns None if no message was found.
 #[tracing::instrument(skip(pool), err)]

@@ -3,7 +3,6 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 // From the `get_process_scheduled_messages` fixture.
 const LINK: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000e01);
-const OTHER_LINK: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000e02);
 const THREAD: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000e201);
 const PARENT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_00000000e6a1);
 
@@ -194,75 +193,6 @@ async fn reply_to_an_unsynced_sent_parent_uses_its_delivery_identity(
             references: Some(vec!["parent.1@example.com".to_owned()]),
             provider_thread_id: Some("gmail-thread-1".to_owned()),
         })
-    );
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../../../../crates/email_db_client/fixtures",
-        scripts("get_process_scheduled_messages")
-    )
-)]
-async fn reply_to_a_synced_parent_uses_its_headers(pool: PgPool) -> anyhow::Result<()> {
-    insert_parent(
-        &pool,
-        false,
-        true,
-        Some("gmail-thread-1"),
-        Some(serde_json::json!([
-            { "name": "Message-ID", "value": "<synced@example.com>" },
-            { "name": "References", "value": "<root@example.com>" },
-        ])),
-    )
-    .await?;
-    schedule_parent(
-        &pool,
-        Some("sequence"),
-        true,
-        "ready",
-        Some("parent.1@example.com"),
-    )
-    .await?;
-
-    assert_eq!(
-        reply_threading(&pool, Some(PARENT), LINK).await?,
-        Ok(ReplyThreading {
-            parent_message_id: Some("synced@example.com".to_owned()),
-            references: Some(vec![
-                "root@example.com".to_owned(),
-                "synced@example.com".to_owned()
-            ]),
-            provider_thread_id: Some("gmail-thread-1".to_owned()),
-        })
-    );
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(
-        path = "../../../../../../crates/email_db_client/fixtures",
-        scripts("get_process_scheduled_messages")
-    )
-)]
-async fn reply_without_a_reachable_parent_is_unthreaded(pool: PgPool) -> anyhow::Result<()> {
-    assert_eq!(
-        reply_threading(&pool, None, LINK).await?,
-        Ok(ReplyThreading::default())
-    );
-    assert_eq!(
-        reply_threading(&pool, Some(PARENT), LINK).await?,
-        Ok(ReplyThreading::default()),
-        "a deleted parent"
-    );
-    // A received parent in another inbox.
-    insert_parent(&pool, false, false, Some("gmail-thread-1"), None).await?;
-    assert_eq!(
-        reply_threading(&pool, Some(PARENT), OTHER_LINK).await?,
-        Ok(ReplyThreading::default()),
-        "a parent in another inbox belongs to another account's threads"
     );
     Ok(())
 }

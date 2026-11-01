@@ -262,7 +262,7 @@ export function replySubject(subject: string) {
  * write must stay under the 2 MiB request limit after two rounds of JSON
  * escaping. 100k characters leaves room for multi-byte text and escaping.
  */
-export const MAX_SEQUENCE_CHARACTERS = 100_000;
+const MAX_SEQUENCE_CHARACTERS = 100_000;
 
 export function validateCampaign(campaign: Campaign) {
   if (!campaign.name.trim()) throw new MarketingError('nameRequired');

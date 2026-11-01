@@ -1,69 +1,36 @@
 # Email Marketing
 
 Multi-step email sequences sent from the user's own Gmail inbox, at
-`/app/email-marketing` behind the `enable-email-marketing` flag (on in dev,
-PostHog in production). The flag hides the sidebar item, redirects the route
-once flags load, and hides the enrollment card on CRM contacts.
+`/app/email-marketing` behind `enable-email-marketing` (on in dev, PostHog in
+production). The flag also hides the sidebar and dock entries and the CRM
+contact card.
 
 ## Storage
 
-Records live in the user's own Macro database, found by its tables
-(`Email campaigns`, `Sequence enrollments`, `Unsubscribed contacts`) and
-created on the first write. Shared databases are never adopted: delivery acts
-on the signed-in user's inbox. Each row has a `Name` label and a JSON
-`Sequence data` cell; a campaign's `Name` edited in the database view renames
-it. Rows that no longer parse are counted and block enrolling until fixed.
-Rows are read from the primary with the table version they reflect, so a
-write made moments earlier is never missing. Every write sends all table
-versions. A write that loses to an unrelated
-change retries only while its own record is untouched and what it depends on
-still holds (campaign active, address subscribed). Edits to an open campaign
-save only over the stored copy they started from, and save on every exit:
-Back, another section, a new campaign, or leaving the view (the host's leave
-guard). An edit that can't save keeps the user there with **Discard my
-changes**.
+Records are rows in the user's own Macro database (`Email campaigns`,
+`Sequence enrollments`, `Unsubscribed contacts`; shared databases are never
+used), each a `Name` label and a JSON `Sequence data` cell. Rows are read from
+the primary with their table version, and every write carries all table
+versions, so tabs conflict instead of overwriting each other. Unreadable rows
+block enrolling, deleting, and recovery actions until fixed. Campaign edits save
+on every exit and never over a copy changed elsewhere.
 
 ## Sending
 
-Enrolling freezes each personalized step, then creates and schedules one Gmail
-draft per step in order, so the server sends them with the tab closed. A
-batch that runs long starts later contacts later instead of failing.
-Scheduled steps are marked as sequence sends, which keeps them out of Mail's
-lists, thread view, and search until they send. A follow-up marked "reply in
-the same thread" replies to the previous scheduled or sent step of its own
-thread (`Re:` plus the thread's first subject); with none left it starts a new
-thread. Pause, stop, delete, and unsubscribe cancel unsent drafts at their
-stored generation, last step first, and stop at the first failure so no reply
-loses its parent; steps the scheduler already sent are marked sent without a
-request, and sent email is never recalled. Resume skips steps whose time has
-passed, unless the contact received nothing yet: then the sequence starts
-over.
-
-Opening the workspace or a CRM contact reads the scheduler back, so failed,
-missing, stalled, or interrupted sends and disconnected inboxes show as
-needing attention. The workspace also lists every inbox's scheduled sequence
-emails, so ones whose records were lost (a trashed database, a deleted table)
-can still be canceled, and stops enrollments whose campaign row is gone; both
-wait while any record is unreadable.
-Unsubscribing an address stops it in every campaign and blocks enrolling it
-again. Replies are not processed automatically.
+Enrolling freezes each personalized step and schedules one Gmail draft per step
+in order, so the server sends them with Macro closed; pending steps stay out of
+Mail. A reply step answers the previous queued or sent step of its own thread.
+Pause, stop, delete, and unsubscribe cancel unsent drafts last step first and
+stop at the first failure; steps already sent are marked, never recalled. Resume
+skips past-due steps unless the contact received nothing yet. The workspace and
+CRM card read the scheduler back to flag failed, missing, or stalled sends, and
+the workspace can cancel scheduled sequence emails whose records were lost.
+Replies are not processed.
 
 ## Layout
 
-`core/` model, errors, and attention rules; `queries/` database, Gmail, and
-contact adapters; `primitives/` the sequence engine and workspace state;
-`components/` presentation; `views/` the workspace and campaign detail.
-User-facing text is in `lib/i18n/locales/en/email-marketing.ts`; errors carry
-codes that views translate.
-Contact names and addresses, personalized subjects and bodies, and inbox
-addresses render under `ph-no-capture`, out of session replay.
-
-## Checks
-
-```sh
-bunx vitest run src/features/email-marketing
-bunx playwright test --config src/features/email-marketing/browser-test/playwright.config.ts
-```
-
-The browser fixture mounts the production view and engine over local storage
-and a simulated scheduler. It never sends email.
+`core/` model and rules; `queries/` database, Gmail, and contact adapters;
+`primitives/` the sequence engine and workspace state; `components/`
+presentation; `views/` composition. Text lives in
+`lib/i18n/locales/en/email-marketing.ts`; personal data renders under
+`ph-no-capture`. Tests: `bunx vitest run src/features/email-marketing`.

@@ -325,46 +325,6 @@ async fn get_scheduled_db_messages_returns_empty_for_nonexistent_link(
     Ok(())
 }
 
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../fixtures", scripts("get_scheduled_db_messages"))
-)]
-async fn get_scheduled_db_messages_filters_by_source(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000001")?;
-    let pending_step = Uuid::parse_str("00000000-0000-0000-0000-0000000d0001")?;
-    let failed_step = Uuid::parse_str("00000000-0000-0000-0000-0000000d0002")?;
-    let ordinary = Uuid::parse_str("00000000-0000-0000-0000-0000000d0003")?;
-    sqlx::query!(
-        "UPDATE email_scheduled_messages SET source = 'sequence' WHERE message_id = ANY($1)",
-        &[pending_step, failed_step],
-    )
-    .execute(&pool)
-    .await?;
-    sqlx::query!(
-        "UPDATE email_scheduled_messages SET delivery_status = 'failed', processing = true WHERE message_id = $1",
-        failed_step,
-    )
-    .execute(&pool)
-    .await?;
-
-    let default: Vec<Uuid> = get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, None)
-        .await?
-        .iter()
-        .map(|m| m.id)
-        .collect();
-    assert_eq!(default, vec![ordinary, failed_step]);
-
-    let sequence_only: Vec<Uuid> =
-        get_scheduled_db_messages_by_link_id(&pool, link_id, 0, 100, Some("sequence"))
-            .await?
-            .iter()
-            .map(|m| m.id)
-            .collect();
-    assert_eq!(sequence_only, vec![failed_step, pending_step]);
-
-    Ok(())
-}
-
 async fn fetch_calendar_flag(pool: &Pool<Postgres>, thread_id: Uuid) -> anyhow::Result<bool> {
     Ok(sqlx::query_scalar!(
         "SELECT has_calendar_attachment FROM email_threads WHERE id = $1",

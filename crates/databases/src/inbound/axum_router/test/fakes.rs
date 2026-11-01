@@ -1,6 +1,6 @@
 //! The router's collaborators, just enough to drive a request: a `valid`
-//! bearer token, one fixed grant or none, and a service recording what
-//! reached it.
+//! bearer token, one fixed grant or none, and a service recording applied
+//! batches.
 
 use std::sync::{Arc, Mutex};
 
@@ -27,7 +27,7 @@ use uuid::Uuid;
 use crate::domain::models::{
     Awareness, ColumnCast, ColumnConversion, ColumnId, CreateDatabase, Database, DatabaseDetail,
     DatabaseError, DatabaseId, InferColumnType, InferColumnTypeOutcome, ListedDatabase, OpBatch,
-    QueryDefinition, QueryId, RowId, SavedQuery, SavedQueryError, Table, TableId, Viewer,
+    QueryDefinition, QueryId, SavedQuery, SavedQueryError, Table, TableId, Viewer,
 };
 use crate::domain::ports::{DatabaseRowPages, DatabasesService};
 use crate::domain::sharing::DatabaseSharingService;
@@ -115,22 +115,19 @@ pub(super) fn conversion_router(level: AccessLevel) -> (Router, Arc<RecordingSer
     (router, service)
 }
 
-/// The table rows route alone, for a caller holding `level` on every
-/// database, or no grant, and the service behind it.
-pub(super) fn rows_router(level: Option<AccessLevel>) -> (Router, Arc<RecordingService>) {
-    let service = Arc::new(RecordingService::default());
+/// The table rows route alone, for a caller without a grant.
+pub(super) fn ungranted_rows_router() -> Router {
     let state = DatabasesRouterState::new(
-        service.clone(),
-        Arc::new(GrantingAccess(level)),
+        Arc::new(RecordingService::default()),
+        Arc::new(GrantingAccess(None)),
         authorization_state(),
     );
-    let router = Router::new()
+    Router::new()
         .route(
             "/{id}/tables/{table_id}/rows",
             post(table_rows_handler::<RecordingService, GrantingAccess, Authorization>),
         )
-        .with_state(state);
-    (router, service)
+        .with_state(state)
 }
 
 /// Every databases route, for a caller holding `level` on every database.
@@ -250,20 +247,16 @@ impl EntityAccessService for GrantingAccess {
 
 /// Records the batches that reached it, and answers each with no results,
 /// or with `refusal` when one is set; records the conversions asked for and
-/// answers each with `conversion`; records the row pages asked for (table and
-/// `after`) and answers each with `row_page`. The routes under
-/// test call nothing else.
+/// answers each with `conversion`. The routes under test call nothing else.
 #[derive(Default)]
 pub(super) struct RecordingService {
     pub(super) applied: Mutex<Vec<OpBatch>>,
     pub(super) refusal: Mutex<Option<DatabaseError>>,
     pub(super) conversions: Mutex<Vec<(TableId, ColumnId, ColumnKind)>>,
     pub(super) conversion: Mutex<Option<ColumnConversion>>,
-    pub(super) row_pages: Mutex<Vec<(TableId, Option<RowId>)>>,
-    pub(super) row_page: Mutex<Option<Result<StorageRows, DatabaseError>>>,
 }
 
-const ONLY_OPS: &str = "the routes under test call only apply_ops, column_conversion and row_page";
+const ONLY_OPS: &str = "the routes under test call only apply_ops and column_conversion";
 
 impl DatabasesService for RecordingService {
     async fn apply_ops(
@@ -425,15 +418,10 @@ impl DatabaseRowPages for RecordingService {
     async fn row_page(
         &self,
         _: EntityAccessReceipt<ViewAccessLevel>,
-        table_id: TableId,
-        query: StorageRowsQuery,
+        _: TableId,
+        _: StorageRowsQuery,
     ) -> Result<StorageRows, DatabaseError> {
-        self.row_pages.lock().unwrap().push((table_id, query.after));
-        self.row_page
-            .lock()
-            .unwrap()
-            .take()
-            .expect("the test sets the page it answers")
+        unimplemented!("a caller without a grant is refused before the service")
     }
 }
 

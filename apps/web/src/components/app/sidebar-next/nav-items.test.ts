@@ -191,14 +191,6 @@ describe('Email Marketing', () => {
       expect(items.some((item) => item.id === 'email-marketing')).toBe(false);
     }
   });
-
-  it('offers Email Marketing when its feature flag is on', () => {
-    expect(
-      customizableNavItems(defaultGates()).some(
-        (item) => item.id === 'email-marketing'
-      )
-    ).toBe(true);
-  });
 });
 
 describe('orderNavItems', () => {

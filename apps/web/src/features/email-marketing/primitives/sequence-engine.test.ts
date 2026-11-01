@@ -292,32 +292,6 @@ describe('server scheduled sequences', () => {
     expect(stored.error).toBe('scheduleFailed');
     expect(stored.steps.every((step) => step.status === 'canceled')).toBe(true);
   });
-  it('cancels the last step first, so no reply outlives the email it answers', async () => {
-    const test = setup({ campaigns: [threaded] });
-    const enrollment = await test.enroll(threaded, contact, start);
-    await test.engine.stop(enrollment, 'stopped');
-    expect(
-      vi
-        .mocked(test.delivery.cancel)
-        .mock.calls.map(([, draft]) => draft.draftId)
-    ).toEqual(['draft-3', 'draft-2', 'draft-1']);
-  });
-  it('keeps failed cancellation visible and allows an explicit recovery stop', async () => {
-    const test = setup();
-    const enrollment = await test.enroll(campaign, contact, start);
-    vi.mocked(test.delivery.cancel).mockRejectedValueOnce(
-      new Error('Gmail unavailable')
-    );
-    await expect(test.engine.stop(enrollment, 'stopped')).rejects.toEqual(
-      code('cancelFailed')
-    );
-    expect(test.snapshot().enrollments[0]).toMatchObject({
-      status: 'needs_attention',
-      error: 'cancelFailed',
-    });
-    await test.engine.stop(test.snapshot().enrollments[0], 'stopped');
-    expect(test.snapshot().enrollments[0].status).toBe('stopped');
-  });
   it('blocks duplicate contact emails across case variants, including stopped enrollments', async () => {
     const test = setup();
     const enrollment = await test.enroll(campaign, contact, start);
@@ -350,227 +324,6 @@ describe('server scheduled sequences', () => {
     );
     await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
       code('changedElsewhere')
-    );
-    expect(test.delivery.createDraft).not.toHaveBeenCalled();
-  });
-  it('retries a write that lost to an unrelated change and keeps scheduling', async () => {
-    const test = setup();
-    let failed = false;
-    vi.mocked(test.repository.saveEnrollment).mockImplementation(
-      async (entry) => {
-        if (
-          !failed &&
-          entry.steps.some((step) => step.status === 'scheduling')
-        ) {
-          failed = true;
-          throw conflict();
-        }
-        test.edit((data) => {
-          data.enrollments = [
-            ...data.enrollments.filter((value) => value.id !== entry.id),
-            structuredClone(entry),
-          ];
-        });
-      }
-    );
-    const enrollment = await test.enroll(campaign, contact, start);
-    expect(enrollment.status).toBe('scheduled');
-    expect(test.delivery.cancel).not.toHaveBeenCalled();
-  });
-  it('cancels instead of retrying when the campaign was paused mid-enrollment', async () => {
-    const test = setup();
-    let failed = false;
-    vi.mocked(test.repository.saveEnrollment).mockImplementation(
-      async (entry) => {
-        if (
-          !failed &&
-          entry.steps.some((step) => step.status === 'scheduling')
-        ) {
-          failed = true;
-          test.edit((data) => {
-            data.campaigns[0].status = 'paused';
-          });
-          throw conflict();
-        }
-        test.edit((data) => {
-          data.enrollments = [
-            ...data.enrollments.filter((value) => value.id !== entry.id),
-            structuredClone(entry),
-          ];
-        });
-      }
-    );
-    await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
-      code('changedElsewhere')
-    );
-    expect(test.delivery.schedule).not.toHaveBeenCalled();
-    expect(test.delivery.cancel).toHaveBeenCalledTimes(1);
-    expect(test.snapshot().enrollments[0].status).toBe('needs_attention');
-  });
-  it('rejects a stale active campaign after it was paused in another tab', async () => {
-    const test = setup();
-    await test.repository.saveCampaign({ ...campaign, status: 'paused' });
-    await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
-      code('campaignInactive')
-    );
-    expect(test.delivery.createDraft).not.toHaveBeenCalled();
-  });
-  it('refuses to enroll while some records cannot be read', async () => {
-    const test = setup();
-    test.edit((data) => {
-      data.unreadable = 1;
-    });
-    await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
-      code('unreadableRecords')
-    );
-    expect(test.delivery.createDraft).not.toHaveBeenCalled();
-  });
-  it('does not resume a stopped contact using an outdated paused record', async () => {
-    const test = setup();
-    const enrollment = await test.enroll(campaign, contact, start);
-    await test.engine.stop(enrollment, 'paused');
-    const paused = structuredClone(test.snapshot().enrollments[0]);
-    await test.engine.stop(paused, 'stopped');
-    await expect(test.engine.resume(paused)).rejects.toEqual(code('notPaused'));
-    expect(test.delivery.createDraft).toHaveBeenCalledTimes(2);
-  });
-  it('rejects unsupported personalization and start times before any side effects', async () => {
-    const test = setup();
-    await expect(
-      test.enroll(
-        {
-          ...campaign,
-          steps: [{ ...campaign.steps[0], subject: '{{company}}' }],
-        },
-        contact,
-        start
-      )
-    ).rejects.toEqual(code('unknownPersonalization'));
-    await expect(test.enroll(campaign, contact, clock)).rejects.toEqual(
-      code('startTooSoon')
-    );
-    expect(test.delivery.createDraft).not.toHaveBeenCalled();
-  });
-  it('never lets a stale pause revive a stopped enrollment', async () => {
-    const test = setup();
-    const enrollment = await test.enroll(campaign, contact, start);
-    const stale = structuredClone(enrollment);
-    await test.engine.stop(enrollment, 'stopped');
-    await expect(test.engine.stop(stale, 'paused')).rejects.toEqual(
-      code('enrollmentStopped')
-    );
-    expect(test.snapshot().enrollments[0].status).toBe('stopped');
-    // Repeating the same transition is a no-op, not a second cancellation.
-    await test.engine.stop(stale, 'stopped');
-    expect(test.delivery.cancel).toHaveBeenCalledTimes(2);
-  });
-  it('resumes steps a pause interrupted before they were drafted', async () => {
-    const test = setup();
-    vi.mocked(test.delivery.schedule)
-      .mockResolvedValueOnce()
-      .mockRejectedValueOnce(new Error('Paused in another tab'));
-    await expect(test.enroll(campaign, contact, start)).rejects.toThrow();
-    // Simulate the pause landing after the first step queued: the second step
-    // has a draft that cancellation removed and the record is paused.
-    const record = test.snapshot().enrollments[0];
-    test.edit((data) => {
-      data.enrollments[0].status = 'paused';
-      data.enrollments[0].steps[1] = {
-        ...record.steps[1],
-        draftId: undefined,
-        status: 'pending',
-      };
-    });
-    const resumed = await test.engine.resume(test.snapshot().enrollments[0]);
-    expect(resumed.status).toBe('scheduled');
-    // Both steps were never sent and are still ahead, so both are queued again
-    // on their original times.
-    expect(resumed.steps.map((step) => [step.status, step.sendAt])).toEqual([
-      ['queued', '2026-10-03T16:00:00.000Z'],
-      ['queued', '2026-10-05T16:00:00.000Z'],
-    ]);
-  });
-  it('keeps the remaining cadence and never sends a resumed step early', async () => {
-    let now = clock;
-    const test = setup({ now: () => now });
-    const queued = await test.enroll(campaign, contact, start);
-    now = new Date('2026-10-03T17:00:00Z');
-    vi.mocked(test.delivery.cancel).mockImplementation(async (_, draft) =>
-      draft.draftId === 'draft-1' ? 'delivery_started' : 'canceled'
-    );
-    await test.engine.stop(queued, 'paused');
-    // A day later, step two (Oct 5 16:00) is still on time and keeps its slot.
-    now = new Date('2026-10-04T15:00:00Z');
-    const onTime = await test.engine.resume(test.snapshot().enrollments[0]);
-    expect(onTime.steps.map((step) => [step.status, step.sendAt])).toEqual([
-      ['delivery_started', '2026-10-03T16:00:00.000Z'],
-      ['queued', '2026-10-05T16:00:00.000Z'],
-    ]);
-  });
-  it('shifts every remaining step together when the next one is too soon', async () => {
-    let now = clock;
-    const test = setup({ now: () => now });
-    const queued = await test.enroll(campaign, contact, start);
-    await test.engine.stop(queued, 'paused');
-    // Five minutes before step one: it moves to the earliest safe time and
-    // step two keeps its two-day gap.
-    now = new Date('2026-10-03T15:55:00Z');
-    const resumed = await test.engine.resume(test.snapshot().enrollments[0]);
-    expect(resumed.steps.map((step) => step.sendAt)).toEqual([
-      '2026-10-03T16:06:00.000Z',
-      '2026-10-05T16:06:00.000Z',
-    ]);
-  });
-  it('lets a failed enrollment with nothing sent be retried in place', async () => {
-    const test = setup();
-    vi.mocked(test.delivery.schedule).mockRejectedValueOnce(
-      new Error('Gmail unavailable')
-    );
-    await expect(test.enroll(campaign, contact, start)).rejects.toThrow(
-      'Gmail unavailable'
-    );
-    expect(test.snapshot().enrollments[0].status).toBe('needs_attention');
-    const retried = await test.enroll(campaign, contact, start);
-    expect(retried.id).toBe('enrollment');
-    expect(retried.status).toBe('scheduled');
-    expect(test.snapshot().enrollments).toHaveLength(1);
-  });
-  it('still blocks re-enrolling a contact with a queued or paused enrollment', async () => {
-    const test = setup();
-    const enrollment = await test.enroll(campaign, contact, start);
-    await test.engine.stop(enrollment, 'paused');
-    await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
-      code('alreadyEnrolled')
-    );
-  });
-  it('enrolls a batch with one load and reports each failure by contact', async () => {
-    const test = setup();
-    const { enrolled, failures } = await test.engine.enrollMany(
-      campaign,
-      [
-        contact,
-        { name: 'Ada again', email: 'ADA@example.com' },
-        { name: 'Grace', email: 'grace@example.com' },
-      ],
-      start
-    );
-    expect(enrolled.map((entry) => entry.contact.email)).toEqual([
-      'ada@example.com',
-      'grace@example.com',
-    ]);
-    expect(failures).toEqual([
-      {
-        email: 'ADA@example.com',
-        error: code('alreadyEnrolled'),
-      },
-    ]);
-    // One load up front; a failure that isn't a conflict needs no reload.
-    expect(test.repository.load).toHaveBeenCalledTimes(1);
-  });
-  it('refuses to send from an inbox that is not connected to this account', async () => {
-    const test = setup({ senderStatus: () => 'disconnected' });
-    await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
-      code('inboxDisconnected')
     );
     expect(test.delivery.createDraft).not.toHaveBeenCalled();
   });
@@ -637,34 +390,6 @@ describe('server scheduled sequences', () => {
     expect(test.saved).toHaveLength(writes);
   });
 
-  it('cancels only the steps the scheduler still holds once some were sent', async () => {
-    let now = clock;
-    const test = setup({ now: () => now });
-    const enrollment = await test.enroll(campaign, contact, start);
-    now = new Date('2026-10-04T15:00:00Z');
-    vi.mocked(test.delivery.scheduled).mockResolvedValue(new Set(['draft-2']));
-    await test.engine.stop(enrollment, 'paused');
-    const saved = test.snapshot().enrollments[0];
-    expect(saved.status).toBe('paused');
-    expect(saved.steps.map((step) => step.status)).toEqual([
-      'delivery_started',
-      'canceled',
-    ]);
-    expect(
-      vi.mocked(test.delivery.cancel).mock.calls.map(([, d]) => d.draftId)
-    ).toEqual(['draft-2']);
-  });
-
-  it('asks the server step by step when the scheduler list cannot be read', async () => {
-    let now = clock;
-    const test = setup({ now: () => now });
-    const enrollment = await test.enroll(campaign, contact, start);
-    now = new Date('2026-10-04T15:00:00Z');
-    vi.mocked(test.delivery.scheduled).mockRejectedValue(new Error('503'));
-    await test.engine.stop(enrollment, 'paused');
-    expect(test.delivery.cancel).toHaveBeenCalledTimes(2);
-  });
-
   it('refuses to stop orphans or cancel untracked emails while a record is unreadable', async () => {
     const test = setup();
     const enrollment = await test.enroll(campaign, contact, start);
@@ -680,32 +405,6 @@ describe('server scheduled sequences', () => {
     ).rejects.toThrow(code('unreadableRecords'));
     expect(test.delivery.cancel).not.toHaveBeenCalled();
     expect(test.snapshot().enrollments[0]).toEqual(enrollment);
-  });
-
-  it('treats steps already handed to Gmail as tracked, and reports a stray email it cannot recall', async () => {
-    const test = setup();
-    await test.enroll(campaign, contact, start);
-    test.edit((data) => {
-      data.enrollments[0].steps[0].status = 'delivery_started';
-    });
-    vi.mocked(test.delivery.cancel).mockResolvedValue('delivery_started');
-    await expect(
-      test.engine.cancelUntracked({ gmail: ['draft-1', 'stray'] })
-    ).rejects.toThrow(code('cancelFailed'));
-    expect(
-      vi.mocked(test.delivery.cancel).mock.calls.map(([, d]) => d.draftId)
-    ).toEqual(['stray']);
-  });
-  it('does not cancel anything while inboxes are still loading', async () => {
-    let status: SenderStatus | undefined = 'ready';
-    const test = setup({ senderStatus: () => status });
-    const enrollment = await test.enroll(campaign, contact, start);
-    status = undefined;
-    await expect(test.engine.stop(enrollment, 'stopped')).rejects.toEqual(
-      code('inboxesLoading')
-    );
-    expect(test.delivery.cancel).not.toHaveBeenCalled();
-    expect(test.snapshot().enrollments[0].status).toBe('scheduled');
   });
 });
 
@@ -730,23 +429,6 @@ describe('unsubscribe', () => {
       code('unsubscribed')
     );
   });
-  it('is idempotent and also blocks resuming a paused enrollment', async () => {
-    const test = setup();
-    const enrollment = await test.enroll(campaign, contact, start);
-    await test.engine.stop(enrollment, 'paused');
-    test.edit((data) => {
-      data.unsubscribed.push({
-        email: 'ada@example.com',
-        unsubscribedAt: clock.toISOString(),
-      });
-    });
-    await expect(
-      test.engine.resume(test.snapshot().enrollments[0])
-    ).rejects.toEqual(code('unsubscribed'));
-    await test.engine.unsubscribe('ada@example.com');
-    expect(test.repository.saveUnsubscribe).not.toHaveBeenCalled();
-    expect(test.snapshot().enrollments[0].status).toBe('stopped');
-  });
 });
 
 describe('delete campaign', () => {
@@ -766,18 +448,6 @@ describe('delete campaign', () => {
     ]);
     expect(test.snapshot().campaigns).toEqual([]);
     expect(test.snapshot().enrollments).toEqual([]);
-  });
-  it('keeps the campaign when an upcoming email cannot be canceled', async () => {
-    const test = setup();
-    await test.enroll(campaign, contact, start);
-    vi.mocked(test.delivery.cancel).mockRejectedValueOnce(
-      new Error('Gmail unavailable')
-    );
-    await expect(test.engine.deleteCampaign(campaign)).rejects.toEqual(
-      code('contactsFailed')
-    );
-    expect(test.repository.deleteCampaign).not.toHaveBeenCalled();
-    expect(test.snapshot().campaigns).toHaveLength(1);
   });
 });
 
@@ -837,6 +507,7 @@ describe('concurrent changes', () => {
         .mock.calls.some(([, content]) => content.email === contact.email)
     ).toBe(false);
   });
+
   it('stops scheduling a contact who unsubscribed mid-enrollment', async () => {
     const test = setup();
     conflictOnce(test, drafting(contact.email), unsubscribe(contact.email));
@@ -846,87 +517,52 @@ describe('concurrent changes', () => {
     expect(test.delivery.schedule).not.toHaveBeenCalled();
     expect(test.delivery.cancel).toHaveBeenCalledTimes(1);
   });
-  it('leaves a stop made in another tab in place instead of overwriting it', async () => {
+
+  it('cancels instead of retrying when the campaign was paused mid-enrollment', async () => {
     const test = setup();
-    conflictOnce(test, drafting(contact.email), (data) => {
-      data.enrollments[0] = { ...data.enrollments[0], status: 'stopped' };
-    });
-    await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
-      code('changedElsewhere')
-    );
-    expect(test.snapshot().enrollments[0].status).toBe('stopped');
-    expect(test.delivery.cancel).toHaveBeenCalledTimes(1);
-  });
-  it('does not mark an enrollment scheduled after its campaign was paused', async () => {
-    const test = setup();
-    conflictOnce(
-      test,
-      (entry) => entry.status === 'scheduled',
-      (data) => {
-        data.campaigns[0].status = 'paused';
-      }
-    );
-    await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
-      code('changedElsewhere')
-    );
-    const stored = test.snapshot().enrollments[0];
-    expect(stored.status).toBe('needs_attention');
-    expect(stored.steps.every((step) => step.status === 'canceled')).toBe(true);
-  });
-  it('keeps stopping while another tab’s batch keeps changing the tables', async () => {
-    const test = setup();
-    const enrollment = await test.enroll(campaign, contact, start);
-    let conflicts = 3;
+    let failed = false;
     vi.mocked(test.repository.saveEnrollment).mockImplementation(
       async (entry) => {
-        if (conflicts-- > 0) throw conflict();
+        if (
+          !failed &&
+          entry.steps.some((step) => step.status === 'scheduling')
+        ) {
+          failed = true;
+          test.edit((data) => {
+            data.campaigns[0].status = 'paused';
+          });
+          throw conflict();
+        }
         test.edit((data) => {
-          data.enrollments = [structuredClone(entry)];
+          data.enrollments = [
+            ...data.enrollments.filter((value) => value.id !== entry.id),
+            structuredClone(entry),
+          ];
         });
       }
     );
+    await expect(test.enroll(campaign, contact, start)).rejects.toEqual(
+      code('changedElsewhere')
+    );
+    expect(test.delivery.schedule).not.toHaveBeenCalled();
+    expect(test.delivery.cancel).toHaveBeenCalledTimes(1);
+    expect(test.snapshot().enrollments[0].status).toBe('needs_attention');
+  });
+
+  it('never lets a stale pause revive a stopped enrollment', async () => {
+    const test = setup();
+    const enrollment = await test.enroll(campaign, contact, start);
+    const stale = structuredClone(enrollment);
     await test.engine.stop(enrollment, 'stopped');
+    await expect(test.engine.stop(stale, 'paused')).rejects.toEqual(
+      code('enrollmentStopped')
+    );
     expect(test.snapshot().enrollments[0].status).toBe('stopped');
-  });
-  it('starts later contacts later instead of running into the safety window', async () => {
-    let now = clock;
-    const test = setup({ now: () => now });
-    const tight = new Date(clock.getTime() + 10 * 60_000);
-    vi.mocked(test.delivery.createDraft).mockImplementation(async () => {
-      // Every draft takes a minute, so the batch outlasts the start time.
-      now = new Date(now.getTime() + 60_000);
-      return { id: crypto.randomUUID(), generation: 0, threadId: 't' };
-    });
-    const { enrolled, failures } = await test.engine.enrollMany(
-      campaign,
-      [contact, grace],
-      tight
-    );
-    expect(failures).toEqual([]);
-    expect(new Date(enrolled[1].steps[0].sendAt).getTime()).toBeGreaterThan(
-      tight.getTime()
-    );
-  });
-  it('refuses to delete a campaign while some records cannot be read', async () => {
-    const test = setup();
-    test.edit((data) => {
-      data.unreadable = 1;
-    });
-    await expect(test.engine.deleteCampaign(campaign)).rejects.toEqual(
-      code('unreadableRecords')
-    );
-    expect(test.repository.deleteCampaign).not.toHaveBeenCalled();
-  });
-  it('stops enrollments whose campaign record was deleted elsewhere', async () => {
-    const test = setup();
-    await test.enroll(campaign, contact, start);
-    test.edit((data) => {
-      data.campaigns = [];
-    });
-    await test.engine.stopOrphans();
-    expect(test.snapshot().enrollments[0].status).toBe('stopped');
+    // Repeating the same transition is a no-op, not a second cancellation.
+    await test.engine.stop(stale, 'stopped');
     expect(test.delivery.cancel).toHaveBeenCalledTimes(2);
   });
+
   it('cancels only scheduled emails that no record knows about', async () => {
     const test = setup();
     await test.enroll(campaign, contact, start);

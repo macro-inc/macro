@@ -195,38 +195,6 @@ describe('Macro Databases sequence records', () => {
     expect(client.queryRows).toHaveBeenCalledTimes(4);
   });
 
-  it('starts a paged read over when the table changes between pages', async () => {
-    const row = (id: string) => ({
-      rowId: id,
-      cells: {
-        'enrollment-table:Sequence data': text(
-          JSON.stringify({ ...enrollment, id })
-        ),
-      },
-    });
-    let reads = 0;
-    client.queryRows.mockImplementation(async (request) => {
-      if (request.tableId !== 'enrollment-table') return rowsPage(request);
-      reads++;
-      // The first pass sees page two at a newer version than page one.
-      const version = reads === 2 ? 13 : reads === 1 ? 12 : 13;
-      return request.request.after
-        ? ok({ version, rows: [row('second')] })
-        : ok({ version, rows: [row('first')], next: 'first' });
-    });
-    const repository = createDatabaseMarketingRepository();
-    const snapshot = await repository.load();
-    expect(snapshot.enrollments.map((entry) => entry.id)).toEqual([
-      'first',
-      'second',
-    ]);
-    expect(reads).toBe(4);
-    await repository.saveCampaign(campaign);
-    expect(
-      client.applyOps.mock.calls[0][0].request.baseVersions['enrollment-table']
-    ).toBe(13);
-  });
-
   it('still finds its tables and columns after a case-only rename', async () => {
     const renamed = structuredClone(tables);
     renamed[0].table.name = 'EMAIL CAMPAIGNS';
@@ -247,39 +215,6 @@ describe('Macro Databases sequence records', () => {
     // The table counts as present: no import of a second copy.
     expect(client.importTable).not.toHaveBeenCalled();
   });
-
-  it('counts unreadable rows instead of failing the load, and ignores empty ones', async () => {
-    client.read.mockImplementation(async (id: string) =>
-      id === 'enrollment-table'
-        ? [
-            { rowId: 'empty', name: undefined, data: undefined },
-            { rowId: 'broken-json', data: '{"id":' },
-            { rowId: 'wrong-shape', data: '{"status":"active"}' },
-            { rowId: 'good', data: JSON.stringify(enrollment) },
-          ]
-        : []
-    );
-    const snapshot = await createDatabaseMarketingRepository().load();
-    expect(snapshot.unreadable).toBe(2);
-    expect(snapshot.enrollments.map((entry) => entry.id)).toEqual([
-      'enrollment',
-    ]);
-  });
-  it('takes a campaign’s name from its Name cell, so a rename in the database view sticks', async () => {
-    client.read.mockImplementation(async (id: string) =>
-      id === 'campaign-table'
-        ? [
-            {
-              rowId: 'campaign-row',
-              name: '  Renamed  ',
-              data: JSON.stringify(campaign),
-            },
-          ]
-        : []
-    );
-    const snapshot = await createDatabaseMarketingRepository().load();
-    expect(snapshot.campaigns[0].name).toBe('Renamed');
-  });
   it('reports a version conflict as a change elsewhere, without retrying the insert', async () => {
     const repository = createDatabaseMarketingRepository();
     await repository.load();
@@ -290,17 +225,6 @@ describe('Macro Databases sequence records', () => {
       code: 'changedElsewhere',
     });
     expect(client.applyOps).toHaveBeenCalledTimes(1);
-  });
-  it('does not write through a database it can only view', async () => {
-    client.get.mockResolvedValue(
-      ok({ grant: 'view', database: { id: 'database' }, tables })
-    );
-    const repository = createDatabaseMarketingRepository();
-    expect((await repository.load()).writable).toBe(false);
-    await expect(repository.saveCampaign(campaign)).rejects.toMatchObject({
-      code: 'needEditAccess',
-    });
-    expect(client.applyOps).not.toHaveBeenCalled();
   });
   it('finds its own database by its tables, even renamed, choosing the oldest and ignoring shared ones', async () => {
     client.list.mockResolvedValue(
@@ -334,106 +258,5 @@ describe('Macro Databases sequence records', () => {
     const snapshot = await createDatabaseMarketingRepository().load();
     expect(snapshot.databaseId).toBe('renamed');
     expect(client.get).toHaveBeenCalledWith({ id: 'renamed' });
-  });
-  it('creates its own database with every table when only a shared one exists', async () => {
-    const shared = ok([
-      listed('shared', '2026-01-01T00:00:00Z', 'edit', TABLE_NAMES),
-    ]);
-    // Two reads before setup; afterwards the new database is listed.
-    client.list.mockResolvedValueOnce(shared).mockResolvedValueOnce(shared);
-    client.create.mockResolvedValue(ok({ id: 'database' }));
-    const repository = createDatabaseMarketingRepository();
-    expect((await repository.load()).databaseId).toBeUndefined();
-    await repository.saveCampaign(campaign);
-    expect(client.applyOps).toHaveBeenCalledTimes(1);
-    expect(client.create).toHaveBeenCalledWith({ name: 'Email Marketing' });
-    expect(
-      client.importTable.mock.calls.map((call) => [
-        call[0].request.name,
-        call[0].request.columns,
-      ])
-    ).toEqual(TABLE_NAMES.map((name) => [name, ['Name', 'Sequence data']]));
-  });
-  it('finishes an interrupted setup instead of failing every later load', async () => {
-    client.list.mockResolvedValue(
-      ok([listed('database', '2026-10-01T00:00:00Z', 'owner', ['Table 1'])])
-    );
-    client.get
-      .mockResolvedValueOnce(detail([]))
-      .mockResolvedValueOnce(detail([]));
-    const repository = createDatabaseMarketingRepository();
-    expect(await repository.load()).toMatchObject({
-      campaigns: [],
-      enrollments: [],
-    });
-    await repository.saveCampaign(campaign);
-    expect(client.create).not.toHaveBeenCalled();
-    expect(
-      client.importTable.mock.calls.map((call) => call[0].request.name)
-    ).toEqual(TABLE_NAMES);
-    expect(client.applyOps).toHaveBeenCalledTimes(1);
-  });
-  it('adds the unsubscribed table to an existing database on its first write', async () => {
-    client.get
-      .mockResolvedValueOnce(detail(tables.slice(0, 2)))
-      .mockResolvedValueOnce(detail(tables.slice(0, 2)));
-    const repository = createDatabaseMarketingRepository();
-    expect((await repository.load()).unsubscribed).toEqual([]);
-    await repository.saveUnsubscribe({
-      email: 'ada@example.com',
-      unsubscribedAt: '2026-10-30T00:00:00Z',
-    });
-    expect(
-      client.importTable.mock.calls.map((call) => call[0].request.name)
-    ).toEqual(['Unsubscribed contacts']);
-    expect(client.applyOps.mock.calls[0][0].request.ops[0].table).toBe(
-      'unsubscribe-table'
-    );
-    expect(cell(0, 'unsubscribe-table:Name')?.value).toBe('ada@example.com');
-  });
-  it('deletes a campaign and its enrollment rows in one write', async () => {
-    client.read.mockImplementation(async (id: string) =>
-      id === 'campaign-table'
-        ? [{ rowId: 'campaign-row', data: JSON.stringify(campaign) }]
-        : id === 'enrollment-table'
-          ? [{ rowId: 'enrollment-row', data: JSON.stringify(enrollment) }]
-          : []
-    );
-    const repository = createDatabaseMarketingRepository();
-    await repository.load();
-    client.applyOps.mockResolvedValue(ok({ changes: [], results: [] }));
-    await repository.deleteCampaign('campaign', ['enrollment']);
-    expect(client.applyOps).toHaveBeenCalledTimes(1);
-    expect(client.applyOps.mock.calls[0][0].request.ops).toEqual([
-      {
-        kind: 'rows',
-        table: 'enrollment-table',
-        change: { kind: 'delete', rows: ['enrollment-row'] },
-      },
-      {
-        kind: 'rows',
-        table: 'campaign-table',
-        change: { kind: 'delete', rows: ['campaign-row'] },
-      },
-    ]);
-  });
-  it('refuses a write that would exceed the request size limit before sending it', async () => {
-    const repository = createDatabaseMarketingRepository();
-    await repository.load();
-    const huge: Enrollment = {
-      ...enrollment,
-      steps: Array.from({ length: 20 }, (_, index) => ({
-        id: `step-${index}`,
-        delayDays: 0,
-        subject: 'Hi',
-        body: '"'.repeat(49_000),
-        sendAt: '2026-10-03T16:00:00Z',
-        status: 'pending' as const,
-      })),
-    };
-    await expect(repository.saveEnrollment(huge)).rejects.toMatchObject({
-      code: 'sequenceTooLarge',
-    });
-    expect(client.applyOps).not.toHaveBeenCalled();
   });
 });

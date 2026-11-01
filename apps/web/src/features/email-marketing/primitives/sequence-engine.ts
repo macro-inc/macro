@@ -684,4 +684,3 @@ export function createSequenceEngine(
     },
   };
 }
-export type SequenceEngine = ReturnType<typeof createSequenceEngine>;
