@@ -372,7 +372,9 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
         }
         if matches.len() == 1 {
             let found = matches[0];
-            if found.size != file.size || found.name != file.name || found.inline != file.inline {
+            // Graph's size also counts the attachment's other properties, so it
+            // exceeds the byte length; only a smaller file means it changed.
+            if found.size < file.size || found.name != file.name || found.inline != file.inline {
                 return Err(EmailApiError::Conflict.into());
             }
             checkpoint.completed_files += 1;
