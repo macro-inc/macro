@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.message_id, r.open_count, r.first_opened_at, r.last_opened_at\n            FROM email_message_read_receipts r\n            JOIN email_messages m ON m.id = r.message_id\n            WHERE m.thread_id = $1 AND m.link_id = ANY($2) AND m.is_sent\n            ORDER BY m.internal_date_ts DESC NULLS LAST, r.message_id\n            LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "open_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "first_opened_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_opened_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "b9151a8d786e553b1d03de00a93f9370a3850a6a165b3ca0634d1f8222c2b1a5"
+}

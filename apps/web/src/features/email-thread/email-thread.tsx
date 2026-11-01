@@ -29,6 +29,7 @@ import type {
   EmailMessage,
 } from '../email-message/core/email-message';
 import { operationSettled } from '../email-message/core/message-operation';
+import { showsReadReceiptPixel } from '../email-message/core/read-receipt';
 import { EmailMessageOperation } from '../email-message/email-message-operation';
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
@@ -44,6 +45,7 @@ import type {
 import type { EmailThreadOrganizationStatus } from './context/email-thread-view-context';
 import { EmailThreadOperations } from './email-thread-operations';
 import { createOptimisticThreadSend } from './primitives/optimistic-send';
+import { createThreadReadReceipts } from './read-receipts';
 import { createThreadActionAdapter } from './thread-action-adapter';
 import {
   EmailThreadSurface,
@@ -143,6 +145,9 @@ export function EmailThread(props: EmailThreadProps) {
       renderAvatar: (message: EmailMessage) => (
         <EmailSenderIcon message={message} />
       ),
+      readReceipt: createThreadReadReceipts(() => props.threadId()),
+      showReadReceiptPixel: (message: EmailMessage) =>
+        showsReadReceiptPixel(message, compose.accounts.inboxes()),
     },
   };
   const rendering = createEmailRenderingContext();

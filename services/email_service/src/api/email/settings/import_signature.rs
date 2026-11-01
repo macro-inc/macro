@@ -125,6 +125,7 @@ pub async fn import_signature_handler(
         api::settings::Settings {
             signature: Some(sanitized_signature),
             signature_on_replies_forwards: None,
+            read_receipts_enabled: None,
         },
         link.id,
     );

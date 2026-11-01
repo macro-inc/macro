@@ -20,6 +20,8 @@ pub mod invitation_resolution;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
 pub mod models;
+#[cfg(feature = "ports")]
+pub mod read_receipts;
 pub mod senders;
 
 #[cfg(feature = "ports")]

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_message_read_receipts (message_id, token)\n            VALUES ($1, $2)\n            ON CONFLICT (message_id) DO UPDATE SET token = email_message_read_receipts.token\n            RETURNING token",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1cd3d12ac72da02f60fc8466960f516f90c7200be2d31d02f2abcfe44d452716"
+}

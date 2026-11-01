@@ -72,3 +72,19 @@ pub fn inbox_health(
         },
     )
 }
+
+pub type ReadReceipts = email::domain::read_receipts::ReadReceiptService<
+    email::outbound::read_receipts_pg::ReadReceiptPgRepository,
+>;
+
+/// Pixels point at this service's public URL, which serves `/opens/{token}`.
+pub fn read_receipts(
+    db: sqlx::PgPool,
+    environment: macro_env::Environment,
+) -> anyhow::Result<ReadReceipts> {
+    let base = macro_service_urls::EmailServiceUrl::new_for_environment(environment)?;
+    Ok(email::domain::read_receipts::ReadReceiptService::new(
+        email::outbound::read_receipts_pg::ReadReceiptPgRepository(db),
+        email::domain::read_receipts::PixelUrlPrefix::new(base.as_str()),
+    ))
+}

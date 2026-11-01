@@ -816,6 +816,30 @@ Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
 
+### Read receipts
+
+With `enable-email-read-receipts` on and read receipts turned on for an inbox
+(see [Settings](settings.md#email-read-receipts)), messages sent from that
+inbox show **Opened** or **Not opened** beside the date in the expanded
+message header. The desktop tooltip and the expanded header details (tap the
+header caret on touch) give the count and first and last open times. Only
+people with access to the sending inbox see it, and the thread refreshes it
+about once a minute. Turning the setting off stops tracking new messages;
+statuses already recorded for that inbox stay visible while another of the
+viewer's inboxes has read receipts on, and every status hides once none does.
+A recipient who reads their own copy in Macro counts as
+an open; the reader loads the pixel only on copies in an inbox the viewer owns
+or is a delegate of that were not sent from one of the viewer's addresses or
+send-as aliases. The sender's copy never loads it, including a copy the sender
+received by CC'ing themselves, and neither does a thread seen only through
+sharing or any copy while the viewer's inboxes load. Quoted replies and
+forwards always drop it, so new recipients never inherit the original's pixel.
+With the image proxy on, a browser caches the pixel, so a recipient's repeat
+opens in Macro on one device count once. Verify with two Macro accounts: open
+the recipient's copy, then check the sender's status; the sender's own views
+must not change it. Opens need the email service's public URL, which the local
+Docker stack cannot serve.
+
 Sending a reply from an inbox thread marks that thread done but stays on it.
 Send and mark done (Shift+Cmd+Enter) and Mark done open the next email, counted
 from where the thread sat when it was opened (a reply draft lifts its thread to
