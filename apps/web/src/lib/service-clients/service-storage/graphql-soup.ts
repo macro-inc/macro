@@ -552,6 +552,9 @@ const [cacheAvailability, setCacheAvailability] = createSignal(0);
 // get the plain network client.
 const [sessionActive, setSessionActive] = createSignal(hasLoginCookie());
 
+/** Whether this tab has a signed-in session; the `user` root needs one. */
+export const graphqlSoupSessionActive = sessionActive;
+
 /**
  * Records whether this tab has a signed-in session. Ending one disposes the
  * cached and realtime clients, so their websocket and queue runner stop.

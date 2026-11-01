@@ -7,6 +7,7 @@
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import type { AgentSessionLogQuery } from '@service-storage/graphql/generated/graphql';
 import type { OperationResult } from '@urql/core';
+import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, type Source } from 'wonka';
 
@@ -32,12 +33,18 @@ const host = vi.hoisted(() => ({
   writeQuery: vi.fn(),
   deleteRecords: vi.fn(),
 }));
+const soup = vi.hoisted(() => ({ sessionActive: true }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => client,
   getGraphqlCacheHost: () => host,
+  graphqlSoupSessionActive: () => soup.sessionActive,
+}));
+const harness = vi.hoisted(() => ({ getLog: vi.fn() }));
+vi.mock('@service-agent-harness/client', () => ({
+  agentHarnessServiceClient: harness,
 }));
 
-import { watchAgentSessionLog } from './log';
+import { AgentSessionLogUnavailable, watchAgentSessionLog } from './log';
 
 const SESSION = '01a0abed-279f-724c-9f49-60dbedc79b6e';
 
@@ -101,6 +108,7 @@ let calls: string[];
 
 beforeEach(() => {
   vi.useFakeTimers();
+  soup.sessionActive = true;
   calls = [];
   query = makeSubject();
   appended = makeSubject();
@@ -265,5 +273,70 @@ describe('watchAgentSessionLog', () => {
 
     expect(gap).toHaveBeenCalledOnce();
     watch.stop();
+  });
+
+  describe('signed out', () => {
+    beforeEach(() => {
+      soup.sessionActive = false;
+    });
+
+    it('reads a public session from the harness, which applies link sharing', async () => {
+      harness.getLog.mockResolvedValue(
+        ok({
+          bot: { id: 'bot-id', name: 'Agent', handle: 'agent' },
+          entries: [row(1), row(2)],
+        })
+      );
+      const watch = watchAgentSessionLog(SESSION);
+
+      expect(await watch.fetched).toEqual({
+        bot: { id: 'bot-id', name: 'Agent', handle: 'agent' },
+        rows: [row(1), row(2)],
+      });
+      expect(await watch.cached).toBeUndefined();
+      expect(client.query).not.toHaveBeenCalled();
+    });
+
+    it('reports a session the harness refuses as inaccessible', async () => {
+      harness.getLog.mockResolvedValue(
+        err([{ code: 'UNAUTHORIZED', message: 'Unauthorized access' }])
+      );
+      const watch = watchAgentSessionLog(SESSION);
+
+      await expect(watch.fetched).rejects.toMatchObject({
+        reason: 'inaccessible',
+      });
+    });
+
+    it.each([
+      [
+        'a log',
+        ok({
+          bot: { id: 'bot-id', name: 'Agent', handle: 'agent' },
+          entries: [row(1)],
+        }),
+      ],
+      ['a refusal', err([{ code: 'NOT_FOUND', message: 'Not found' }])],
+    ])(
+      'fails a read stopped before the harness answers, even with %s later',
+      async (_, late) => {
+        let answer!: (result: unknown) => void;
+        harness.getLog.mockReturnValue(
+          new Promise((resolve) => {
+            answer = resolve;
+          })
+        );
+        const watch = watchAgentSessionLog(SESSION);
+
+        watch.stop();
+        await expect(watch.fetched).rejects.toBeInstanceOf(
+          AgentSessionLogUnavailable
+        );
+
+        answer(late);
+        await settle();
+        await expect(watch.fetched).rejects.toMatchObject({ reason: 'failed' });
+      }
+    );
   });
 });

@@ -1613,7 +1613,10 @@ the owner's team when one exists. On mobile these controls are in the Share,
 People, and Link tabs, and the People tab is likewise named Owner when only the
 owner is listed. View and Comment allow reading; Edit also allows
 controlling the session. View-only sessions keep the composer, model selector,
-and queued-message controls disabled. **Copy Share Link** remains in the header. Cancel
+and queued-message controls disabled. A Public session opened signed out shows
+its transcript read-only under the **Create an account to get started** banner;
+new turns appear only after a reload. A session without Public link sharing
+shows **You don't have access to this agent session** instead. **Copy Share Link** remains in the header. Cancel
 closes the composer without sending.
 
 Sharing a session reference in a message grants View by default and preserves
