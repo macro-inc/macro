@@ -129,28 +129,57 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
   );
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal('');
+
   const trimmedPattern = () => pattern().trim();
-  const canSubmit = () =>
-    name().trim().length > 0 &&
-    (kind() === 'manual' || trimmedPattern().length > 0) &&
-    (!props.initial ||
-      name().trim() !== props.initial.name.trim() ||
-      (kind() === 'smart' &&
-        trimmedPattern() !== props.initial.rule?.contains));
+  const canSubmit = () => {
+    if (name().trim().length === 0) {
+      return false;
+    }
+
+    if (kind() !== 'manual' && trimmedPattern().length === 0) {
+      return false;
+    }
+
+    if (!props.initial || name().trim() !== props.initial.name.trim()) {
+      return true;
+    }
+
+    return (
+      kind() === 'smart' && trimmedPattern() !== props.initial.rule?.contains
+    );
+  };
+
+  const submitLabel = () => {
+    if (saving()) {
+      return t('channelSections.saving');
+    }
+
+    return props.initial
+      ? t('channelSections.saveSection')
+      : t('channelSections.createSection');
+  };
 
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
-    if (!canSubmit() || saving()) return;
+
+    if (!canSubmit() || saving()) {
+      return;
+    }
+
     setSaving(true);
     setError('');
+
     try {
-      await props.onConfirm({
+      const value: SectionDialogValue = {
         name: name().trim(),
         scope: scope(),
-        ...(kind() === 'smart'
-          ? { rule: { attribute: 'name' as const, contains: trimmedPattern() } }
-          : {}),
-      });
+      };
+
+      if (kind() === 'smart') {
+        value.rule = { attribute: 'name', contains: trimmedPattern() };
+      }
+
+      await props.onConfirm(value);
       props.onOpenChange(false);
     } catch (error) {
       setError(
@@ -167,7 +196,9 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
     <Dialog
       open={props.open}
       onOpenChange={(open) => {
-        if (!saving()) props.onOpenChange(open);
+        if (!saving()) {
+          props.onOpenChange(open);
+        }
       }}
       class="w-[min(36rem,90vw)]"
       visibleScrim
@@ -266,11 +297,7 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
                 variant="primary"
                 disabled={!canSubmit() || saving()}
               >
-                {saving()
-                  ? t('channelSections.saving')
-                  : props.initial
-                    ? t('channelSections.saveSection')
-                    : t('channelSections.createSection')}
+                {submitLabel()}
               </Button>
             </div>
           </div>

@@ -71,7 +71,10 @@ type ConversationOption =
   | CombinedRecipientItem<'channel'>;
 
 function optionName(option: ConversationOption): string {
-  if (option.kind === 'custom') return option.data.email;
+  if (option.kind === 'custom') {
+    return option.data.email;
+  }
+
   return (
     option.data.name ||
     (option.kind === 'user' || option.kind === 'contact'
@@ -89,15 +92,29 @@ const searchOptions = createFreshSearch<ConversationOption>({
   getDisplayName: optionName,
   isChannelItem: (option) => option.kind === 'channel',
   getTimestamp: (option) => {
-    if (option.kind === 'user')
+    if (option.kind === 'user') {
       return { lastInteraction: option.data.lastInteraction };
-    if (option.kind === 'channel')
-      return {
-        updatedAt: option.data.updated_at,
-      };
+    }
+
+    if (option.kind === 'channel') {
+      return { updatedAt: option.data.updated_at };
+    }
+
     return {};
   },
 });
+
+function optionActionLabel(option: ConversationOption): string {
+  if (option.kind === 'channel') {
+    return t('channelSections.openChannel');
+  }
+
+  if (option.kind === 'custom') {
+    return t('channelSections.invitePerson');
+  }
+
+  return t('channelSections.messagePerson');
+}
 
 function OptionIcon(props: { option: ConversationOption }) {
   return (
@@ -145,6 +162,7 @@ function NewConversationDialog(props: ManagedDialogProps) {
   const [setupProgress, setSetupProgress] = createSignal<ChannelSetupProgress>(
     {}
   );
+
   const teamQuery = useCurrentTeamQuery();
   const team = () =>
     queryReadyGate(teamQuery) ? teamQuery.data?.team : undefined;
@@ -159,25 +177,32 @@ function NewConversationDialog(props: ManagedDialogProps) {
       recipientEntityMapper('agent')(agent.bot)
     ),
   ]);
-  const options = createMemo<ConversationOption[]>(() =>
-    [
+  const options = createMemo<ConversationOption[]>(() => {
+    const available: ConversationOption[] = [
       ...users().filter((option) => option.id !== userId()),
       ...agents(),
-      ...(selected().length === 0
-        ? channels()
-            .filter((channel) => channel.channel_type !== 'direct_message')
-            .map(recipientEntityMapper('channel'))
-        : []),
-    ].filter(
+    ];
+
+    if (selected().length === 0) {
+      available.push(
+        ...channels()
+          .filter((channel) => channel.channel_type !== 'direct_message')
+          .map(recipientEntityMapper('channel'))
+      );
+    }
+
+    return available.filter(
       (option) => !selected().some((recipient) => recipient.id === option.id)
-    )
-  );
+    );
+  });
+
   const suggestions = createMemo(() => {
     const matches = searchOptions(options(), query()).map(
       (result) => result.item
     );
     const email = query().trim().toLowerCase();
     const id = emailToMacroId(email);
+
     if (
       id &&
       EmailValidator.validate(email) &&
@@ -193,8 +218,10 @@ function NewConversationDialog(props: ManagedDialogProps) {
         recipientEntityMapper('custom')({ id, email, invalid: false })
       );
     }
+
     return matches.slice(0, 3);
   });
+
   const duplicates = createMemo(() =>
     channels().filter(
       (channel) =>
@@ -210,9 +237,14 @@ function NewConversationDialog(props: ManagedDialogProps) {
       ? [`bot|${agent.id}`]
       : getDestinationFromOptions(selected()).users;
   };
+
   const existing = createMemo(() => {
     const ids = new Set([userId(), ...recipients()]);
-    if (recipients().length === 0) return;
+
+    if (recipients().length === 0) {
+      return;
+    }
+
     return channels().find(
       (channel) =>
         (recipients().length === 1
@@ -224,6 +256,7 @@ function NewConversationDialog(props: ManagedDialogProps) {
         )
     );
   });
+
   const canSubmit = () => {
     if (
       !active ||
@@ -232,8 +265,10 @@ function NewConversationDialog(props: ManagedDialogProps) {
       !userId() ||
       userId() !== ownerId ||
       pending()
-    )
+    ) {
       return false;
+    }
+
     if (setupProgress().channelId) {
       return (
         setupInput !== undefined &&
@@ -242,7 +277,11 @@ function NewConversationDialog(props: ManagedDialogProps) {
           setupInput.teamId === team()?.id)
       );
     }
-    if (selected().length > 0) return query().trim().length === 0;
+
+    if (selected().length > 0) {
+      return query().trim().length === 0;
+    }
+
     return (
       channelName().length > 0 &&
       channelName().length <= 80 &&
@@ -250,6 +289,34 @@ function NewConversationDialog(props: ManagedDialogProps) {
       (duplicates().length === 0 || duplicateConfirmed())
     );
   };
+
+  const submitLabel = () => {
+    if (pending()) {
+      return t('channelSections.saving');
+    }
+
+    if (setupProgress().channelId) {
+      return t('channelSections.retry');
+    }
+
+    if (selected().length > 0) {
+      return t(
+        existing()
+          ? 'channelSections.openConversation'
+          : 'channelSections.startConversation'
+      );
+    }
+
+    return t('channelSections.createChannel');
+  };
+
+  const creationError = () =>
+    t(
+      setupProgress().channelId
+        ? 'channelSections.channelSetupFailed'
+        : 'channelSections.creationFailed'
+    );
+
   const direct = useGetOrCreateDirectMessageMutation();
   const group = useGetOrCreatePrivateChannelMutation();
   const create = useCreateChannelMutation();
@@ -260,55 +327,78 @@ function NewConversationDialog(props: ManagedDialogProps) {
   let inputRef: HTMLInputElement | undefined;
   let suggestionsRef: HTMLUListElement | undefined;
   let active = true;
+
   onCleanup(() => {
     active = false;
   });
+
   createEffect(
     on(
       () => sections().enabled,
       (enabled) => {
-        if (enabled) return;
+        if (enabled) {
+          return;
+        }
+
         active = false;
         props.onOpenChange(false);
       }
     )
   );
+
   createEffect(
     on(userId, (id) => {
-      if (id === ownerId) return;
+      if (id === ownerId) {
+        return;
+      }
+
       active = false;
       props.onOpenChange(false);
     })
   );
 
   const open = (id: string) => {
-    if (!active || !sections().enabled || userId() !== ownerId) return;
+    if (!active || !sections().enabled || userId() !== ownerId) {
+      return;
+    }
+
     props.onOpenChange(false);
     openWithSplit(
       { type: 'channel', id },
       { referredFrom: 'channels', reopen: 'latest' }
     );
   };
+
   const selectOption = (option: ConversationOption) => {
-    if (locked()) return;
+    if (locked()) {
+      return;
+    }
+
     if (option.kind === 'channel') {
       open(option.id);
       return;
     }
+
     setSelected(selectConversationRecipients([...selected(), option]));
     setQuery('');
     setError('');
     setDuplicateConfirmed(false);
     inputRef?.focus();
   };
+
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     const actor = userId();
-    if (!actor || !canSubmit()) return;
+
+    if (!actor || !canSubmit()) {
+      return;
+    }
+
     const isCurrent = () =>
       active && sections().enabled && props.open && userId() === actor;
     setPending(true);
     setError('');
+
     try {
       if (selected().length > 0) {
         const ids = recipients();
@@ -316,19 +406,28 @@ function NewConversationDialog(props: ManagedDialogProps) {
           'conversation.resolve',
           async (span) => {
             span.setAttr('conversation.recipient_count', ids.length);
-            const resolved =
-              ids.length === 1
-                ? await direct.mutateAsync({ recipient_id: ids[0] })
-                : await group.mutateAsync({ recipients: ids });
+            if (ids.length === 1) {
+              const resolved = await direct.mutateAsync({
+                recipient_id: ids[0],
+              });
+              span.setAttr('channel.id', resolved.channel_id);
+              return resolved;
+            }
+
+            const resolved = await group.mutateAsync({ recipients: ids });
             span.setAttr('channel.id', resolved.channel_id);
             return resolved;
           }
         );
-        if (isCurrent()) open(result.channel_id);
+
+        if (isCurrent()) {
+          open(result.channel_id);
+        }
+
         return;
       }
 
-      if (!setupProgress().channelId)
+      if (!setupProgress().channelId) {
         setupInput = {
           name: channelName(),
           channelType: privateChannel() ? 'private' : 'team',
@@ -340,7 +439,12 @@ function NewConversationDialog(props: ManagedDialogProps) {
             .map((option) => option.id),
           autoJoinTeam: autoJoinTeam(),
         };
-      if (!setupInput) return;
+      }
+
+      if (!setupInput) {
+        return;
+      }
+
       const input = setupInput;
       const id = await Telemetry.span('conversation.create', async (span) => {
         span.setAttr('channel.type', input.channelType);
@@ -384,55 +488,70 @@ function NewConversationDialog(props: ManagedDialogProps) {
           },
           setSetupProgress
         );
-        if (id) span.setAttr('channel.id', id);
+
+        if (id) {
+          span.setAttr('channel.id', id);
+        }
+
         return id;
       });
-      if (id && isCurrent()) open(id);
-      else if (isCurrent())
-        setError(
-          t(
-            setupProgress().channelId
-              ? 'channelSections.channelSetupFailed'
-              : 'channelSections.creationFailed'
-          )
-        );
+
+      if (id && isCurrent()) {
+        open(id);
+      } else if (isCurrent()) {
+        setError(creationError());
+      }
     } catch {
-      if (isCurrent())
-        setError(
-          t(
-            setupProgress().channelId
-              ? 'channelSections.channelSetupFailed'
-              : 'channelSections.creationFailed'
-          )
-        );
+      if (isCurrent()) {
+        setError(creationError());
+      }
     } finally {
-      if (active) setPending(false);
+      if (active) {
+        setPending(false);
+      }
     }
   };
 
   const moveSuggestionFocus = (event: KeyboardEvent) => {
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+      return;
+    }
+
     const buttons = Array.from(
       suggestionsRef?.querySelectorAll<HTMLButtonElement>('button') ?? []
     );
-    if (locked() || buttons.length === 0 || !suggestionsRef?.isConnected)
+
+    if (locked() || buttons.length === 0 || !suggestionsRef?.isConnected) {
       return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
+
     const index =
       event.target instanceof HTMLButtonElement
         ? buttons.indexOf(event.target)
         : -1;
     let next = index + (event.key === 'ArrowDown' ? 1 : -1);
-    if (index === -1) next = event.key === 'ArrowDown' ? 0 : buttons.length - 1;
-    if (buttons[next]) buttons[next].focus();
-    else inputRef?.focus();
+
+    if (index === -1) {
+      next = event.key === 'ArrowDown' ? 0 : buttons.length - 1;
+    }
+
+    if (buttons[next]) {
+      buttons[next].focus();
+    } else {
+      inputRef?.focus();
+    }
   };
+
   return (
     <Dialog
       open={props.open}
       onOpenChange={(open) => {
-        if (!pending()) props.onOpenChange(open);
+        if (!pending()) {
+          props.onOpenChange(open);
+        }
       }}
       class="w-[min(36rem,90vw)]"
     >
@@ -533,11 +652,7 @@ function NewConversationDialog(props: ManagedDialogProps) {
                         {optionName(option)}
                       </span>
                       <span class="shrink-0 text-xs text-ink-muted">
-                        {option.kind === 'channel'
-                          ? t('channelSections.openChannel')
-                          : option.kind === 'custom'
-                            ? t('channelSections.invitePerson')
-                            : t('channelSections.messagePerson')}
+                        {optionActionLabel(option)}
                       </span>
                     </Button>
                   </li>
@@ -633,8 +748,12 @@ function NewConversationDialog(props: ManagedDialogProps) {
             disabled={pending()}
             onClick={() => {
               const id = setupProgress().channelId;
-              if (id) open(id);
-              else props.onOpenChange(false);
+
+              if (id) {
+                open(id);
+              } else {
+                props.onOpenChange(false);
+              }
             }}
           >
             {t(
@@ -644,17 +763,7 @@ function NewConversationDialog(props: ManagedDialogProps) {
             )}
           </Button>
           <Button type="submit" disabled={!canSubmit()}>
-            {pending()
-              ? t('channelSections.saving')
-              : setupProgress().channelId
-                ? t('channelSections.retry')
-                : selected().length > 0
-                  ? t(
-                      existing()
-                        ? 'channelSections.openConversation'
-                        : 'channelSections.startConversation'
-                    )
-                  : t('channelSections.createChannel')}
+            {submitLabel()}
           </Button>
         </div>
       </form>
@@ -663,6 +772,9 @@ function NewConversationDialog(props: ManagedDialogProps) {
 }
 
 export function openNewConversationDialog() {
-  if (!isFeatureEnabled(enableChatSidebarSections)) return;
+  if (!isFeatureEnabled(enableChatSidebarSections)) {
+    return;
+  }
+
   openDialog(NewConversationDialog, {});
 }
