@@ -75,6 +75,10 @@ pub struct CodeStep {
     pub writes: Vec<WriteScope>,
 }
 
+/// How to write a code step, for whoever writes one: the agent tool that
+/// creates routines and the routine drafter read the same text.
+pub const CODE_STEPS: &str = include_str!("code_steps.md");
+
 /// The ambient declarations a code step is type-checked with: the type of
 /// its `main`'s argument. The SDK's own declarations come from the checker.
 pub const STEP_CONTEXT: &str = r#"import type { Macro } from '@macro-inc/sdk';

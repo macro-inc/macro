@@ -890,6 +890,18 @@ impl RoutineCode for Code {
             })
     }
 
+    async fn reference(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+    ) -> std::result::Result<String, crate::domain::ports::CodeUnavailable> {
+        Ok(String::new())
+    }
+
+    fn declarations(&self, _: &[String]) -> String {
+        String::new()
+    }
+
     async fn rewrite(
         &self,
         _: &MacroUserIdStr<'static>,

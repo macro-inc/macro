@@ -211,6 +211,20 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
+    /// How to write a code step for `task`: the shared guide, the type of
+    /// `main`'s argument, and the SDK reference relevant to the task.
+    fn code_guide(
+        &self,
+        user: MacroUserIdStr<'static>,
+        task: &str,
+    ) -> impl Future<Output = Result<super::code_check::CodeGuide>> + Send;
+
+    /// Type-check code the way saving a routine does, without saving it.
+    fn check_code(
+        &self,
+        source: &str,
+    ) -> impl Future<Output = Result<super::code_check::CodeCheck>> + Send;
+
     /// How the routine's code steps were brought to new SDKs, newest first.
     fn get_code_upgrades(
         &self,
@@ -430,6 +444,18 @@ pub trait RoutineCode: Send + Sync + 'static {
         run: CodeRun<'_>,
     ) -> impl Future<Output = CodeOutcome> + Send;
 
+    /// The SDK reference for code that does `task` (entity indexes with
+    /// method signatures), chosen for `user`.
+    fn reference(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task: &str,
+    ) -> impl Future<Output = Result<String, CodeUnavailable>> + Send;
+
+    /// The SDK declarations of the types `problems` name, for whoever fixes
+    /// the code.
+    fn declarations(&self, problems: &[String]) -> String;
+
     /// Rewrite `step`'s source so the problems [`Self::check`] found go
     /// away, keeping what it does, billed to `owner`. The model sees the
     /// code and the problems, never the routine's data. Why it couldn't, for
@@ -493,6 +519,18 @@ impl RoutineCode for NoRoutineCode {
         }
     }
 
+    async fn reference(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+    ) -> Result<String, CodeUnavailable> {
+        Err(CodeUnavailable(NO_CODE.to_owned()))
+    }
+
+    fn declarations(&self, _: &[String]) -> String {
+        String::new()
+    }
+
     async fn rewrite(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -521,6 +559,23 @@ impl<Code: RoutineCode> RoutineCode for Option<Code> {
             Some(code) => code.run(owner, run).await,
             None => NoRoutineCode.run(owner, run).await,
         }
+    }
+
+    async fn reference(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task: &str,
+    ) -> Result<String, CodeUnavailable> {
+        match self {
+            Some(code) => code.reference(user, task).await,
+            None => NoRoutineCode.reference(user, task).await,
+        }
+    }
+
+    fn declarations(&self, problems: &[String]) -> String {
+        self.as_ref()
+            .map(|code| code.declarations(problems))
+            .unwrap_or_default()
     }
 
     async fn rewrite(

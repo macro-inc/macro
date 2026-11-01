@@ -149,6 +149,66 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * Code to type-check.
+ */
+export type CheckCodeRequest = {
+    /**
+     * A code step's source.
+     */
+    source: string;
+};
+
+/**
+ * What type-checking code found.
+ */
+export type CodeCheck = {
+    /**
+     * The SDK declarations the problems name, to fix them with.
+     */
+    declarations: string;
+    /**
+     * The first problems, as the type checker reported them; empty when it checks.
+     */
+    problems: Array<string>;
+    /**
+     * The SDK the code was checked against.
+     */
+    sdk: string;
+};
+
+/**
+ * How to write a code step for a described task.
+ */
+export type CodeGuide = {
+    /**
+     * TypeScript declaring `StepContext`, what `main` receives.
+     */
+    contract: string;
+    /**
+     * The SDK's entities relevant to the task, with method signatures.
+     */
+    reference: string;
+    /**
+     * The SDK code is checked against.
+     */
+    sdk: string;
+    /**
+     * How to write a code step, the same text the routine agent tools read.
+     */
+    steps: string;
+};
+
+/**
+ * What code should do, to choose the SDK reference for.
+ */
+export type CodeGuideRequest = {
+    /**
+     * The work, in words, e.g. "go through my notifications and keep the important ones".
+     */
+    task: string;
+};
+
+/**
  * One time a routine's code was brought to a new SDK.
  */
 export type CodeUpgrade = {
@@ -620,6 +680,61 @@ export type CreateScheduledActionResponses = {
 };
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
+
+export type CheckRoutineCodeData = {
+    body: CheckCodeRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/code/check';
+};
+
+export type CheckRoutineCodeErrors = {
+    401: string;
+    500: string;
+    /**
+     * Code steps aren't available here
+     */
+    503: string;
+};
+
+export type CheckRoutineCodeError = CheckRoutineCodeErrors[keyof CheckRoutineCodeErrors];
+
+export type CheckRoutineCodeResponses = {
+    /**
+     * What the type checker found, as saving a routine would check it
+     */
+    200: CodeCheck;
+};
+
+export type CheckRoutineCodeResponse = CheckRoutineCodeResponses[keyof CheckRoutineCodeResponses];
+
+export type RoutineCodeGuideData = {
+    body: CodeGuideRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/code/guide';
+};
+
+export type RoutineCodeGuideErrors = {
+    400: string;
+    401: string;
+    500: string;
+    /**
+     * Code steps aren't available here
+     */
+    503: string;
+};
+
+export type RoutineCodeGuideError = RoutineCodeGuideErrors[keyof RoutineCodeGuideErrors];
+
+export type RoutineCodeGuideResponses = {
+    /**
+     * How to write a code step for the task, with the SDK reference it needs
+     */
+    200: CodeGuide;
+};
+
+export type RoutineCodeGuideResponse = RoutineCodeGuideResponses[keyof RoutineCodeGuideResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;

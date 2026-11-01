@@ -653,6 +653,7 @@ async fn run() -> anyhow::Result<()> {
             ),
             code_mode::sdk_hosts()?,
             Arc::clone(&recorder),
+            tool_context.cognition_tool_context.service.clone(),
         )),
         None => None,
     };

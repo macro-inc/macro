@@ -12,6 +12,8 @@ import {
 } from '../ai-usage-limit';
 import type {
   ActionExecutionRecord,
+  CodeCheck,
+  CodeGuide,
   CodeUpgrade,
   CreateScheduledAction,
   InProgressExecution,
@@ -104,6 +106,18 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.scheduleId}/history`,
       { method: 'GET' }
     ),
+
+  codeGuide: async (args: { task: string }) =>
+    scheduledActionFetch<CodeGuide>('/scheduled-actions/code/guide', {
+      method: 'POST',
+      body: JSON.stringify({ task: args.task }),
+    }),
+
+  checkCode: async (args: { source: string }) =>
+    scheduledActionFetch<CodeCheck>('/scheduled-actions/code/check', {
+      method: 'POST',
+      body: JSON.stringify({ source: args.source }),
+    }),
 
   listCodeUpgrades: async (args: { scheduleId: string }) =>
     scheduledActionFetch<CodeUpgrade[]>(

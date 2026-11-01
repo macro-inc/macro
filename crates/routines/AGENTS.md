@@ -16,7 +16,9 @@ persona/model to run later.
   and turns it into one agent step.
 - `src/inbound.rs`: the AI toolset exposed to MCP and embedded agents.
 - `src/create_routine.md`: `CreateRoutine`'s description — the step types,
-  allowed tools and placeholders agents compose routines from.
+  allowed tools and placeholders agents compose routines from. Its code-step
+  section is `routine_program`'s `code_steps.md`, appended at compile time
+  and shared with the web drafter; edit it there.
 - `CreateRoutine` tells agents to use `m-document-mention` with the routine ID,
   name, and `blockName: "routine"` in replies.
 - `src/outbound.rs`: the HTTP client to the owning scheduled-action service.

@@ -208,6 +208,7 @@ mod real_deno {
             FixedToken,
             hosts,
             Arc::new(ai_usage::NoOpUsageRecorder),
+            None,
         );
         (root, code)
     }

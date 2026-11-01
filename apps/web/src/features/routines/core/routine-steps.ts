@@ -51,6 +51,8 @@ export type CodeStepDraft = {
   summary: string;
   source: string;
   writes: WriteScope[];
+  /** Type-checker problems found while drafting, until AI fixes them. Never saved. */
+  problems?: string[];
 };
 export type AgentStepDraft = {
   id: string;
@@ -215,6 +217,7 @@ export const stepDraftSchema: z.ZodType<StepDraft> = z.lazy(() =>
       summary: z.string(),
       source: z.string(),
       writes: z.array(z.enum(writeScopes)),
+      problems: z.array(z.string()).optional(),
     }),
     z.object({
       id: z.string(),
@@ -714,6 +717,8 @@ export function validateSteps(
         const bytes = new TextEncoder().encode(step.source).length;
         if (!step.source.trim() || bytes > STEP_LIMITS.sourceBytes)
           return 'A code step’s code is empty or too long. Ask AI to rewrite it.';
+        if (step.problems?.length)
+          return `“${title}” doesn’t type-check yet. Draft the routine again or remove that step.`;
         return null;
       })
       .with({ kind: 'tool' }, (step) => validateTool(step))

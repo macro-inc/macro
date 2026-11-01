@@ -8,6 +8,10 @@
 import type {
   ActionExecutionRecord,
   AiAdmissionErrorBody,
+  CheckCodeRequest,
+  CodeCheck,
+  CodeGuide,
+  CodeGuideRequest,
   CodeUpgrade,
   CreateScheduledAction,
   EmptyResponse,
@@ -199,6 +203,132 @@ export const createScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as createScheduledActionResponse;
+};
+
+export type checkRoutineCodeResponse200 = {
+  data: CodeCheck;
+  status: 200;
+};
+
+export type checkRoutineCodeResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type checkRoutineCodeResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type checkRoutineCodeResponse503 = {
+  data: string;
+  status: 503;
+};
+
+export type checkRoutineCodeResponseSuccess = checkRoutineCodeResponse200 & {
+  headers: Headers;
+};
+export type checkRoutineCodeResponseError = (
+  | checkRoutineCodeResponse401
+  | checkRoutineCodeResponse500
+  | checkRoutineCodeResponse503
+) & {
+  headers: Headers;
+};
+
+export type checkRoutineCodeResponse =
+  | checkRoutineCodeResponseSuccess
+  | checkRoutineCodeResponseError;
+
+export const getCheckRoutineCodeUrl = () => {
+  return `/scheduled-actions/code/check`;
+};
+
+export const checkRoutineCode = async (
+  checkCodeRequest: CheckCodeRequest,
+  options?: RequestInit
+): Promise<checkRoutineCodeResponse> => {
+  const res = await fetch(getCheckRoutineCodeUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(checkCodeRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: checkRoutineCodeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as checkRoutineCodeResponse;
+};
+
+export type routineCodeGuideResponse200 = {
+  data: CodeGuide;
+  status: 200;
+};
+
+export type routineCodeGuideResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type routineCodeGuideResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type routineCodeGuideResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type routineCodeGuideResponse503 = {
+  data: string;
+  status: 503;
+};
+
+export type routineCodeGuideResponseSuccess = routineCodeGuideResponse200 & {
+  headers: Headers;
+};
+export type routineCodeGuideResponseError = (
+  | routineCodeGuideResponse400
+  | routineCodeGuideResponse401
+  | routineCodeGuideResponse500
+  | routineCodeGuideResponse503
+) & {
+  headers: Headers;
+};
+
+export type routineCodeGuideResponse =
+  | routineCodeGuideResponseSuccess
+  | routineCodeGuideResponseError;
+
+export const getRoutineCodeGuideUrl = () => {
+  return `/scheduled-actions/code/guide`;
+};
+
+export const routineCodeGuide = async (
+  codeGuideRequest: CodeGuideRequest,
+  options?: RequestInit
+): Promise<routineCodeGuideResponse> => {
+  const res = await fetch(getRoutineCodeGuideUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(codeGuideRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: routineCodeGuideResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as routineCodeGuideResponse;
 };
 
 export type getScheduledActionResponse200 = {

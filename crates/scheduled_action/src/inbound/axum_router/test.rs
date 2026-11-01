@@ -1075,3 +1075,48 @@ async fn code_steps_need_a_checker_and_the_owner_reads_their_upgrades() {
         (StatusCode::OK, json!([]))
     );
 }
+
+#[tokio::test]
+async fn code_guides_and_checks_need_a_signed_in_user_and_an_executor() {
+    let app = router(true);
+    let guide = json!({ "task": "keep the important notifications" });
+    let check = json!({ "source": "export async function main() {}" });
+    for (path, body) in [
+        ("/scheduled-actions/code/guide", guide.clone()),
+        ("/scheduled-actions/code/check", check.clone()),
+    ] {
+        assert_eq!(
+            request(&app, "POST", path, "invalid", body.clone()).await.0,
+            StatusCode::UNAUTHORIZED
+        );
+        // This router's service has no code executor.
+        assert_eq!(
+            request(&app, "POST", path, "owner", body).await.0,
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/scheduled-actions/code/guide",
+            "owner",
+            json!({ "task": " " })
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/scheduled-actions/code/check",
+            "owner",
+            json!({ "code": "x" })
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+}

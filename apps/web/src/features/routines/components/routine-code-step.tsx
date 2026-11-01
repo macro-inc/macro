@@ -19,6 +19,29 @@ export function CodeStepBody(props: { step: CodeStepDraft; path: string }) {
       <Show when={props.step.summary.trim()}>
         {(summary) => <p class="text-sm text-ink-muted">{summary()}</p>}
       </Show>
+      <Show
+        when={props.step.problems?.length ? props.step.problems : undefined}
+      >
+        {(problems) => (
+          <div
+            role="alert"
+            class="grid min-w-0 gap-1.5 rounded-xl border border-failure/30 bg-failure-bg px-3 py-2.5"
+          >
+            <span class="text-sm text-failure">
+              This code doesn’t type-check against Macro’s SDK yet, so the
+              routine can’t be saved with it. Draft it again or remove this
+              step.
+            </span>
+            <For each={problems()}>
+              {(problem) => (
+                <pre class="min-w-0 overflow-auto whitespace-pre-wrap font-mono text-xs text-ink-muted">
+                  {problem}
+                </pre>
+              )}
+            </For>
+          </div>
+        )}
+      </Show>
       <Field label="Can change">
         <div class="flex min-w-0 flex-wrap gap-1">
           <For

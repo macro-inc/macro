@@ -34,6 +34,18 @@ impl RoutineCode for Checker {
         unreachable!("saving never runs code")
     }
 
+    async fn reference(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        task: &str,
+    ) -> Result<String, CodeUnavailable> {
+        Ok(format!("TaskNamespace methods for: {task}"))
+    }
+
+    fn declarations(&self, problems: &[String]) -> String {
+        format!("declarations for {} problems", problems.len())
+    }
+
     async fn rewrite(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -128,4 +140,44 @@ fn the_recorded_sdk_is_not_configuration() {
         &task(&["one"], None)
     ));
     assert!(!same_task(&task(&["one"], None), &task(&["two"], None)));
+}
+
+fn user() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap()
+}
+
+#[tokio::test]
+async fn a_guide_carries_the_shared_rules_the_contract_and_the_tasks_reference() {
+    let found = guide(
+        &Checker::default(),
+        &user(),
+        "  go through my notifications  ",
+    )
+    .await
+    .unwrap();
+    assert_eq!(found.sdk, "0.3.0+current");
+    assert_eq!(found.steps, routine_program::CODE_STEPS);
+    assert!(found.contract.contains("interface StepContext"));
+    assert_eq!(
+        found.reference,
+        "TaskNamespace methods for: go through my notifications"
+    );
+    for task in ["  ", &"x".repeat(MAX_TASK_CHARS + 1)] {
+        let error = guide(&Checker::default(), &user(), task).await.unwrap_err();
+        assert!(error.downcast_ref::<InvalidCodeTask>().is_some());
+    }
+    assert!(guide(&NoRoutineCode, &user(), "task").await.is_err());
+}
+
+#[tokio::test]
+async fn checking_code_reports_its_problems_with_the_declarations_to_fix_them() {
+    let checked = check(&Checker::default(), "fine").await.unwrap();
+    assert_eq!(
+        (checked.problems.len(), checked.declarations.as_str()),
+        (0, "")
+    );
+    let checked = check(&Checker::default(), "bad").await.unwrap();
+    assert_eq!(checked.problems.len(), 1);
+    assert_eq!(checked.declarations, "declarations for 1 problems");
+    assert_eq!(checked.sdk, "0.3.0+current");
 }

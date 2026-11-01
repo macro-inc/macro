@@ -22,7 +22,10 @@ each run.
   `target_runner.rs`. An old single-agent task runs as one agent step.
 - `src/domain/code_check.rs`: saving a routine type-checks its changed code
   steps and stamps the task's `sdk`; unchanged code already checked against
-  the current SDK isn't checked again.
+  the current SDK isn't checked again. `POST /scheduled-actions/code/guide`
+  (the shared code-step text, `StepContext` and the SDK reference for a
+  task) and `/code/check` (the same check, without saving) serve the web
+  routine drafter.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older SDK, it is checked again, and rewritten by a model only if that
   fails (once per routine and SDK, `scheduled_action_code_upgrade`); a

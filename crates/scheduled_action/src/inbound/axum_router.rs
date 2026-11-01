@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::domain::code_check::CodeCheckError;
+use crate::domain::code_check::{CodeCheck, CodeCheckError, CodeGuide, InvalidCodeTask};
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
@@ -24,7 +24,7 @@ use entity_access::inbound::axum_extractors::ScheduledActionAccessExtractor;
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners, OwnedPurgeOutcome};
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    UserOnly, UserOrInternal,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -170,6 +170,14 @@ where
         .route(
             "/scheduled-actions/{id}/code-upgrades",
             get(list_code_upgrades::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/code/guide",
+            post(code_guide::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/code/check",
+            post(check_code::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -533,6 +541,82 @@ where
     Ok(Json(upgrades))
 }
 
+/// What code should do, to choose the SDK reference for.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CodeGuideRequest {
+    /// The work, in words, e.g. "go through my notifications and keep the important ones".
+    pub task: String,
+}
+
+/// Code to type-check.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
+pub struct CheckCodeRequest {
+    /// A code step's source.
+    pub source: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/scheduled-actions/code/guide",
+    tag = "scheduled actions",
+    operation_id = "routine_code_guide",
+    request_body = CodeGuideRequest,
+    responses(
+        (status = 200, body = CodeGuide, description = "How to write a code step for the task, with the SDK reference it needs"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 503, body = String, description = "Code steps aren't available here"),
+        (status = 500, body = String),
+    )
+)]
+pub async fn code_guide<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    request: Result<Json<CodeGuideRequest>, JsonRejection>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = request.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let guide = state
+        .service
+        .code_guide(user.authorization.macro_user_id.clone(), &request.task)
+        .await?;
+    Ok(Json(guide))
+}
+
+#[utoipa::path(
+    post,
+    path = "/scheduled-actions/code/check",
+    tag = "scheduled actions",
+    operation_id = "check_routine_code",
+    request_body = CheckCodeRequest,
+    responses(
+        (status = 200, body = CodeCheck, description = "What the type checker found, as saving a routine would check it"),
+        (status = 401, body = String),
+        (status = 503, body = String, description = "Code steps aren't available here"),
+        (status = 500, body = String),
+    )
+)]
+pub async fn check_code<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    _user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    request: Result<Json<CheckCodeRequest>, JsonRejection>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = request.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let checked = state.service.check_code(&request.source).await?;
+    Ok(Json(checked))
+}
+
 pub enum ScheduledActionApiError {
     InvalidRequest(JsonRejection),
     Service(anyhow::Error),
@@ -572,6 +656,9 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
+        }
+        if let Some(task) = error.downcast_ref::<InvalidCodeTask>() {
+            return (StatusCode::BAD_REQUEST, task.to_string()).into_response();
         }
         if let Some(code) = error.downcast_ref::<CodeCheckError>() {
             let status = match code {

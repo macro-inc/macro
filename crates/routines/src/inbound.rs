@@ -48,7 +48,11 @@ pub fn routine_toolset() -> AsyncToolCollection<RoutineToolContext> {
 #[derive(Deserialize, JsonSchema)]
 #[schemars(
     title = "CreateRoutine",
-    description = include_str!("create_routine.md")
+    description = concat!(
+        include_str!("create_routine.md"),
+        "\n",
+        include_str!("../../routine_program/src/code_steps.md")
+    )
 )]
 pub struct CreateRoutine {
     /// Name, triggers and steps.

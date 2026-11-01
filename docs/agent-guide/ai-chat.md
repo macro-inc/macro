@@ -746,6 +746,13 @@ A run's detail lists a code step's SDK calls in order, with how each ended
 (**Would do** in a dry run, **Not allowed** outside the step's write scopes)
 and how long it took; arguments and results are never shown.
 
+**Draft it** on a new routine can write code steps too. It reads the same
+code-step guide CreateRoutine does, plus SDK signatures relevant to the
+description, then type-checks each code step and asks the model to fix
+errors, twice at most. A step that still fails stays in the draft with its
+errors listed, and the routine can't be created until it is drafted again or
+the step is removed.
+
 Code steps (written by AI through CreateRoutine) open read-only on the routine's
 Overview: summary, **Can change** scopes and the code. When an SDK release
 breaks a routine's code and AI's update fails its checks, the routine pauses

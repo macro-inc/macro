@@ -69,6 +69,8 @@ pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     credentials: Credentials,
     hosts: BTreeMap<String, String>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
+    /// Chooses the SDK entities relevant to a task, as code mode does.
+    cognition: Option<Arc<dyn cognition::domain::Cognition>>,
 }
 
 impl<Credentials> SdkRoutineCode<Credentials> {
@@ -81,6 +83,7 @@ impl<Credentials> SdkRoutineCode<Credentials> {
         credentials: Credentials,
         hosts: BTreeMap<String, String>,
         recorder: Arc<dyn ai_usage::UsageRecorder>,
+        cognition: Option<Arc<dyn cognition::domain::Cognition>>,
     ) -> Self {
         Self {
             executor,
@@ -88,6 +91,7 @@ impl<Credentials> SdkRoutineCode<Credentials> {
             credentials,
             hosts,
             recorder,
+            cognition,
         }
     }
 }
@@ -193,6 +197,47 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         }
     }
 
+    // The task is the person's words; the span records only the outcome.
+    #[tracing::instrument(name = "routine.code_reference", skip_all, fields(
+        entities = tracing::field::Empty,
+        status = tracing::field::Empty,
+    ))]
+    async fn reference(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task: &str,
+    ) -> Result<String, CodeUnavailable> {
+        let documentation = agent_code_mode::domain::documentation_for_task(
+            user,
+            task,
+            self.cognition.as_ref(),
+            &CancellationToken::new(),
+        )
+        .await;
+        let span = tracing::Span::current();
+        span.record("entities", documentation.entities.len());
+        span.record("status", tracing::field::debug(documentation.status));
+        let mut reference: String = documentation
+            .entities
+            .iter()
+            .filter_map(|entity| entity.index.as_deref())
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        if reference.is_empty() {
+            // Without a ranking, the catalog still names every entity.
+            reference = agent_code_mode::domain::sdk_documentation()
+                .iter()
+                .map(|entity| format!("{}: {}", entity.name, entity.description))
+                .collect::<Vec<_>>()
+                .join("\n");
+        }
+        Ok(reference)
+    }
+
+    fn declarations(&self, problems: &[String]) -> String {
+        declarations_for(problems)
+    }
+
     async fn rewrite(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -214,12 +259,7 @@ impl<Credentials> SdkRoutineCode<Credentials> {
         step: &CodeStep,
         problems: &[String],
     ) -> anyhow::Result<String> {
-        let names = quoted_names(problems);
-        let names: Vec<&str> = names.iter().map(String::as_str).collect();
-        let declarations: String = sdk_declarations(&names, REWRITE_DECLARATION_BYTES)
-            .into_iter()
-            .map(|(path, text)| format!("// @macro-inc/sdk/{path}\n{text}\n"))
-            .collect();
+        let declarations = declarations_for(problems);
         let prompt = format!(
             "Step: {title}\n{summary}\n\nIts code:\n```ts\n{source}\n```\n\nThe type checker's errors against the current SDK:\n{problems}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\nThe current SDK's declarations for the types in those errors:\n```ts\n{declarations}```",
             title = step.title.trim(),
@@ -254,6 +294,16 @@ impl<Credentials> SdkRoutineCode<Credentials> {
             .map(str::to_owned)
             .ok_or_else(|| anyhow::anyhow!("the model returned no code"))
     }
+}
+
+/// The SDK declarations of the types type-checker messages name.
+fn declarations_for(problems: &[String]) -> String {
+    let names = quoted_names(problems);
+    let names: Vec<&str> = names.iter().map(String::as_str).collect();
+    sdk_declarations(&names, REWRITE_DECLARATION_BYTES)
+        .into_iter()
+        .map(|(path, text)| format!("// @macro-inc/sdk/{path}\n{text}\n"))
+        .collect()
 }
 
 /// The identifiers type-checker messages quote, such as `'TaskNamespace'`

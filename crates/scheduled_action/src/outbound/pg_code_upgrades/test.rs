@@ -171,6 +171,18 @@ impl crate::domain::ports::RoutineCode for Checks {
         unreachable!("checked code isn't run by a sweep")
     }
 
+    async fn reference(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        _: &str,
+    ) -> std::result::Result<String, crate::domain::ports::CodeUnavailable> {
+        Ok(String::new())
+    }
+
+    fn declarations(&self, _: &[String]) -> String {
+        String::new()
+    }
+
     async fn rewrite(
         &self,
         _: &macro_user_id::user_id::MacroUserIdStr<'static>,

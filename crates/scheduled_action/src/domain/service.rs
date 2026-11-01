@@ -17,7 +17,7 @@ use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
-use super::code_check::{checked_task, same_task};
+use super::code_check::{CodeCheck, CodeGuide, checked_task, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -628,6 +628,14 @@ where
             bail!("cannot read execution history without id");
         };
         self.repo.get_execution_records(&id).await
+    }
+
+    async fn code_guide(&self, user: MacroUserIdStr<'static>, task: &str) -> Result<CodeGuide> {
+        super::code_check::guide(self.code.as_ref(), &user, task).await
+    }
+
+    async fn check_code(&self, source: &str) -> Result<CodeCheck> {
+        super::code_check::check(self.code.as_ref(), source).await
     }
 
     async fn get_code_upgrades(

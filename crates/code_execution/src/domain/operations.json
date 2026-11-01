@@ -1997,6 +1997,18 @@
     "path": "/scheduled-actions",
     "write": true
   },
+  "scheduled-action.checkRoutineCode": {
+    "label": "Check Routine Code",
+    "method": "POST",
+    "path": "/scheduled-actions/code/check",
+    "write": true
+  },
+  "scheduled-action.routineCodeGuide": {
+    "label": "Routine Code Guide",
+    "method": "POST",
+    "path": "/scheduled-actions/code/guide",
+    "write": true
+  },
   "scheduled-action.deleteScheduledAction": {
     "label": "Delete Scheduled Action",
     "method": "DELETE",

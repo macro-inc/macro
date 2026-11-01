@@ -157,6 +157,132 @@
         }
       }
     },
+    "/scheduled-actions/code/check": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "check_routine_code",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "What the type checker found, as saving a routine would check it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeCheck"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Code steps aren't available here",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/code/guide": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "operationId": "routine_code_guide",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeGuideRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "How to write a code step for the task, with the SDK reference it needs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeGuide"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Code steps aren't available here",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1193,6 +1319,75 @@
             "description": "Human-readable explanation, without internal billing diagnostics."
           }
         }
+      },
+      "CheckCodeRequest": {
+        "type": "object",
+        "description": "Code to type-check.",
+        "required": ["source"],
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "A code step's source."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CodeCheck": {
+        "type": "object",
+        "description": "What type-checking code found.",
+        "required": ["sdk", "problems", "declarations"],
+        "properties": {
+          "declarations": {
+            "type": "string",
+            "description": "The SDK declarations the problems name, to fix them with."
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The first problems, as the type checker reported them; empty when it checks."
+          },
+          "sdk": {
+            "type": "string",
+            "description": "The SDK the code was checked against."
+          }
+        }
+      },
+      "CodeGuide": {
+        "type": "object",
+        "description": "How to write a code step for a described task.",
+        "required": ["sdk", "steps", "contract", "reference"],
+        "properties": {
+          "contract": {
+            "type": "string",
+            "description": "TypeScript declaring `StepContext`, what `main` receives."
+          },
+          "reference": {
+            "type": "string",
+            "description": "The SDK's entities relevant to the task, with method signatures."
+          },
+          "sdk": {
+            "type": "string",
+            "description": "The SDK code is checked against."
+          },
+          "steps": {
+            "type": "string",
+            "description": "How to write a code step, the same text the routine agent tools read."
+          }
+        }
+      },
+      "CodeGuideRequest": {
+        "type": "object",
+        "description": "What code should do, to choose the SDK reference for.",
+        "required": ["task"],
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "The work, in words, e.g. \"go through my notifications and keep the important ones\"."
+          }
+        },
+        "additionalProperties": false
       },
       "CodeUpgrade": {
         "type": "object",

@@ -273,7 +273,9 @@ export const propertiesBacklog =
   [] as const satisfies readonly (keyof PropertiesSdk)[];
 
 export const scheduledActionExcluded = [
+  'checkRoutineCode', // The routine drafter checks the code it writes.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'routineCodeGuide', // The routine drafter's SDK reference for code steps.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 

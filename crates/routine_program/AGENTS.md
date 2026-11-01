@@ -11,7 +11,9 @@ no I/O.
 
 - `src/model.rs`: steps (code, tool, if, choose, agent), `RoutineTool` (the
   only tools a tool step may call), `WriteScope` (the areas a code step may
-  change), `STEP_CONTEXT` (the type a code step's `main` receives), the
+  change), `CODE_STEPS` (`src/code_steps.md`, how to write a code step: the
+  one description CreateRoutine and the web drafter both read),
+  `STEP_CONTEXT` (the type a code step's `main` receives), the
   program's recorded `sdk`, `AgentTask`, and `RoutineProgram::from_task`.
 - `src/plan.rs`: `questions()` (every decision, untaken branches included, for
   one classifier call) and `resolve()` (answers → the steps to run).
