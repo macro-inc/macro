@@ -20,6 +20,7 @@ use crate::domain::models::{AccessGrant, AccessLevel};
 #[cfg(feature = "explain_binary")]
 use models_entity_access_management::EntityAccessSourceType;
 
+pub mod access_sources;
 pub mod agent_session_access;
 pub mod call_access;
 pub mod call_channel;

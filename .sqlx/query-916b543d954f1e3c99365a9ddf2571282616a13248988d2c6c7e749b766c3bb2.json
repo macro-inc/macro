@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT reached.user_id AS \"user_id!\"\n        FROM (\n            SELECT unnest($1::text[]) AS user_id\n\n            UNION ALL\n\n            SELECT cp.user_id\n            FROM comms_channel_participants cp\n            WHERE cp.left_at IS NULL AND cp.channel_id = ANY($2::uuid[])\n\n            UNION ALL\n\n            SELECT tu.user_id\n            FROM team_user tu\n            WHERE tu.team_id = ANY($3::uuid[])\n        ) AS reached\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "916b543d954f1e3c99365a9ddf2571282616a13248988d2c6c7e749b766c3bb2"
+}

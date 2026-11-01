@@ -30,7 +30,10 @@ impl<B: MacroEventBroker> ProjectSearchIndexer for SqsProjectSearchIndexer<B> {
         for document_id in document_ids {
             let event = DocumentMacroEvent::purged(
                 document_id.clone(),
-                DocumentPurgedMetadata { document_id },
+                DocumentPurgedMetadata {
+                    document_id,
+                    audience: Vec::new(),
+                },
             );
             drop(self.event_broker.send_event(&event)?);
         }

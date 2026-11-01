@@ -10,8 +10,9 @@ tasks itself.
 
 ## Start here
 
-- `src/domain/service.rs`: expands current access for an event and publishes
-  one `Patch` per recipient to `macro.soup`.
+- `src/domain/service.rs`: expands current access for an event, adds the
+  users of any recorded grants the event carries, and publishes one `Patch` per
+  recipient to `macro.soup`.
 - `src/domain/models.rs` + `src/domain/ports.rs`: the `Patch<Entity>` shape
   and the ports the service depends on.
 - `src/inbound/kafka_consumer.rs`: maps each source Kafka event to
@@ -55,6 +56,13 @@ tasks itself.
 - Property definition/option lifecycle events are intentionally ignored; they
   don't identify every affected entity.
 - Channel threads use their containing channel as the access source.
+- A permanent delete removes the access rows recipients resolve from, often
+  before this consumer reads them. `document.purged` and `initiative.purged`
+  carry the grants (user, channel and team sources) their producer read first;
+  the patch goes to the users those grants reach now plus current accessors.
+  Grants, not users, keep a team-wide share one entry on the event. A
+  `document.purged` without an audience is ignored: it follows a soft delete
+  that was already announced.
 - Only `call.record_imported` patches calls; native call lifecycle events on
   `macro.calls` are ignored. The web cache has no local call projection, so a
   call patch makes mounted lists that can contain calls refetch

@@ -570,6 +570,7 @@ fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicE
             "document.purged",
             Event::new(DocumentTopicEvent::Purged(DocumentPurgedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
+                audience: Vec::new(),
             })),
         ),
     ]

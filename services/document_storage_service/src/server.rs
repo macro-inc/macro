@@ -2057,6 +2057,9 @@ pub async fn run() -> anyhow::Result<()> {
         documents_hex::outbound::document_purge::RedisDocxPartReferences::new(
             redis_sha_client.clone(),
         ),
+        documents_hex::outbound::document_purge::EntityAccessDocumentAudience::new(
+            entity_access_service.clone(),
+        ),
         macro_event_broker.clone(),
     ));
 
@@ -2091,6 +2094,9 @@ pub async fn run() -> anyhow::Result<()> {
                 redis_sha_client.clone(),
                 sqs_client.clone(),
                 macro_event_broker.clone(),
+                documents_hex::outbound::document_purge::EntityAccessDocumentAudience::new(
+                    entity_access_service.clone(),
+                ),
             )),
         ));
 

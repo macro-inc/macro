@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroInitiativesTopic;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_entity_access_management::EntityAccessSource;
 use serde::{Deserialize, Serialize};
 
 use super::models::{InitiativeError, InitiativeId};
@@ -55,6 +56,11 @@ pub enum InitiativeTopicEvent {
     Purged {
         /// Deleted initiative.
         initiative_id: InitiativeId,
+        /// Grants the initiative had before the delete removed them, so realtime
+        /// consumers can still reach the people they covered. Empty on events
+        /// published before it was recorded.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        audience: Vec<EntityAccessSource>,
     },
 }
 

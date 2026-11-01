@@ -17,6 +17,7 @@ use crate::domain::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId, user_id::MacroUserIdStr};
+use models_entity_access_management::EntityAccessSource;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -891,6 +892,25 @@ impl AccessRepository for PgAccessRepository {
         channel_id: &Uuid,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         queries::channel_users::get_channel_users(&self.pool, channel_id)
+            .await
+            .map_err(AccessError::from)
+    }
+
+    async fn get_entity_access_sources(
+        &self,
+        entity_id: &Uuid,
+        entity_type: EntityType,
+    ) -> Result<Vec<EntityAccessSource>, AccessError> {
+        queries::access_sources::get_entity_access_sources(&self.pool, entity_id, entity_type)
+            .await
+            .map_err(AccessError::from)
+    }
+
+    async fn get_users_for_sources(
+        &self,
+        sources: &[EntityAccessSource],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
+        queries::access_sources::get_users_for_sources(&self.pool, sources)
             .await
             .map_err(AccessError::from)
     }
