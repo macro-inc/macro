@@ -1046,7 +1046,7 @@ describe('routine code that needs an update', () => {
     enabled: false,
     task: code('macro.tasks.create(x)', '0.2.0+old'),
   };
-  const upgrade = (task?: object): CodeUpgrade => ({
+  const upgrade = (task?: Record<string, unknown>): CodeUpgrade => ({
     id: 'upgrade',
     fromSdk: '0.2.0+old',
     toSdk: '0.3.0+new',
