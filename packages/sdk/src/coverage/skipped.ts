@@ -228,18 +228,28 @@ export const contactsBacklog =
 
 export const emailExcluded = [
   'cancelBackfillGmail',
+  // Sequences: the Customers app feature's own API.
+  'contactEnrollments',
+  'createSequence',
   'deleteLink',
+  'deleteSequence',
   'disableLinkCalendar',
   'disableSync',
+  'enrollContacts',
   'getBackfillGmail',
   'getBackfillGmailActive',
+  'getEnrollment',
   'getMessagesBatch',
+  'getSequence',
   'healthCheckLinks',
   'healthHandler',
   'initUser',
   'listBackfillGmail',
+  'listSequences',
   'patchSettings',
   'resyncLink',
+  'updateEnrollment',
+  'updateSequence',
 ] as const satisfies readonly (keyof EmailSdk)[];
 
 export const emailBacklog = [

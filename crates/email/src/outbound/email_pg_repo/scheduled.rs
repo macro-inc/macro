@@ -55,7 +55,7 @@ async fn change_schedule(
     ).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?
         .ok_or(EmailErr::MessageNotFound(message_id))?;
     let schedule = sqlx::query!(
-        "SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
+        "SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id, source FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
         message_id, link_id,
     ).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?;
     let protected = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_send_attempts WHERE message_id=$1 AND link_id=$2 AND NOT cancelled AND NOT sent) AS "protected!""#, message_id, link_id).fetch_one(&mut *tx).await.map_err(anyhow::Error::from)?;
@@ -100,7 +100,9 @@ async fn change_schedule(
                     (link_id, message_id, send_time, sent, processing, actor_id, created_at, updated_at)
                    VALUES ($1, $2, $3, false, false, $4, NOW(), NOW())
                    ON CONFLICT (link_id, message_id) DO UPDATE SET
-                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, updated_at = NOW()
+                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, updated_at = NOW(),
+                    -- Rescheduling a pending sequence step makes it the user's own send.
+                    source = NULL
                    WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing"#,
                 link_id, message_id, send_time, actor.as_ref(),
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
@@ -138,6 +140,16 @@ async fn change_schedule(
                 message_id, link_id,
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
         }
+    }
+    // Cancelling or rescheduling a pending sequence step puts it back in its
+    // thread's mail state.
+    if schedule
+        .as_ref()
+        .is_some_and(|row| row.source.is_some() && row.delivery_status != "failed")
+    {
+        super::thread::update_thread_metadata(&mut tx, message.thread_id, link_id)
+            .await
+            .map_err(anyhow::Error::from)?;
     }
     if outlook.is_some() && matches!(change, ScheduleChange::Set(_)) {
         super::draft::snapshot_outlook_draft(&mut tx, message_id, link_id, actor.as_ref())

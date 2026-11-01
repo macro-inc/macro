@@ -33,6 +33,27 @@ export function pipelineIdOfTab(tab: string | undefined): string | undefined {
     : undefined;
 }
 
+/** The workspace tab listing the owner's sequences. */
+export const SEQUENCES_TAB = 'sequences';
+const SEQUENCE_TAB_PREFIX = 'sequence:';
+
+/** The workspace tab that shows one sequence. */
+export function sequenceTab(sequenceId: string): string {
+  return `${SEQUENCE_TAB_PREFIX}${sequenceId}`;
+}
+
+/** The sequence a workspace tab shows, if any. */
+export function sequenceIdOfTab(tab: string | undefined): string | undefined {
+  return tab?.startsWith(SEQUENCE_TAB_PREFIX)
+    ? tab.slice(SEQUENCE_TAB_PREFIX.length)
+    : undefined;
+}
+
+/** The Sequences list or one sequence. */
+export function isSequencesTab(tab: string): boolean {
+  return tab === SEQUENCES_TAB || !!sequenceIdOfTab(tab);
+}
+
 export type CrmListConfig = {
   kind: 'crm-list';
   teamId: string;

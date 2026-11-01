@@ -32,8 +32,14 @@ import type {
   ApiPaginatedThreadCursor,
   ArchiveThreadsRequest,
   ArchiveThreadsResponse,
+  ContactEnrollmentsResponse,
   CreateDraftRequest,
   CreateDraftResponse,
+  EnrollmentActionRequest,
+  EnrollmentDetail,
+  EnrollmentSummary,
+  EnrollRequest,
+  EnrollResponse,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetScheduledResponse,
@@ -44,6 +50,7 @@ import type {
   ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
+  ListSequencesResponse,
   MailboxSettingsOperation,
   ParsedMessage,
   PatchSettingsRequest,
@@ -52,12 +59,17 @@ import type {
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
+  Sequence,
+  SequenceDetailResponse,
+  SequenceErrorResponse,
+  SequenceInput,
   SharedInboxConflictResponse,
   TransferDraftRequest,
   TransferDraftResponse,
   TransferRecoveryResponse,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpdateSequenceRequest,
   UpdateThreadLabelRequest,
   UpdateThreadLabelsResponse,
   UpsertEmailFilterRequest,
@@ -70,6 +82,7 @@ import { ForwardCalendarEventErrorCode } from './generated/schemas/forwardCalend
 import type { ForwardCalendarEventRequest } from './generated/schemas/forwardCalendarEventRequest';
 import type { ForwardCalendarEventResponse } from './generated/schemas/forwardCalendarEventResponse';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
+import { SequenceErrorCode } from './generated/schemas/sequenceErrorCode';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
 const calendarHost: string = SERVER_HOSTS['calendar-service'];
@@ -151,6 +164,38 @@ function emailFetch<T extends ObjectLike = never>(
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${emailHost}${url}`, init);
+}
+
+/** A sequences request the server refused, with what to fix when it says. */
+export type SequenceRequestError = ResultError<SequenceErrorCode> &
+  Pick<SequenceErrorResponse, 'problem' | 'position' | 'tokens'>;
+
+/** Sequence failures carry a typed `{ code, problem?, position?, tokens? }` body. */
+async function sequenceErrorHandler(response: Response) {
+  const body = (await response
+    .json()
+    .catch(() => null)) as Partial<SequenceErrorResponse> | null;
+  if (body?.code && body.code in SequenceErrorCode) {
+    const error: SequenceRequestError = {
+      code: body.code,
+      message: body.message ?? '',
+      problem: body.problem,
+      position: body.position,
+      tokens: body.tokens ?? [],
+    };
+    return error;
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
+}
+
+function sequenceFetch<T extends ObjectLike>(url: string, init: SafeFetchInit) {
+  return fetchWithToken<T, SequenceErrorCode>(`${emailHost}${url}`, {
+    ...init,
+    errorResponseHandler: sequenceErrorHandler,
+  });
 }
 
 /**
@@ -1001,5 +1046,66 @@ export const emailClient = {
         };
       },
     });
+  },
+
+  /** The caller's own sequences, with enrollment counts. */
+  async listSequences() {
+    return sequenceFetch<ListSequencesResponse>('/email/sequences', {
+      method: 'GET',
+    });
+  },
+  async createSequence(input: SequenceInput) {
+    return sequenceFetch<Sequence>('/email/sequences', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  async getSequence(sequenceId: string) {
+    return sequenceFetch<SequenceDetailResponse>(
+      `/email/sequences/${sequenceId}`,
+      { method: 'GET' }
+    );
+  },
+  /** Edits and status changes; `version` is the one the caller last saw. */
+  async updateSequence(sequenceId: string, request: UpdateSequenceRequest) {
+    return sequenceFetch<Sequence>(`/email/sequences/${sequenceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    });
+  },
+  async deleteSequence(sequenceId: string) {
+    return sequenceFetch<EmptyResponse>(`/email/sequences/${sequenceId}`, {
+      method: 'DELETE',
+    });
+  },
+  /** Enrolls up to 50 CRM contacts; each result says whether it was skipped. */
+  async enrollContacts(sequenceId: string, request: EnrollRequest) {
+    return sequenceFetch<EnrollResponse>(
+      `/email/sequences/${sequenceId}/enrollments`,
+      { method: 'POST', body: JSON.stringify(request) }
+    );
+  },
+  /** One enrollment with its frozen steps and their history. */
+  async getEnrollment(enrollmentId: string) {
+    return sequenceFetch<EnrollmentDetail>(
+      `/email/sequences/enrollments/${enrollmentId}`,
+      { method: 'GET' }
+    );
+  },
+  async updateEnrollment(
+    enrollmentId: string,
+    request: EnrollmentActionRequest
+  ) {
+    return sequenceFetch<EnrollmentSummary>(
+      `/email/sequences/enrollments/${enrollmentId}`,
+      { method: 'PATCH', body: JSON.stringify(request) }
+    );
+  },
+  /** A CRM contact's enrollments across the team, without step content. */
+  async contactEnrollments(crmContactId: string) {
+    return sequenceFetch<ContactEnrollmentsResponse>(
+      `/email/sequences/contacts/${crmContactId}`,
+      { method: 'GET' }
+    );
   },
 };

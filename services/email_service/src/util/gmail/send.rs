@@ -75,3 +75,6 @@ pub async fn cleanup_draft_attachments(
         tracing::error!(?error, "Failed to release sent draft attachment references");
     }
 }
+
+#[cfg(test)]
+mod test;

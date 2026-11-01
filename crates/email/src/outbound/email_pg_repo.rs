@@ -16,6 +16,8 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+pub use sequence_steps::PgSequenceSteps;
+
 #[cfg(feature = "mailbox")]
 mod attachment_access;
 mod attachment_cleanup;
@@ -42,6 +44,7 @@ mod project;
 mod scheduled;
 mod send_attempt;
 pub(super) mod sender_policy;
+mod sequence_steps;
 mod settings;
 mod thread;
 
@@ -389,7 +392,8 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         addresses: ParsedAddresses,
     ) -> Result<UpsertedContacts, Self::Err> {
-        contact::upsert_contacts(&self.pool, link_id, addresses).await
+        let mut conn = self.pool.acquire().await?;
+        contact::upsert_contacts(&mut conn, link_id, addresses).await
     }
 
     async fn insert_message(

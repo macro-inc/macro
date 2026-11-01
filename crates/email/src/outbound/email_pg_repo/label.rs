@@ -498,20 +498,33 @@ pub(crate) async fn delete_scheduled_messages_batch(
     )
     .fetch_all(&mut *tx)
     .await?;
-    let deleted = sqlx::query_scalar!(
+    let deleted = sqlx::query!(
         r#"
         DELETE FROM email_scheduled_messages
         WHERE message_id = ANY($1) AND link_id = $2 AND sent = false
           AND (delivery_status = 'failed' OR
                (delivery_started_at IS NULL AND delivery_status <> 'unconfirmed'
                 AND (NOT processing OR delivery_claim_id IS NOT NULL)))
-        RETURNING message_id
+        RETURNING message_id,
+            -- A pending sequence step's thread: its projection now counts the draft.
+            (SELECT m.thread_id FROM email_messages m
+             WHERE m.id = email_scheduled_messages.message_id
+               AND email_scheduled_messages.source IS NOT NULL
+               AND email_scheduled_messages.delivery_status <> 'failed') AS step_thread_id
         "#,
         &drafts,
         link_id
     )
     .fetch_all(&mut *tx)
     .await?;
+    let step_threads: std::collections::BTreeSet<Uuid> = deleted
+        .iter()
+        .filter_map(|row| row.step_thread_id)
+        .collect();
+    for thread_id in step_threads {
+        super::thread::update_thread_metadata(&mut tx, thread_id, link_id).await?;
+    }
+    let deleted: Vec<Uuid> = deleted.into_iter().map(|row| row.message_id).collect();
     super::send_attempt::cancel_revoked_attempts(&mut tx, &deleted, link_id).await?;
     tx.commit().await?;
     Ok(deleted)

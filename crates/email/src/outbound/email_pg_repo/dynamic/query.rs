@@ -684,7 +684,7 @@ fn build_query(
             WHERE m.thread_id = t.id
               AND "#,
     );
-    build_lateral_trash_exclusion(&params.resolved).push_into(&mut builder, &params.user_id);
+    build_visible_message_check(&params.resolved).push_into(&mut builder, &params.user_id);
 
     // Add view-specific message filters
     if !view_message_filter.is_empty() {

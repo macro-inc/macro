@@ -1,10 +1,16 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
+import {
+  canAddToSequence,
+  openAddToSequence,
+} from '@app/features/sequences/add-to-sequence';
 import { isShareableEntityType } from '@app/features/sharing/global-share-modal/shareable-entity';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { SplitHandle } from '@components/app/split-layout/layoutManager';
+import { enableSequences } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
@@ -860,6 +866,27 @@ export const useEntityActionHotkeys = (
       scopeId,
     }).withGroup(group);
   }
+
+  // Add selected People to a sequence (command menu only, no keybinding).
+  const sequencesFlag = useFeatureFlag(enableSequences);
+  registerHotkey({
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+    description: () => t('sequences.addToSequence'),
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (!sequencesFlag().enabled || !canAddToSequence(entities)) return false;
+      openAddToSequence(entities);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      return (
+        sequencesFlag().enabled && canAddToSequence(getEntitiesForAction())
+      );
+    },
+    scopeId,
+  }).withGroup(group);
 
   onCleanup(() => group.dispose());
 

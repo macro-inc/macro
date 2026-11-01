@@ -273,5 +273,6 @@ fn send_request() -> SendRequest {
         },
         parent_message_id: None,
         references: None,
+        list_unsubscribe: None,
     }
 }

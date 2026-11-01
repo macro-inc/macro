@@ -29,6 +29,9 @@ vi.mock('@core/hotkey/hotkeys', () => ({
   createHotkeyGroup: () => ({ dispose: vi.fn(), addDisposer: vi.fn() }),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));

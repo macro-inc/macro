@@ -1,6 +1,6 @@
 use crate::outbound::email_api::GmailApi;
 use crate::pubsub::context::{
-    CrmServiceType, NotificationIngressType, PubSubContext, PubSubEventBroker,
+    CrmServiceType, NotificationIngressType, PubSubContext, PubSubEventBroker, SequencesType,
 };
 use crate::pubsub::inbox_sync::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
@@ -30,6 +30,7 @@ pub async fn run_worker(
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     crm_service: CrmServiceType,
+    sequences: Arc<SequencesType>,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
     retry_worker: bool,
@@ -47,6 +48,7 @@ pub async fn run_worker(
         dss_client,
         system_properties_service,
         crm_service,
+        sequences,
         macro_event_broker,
         notifications_enabled,
         retry_worker,
@@ -72,6 +74,7 @@ pub async fn run_worker_with_cancellation(
     dss_client: DocumentStorageServiceClient,
     system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     crm_service: CrmServiceType,
+    sequences: Arc<SequencesType>,
     macro_event_broker: PubSubEventBroker,
     notifications_enabled: bool,
     retry_worker: bool,
@@ -97,6 +100,7 @@ pub async fn run_worker_with_cancellation(
         dss_client,
         system_properties_service,
         crm_service,
+        sequences,
         macro_event_broker,
         notifications_enabled,
         retry_worker,

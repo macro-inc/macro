@@ -53,9 +53,14 @@ export type CronParts = {
   dayOfMonth: string;
 };
 
-/** The IANA zone the browser is in, which is what a local time is relative to. */
+/**
+ * The IANA zone the browser is in, which is what a local time is relative to.
+ * A host that can't resolve its zone reports `Etc/Unknown` (or nothing), which
+ * no server parses, so that falls back to UTC.
+ */
 export function getDefaultTimezone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return zone && zone !== 'Etc/Unknown' ? zone : 'UTC';
 }
 
 /**

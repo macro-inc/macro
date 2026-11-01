@@ -14,7 +14,7 @@ pub mod invitation_pg;
 mod s3_draft_attachment_storage;
 
 #[cfg(feature = "outbound")]
-pub use email_pg_repo::EmailPgRepo;
+pub use email_pg_repo::{EmailPgRepo, PgSequenceSteps};
 #[cfg(all(feature = "outbound", feature = "mailbox"))]
 pub mod mailbox_pg;
 #[cfg(feature = "http_client")]

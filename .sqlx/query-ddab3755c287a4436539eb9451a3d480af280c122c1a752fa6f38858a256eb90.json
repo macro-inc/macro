@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sequence_enrollments SET due_at = $1, updated_at = now()\n               WHERE id IN (\n                   SELECT e.id FROM email_sequence_enrollments e\n                   WHERE e.status = 'active' AND e.due_at IS NULL\n                     AND NOT EXISTS (SELECT 1 FROM email_sequence_steps h\n                                     WHERE h.enrollment_id = e.id AND h.status = 'scheduled')\n                   FOR UPDATE SKIP LOCKED)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ddab3755c287a4436539eb9451a3d480af280c122c1a752fa6f38858a256eb90"
+}

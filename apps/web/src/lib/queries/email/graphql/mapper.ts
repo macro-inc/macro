@@ -10,6 +10,7 @@ import type {
   EmailThreadMessageFieldsFragment,
   EmailThreadPageFieldsFragment,
   GraphqlEntityAccessLevel,
+  GraphqlScheduledSendSource,
   GraphqlScheduledSendStatus,
 } from '@service-storage/graphql/generated/graphql';
 import { match } from 'ts-pattern';
@@ -146,6 +147,13 @@ export function mapGraphqlEmailMessage(
             .with('UNCONFIRMED', () => 'unconfirmed' as const)
             // An unfamiliar delivery state cannot prove the draft is editable.
             .exhaustive(() => 'unconfirmed' as const),
+    scheduled_send_source:
+      message.scheduledSendSource == null
+        ? null
+        : match<GraphqlScheduledSendSource>(message.scheduledSendSource)
+            .with('SEQUENCE', () => 'sequence' as const)
+            // Any source is a send the user did not compose.
+            .exhaustive(() => 'sequence' as const),
     sent_at: message.sentAt,
     snippet: message.snippet,
     subject: message.subject,

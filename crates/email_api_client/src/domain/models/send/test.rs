@@ -47,6 +47,7 @@ fn mime_contains_recipients_threading_bodies_and_attachments() {
             "root@example.com".to_string(),
             "parent@example.com".to_string(),
         ]),
+        list_unsubscribe: None,
     };
 
     let mime = String::from_utf8(request.build_mime().expect("MIME should build"))
@@ -84,6 +85,18 @@ fn stable_message_id_rejects_header_or_query_injection() {
     assert!(super::validate_message_id("email-send-123+attempt@macro.com").is_ok());
 }
 
+#[test]
+fn one_click_unsubscribe_headers_are_sent_only_when_set() {
+    let plain = String::from_utf8(message(vec![]).build_mime().unwrap()).unwrap();
+    assert!(!plain.contains("List-Unsubscribe"));
+
+    let mut request = message(vec![]);
+    request.list_unsubscribe = Some("https://example.com/u/token".to_string());
+    let mime = String::from_utf8(request.build_mime().unwrap()).unwrap();
+    assert!(mime.contains("List-Unsubscribe: <https://example.com/u/token>\r\n"));
+    assert!(mime.contains("List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n"));
+}
+
 fn message(attachments: Vec<AttachmentToSend>) -> SendRequest {
     SendRequest {
         message_id: Some("stable-send@example.com".to_string()),
@@ -108,6 +121,7 @@ fn message(attachments: Vec<AttachmentToSend>) -> SendRequest {
         from: contact("sender@example.com", "Sender"),
         parent_message_id: None,
         references: None,
+        list_unsubscribe: None,
     }
 }
 

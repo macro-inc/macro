@@ -65,6 +65,14 @@ tools — hexagonal, heavily feature-gated.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
 
+- A pending sequence step (schedule `source` set, neither sent nor failed) is
+  not the user's mail. The SQL predicate is restated in several queries; find
+  them with `rg "source IS NOT NULL"` and change them together. See "Sequence
+  sends" in `docs/architecture/email.md`.
+- `domain/sequence_steps.rs` is the only way `email_sequences` touches email
+  tables. Its methods run on the caller's connection inside a transaction that
+  already holds an enrollment lock, so they take provider-thread, message,
+  schedule, then thread locks and never wait on sequence rows.
 - Gmail thread label writes stage each thread's DB change, then enqueue one
   provider write per inbox holding only the messages whose labels changed
   (`stage_thread_labels` / `commit_thread_label_write` in

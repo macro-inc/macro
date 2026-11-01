@@ -1085,6 +1085,7 @@ fn full_message(thread_id: Uuid) -> Message {
         has_attachments: true,
         scheduled_send_time: Some(Default::default()),
         scheduled_send_status: Some(email::domain::models::ScheduledSendStatus::Failed),
+        scheduled_send_source: None,
         from: None,
         to: Vec::new(),
         cc: Vec::new(),

@@ -524,6 +524,39 @@ cannot roll back a newer selection or replace its feedback. Settlement revalidat
 projections. The on-demand local-day agenda shares occurrence queries and handles DST
 boundaries and exclusive all-day ends without mounting a calendar grid.
 
+## Sequence sends
+
+Email sequences (`crates/email_sequences`, the Customers "Sequences" section)
+send from the owner's own Gmail inbox through scheduled sends. The crate owns
+all sequence state; the email crate exposes the steps through one port,
+`domain/sequence_steps.rs` (`PgSequenceSteps`), whose methods run on the
+caller's connection so a step is created or withdrawn inside the transaction
+that holds its enrollment's row lock.
+
+A sweep in `pubsub_workers` creates at most one unsent step per enrollment,
+about a minute before it sends, as a draft scheduled with
+`email_scheduled_messages.source = 'sequence'` and a `list_unsubscribe_url`
+that delivery sends as `List-Unsubscribe` / `List-Unsubscribe-Post`. A reply
+step is created only after its parent is sent, so it threads like any reply.
+Inbox sync calls the crate after each committed upsert so a reply or bounce
+stops the enrollment; the sweep checks again before every step, including
+bounces from `mailer-daemon@` or `postmaster@` that arrive in a thread of their
+own. A delay notice is not a bounce, and a bounce stops only the addresses it
+reports as failed, not those in the original message it quotes.
+
+A pending step (source set, neither sent nor failed) is not the user's mail:
+every mail list (the static views and the dynamic builder, which checks it when
+choosing candidate threads so pages stay full), the thread projection and its
+importance, the GraphQL mail cache, search, and `GET /email/drafts/scheduled`
+leave it out. Threads still return it, with GraphQL `scheduledSendSource`, so
+the web thread view can skip it. A failed step shows again like any draft.
+Rescheduling or unscheduling a pending step from Mail clears its source, so it
+becomes the user's own send; the sequence then waits for them to send or
+delete it.
+Writers that make a message a pending step or stop it being one recompute the
+thread. A reply threads under a sent parent's synced Message-ID, else the
+`delivery_message_id` its delivery minted.
+
 ## Independent send outbox
 
 All immediate composer sends use a device email journal for Gmail and Outlook,

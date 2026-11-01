@@ -31,7 +31,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let port = state.config.port;
     let traced_api = api_router(state.clone()).with_state(state).layer(
         ServiceBuilder::new()
-            .layer(TraceLayer::new_for_http())
+            .layer(TraceLayer::new_for_http().make_span_with(request_span))
             .layer(macro_cors::cors_layer())
             .layer(CompressionLayer::new().gzip(true)),
     );
@@ -50,6 +50,24 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("error starting service")
+}
+
+/// The default request span, with an unsubscribe token kept out of the path.
+fn request_span<B>(request: &axum::http::Request<B>) -> tracing::Span {
+    tracing::debug_span!(
+        "request",
+        method = %request.method(),
+        uri = %redacted_uri(request.uri()),
+        version = ?request.version(),
+    )
+}
+
+fn redacted_uri(uri: &axum::http::Uri) -> String {
+    const UNSUBSCRIBE: &str = "/public/sequences/unsubscribe/";
+    match uri.path().find(UNSUBSCRIBE) {
+        Some(at) => format!("{}{{token}}", &uri.path()[..at + UNSUBSCRIBE.len()]),
+        None => uri.to_string(),
+    }
 }
 
 fn mount_at_root_and_prefix(inner: Router) -> Router {
@@ -80,6 +98,11 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/email/calendar-events/{event_id}/forward",
             axum::routing::post(calendar_event_forward::handler),
+        )
+        .merge(
+            email_sequences::inbound::public_unsubscribe::unsubscribe_router(
+                state.sequences.clone(),
+            ),
         )
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())

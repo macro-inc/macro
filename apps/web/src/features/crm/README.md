@@ -64,6 +64,13 @@ context, the standard composer opens immediately. Each opening snapshots its
 context; later flag, focus or record changes leave the open draft unchanged.
 The Soup and email SQL optimizations are independent of this frontend gate.
 
+`enable-sequences` and the team's CRM gate the Sequences section (`sequences`
+and `sequence:<id>` tabs, the `sequence/:sequenceId` route), its sidebar item and
+mobile tab; the flag also gates the contact Overview card and Add to sequence.
+`CrmContext` supplies the views lazily from `features/sequences`, so they load
+only when shown; the small Add to sequence launcher and its rules are static
+imports. Saved sequence links fall back to Companies once the flag and team load.
+
 The workspace activity feeds are CRM-linked, not unfiltered app shortcuts.
 `queries/activity.ts` sends a constant-size `crma: 'activity'` association
 selector. CRM resolves every visible company and contact on the server before

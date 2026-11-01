@@ -26,6 +26,7 @@ import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMc
 import { onboardingRedirectPath } from '@app/features/onboarding/core/next-target';
 import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
+import { addToSequenceDialog } from '@app/features/sequences/add-to-sequence';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
@@ -124,6 +125,10 @@ const CreateCompanyModal = lazyNamed(
 const CreateContactModal = lazyNamed(
   () => import('@app/features/crm/crm-create'),
   'CreateContactModal'
+);
+const AddToSequenceHost = lazyNamed(
+  () => import('@app/features/sequences/sequences'),
+  'AddToSequenceHost'
 );
 
 /** True from the first time `opened` is, so a dialog loads on first open and can animate closed. */
@@ -266,6 +271,9 @@ export function AppChrome(props: ParentProps) {
   const contactDialogUsed = hasOpened(
     () => contactCreation.target() !== undefined
   );
+  const addToSequenceUsed = hasOpened(
+    () => addToSequenceDialog.people() !== undefined
+  );
 
   return (
     <SidebarVisibilityContext.Provider value={sidebarVisible}>
@@ -312,6 +320,11 @@ export function AppChrome(props: ParentProps) {
           <Show when={contactDialogUsed()}>
             <Suspense>
               <CreateContactModal />
+            </Suspense>
+          </Show>
+          <Show when={addToSequenceUsed()}>
+            <Suspense>
+              <AddToSequenceHost />
             </Suspense>
           </Show>
           <Show when={isAddInboxDialogOpen()}>

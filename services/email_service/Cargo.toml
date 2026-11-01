@@ -106,6 +106,7 @@ entity_access = { path = "../../crates/entity_access", default-features = false,
 entity_access_management = { path = "../../crates/entity_access_management" }
 email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail", "outbound-outlook", "microsoft-gate"] }
 email_db_client = { path = "../../crates/email_db_client" }
+email_sequences = { path = "../../crates/email_sequences", features = ["inbound", "outbound"] }
 email_utils = { path = "../../crates/email_utils" }
 filter_ast = { path = "../../crates/filter_ast" }
 frecency = { path = "../../crates/frecency", features = ["postgres"] }

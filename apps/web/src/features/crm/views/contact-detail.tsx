@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel } from '@components/app/side-panel';
+import { enableSequences } from '@core/constant/featureFlags';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
@@ -35,6 +37,7 @@ export function Contact(props: {
 }) {
   const context = useCrmContext();
   const pipelinesEnabled = context.pipelinesEnabled();
+  const sequencesFlag = useFeatureFlag(enableSequences);
   const contactQuery = useContactQuery(() => props.contactId);
   const contact = () => contactQuery.data;
   onCleanup(
@@ -81,6 +84,11 @@ export function Contact(props: {
                     record={{ type: 'contact', id: props.contactId }}
                     onOpenPipeline={props.onOpenPipeline}
                   />
+                </Show>
+                <Show when={sequencesFlag().enabled}>
+                  <Suspense>
+                    <context.ContactSequences contactId={props.contactId} />
+                  </Suspense>
                 </Show>
                 <ContactDiscussionSection contactId={props.contactId} />
               </RecordOverview>

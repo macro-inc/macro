@@ -1,12 +1,12 @@
 use crate::domain::models::{ParsedAddresses, RecipientType, UpsertedContacts, UpsertedRecipient};
-use sqlx::PgPool;
+use sqlx::PgConnection;
 use std::collections::{BTreeMap, HashMap};
 use uuid::Uuid;
 
 /// Upsert contacts from parsed addresses. Called outside a transaction to avoid deadlocks.
-#[tracing::instrument(skip(pool, addresses), err)]
+#[tracing::instrument(skip(conn, addresses), err)]
 pub(crate) async fn upsert_contacts(
-    pool: &PgPool,
+    conn: &mut PgConnection,
     link_id: Uuid,
     addresses: ParsedAddresses,
 ) -> Result<UpsertedContacts, sqlx::Error> {
@@ -60,7 +60,7 @@ pub(crate) async fn upsert_contacts(
         link_id,
         &emails,
     )
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await?;
 
     let mut email_to_id: HashMap<String, Uuid> = existing
@@ -93,7 +93,7 @@ pub(crate) async fn upsert_contacts(
             &update_ids,
             &update_names,
         )
-        .execute(pool)
+        .execute(&mut *conn)
         .await?;
     }
 
@@ -128,7 +128,7 @@ pub(crate) async fn upsert_contacts(
             &new_emails,
             &new_names as &[Option<String>],
         )
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await?;
 
         for row in inserted {
@@ -152,7 +152,7 @@ pub(crate) async fn upsert_contacts(
                 link_id,
                 &still_missing,
             )
-            .fetch_all(pool)
+            .fetch_all(&mut *conn)
             .await?;
 
             for row in fetched {

@@ -513,6 +513,15 @@ export const enableCrmPipelines = defineFlag({
   default: onInDev,
 });
 
+// Sequences in Customers: multi-step emails the server sends from the owner's
+// own Gmail to CRM people, plus the sequence card on contacts and "Add to
+// sequence". It sends real email, so PostHog controls production rollout.
+export const enableSequences = defineFlag({
+  key: 'enable-sequences',
+  env: 'ENABLE_SEQUENCES',
+  default: onInDev,
+});
+
 // Native Projects frontend: navigation, creation, task assignment and project
 // views. Enabled in development; PostHog controls production rollout. Override
 // with VITE_ENABLE_PROJECTS; legacy Files folders are unaffected.

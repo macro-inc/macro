@@ -55,6 +55,12 @@ the gateway `/email` prefix.
 
 - Draft edit routes carry `draft_generation` from the editing lifetime, including attachments, deletion, transfer, and schedules; regenerate OpenAPI clients when this contract changes.
 
+- `pubsub_workers` runs the email sequences sweep
+  (`email_sequences::inbound::sweep_worker`), and inbox sync calls
+  `ctx.sequences.message_synced` after an upsert commits; it must never fail
+  sync. `/public/sequences/unsubscribe/{token}` is unauthenticated, and the
+  request span records its path with the token replaced (`api.rs`).
+
 - The Gmail delivery adapter freezes approved upload/provider-file IDs before
   loading bytes through the authorized reader; Outlook uses its own coordinator.
 

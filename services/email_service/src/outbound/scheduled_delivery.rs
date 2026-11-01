@@ -379,6 +379,7 @@ impl ScheduledDeliveryAdapter {
             parent_message_id,
             references,
             message_id: claim.delivery.message_id_header.clone(),
+            list_unsubscribe: claim.delivery.list_unsubscribe_url.clone(),
         };
         let provider = self
             .email_api

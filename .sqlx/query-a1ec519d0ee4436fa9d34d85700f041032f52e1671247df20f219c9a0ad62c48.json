@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_sequence_steps (enrollment_id, step, message_id, status, scheduled_at)\n               VALUES ($1, $2, $3, 'scheduled', $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a1ec519d0ee4436fa9d34d85700f041032f52e1671247df20f219c9a0ad62c48"
+}

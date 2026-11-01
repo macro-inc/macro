@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM email_sequence_enrollments\n               WHERE team_id = $1 AND email = $2 AND status = ANY($3)\n               ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bc3b5911409bf5f72dbf5d9ad0bcbbb55b9c13f5d772deedd75ed465c03950b7"
+}

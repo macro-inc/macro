@@ -17,6 +17,7 @@ import {
   crmRecordParams,
   crmRecordReference,
   crmRecordTrailSchema,
+  crmSequenceParams,
   crmViewReference,
 } from '@app/features/crm/crm-route';
 import { driveDetailTrailSchema } from '@app/features/drive-view/primitives/drive-detail-trail';
@@ -685,6 +686,17 @@ export const crmPipelineRoute = defineRoute({
     id: `pipeline:${pipelineId}`,
   }),
   toReference: ({ pipelineId }) => crmPipelineReference(pipelineId),
+});
+
+/** One of the viewer's sequences, inside Customers. */
+export const crmSequenceRoute = defineRoute({
+  id: 'companies-sequence',
+  path: 'sequence/:sequenceId',
+  params: crmSequenceParams,
+  claim: ({ sequenceId }) => ({
+    namespace: 'block',
+    id: `sequence:${sequenceId}`,
+  }),
 });
 
 export const foldersRoute = defineRoute({

@@ -24,6 +24,8 @@ pub struct DeliveryClaim {
     pub approved_snapshot: Option<serde_json::Value>,
     /// Prepared envelope/body frozen by GraphQL admission; absent for older writes.
     pub prepared_content: Option<serde_json::Value>,
+    /// One-click unsubscribe URL a sequence step sends in `List-Unsubscribe`.
+    pub list_unsubscribe_url: Option<String>,
 }
 
 /// Acquire a fresh or expired claim under the common message -> schedule lock order.
@@ -48,6 +50,7 @@ pub async fn claim_delivery(
     let schedule = sqlx::query!(
         r#"SELECT send_time, sent, processing, actor_id, delivery_claim_id,
                   delivery_started_at, delivery_message_id, delivery_status, approved_attachments,
+                  list_unsubscribe_url,
                   (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'
                    AND (CASE WHEN processing THEN
                         COALESCE(delivery_lease_expires_at, updated_at + make_interval(secs => $3)) <= NOW()
@@ -101,6 +104,7 @@ pub async fn claim_delivery(
         approved_attachments: schedule.approved_attachments,
         approved_snapshot: attempt.as_ref().and_then(|attempt| attempt.request.clone()),
         prepared_content: attempt.and_then(|attempt| attempt.prepared_content),
+        list_unsubscribe_url: schedule.list_unsubscribe_url,
     }))
 }
 
@@ -145,6 +149,7 @@ pub async fn release_preparation(
 }
 
 /// Persist a paused delivery; unconfirmed outcomes remain eligible only for lookup.
+/// A failed sequence step rejoins its thread's mail state so the user can fix it.
 #[tracing::instrument(skip(pool, claim), err)]
 pub async fn pause_delivery(
     pool: &PgPool,
@@ -152,19 +157,39 @@ pub async fn pause_delivery(
     unconfirmed: bool,
     retry_seconds: i32,
 ) -> anyhow::Result<()> {
-    sqlx::query!(
+    let mut tx = pool.begin().await?;
+    let paused = sqlx::query!(
         r#"UPDATE email_scheduled_messages SET processing = true,
            delivery_status = CASE WHEN $4 THEN 'unconfirmed' ELSE 'failed' END,
            delivery_lease_expires_at = NOW() + make_interval(secs => $5), updated_at = NOW()
-           WHERE message_id = $1 AND link_id = $2 AND delivery_claim_id = $3 AND NOT sent"#,
+           WHERE message_id = $1 AND link_id = $2 AND delivery_claim_id = $3 AND NOT sent
+           RETURNING source IS NOT NULL AS "sourced!""#,
         claim.schedule.message_id,
         claim.schedule.link_id,
         claim.token.0,
         unconfirmed,
         f64::from(retry_seconds),
     )
-    .execute(pool)
+    .fetch_optional(&mut *tx)
     .await?;
+    if !unconfirmed && paused.is_some_and(|row| row.sourced) {
+        let thread_id = sqlx::query_scalar!(
+            "SELECT thread_id FROM email_messages WHERE id = $1 AND link_id = $2",
+            claim.schedule.message_id,
+            claim.schedule.link_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        if let Some(thread_id) = thread_id {
+            crate::threads::update::recompute_thread_metadata(
+                &mut tx,
+                thread_id,
+                claim.schedule.link_id,
+            )
+            .await?;
+        }
+    }
+    tx.commit().await?;
     Ok(())
 }
 

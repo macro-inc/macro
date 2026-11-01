@@ -80,6 +80,27 @@ export function useCrmContactMentionSource(
   };
 }
 
+/** People matching `search` across the viewer's CRM-enabled teams, recently updated first when it is empty. */
+export function useCrmPeopleSearch(search: Accessor<string>, limit: number) {
+  const query = useCrmContactsQuery(
+    { client: useQueryClient() },
+    () => true,
+    search,
+    limit
+  );
+  return {
+    people: createMemo(() =>
+      queryReadyGate(query)
+        ? query.data.pages.flatMap((page) =>
+            page.contacts.map(toCrmContactEntity)
+          )
+        : []
+    ),
+    pending: () => query.isPending,
+    failed: () => query.isError && !queryReadyGate(query),
+  };
+}
+
 const CONTACT_SEARCH_DEBOUNCE_MS = 250;
 
 /** Contacts matching a typed query: cached matches at once, then authorized
