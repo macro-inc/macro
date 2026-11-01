@@ -32,7 +32,7 @@ use item_filters::ast::EntityFilterAst;
 use crate::{
     domain::{
         models::{
-            EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
+            DynamicSort, EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
             NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery,
             SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
             grouping::ItemGroupingInfo,
@@ -78,14 +78,7 @@ struct MockSoupCall {
 #[derive(Clone)]
 struct MockSoup {
     called: Arc<std::sync::Mutex<Vec<MockSoupCall>>>,
-    grouped_calls: Arc<
-        std::sync::Mutex<
-            Vec<(
-                models_grouping::GroupingConfig,
-                crate::domain::models::DynamicSort,
-            )>,
-        >,
-    >,
+    grouped_calls: Arc<std::sync::Mutex<Vec<(models_grouping::GroupingConfig, DynamicSort)>>>,
     succeeds: bool,
 }
 
@@ -2354,7 +2347,7 @@ async fn property_sort_uses_the_ordinary_route_in_both_directions() {
 
 #[tokio::test]
 async fn property_cursor_with_missing_key_is_not_restarted() {
-    let sort = crate::domain::models::DynamicSort::Property {
+    let sort = DynamicSort::Property {
         property_definition_id: Uuid::from_u128(17),
         direction: SoupSortDirection::Asc,
     };

@@ -1,5 +1,5 @@
 use crate::{
-    domain::models::SoupDocumentServerFacts,
+    domain::models::{DynamicSort, DynamicSortValue, SoupDocumentServerFacts},
     outbound::pg_soup_repo::{
         expanded::{
             by_ids::{expanded_soup_by_ids, expanded_soup_by_ids_with_projection},
@@ -47,7 +47,7 @@ async fn expanded_generic_cursor_soup(
         ExpandedDynamicCursorArgs {
             user_id,
             limit,
-            cursor: crate::domain::models::DynamicSort::from_timestamp_query(
+            cursor: DynamicSort::from_timestamp_query(
                 cursor.map_filter(|_| EntityFilterAst::default()),
             ),
             exclude_frecency: false,
@@ -67,7 +67,7 @@ async fn no_frecency_expanded_generic_soup(
         ExpandedDynamicCursorArgs {
             user_id,
             limit,
-            cursor: crate::domain::models::DynamicSort::from_timestamp_query(
+            cursor: DynamicSort::from_timestamp_query(
                 cursor.map_filter(|_| EntityFilterAst::default()),
             ),
             exclude_frecency: true,
@@ -1818,9 +1818,7 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
                 limit: cursor_decoded.limit,
                 val: models_pagination::CursorVal {
                     sort_type: cursor_decoded.val.sort_type.into(),
-                    last_val: crate::domain::models::DynamicSortValue::Timestamp(
-                        cursor_decoded.val.last_val,
-                    ),
+                    last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
                 },
                 filter: filters_for_cursor,
             }),
@@ -1931,9 +1929,7 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
                     limit: cursor_decoded.limit,
                     val: models_pagination::CursorVal {
                         sort_type: cursor_decoded.val.sort_type.into(),
-                        last_val: crate::domain::models::DynamicSortValue::Timestamp(
-                            cursor_decoded.val.last_val,
-                        ),
+                        last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
                     },
                     filter: filters_for_cursor,
                 }),
@@ -2010,7 +2006,7 @@ async fn test_cursor_pagination_filter_consistency(db: PgPool) -> anyhow::Result
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: page_size,
-                cursor: crate::domain::models::DynamicSort::from_timestamp_query(current_query),
+                cursor: DynamicSort::from_timestamp_query(current_query),
                 exclude_frecency: false,
             },
         )
@@ -2139,9 +2135,7 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
                     limit: cursor_decoded.limit,
                     val: models_pagination::CursorVal {
                         sort_type: cursor_decoded.val.sort_type.into(),
-                        last_val: crate::domain::models::DynamicSortValue::Timestamp(
-                            cursor_decoded.val.last_val,
-                        ),
+                        last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
                     },
                     filter: filters_for_cursor,
                 }),
@@ -4513,7 +4507,7 @@ async fn test_dyn_paginate_one_at_a_time(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 1,
-                cursor: crate::domain::models::DynamicSort::from_timestamp_query(current_query),
+                cursor: DynamicSort::from_timestamp_query(current_query),
                 exclude_frecency: false,
             },
         )
@@ -4606,7 +4600,7 @@ async fn test_dyn_paginate_with_filters(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: page_size,
-                cursor: crate::domain::models::DynamicSort::from_timestamp_query(current_query),
+                cursor: DynamicSort::from_timestamp_query(current_query),
                 exclude_frecency: false,
             },
         )

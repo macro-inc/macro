@@ -249,7 +249,7 @@ async fn flat_page(
         ExpandedDynamicCursorArgs {
             user_id: user(),
             limit,
-            cursor: crate::domain::models::DynamicSort::from_timestamp_query(cursor),
+            cursor: DynamicSort::from_timestamp_query(cursor),
             exclude_frecency: false,
         },
     )
@@ -373,7 +373,7 @@ async fn grouped_page(
         GroupedDynamicCursorArgs {
             user_id: user(),
             limit,
-            cursor: crate::domain::models::DynamicSort::from_timestamp_query(cursor),
+            cursor: DynamicSort::from_timestamp_query(cursor),
             exclude_frecency: false,
             grouping,
         },

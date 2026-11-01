@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::grouping::ItemGroupingInfo;
+use crate::domain::models::{DynamicSort, grouping::ItemGroupingInfo};
 use document_sub_type::DocumentSubType;
 use item_filters::ast::project::ProjectLiteral;
 use models_pagination::{CursorWithValAndFilter, SortOn};
@@ -136,7 +136,7 @@ async fn fanout_caps_counts_and_tied_cursor_pages(pool: Pool<Postgres>) -> anyho
             let mut cursor = continuation(group.last().unwrap(), SimpleSortMethod::UpdatedAt);
             loop {
                 let page = fetch(
-                    crate::domain::models::DynamicSort::from_timestamp_query(cursor),
+                    DynamicSort::from_timestamp_query(cursor),
                     GroupingConfig {
                         group_key: Some(key.to_string()),
                         ..grouping.clone()

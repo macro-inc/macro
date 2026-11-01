@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::models::{DynamicSort, SoupSortDirection};
+use crate::domain::models::{
+    DynamicSort, SoupProjectionHydration, SoupSortDirection, grouping::ItemGroupingInfo,
+};
 use chrono::{DateTime, Utc};
 use item_filters::ast::{
     calendar_event::CalendarEventLiteral, chat::ChatLiteral, document::DocumentLiteral,
@@ -96,7 +98,7 @@ async fn flat(
     pool: &PgPool,
     cursor: Query<Uuid, DynamicSort, EntityFilterAst>,
     limit: u16,
-) -> anyhow::Result<Vec<crate::domain::models::SoupProjectionHydration>> {
+) -> anyhow::Result<Vec<SoupProjectionHydration>> {
     let user_id = sqlx::query_scalar!(
         r#"SELECT owner FROM "Document" WHERE id = $1"#,
         A.to_string()
@@ -121,7 +123,7 @@ async fn grouped(
     field: GroupByField,
     group_key: Option<&str>,
     limit: u16,
-) -> anyhow::Result<Vec<crate::domain::models::grouping::ItemGroupingInfo>> {
+) -> anyhow::Result<Vec<ItemGroupingInfo>> {
     let user_id = sqlx::query_scalar!(
         r#"SELECT owner FROM "Document" WHERE id = $1"#,
         A.to_string()

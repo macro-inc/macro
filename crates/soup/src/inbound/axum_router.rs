@@ -1,8 +1,8 @@
 use crate::domain::{
     models::{
-        EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
-        NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupItemWithProperties, SoupQuery,
-        SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
+        DynamicSort, EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupFilterAst,
+        IntoSoupReqAst, NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupItemWithProperties,
+        SoupQuery, SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
         grouping::{GroupMeta, build_grouped_response},
     },
     ports::SoupService,
@@ -174,7 +174,7 @@ impl SoupApiSort {
         }
         Ok(match self {
             Self::Property => SoupQuery::Property(models_pagination::Query::Sort(
-                crate::domain::models::DynamicSort::Property {
+                DynamicSort::Property {
                     property_definition_id: property.ok_or(SoupHandlerErr::Expand)?,
                     direction,
                 },
@@ -216,9 +216,9 @@ impl GroupedSoupSort {
         self,
         property: Option<Uuid>,
         direction: Option<SoupApiSortDirection>,
-    ) -> Result<crate::domain::models::DynamicSort, SoupHandlerErr> {
+    ) -> Result<DynamicSort, SoupHandlerErr> {
         if matches!(self, Self::Property) {
-            return Ok(crate::domain::models::DynamicSort::Property {
+            return Ok(DynamicSort::Property {
                 property_definition_id: property.ok_or(SoupHandlerErr::Expand)?,
                 direction: direction.map(Into::into).unwrap_or_default(),
             });
@@ -632,7 +632,7 @@ where
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
     where
         SoupRequest<R>: IntoSoupReqAst,
-        R: Clone + Serialize + Send + crate::domain::models::IntoSoupFilterAst,
+        R: Clone + Serialize + Send + IntoSoupFilterAst,
     {
         let user_for_favorites = macro_user_id.copied().into_owned();
         let sort_direction: SoupSortDirection =
@@ -1059,7 +1059,7 @@ type SoupCursor<R> = Either5<
     // Same value shape as the touched cursor; its `"notified_at"` sort
     // marker (touched serializes `null`) is what keeps it out of arm 3.
     Option<CursorWithValAndFilter<String, NotifiedAt, R>>,
-    Option<CursorWithValAndFilter<Uuid, crate::domain::models::DynamicSort, R>>,
+    Option<CursorWithValAndFilter<Uuid, DynamicSort, R>>,
 >;
 
 /// Gets the items the user has access to
@@ -1291,7 +1291,7 @@ where
     }))
 }
 
-impl crate::domain::models::IntoSoupFilterAst for ApiEntityFilterAst {
+impl IntoSoupFilterAst for ApiEntityFilterAst {
     fn into_filter_ast(self) -> Result<Option<EntityFilterAst>, item_filters::ast::ExpandErr> {
         self.into_optional_entity_ast()
     }

@@ -1,7 +1,7 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, CrmPropertyEdge, GroupedSortRequest, NotifiedEntity,
+            AdvancedSortParams, CrmPropertyEdge, DynamicSort, GroupedSortRequest, NotifiedEntity,
             NotifiedSoupRequest, SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration,
             SoupPropertiesField, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
             WorkFeedCandidateRequest, grouping::ItemGroupingInfo,
@@ -88,9 +88,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: crate::domain::models::DynamicSort::from_timestamp_query(
-                            query.map_filter(|(_, ast)| ast),
-                        ),
+                        cursor: DynamicSort::from_timestamp_query(query.map_filter(|(_, ast)| ast)),
                         exclude_frecency: true,
                     },
                 )
@@ -102,7 +100,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: crate::domain::models::DynamicSort::from_timestamp_query(ast),
+                        cursor: DynamicSort::from_timestamp_query(ast),
                         exclude_frecency: false,
                     },
                 )
@@ -123,7 +121,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: crate::domain::models::DynamicSort::from_timestamp_query(
+                        cursor: DynamicSort::from_timestamp_query(
                             f.map_filter(|_| EntityFilterAst::default()),
                         ),
                         exclude_frecency: true,
@@ -137,7 +135,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: crate::domain::models::DynamicSort::from_timestamp_query(
+                        cursor: DynamicSort::from_timestamp_query(
                             f.map_filter(|_| EntityFilterAst::default()),
                         ),
                         exclude_frecency: false,
@@ -189,7 +187,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: crate::domain::models::DynamicSort::from_timestamp_query(
+                        cursor: DynamicSort::from_timestamp_query(
                             f.map_filter(|_| EntityFilterAst::default()),
                         ),
                         exclude_frecency: true,

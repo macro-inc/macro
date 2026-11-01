@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::grouping::ItemGroupingInfo;
+use crate::domain::models::{DynamicSort, grouping::ItemGroupingInfo};
 use chrono::{DateTime, Duration, Utc};
 use models_pagination::{CursorWithValAndFilter, SortOn};
 use models_soup::item::SoupItem;
@@ -24,7 +24,7 @@ async fn fetch(
         GroupedDynamicCursorArgs {
             user_id: MacroUserIdStr::parse_from_str("macro|user-1@test.com")?,
             limit,
-            cursor: crate::domain::models::DynamicSort::from_timestamp_query(cursor),
+            cursor: DynamicSort::from_timestamp_query(cursor),
             exclude_frecency: false,
             grouping: GroupingConfig {
                 field,
