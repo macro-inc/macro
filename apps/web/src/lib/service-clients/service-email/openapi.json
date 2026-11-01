@@ -815,22 +815,6 @@
               "format": "int32",
               "minimum": 0
             }
-          },
-          {
-            "name": "source",
-            "in": "query",
-            "description": "List only the sends this source created, in every delivery state.\nWithout it, the user's own scheduled sends are listed: pending sequence\nsteps are hidden, like in Drafts, and failed ones are included.",
-            "required": false,
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "$ref": "#/components/schemas/ScheduledSendSource"
-                }
-              ]
-            }
           }
         ],
         "responses": {
@@ -2819,6 +2803,429 @@
         }
       }
     },
+    "/email/sequences": {
+      "get": {
+        "tags": ["sequences"],
+        "summary": "List the caller's sequences.",
+        "operationId": "list_sequences",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSequencesResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["sequences"],
+        "summary": "Create a draft sequence.",
+        "operationId": "create_sequence",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SequenceInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sequence"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/sequences/contacts/{crm_contact_id}": {
+      "get": {
+        "tags": ["sequences"],
+        "summary": "A CRM person's enrollments across the team, without step content.",
+        "operationId": "contact_enrollments",
+        "parameters": [
+          {
+            "name": "crm_contact_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactEnrollmentsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/sequences/enrollments/{id}": {
+      "get": {
+        "tags": ["sequences"],
+        "summary": "An enrollment with its rendered steps and what happened to each.",
+        "operationId": "get_enrollment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["sequences"],
+        "summary": "Pause, resume, stop or unsubscribe an enrollment.",
+        "operationId": "update_enrollment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollmentActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentSummary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/sequences/{id}": {
+      "get": {
+        "tags": ["sequences"],
+        "summary": "A sequence with its enrollments.",
+        "operationId": "get_sequence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["sequences"],
+        "summary": "Delete a sequence, withdrawing its unsent steps.",
+        "operationId": "delete_sequence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["sequences"],
+        "summary": "Edit a draft or paused sequence, or change its status.",
+        "operationId": "update_sequence",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSequenceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sequence"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/sequences/{id}/enrollments": {
+      "post": {
+        "tags": ["sequences"],
+        "summary": "Enroll CRM people into an active sequence.",
+        "operationId": "enroll_contacts",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SequenceErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/settings": {
       "patch": {
         "tags": ["Settings"],
@@ -4234,11 +4641,6 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "ID of the message this draft is replying to."
-          },
-          "reuse_reply_draft": {
-            "type": "boolean",
-            "description": "Without `db_id`, continue an existing unsent draft replying to\n`replying_to_id` in this inbox. `false` always creates a new draft, as\na sequence step does, leaving the user's own reply draft untouched.",
-            "default": true
           },
           "subject": {
             "type": "string",
@@ -5745,6 +6147,80 @@
           }
         }
       },
+      "ContactEnrollment": {
+        "type": "object",
+        "description": "A contact's enrollment as any teammate sees it: never step content.",
+        "required": [
+          "sequenceId",
+          "sequenceName",
+          "ownerId",
+          "isOwner",
+          "status",
+          "sequencePaused"
+        ],
+        "properties": {
+          "isOwner": {
+            "type": "boolean",
+            "description": "Whether the viewer owns the sequence."
+          },
+          "lastSentAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the last step was sent."
+          },
+          "nextSendAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the next step is scheduled or due."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Macro user id of the sequence's owner."
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EnrollmentReason",
+                "description": "Why it stopped or needs attention."
+              }
+            ]
+          },
+          "sequenceId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sequence id."
+          },
+          "sequenceName": {
+            "type": "string",
+            "description": "Sequence name."
+          },
+          "sequencePaused": {
+            "type": "boolean",
+            "description": "Whether the whole sequence is paused."
+          },
+          "status": {
+            "$ref": "#/components/schemas/EnrollmentStatus",
+            "description": "Enrollment status."
+          }
+        }
+      },
+      "ContactEnrollmentsResponse": {
+        "type": "object",
+        "description": "A CRM person's enrollments across the team.",
+        "required": ["enrollments"],
+        "properties": {
+          "enrollments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContactEnrollment"
+            },
+            "description": "Newest first."
+          }
+        }
+      },
       "ContactInfo": {
         "type": "object",
         "required": ["email"],
@@ -5860,6 +6336,281 @@
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EnrollRequest": {
+        "type": "object",
+        "description": "Contacts to enroll.",
+        "required": ["crmContactIds", "start", "timezone"],
+        "properties": {
+          "crmContactIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "CRM people."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the first step should go; also fixes the local send time."
+          },
+          "timezone": {
+            "type": "string",
+            "description": "IANA time zone the send time is in."
+          }
+        }
+      },
+      "EnrollResponse": {
+        "type": "object",
+        "description": "What enrolling each contact did.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrollResult"
+            },
+            "description": "One result per requested contact."
+          }
+        }
+      },
+      "EnrollResult": {
+        "type": "object",
+        "description": "What enrolling one contact did.",
+        "required": ["crmContactId"],
+        "properties": {
+          "crmContactId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The CRM person."
+          },
+          "enrollmentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The new enrollment."
+          },
+          "skipped": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EnrollSkip",
+                "description": "Why it was skipped."
+              }
+            ]
+          }
+        }
+      },
+      "EnrollSkip": {
+        "type": "string",
+        "description": "Why a contact wasn't enrolled.",
+        "enum": [
+          "not_found",
+          "no_email",
+          "invalid_email",
+          "unsubscribed",
+          "already_enrolled"
+        ]
+      },
+      "EnrollmentAction": {
+        "type": "string",
+        "description": "What an owner can do to an enrollment.",
+        "enum": ["pause", "resume", "stop", "unsubscribe"]
+      },
+      "EnrollmentActionRequest": {
+        "type": "object",
+        "description": "An owner action on an enrollment.",
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/EnrollmentAction",
+            "description": "What to do."
+          }
+        }
+      },
+      "EnrollmentCounts": {
+        "type": "object",
+        "description": "Enrollment counts by status.",
+        "required": [
+          "active",
+          "paused",
+          "needsAttention",
+          "stopped",
+          "completed"
+        ],
+        "properties": {
+          "active": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sending as steps come due."
+          },
+          "completed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Finished."
+          },
+          "needsAttention": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Waiting on the owner."
+          },
+          "paused": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Paused by the owner."
+          },
+          "stopped": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Ended early."
+          }
+        }
+      },
+      "EnrollmentDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EnrollmentSummary",
+            "description": "The enrollment."
+          },
+          {
+            "type": "object",
+            "required": ["steps"],
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EnrollmentStep"
+                },
+                "description": "Its steps in order."
+              }
+            }
+          }
+        ],
+        "description": "An enrollment with its rendered steps."
+      },
+      "EnrollmentReason": {
+        "type": "string",
+        "description": "Why an enrollment stopped or needs attention.",
+        "enum": [
+          "manual",
+          "replied",
+          "bounced",
+          "unsubscribed",
+          "access_lost",
+          "inbox_unavailable",
+          "step_failed",
+          "step_withdrawn",
+          "step_unknown",
+          "step_stuck"
+        ]
+      },
+      "EnrollmentStatus": {
+        "type": "string",
+        "description": "Where one contact is in a sequence.",
+        "enum": ["active", "paused", "needs_attention", "stopped", "completed"]
+      },
+      "EnrollmentStep": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Step",
+            "description": "The step as rendered for this contact."
+          },
+          {
+            "type": "object",
+            "required": ["status"],
+            "properties": {
+              "scheduledAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When it was scheduled to send."
+              },
+              "sentAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When it was sent."
+              },
+              "status": {
+                "$ref": "#/components/schemas/StepStatus",
+                "description": "What happened to its email."
+              }
+            }
+          }
+        ],
+        "description": "One rendered step of an enrollment with what happened to it."
+      },
+      "EnrollmentSummary": {
+        "type": "object",
+        "description": "One contact's progress through a sequence.",
+        "required": [
+          "id",
+          "email",
+          "status",
+          "nextStep",
+          "stepCount",
+          "createdAt"
+        ],
+        "properties": {
+          "contactName": {
+            "type": ["string", "null"],
+            "description": "Name at enrollment."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was enrolled."
+          },
+          "crmContactId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The CRM person enrolled; gone if the contact was deleted."
+          },
+          "email": {
+            "type": "string",
+            "description": "Address the steps go to."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Enrollment id."
+          },
+          "lastSentAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the last step was sent."
+          },
+          "nextSendAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the next step is scheduled or due."
+          },
+          "nextStep": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Index of the next step to send."
+          },
+          "reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EnrollmentReason",
+                "description": "Why it stopped or needs attention."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/EnrollmentStatus",
+            "description": "Status."
+          },
+          "stepCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of steps."
+          }
+        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -6634,6 +7385,20 @@
           }
         }
       },
+      "ListSequencesResponse": {
+        "type": "object",
+        "description": "The owner's sequences.",
+        "required": ["sequences"],
+        "properties": {
+          "sequences": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SequenceSummary"
+            },
+            "description": "Most recently changed first."
+          }
+        }
+      },
       "MailboxAction": {
         "oneOf": [
           {
@@ -7107,6 +7872,27 @@
           "other"
         ]
       },
+      "Problem": {
+        "type": "string",
+        "description": "What is wrong with a sequence.",
+        "enum": [
+          "name_required",
+          "name_too_long",
+          "footer_too_long",
+          "steps_required",
+          "too_many_steps",
+          "first_step_is_reply",
+          "subject_required",
+          "subject_single_line",
+          "subject_too_long",
+          "body_required",
+          "body_too_long",
+          "delay_range",
+          "unknown_token",
+          "sender_required",
+          "sender_unavailable"
+        ]
+      },
       "RefreshEmailEvent": {
         "oneOf": [
           {
@@ -7304,6 +8090,214 @@
           }
         }
       },
+      "Sequence": {
+        "type": "object",
+        "description": "A sequence as its owner edits it.",
+        "required": [
+          "id",
+          "name",
+          "footer",
+          "status",
+          "steps",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was created."
+          },
+          "footer": {
+            "type": "string",
+            "description": "Line added above the unsubscribe link in every email."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sequence id."
+          },
+          "linkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The owner's Gmail inbox it sends from."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/SequenceStatus",
+            "description": "Lifecycle status."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "description": "Step templates."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it last changed."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Incremented by every change; edits must name the version they saw."
+          }
+        }
+      },
+      "SequenceDetailResponse": {
+        "type": "object",
+        "description": "A sequence with its enrollments.",
+        "required": ["sequence", "enrollments"],
+        "properties": {
+          "enrollments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnrollmentSummary"
+            },
+            "description": "Its enrollments, newest first."
+          },
+          "sequence": {
+            "$ref": "#/components/schemas/Sequence",
+            "description": "The sequence."
+          }
+        }
+      },
+      "SequenceErrorCode": {
+        "type": "string",
+        "description": "What went wrong, for the client to show.",
+        "enum": [
+          "not_found",
+          "version_conflict",
+          "invalid_transition",
+          "invalid_sequence",
+          "sequence_not_active",
+          "too_many_contacts",
+          "invalid_start",
+          "invalid_timezone",
+          "action_unavailable",
+          "step_in_delivery",
+          "no_team",
+          "crm_disabled",
+          "internal"
+        ]
+      },
+      "SequenceErrorResponse": {
+        "type": "object",
+        "description": "An error response.",
+        "required": ["code", "message", "tokens"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/SequenceErrorCode",
+            "description": "Machine-readable code."
+          },
+          "message": {
+            "type": "string",
+            "description": "Developer-facing message."
+          },
+          "position": {
+            "type": ["integer", "null"],
+            "description": "For `invalid_sequence`: the 1-based step.",
+            "minimum": 0
+          },
+          "problem": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Problem",
+                "description": "For `invalid_sequence`: what is wrong."
+              }
+            ]
+          },
+          "tokens": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "For `unknown_token`: the tokens."
+          }
+        }
+      },
+      "SequenceInput": {
+        "type": "object",
+        "description": "A new sequence.",
+        "required": ["name"],
+        "properties": {
+          "footer": {
+            "type": "string",
+            "description": "Footer line."
+          },
+          "linkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Sending inbox."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "description": "Step templates."
+          }
+        }
+      },
+      "SequenceStatus": {
+        "type": "string",
+        "description": "Where a sequence is in its lifecycle.",
+        "enum": ["draft", "active", "paused"]
+      },
+      "SequenceSummary": {
+        "type": "object",
+        "description": "A sequence in the owner's list.",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "stepCount",
+          "counts",
+          "updatedAt"
+        ],
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/EnrollmentCounts",
+            "description": "Enrollments by status."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Sequence id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "status": {
+            "$ref": "#/components/schemas/SequenceStatus",
+            "description": "Lifecycle status."
+          },
+          "stepCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of steps."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it last changed."
+          }
+        }
+      },
       "Settings": {
         "type": "object",
         "properties": {
@@ -7339,6 +8333,36 @@
             "description": "The email of the macro user who first connected the mailbox."
           }
         }
+      },
+      "Step": {
+        "type": "object",
+        "description": "One email of a sequence. A sequence holds templates; an enrollment holds\nthem rendered for its contact.",
+        "required": ["delayDays", "subject", "body"],
+        "properties": {
+          "asReply": {
+            "type": "boolean",
+            "description": "Send as a reply in the previous email's thread."
+          },
+          "body": {
+            "type": "string",
+            "description": "Plain-text body."
+          },
+          "delayDays": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Calendar days after the previous step, at the enrollment's send time.",
+            "minimum": 0
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject line; a reply step uses its thread's subject instead."
+          }
+        }
+      },
+      "StepStatus": {
+        "type": "string",
+        "description": "State of one step's email.",
+        "enum": ["pending", "scheduled", "sent", "unknown"]
       },
       "SyncStatus": {
         "type": "string",
@@ -7656,6 +8680,49 @@
           }
         }
       },
+      "UpdateSequenceRequest": {
+        "type": "object",
+        "description": "Changes to a sequence; `None` leaves a field as it is.",
+        "required": ["version"],
+        "properties": {
+          "footer": {
+            "type": ["string", "null"],
+            "description": "New footer."
+          },
+          "linkId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "New sending inbox."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "New name."
+          },
+          "status": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SequenceStatus",
+                "description": "New status."
+              }
+            ]
+          },
+          "steps": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "description": "New steps."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The version the caller last read."
+          }
+        }
+      },
       "UpdateThreadLabelRequest": {
         "type": "object",
         "description": "Request body for updating a thread's labels.",
@@ -7765,17 +8832,6 @@
             "type": "string",
             "format": "date-time",
             "description": "The time to send the message (ISO 8601 format)."
-          },
-          "source": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/ScheduledSendSource",
-                "description": "What created this send. `sequence` keeps the pending step out of the\nuser's Drafts and Scheduled lists (Gmail inboxes only). Absent keeps the\ndraft's existing source; only unscheduling clears it."
-              }
-            ]
           }
         }
       },

@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.is_sent, m.internal_date_ts, m.updated_at, m.global_id,\n                      s.message_id AS \"scheduled?\", s.send_time AS \"send_time?\",\n                      s.processing AS \"processing?\", s.delivery_status AS \"delivery_status?\",\n                      s.delivery_started_at, s.delivery_claim_id, s.delivery_message_id,\n                      (COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)\n                       OR EXISTS (SELECT 1 FROM email_message_mailbox_facts mf\n                                  WHERE mf.id = m.id AND mf.in_trash)) AS \"discarded!\"\n               FROM email_messages m\n               LEFT JOIN email_scheduled_messages s ON s.message_id = m.id AND s.link_id = m.link_id\n               WHERE m.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "internal_date_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "global_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "scheduled?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "send_time?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "processing?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "delivery_status?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "delivery_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "delivery_claim_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "delivery_message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "discarded!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "9e7a427f53b500ff130a417a5d87b7306d14a8e54dc288300cce57f4eccde431"
+}

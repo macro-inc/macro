@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.id, s.name, s.status, jsonb_array_length(s.steps) AS \"step_count!\", s.updated_at,\n                      count(e.id) FILTER (WHERE e.status = 'active') AS \"active!\",\n                      count(e.id) FILTER (WHERE e.status = 'paused') AS \"paused!\",\n                      count(e.id) FILTER (WHERE e.status = 'needs_attention') AS \"needs_attention!\",\n                      count(e.id) FILTER (WHERE e.status = 'stopped') AS \"stopped!\",\n                      count(e.id) FILTER (WHERE e.status = 'completed') AS \"completed!\"\n               FROM email_sequences s\n               LEFT JOIN email_sequence_enrollments e ON e.sequence_id = s.id\n               WHERE s.user_id = $1 AND s.team_id = $2\n               GROUP BY s.id\n               ORDER BY s.updated_at DESC, s.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "step_count!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "active!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "paused!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "needs_attention!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "stopped!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "completed!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "16affb641b067bb154e476a74ac0e0bcbd779b81f864e03729266219da352ae5"
+}

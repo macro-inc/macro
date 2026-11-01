@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.id, e.crm_contact_id, e.email, e.contact_name, e.status, e.reason, e.next_step,\n                  jsonb_array_length(e.steps) AS \"step_count!\", e.created_at,\n                  (SELECT max(h.sent_at) FROM email_sequence_steps h WHERE h.enrollment_id = e.id) AS last_sent_at,\n                  COALESCE((SELECT h.scheduled_at FROM email_sequence_steps h\n                            WHERE h.enrollment_id = e.id AND h.status = 'scheduled'), e.due_at) AS next_send_at\n           FROM email_sequence_enrollments e\n           JOIN email_sequences s ON s.id = e.sequence_id\n           WHERE ($1::uuid IS NULL OR e.sequence_id = $1)\n             AND ($2::uuid IS NULL OR e.id = $2)\n             AND ($3::text IS NULL OR (s.user_id = $3 AND s.team_id = $4))\n           ORDER BY e.created_at DESC, e.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "crm_contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "contact_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "next_step",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 7,
+        "name": "step_count!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "next_send_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false,
+      null,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "7073b77d6bd27d50848d21bd7431b1dc402c1fa73837cadde5f8c2953bf5ae3d"
+}

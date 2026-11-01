@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id, m.internal_date_ts, m.replying_to_id, m.headers_jsonb, m.body_text,\n                      lower(c.email_address) AS \"from_email?\"\n               FROM email_messages m LEFT JOIN email_contacts c ON c.id = m.from_contact_id\n               WHERE m.id = $1 AND m.link_id = $2 AND NOT m.is_sent AND NOT m.is_draft",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "internal_date_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "replying_to_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "headers_jsonb",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "from_email?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "98d65881a977c5835296375a85d4a94fdb38d3f01a138d7b5bb6cb1001080e75"
+}

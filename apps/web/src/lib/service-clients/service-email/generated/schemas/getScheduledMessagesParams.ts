@@ -4,7 +4,6 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ScheduledSendSource } from './scheduledSendSource';
 
 export type GetScheduledMessagesParams = {
   /**
@@ -17,10 +16,4 @@ export type GetScheduledMessagesParams = {
    * @minimum 0
    */
   limit?: number;
-  /**
- * List only the sends this source created, in every delivery state.
-Without it, the user's own scheduled sends are listed: pending sequence
-steps are hidden, like in Drafts, and failed ones are included.
- */
-  source?: null | ScheduledSendSource;
 };

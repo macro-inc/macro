@@ -5,12 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UpsertScheduledRequestIncludeSignature } from './upsertScheduledRequestIncludeSignature';
-import type { UpsertScheduledRequestSource } from './upsertScheduledRequestSource';
 
 export interface UpsertScheduledRequest {
   /** Per-message signature override; absent uses the inbox's send defaults. */
   include_signature?: UpsertScheduledRequestIncludeSignature;
   /** The time to send the message (ISO 8601 format). */
   send_time: string;
-  source?: UpsertScheduledRequestSource;
 }

@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.id, e.due_at AS \"due_at!\", e.link_id, e.email, e.contact_name\n               FROM email_sequence_enrollments e\n               JOIN email_sequences s ON s.id = e.sequence_id AND s.status = 'active'\n               WHERE e.status = 'active' AND e.due_at <= now()\n                 AND ($1::timestamptz IS NULL OR (e.due_at, e.id) > ($1, $2))\n                 AND NOT EXISTS (SELECT 1 FROM email_sequence_steps h\n                                 WHERE h.enrollment_id = e.id AND h.status = 'scheduled')\n               ORDER BY e.due_at, e.id\n               LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "due_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "contact_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "26c65f65993e741e849218b34fc258a5d8ebe5c7d6450b47e3a796ba25760157"
+}

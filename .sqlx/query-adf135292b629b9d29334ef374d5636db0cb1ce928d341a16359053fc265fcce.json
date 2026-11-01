@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sequence_enrollments SET due_at = $2, updated_at = now()\n               WHERE id = $1 AND status = 'active'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "adf135292b629b9d29334ef374d5636db0cb1ce928d341a16359053fc265fcce"
+}

@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id\n               FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "processing",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "delivery_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "delivery_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "delivery_claim_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "398bc57f00ac00cfccdf03e4a81e61ba43723ad222261cc3fe0d3576fe2719db"
+}

@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_sequence_recipients (team_id, email, token)\n               SELECT $1, address, token FROM unnest($2::text[], $3::text[]) AS input(address, token)\n               ON CONFLICT (team_id, email) DO UPDATE SET email = EXCLUDED.email\n               RETURNING email, token, unsubscribed_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "unsubscribed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f4a4110086e6dfd1a0410419928002be99732fc17f45a11ecab9135b45dd3e11"
+}

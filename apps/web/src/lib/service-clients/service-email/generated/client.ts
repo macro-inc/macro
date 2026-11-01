@@ -20,6 +20,7 @@ import type {
   CalendarMutationApiError,
   CancelBackfillParams,
   CompleteDraftAttachmentParams,
+  ContactEnrollmentsResponse,
   CopyCalendarEventRequest,
   CreateDraftRequest,
   CreateDraftResponse,
@@ -29,6 +30,11 @@ import type {
   DeleteScheduledDraftParams,
   EmlFile,
   EmptyResponse,
+  EnrollmentActionRequest,
+  EnrollmentDetail,
+  EnrollmentSummary,
+  EnrollRequest,
+  EnrollResponse,
   ErrorResponse,
   ForwardCalendarEventError,
   ForwardCalendarEventRequest,
@@ -52,6 +58,7 @@ import type {
   ListEmailFiltersResponse,
   ListLabelsResponse,
   ListLinksResponse,
+  ListSequencesResponse,
   MailboxOperation,
   MailboxSettingsOperation,
   MessageOperationResponse,
@@ -65,6 +72,10 @@ import type {
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
+  Sequence,
+  SequenceDetailResponse,
+  SequenceErrorResponse,
+  SequenceInput,
   SharedInboxConflictResponse,
   TransferDraftRequest,
   TransferDraftResponse,
@@ -73,6 +84,7 @@ import type {
   UnresolvedSignatureImagesError,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
+  UpdateSequenceRequest,
   UpdateThreadLabelRequest,
   UpdateThreadLabelsResponse,
   UpdateThreadProjectRequest,
@@ -3073,6 +3085,484 @@ export const getMessageEml = async (
     status: res.status,
     headers: res.headers,
   } as getMessageEmlResponse;
+};
+
+/**
+ * @summary List the caller's sequences.
+ */
+export type listSequencesResponse200 = {
+  data: ListSequencesResponse;
+  status: 200;
+};
+
+export type listSequencesResponse403 = {
+  data: SequenceErrorResponse;
+  status: 403;
+};
+
+export type listSequencesResponseSuccess = listSequencesResponse200 & {
+  headers: Headers;
+};
+export type listSequencesResponseError = listSequencesResponse403 & {
+  headers: Headers;
+};
+
+export type listSequencesResponse =
+  | listSequencesResponseSuccess
+  | listSequencesResponseError;
+
+export const getListSequencesUrl = () => {
+  return `/email/sequences`;
+};
+
+export const listSequences = async (
+  options?: RequestInit
+): Promise<listSequencesResponse> => {
+  const res = await fetch(getListSequencesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSequencesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listSequencesResponse;
+};
+
+/**
+ * @summary Create a draft sequence.
+ */
+export type createSequenceResponse200 = {
+  data: Sequence;
+  status: 200;
+};
+
+export type createSequenceResponse400 = {
+  data: SequenceErrorResponse;
+  status: 400;
+};
+
+export type createSequenceResponse403 = {
+  data: SequenceErrorResponse;
+  status: 403;
+};
+
+export type createSequenceResponseSuccess = createSequenceResponse200 & {
+  headers: Headers;
+};
+export type createSequenceResponseError = (
+  | createSequenceResponse400
+  | createSequenceResponse403
+) & {
+  headers: Headers;
+};
+
+export type createSequenceResponse =
+  | createSequenceResponseSuccess
+  | createSequenceResponseError;
+
+export const getCreateSequenceUrl = () => {
+  return `/email/sequences`;
+};
+
+export const createSequence = async (
+  sequenceInput: SequenceInput,
+  options?: RequestInit
+): Promise<createSequenceResponse> => {
+  const res = await fetch(getCreateSequenceUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sequenceInput),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createSequenceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createSequenceResponse;
+};
+
+/**
+ * @summary A CRM person's enrollments across the team, without step content.
+ */
+export type contactEnrollmentsResponse200 = {
+  data: ContactEnrollmentsResponse;
+  status: 200;
+};
+
+export type contactEnrollmentsResponse404 = {
+  data: SequenceErrorResponse;
+  status: 404;
+};
+
+export type contactEnrollmentsResponseSuccess =
+  contactEnrollmentsResponse200 & {
+    headers: Headers;
+  };
+export type contactEnrollmentsResponseError = contactEnrollmentsResponse404 & {
+  headers: Headers;
+};
+
+export type contactEnrollmentsResponse =
+  | contactEnrollmentsResponseSuccess
+  | contactEnrollmentsResponseError;
+
+export const getContactEnrollmentsUrl = (crmContactId: string) => {
+  return `/email/sequences/contacts/${crmContactId}`;
+};
+
+export const contactEnrollments = async (
+  crmContactId: string,
+  options?: RequestInit
+): Promise<contactEnrollmentsResponse> => {
+  const res = await fetch(getContactEnrollmentsUrl(crmContactId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: contactEnrollmentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as contactEnrollmentsResponse;
+};
+
+/**
+ * @summary An enrollment with its rendered steps and what happened to each.
+ */
+export type getEnrollmentResponse200 = {
+  data: EnrollmentDetail;
+  status: 200;
+};
+
+export type getEnrollmentResponse404 = {
+  data: SequenceErrorResponse;
+  status: 404;
+};
+
+export type getEnrollmentResponseSuccess = getEnrollmentResponse200 & {
+  headers: Headers;
+};
+export type getEnrollmentResponseError = getEnrollmentResponse404 & {
+  headers: Headers;
+};
+
+export type getEnrollmentResponse =
+  | getEnrollmentResponseSuccess
+  | getEnrollmentResponseError;
+
+export const getGetEnrollmentUrl = (id: string) => {
+  return `/email/sequences/enrollments/${id}`;
+};
+
+export const getEnrollment = async (
+  id: string,
+  options?: RequestInit
+): Promise<getEnrollmentResponse> => {
+  const res = await fetch(getGetEnrollmentUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getEnrollmentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getEnrollmentResponse;
+};
+
+/**
+ * @summary Pause, resume, stop or unsubscribe an enrollment.
+ */
+export type updateEnrollmentResponse200 = {
+  data: EnrollmentSummary;
+  status: 200;
+};
+
+export type updateEnrollmentResponse404 = {
+  data: SequenceErrorResponse;
+  status: 404;
+};
+
+export type updateEnrollmentResponse409 = {
+  data: SequenceErrorResponse;
+  status: 409;
+};
+
+export type updateEnrollmentResponseSuccess = updateEnrollmentResponse200 & {
+  headers: Headers;
+};
+export type updateEnrollmentResponseError = (
+  | updateEnrollmentResponse404
+  | updateEnrollmentResponse409
+) & {
+  headers: Headers;
+};
+
+export type updateEnrollmentResponse =
+  | updateEnrollmentResponseSuccess
+  | updateEnrollmentResponseError;
+
+export const getUpdateEnrollmentUrl = (id: string) => {
+  return `/email/sequences/enrollments/${id}`;
+};
+
+export const updateEnrollment = async (
+  id: string,
+  enrollmentActionRequest: EnrollmentActionRequest,
+  options?: RequestInit
+): Promise<updateEnrollmentResponse> => {
+  const res = await fetch(getUpdateEnrollmentUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(enrollmentActionRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateEnrollmentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateEnrollmentResponse;
+};
+
+/**
+ * @summary A sequence with its enrollments.
+ */
+export type getSequenceResponse200 = {
+  data: SequenceDetailResponse;
+  status: 200;
+};
+
+export type getSequenceResponse404 = {
+  data: SequenceErrorResponse;
+  status: 404;
+};
+
+export type getSequenceResponseSuccess = getSequenceResponse200 & {
+  headers: Headers;
+};
+export type getSequenceResponseError = getSequenceResponse404 & {
+  headers: Headers;
+};
+
+export type getSequenceResponse =
+  | getSequenceResponseSuccess
+  | getSequenceResponseError;
+
+export const getGetSequenceUrl = (id: string) => {
+  return `/email/sequences/${id}`;
+};
+
+export const getSequence = async (
+  id: string,
+  options?: RequestInit
+): Promise<getSequenceResponse> => {
+  const res = await fetch(getGetSequenceUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSequenceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSequenceResponse;
+};
+
+/**
+ * @summary Delete a sequence, withdrawing its unsent steps.
+ */
+export type deleteSequenceResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteSequenceResponse404 = {
+  data: SequenceErrorResponse;
+  status: 404;
+};
+
+export type deleteSequenceResponseSuccess = deleteSequenceResponse204 & {
+  headers: Headers;
+};
+export type deleteSequenceResponseError = deleteSequenceResponse404 & {
+  headers: Headers;
+};
+
+export type deleteSequenceResponse =
+  | deleteSequenceResponseSuccess
+  | deleteSequenceResponseError;
+
+export const getDeleteSequenceUrl = (id: string) => {
+  return `/email/sequences/${id}`;
+};
+
+export const deleteSequence = async (
+  id: string,
+  options?: RequestInit
+): Promise<deleteSequenceResponse> => {
+  const res = await fetch(getDeleteSequenceUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteSequenceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteSequenceResponse;
+};
+
+/**
+ * @summary Edit a draft or paused sequence, or change its status.
+ */
+export type updateSequenceResponse200 = {
+  data: Sequence;
+  status: 200;
+};
+
+export type updateSequenceResponse400 = {
+  data: SequenceErrorResponse;
+  status: 400;
+};
+
+export type updateSequenceResponse404 = {
+  data: SequenceErrorResponse;
+  status: 404;
+};
+
+export type updateSequenceResponse409 = {
+  data: SequenceErrorResponse;
+  status: 409;
+};
+
+export type updateSequenceResponseSuccess = updateSequenceResponse200 & {
+  headers: Headers;
+};
+export type updateSequenceResponseError = (
+  | updateSequenceResponse400
+  | updateSequenceResponse404
+  | updateSequenceResponse409
+) & {
+  headers: Headers;
+};
+
+export type updateSequenceResponse =
+  | updateSequenceResponseSuccess
+  | updateSequenceResponseError;
+
+export const getUpdateSequenceUrl = (id: string) => {
+  return `/email/sequences/${id}`;
+};
+
+export const updateSequence = async (
+  id: string,
+  updateSequenceRequest: UpdateSequenceRequest,
+  options?: RequestInit
+): Promise<updateSequenceResponse> => {
+  const res = await fetch(getUpdateSequenceUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateSequenceRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateSequenceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateSequenceResponse;
+};
+
+/**
+ * @summary Enroll CRM people into an active sequence.
+ */
+export type enrollContactsResponse200 = {
+  data: EnrollResponse;
+  status: 200;
+};
+
+export type enrollContactsResponse400 = {
+  data: SequenceErrorResponse;
+  status: 400;
+};
+
+export type enrollContactsResponse404 = {
+  data: SequenceErrorResponse;
+  status: 404;
+};
+
+export type enrollContactsResponse409 = {
+  data: SequenceErrorResponse;
+  status: 409;
+};
+
+export type enrollContactsResponseSuccess = enrollContactsResponse200 & {
+  headers: Headers;
+};
+export type enrollContactsResponseError = (
+  | enrollContactsResponse400
+  | enrollContactsResponse404
+  | enrollContactsResponse409
+) & {
+  headers: Headers;
+};
+
+export type enrollContactsResponse =
+  | enrollContactsResponseSuccess
+  | enrollContactsResponseError;
+
+export const getEnrollContactsUrl = (id: string) => {
+  return `/email/sequences/${id}/enrollments`;
+};
+
+export const enrollContacts = async (
+  id: string,
+  enrollRequest: EnrollRequest,
+  options?: RequestInit
+): Promise<enrollContactsResponse> => {
+  const res = await fetch(getEnrollContactsUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(enrollRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: enrollContactsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as enrollContactsResponse;
 };
 
 /**

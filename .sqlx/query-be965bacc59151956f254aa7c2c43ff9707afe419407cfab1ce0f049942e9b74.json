@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sequence_recipients\n               SET unsubscribed_at = COALESCE(unsubscribed_at, now()), source = COALESCE(source, 'link')\n               WHERE token = $1\n               RETURNING team_id, email",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "be965bacc59151956f254aa7c2c43ff9707afe419407cfab1ce0f049942e9b74"
+}
