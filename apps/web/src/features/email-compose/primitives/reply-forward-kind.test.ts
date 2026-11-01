@@ -10,6 +10,7 @@ import type {
 } from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import type { EmailRecipient } from '../core/email-recipient';
+import type { LocalDraft } from '../core/local-draft';
 import type { ReplyType } from '../core/reply-type';
 import { createComposeContext } from '../tests/capabilities';
 import { createEmailEditor } from '../tests/editor';
@@ -188,6 +189,62 @@ it.each(providers)(
       const sent = delivered(context);
       expect(sent.to).toEqual(['teammate@example.com']);
       expect(sent.subject).toBe('Fwd: Numbers');
+      expect(sent.body).toContain('Forwarded message');
+      expect(sent.body).toContain('Original message text');
+    } finally {
+      reply.dispose();
+    }
+  }
+);
+
+it.each(providers)(
+  'sends a %s forward with nothing typed above the forwarded message',
+  async (provider) => {
+    const context = inboxContext(provider);
+    context.delivery.queueActive = () => true;
+    context.drafts.saveLocalDraft = vi.fn(
+      async (input): Promise<LocalDraft> => ({
+        key: input.clientHandles?.draftId ?? 'draft',
+        draftId: input.clientHandles?.draftId ?? 'draft',
+        threadId: input.clientHandles?.threadId ?? 'thread',
+        accountId: 'owner',
+        generation: 'local-generation',
+        revision: 1,
+        acknowledgedRevision: 0,
+        status: 'dirty',
+        updatedAt: Date.now(),
+        content: input.draft,
+        attachments: [],
+      })
+    );
+    const actions = cardActions();
+    const reply = mountReplyComposer(
+      context,
+      () => parent,
+      {},
+      {
+        replyRequest: actions,
+      }
+    );
+    try {
+      reply.edit('');
+      await actions.click('forward');
+      reply.form.setRecipients('to', [teammate]);
+      await reply.sendEmail();
+
+      expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+      expect(context.delivery.sendMessage).toHaveBeenCalledOnce();
+      // The send queue refuses a send without the draft it delivers.
+      expect(context.delivery.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientHandles: expect.objectContaining({
+            draftId: expect.any(String),
+          }),
+          expectedLocalVersion: expect.anything(),
+        })
+      );
+      const sent = delivered(context);
+      expect(sent.to).toEqual(['teammate@example.com']);
       expect(sent.body).toContain('Forwarded message');
       expect(sent.body).toContain('Original message text');
     } finally {
