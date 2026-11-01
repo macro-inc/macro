@@ -495,7 +495,10 @@ export function createEmailComposer(props: EmailComposerOptions) {
   );
   const currentOperation = () => {
     const live = operationSource?.operation();
-    return live === undefined ? props.draft?.operation : live;
+    // The opened draft's operation stops applying once a discard drops it.
+    return live === undefined && currentDraftId() === props.draft?.db_id
+      ? props.draft?.operation
+      : live;
   };
   const deliveryBlocked = () =>
     operationSource?.needsReload?.() ||

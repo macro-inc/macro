@@ -193,6 +193,8 @@ it.each([
     expect(root.state.context.disabled()).toBe(true);
     expect(root.state.context.deleteDisabled?.()).toBe(!discards);
     await root.state.deleteDraftAndReset();
+    // A host that cannot leave keeps an empty composer, now unlocked.
+    expect(root.state.context.disabled()).toBe(!discards);
     root.dispose();
     expect(goBack).toHaveBeenCalledTimes(discards ? 1 : 0);
     expect(composeContext.drafts.deleteDraft).toHaveBeenCalledTimes(
