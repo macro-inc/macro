@@ -237,6 +237,19 @@ replaced with `/app`, which goes to Home or to login. An unknown split among app
 splits (`/app/mail/~/garbage`) shows the in-split 404 instead. A split that
 navigates to a page outside the app replaces every split; Back restores them.
 
+Account-only splits (Home, Tasks, Projects, Channels, Mail, Calendar, and the
+other workspaces) show **Sign in to view this page** with Login and Sign Up
+once the session is confirmed signed out, never an indefinite loader. While
+identity is unresolved they keep their loading skeleton. A link a signed-out
+visitor may open (a Public document, project, task, or agent session) shows
+that item alone, read-only, with no sidebar or list beside it; the documents,
+tasks, and AI chat guides cover each. Signed out, the app keeps one pane:
+opening anything, including Shift-click or Open in new split, replaces what
+that pane shows. Login and Sign Up,
+here and in the signed-out banner and Drive prompt, store the page URL in
+`sessionStorage` (`redirectUrl`), and signing in returns to it; a new account
+that goes through onboarding lands on Home instead.
+
 Search-result locations use pane-local namespaces: `channels` (message/thread),
 `email-detail` (message), `markdown-detail` (node), `pdf-detail` (page and highlight
 context), `agent-detail` (turn/author), and `call-detail` (transcript segment).

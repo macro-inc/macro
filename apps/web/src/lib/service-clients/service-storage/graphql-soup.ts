@@ -553,6 +553,13 @@ const [cacheAvailability, setCacheAvailability] = createSignal(0);
 const [sessionActive, setSessionActive] = createSignal(hasLoginCookie());
 
 /**
+ * Whether this tab has a signed-in session, which picks the cached client. A
+ * root read selects the viewer's id while it does, so the cache stays bound
+ * to the account it holds.
+ */
+export const graphqlSoupSessionActive = sessionActive;
+
+/**
  * Records whether this tab has a signed-in session. Ending one disposes the
  * cached and realtime clients, so their websocket and queue runner stop.
  */

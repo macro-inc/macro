@@ -20,6 +20,7 @@ import { createProjectDetailQuery } from './project-identity';
 import { projectDefinitionProperties } from './project-properties';
 import { refreshProjectQueries } from './project-revalidation';
 import { createProjectSoupSource } from './project-soup';
+import { createProjectVisitorTasksQuery } from './project-visitor-tasks';
 import { TASK_PROJECT_PROPERTY, taskProjectValue } from './task-project';
 
 type ProjectCommands = ReturnType<ProjectsContext['createCommands']>;
@@ -94,6 +95,13 @@ export function createProjectSources(
           if (!readEnabled()) return;
           await refresh();
         },
+      };
+    },
+    createVisitorTasksSource(id) {
+      const query = createProjectVisitorTasksQuery(soup.client, id);
+      return {
+        tasks: () => query.data,
+        failed: () => query.isError,
       };
     },
     createCommands() {

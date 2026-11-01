@@ -25,6 +25,7 @@ import { SplitLayoutContext } from './context';
 import { createSplitLayout, type SplitId } from './layoutManager';
 import { createMobilePaneStack } from './mobile/createMobilePaneStack';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
+import { keepSinglePane } from './single-pane';
 import {
   resolveContentLocation,
   splitContentFromLocation,
@@ -48,6 +49,8 @@ export function SplitLayoutProvider(props: ParentProps) {
   });
   createEffect(() => setGlobalSplitManager(splitManager));
   onCleanup(() => setGlobalSplitManager(undefined));
+  const isAuthenticated = useIsAuthenticated();
+  keepSinglePane(splitManager, () => isAuthenticated() === false);
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>

@@ -48,6 +48,8 @@ mod agent_metadata;
 mod crm_association;
 mod exclusions;
 mod favorites;
+mod project_scope;
+mod viewable;
 mod work_feed;
 
 struct NoopEmailPreviewService;

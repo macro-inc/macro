@@ -75,15 +75,15 @@ pub struct EntityNotificationsKey {
 
 /// DataLoader for entity notification edges.
 pub struct EntityNotificationsLoader<R> {
-    /// User whose notifications are loaded.
-    user_id: MacroUserIdStr<'static>,
+    /// User whose notifications are loaded; a caller with no account has none.
+    user_id: Option<MacroUserIdStr<'static>>,
     /// Notification reader used to fulfill batches.
     reader: R,
 }
 
 impl<R> EntityNotificationsLoader<R> {
     /// Create a new entity notifications DataLoader.
-    pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
+    pub fn new(user_id: Option<MacroUserIdStr<'static>>, reader: R) -> Self {
         Self { user_id, reader }
     }
 }
@@ -99,6 +99,9 @@ where
         &self,
         keys: &[EntityNotificationsKey],
     ) -> Result<HashMap<EntityNotificationsKey, Self::Value>, Self::Error> {
+        let Some(user_id) = &self.user_id else {
+            return Ok(keys.iter().map(|key| (key.clone(), Vec::new())).collect());
+        };
         let mut batches: HashMap<EntityNotificationQuery, Vec<EntityNotificationsKey>> =
             HashMap::new();
         for key in keys {
@@ -115,7 +118,7 @@ where
                 .collect();
             let mut loaded = self
                 .reader
-                .get_notifications(self.user_id.clone(), entities, query)
+                .get_notifications(user_id.clone(), entities, query)
                 .await
                 .map_err(|error| error.into_cloneable())?;
             for key in keys {
@@ -129,7 +132,7 @@ where
 
 /// Build a DataLoader for entity notification edges.
 pub fn entity_notifications_loader<R>(
-    user_id: MacroUserIdStr<'static>,
+    user_id: Option<MacroUserIdStr<'static>>,
     reader: R,
 ) -> DataLoader<EntityNotificationsLoader<R>>
 where

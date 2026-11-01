@@ -9202,6 +9202,12 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
+	The associated tasks this viewer may view, from the same access walk
+	as `taskIds` and in its order. A public link opens each task the same
+	way it opens the project, so a caller with no account reads them too.
+	"""
+	tasks: [GraphqlSoupEntity!]!
+	"""
 	Collaborators, independent of assignees.
 	"""
 	memberIds: [String!]!
@@ -9562,11 +9568,11 @@ type GraphqlUser {
 	"""
 	One initiative accessible to the authenticated viewer.
 	"""
-	initiative(initiativeId: ID!): GraphqlSoupInitiative!
+	initiative(initiativeId: ID!): GraphqlSoupInitiative! @deprecated(reason: "Use the root initiative field. Remove after 2026-12-15.")
 	"""
 	A permission-filtered page of task identifiers within an initiative.
 	"""
-	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage!
+	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage! @deprecated(reason: "Use the root initiativeTasks field. Remove after 2026-12-15.")
 	"""
 	AI routines the authenticated user can access.
 	"""
@@ -9668,7 +9674,7 @@ type GraphqlUser {
 	Fetch one accessible agent session by id, with its protocol log
 	reachable through `log`.
 	"""
-	agentSession(sessionId: ID!): GraphqlSoupAgentSession
+	agentSession(sessionId: ID!): GraphqlSoupAgentSession @deprecated(reason: "Use the root agentSession field. Remove after 2026-12-15.")
 	"""
 	Fetch one accessible Soup entity, read from the primary so an entity
 	opened right after it is created or edited reflects that write.
@@ -10636,6 +10642,22 @@ type SoupQueryRoot {
 	The authenticated user.
 	"""
 	user: GraphqlUser!
+	"""
+	One initiative the caller may view, signed in or not. Access is the
+	initiative's own: a public or team link opens it like any other share.
+	"""
+	initiative(initiativeId: ID!): GraphqlSoupInitiative!
+	"""
+	A page of the tasks in an initiative the caller may view, signed in or
+	not, holding only the tasks they may view themselves.
+	"""
+	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage!
+	"""
+	One agent session the caller may view, signed in or not, with its
+	protocol log reachable through `log`. A public link opens it like any
+	other share.
+	"""
+	agentSession(sessionId: ID!): GraphqlSoupAgentSession
 }
 
 """

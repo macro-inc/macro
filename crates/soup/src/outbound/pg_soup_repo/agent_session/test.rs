@@ -591,6 +591,56 @@ async fn unlisted_runs_leave_lists_that_exclude_them(pool: PgPool) -> anyhow::Re
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn viewable_reads_hydrate_sessions_the_listing_never_reaches(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let fixture = seed(&pool).await?;
+    let stranger = MacroUserIdStr::parse_from_str(STRANGER)?;
+    let requested = [EntityType::AgentSession.with_entity_string(fixture.private.to_string())];
+    assert!(
+        by_ids(
+            &pool,
+            AdvancedSortParams {
+                user_id: stranger.clone(),
+                entities: &requested,
+            },
+        )
+        .await?
+        .is_empty(),
+        "the listing's by-ID read keeps its access predicate"
+    );
+
+    sqlx::query!(
+        r#"
+        INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "updatedAt")
+        VALUES ($1, $2, 'agent_session', '2026-01-04')
+        "#,
+        STRANGER,
+        fixture.private.to_string(),
+    )
+    .execute(&pool)
+    .await?;
+
+    for (viewer, viewed) in [(Some(stranger), true), (None, false)] {
+        let items = viewable_by_ids(&pool, viewer, &requested).await?;
+        assert_eq!(
+            ids(&items),
+            vec![fixture.private],
+            "a receipt already authorized the read"
+        );
+        let SoupItem::AgentSession(session) = &items[0] else {
+            unreachable!("ids matched an agent session");
+        };
+        assert_eq!(
+            session.viewed_at.is_some(),
+            viewed,
+            "only the viewer's own history joins"
+        );
+    }
+    Ok(())
+}
+
 /// A session started from a document or call thread inherits the parent's
 /// viewers, as the session's REST read and its inline chip already do, so
 /// opening it by id works for someone who prompted it or saw it in the thread.

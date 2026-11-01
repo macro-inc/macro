@@ -90,6 +90,7 @@ function setup(url: string) {
           route: paneRoute({ id: 'view-home', params: {} }),
         }),
         stacked: () => false,
+        singlePane: () => false,
       }),
     });
     manager = createSplitLayout(createMockOrchestrator(), {

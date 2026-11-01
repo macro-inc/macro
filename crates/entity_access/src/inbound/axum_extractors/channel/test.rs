@@ -26,7 +26,7 @@ use super::*;
 use crate::{
     domain::models::{
         AccessError, AccessLevel, AdminParticipantRole, BotAccessScope, BotId, CallChannelInfo,
-        MemberParticipantRole, OwnerParticipantRole, UserTeamInfo, ViewOnly,
+        EntityAccessAuth, MemberParticipantRole, OwnerParticipantRole, UserTeamInfo, ViewOnly,
     },
     inbound::axum_extractors::test_support::{
         BOT_ID, BOT_TEAM_ID, BotAccessCall, VALID_BOT_TOKEN, valid_bot_authentication,
