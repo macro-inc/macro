@@ -8,22 +8,39 @@ import {
 } from '@app/lib/split-router';
 import {
   companiesRoute,
+  crmItemRoute,
+  crmPipelineItemRoute,
+  crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
   crmPipelineRoute,
+  crmRecordItemRoute,
   crmRecordRoute,
 } from '@app/routes/routes';
+import {
+  blockNameToDefaultFile,
+  fileTypeToBlockName,
+  fileTypeToResolvedBlockName,
+} from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { CrmRoute } from './context/workspace-context';
+import { Telemetry } from '@macro-inc/observability';
+import type {
+  CrmRecordNavigation,
+  CrmRoute,
+} from './context/workspace-context';
 import { pipelineIdOfTab, pipelineTab } from './core/navigation';
 import type { CrmRecordRef, CrmRecordSection } from './core/record';
 import {
+  type CrmItemParams,
   type CrmRecordParams,
+  crmItemBlockType,
   crmRecordSearch,
   crmSearch,
   crmSearchCodec,
 } from './crm-route';
 
-type CrmBranchParams = Partial<CrmRecordParams> & { pipelineId?: string };
+type CrmBranchParams = Partial<CrmRecordParams & CrmItemParams> & {
+  pipelineId?: string;
+};
 
 /** The list tab an entry shows, or undefined for a record. */
 function listTab(entry: Entry): string | undefined {
@@ -38,11 +55,20 @@ function listTab(entry: Entry): string | undefined {
 }
 
 /** The Customers location held by the pane's route. */
-export function createCrmRoute(): CrmRoute {
+export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
   const [search] = createSearchParams(crmSearch);
   const [recordSearch] = createSearchParams(crmRecordSearch);
   const params = useParams<CrmBranchParams>();
   const routeTrail = useRouteState(companiesRoute);
+  const listItemState = useRouteState(crmItemRoute);
+  const recordItemState = useRouteState(crmRecordItemRoute);
+  const pipelineItemState = useRouteState(crmPipelineItemRoute);
+  const pipelineRecordItemState = useRouteState(crmPipelineRecordItemRoute);
+  const itemState = () =>
+    listItemState() ??
+    recordItemState() ??
+    pipelineItemState() ??
+    pipelineRecordItemState();
   const navigate = useNavigate();
   const history = usePaneHistory();
 
@@ -57,7 +83,7 @@ export function createCrmRoute(): CrmRoute {
   const records = (): readonly CrmRecordRef[] => {
     const record = shown();
     if (!record) return [];
-    const trail = routeTrail();
+    const trail = itemState()?.trail ?? routeTrail();
     const end = trail?.at(-1);
     if (trail && end?.type === record.type && end.id === record.id)
       return trail;
@@ -117,8 +143,139 @@ export function createCrmRoute(): CrmRoute {
     );
   };
 
+  const item = () => {
+    if (!params.itemType || !params.itemId) return;
+    const state = itemState();
+    const current = {
+      itemType: params.itemType,
+      itemId: params.itemId,
+      itemFileType: params.itemFileType,
+      itemSubType: params.itemSubType,
+    };
+    return {
+      ...current,
+      name:
+        state?.name ??
+        blockNameToDefaultFile(fileTypeToBlockName(crmItemBlockType(current))),
+    };
+  };
+
+  const openItem: CrmRecordNavigation['openItem'] = (entity, event) => {
+    if (
+      event &&
+      (event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey ||
+        (event instanceof MouseEvent && event.button !== 0))
+    )
+      return false;
+    if (
+      entity.type !== 'document' &&
+      entity.type !== 'email' &&
+      entity.type !== 'call' &&
+      entity.type !== 'database'
+    )
+      return false;
+    const itemParams: CrmItemParams = {
+      itemType: entity.type,
+      itemId: entity.id,
+      ...(entity.type === 'document'
+        ? {
+            itemFileType: fileTypeToResolvedBlockName(entity.fileType ?? 'md'),
+            itemSubType: entity.subType?.type,
+          }
+        : {}),
+    };
+    captureEntryState?.();
+    const trail = records();
+    const pipelineId = params.pipelineId;
+    const itemRoute = pipelineId ? crmPipelineItemRoute : crmItemRoute;
+    const recordItemRoute = pipelineId
+      ? crmPipelineRecordItemRoute
+      : crmRecordItemRoute;
+    const target = trail.length ? recordItemRoute : itemRoute;
+    fireAndForget(
+      Telemetry.span('crm.item.open', async (span) => {
+        span.setAttr('entity.id', entity.id);
+        span.setAttr('entity.type', entity.type);
+        await navigate(
+          {
+            route: target,
+            params: {
+              ...itemParams,
+              ...(pipelineId ? { pipelineId } : {}),
+              ...(trail.length
+                ? {
+                    recordType: trail[trail.length - 1]!.type,
+                    recordId: trail[trail.length - 1]!.id,
+                    section: params.section,
+                  }
+                : {}),
+            },
+          },
+          {
+            state: {
+              trail: trail.length ? [...trail] : undefined,
+              name: entity.name,
+            },
+          }
+        );
+      }),
+      'crm'
+    );
+    return true;
+  };
+
+  const closeItem = () => {
+    if (!item()) return;
+    const snapshot = history();
+    if (snapshot) {
+      for (let index = snapshot.index - 1; index >= 0; index--) {
+        const previous = snapshot.entries[index];
+        const matches = previous.location.route.matches;
+        if (!matches.some((match) => match.id === companiesRoute.id)) break;
+        if (
+          matches.some(
+            (match) =>
+              match.id === crmItemRoute.id ||
+              match.id === crmRecordItemRoute.id ||
+              match.id === crmPipelineItemRoute.id ||
+              match.id === crmPipelineRecordItemRoute.id
+          )
+        )
+          continue;
+        const previousRecord = matches.find(
+          (match) =>
+            match.id === crmRecordRoute.id ||
+            match.id === crmPipelineRecordRoute.id
+        );
+        const currentRecord = shown();
+        if (currentRecord) {
+          if (
+            previousRecord?.params.recordId !== currentRecord.id ||
+            previousRecord.params.recordType !== currentRecord.type ||
+            previousRecord.params.section !== params.section ||
+            (params.pipelineId &&
+              !matches.some(
+                (match) =>
+                  match.id === crmPipelineRoute.id &&
+                  match.params.pipelineId === params.pipelineId
+              ))
+          )
+            break;
+        } else if (listTab(previous) !== tab()) break;
+        fireAndForget(navigate(index - snapshot.index), 'crm');
+        return;
+      }
+    }
+    const trail = records();
+    if (trail.length) showRecord(trail, params.section);
+    else showList(tab());
+  };
+
   const close = () => {
-    if (!shown()) return;
+    if (!shown()) return closeItem();
     const current = tab();
     // The list's own entry restores its scroll position.
     const snapshot = history();
@@ -148,6 +305,9 @@ export function createCrmRoute(): CrmRoute {
         : undefined,
     open: (trail) => showRecord(trail, undefined),
     setSection: (section) => showRecord(records(), section),
+    item,
+    openItem,
+    closeItem,
     close,
   };
 }

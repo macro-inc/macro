@@ -24,6 +24,26 @@ export type CrmRecordNavigation = {
   /** Shows the last record of `trail` at its Overview. */
   open(trail: readonly CrmRecordRef[]): void;
   setSection(section: CrmRecordSection): void;
+  item: Accessor<
+    | {
+        itemType: 'document' | 'email' | 'call' | 'database';
+        itemId: string;
+        itemFileType?: string;
+        itemSubType?: 'task' | 'snippet' | 'skill';
+        name: string;
+      }
+    | undefined
+  >;
+  openItem(
+    entity:
+      | EntityData
+      | Pick<
+          Extract<EntityData, { type: 'document' }>,
+          'type' | 'id' | 'name' | 'fileType' | 'subType'
+        >,
+    event?: MouseEvent | KeyboardEvent
+  ): boolean;
+  closeItem(): void;
   /** Returns to the list the records were opened from. */
   close(): void;
 };
@@ -82,8 +102,9 @@ export type CrmWorkspace = {
 };
 const Context = createContext<CrmWorkspace>();
 export const CrmWorkspaceProvider = Context.Provider;
+export const useOptionalCrmWorkspace = () => useContext(Context);
 export function useCrmWorkspace(): CrmWorkspace {
-  const value = useContext(Context);
+  const value = useOptionalCrmWorkspace();
   if (!value)
     throw new Error('CRM workspace views require a CrmWorkspaceProvider');
   return value;

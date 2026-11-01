@@ -11,6 +11,9 @@ import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
 import {
+  crmItemBlockType,
+  crmItemParams,
+  crmItemStateSchema,
   crmPipelineParams,
   crmPipelineReference,
   crmRecordClaim,
@@ -673,6 +676,35 @@ export const crmPipelineRecordRoute = defineRoute({
   state: crmRecordTrailSchema,
   claim: crmRecordClaim,
   toReference: crmRecordReference,
+});
+
+/** An item opened from a Customers activity view or record section. */
+export const crmItemRoute = defineRoute({
+  id: 'companies-item',
+  path: 'item/:itemType/:itemId/:itemFileType?/:itemSubType?',
+  params: crmItemParams,
+  state: crmItemStateSchema,
+  claim: (params) => ({
+    namespace: 'block',
+    id: `${crmItemBlockType(params)}:${params.itemId}`,
+  }),
+  toReference: (params) =>
+    uuidRouteReference(params.itemId, crmItemBlockType(params)),
+});
+
+export const crmRecordItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-record-item',
+});
+
+export const crmPipelineItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-pipeline-item',
+});
+
+export const crmPipelineRecordItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-pipeline-record-item',
 });
 
 export const crmPipelineRoute = defineRoute({

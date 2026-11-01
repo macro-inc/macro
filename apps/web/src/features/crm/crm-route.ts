@@ -49,6 +49,27 @@ export const crmRecordParams = z.object({
 
 export type CrmRecordParams = z.infer<typeof crmRecordParams>;
 
+/** A CRM-linked item keeps its source record trail and display name in history. */
+export const crmItemParams = z.object({
+  itemType: z.enum(['document', 'email', 'call', 'database']),
+  itemId: z.string().min(1),
+  itemFileType: z.string().optional(),
+  itemSubType: z.enum(['task', 'snippet', 'skill']).optional(),
+});
+
+export type CrmItemParams = z.infer<typeof crmItemParams>;
+
+/** The canonical entity kind used by item claims, references, and fallback names. */
+export function crmItemBlockType({
+  itemType,
+  itemFileType,
+  itemSubType,
+}: CrmItemParams) {
+  return itemType === 'document'
+    ? (itemSubType ?? itemFileType ?? 'md')
+    : itemType;
+}
+
 /** Records opened on the way to the shown one, kept with its history entry. */
 export const crmRecordTrailSchema = z
   .array(
@@ -59,6 +80,11 @@ export const crmRecordTrailSchema = z
     })
   )
   .min(1);
+
+export const crmItemStateSchema = z.object({
+  trail: crmRecordTrailSchema.optional(),
+  name: z.string(),
+});
 
 export function crmRecordClaim({ recordType, recordId }: CrmRecordParams) {
   return { namespace: 'block', id: `${recordType}:${recordId}` };

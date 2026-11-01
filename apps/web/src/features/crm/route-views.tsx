@@ -1,3 +1,4 @@
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
   usePageViewTracking,
@@ -24,7 +25,8 @@ export const CompaniesRouteView = withAuth(() => {
     return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
   useViewRestoration();
   usePageViewTracking('companies');
-  const route = createCrmRoute();
+  const panel = useSplitPanel();
+  const route = createCrmRoute(() => panel?.handle.captureEntryState());
   const crmView = new URLSearchParams(window.location.search).get(
     CRM_VIEW_URL_PARAM
   );

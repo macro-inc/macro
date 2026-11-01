@@ -11,8 +11,12 @@ import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
   companiesRoute,
+  crmItemRoute,
+  crmPipelineItemRoute,
+  crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
   crmPipelineRoute,
+  crmRecordItemRoute,
   crmRecordRoute,
 } from '@app/routes/routes';
 import { cleanup, render, screen } from '@solidjs/testing-library';
@@ -38,9 +42,10 @@ vi.mock('@service-connection/websocket', () => ({
 afterEach(cleanup);
 
 let route: CrmRoute;
+let capture = vi.fn();
 
 function Customers() {
-  route = createCrmRoute();
+  route = createCrmRoute(capture);
   return (
     <>
       <p data-testid="customers">
@@ -49,6 +54,7 @@ function Customers() {
           .map((record) => `${record.type}:${record.id}:${record.name}`)
           .join(',')}`}
       </p>
+      <p data-testid="item">{route.item()?.name ?? '-'}</p>
       <p data-testid="comment">{route.commentTarget()?.commentId ?? '-'}</p>
     </>
   );
@@ -63,8 +69,18 @@ const routes: SplitRoutes = {
           ...companiesRoute,
           component: Customers,
           children: [
-            { ...crmPipelineRoute, children: [crmPipelineRecordRoute] },
-            crmRecordRoute,
+            {
+              ...crmPipelineRoute,
+              children: [
+                crmPipelineItemRoute,
+                {
+                  ...crmPipelineRecordRoute,
+                  children: [crmPipelineRecordItemRoute],
+                },
+              ],
+            },
+            crmItemRoute,
+            { ...crmRecordRoute, children: [crmRecordItemRoute] },
           ],
         },
       ],
@@ -74,6 +90,7 @@ const routes: SplitRoutes = {
 };
 
 function renderCustomers(url: string) {
+  capture = vi.fn();
   const history = createMemoryHistory(url);
   let router: SplitRouterInstance | undefined;
   render(() => {
@@ -209,4 +226,121 @@ it('shows a linked Discussion message only on the record it was asked for', asyn
   );
   expect(screen.getByTestId('comment').textContent).toBe('-');
   expect(url()).toBe('/companies/contact/maya');
+});
+
+it('keeps an activity item in its source list across close and forward', async () => {
+  const { url, shows, canGo, go } = renderCustomers(
+    '/companies?s0.crm.tab=tasks'
+  );
+  await shows('tab:tasks section:- records:');
+  expect(
+    route.openItem({
+      type: 'document',
+      id: 'task-1',
+      name: 'Follow up',
+      fileType: 'md',
+      subType: { type: 'task' },
+    })
+  ).toBe(true);
+  await vi.waitFor(() =>
+    expect(screen.getByTestId('item').textContent).toBe('Follow up')
+  );
+  expect(url()).toBe(
+    '/companies/item/document/task-1/md/task?s0.crm.tab=tasks'
+  );
+  route.closeItem();
+  await vi.waitFor(() =>
+    expect(screen.getByTestId('item').textContent).toBe('-')
+  );
+  expect(url()).toBe('/companies?s0.crm.tab=tasks');
+  expect(canGo(-1)).toBe(false);
+  expect(canGo(1)).toBe(true);
+  await go(1);
+  await vi.waitFor(() =>
+    expect(screen.getByTestId('item').textContent).toBe('Follow up')
+  );
+});
+
+it('retains a record trail, section and pipeline source for an item', async () => {
+  const { url, shows, go } = renderCustomers('/companies/pipeline/sales');
+  await shows('tab:pipeline:sales section:- records:');
+  route.open([acme, maya]);
+  await shows(
+    'tab:pipeline:sales section:- records:company:acme:Acme,contact:maya:Maya'
+  );
+  route.setSection('emails');
+  await shows(
+    'tab:pipeline:sales section:emails records:company:acme:Acme,contact:maya:Maya'
+  );
+  route.openItem({
+    type: 'document',
+    id: 'note-1',
+    name: 'Note',
+    fileType: 'md',
+    subType: { type: 'task' },
+  });
+  await vi.waitFor(() =>
+    expect(screen.getByTestId('item').textContent).toBe('Note')
+  );
+  expect(url()).toBe(
+    '/companies/pipeline/sales/contact/maya/emails/item/document/note-1/md/task'
+  );
+  await shows(
+    'tab:pipeline:sales section:emails records:company:acme:Acme,contact:maya:Maya'
+  );
+  route.closeItem();
+  await vi.waitFor(() =>
+    expect(screen.getByTestId('item').textContent).toBe('-')
+  );
+  expect(url()).toBe('/companies/pipeline/sales/contact/maya/emails');
+  await go(1);
+  await vi.waitFor(() =>
+    expect(screen.getByTestId('item').textContent).toBe('Note')
+  );
+});
+
+it('closes a directly loaded item to its record section without a prior entry', async () => {
+  const { url, shows, canGo } = renderCustomers(
+    '/companies/company/acme/emails/item/email/thread-1'
+  );
+  await shows('tab:active section:emails records:company:acme:');
+  expect(route.item()?.itemId).toBe('thread-1');
+  route.closeItem();
+  await shows('tab:active section:emails records:company:acme:');
+  await vi.waitFor(() => expect(route.item()).toBeUndefined());
+  expect(url()).toBe('/companies/company/acme/emails');
+  expect(canGo(-1)).toBe(true);
+});
+
+it.each(['metaKey', 'ctrlKey', 'shiftKey', 'altKey'])(
+  'leaves %s item opens to the split navigation handler',
+  async (modifier) => {
+    const { shows, canGo } = renderCustomers('/companies?s0.crm.tab=tasks');
+    await shows('tab:tasks section:- records:');
+    expect(
+      route.openItem(
+        { type: 'document', id: 'task-1', name: 'Follow up', fileType: 'md' },
+        new MouseEvent('click', { [modifier]: true })
+      )
+    ).toBe(false);
+    expect(route.item()).toBeUndefined();
+    expect(capture).not.toHaveBeenCalled();
+    expect(canGo(-1)).toBe(false);
+  }
+);
+
+it('returns to the activity list when its sidebar destination is selected again', async () => {
+  const { url, shows, canGo } = renderCustomers('/companies?s0.crm.tab=notes');
+  await shows('tab:notes section:- records:');
+  route.openItem({
+    type: 'document',
+    id: 'note-1',
+    name: 'Note',
+    fileType: 'md',
+  });
+  await vi.waitFor(() => expect(route.item()).toBeDefined());
+  route.close();
+  await vi.waitFor(() => expect(route.item()).toBeUndefined());
+  expect(url()).toBe('/companies?s0.crm.tab=notes');
+  expect(canGo(-1)).toBe(false);
 });
