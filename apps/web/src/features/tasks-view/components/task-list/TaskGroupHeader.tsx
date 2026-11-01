@@ -142,7 +142,7 @@ export function TaskGroupHeader(props: {
                 <span
                   class={cn(
                     'flex h-5 shrink-0 items-center justify-center',
-                    alignWithRows() ? 'w-6 touch:w-9' : 'w-5'
+                    isMobile() ? 'w-5' : 'w-6 touch:w-9'
                   )}
                 >
                   <Switch>
