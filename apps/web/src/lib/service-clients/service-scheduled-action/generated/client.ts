@@ -210,6 +210,11 @@ export type checkRoutineCodeResponse200 = {
   status: 200;
 };
 
+export type checkRoutineCodeResponse400 = {
+  data: string;
+  status: 400;
+};
+
 export type checkRoutineCodeResponse401 = {
   data: string;
   status: 401;
@@ -229,6 +234,7 @@ export type checkRoutineCodeResponseSuccess = checkRoutineCodeResponse200 & {
   headers: Headers;
 };
 export type checkRoutineCodeResponseError = (
+  | checkRoutineCodeResponse400
   | checkRoutineCodeResponse401
   | checkRoutineCodeResponse500
   | checkRoutineCodeResponse503

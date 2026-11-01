@@ -337,7 +337,7 @@ pub enum RunStart {
 pub struct RunInfo {
     /// When the run counts as happening: its trigger's time.
     pub at: DateTime<Utc>,
-    /// The IANA time zone code read `at` in, when the run had one.
+    /// The IANA time zone code reads `at` in, when the run had one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timezone: Option<String>,
     /// What started it.

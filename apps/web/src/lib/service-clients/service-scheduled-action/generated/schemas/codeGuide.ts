@@ -14,7 +14,7 @@ export interface CodeGuide {
   contract: string;
   /** The SDK's entities relevant to the task, with method signatures. */
   reference: string;
-  /** The SDK code is checked against. */
+  /** The version code is checked against: the SDK and the step contract. */
   sdk: string;
   /** How to write a code step, the same text the routine agent tools read. */
   steps: string;

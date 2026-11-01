@@ -5,15 +5,14 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { CodeStepCheck } from './codeStepCheck';
 
 /**
- * What type-checking code found.
+ * What type-checking a routine's code steps found.
  */
 export interface CodeCheck {
-  /** The SDK declarations the problems name, to fix them with. */
-  declarations: string;
-  /** The first problems, as the type checker reported them; empty when it checks. */
-  problems: string[];
-  /** The SDK the code was checked against. */
+  /** The version the code was checked against. */
   sdk: string;
+  /** Each code step with problems; empty when every step checks. */
+  steps: CodeStepCheck[];
 }

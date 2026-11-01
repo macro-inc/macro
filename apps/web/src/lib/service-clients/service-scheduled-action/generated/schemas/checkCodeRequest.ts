@@ -5,11 +5,12 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { CheckCodeRequestStepsItem } from './checkCodeRequestStepsItem';
 
 /**
- * Code to type-check.
+ * A routine's steps, whose code steps are type-checked together.
  */
 export interface CheckCodeRequest {
-  /** A code step's source. */
-  source: string;
+  /** The steps, in the shape a routine's task holds them. */
+  steps: CheckCodeRequestStepsItem[];
 }

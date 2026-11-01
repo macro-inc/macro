@@ -9,6 +9,7 @@ import type { ExecutionResultCondition } from './executionResultCondition';
 import type { ExecutionResultConfigurationRevision } from './executionResultConfigurationRevision';
 import type { ExecutionResultError } from './executionResultError';
 import type { ExecutionResultResource } from './executionResultResource';
+import type { ExecutionResultRun } from './executionResultRun';
 import type { ExecutionResultStepsItem } from './executionResultStepsItem';
 
 /**
@@ -22,6 +23,7 @@ steps in that configuration; a later edit can put another step there. */
   configuration_revision?: ExecutionResultConfigurationRevision;
   error?: ExecutionResultError;
   resource?: ExecutionResultResource;
+  run?: ExecutionResultRun;
   /** What each step that ran did, in order: decisions, tool calls, the agent. */
   steps?: ExecutionResultStepsItem[];
   /** @minimum 0 */

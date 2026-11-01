@@ -149,31 +149,29 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
- * Code to type-check.
+ * A routine's steps, whose code steps are type-checked together.
  */
 export type CheckCodeRequest = {
     /**
-     * A code step's source.
+     * The steps, in the shape a routine's task holds them.
      */
-    source: string;
+    steps: Array<{
+        [key: string]: unknown;
+    }>;
 };
 
 /**
- * What type-checking code found.
+ * What type-checking a routine's code steps found.
  */
 export type CodeCheck = {
     /**
-     * The SDK declarations the problems name, to fix them with.
-     */
-    declarations: string;
-    /**
-     * The first problems, as the type checker reported them; empty when it checks.
-     */
-    problems: Array<string>;
-    /**
-     * The SDK the code was checked against.
+     * The version the code was checked against.
      */
     sdk: string;
+    /**
+     * Each code step with problems; empty when every step checks.
+     */
+    steps: Array<CodeStepCheck>;
 };
 
 /**
@@ -189,7 +187,7 @@ export type CodeGuide = {
      */
     reference: string;
     /**
-     * The SDK code is checked against.
+     * The version code is checked against: the SDK and the step contract.
      */
     sdk: string;
     /**
@@ -206,6 +204,28 @@ export type CodeGuideRequest = {
      * The work, in words, e.g. "go through my notifications and keep the important ones".
      */
     task: string;
+};
+
+/**
+ * A code step's problems, and what to fix them with.
+ */
+export type CodeStepCheck = {
+    /**
+     * The SDK declarations the problems name.
+     */
+    declarations: string;
+    /**
+     * Which code step, counted in program order from zero.
+     */
+    index: number;
+    /**
+     * The first problems, as the type checker reported them.
+     */
+    problems: Array<string>;
+    /**
+     * Its title.
+     */
+    title: string;
 };
 
 /**
@@ -328,6 +348,7 @@ export type ExecutionResult = {
     configuration_revision?: number | null;
     error?: string | null;
     resource?: null | ExecutionResource;
+    run?: null | RunInfo;
     /**
      * What each step that ran did, in order: decisions, tool calls, the agent.
      */
@@ -463,6 +484,60 @@ export type RoutineTrigger = {
  * Bounded schedules and one combined set of event filters.
  */
 export type RoutineTriggers = Array<RoutineTrigger>;
+
+/**
+ * What the run page says about a run: what started it, when it counts as
+ * happening, and since when.
+ */
+export type RunInfo = {
+    /**
+     * When the run counts as happening: its trigger's time.
+     */
+    at: string;
+    /**
+     * When the routine's previous finished run started.
+     */
+    previous_at?: string | null;
+    /**
+     * What started it.
+     */
+    started_by: RunStart;
+    /**
+     * The IANA time zone code reads `at` in, when the run had one.
+     */
+    timezone?: string | null;
+};
+
+/**
+ * What started a run, for its page.
+ */
+export type RunStart = {
+    kind: 'schedule';
+    /**
+     * The cron expression.
+     */
+    schedule: string;
+    /**
+     * Its IANA time zone.
+     */
+    timezone: string;
+} | {
+    /**
+     * The item the event is about.
+     */
+    entity_id?: string | null;
+    /**
+     * The event's name, e.g. `email.message_received`.
+     */
+    event: string;
+    kind: 'event';
+} | {
+    /**
+     * Who started it.
+     */
+    by: string;
+    kind: 'manual';
+};
 
 /**
  * Whether a routine's runs are listed in Home and the Agents list. Routines
@@ -689,6 +764,7 @@ export type CheckRoutineCodeData = {
 };
 
 export type CheckRoutineCodeErrors = {
+    400: string;
     401: string;
     500: string;
     /**

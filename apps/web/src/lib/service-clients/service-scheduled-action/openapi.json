@@ -182,6 +182,16 @@
               }
             }
           },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "401": {
             "description": "",
             "content": {
@@ -1322,35 +1332,34 @@
       },
       "CheckCodeRequest": {
         "type": "object",
-        "description": "Code to type-check.",
-        "required": ["source"],
+        "description": "A routine's steps, whose code steps are type-checked together.",
+        "required": ["steps"],
         "properties": {
-          "source": {
-            "type": "string",
-            "description": "A code step's source."
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "The steps, in the shape a routine's task holds them."
           }
         },
         "additionalProperties": false
       },
       "CodeCheck": {
         "type": "object",
-        "description": "What type-checking code found.",
-        "required": ["sdk", "problems", "declarations"],
+        "description": "What type-checking a routine's code steps found.",
+        "required": ["sdk", "steps"],
         "properties": {
-          "declarations": {
-            "type": "string",
-            "description": "The SDK declarations the problems name, to fix them with."
-          },
-          "problems": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "The first problems, as the type checker reported them; empty when it checks."
-          },
           "sdk": {
             "type": "string",
-            "description": "The SDK the code was checked against."
+            "description": "The version the code was checked against."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodeStepCheck"
+            },
+            "description": "Each code step with problems; empty when every step checks."
           }
         }
       },
@@ -1369,7 +1378,7 @@
           },
           "sdk": {
             "type": "string",
-            "description": "The SDK code is checked against."
+            "description": "The version code is checked against: the SDK and the step contract."
           },
           "steps": {
             "type": "string",
@@ -1388,6 +1397,33 @@
           }
         },
         "additionalProperties": false
+      },
+      "CodeStepCheck": {
+        "type": "object",
+        "description": "A code step's problems, and what to fix them with.",
+        "required": ["index", "title", "problems", "declarations"],
+        "properties": {
+          "declarations": {
+            "type": "string",
+            "description": "The SDK declarations the problems name."
+          },
+          "index": {
+            "type": "integer",
+            "description": "Which code step, counted in program order from zero.",
+            "minimum": 0
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The first problems, as the type checker reported them."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its title."
+          }
+        }
       },
       "CodeUpgrade": {
         "type": "object",
@@ -1605,6 +1641,17 @@
               },
               {
                 "$ref": "#/components/schemas/ExecutionResource"
+              }
+            ]
+          },
+          "run": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunInfo",
+                "description": "What started the run and when, for runs of programs."
               }
             ]
           },
@@ -1874,6 +1921,89 @@
           "$ref": "#/components/schemas/RoutineTrigger"
         },
         "description": "Bounded schedules and one combined set of event filters."
+      },
+      "RunInfo": {
+        "type": "object",
+        "description": "What the run page says about a run: what started it, when it counts as\nhappening, and since when.",
+        "required": ["at", "started_by"],
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the run counts as happening: its trigger's time."
+          },
+          "previous_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the routine's previous finished run started."
+          },
+          "started_by": {
+            "$ref": "#/components/schemas/RunStart",
+            "description": "What started it."
+          },
+          "timezone": {
+            "type": ["string", "null"],
+            "description": "The IANA time zone code reads `at` in, when the run had one."
+          }
+        }
+      },
+      "RunStart": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One of its schedules came due.",
+            "required": ["schedule", "timezone", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["schedule"]
+              },
+              "schedule": {
+                "type": "string",
+                "description": "The cron expression."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "Its IANA time zone."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An event it watches happened.",
+            "required": ["event", "kind"],
+            "properties": {
+              "entity_id": {
+                "type": ["string", "null"],
+                "description": "The item the event is about."
+              },
+              "event": {
+                "type": "string",
+                "description": "The event's name, e.g. `email.message_received`."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["event"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Its owner started it by hand.",
+            "required": ["by", "kind"],
+            "properties": {
+              "by": {
+                "type": "string",
+                "description": "Who started it."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["manual"]
+              }
+            }
+          }
+        ],
+        "description": "What started a run, for its page."
       },
       "RunVisibility": {
         "type": "string",
