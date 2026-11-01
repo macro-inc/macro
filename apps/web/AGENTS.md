@@ -508,7 +508,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Resume unfinished channel setup after failures without recreating the channel; keep drafts locked after creation and guard each later write against account/team changes.
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent all section content by 8px, including Favorites, custom sections, DMs, and empty states; keep unsectioned search results unindented.
-  Reuse shared collapsible section headers and their hidden-caret behavior, with a leading folder icon (star for Favorites, chat bubble for DMs) and a neutral Shared badge next to the name before the caret; apply focus backgrounds across the full header row and omit trailing header padding.
+  Reuse shared collapsible section headers and their hidden-caret behavior without leading icons; keep a neutral Shared badge next to the name before the caret, apply focus backgrounds across the full header row, and omit trailing header padding.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep available channel rows visible during section hydration and refetches; pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.

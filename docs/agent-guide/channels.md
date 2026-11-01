@@ -929,8 +929,8 @@ personal section. Each custom section is a top-level heading, independent of the
 Team channels disclosure. Empty sections remain visible with a short hint; empty
 Favorites explains how to add a favorite. Private conversations use a lock icon in
 the sidebar and mobile feed, including favorited private conversations.
-All section headers use the shared collapsible-section styling. Channel sections
-have a leading folder icon, Favorites a star, and Direct messages a chat bubble.
+All section headers use the shared collapsible-section styling without leading
+icons.
 Section, DM, and search containers use the 8px outer sidebar gutter; headings
 and rows add their own item padding so headings align with the Chat title.
 Content is indented by 8px under every section, including Favorites, custom

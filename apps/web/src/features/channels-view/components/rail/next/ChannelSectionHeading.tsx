@@ -1,5 +1,4 @@
 import { CollapsibleSection } from '@app/components/view-shell';
-import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
@@ -12,7 +11,6 @@ export function ChannelSectionHeading(props: {
   focused: boolean;
   unreadCount: number;
   onToggle: () => void;
-  icon?: JSX.Element;
   badge?: JSX.Element;
   children?: JSX.Element;
 }) {
@@ -32,9 +30,6 @@ export function ChannelSectionHeading(props: {
           title={props.title}
           class={cn('flex-1', props.focused && 'text-ink')}
         >
-          {props.icon ?? (
-            <FolderIcon aria-hidden="true" class="size-3.5 shrink-0" />
-          )}
           <span class="min-w-0 truncate">{props.label}</span>
           {props.badge}
           <CollapsibleSection.Indicator />
